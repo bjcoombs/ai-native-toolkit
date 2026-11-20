@@ -373,6 +373,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `shared_tooling.ci_includes.kind` | token |
 | `shared_tooling.ci_includes.source` | dropped |
 | `shared_tooling.ci_includes.id` | external id (hashed when hashing is on) |
+| `shared_tooling.ci_includes.ref` | token |
 | `shared_tooling.marketplaces.kind` | token |
 | `shared_tooling.marketplaces.name` | dropped |
 | `shared_tooling.marketplaces.source` | dropped |
