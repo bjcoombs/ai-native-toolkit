@@ -56,6 +56,7 @@ from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
+from lib.layer_grades import scan_layer_grades
 from lib.review_reality import scan_review_reality
 from lib.shared_tooling import scan_shared_tooling
 
@@ -514,6 +515,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
+    # Deterministic layer grades (issue #620): instructions_grade republished as
+    # a block, so a maturity rubric can name it in a headless or full run.
+    ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and

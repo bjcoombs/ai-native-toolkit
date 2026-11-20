@@ -206,6 +206,9 @@ def _setting(name: str) -> Wording:
 
 _WORDING: dict[str, Wording] = {
     "nested_instructions.budget.claude_code.bytes": _instructions_present,
+    "layer_grades.instruction_file_present": _flag(
+        "Commit an agent instruction file (`CLAUDE.md` or `AGENTS.md` at the repository root).",
+        "`git ls-files` lists a `CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`."),
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
     "instruction_claims.failed": _claims_hold,
