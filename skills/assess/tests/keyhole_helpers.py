@@ -47,6 +47,7 @@ def _stale_doc_staleness(*, churn_degenerate: bool) -> dict:
             "code_churn_in_window": 6,
             "subject_code_count": 1,
             "subject_method": "nearest-ancestor",
+            "subject_roots": ["pkg"],
             "confidence": "high",
         }],
     }

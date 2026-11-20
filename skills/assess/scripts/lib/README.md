@@ -357,9 +357,24 @@ set of notes a hub surfaces. Pure - no filesystem walk, no `doc_graph` import - 
 `doc_graph.py` owns discovery/excludes and consumes this module's parse + selection. Add
 a fixture-backed test here alongside any predicate change.
 
+**`doc_ownership.py`**
+The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
+`doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
+ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
+directory's code), then a parallel `docs/` tree, explicit code links, and the empty
+`repo-baseline` subject. `subject_spec` records each doc's method and roots as
+repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
+`/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
+Staleness expands them over every discovered code file and exports each row's
+`subject_roots`, `base_doc_dir`, `subject_code_count` and up to `SUBJECT_PATHS_CAP`
+sorted `subject_paths`; the join expands the same roots over the scored files, so the cap
+never hides an owned file from it. Every base doc stays an ancestor in the walk, even one
+that owns no discovered code, because the treemap scores languages the staleness
+discovery does not list. Tests: `tests/test_doc_ownership.py`.
+
 **`doc_staleness.py`**
-Doc-staleness metric for Layer 0. Associates each doc with the code it describes via
-nearest-ancestor base-doc rules, computes code churn relative to doc maintenance, and
+Doc-staleness metric for Layer 0. Associates each doc with the code it describes through
+`doc_ownership.py`, computes code churn relative to doc maintenance, and
 emits a signed ratio (high = decaying map). `ratio` is the whole-window ratio
 (`window_ratio`, subject churn over doc edits) capped by `code_churn_since_doc_change`,
 the distinct subject commits authored after the doc's last content change, so a doc is a
@@ -399,7 +414,10 @@ negative = the doc is a lying map over complex code (worse than no doc). The joi
 multiplies complexity by a signed freshness score so trivial code generates near-zero
 signal regardless of doc state. When a doc carries a `doc_provenance` verdict, freshness
 comes from the source-vs-doc comparison (a direct, high-confidence signal that bypasses
-the churn-ratio confidence guards) instead of the ratio.
+the churn-ratio confidence guards) instead of the ratio. Which code a doc covers comes
+from the staleness rows through `doc_subjects` (the `doc_ownership.py` rule), and each
+unit's `subject_code_count` is the staleness row's value, so both blocks report one count
+per document. `_extract_file_ccn` is the single read of the stats' per-file CCN.
 
 ### Ownership and structure drift
 
@@ -1591,7 +1609,38 @@ The core writes the result as the run-context block `instruction_claims`
 nothing matched; `{available: false, reason}` with no counts when the scan itself
 raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
-(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
+(which returns the extra failure fields). `tally_claims` and `has_ci_config` are
+public for `doc_claims`. Tests: `tests/test_instruction_claims.py`.
+
+**`doc_claims.py`**
+Runs the `instruction_claims` kinds over the doc set and adds one cross-document
+kind (issue #491), no model. `scan_doc_claims(repo_root, instruction_files,
+scope, excludes)` reads the tracked Markdown matching `DOC_CLAIM_GLOBS` (`docs/**/*.md`,
+`skills/*/references/**/*.md`, `skills/*/SKILL.md`) from the `--scope` directory
+(default the repo root), minus `HISTORICAL_DOC_TREES` (`docs/design`,
+`docs/superpowers` and the ADR and RFC trees, matched from that directory), the built-in
+excluded trees and the user's excludes, and verifies each document's claims with
+`instruction_claims.tally_claims`. The graded instruction files join the
+comparison but are not re-verified (a document that resolves to one, such as
+`docs/CLAUDE.md`, is left to `instruction_claims`). The cross-document kind,
+`contradiction`, groups `pin` and `count` claims by kind and path and reports a
+group when two different files (by resolved path) disagree: two pins disagree
+unless one version's dotted components prefix the other's, two counts unless
+they are within `count_within_tolerance`. One finding per group lists every
+site, so both conflicting lines are cited; a claim the repo cannot verify still
+takes part. A skill's `SKILL.md` and `references/` claims resolve against
+`skills/<name>/` (`rebase_skill_claims`; the repo root only when just that reading
+exists), before verification and grouping. Pins group by pinned file, so a pin finding whose every version
+the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+`CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
+`_VERIFIERS`. The core writes the run-context block `doc_claims`
+(`{files_scanned, excluded_trees, total, verified, failed, failures[...],
+contradictions_total, contradictions[{kind, path, sites[{file, line, value}],
+conflict_pair}]}` (`conflict_pair`: the first two sites from different files that
+disagree),
+lists capped at `MAX_FAILURES` and `MAX_CONTRADICTIONS`; `{available: false,
+reason}` when the scan raised). Rules that conflict in meaning stay out of the
+core. Tests: `tests/test_doc_claims.py`.
 
 **`claude_config.py`**
 Flags Claude Code configuration the runtime treats as legacy or silently ignores

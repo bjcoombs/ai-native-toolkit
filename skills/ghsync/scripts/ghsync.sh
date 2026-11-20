@@ -45,6 +45,7 @@ set -euo pipefail
 # Usage: ./ghsync.sh [--provider github|gitlab] [--root DIR] [--quiet]
 #                    [--limit N] [--dry-run] [--list-repos] [--porcelain]
 #                    [--partial | --filter SPEC] [--shallow-since DATE]
+#                    [--active-since DURATION] [--porcelain-json]
 #                    GitHub: [--org NAME] [--list-teams]
 #                    GitLab: [--host HOST] [--group PATH] [--from-list FILE]
 #   --provider P     github (default) or gitlab
@@ -59,6 +60,23 @@ set -euo pipefail
 #                    (GitHub: the repo name; GitLab: path_with_namespace),
 #                    all progress/status chatter to stderr; implies
 #                    --list-repos
+#   --porcelain-json One JSON object per line to stdout instead of a path:
+#                    path, default_branch, last_activity_at,
+#                    head_committed_at, archived, forked_from (path or
+#                    null), mirror (true, false, or null when unreadable)
+#                    and head_sha; chatter to stderr; implies --list-repos.
+#                    Costs one API call per repository for the head commit
+#   --active-since DURATION
+#                    Keep only repositories whose default branch has a
+#                    commit inside the window: Nd, Nw, Nmo (30 days) or Ny
+#                    (365 days), e.g. 90d or 6mo. Prefilters on the
+#                    discovery's last activity (GitHub pushed_at, GitLab
+#                    last_activity_at), then confirms with the committed
+#                    date of the default branch's head. A repository whose
+#                    head cannot be read is dropped with a warning. With
+#                    --dry-run, prints qualifying and total counts per
+#                    GitLab group (one count for a GitHub org or account).
+#                    Neither flag works with --from-list
 #   --partial        Shorthand for --filter blob:none
 #   --filter SPEC    New clones only: pass --filter=SPEC to git clone.
 #                    blob:none keeps full history and fetches file contents
@@ -102,6 +120,12 @@ DRY_RUN=false
 LIST_TEAMS=false
 LIST_REPOS=false
 PORCELAIN_MODE=false
+# --porcelain-json and --active-since need per-repository metadata from
+# discovery (META_MODE). Without either flag discovery is unchanged.
+PORCELAIN_JSON=false
+ACTIVE_SINCE=""
+ACTIVE_SINCE_SET=false
+META_MODE=false
 GITLAB_HOST=""
 GITLAB_GROUP=""
 FROM_LIST=""
@@ -241,6 +265,22 @@ while [[ $# -gt 0 ]]; do
       LIST_REPOS=true
       shift
       ;;
+    --porcelain-json)
+      PORCELAIN_JSON=true
+      PORCELAIN_MODE=true
+      LIST_REPOS=true
+      shift
+      ;;
+    --active-since)
+      ACTIVE_SINCE=${2:-}
+      ACTIVE_SINCE_SET=true
+      shift $(( $# > 1 ? 2 : 1 ))
+      ;;
+    --active-since=*)
+      ACTIVE_SINCE=${1#*=}
+      ACTIVE_SINCE_SET=true
+      shift
+      ;;
     -h|--help)
       # The header between the first two rule lines, wherever it ends.
       awk '/^# =====/ { n++; print; if (n == 2) exit; next } n == 1' "$0"
@@ -249,7 +289,7 @@ while [[ $# -gt 0 ]]; do
     *)
       echo "Unknown option: $1"
       echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--quiet] [--limit N] [--dry-run] [--list-repos] [--porcelain]"
-      echo "       [--partial | --filter SPEC] [--shallow-since DATE]"
+      echo "       [--partial | --filter SPEC] [--shallow-since DATE] [--active-since DURATION] [--porcelain-json]"
       echo "       GitHub: [--org NAME] [--list-teams]   GitLab: [--host HOST] [--group PATH] [--from-list FILE]"
       exit 1
       ;;
@@ -303,6 +343,31 @@ case "$PROVIDER" in
         ;;
 esac
 
+# --active-since: a fixed grammar, checked before any API call. The cutoff
+# is computed in seconds since the epoch, so no date(1) dialect is needed.
+ACTIVE_CUTOFF_EPOCH=0
+if [ "$ACTIVE_SINCE_SET" = true ]; then
+    if [[ "$ACTIVE_SINCE" =~ ^([0-9]+)(d|w|mo|y)$ ]] && [ "$((10#${BASH_REMATCH[1]}))" -gt 0 ]; then
+        case "${BASH_REMATCH[2]}" in
+            d) active_days=1 ;;
+            w) active_days=7 ;;
+            mo) active_days=30 ;;
+            y) active_days=365 ;;
+        esac
+        ACTIVE_CUTOFF_EPOCH=$(( $(date -u +%s) - 10#${BASH_REMATCH[1]} * active_days * 86400 ))
+    else
+        echo "Error: --active-since needs a duration such as 90d, 2w, 6mo or 1y (got '${ACTIVE_SINCE}')" >&2
+        exit 1
+    fi
+fi
+if [ "$ACTIVE_SINCE_SET" = true ] || [ "$PORCELAIN_JSON" = true ]; then
+    META_MODE=true
+    if [ -n "$FROM_LIST" ]; then
+        echo "Error: --active-since and --porcelain-json need discovery metadata and cannot be combined with --from-list" >&2
+        exit 1
+    fi
+fi
+
 # ---- provider seam ------------------------------------------------------
 # Every provider call sits behind the functions below, dispatched on
 # PROVIDER. The sync loop sees only repository paths relative to the root.
@@ -322,6 +387,46 @@ github_preflight() {
         [[ -n "${GH_HOST:-}" ]] && echo "  (targeting host: $GH_HOST)"
         exit 1
     fi
+}
+
+# --json fields for gh repo list; the metadata fields only in META_MODE.
+github_list_fields() {
+    if [ "$META_MODE" = true ]; then
+        echo "name,isArchived,defaultBranchRef,pushedAt,isFork,isMirror,parent"
+    else
+        echo "name,isArchived,defaultBranchRef"
+    fi
+}
+
+# Append one metadata line per listed, kept repository to $meta_file (see
+# the activity metadata section). $1 is a gh repo list JSON file.
+github_list_meta() {
+    [ "$META_MODE" = true ] || return 0
+    jq -c --arg g "$ORG" '.[]
+        | select(.isArchived == false and (.defaultBranchRef.name // "") != "")
+        | {path: .name, default_branch: .defaultBranchRef.name,
+           last_activity_at: .pushedAt, archived: false, fork: (.isFork == true),
+           forked_from: (if .parent == null then null
+                         else "\(.parent.owner.login)/\(.parent.name)" end),
+           mirror: (if has("isMirror") then .isMirror else null end),
+           group: $g}' "$1" >> "$meta_file"
+}
+
+# META_MODE team source: one call per team, split locally, plus metadata.
+# The REST team listing has no parent; a fork's parent is looked up later
+# only when no other source supplied it.
+github_team_repos_meta() {
+    local team=$1 json
+    json=$(gh api "orgs/$ORG/teams/$team/repos" --paginate 2>/dev/null) || json=""
+    [ -n "$json" ] || return 0
+    jq -r '.[] | select(.archived == false) | .name' <<< "$json" >> "$all_repos_file" || true
+    jq -r '.[] | select(.archived == true) | .name' <<< "$json" >> "$archived_repos_file" || true
+    jq -c --arg g "$ORG" '.[] | select(.archived == false)
+        | {path: .name, default_branch: .default_branch,
+           last_activity_at: .pushed_at, archived: false, fork: (.fork == true),
+           forked_from: (.parent.full_name // null),
+           mirror: (if has("mirror_url") then .mirror_url != null else null end),
+           group: $g}' <<< "$json" >> "$meta_file" || true
 }
 
 # Discover every accessible repository. Appends one relative path per line
@@ -355,8 +460,9 @@ discover_github() {
         repo_list_limit=4000
         echo "Fetching repositories for personal account $ORG..."
         repo_list_json=$(mktemp)
-        gh repo list "$ORG" --limit "$repo_list_limit" --json name,isArchived,defaultBranchRef > "$repo_list_json"
+        gh repo list "$ORG" --limit "$repo_list_limit" --json "$(github_list_fields)" > "$repo_list_json"
         jq -r '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' "$repo_list_json" >> "$all_repos_file"
+        github_list_meta "$repo_list_json"
         jq -r '.[] | select(.isArchived == true) | .name' "$repo_list_json" >> "$archived_repos_file"
 
         if [ "$(jq 'length' "$repo_list_json")" -ge "$repo_list_limit" ]; then
@@ -411,6 +517,10 @@ discover_github() {
             echo "Fetching repositories from all teams..."
             for team in "${user_teams[@]}"; do
                 echo "  - Fetching from $team..."
+                if [ "$META_MODE" = true ]; then
+                    github_team_repos_meta "$team"
+                    continue
+                fi
                 # Fetch all repos and split into active vs archived
                 gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == false) | .name' 2>/dev/null >> "$all_repos_file" || true
                 gh api "orgs/$ORG/teams/$team/repos" --paginate --jq '.[] | select(.archived == true) | .name' 2>/dev/null >> "$archived_repos_file" || true
@@ -425,8 +535,9 @@ discover_github() {
         echo "Fetching the $ORG repo list..."
         org_repo_list_limit=4000
         org_repo_list_json=$(mktemp)
-        gh repo list "$ORG" --limit "$org_repo_list_limit" --json name,isArchived,defaultBranchRef > "$org_repo_list_json"
+        gh repo list "$ORG" --limit "$org_repo_list_limit" --json "$(github_list_fields)" > "$org_repo_list_json"
         jq -r '.[] | select(.isArchived == false and (.defaultBranchRef.name // "") != "") | .name' "$org_repo_list_json" >> "$all_repos_file"
+        github_list_meta "$org_repo_list_json"
         jq -r '.[] | select(.isArchived == true) | .name' "$org_repo_list_json" >> "$archived_repos_file"
 
         if [ "$(jq 'length' "$org_repo_list_json")" -ge "$org_repo_list_limit" ]; then
@@ -485,6 +596,16 @@ gitlab_group_projects() {
         # mirroring the GitHub rule; archived ones go to the archive cache.
         jq -r '.[] | select(.archived != true and (.default_branch // "") != "" and .empty_repo != true) | .path_with_namespace' <<< "$json" >> "$all_repos_file"
         jq -r '.[] | select(.archived == true) | .path_with_namespace' <<< "$json" >> "$archived_repos_file"
+        # mirror is shown only to some roles; unreadable is null, not false.
+        if [ "$META_MODE" = true ]; then
+            jq -c --arg g "$full_path" '.[]
+                | select(.archived != true and (.default_branch // "") != "" and .empty_repo != true)
+                | {path: .path_with_namespace, id: .id, default_branch: .default_branch,
+                   last_activity_at: .last_activity_at, archived: false,
+                   forked_from: (.forked_from_project.path_with_namespace // null),
+                   mirror: (if has("mirror") then .mirror else null end),
+                   group: $g}' <<< "$json" >> "$meta_file"
+        fi
     done
 }
 
@@ -749,6 +870,157 @@ discover_repos() {
     esac
 }
 
+# ---- activity metadata (--active-since, --porcelain-json) -----------------
+# In META_MODE each discovery source also appends one JSON line per listed
+# repository to $meta_file: path, default_branch, last_activity_at, archived,
+# forked_from, mirror, plus internal fields (group: the GitLab group whose
+# listing returned it, or the GitHub org/account; id: the GitLab project id;
+# fork). A path seen by several sources (team and org list, a project shared
+# into two groups) has several lines; meta_merge joins them per path, a
+# known value beating an unknown one whatever the source order, so the
+# sidecar survives the same dedupe as the path list.
+
+# jq: ISO 8601 timestamp (Z or +hh:mm offset, optional fractional seconds)
+# to seconds since the epoch; anything else is null. jq 1.6 safe.
+META_JQ_EPOCH='def epoch:
+  if type != "string" then null
+  else [capture("^(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\\.[0-9]+)?(?<z>Z|(?<s>[+-])(?<h>[0-9]{2}):?(?<m>[0-9]{2}))$")]
+    | if length == 0 then null
+      else .[0] as $c
+        | ($c.d + "Z" | fromdateiso8601)
+          - (if $c.s == null then 0
+             else (($c.h | tonumber) * 3600 + ($c.m | tonumber) * 60)
+                  * (if $c.s == "+" then 1 else -1 end)
+             end)
+      end
+  end;'
+
+# The final repo_paths as a JSON array.
+meta_paths_json() {
+    printf '%s\n' "${repo_paths[@]}" | jq -R . | jq -sc .
+}
+
+# One merged record per repo_paths entry, in repo_paths order.
+meta_merge() {
+    jq -sc --argjson keep "$(meta_paths_json)" '
+        def known: with_entries(select(.value != null));
+        (reduce .[] as $o ({};
+            .[$o.path] as $prev
+            | .[$o.path] = (($prev // {}) + ($o | known)
+                | .fork = (($prev.fork // false) or ($o.fork == true)))))
+        as $m
+        | $keep[] as $p | ($m[$p] // {path: $p})' "$meta_file"
+}
+
+# Head commit of one repository's default branch, as
+# {"head_sha": ..., "head_committed_at": ...}; nulls when unreadable.
+meta_head() {
+    local path=$1 branch=$2 id=$3 json=""
+    if [ -n "$branch" ]; then
+        case "$PROVIDER" in
+            github)
+                json=$(gh api "repos/$ORG/$path/commits/$(gitlab_encode "$branch")" 2>/dev/null \
+                    | jq -c '{head_sha: .sha, head_committed_at: .commit.committer.date}' 2>/dev/null) || json=""
+                ;;
+            gitlab)
+                [ -n "$id" ] || id=$(gitlab_encode "$path")
+                json=$(glab api --hostname "$GITLAB_HOST" "projects/$id/repository/branches/$(gitlab_encode "$branch")" 2>/dev/null \
+                    | jq -c '{head_sha: .commit.id, head_committed_at: .commit.committed_date}' 2>/dev/null) || json=""
+                ;;
+        esac
+    fi
+    [ -n "$json" ] || json='{"head_sha":null,"head_committed_at":null}'
+    echo "$json"
+}
+
+# GitHub fork whose parent no listing supplied (team-only forks).
+meta_github_parent() {
+    gh api "repos/$ORG/$1" 2>/dev/null | jq -c '{forked_from: (.parent.full_name // null)}' 2>/dev/null \
+        || echo '{"forked_from":null}'
+}
+
+# Join metadata to repo_paths, read each default-branch head (skipping
+# repositories the --active-since prefilter already rules out), and apply
+# the filter. Rewrites repo_paths, and writes $meta_out_file: the
+# --porcelain-json lines for the kept repositories, in order.
+apply_activity_metadata() {
+    local merged rows path branch id prefilter need_parent extra kept_paths
+    local candidates=${#repo_paths[@]}
+    merged=$(mktemp)
+    rows=$(mktemp)
+    meta_merge > "$merged"
+    # One TSV row per repository; "-" stands for empty, since read collapses
+    # adjacent tabs.
+    jq -r --argjson cutoff "$ACTIVE_CUTOFF_EPOCH" --arg active "$ACTIVE_SINCE_SET" "$META_JQ_EPOCH"'
+        (.last_activity_at | epoch) as $la
+        | [.path, (.default_branch // "-"), ((.id // "-") | tostring),
+           (if $active == "true" and $la != null and $la < $cutoff then "stale" else "check" end),
+           (if .fork == true and .forked_from == null then "parent" else "-" end)]
+        | @tsv' "$merged" > "$rows"
+
+    : > "$meta_out_file.heads"
+    if [ "$ACTIVE_SINCE_SET" = true ]; then
+        echo "Checking default-branch activity since $ACTIVE_CUTOFF_ISO for $candidates repositories..."
+    else
+        echo "Reading the default-branch head of $candidates repositories..."
+    fi
+    while IFS=$'\t' read -r path branch id prefilter need_parent; do
+        [ "$branch" = "-" ] && branch=""
+        [ "$id" = "-" ] && id=""
+        if [ "$prefilter" = stale ]; then
+            extra='{"head_sha":null,"head_committed_at":null,"stale":true}'
+        else
+            extra=$(meta_head "$path" "$branch" "$id")
+            if [ "$ACTIVE_SINCE_SET" = true ] && [ "$(jq -r '.head_committed_at // ""' <<< "$extra")" = "" ]; then
+                echo "Warning: could not read the default-branch head of $path; excluded by --active-since" >&2
+            fi
+        fi
+        if [ "$need_parent" = parent ] && [ "$PROVIDER" = github ]; then
+            extra=$(jq -sc 'add' <<< "$extra"$'\n'"$(meta_github_parent "$path")")
+        fi
+        jq -c --arg p "$path" '. + {path: $p}' <<< "$extra" >> "$meta_out_file.heads"
+    done < "$rows"
+
+    # Join heads onto the merged records; keep per --active-since.
+    jq -sc --argjson cutoff "$ACTIVE_CUTOFF_EPOCH" --arg active "$ACTIVE_SINCE_SET" \
+        --slurpfile heads "$meta_out_file.heads" "$META_JQ_EPOCH"'
+        (reduce $heads[] as $h ({}; .[$h.path] = $h)) as $hm
+        | .[] | . + ($hm[.path] // {})
+        | select($active != "true"
+                 or (.stale != true and (.head_committed_at | epoch) != null
+                     and (.head_committed_at | epoch) >= $cutoff))
+        | {path, default_branch, last_activity_at, head_committed_at,
+           archived: (.archived == true), forked_from, mirror, head_sha}' \
+        "$merged" > "$meta_out_file"
+
+    if [ "$ACTIVE_SINCE_SET" = true ]; then
+        kept_paths=$(jq -r '.path' "$meta_out_file")
+        echo "Active since $ACTIVE_CUTOFF_ISO ($ACTIVE_SINCE): $(wc -l < "$meta_out_file" | tr -d ' ') of $candidates repositories have a default-branch commit in the window"
+        if [ "$DRY_RUN" = true ]; then
+            meta_group_counts
+        fi
+        repo_paths=()
+        if [ -n "$kept_paths" ]; then
+            mapfile -t repo_paths <<< "$kept_paths"
+        fi
+    fi
+    rm -f "$merged" "$rows" "$meta_out_file.heads"
+}
+
+# --dry-run --active-since: qualifying and total counts per GitLab listing
+# group (a project shared into two groups counts in both), or one count
+# for the GitHub org or account. Printed even under --quiet: these are the
+# answer, not per-repository chatter.
+meta_group_counts() {
+    jq -rs --argjson cand "$(meta_paths_json)" --slurpfile kept "$meta_out_file" '
+        (reduce $cand[] as $p ({}; .[$p] = true)) as $c
+        | (reduce $kept[] as $k ({}; .[$k.path] = true)) as $k
+        | map(select($c[.path] == true)) | group_by(.group) | .[]
+        | (map(.path) | unique) as $ps
+        | "  \(.[0].group): \($ps | map(select($k[.] == true)) | length) of \($ps | length) active"' \
+        "$meta_file"
+}
+
 provider_preflight
 
 # Derive the root, after preflight so a failed host check leaves no
@@ -809,9 +1081,16 @@ user_teams=()
 gitlab_group_count=0
 all_repos_file=$(mktemp)
 archived_repos_file=$(mktemp)
+# The metadata sidecar and the --porcelain-json lines (META_MODE only).
+meta_file=$(mktemp)
+meta_out_file=$(mktemp)
 # Remove the temp files on any exit path, including the --list-teams early
 # exits below which return before the explicit rm -f calls.
-trap 'rm -f "$all_repos_file" "$archived_repos_file"' EXIT
+trap 'rm -f "$all_repos_file" "$archived_repos_file" "$meta_file" "$meta_out_file" "$meta_out_file.heads"' EXIT
+ACTIVE_CUTOFF_ISO=""
+if [ "$ACTIVE_SINCE_SET" = true ]; then
+    ACTIVE_CUTOFF_ISO=$(jq -rn --argjson e "$ACTIVE_CUTOFF_EPOCH" '$e | todate')
+fi
 
 discover_repos
 
@@ -853,6 +1132,14 @@ if [ ${#REPO_BLACKLIST[@]} -gt 0 ]; then
     echo "Excluded ${#REPO_BLACKLIST[@]} blacklisted repo(s): ${REPO_BLACKLIST[*]}"
 fi
 
+if [ "$META_MODE" = true ] && [ ${#repo_paths[@]} -gt 0 ]; then
+    apply_activity_metadata
+    if [ ${#repo_paths[@]} -eq 0 ]; then
+        echo "No repositories have a default-branch commit since $ACTIVE_CUTOFF_ISO (--active-since $ACTIVE_SINCE)"
+        exit 0
+    fi
+fi
+
 total_repos=${#repo_paths[@]}
 
 if [ "$total_repos" -eq 0 ]; then
@@ -863,7 +1150,10 @@ fi
 report_found_repos
 
 if [ "$LIST_REPOS" = true ]; then
-    if [ "$PORCELAIN_MODE" = true ]; then
+    if [ "$PORCELAIN_JSON" = true ]; then
+        # One JSON object per repository, in repo_paths order.
+        cat "$meta_out_file" >&3
+    elif [ "$PORCELAIN_MODE" = true ]; then
         # Machine-readable: one repo name per line to real stdout (fd 3),
         # no prefix, no surrounding chatter.
         for repo in "${repo_paths[@]}"; do
@@ -888,7 +1178,7 @@ temp_dir=$(mktemp -d)
 mkdir -p "$temp_dir/status"
 status_dir="$temp_dir/status"
 GHSYNC_STATUS_DIR="$status_dir"
-trap 'rm -f "$all_repos_file" "$archived_repos_file"; rm -rf "$temp_dir"' EXIT
+trap 'rm -f "$all_repos_file" "$archived_repos_file" "$meta_file" "$meta_out_file" "$meta_out_file.heads"; rm -rf "$temp_dir"' EXIT
 
 export QUIET_MODE DRY_RUN GITHUB_DEV_PATH ORG PROVIDER GITLAB_HOST GITLAB_SCHEME GHSYNC_STATUS_DIR
 export CLONE_FILTER CLONE_SHALLOW_SINCE

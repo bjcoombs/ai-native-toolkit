@@ -194,6 +194,18 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_claims.failures.version` | dropped |
 | `instruction_claims.failures.reason` | dropped |
 
+## doc_claims
+
+| Field | Kept as |
+|---|---|
+| `doc_claims.excluded_trees` | path (hashed when hashing is on) |
+| `doc_claims.failures.kind` | token |
+| `doc_claims.failures.version` | dropped |
+| `doc_claims.failures.reason` | dropped |
+| `doc_claims.contradictions.kind` | token |
+| `doc_claims.contradictions.sites.value` | dropped |
+| `doc_claims.contradictions.conflict_pair.value` | dropped |
+
 ## doc_graph
 
 | Field | Kept as |
@@ -219,6 +231,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `doc_staleness.churn_window` | dropped |
 | `doc_staleness.docs.subject_method` | token |
+| `doc_staleness.docs.subject_roots` | path (hashed when hashing is on) |
+| `doc_staleness.docs.subject_paths` | path (hashed when hashing is on) |
+| `doc_staleness.docs.base_doc_dir` | path (hashed when hashing is on) |
 | `doc_staleness.docs.confidence` | token |
 | `doc_staleness.docs.last_change_basis` | token |
 | `doc_staleness.docs.last_commit_days_bound` | token |
@@ -229,6 +244,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.bulk_commits_skipped.sha` | dropped |
 | `doc_staleness.bulk_commits_skipped.date` | token |
 | `stale_hubs.subject_method` | token |
+| `stale_hubs.subject_roots` | path (hashed when hashing is on) |
+| `stale_hubs.subject_paths` | path (hashed when hashing is on) |
+| `stale_hubs.base_doc_dir` | path (hashed when hashing is on) |
 | `stale_hubs.confidence` | token |
 | `stale_hubs.last_change_basis` | token |
 | `stale_hubs.last_commit_days_bound` | token |
