@@ -233,14 +233,18 @@ def test_default_rubric_on_the_golden_fixture_repos(golden_repos: dict[str, dict
         assert _levels(_run({name: golden_repos[name]})) == {
             "layer-0-instructions": 0,   # no CLAUDE.md: level 0, not unknown
             "layer-1-liveness": None,    # only a full /assess run measures the rung
-            "layer-2-design": None,      # structure, stats_summary, promissory_markers
-            "layer-3-linters": None,     # and structure_drift: full /assess run only
-            "layer-4-architecture": None,
+            "layer-2-design": None,      # no Python package: no_python_packages
+            "layer-3-linters": None,     # no lint suppression: no suppression family
+            "layer-4-architecture": None,  # no ownership map: no_ownership_map
             "layer-5-ci": 0,
             "layer-6-coverage": 0,
             "layer-7-review": None,      # needs GitHub
             "layer-8-agent-ops": 0,
         }
+    for scans in golden_repos.values():   # measured headless, each unknown for a named reason
+        assert scans["structure"]["reason"].startswith("no_python_packages:")
+        assert scans["structure_drift"]["reason"].startswith("no_ownership_map:")
+        assert scans["promissory_markers"]["available"] is True
     layer1 = _row(result, "layer-1-liveness")
     assert (layer1["status"], layer1["missing_signals"]) == ("unknown", ["observability.rung"])
     assert layer1["unknown_repos"] == sorted(golden_repos)

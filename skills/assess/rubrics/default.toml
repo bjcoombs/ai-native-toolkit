@@ -18,10 +18,13 @@
 #   proxies the run context already exposes, so they disagree with /assess
 #   most often. Each starts from positive evidence at level 1, so an absent
 #   signal is level 0 or unknown, never credit; a practice /assess looks for
-#   can still be absent at level 2 (see each row below). The structure,
-#   structure_drift, stats_summary and promissory_markers blocks are
-#   assembled by a full /assess run only: a headless run reports them
-#   unavailable, so these three rows are unknown there.
+#   can still be absent at level 2 (see each row below). A headless run
+#   builds the structure, structure_drift, stats_summary and
+#   promissory_markers blocks itself (lib/headless_layers.py) when grimp,
+#   networkx, lizard and rg are installed; a missing tool makes its block
+#   unavailable with a named reason, so the row is unknown there. Headless
+#   stats_summary scores the files lizard reads only, so its loc p95 can
+#   differ from a full run's.
 # - Layer 2 reads the import graph's design, not type strictness: level 1 is
 #   real module structure (Newman modularity Q >= 0.3, the usual threshold
 #   for community structure), level 2 adds cross-package imports entering
@@ -50,7 +53,8 @@
 #   tracked file, level 2 adds a file-size outcome (95% of scored files at
 #   500 lines or fewer). Neither proves an architecture test runs in CI,
 #   which is what /assess looks for. With no map the structure_drift block
-#   is omitted, so the row is unknown rather than 0.
+#   is omitted (a headless run reports it unavailable), so the row is
+#   unknown rather than 0.
 # - Layer 0 level 1 reads layer_grades.instruction_file_present: a committed
 #   instruction file at any location in
 #   instruction_files.INSTRUCTION_FILE_PATHS (root CLAUDE.md, AGENTS.md,
@@ -75,7 +79,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.3"
+version = "default-2026.11.4"
 
 [[rows]]
 id = "layer-0-instructions"

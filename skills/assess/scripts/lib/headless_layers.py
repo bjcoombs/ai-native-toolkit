@@ -12,9 +12,8 @@ modules, so the boundary from #557/#558 stays as it is:
 
 - ``structure`` reads the core's private ``structure_scan`` (the import graph,
   which needs grimp and networkx). A repository with no importable Python
-  package reports unavailable (``no_python_packages``) where the full run
-  reports modularity 0.0, so a fleet of Go or JavaScript repositories reads
-  unknown on layer 2 rather than level 0.
+  package reports unavailable (``no_python_packages``), as the full run does,
+  so a Go or JavaScript repository reads unknown on layer 2 rather than 0.
 - ``promissory_markers`` reads the core's private ``promissory`` scan (needs
   ``rg``).
 - ``structure_drift`` builds tier 0 (declared ownership patterns against the
@@ -100,10 +99,11 @@ def structure(scan: Any) -> JsonDict:
     """The import-graph block, or a named marker (no tool, no Python package)."""
     marker = _named(scan, (("grimp not installed", "no_grimp"),
                            ("networkx not installed", "no_networkx"),
-                           ("grimp failed", "grimp_failed")))
+                           ("grimp failed", "grimp_failed"),
+                           ("no importable Python", "no_python_packages")))
     if marker is not None:
         return marker
-    if not scan.get("module_count"):
+    if not scan.get("module_count"):  # a scan from before #663 reported these available
         return _marker("no_python_packages",
                        "no importable Python package; the import graph reads Python only")
     block: JsonDict = scan
@@ -123,7 +123,7 @@ def structure_drift(repo_root: Path) -> JsonDict:
     """Tier 0 drift with tier 1 unavailable, or ``no_ownership_map``."""
     block = structure_drift_tier_0(repo_root)
     if block is None:
-        return _marker("no_ownership_map", "no CODEOWNERS or ARCHITECTURE.md path map")
+        return _marker("no_ownership_map", "no supported ownership or boundary map")
     block["tier_1"] = {"available": False, "reason": TIER_1_REASON}
     return block
 

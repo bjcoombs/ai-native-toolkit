@@ -20,7 +20,8 @@ from lib import signals
 from lib import structure_graph
 from lib.counts_only import reason_code
 from lib.counts_only_rules import ID, PATH, classify
-from lib.rubric import _UNAVAILABLE, resolve_signal
+from lib.rubric import _UNAVAILABLE, evaluate, resolve_signal
+from lib.rubric_signals import load_default_rubric
 from lib.signals_schema import SCHEMA_PATH
 
 BLOCKS = ("structure", "stats_summary", "promissory_markers", "structure_drift")
@@ -29,6 +30,8 @@ BLOCKS = ("structure", "stats_summary", "promissory_markers", "structure_drift")
 LAYER_SIGNALS = (
     "structure.modularity_q",
     "structure.front_door_ratio",
+    "structure.cross_package_edges",
+    "promissory_markers.aging_reliable",
     "promissory_markers.families.suppression.total",
     "promissory_markers.families.suppression.stale",
     "structure_drift.tier_0.matched_patterns",
@@ -228,12 +231,32 @@ def test_counts_only_run_gives_every_layer_signal_a_value(
     jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
     for signal in LAYER_SIGNALS:
         value = resolve_signal(doc["scans"], signal)
-        assert isinstance(value, (int, float)) and not isinstance(value, bool), signal
+        assert isinstance(value, (int, float)), signal
     text = json.dumps(doc)
     for planted in (LONG_NAME, LONG_OWNER, "missing-dir-with-a-long-planted-name", "F401"):
         assert planted not in text
     for pattern, value in _strings(doc["scans"]):
         assert len(value) <= 40 or classify(pattern) in (PATH, ID), (pattern, value)
+
+
+def test_the_default_model_gives_layers_2_to_4_a_whole_level_from_counts_only(
+    target: Path, tmp_path: Path, real_lizard: None,
+) -> None:
+    """The fleet path: a counts-only headless document through the default rows."""
+    _write(target, "pkg2/__init__.py", "from pkg import api\n")
+    _git(target, "add", "-A")
+    _git(target, "commit", "-qm", "second package")
+    doc = _run(target, tmp_path / "co.json", "--counts-only")
+    result = evaluate(load_default_rubric(),
+                      {"name": "g", "settings": None, "repos": {"r": doc["scans"]}})
+    levels = {row["id"]: row["level"] for row in result["rows"]}
+    assert resolve_signal(doc["scans"], "structure.cross_package_edges") > 0
+    for row_id in ("layer-2-design", "layer-3-linters", "layer-4-architecture"):
+        assert isinstance(levels[row_id], int), (row_id, levels[row_id])
+    # One suppression on two commits: a linter runs, but history too thin to age it.
+    assert levels["layer-3-linters"] == 1
+    assert doc["scans"]["promissory_markers"]["aging_reliable"] is False
+    assert levels["layer-4-architecture"] == 2   # a matched CODEOWNERS path, small files
 
 
 def test_no_tool_run_reads_unknown_with_named_reasons(

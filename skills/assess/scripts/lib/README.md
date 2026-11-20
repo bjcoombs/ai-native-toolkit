@@ -648,9 +648,9 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
 `code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
-and a rubric row reads `unknown`. It diverges from the full run in two places: no Python
-package reads `no_python_packages` (the full run: modularity 0.0), and no ownership map
-reads `no_ownership_map` (the full run omits the block). Tests:
+and a rubric row reads `unknown`. It diverges from the full run in two places: no ownership
+map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
+lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
 **`signals_schema.py`**
@@ -747,8 +747,8 @@ passes their union across the repositories a step lists and annotates each repos
 with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
 then states the signal expression alone. `measure_hint(signal)` says why a signal can
 be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
-permission; the `structure`, `stats_summary`, `structure_drift` and
-`promissory_markers` blocks a full `/assess` run only). Every signal of
+permission; for the `structure`, `stats_summary` and `promissory_markers` blocks a missing
+grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Every signal of
 `rubrics/default.toml` has wording (tested).
 
 **`fleet_group_schema.py`**
@@ -1357,7 +1357,8 @@ name a field and end on a scalar (no list, no object); an untyped block is open.
 `<setting>.value` / `.reason`). `load_default_rubric` loads
 `skills/assess/rubrics/default.toml`: one team row per layer 0-8, level 1 for
 Partial and 2 for Present. Layers 2-4 have no deterministic grade, so their rows read
-proxies from full-run blocks (import-graph modularity and front doors; lint
+proxies from the `structure`, `promissory_markers`, `structure_drift` and `stats_summary`
+blocks, which full and headless runs both produce (import-graph modularity and front doors; lint
 suppressions; an ownership map and file size), each starting from positive evidence
 so an absent signal is never credited (the practice /assess looks for can still be
 absent: the header says where). It can disagree with the `/assess` layer verdicts (the file header lists
