@@ -73,7 +73,7 @@ def type_schema(tp: Any) -> JsonDict:
 
 def build_schema() -> JsonDict:
     schema = type_schema(GroupRow)
-    level = schema["properties"]["rubric"]["items"]["properties"]
+    level = schema["properties"]["levels"]["items"]["properties"]
     level["scope"] = {"enum": ["org", "team"]}
     level["status"] = {"enum": ["level", "unknown"]}
     return {

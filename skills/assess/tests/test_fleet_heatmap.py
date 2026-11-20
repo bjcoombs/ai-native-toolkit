@@ -152,7 +152,7 @@ def test_comparison_text_and_removed_groups(tmp_path):
 
 
 def test_comparison_across_levels_versions_is_not_shown(tmp_path):
-    earlier = [dict(g, rubric_version="fixture-0") for g in _groups()]
+    earlier = [dict(g, levels_version="fixture-0") for g in _groups()]
     path = _write_lines(tmp_path / "earlier.jsonl", list(earlier))
     svg = _render(tmp_path, "--compare", str(path))
     assert "change not shown: the earlier run used rubric fixture-0, this run fixture-1" in svg
@@ -219,8 +219,8 @@ def test_change_text(change, text):
 
 def test_unknown_with_no_missing_signal_says_no_evidence():
     (group, *_rest) = _groups()
-    entry = dict(group["rubric"][0], status="unknown", level=None, missing_signals=[])
-    empty: GroupRow = dict(group, rubric=[entry])  # type: ignore[assignment]
+    entry = dict(group["levels"][0], status="unknown", level=None, missing_signals=[])
+    empty: GroupRow = dict(group, levels=[entry])  # type: ignore[assignment]
     columns: list[fh.Column] = [{"id": entry["id"], "title": "t", "top": 1}]
     assert list(fh.unknown_keys([empty], columns)) == ["no evidence (no repository scanned)"]
 
@@ -245,15 +245,15 @@ def _one() -> dict[str, object]:
     ([[1]], "not a JSON object"),
     ([dict(_one(), fleet_group_version=99)], "fleet_group_version is 99, expected 1"),
     ([dict(_one(), group=None)], "needs a string 'group'"),
-    ([dict(_one(), rubric=[{"id": "x"}])], "lacks one of"),
-    ([dict(_one(), rubric=[{"id": "x", "status": "maybe", "level": None,
+    ([dict(_one(), levels=[{"id": "x"}])], "lacks one of"),
+    ([dict(_one(), levels=[{"id": "x", "status": "maybe", "level": None,
                             "missing_signals": [], "unknown_repos": []}])], "no whole level"),
     ([_one(), _one()], "appears twice"),
-    ([{k: v for k, v in _one().items() if k != "rubric_version"}], "rubric_version"),
-    ([dict(_one(), rubric_version=3)], "rubric_version"),
-    ([dict(_one(), rubric=[{"id": "x", "status": "unknown", "level": None,
+    ([{k: v for k, v in _one().items() if k != "levels_version"}], "levels_version"),
+    ([dict(_one(), levels_version=3)], "levels_version"),
+    ([dict(_one(), levels=[{"id": "x", "status": "unknown", "level": None,
                             "missing_signals": "sig", "unknown_repos": []}])], "malformed"),
-    ([dict(_one(), rubric=[{"id": 1, "status": "unknown", "level": None,
+    ([dict(_one(), levels=[{"id": 1, "status": "unknown", "level": None,
                             "missing_signals": [], "unknown_repos": []}])], "malformed"),
 ])
 def test_load_groups_refuses_malformed_runs(tmp_path, rows, message):
@@ -288,7 +288,7 @@ def test_an_empty_run_loads_as_no_groups_and_the_heat_map_exits_2(tmp_path, caps
 
 def test_a_boolean_level_is_not_a_whole_level(tmp_path):
     entry = {"id": "x", "status": "level", "level": True, "missing_signals": [], "unknown_repos": []}
-    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), rubric=[entry])])
+    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), levels=[entry])])
     with pytest.raises(fv.FleetViewError, match="no whole level"):
         fv.load_groups(path)
 
@@ -301,11 +301,11 @@ def test_load_groups_missing_file(tmp_path):
 def test_run_shape_errors():
     a, b, *_rest = _groups()
     with pytest.raises(fv.FleetViewError, match="--rubric"):
-        fv.level_columns([dict(a, rubric=[])])  # type: ignore[list-item]
+        fv.level_columns([dict(a, levels=[])])  # type: ignore[list-item]
     with pytest.raises(fv.FleetViewError, match="different rubric rows"):
-        fv.level_columns([a, dict(b, rubric=b["rubric"][:1])])  # type: ignore[list-item]
+        fv.level_columns([a, dict(b, levels=b["levels"][:1])])  # type: ignore[list-item]
     with pytest.raises(fv.FleetViewError, match="different rubric versions"):
-        fv.run_levels_version([a, dict(b, rubric_version="other")])  # type: ignore[list-item]
+        fv.run_levels_version([a, dict(b, levels_version="other")])  # type: ignore[list-item]
     with pytest.raises(fv.FleetViewError, match="no rubric row"):
         fv.cell(a, "absent")
 
@@ -321,7 +321,7 @@ def test_check_levels_refuses_another_levels(tmp_path):
 
 def test_check_levels_names_a_run_without_a_levels():
     maturity_model = load_levels(FIXTURES / "levels.toml")
-    bare = [dict(g, rubric_version=None, rubric=[]) for g in _groups()]
+    bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
     with pytest.raises(fv.FleetViewError) as exc:
         fv.check_levels(maturity_model, bare)  # type: ignore[arg-type]
     assert "without --rubric" in str(exc.value)
@@ -329,7 +329,7 @@ def test_check_levels_names_a_run_without_a_levels():
 
 
 def test_comparison_against_a_run_without_a_maturity_model_says_so():
-    bare = [dict(g, rubric_version=None, rubric=[]) for g in _groups()]
+    bare = [dict(g, levels_version=None, levels=[]) for g in _groups()]
     then_bare = fv.compare_levels(_groups(), bare)  # type: ignore[arg-type]
     assert not then_bare["comparable"]
     assert then_bare["note"] == ("change not shown: the earlier run had no rubric, "
@@ -357,7 +357,7 @@ def test_compare_levels_kinds():
 
 
 def test_cli_exits_2_on_a_run_without_maturity_levels(tmp_path, capsys):
-    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), rubric=[], rubric_version=None)])
+    path = _write_lines(tmp_path / "groups.jsonl", [dict(_one(), levels=[], levels_version=None)])
     assert cli.main([str(path)]) == 2
     assert "--rubric" in capsys.readouterr().err
 

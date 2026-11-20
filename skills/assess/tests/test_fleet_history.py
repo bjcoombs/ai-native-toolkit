@@ -26,7 +26,7 @@ from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 
 COMPARE_SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet_compare.py"
-STAMP = {"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo", "counts_only": True,
+STAMP = {"fleet_stamp_version": 1, "levels_version": None, "window": "6mo", "counts_only": True,
          "scans": None, "paths_hashed": False}
 
 

@@ -31,7 +31,7 @@ def _row(repo: str, scans: dict[str, Any] | None, active: bool = True) -> FleetR
 
 def _stamp(rows: list[FleetRow], **overrides: Any) -> FleetStamp:
     args: dict[str, Any] = {"toolkit_commit": "abc", "plugin_version": "1.2.0", "today": date(2026, 11, 20),
-                            "window": "6mo", "rubric_version": "fixture-1", "counts_only": True,
+                            "window": "6mo", "levels_version": "fixture-1", "counts_only": True,
                             "paths_hashed": False, "scans": None}
     args.update(overrides)
     return build_stamp(rows, **args)
@@ -119,7 +119,7 @@ def test_an_org_row_on_both_sides_is_a_level_change_even_when_the_set_moved():
     later_rows = [_row("g/a", _scans(1))]
     earlier = _run(earlier_rows)
     later = _run(later_rows)
-    for entry in later.groups[0]["rubric"]:
+    for entry in later.groups[0]["levels"]:
         if entry["scope"] == "org":  # a level move with the settings unchanged
             entry["status"], entry["level"] = "level", 1
     comparison = compare(earlier, later)
@@ -143,7 +143,7 @@ def test_an_unchanged_rerun_shows_no_movement():
 
 
 @pytest.mark.parametrize(("override", "reason"), [
-    ({"rubric_version": "fixture-2"}, "rubric version changed"),
+    ({"levels_version": "fixture-2"}, "maturity-model version changed"),
     ({"window": "90d"}, "window changed"),
     ({"counts_only": False}, "counts-only mode changed"),
     ({"scans": ["agent_ops"]}, "scan selection changed"),

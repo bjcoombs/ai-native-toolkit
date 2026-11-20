@@ -399,7 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
     planned: JsonDict = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
-        "rubric_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
+        "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
     }
@@ -453,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
     groups_path = write_groups(out_dir, groups)
     stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
-        today=today, window=window, rubric_version=maturity_model["version"] if maturity_model is not None else None,
+        today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
     )
     write_stamp(out_dir, stamp)

@@ -114,7 +114,18 @@ constant each.
 # ref_variable (issue #684): true when the ref holds a CI variable ($TPL_REF), so
 # a fleet map draws that include as "pin unknown" rather than unpinned. Additive:
 # ref stays null for it, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.17.0"
+# 1.18.0: 2.0.0 maturity-model rename (issue #670), a breaking field rename in
+# the /fleet outputs: run.json and each groups.jsonl line carry levels_version
+# (was rubric_version), and a group line holds its rows under levels (was
+# rubric); compare.json earlier/later summaries carry levels_version
+# (fleet_compare_version 2). Readers map the old keys (lib/fleet_legacy.py), so
+# runs written before the rename still load and compare. Also documented: a
+# run-context.json structure block reports modularity_q null in two cases, an
+# import graph with no edges (modularity_reason "no_import_edges") and an
+# unavailable block (available false: grimp or networkx not installed, or no
+# importable Python package; the cause is in structure.reason). run-context.json
+# and complexity-stats.json are otherwise unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.18.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

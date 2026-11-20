@@ -140,7 +140,7 @@ def test_page_levels_agree_with_groups_jsonl(tmp_path):
     titles = {row["id"]: row["title"] for row in LEVELS["rows"]}
     for group in load_groups(tmp_path):
         page = pages[ns.page_path(group["group"]).as_posix()]
-        for entry in group["rubric"]:
+        for entry in group["levels"]:
             cell = "unknown" if entry["status"] == "unknown" else f"{entry['level']} of "
             assert f"| {ns.text(titles[entry['id']])} | {cell}" in page
 
@@ -152,7 +152,7 @@ def test_every_row_below_top_names_an_unmet_criterion_and_its_repositories(tmp_p
     checked = 0
     for group in load_groups(tmp_path):
         page = pages[ns.page_path(group["group"]).as_posix()]
-        for entry in group["rubric"]:
+        for entry in group["levels"]:
             if entry["status"] != "level" or entry["level"] == tops[entry["id"]]:
                 continue
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
@@ -239,7 +239,7 @@ def test_mismatched_group_sets_raise(tmp_path):
 def test_a_changed_row_set_raises(tmp_path):
     fleet_run(tmp_path)
     groups = load_groups(tmp_path)
-    groups[0]["rubric"].append({**groups[0]["rubric"][0], "id": "extra"})
+    groups[0]["levels"].append({**groups[0]["levels"][0], "id": "extra"})
     with pytest.raises(ns.NextStepsError, match="different set of rubric rows"):
         ns.build_pages(LEVELS, read_repos(tmp_path), groups, load_settings(tmp_path / "settings.json"))
 
@@ -293,7 +293,7 @@ def test_readers_require_ids_and_sort(tmp_path):
     with pytest.raises(FleetViewError, match="no repo or group id"):
         read_repos(tmp_path)
     (tmp_path / "groups.jsonl").write_text('{"fleet_group_version": 1, "group": "g"}\n', encoding="utf-8")
-    with pytest.raises(FleetViewError, match="needs a string 'group' and a 'rubric' list"):
+    with pytest.raises(FleetViewError, match="needs a string 'group' and a 'levels' list"):
         load_groups(tmp_path)
     fleet_run(tmp_path)
     assert [r["repo"] for r in read_repos(tmp_path)] == sorted(r["repo"] for r in REPOS)
@@ -390,7 +390,7 @@ def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path): 
     titles = {row["id"]: ns.text(row["title"]) for row in load_default_levels()["rows"]}
     for group in load_groups(out):
         page = (out / ns.page_path(group["group"])).read_text(encoding="utf-8")
-        for entry in group["rubric"]:
+        for entry in group["levels"]:
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
             if entry["status"] == "unknown":
                 assert "not a failure" in section
@@ -408,7 +408,7 @@ def test_a_run_without_a_maturity_model_says_so(froot, tmp_path, capsys):  # noq
 
 
 def test_index_links_are_percent_encoded():
-    group = {"group": "my team", "repos": 1, "rubric": []}
+    group = {"group": "my team", "repos": 1, "levels": []}
     page = ns.index_page(LEVELS, [group])  # type: ignore[list-item]
     assert "(teams/my%20team.md)" in page
 

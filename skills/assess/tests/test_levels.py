@@ -65,7 +65,7 @@ def test_fixture_levels_reaches_expected_whole_levels() -> None:
     maturity_model = load_levels(LEVELS, known_paths(ORG_PATHS, TEAM_PATHS))
     result = evaluate(maturity_model, _group())
 
-    assert result["rubric_version"] == "fixture-2026.11"
+    assert result["levels_version"] == "fixture-2026.11"
     assert result["group"] == "fixture-group"
     org = _row(result, "two-factor")
     assert (org["status"], org["level"]) == ("level", 1)
@@ -157,7 +157,7 @@ def test_rerun_is_byte_identical_regardless_of_input_order() -> None:
     shuffled = copy.deepcopy(group)
     shuffled["repos"] = dict(reversed(list(shuffled["repos"].items())))
     assert dumps_result(evaluate(load_levels(LEVELS), shuffled)) == first
-    assert first.endswith("\n") and '"rubric_version": "fixture-2026.11"' in first
+    assert first.endswith("\n") and '"levels_version": "fixture-2026.11"' in first
 
 
 # --- signal resolution ------------------------------------------------------

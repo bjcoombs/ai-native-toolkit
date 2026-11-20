@@ -29,7 +29,7 @@ REPOS = frozenset({"payments/api", "platform/gateway"})
 def stamp(scan_date: str, version: str | None, window: str = "6mo") -> FleetStamp:
     return {"fleet_stamp_version": FLEET_STAMP_VERSION, "toolkit_commit": None,
             "plugin_version": "2.0.0", "scan_date": scan_date, "window": window,
-            "rubric_version": version, "counts_only": True, "paths_hashed": False, "scans": None,
+            "levels_version": version, "counts_only": True, "paths_hashed": False, "scans": None,
             "repositories": {"selected": 2, "scanned_ok": 2, "failed": 0, "qualifying": 2}}
 
 
@@ -50,7 +50,7 @@ def group(name: str, levels: tuple[int | None, ...], top: int | None = None,
     return {"fleet_group_version": FLEET_GROUP_VERSION, "group": name, "repos": 2, "scanned": 2,
             "failed": 0, "shared_tooling_repos": 0, "distinct_ci_sources": None,
             "distinct_marketplaces": None, "settings_scope": None, "settings": None,
-            "rubric_version": None, "rubric": rows}
+            "levels_version": None, "levels": rows}
 
 
 # This run's maturity model (levels-2): two team rows of 3 levels and an org row. Entries

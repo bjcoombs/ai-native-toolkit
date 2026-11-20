@@ -100,7 +100,7 @@ WINDOW = "6mo"
 
 def _run(rows: tuple[FleetRow, ...], levels: MaturityModel, day: date) -> FleetRun:
     stamp = build_stamp(list(rows), toolkit_commit=None, plugin_version="2.0.0", today=day,
-                        window=WINDOW, rubric_version=levels["version"], counts_only=True,
+                        window=WINDOW, levels_version=levels["version"], counts_only=True,
                         paths_hashed=False, scans=None)
     return FleetRun(stamp, list(rows), roll_up(rows, levels, {}))
 

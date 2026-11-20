@@ -121,7 +121,7 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     stamp = (tmp_path / "out1" / "run.json").read_bytes()
     assert stamp == (tmp_path / "out2" / "run.json").read_bytes()
     assert stamp == (tmp_path / "out3" / "run.json").read_bytes()
-    assert json.loads(stamp)["rubric_version"] == "fixture-1"
+    assert json.loads(stamp)["levels_version"] == "fixture-1"
     assert str(froot).encode() not in stamp
     assert _snapshot(froot) == before, "the fleet run wrote into a target"
 
@@ -324,7 +324,7 @@ def test_usage_errors(froot, argv):
     assert exc.value.code == 2
 
 
-@pytest.mark.parametrize("case", ["no_root", "no_list", "empty", "rubric", "scans", "window", "inside"])
+@pytest.mark.parametrize("case", ["no_root", "no_list", "empty", "levels", "scans", "window", "inside"])
 def test_refusals_exit_2(froot, tmp_path, case, capsys):
     (tmp_path / "bad.toml").write_text('version = "x"\n[[rows]]\nid = "r"\n', encoding="utf-8")
     (tmp_path / "empty").mkdir()
@@ -332,7 +332,7 @@ def test_refusals_exit_2(froot, tmp_path, case, capsys):
         "no_root": [str(tmp_path / "absent")],
         "no_list": ["--from-list", str(tmp_path / "absent.txt")],
         "empty": [str(tmp_path / "empty")],
-        "rubric": [str(froot), "--rubric", str(tmp_path / "bad.toml")],
+        "levels": [str(froot), "--rubric", str(tmp_path / "bad.toml")],
         "scans": [str(froot), "--scans", "no_such_scan"],
         "window": [str(froot), "--window", "soon"],
         "inside": [str(froot)],

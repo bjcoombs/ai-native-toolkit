@@ -145,14 +145,14 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
     assert (grpa["distinct_marketplaces"], grpa["distinct_ci_sources"]) == (2, 1)
     assert (grpb["distinct_marketplaces"], grpb["distinct_ci_sources"]) == (1, 0)
     assert grpa["settings_scope"] == "grpa" and grpa["settings"]["push_rules"] == {"value": "set", "reason": None}
-    levels = {r["id"]: r for r in grpa["rubric"]}
+    levels = {r["id"]: r for r in grpa["levels"]}
     assert levels["org2fa"]["level"] == 1 and levels["org2fa"]["aggregation"] is None
     assert levels["teamdocs"]["level"] == 2
     assert levels["teamdocs"]["aggregation"] == {"rule": "min", "share": 1}
-    assert {r["id"]: r["level"] for r in grpb["rubric"]} == {"org2fa": 0, "teamdocs": 0}
-    assert grpa["rubric_version"] == "fixture-1"
+    assert {r["id"]: r["level"] for r in grpb["levels"]} == {"org2fa": 0, "teamdocs": 0}
+    assert grpa["levels_version"] == "fixture-1"
     tops = {row["id"]: len(row["levels"]) for row in LEVELS["rows"]}
-    assert {r["id"]: r["top_level"] for r in grpa["rubric"]} == tops  # #684: a share needs no model file
+    assert {r["id"]: r["top_level"] for r in grpa["levels"]} == tops  # #684: a share needs no model file
     for group in groups:
         jsonschema.validate(group, build_schema())
 
@@ -161,10 +161,10 @@ def test_a_group_row_written_before_top_level_still_validates_and_loads(tmp_path
     from lib.fleet_view import load_groups
     rows = [_row("grpa/svc1", _scans(20, []))]
     (group,) = fg.roll_up(rows, LEVELS, {"grpa": _fragment("grpa", "on")})
-    legacy = {**group, "rubric": [{k: v for k, v in r.items() if k != "top_level"} for r in group["rubric"]]}
+    legacy = {**group, "levels": [{k: v for k, v in r.items() if k != "top_level"} for r in group["levels"]]}
     jsonschema.validate(legacy, build_schema())  # top_level is additive, not required
     (tmp_path / "groups.jsonl").write_text(json.dumps(legacy) + "\n", encoding="utf-8")
-    assert "top_level" not in load_groups(tmp_path)[0]["rubric"][0]
+    assert "top_level" not in load_groups(tmp_path)[0]["levels"][0]
 
 
 def test_unknown_setting_and_failed_repo_give_unknown_never_zero():
@@ -172,7 +172,7 @@ def test_unknown_setting_and_failed_repo_give_unknown_never_zero():
     groups = fg.roll_up(rows, LEVELS, {"grpa": _fragment("grpa", "unknown", "denied (HTTP 403)")})
     (grpa,) = groups
     assert (grpa["repos"], grpa["scanned"], grpa["failed"]) == (2, 1, 1)
-    levels = {r["id"]: r for r in grpa["rubric"]}
+    levels = {r["id"]: r for r in grpa["levels"]}
     assert levels["org2fa"]["status"] == "unknown" and levels["org2fa"]["level"] is None
     assert levels["org2fa"]["missing_signals"] == ["two_factor.value"]
     assert levels["teamdocs"]["status"] == "unknown"
@@ -194,7 +194,7 @@ def test_no_shared_tooling_evidence_gives_null_counts_not_zero():
 def test_no_levels_no_settings_and_full_output():
     rows = [_row("g/r", _scans(1, ["marketplace:x"]))]
     (bare,) = fg.roll_up(rows, None, {})
-    assert bare["rubric"] == [] and bare["rubric_version"] is None
+    assert bare["levels"] == [] and bare["levels_version"] is None
     assert bare["settings"] is None and bare["settings_scope"] is None
     (full,) = fg.roll_up(rows, None, {"g": _fragment("g", "on")}, counts_only=False)
     assert full["settings"]["push_rules"] == {"value": "deny_delete_tag, member_check", "reason": None}
@@ -218,7 +218,7 @@ scope = "org"
   criteria = [{ signal = "provider", op = "eq", value = "gitlab" }, { signal = "scope", op = "eq", value = "top" }]
 """))
     (row,) = fg.roll_up([_row("top/sub/r", _scans(1, []))], maturity_model, {"top": _fragment("top", "off")})
-    assert row["settings_scope"] == "top" and row["rubric"][0]["level"] == 1
+    assert row["settings_scope"] == "top" and row["levels"][0]["level"] == 1
     assert fg.settings_signals(None, None) is None
 
 
@@ -265,8 +265,8 @@ def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa:
     assert sorted(groups) == ["grpa", "grpb"]
     assert groups["grpa"]["distinct_marketplaces"] == 2
     assert groups["grpb"]["distinct_marketplaces"] == 1  # lib1's settings entry names mkt-a
-    assert {r["id"]: r["level"] for r in groups["grpa"]["rubric"]} == {"org2fa": 1, "teamdocs": 0}
-    assert {r["id"]: r["level"] for r in groups["grpb"]["rubric"]} == {"org2fa": 0, "teamdocs": 0}
+    assert {r["id"]: r["level"] for r in groups["grpa"]["levels"]} == {"org2fa": 1, "teamdocs": 0}
+    assert {r["id"]: r["level"] for r in groups["grpb"]["levels"]} == {"org2fa": 0, "teamdocs": 0}
     assert groups["grpa"]["settings"]["two_factor"] == {"value": "on", "reason": None}
     for group in groups.values():
         jsonschema.validate(group, build_schema())
@@ -322,9 +322,9 @@ def test_default_levels_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
     rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text().splitlines()]
     default = load_default_levels()
     for row in rows:
-        assert row["rubric_version"] == default["version"]
-        assert [r["id"] for r in row["rubric"]] == [r["id"] for r in default["rows"]]
-        assert all(r["status"] in ("level", "unknown") for r in row["rubric"])
+        assert row["levels_version"] == default["version"]
+        assert [r["id"] for r in row["levels"]] == [r["id"] for r in default["rows"]]
+        assert all(r["status"] in ("level", "unknown") for r in row["levels"])
         jsonschema.validate(row, build_schema())
 
 

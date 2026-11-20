@@ -87,13 +87,13 @@
         }
       ]
     },
-    "rubric_version": {
+    "levels_version": {
       "type": [
         "string",
         "null"
       ]
     },
-    "rubric": {
+    "levels": {
       "type": "array",
       "items": {
         "type": "object",
@@ -180,9 +180,9 @@
     "failed",
     "fleet_group_version",
     "group",
+    "levels",
+    "levels_version",
     "repos",
-    "rubric",
-    "rubric_version",
     "scanned",
     "settings",
     "settings_scope",

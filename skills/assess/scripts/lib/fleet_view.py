@@ -13,7 +13,7 @@ reads that output back, and holds what both views need:
   returns the rows sorted by group;
 - ``level_columns`` gives the rubric row ids in rubric order, the same for
   every group (a run evaluates one rubric), refusing a run with no rubric;
-- ``run_levels_version`` is the single ``rubric_version`` the run carries;
+- ``run_levels_version`` is the single ``levels_version`` the run carries;
 - ``check_levels`` matches an optional rubric file (row titles and top levels,
   which ``groups.jsonl`` does not carry) to the run: same version, same rows;
 - ``compare_levels`` pairs each cell with an earlier run's level (#552 shape
@@ -32,6 +32,7 @@ from typing import Any, TypedDict, cast
 
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, FleetRow
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
+from lib.fleet_legacy import upgrade
 from lib.levels import MaturityModel
 
 STATUS_LEVEL = "level"
@@ -102,11 +103,12 @@ def read_repos(path: Path) -> list[FleetRow]:
 
 
 def _check_row(data: dict[str, Any], where: str) -> GroupRow:
-    if not isinstance(data.get("group"), str) or not isinstance(data.get("rubric"), list):
-        raise FleetViewError(f"{where}: needs a string 'group' and a 'rubric' list")
-    if "rubric_version" not in data or not isinstance(data["rubric_version"], (str, type(None))):
-        raise FleetViewError(f"{where}: needs 'rubric_version' (a string or null)")
-    for entry in data["rubric"]:
+    data = upgrade(data)  # a line written before the 2.0.0 rename
+    if not isinstance(data.get("group"), str) or not isinstance(data.get("levels"), list):
+        raise FleetViewError(f"{where}: needs a string 'group' and a 'levels' list")
+    if "levels_version" not in data or not isinstance(data["levels_version"], (str, type(None))):
+        raise FleetViewError(f"{where}: needs 'levels_version' (a string or null)")
+    for entry in data["levels"]:
         if not isinstance(entry, dict) or any(key not in entry for key in _ROW_FIELDS):
             raise FleetViewError(f"{where}: a rubric entry lacks one of {', '.join(_ROW_FIELDS)}")
         lists = (entry["missing_signals"], entry["unknown_repos"])
@@ -140,21 +142,21 @@ def level_columns(groups: Sequence[GroupRow]) -> list[str]:
     """Rubric row ids in rubric order; every group must carry the same rows."""
     if not groups:
         raise FleetViewError("the run has no groups (no repository was scanned): nothing to draw")
-    columns = [entry["id"] for entry in groups[0]["rubric"]]
+    columns = [entry["id"] for entry in groups[0]["levels"]]
     if not columns:
         raise FleetViewError("the run has no rubric levels: rerun fleet.py with --rubric")
     for group in groups[1:]:
-        if [entry["id"] for entry in group["rubric"]] != columns:
+        if [entry["id"] for entry in group["levels"]] != columns:
             raise FleetViewError(f"group {group['group']!r} carries different rubric rows")
     return columns
 
 
 def run_levels_version(groups: Sequence[GroupRow]) -> str | None:
     """The run's rubric version; groups disagreeing is a malformed run."""
-    versions = sorted({str(group["rubric_version"]) for group in groups})
+    versions = sorted({str(group["levels_version"]) for group in groups})
     if len(versions) > 1:
         raise FleetViewError(f"groups carry different rubric versions: {', '.join(versions)}")
-    return groups[0]["rubric_version"] if groups else None
+    return groups[0]["levels_version"] if groups else None
 
 
 def check_levels(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> None:
@@ -172,7 +174,7 @@ def check_levels(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> N
 
 def cell(group: GroupRow, row_id: str) -> RowLevel:
     """The group's level entry for one rubric row."""
-    for entry in group["rubric"]:
+    for entry in group["levels"]:
         if entry["id"] == row_id:
             return entry
     raise FleetViewError(f"group {group['group']!r} has no rubric row {row_id!r}")
@@ -206,12 +208,12 @@ def compare_levels(now: Sequence[GroupRow], then: Sequence[GroupRow]) -> Compari
     if then and now_version != then_version:
         return {"comparable": False, "removed_groups": removed, "changes": {},
                 "note": _incomparable_note(then_version, now_version)}
-    earlier = {g["group"]: {e["id"]: e for e in g["rubric"]} for g in then}
+    earlier = {g["group"]: {e["id"]: e for e in g["levels"]} for g in then}
     changes: dict[str, dict[str, Change]] = {}
     for group in now:
         rows = earlier.get(group["group"])
         changes[group["group"]] = {
             entry["id"]: _change(entry, None if rows is None else rows.get(entry["id"]))
-            for entry in group["rubric"]
+            for entry in group["levels"]
         }
     return {"comparable": True, "note": None, "changes": changes, "removed_groups": removed}

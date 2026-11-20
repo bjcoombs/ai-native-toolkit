@@ -192,7 +192,7 @@ class RowResult(TypedDict):
 
 
 class LevelsResult(TypedDict):
-    rubric_version: str
+    levels_version: str
     group: str
     rows: list[RowResult]
 
@@ -520,7 +520,7 @@ def evaluate(maturity_model: MaturityModel, group: Group) -> LevelsResult:
         _org_result(row, group["settings"]) if row["scope"] == "org" else _team_result(row, group["repos"])
         for row in maturity_model["rows"]
     ]
-    return {"rubric_version": maturity_model["version"], "group": group["name"], "rows": rows}
+    return {"levels_version": maturity_model["version"], "group": group["name"], "rows": rows}
 
 
 def dumps_result(result: LevelsResult) -> str:

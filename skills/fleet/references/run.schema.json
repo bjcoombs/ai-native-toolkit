@@ -25,7 +25,7 @@
       "type": "string",
       "pattern": "^[1-9][0-9]*(?:d|w|mo|y)$"
     },
-    "rubric_version": {
+    "levels_version": {
       "type": [
         "string",
         "null"
@@ -78,10 +78,10 @@
   "required": [
     "counts_only",
     "fleet_stamp_version",
+    "levels_version",
     "paths_hashed",
     "plugin_version",
     "repositories",
-    "rubric_version",
     "scan_date",
     "scans",
     "toolkit_commit",

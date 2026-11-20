@@ -54,6 +54,8 @@ from lib.levels import Aggregation, MaturityModel, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids
 
+# Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other
+# version, so lib/fleet_legacy.py maps the old keys and earlier history lines still load.
 FLEET_GROUP_VERSION = 1
 GROUPS_FILE = "groups.jsonl"
 SETTINGS_META_KEYS = frozenset({"scope", "provider"})
@@ -87,8 +89,8 @@ class GroupRow(TypedDict):
     distinct_marketplaces: int | None
     settings_scope: str | None  # the fragment joined; None when none matched
     settings: JsonDict | None  # normalised (and, counts-only, reduced) settings
-    rubric_version: str | None  # None without a rubric
-    rubric: list[RowLevel]
+    levels_version: str | None  # None without a rubric
+    levels: list[RowLevel]
 
 
 # --- settings input --------------------------------------------------------
@@ -219,8 +221,8 @@ def group_row(group: str, rows: Sequence[FleetRow], maturity_model: MaturityMode
         "distinct_marketplaces": len(ids["marketplaces"]) if evidence else None,
         "settings_scope": scope,
         "settings": shown,
-        "rubric_version": maturity_model["version"] if maturity_model else None,
-        "rubric": _row_levels(maturity_model, group, org_data, rows) if maturity_model else [],
+        "levels_version": maturity_model["version"] if maturity_model else None,
+        "levels": _row_levels(maturity_model, group, org_data, rows) if maturity_model else [],
     }
 
 

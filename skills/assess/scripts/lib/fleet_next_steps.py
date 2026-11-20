@@ -123,7 +123,7 @@ def evaluate_group(maturity_model: MaturityModel, group: str, rows: Sequence[Fle
 
 
 def _check_agrees(group: GroupRow, results: Sequence[RowResult]) -> None:
-    recorded = {(r["id"], r["status"], r["level"]) for r in group["rubric"]}
+    recorded = {(r["id"], r["status"], r["level"]) for r in group["levels"]}
     for result in results:
         if (result["id"], result["status"], result["level"]) not in recorded:
             raise NextStepsError(
@@ -348,9 +348,9 @@ def index_page(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> str
              "|-------|--------------|-------------------|----------------------|--------------|"]
     tops = {row["id"]: len(row["levels"]) for row in maturity_model["rows"]}
     for group in groups:
-        known = [r for r in group["rubric"] if r["status"] == "level" and r["level"] is not None]
+        known = [r for r in group["levels"] if r["status"] == "level" and r["level"] is not None]
         top = sum(1 for r in known if r["level"] == tops.get(r["id"]))
-        unknown = len(group["rubric"]) - len(known)
+        unknown = len(group["levels"]) - len(known)
         link = quote(page_path(group["group"]).as_posix())
         lines.append(f"| [{code(group['group'], True)}]({link}) | {group['repos']} | {top} | "
                      f"{len(known) - top} | {unknown} |")
@@ -367,12 +367,12 @@ def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups
         raise NextStepsError("repos.jsonl and groups.jsonl name different groups; they are not one run")
     pages: dict[str, str] = {INDEX_FILE: index_page(maturity_model, groups)}
     for group in groups:
-        if group["rubric_version"] is None:
+        if group["levels_version"] is None:
             raise NextStepsError("the fleet run had no --rubric, so groups.jsonl holds no levels; "
                                  "rerun fleet.py with --rubric")
-        if group["rubric_version"] != maturity_model["version"]:
+        if group["levels_version"] != maturity_model["version"]:
             raise NextStepsError(
-                f"groups.jsonl was rolled up with rubric {group['rubric_version']!r}, not "
+                f"groups.jsonl was rolled up with rubric {group['levels_version']!r}, not "
                 f"{maturity_model['version']!r}; pass the --rubric the fleet run used")
         rows = sorted(members[group["group"]], key=lambda r: r["repo"])
         results = evaluate_group(maturity_model, group["group"], rows, by_scope)
