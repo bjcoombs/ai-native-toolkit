@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
 # Hotspot: `skills/assess/scripts/complexity-treemap.py`
 
 _First flagged: 2026-05-31. Last seen: 2026-11-20. Status: persistent._
@@ -10,7 +10,7 @@ _First flagged: 2026-05-31. Last seen: 2026-11-20. Status: persistent._
 | LOC | 818 |
 | Cyclomatic complexity (file aggregate) | 201 |
 | Worst function | `lizard_scores` (14) |
-| Commits in churn window | 45 |
+| Commits in churn window | 49 |
 | Has test file | yes |
 
 ## History across runs
@@ -27,12 +27,13 @@ _First flagged: 2026-05-31. Last seen: 2026-11-20. Status: persistent._
 | 2026-10-08 | 32cb78d4 | 847 | 214 | 33 | persistent |
 | 2026-10-11 | 0d249381 | 847 | 214 | 34 | persistent |
 | 2026-11-20 | 2e2af36e | 818 | 201 | 45 | persistent |
+| 2026-11-20 | d1e8fc2e | 818 | 201 | 49 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/complexity-treemap.py`:
 
-Hotspot (persistent). 818 LOC, aggregate cyclomatic complexity 201 (worst function `lizard_scores` 14), 45 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 818 LOC, aggregate cyclomatic complexity 201 (worst function `lizard_scores` 14), 49 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 
