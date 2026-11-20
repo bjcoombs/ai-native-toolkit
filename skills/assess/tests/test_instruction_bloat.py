@@ -75,6 +75,8 @@ def test_600_line_file_scores_below_the_same_file_with_a_pointer(tmp_path: Path)
     ptr = with_pointer.subscores
     assert (ptr["always_on_lines"], ptr["fetch_on_need_lines"], ptr["always_on_flagged"]) == (302, 0, 1)
     assert ptr["always_on_penalty"] == 11
+    assert sub["score_before_penalties"] == ptr["score_before_penalties"]
+    assert sub["bloat_penalty"] > ptr["bloat_penalty"]
     assert with_section.score < with_pointer.score
 
 
@@ -210,7 +212,8 @@ def test_cap_binds_when_the_score_would_be_higher(tmp_path: Path, fixtures_dir: 
     """The cap lowers a score above B and leaves a lower one alone."""
     root = tmp_path / "repo"
     shutil.copytree(fixtures_dir / "instruction_grading" / "repo", root)
-    commands = "`npm test` `make check` `make fmt` `make lint`\n"
+    commands = ("`npm test` `make check` `make fmt` `make lint`\n"
+                "Code: `src/app.ts` `src/routes/index.ts` `tests/app.test.ts`\n")
     rich = commands + _RICH * 3 + "x\n" * ALWAYS_ON_GRADE_CAP_LINES
     capped = grade_instructions(rich, 1, repo=build_repo_context(root))
     assert capped.subscores["verified_commands"] == 4
