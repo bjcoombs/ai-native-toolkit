@@ -754,8 +754,10 @@ or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` re
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
 `run.json` at the current stamp version) or whose stamp differs in rubric version,
-window, output mode, scan selection or path hashing. `persist` only `os.replace`s the
-three files (`run.json` last) and never deletes.
+window, output mode, scan selection or path hashing; `choose_entry` then moves to
+`<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
+`latest_matching` finds the newest matching entry, the default for a bare `--compare`.
+`persist` only `os.replace`s the three files (`run.json` last) and never deletes.
 
 **`fleet_compare.py`**
 Compares two fleet runs (issue #552), driven by `fleet.py --compare` and

@@ -19,7 +19,12 @@ Writes are narrow and fail closed:
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
   rubric version, window, output mode, scan selection and path hashing;
-  otherwise ``entry_conflict`` names why and the entry is kept.
+  otherwise ``entry_conflict`` names why, the entry is kept, and
+  ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,
+  ...), taking the first that is free or holds a matching run.
+
+``latest_matching`` finds the newest entry (by date, then suffix) whose stamp
+matches a planned run: the default earlier run for ``--compare``.
 """
 from __future__ import annotations
 
@@ -38,6 +43,8 @@ from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: run.json last
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
 _MATCH_KEYS = ("rubric_version", "window", "counts_only", "scans", "paths_hashed")
+_ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
+MAX_SAME_DAY = 99
 
 
 class HistoryError(ValueError):
@@ -95,6 +102,39 @@ def entry_conflict(entry: Path, stamp: Mapping[str, Any]) -> str | None:
     differs = [key for key in _MATCH_KEYS if earlier.get(key) != stamp.get(key)]
     if differs:
         return f"{entry} is a same-day run with a different {', '.join(differs)}"
+    return None
+
+
+def choose_entry(root: Path, org: str, scan_date: str, stamp: Mapping[str, Any]) -> tuple[Path, list[str]]:
+    """The entry this run is kept in, and why each earlier same-day candidate was passed over.
+
+    ``<date>``, then ``<date>.2``, ``<date>.3``, ...: the first that is free or
+    holds a run with a matching stamp. Raises ``HistoryError`` past ``MAX_SAME_DAY``.
+    """
+    passed: list[str] = []
+    for n in range(1, MAX_SAME_DAY + 1):
+        entry = entry_dir(root, org, scan_date if n == 1 else f"{scan_date}.{n}")
+        conflict = entry_conflict(entry, stamp)
+        if conflict is None:
+            return entry, passed
+        passed.append(conflict)
+    raise HistoryError(f"{MAX_SAME_DAY} same-day entries for {org} on {scan_date} already differ from this run")
+
+
+def _entry_order(path: Path) -> tuple[str, int] | None:
+    match = _ENTRY.match(path.name)
+    return (match.group(1), int(match.group(2) or 1)) if match else None
+
+
+def latest_matching(org_dir: Path, stamp: Mapping[str, Any]) -> Path | None:
+    """The newest ``<date>[.<n>]`` entry under ``org_dir`` holding a run whose stamp matches ``stamp``."""
+    if not org_dir.is_dir() or org_dir.is_symlink():
+        return None
+    entries = [(order, p) for p in org_dir.iterdir()
+               if (order := _entry_order(p)) is not None and p.is_dir() and not p.is_symlink()]
+    for _order, entry in sorted(entries, reverse=True):
+        if (entry / RUN_FILE).is_file() and entry_conflict(entry, stamp) is None:
+            return entry
     return None
 
 

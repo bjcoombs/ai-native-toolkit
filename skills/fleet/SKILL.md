@@ -48,7 +48,7 @@ no third-party dependencies.
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
 | `--hash-salt VALUE` | Hash paths under this salt; reruns stay byte-identical and join across runs. |
 | `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
-| `--compare RUN_DIR` | Compare this run with an earlier one (an `--out` directory or a history entry) and write `DIR/compare.json`; see [Run history and comparison](#run-history-and-comparison). |
+| `--compare [RUN_DIR]` | Compare this run with an earlier one and write `DIR/compare.json`. `RUN_DIR` is an `--out` directory or a history entry; a bare `--compare` takes the latest history entry whose stamp matches this run. See [Run history and comparison](#run-history-and-comparison). |
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
@@ -186,12 +186,17 @@ be one plain directory name, no directory on the way may be a symlink, and the
 history may not be inside a target (exit 2 before any scan; `--no-history`
 skips it). A same-day rerun replaces the day's entry only when that entry is a
 fleet run with the same rubric version, window, output mode, scans and path
-hashing; otherwise the entry is kept and stderr says this run was not recorded.
-A failed history write never loses the `--out` results.
+hashing. Otherwise the entry is kept and the run goes to a suffixed sibling,
+`<date>.2`, `<date>.3` and so on (the first that is free or holds a matching
+run); stderr names the kept entry, why, and where this run went. A failed
+history write never loses the `--out` results.
 
 `--compare RUN_DIR` reads the earlier run before scanning and writes
-`DIR/compare.json`, with a summary on stderr. To compare two existing runs
-without rescanning:
+`DIR/compare.json`, with a summary on stderr. A bare `--compare` picks the
+latest history entry (by date, then suffix) whose stamp matches this run's
+rubric version, window, output mode, scans and path hashing; with none, stderr
+says so and nothing is compared. To compare two existing runs without
+rescanning:
 
 <!-- chat-skip:start -->
 ```bash

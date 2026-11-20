@@ -12,7 +12,16 @@ from types import ModuleType
 import pytest
 
 from lib import fleet_history as fh
-from lib.fleet_history import HistoryError, default_org, entry_conflict, entry_dir, history_root, persist
+from lib.fleet_history import (
+    HistoryError,
+    choose_entry,
+    default_org,
+    entry_conflict,
+    entry_dir,
+    history_root,
+    latest_matching,
+    persist,
+)
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 
@@ -100,6 +109,48 @@ def test_a_foreign_run_json_is_never_replaced(tmp_path, content):
     assert entry_conflict(entry, STAMP) is not None
 
 
+def test_choose_entry_moves_to_a_suffixed_sibling(tmp_path):
+    root = tmp_path / "hist"
+    first, passed = choose_entry(root, "org", "2026-11-20", STAMP)
+    assert first.name == "2026-11-20" and passed == []
+    first.mkdir(parents=True)
+    (first / "run.json").write_text(json.dumps(STAMP), encoding="utf-8")
+    assert choose_entry(root, "org", "2026-11-20", STAMP) == (first, [])
+    other = {**STAMP, "window": "90d"}
+    second, passed = choose_entry(root, "org", "2026-11-20", other)
+    assert second.name == "2026-11-20.2" and "different window" in passed[0]
+    second.mkdir()
+    (second / "run.json").write_text(json.dumps(other), encoding="utf-8")
+    assert choose_entry(root, "org", "2026-11-20", other)[0] == second
+    third, passed = choose_entry(root, "org", "2026-11-20", {**STAMP, "window": "1y"})
+    assert third.name == "2026-11-20.3" and len(passed) == 2
+
+
+def test_choose_entry_gives_up_past_the_cap(tmp_path, monkeypatch):
+    monkeypatch.setattr(fh, "MAX_SAME_DAY", 2)
+    root = tmp_path / "hist"
+    for name in ("2026-11-20", "2026-11-20.2"):
+        (root / "org" / name).mkdir(parents=True)
+        (root / "org" / name / "run.json").write_text("{", encoding="utf-8")
+    with pytest.raises(HistoryError, match="same-day entries"):
+        choose_entry(root, "org", "2026-11-20", STAMP)
+
+
+def test_latest_matching_picks_the_newest_matching_entry(tmp_path):
+    org = tmp_path / "org"
+    assert latest_matching(org, STAMP) is None
+    other = {**STAMP, "window": "90d"}
+    for name, stamp in (("2026-11-01", STAMP), ("2026-11-20", STAMP), ("2026-11-20.2", other),
+                        ("2026-11-20.10", other), ("2026-12-01", other), ("notes", STAMP)):
+        (org / name).mkdir(parents=True)
+        (org / name / "run.json").write_text(json.dumps(stamp), encoding="utf-8")
+    (org / "2026-12-02").mkdir()  # no run.json
+    (org / "2026-12-03").symlink_to(org / "2026-11-01")
+    assert latest_matching(org, STAMP) == org / "2026-11-20"
+    assert latest_matching(org, other) == org / "2026-12-01"
+    assert latest_matching(org, {**STAMP, "window": "1y"}) is None
+
+
 def test_persist_replaces_only_its_three_files(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
@@ -183,15 +234,25 @@ def test_a_run_is_kept_and_a_rerun_compares_with_no_movement(froot2, tmp_path, c
     assert not (tmp_path / "o3" / "compare.json").exists()
 
 
-def test_a_same_day_run_with_another_window_keeps_the_entry(froot2, tmp_path, capsys):
+def test_a_same_day_run_with_another_window_goes_beside_the_entry(froot2, tmp_path, capsys):
     hist = tmp_path / "hist"
     assert _run(froot2, tmp_path / "o1", hist) == 0
     (entry,) = _entries(hist)
     before = (entry / "run.json").read_bytes()
     assert _run(froot2, tmp_path / "o2", hist, "--window", "90d") == 0
     assert (entry / "run.json").read_bytes() == before
-    assert "this run is not recorded" in capsys.readouterr().err
-    assert (tmp_path / "o2" / "run.json").exists()
+    err = capsys.readouterr().err
+    assert "different window" in err and f"goes to {entry.name}.2" in err
+    second = entry.parent / f"{entry.name}.2"
+    assert (second / "run.json").read_bytes() == (tmp_path / "o2" / "run.json").read_bytes()
+
+    # a bare --compare picks the latest entry whose stamp matches this run
+    assert _run(froot2, tmp_path / "o3", hist, "--compare") == 0
+    assert f"against {entry}" in capsys.readouterr().err
+    assert json.loads((tmp_path / "o3" / "compare.json").read_text(encoding="utf-8"))["comparable"]
+    assert _run(froot2, tmp_path / "o4", hist, "--window", "1y", "--compare") == 0
+    assert "nothing compared" in capsys.readouterr().err
+    assert not (tmp_path / "o4" / "compare.json").exists()
 
 
 def test_full_and_no_history_runs_are_not_kept(froot2, tmp_path, capsys):

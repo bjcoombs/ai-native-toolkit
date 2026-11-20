@@ -19,8 +19,9 @@ lost (``lib/fleet_cleanup.py``). Every run also writes the run stamp
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
 (``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
-``--compare RUN_DIR`` compares this run with an earlier one and writes
-``<out>/compare.json`` (``lib/fleet_compare.py``).
+``--compare [RUN_DIR]`` compares this run with an earlier one (by default the
+latest history entry whose stamp matches) and writes ``<out>/compare.json``
+(``lib/fleet_compare.py``).
 
 Exit codes:
     0  the run completed and repos.jsonl and run.json were written. Repositories that could
@@ -34,7 +35,7 @@ Exit codes:
 Run:
     uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
-        [--delete-after] [--compare RUN_DIR] [--history-dir DIR] [--history-org NAME]
+        [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
@@ -84,15 +85,16 @@ from lib.fleet_compare import (  # noqa: E402
 from lib.fleet_groups import SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.fleet_history import (  # noqa: E402
     HistoryError,
+    choose_entry,
     default_org,
-    entry_conflict,
     entry_dir,
     history_root,
+    latest_matching,
     persist,
     safe_component,
 )
 from lib.fleet_inputs import FleetInputError  # noqa: E402
-from lib.fleet_stamp import build_stamp, write_stamp  # noqa: E402
+from lib.fleet_stamp import FLEET_STAMP_VERSION, build_stamp, write_stamp  # noqa: E402
 from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
 from lib.rubric_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
@@ -105,6 +107,9 @@ from lib.signals import (  # noqa: E402
     select_scans,
     toolkit_commit,
 )
+
+
+LATEST = "latest"  # bare --compare: the newest matching history entry
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -156,9 +161,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "Anything else is kept and listed on stderr.",
     )
     parser.add_argument(
-        "--compare", metavar="RUN_DIR",
-        help="An earlier run (an --out directory or a history entry) to compare this run with; "
-             "writes OUT/compare.json and a summary on stderr.",
+        "--compare", metavar="RUN_DIR", nargs="?", const=LATEST,
+        help="Compare this run with an earlier one and write OUT/compare.json plus a summary on "
+             "stderr. RUN_DIR is an --out directory or a history entry; without it, the latest "
+             "history entry whose stamp matches this run.",
     )
     parser.add_argument(
         "--history-dir", metavar="DIR",
@@ -201,7 +207,15 @@ def _report_deletions(deleter: CloneDeleter) -> None:
         print(f"  kept: {repo} ({reason})", file=sys.stderr)
 
 
-def _history_entry(args: argparse.Namespace, targets: list[Target], scan_date: str,
+def _history_org_dir(args: argparse.Namespace, targets: list[Target]) -> Path:
+    """``<history root>/<org>``; raises ``HistoryError`` for an unsafe name or a symlinked directory."""
+    root = Path(args.history_dir) if args.history_dir else history_root(os.environ, Path.home())
+    org = (safe_component(args.history_org, "--history-org") if args.history_org is not None
+           else default_org(t.repo for t in targets))
+    return entry_dir(root, org, "x").parent  # validates root and org
+
+
+def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Path, scan_date: str,
                    planned: JsonDict) -> Path | None:
     """The history directory this run will be kept in, created; None when it is not kept.
 
@@ -212,28 +226,34 @@ def _history_entry(args: argparse.Namespace, targets: list[Target], scan_date: s
     if args.full:
         print("fleet: history: --full output is not kept in the run history", file=sys.stderr)
         return None
-    root = Path(args.history_dir) if args.history_dir else history_root(os.environ, Path.home())
-    org = (safe_component(args.history_org, "--history-org") if args.history_org is not None
-           else default_org(t.repo for t in targets))
-    entry = entry_dir(root, org, scan_date)
+    entry, passed = choose_entry(org_dir.parent, org_dir.name, scan_date, planned)
     inside = out_inside_target(entry, targets)
     if inside is not None:
         raise HistoryError(f"history directory {entry} is inside target {inside.repo}")
-    conflict = entry_conflict(entry, planned)
-    if conflict is not None:
-        print(f"fleet: history: kept {conflict}; this run is not recorded", file=sys.stderr)
-        return None
+    for reason in passed:
+        print(f"fleet: history: kept {reason}", file=sys.stderr)
+    if passed:
+        print(f"fleet: history: this run goes to {entry.name} beside it", file=sys.stderr)
     entry.mkdir(parents=True, exist_ok=True)
     return entry
 
 
-def _load_earlier(run_dir: str | None) -> FleetRun | str | None:
-    """The ``--compare`` run, the reason it cannot be compared, or None without ``--compare``.
+def _load_earlier(run_dir: str | None, org_dir: Path, planned: JsonDict) -> FleetRun | str | None:
+    """The ``--compare`` run, the reason it cannot be compared, or None (no ``--compare``, or
+    no matching history entry for a bare ``--compare``).
 
     Raises ``FleetInputError`` when the directory is missing or malformed.
     """
     if run_dir is None:
         return None
+    if run_dir == LATEST:
+        latest = latest_matching(org_dir, planned)
+        if latest is None:
+            print(f"fleet: compare: no earlier run in {org_dir} matches this run's stamp; "
+                  "nothing compared", file=sys.stderr)
+            return None
+        print(f"fleet: compare: against {latest}", file=sys.stderr)
+        run_dir = str(latest)
     try:
         return load_run(Path(run_dir))
     except RunVersionError as e:
@@ -248,7 +268,7 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
             print(f"fleet: history -> {persist(out_dir, entry, later.stamp)}", file=sys.stderr)
         except (HistoryError, OSError) as e:
             print(f"fleet: history: not recorded ({e}); results are in {out_dir}", file=sys.stderr)
-    if earlier is None:
+    if earlier is None:  # nothing to compare: a compare.json left by an earlier run would mislead
         clear_stale_comparison(out_dir)
         return
     comparison = (compare(earlier, later) if isinstance(earlier, FleetRun)
@@ -288,17 +308,23 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     today = datetime.now(timezone.utc).date()
     window = args.window or DEFAULT_WINDOW
-    try:  # read before any scan: the same-day history entry may be replaced
-        earlier = _load_earlier(args.compare)
-    except FleetInputError as e:
-        print(f"error: --compare {args.compare}: {e}", file=sys.stderr)
-        return 2
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
     planned: JsonDict = {
+        "fleet_stamp_version": FLEET_STAMP_VERSION,
         "rubric_version": rubric["version"] if rubric is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
     }
+    try:
+        org_dir = _history_org_dir(args, targets)
+        # read before any scan: the same-day history entry may be replaced
+        earlier = _load_earlier(args.compare, org_dir, planned)
+    except HistoryError as e:
+        print(f"error: run history: {e} (use --history-dir or --history-org)", file=sys.stderr)
+        return 2
+    except FleetInputError as e:
+        print(f"error: --compare {args.compare}: {e}", file=sys.stderr)
+        return 2
     options = ScanOptions(
         counts_only=not args.full,
         hash_salt=hash_salt,
@@ -311,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: cannot create --out {args.out}: {e.strerror}", file=sys.stderr)
         return 2
     try:
-        entry = _history_entry(args, targets, today.isoformat(), planned)
+        entry = _history_entry(args, targets, org_dir, today.isoformat(), planned)
     except (HistoryError, OSError) as e:
         print(f"error: run history: {e} (use --history-dir or --no-history)", file=sys.stderr)
         return 2
