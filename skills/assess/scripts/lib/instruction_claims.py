@@ -341,7 +341,8 @@ def _count_matches(repo_root: Path, pattern: str) -> int:
     return count
 
 
-def _has_ci_config(repo_root: Path) -> bool:
+def has_ci_config(repo_root: Path) -> bool:
+    """True when any CI configuration exists: an enforcement claim needs one."""
     return any((repo_root / rel).exists() for rel in CI_CONFIG_PATHS)
 
 
@@ -396,6 +397,31 @@ def empty_block() -> dict[str, Any]:
     return {"total": 0, "verified": 0, "failed": 0, "failures": []}
 
 
+def tally_claims(block: dict[str, Any], repo_root: Path, rel: str,
+                 claims: Iterable[Claim], ci_configured: bool) -> None:
+    """Verify ``claims`` read from the file ``rel`` and add them to ``block``.
+
+    An enforcement claim in a repo with no CI configuration, and a claim whose
+    verifier raises ``Unverifiable``, is skipped rather than counted.
+    """
+    for claim in claims:
+        if claim.kind == "enforcement" and not ci_configured:
+            continue  # nothing to check against: unverifiable, not false
+        try:
+            detail = _VERIFIERS[claim.kind](repo_root, claim)
+        except Unverifiable:
+            continue  # the repository cannot settle it: skipped, not false
+        block["total"] += 1
+        if detail is None:
+            block["verified"] += 1
+            continue
+        block["failed"] += 1
+        block["failures"].append({
+            "file": rel, "line": claim.line, "kind": claim.kind,
+            "path": claim.path, **claim.fields, **detail,
+        })
+
+
 def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict[str, Any]:
     """Extract and verify the claims in each instruction file.
 
@@ -412,7 +438,7 @@ def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict
     root = Path(repo_root)
     block = empty_block()
     seen: set[Path] = set()
-    ci_configured = _has_ci_config(root)
+    ci_configured = has_ci_config(root)
     for rel in files:
         candidate = root / rel
         try:
@@ -423,20 +449,5 @@ def scan_instruction_claims(repo_root: Path | str, files: Iterable[str]) -> dict
         if real in seen:
             continue
         seen.add(real)
-        for claim in extract_claims(text):
-            if claim.kind == "enforcement" and not ci_configured:
-                continue  # nothing to check against: unverifiable, not false
-            try:
-                detail = _VERIFIERS[claim.kind](root, claim)
-            except Unverifiable:
-                continue  # the repository cannot settle it: skipped, not false
-            block["total"] += 1
-            if detail is None:
-                block["verified"] += 1
-                continue
-            block["failed"] += 1
-            block["failures"].append({
-                "file": rel, "line": claim.line, "kind": claim.kind,
-                "path": claim.path, **claim.fields, **detail,
-            })
+        tally_claims(block, root, rel, extract_claims(text), ci_configured)
     return block
