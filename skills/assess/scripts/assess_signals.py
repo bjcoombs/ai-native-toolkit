@@ -23,6 +23,14 @@ Run:
 """
 # /// script
 # requires-python = ">=3.11"
+# dependencies = [
+#     # The layer 2-4 blocks (lib/headless_layers.py): the import graph and the
+#     # file size and complexity scores. Without them each block reports
+#     # unavailable with a named reason. lizard is pinned to the treemap's version.
+#     "networkx",
+#     "grimp",
+#     "lizard==1.23.0",
+# ]
 # ///
 from __future__ import annotations
 

@@ -507,7 +507,8 @@ pages a per-path view of the same scan. `excluded_generated` and `generated_excl
 read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
 0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
 Tier 1 counts `keyhole_signals` computed, omitting the block when no ownership map
-exists. `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+exists; `structure_drift_tier_0` builds the same block with Tier 1 unavailable, or
+None with no map, for the headless runner (`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
@@ -605,7 +606,9 @@ completes. A name the runner provides is never recomputed from the table. A
 `{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
-the publish step never runs. Names in `UNREGISTERED_SCANS` (run-context blocks
+the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
+registry with `headless_layers.HEADLESS_SCANS` in place of every core entry that
+publishes one of their names, and of every entry that reads a displaced one (#667). Names in `UNREGISTERED_SCANS` (run-context blocks
 `assess_core` assembles, several of which report `available: false` without the
 `reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
 name a reported scan also holds is dropped at runtime. `select_scans` raises
@@ -616,6 +619,22 @@ that read `history_window` (`ai_usage`). Every git call runs inside `read_only_g
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
+
+**`headless_layers.py`**
+The headless runner's entries for the four blocks the default maturity model's layer 2-4
+rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
+`structure_scan`, needs grimp and networkx), `promissory_markers` (the private
+`promissory` scan, needs `rg`), `structure_drift` (tier 0 from the ownership map via
+`context_blocks.structure_drift_tier_0`; tier 1 needs the keyhole co-change pairs and is
+`not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
+`files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
+scc languages, no hotspot lists). Every unavailable block is the bare marker with a
+`code: sentence` reason (`no_grimp`, `no_networkx`, `no_python_packages`, `no_rg`,
+`not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
+and a rubric row reads `unknown`. It diverges from the full run in two places: no Python
+package reads `no_python_packages` (the full run: modularity 0.0), and no ownership map
+reads `no_ownership_map` (the full run omits the block). Tests:
+`tests/test_headless_layers.py`.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
