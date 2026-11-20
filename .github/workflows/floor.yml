@@ -41,10 +41,10 @@
 #     classification, as it stood before this pull request) and goes to the
 #     run's step summary and to one pull-request comment, updated in place. A
 #     read-only token (Dependabot, forks) skips the comment only.
-#     One exemption: a pull request authored by dependabot[bot] whose
-#     floor-core change is workflow `uses:` pin bumps alone is not floor-core
-#     for the trigger, as judged by the base ref's copy of the script
-#     (`pin-bump-only`), so a pull request cannot exempt itself.
+#     One exemption: a pull request opened and pushed by dependabot[bot]
+#     whose floor-core change is workflow `uses:` pin bumps alone is not
+#     floor-core for the trigger, as judged by the base ref's copy of the
+#     script (`pin-bump-only`), so a pull request cannot exempt itself.
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
@@ -405,6 +405,7 @@ jobs:
         id: filter
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_ACTOR: ${{ github.actor }}
         run: |
           BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
           echo "merge-base: ${BASE_SHA}"
@@ -430,13 +431,16 @@ jobs:
           FLOOR_CORE="$(python scripts/floor_check.py protected \
             --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"
           # The one exemption (FLOOR.md clause iii): a Dependabot pull request
-          # whose floor-core change is workflow `uses:` pin bumps alone. The
+          # whose floor-core change is workflow `uses:` pin bumps alone. Both
+          # the opener and this run's actor (the pusher or re-runner) must be
+          # Dependabot, so a push onto a Dependabot branch is not exempt. The
           # verdict is the BASE ref's copy of the script, never the pull
           # request's own, so no pull request can exempt itself; a base that
           # predates the subcommand exempts nothing.
           PIN_BUMP_ONLY=false
           if printf '%s\n' "${FLOOR_CORE}" | grep -q . \
-              && [ "${PR_AUTHOR}" = "dependabot[bot]" ]; then
+              && [ "${PR_AUTHOR}" = "dependabot[bot]" ] \
+              && [ "${PR_ACTOR}" = "dependabot[bot]" ]; then
             CHECKER="${RUNNER_TEMP}/floor_check_base.py"
             if git show "${BASE_SHA}:scripts/floor_check.py" > "${CHECKER}" 2> /dev/null \
                 && python "${CHECKER}" pin-bump-only --help > /dev/null 2>&1 \

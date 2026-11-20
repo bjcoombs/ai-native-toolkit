@@ -21,11 +21,13 @@ NEW = "bec219d200000000000000000000000000000000"
 DEPENDABOT = "dependabot[bot]"
 
 
-def _workflow(pin: str = OLD, version: str = "v10.0.1", extra: str = "") -> str:
+def _workflow(
+    pin: str = OLD, version: str = "v10.0.1", extra: str = "", checkout: str = "v7.0.1"
+) -> str:
     return (
         "name: Floor\non:\n  pull_request:\njobs:\n  t:\n"
         "    runs-on: ubuntu-latest\n    steps:\n"
-        f"      - uses: actions/checkout@{pin}  # v7.0.1\n"
+        f"      - uses: actions/checkout@{pin}  # {checkout}\n"
         "      - run: echo hi\n"
         f"      - uses: astral-sh/setup-uv@{pin}  # {version}\n{extra}"
     )
@@ -61,8 +63,10 @@ def repo(tmp_path, monkeypatch):
     return tmp_path
 
 
-def _bump(root: Path, extra: str = "") -> None:
-    (root / WORKFLOW).write_text(_workflow(NEW, "v10.1.0", extra), encoding="utf-8")
+def _bump(root: Path, extra: str = "", checkout: str = "v7.0.2") -> None:
+    (root / WORKFLOW).write_text(
+        _workflow(NEW, "v10.1.0", extra, checkout), encoding="utf-8"
+    )
 
 
 # ── pin-bump-only: the verdict ───────────────────────────────────────────────
@@ -106,6 +110,26 @@ def test_floor_md_change_is_not_exempt(repo):
     assert main(["pin-bump-only", "--base", "HEAD~1"]) == 1
 
 
+def test_sha_swap_with_the_same_comment_is_not_exempt(repo, capsys):
+    _bump(repo, checkout="v7.0.1")  # checkout keeps `# v7.0.1`
+    _commit(repo, "sha swap, same comment")
+    assert main(["pin-bump-only", "--base", "HEAD~1"]) == 1
+    assert "actions/checkout: the commit changed without a new version comment" in (
+        capsys.readouterr().out
+    )
+
+
+def test_sha_swap_with_the_comment_dropped_is_not_exempt(repo, capsys):
+    text = _workflow(NEW, "v10.1.0").replace(
+        f"actions/checkout@{NEW}  # v7.0.1", f"actions/checkout@{NEW}"
+    )
+    assert f"actions/checkout@{NEW}\n" in text
+    (repo / WORKFLOW).write_text(text, encoding="utf-8")
+    _commit(repo, "comment dropped")
+    assert main(["pin-bump-only", "--base", "HEAD~1"]) == 1
+    assert "without a new version comment" in capsys.readouterr().out
+
+
 def test_no_floor_core_change_is_not_exempt(repo):
     (repo / "notes.md").write_text("x\n", encoding="utf-8")
     _commit(repo, "unprotected")
@@ -123,6 +147,14 @@ def test_refusal_reasons():
     assert "not a plain text" in (pin_bump_refusal([(WORKFLOW, False)], pin_diff) or "")
     assert "not a workflow" in (pin_bump_refusal([("FLOOR.md", True)], pin_diff) or "")
     assert pin_bump_refusal([(WORKFLOW, True)], pin_diff.replace(NEW, OLD)) is not None
+    same_comment = pin_diff.replace("# v2", "# v1")
+    assert "new version comment" in (pin_bump_refusal([(WORKFLOW, True)], same_comment) or "")
+    reindent = (
+        "diff --git a/w b/w\n@@ -1,2 +1,2 @@\n"
+        f"-  - uses: a/b@{OLD}  # v1\n-  - uses: c/d@{OLD}  # v1\n"
+        f"+    - uses: a/b@{OLD}  # v1\n+  - uses: c/d@{NEW}  # v2\n"
+    )
+    assert "without a new commit" in (pin_bump_refusal([(WORKFLOW, True)], reindent) or "")
 
 
 # ── the workflow's filter step, run end to end ───────────────────────────────
@@ -140,7 +172,9 @@ def _filter_step_script() -> str:
     return textwrap.dedent("\n".join(body)).replace("${{ github.base_ref }}", "main")
 
 
-def _run_filter(root: Path, base: str, author: str, tmp_path: Path) -> str:
+def _run_filter(
+    root: Path, base: str, author: str, tmp_path: Path, actor: str | None = None
+) -> str:
     _git(root, "update-ref", "refs/remotes/origin/main", base)
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
@@ -157,6 +191,7 @@ def _run_filter(root: Path, base: str, author: str, tmp_path: Path) -> str:
         "RUNNER_TEMP": str(runner_temp),
         "GITHUB_OUTPUT": str(output),
         "PR_AUTHOR": author,
+        "PR_ACTOR": author if actor is None else actor,
     }
     subprocess.run(
         ["bash", "-e", "-c", _filter_step_script()],
@@ -177,6 +212,15 @@ def test_workflow_does_not_exempt_another_author(repo, tmp_path):
     _bump(repo)
     _commit(repo, "bump")
     out = _run_filter(repo, base, "someone", tmp_path)
+    assert "floor_core_changed=true" in out
+
+
+def test_workflow_does_not_exempt_a_push_onto_a_dependabot_branch(repo, tmp_path):
+    # Dependabot opened the pull request, but someone else pushed this head.
+    base = _git(repo, "rev-parse", "HEAD").strip()
+    _bump(repo)
+    _commit(repo, "bump pushed by a collaborator")
+    out = _run_filter(repo, base, DEPENDABOT, tmp_path, actor="someone")
     assert "floor_core_changed=true" in out
 
 

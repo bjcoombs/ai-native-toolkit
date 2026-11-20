@@ -922,7 +922,8 @@ def pin_bump_refusal(
     path (see ``_path_detail``); ``diff_text`` is their ``-U0`` diff. Exempt
     means: at least one path, every path a workflow file changed by text
     modification alone, and the diff a like-for-like pin bump
-    (``pin_changes``)."""
+    (``pin_changes``) in which every pair changes its commit and carries a
+    new, non-empty version comment."""
     if not floor_core:
         return "no floor-core path changed"
     for path, pure_text in floor_core:
@@ -930,8 +931,19 @@ def pin_bump_refusal(
             return f"{path} is floor core and not a workflow file"
         if not pure_text:
             return f"{path} is not a plain text modification"
-    if pin_changes(diff_text) is None:
+    hunks = _pin_lines(diff_text)
+    if hunks is None or pin_changes(diff_text) is None:
         return "a changed line is not a like-for-like `uses:` pin bump"
+    # Stricter than the summary: every pair is a real bump, commit AND a
+    # non-empty version comment that moves with it (FLOOR.md clause iii).
+    for removed, added in hunks:
+        for (action, old_commit, old_version), (_, new_commit, new_version) in zip(
+            removed, added
+        ):
+            if old_commit == new_commit:
+                return f"{action}: a pin line changed without a new commit"
+            if not new_version or new_version == old_version:
+                return f"{action}: the commit changed without a new version comment"
     return None
 
 
