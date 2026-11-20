@@ -165,7 +165,8 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org my-org --shallow-since 2025-0
   `--numstat`, and `git blame` in the `/assess` scans all do. Expect those
   scans to be slow and to need network access.
 - **`--shallow-since` drops history before DATE**, which changes churn and
-  staleness results. A repository with no commits after DATE may come back
+  staleness results. The clone is single-branch, so a worktree added
+  later for another branch never sees that branch move. A repository with no commits after DATE may come back
   with its full history instead.
 - **Existing clones are never converted.** These flags apply only to
   repositories cloned in this run; a sync of an existing clone only

@@ -355,9 +355,25 @@ def test_clone_flags_never_convert_an_existing_full_clone(env: Env) -> None:
     assert _missing_objects(env, checkout) == []
 
 
-@pytest.mark.parametrize("args", [["--filter="], ["--shallow-since="], ["--filter"]])
+@pytest.mark.parametrize(
+    "args",
+    [["--filter="], ["--shallow-since="], ["--filter"], ["--filter", "--limit"],
+     ["--shallow-since", "--dry-run"]],
+)
 def test_clone_flag_without_value_fails(env: Env, args: list[str]) -> None:
     res = env.run(*args)
     assert res.returncode != 0
     assert "needs a" in res.stdout + res.stderr
     assert not env.gh_log.exists()
+
+
+def test_partial_without_quiet_omits_q(env: Env) -> None:
+    res = subprocess.run(
+        ["bash", str(GHSYNC), "--org", ORG, "--root", str(env.root),
+         "--partial", "--limit", "1"],
+        capture_output=True, text=True, env=env.env, timeout=120,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _clone_line(env, "alpha").endswith(" -- --filter=blob:none")
+    checkout = env.checkout("alpha")
+    assert _config(env, checkout, "remote.origin.partialclonefilter") == "blob:none"

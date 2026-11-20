@@ -62,13 +62,14 @@ set -euo pipefail
 #   --partial        Shorthand for --filter blob:none
 #   --filter SPEC    New clones only: pass --filter=SPEC to git clone.
 #                    blob:none keeps full history and fetches file contents
-#                    on demand; meant for analysis-only mirrors
+#                    on demand; meant for analysis-only mirrors.
 #   --shallow-since DATE
 #                    New clones only: pass --shallow-since=DATE to git
-#                    clone, cutting history before DATE (single-branch)
+#                    clone, cutting history before DATE (single-branch:
+#                    other branches are not fetched).
 #                    A sync never converts an existing clone. Git records
 #                    the mode per clone: remote.origin.partialclonefilter
-#                    and git rev-parse --is-shallow-repository
+#                    and git rev-parse --is-shallow-repository.
 #   --org NAME       GitHub org to sync (default: basename of --root / cwd)
 #   --list-teams     List your teams in the org and exit (GitHub orgs only)
 #   --host HOST      GitLab host (default: gitlab.com); a scheme and
@@ -180,22 +181,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     --filter)
       CLONE_FILTER=${2:-}
-      [ -n "$CLONE_FILTER" ] || { echo "--filter needs a filter spec (e.g. blob:none)"; exit 1; }
+      case $CLONE_FILTER in ''|-*) echo "--filter needs a filter spec (e.g. blob:none)"; exit 1 ;; esac
       shift 2
       ;;
     --filter=*)
       CLONE_FILTER=${1#*=}
-      [ -n "$CLONE_FILTER" ] || { echo "--filter needs a filter spec (e.g. blob:none)"; exit 1; }
+      case $CLONE_FILTER in ''|-*) echo "--filter needs a filter spec (e.g. blob:none)"; exit 1 ;; esac
       shift
       ;;
     --shallow-since)
       CLONE_SHALLOW_SINCE=${2:-}
-      [ -n "$CLONE_SHALLOW_SINCE" ] || { echo "--shallow-since needs a date"; exit 1; }
+      case $CLONE_SHALLOW_SINCE in ''|-*) echo "--shallow-since needs a date"; exit 1 ;; esac
       shift 2
       ;;
     --shallow-since=*)
       CLONE_SHALLOW_SINCE=${1#*=}
-      [ -n "$CLONE_SHALLOW_SINCE" ] || { echo "--shallow-since needs a date"; exit 1; }
+      case $CLONE_SHALLOW_SINCE in ''|-*) echo "--shallow-since needs a date"; exit 1 ;; esac
       shift
       ;;
     --root)
