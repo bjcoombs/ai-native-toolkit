@@ -14,7 +14,10 @@ It never writes, never reaches the network and never prompts. A scan declared
 
 The scan list is every published registry key outside the core's own adapter
 modules (``CORE_MODULES``), plus ``UNREGISTERED_SCANS``, so a scan added to the
-table in its own module runs here without an edit. The core's entries (setup
+table in its own module runs here without an edit. ``lib.headless_layers``
+supplies the blocks the core builds from setup state a headless run lacks
+(``structure``, ``stats_summary``, ``promissory_markers``, ``structure_drift``;
+#667), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
 state, the run header, the serialised blocks) run only when a reported scan
 reads one of them; the publish step that writes the wiki is never called.
 """
@@ -33,6 +36,7 @@ from typing import Any
 from lib.assess_config import load_excludes
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
+from lib.headless_layers import HEADLESS_SCANS
 from lib.instruction_files import grade_instruction_files
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
@@ -48,7 +52,6 @@ SIGNALS_SCHEMA_VERSION = 1
 # with no report), so they stay unreported until each shape is checked. A name
 # a reported scan also holds is dropped at runtime.
 UNREGISTERED_SCANS: tuple[str, ...] = (
-    "stats_summary",
     "diff",
     "doc_graph",
     "doc_staleness",
@@ -56,7 +59,6 @@ UNREGISTERED_SCANS: tuple[str, ...] = (
     "observability",
     "archetype",
     "ancestor_instruction_files",
-    "structure",
     "behaviour",
     "documentation",
     "understanding",
@@ -65,9 +67,7 @@ UNREGISTERED_SCANS: tuple[str, ...] = (
     "coverage_report",
     "test_pressure",
     "test_focus",
-    "promissory_markers",
     "accretion_ratchet",
-    "structure_drift",
     "gap_actions",
 )
 
@@ -78,6 +78,35 @@ UNREGISTERED_REASON = (
 
 # The modules that hold the core's own table entries (#557).
 CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
+
+
+def _published(spec: ScanSpec) -> set[str]:
+    return set(spec.spread) if spec.spread else {spec.key}
+
+
+def signal_scans(
+    specs: Sequence[ScanSpec] = SCANS, headless: Sequence[ScanSpec] = HEADLESS_SCANS,
+) -> tuple[ScanSpec, ...]:
+    """The headless runner's table: ``specs`` with ``headless`` entries in place of the core's.
+
+    A ``headless`` entry (``lib/headless_layers.py``, #667) reports a block the
+    core assembles from setup state a headless run never builds. Each core
+    entry that publishes one of those names is dropped, and so is every entry
+    that reads a dropped key, transitively; they are core entries the runner
+    never reports. The headless entries go last, at their declared stage.
+    """
+    names = {spec.key for spec in headless}
+    dropped = {spec.key for spec in specs if _published(spec) & names}
+    kept: list[ScanSpec] = []
+    for spec in specs:
+        if spec.key in dropped or dropped & set(spec.reads):
+            dropped.add(spec.key)
+            continue
+        kept.append(spec)
+    return (*kept, *headless)
+
+
+SIGNAL_SCANS = signal_scans()
 NETWORK_REASON = "network: reads GitHub via gh; the headless runner makes no network calls"
 
 DEFAULT_WINDOW = "6mo"
@@ -99,13 +128,13 @@ def _reported(spec: ScanSpec) -> bool:
     return not spec.private and not spec.spread and spec.fn.__module__ not in CORE_MODULES
 
 
-def known_scans(specs: Iterable[ScanSpec] = SCANS) -> list[str]:
+def known_scans(specs: Iterable[ScanSpec] = SIGNAL_SCANS) -> list[str]:
     """Every scan name the runner accepts, registry first, in table order."""
     registered = [spec.key for spec in specs if _reported(spec)]
     return registered + [name for name in UNREGISTERED_SCANS if name not in registered]
 
 
-def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SCANS) -> list[str]:
+def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> list[str]:
     """The requested names in table order, or every known name when None.
 
     Raises ``UnknownScanError`` naming every unknown entry.
@@ -177,7 +206,7 @@ def _unavailable(reason: str) -> JsonDict:
 
 
 def collect(
-    repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SCANS,
+    repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read) offline; one block per name."""
@@ -274,7 +303,7 @@ def read_only_git() -> Iterator[None]:
 
 def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
-    toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SCANS,
+    toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 

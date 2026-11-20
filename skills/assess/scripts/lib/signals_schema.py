@@ -27,8 +27,8 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
-from lib.scan_registry import SCANS, ScanSpec  # noqa: E402
-from lib.signals import known_scans  # noqa: E402
+from lib.scan_registry import ScanSpec  # noqa: E402
+from lib.signals import SIGNAL_SCANS, known_scans  # noqa: E402
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "references" / "signals.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/signals.schema.json"
@@ -66,7 +66,7 @@ def type_schema(tp: Any) -> JsonDict:
     raise TypeError(f"no JSON schema mapping for {tp!r}")
 
 
-def build_schema(specs: Sequence[ScanSpec] = SCANS) -> JsonDict:
+def build_schema(specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> JsonDict:
     """The full document schema, ready to serialise (``specs``: the scan table)."""
     document = type_schema(SignalsDocument)
     # Sorted, so a scan added anywhere in the registry adds one line here.
