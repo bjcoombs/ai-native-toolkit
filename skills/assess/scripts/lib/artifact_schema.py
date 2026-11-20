@@ -130,12 +130,18 @@ constant each.
 # check_commands, included_files, test_or_lint_runs (null when no CI line runs
 # a check but a CI file pulls jobs from elsewhere) and basis. Additive, and
 # complexity-stats.json is unchanged.
-# 1.20.0: run-context.json ai_usage gains author counts (issue #695):
+# 1.20.0: run-context.json gains agent_building (issue #689), an unscored
+# inventory of what the repository builds with agents (SDK slugs, agent config
+# kinds, counts-only code heuristic, API-client pairing, one class); /fleet
+# groups.jsonl lines gain agent_building class counts and the run writes
+# agent_clusters.json. Additive: no existing key moves, and complexity-stats.json
+# is unchanged.
+# 1.21.0: run-context.json ai_usage gains author counts (issue #695):
 # agent_authored_commits/share, agent_either_commits/share,
 # dependency_bot_commits, token_user_commits, agent_identity_rule_commits
 # (positional, per [ai_usage] config rule) and covered_author_agents; limits
 # reworded. Additive; the trailer fields are unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.20.0"
+ARTIFACT_SCHEMA_VERSION = "1.21.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

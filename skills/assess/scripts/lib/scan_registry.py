@@ -42,6 +42,7 @@ from typing import Any
 
 from lib import core_scans as cs
 from lib import run_setup as rs
+from lib.agent_building import scan_agent_building
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
@@ -525,6 +526,12 @@ SCANS: tuple[ScanSpec, ...] = (
     # check is found but a CI file pulls jobs from elsewhere (include:, a remote
     # reusable workflow). Layer 5 level 1 of the default maturity model. Offline.
     ScanSpec("ci_checks", scan_ci_checks, ("repo_root",), STAGE_POST_OFFERS),
+    # Agent building (issue #689): what the repository builds with agents, an
+    # inventory and not scored - agent SDKs and frameworks in manifests, agent
+    # configuration, a counts-only tool-call loop / MCP server heuristic and the
+    # issue-tracker plus Git-host API-client pairing, reduced to one class. The
+    # fleet roll-up counts classes per group and clusters similar builders.
+    ScanSpec("agent_building", scan_agent_building, ("repo_root",), STAGE_POST_OFFERS),
     # Deterministic layer grades (issue #620): instructions_grade republished as
     # a block, so a maturity model can name it in a headless or full run.
     ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),
