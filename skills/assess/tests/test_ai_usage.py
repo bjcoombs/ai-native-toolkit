@@ -25,9 +25,12 @@ HUMAN = "Ada Person <ada.person@example.org>"
 CLAUDE = "Claude Helper <noreply@anthropic.com>"
 COPILOT = "Copilot <copilot@users.example.net>"
 BOT = "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>"
+COPILOT_BOT = "Copilot <198982749+Copilot@users.noreply.github.com>"
+COPILOT_AGENT = "copilot-swe-agent[bot] <198982749+copilot-swe-agent[bot]@users.noreply.github.com>"
 IDENTITY_STRINGS = (
     "Ada Person", "ada.person", "example.org", "noreply@anthropic.com",
-    "Claude Helper", "copilot@users", "dependabot[bot]", "49699333",
+    "Claude Helper", "copilot@users", "dependabot[bot]", "49699333", "198982749",
+    "copilot-swe-agent",
 )
 
 RECENT = "2026-11-01T12:00:00+00:00"
@@ -40,6 +43,7 @@ def _git(repo: Path, *args: str, date: str = RECENT) -> None:
 
 
 def _commit(repo: Path, name: str, trailers: tuple[str, ...] = (), date: str = RECENT) -> None:
+    (repo / name).parent.mkdir(parents=True, exist_ok=True)
     (repo / name).write_text(name, encoding="utf-8")
     _git(repo, "add", name, date=date)
     message = f"add {name}"
@@ -59,7 +63,8 @@ def repo(tmp_path: Path) -> Path:
     _commit(r, "plain.txt")                         # no trailer
     _commit(r, "human.txt", (HUMAN,))               # human-only co-author
     _commit(r, "both.txt", (HUMAN, CLAUDE))         # human and agent: counted once
-    _commit(r, "bot.txt", (BOT,))                   # [bot] trailer
+    _commit(r, "bot.txt", (BOT,))                   # automation [bot] trailer: not counted
+    _commit(r, "pkg/agent.txt", (COPILOT_AGENT,))   # Copilot coding agent [bot], in pkg/
     _commit(r, "copilot.txt", (COPILOT,))           # copilot@ trailer
     _git(r, "checkout", "-q", "-b", "side")
     _commit(r, "side.txt", (CLAUDE,))               # agent commit on a branch
@@ -69,25 +74,31 @@ def repo(tmp_path: Path) -> Path:
 
 
 def test_all_time_counts_are_exact_and_merges_are_excluded(repo: Path) -> None:
-    block = scan_ai_usage(repo, None)
+    block = scan_ai_usage(repo, None, None)
     assert block["available"] is True
     assert block["window"] == "all-time" and block["since"] is None
     assert block["merge_rule"] == "excluded"
-    # 7 non-merge commits; agent trailers on old, both, bot, copilot, side.
-    assert block["total_commits"] == 7
+    # 8 non-merge commits; AI trailers on old, both, pkg/agent, copilot, side.
+    assert block["total_commits"] == 8
     assert block["agent_trailer_commits"] == 5
-    assert block["agent_trailer_share"] == round(5 / 7, 4)
+    assert block["agent_trailer_share"] == round(5 / 8, 4)
     assert block["lower_bound"] is True
     assert block["limits"] == list(LIMITS)
     assert block["covered_agents"] == list(agent_identity.COVERED_AGENTS)
 
 
 def test_window_filters_by_commit_date(repo: Path) -> None:
-    block = scan_ai_usage(repo, "5y")
+    block = scan_ai_usage(repo, None, "5y")
     assert block["available"] is True
     assert block["window"] == "5y" and block["since"] == "5 years ago"
-    assert block["total_commits"] == 6
+    assert block["total_commits"] == 7
     assert block["agent_trailer_commits"] == 4
+
+
+def test_scope_counts_only_the_subtree(repo: Path) -> None:
+    block = scan_ai_usage(repo, repo / "pkg", None)
+    assert block["available"] is True
+    assert block["total_commits"] == 1 and block["agent_trailer_commits"] == 1
 
 
 @pytest.mark.parametrize(("label", "since"), CHURN_WINDOWS)
@@ -98,7 +109,7 @@ def test_every_churn_window_resolves_to_its_since(label: str, since: str | None)
 
 
 def test_no_identity_string_reaches_the_block(repo: Path) -> None:
-    text = json.dumps(scan_ai_usage(repo, None))
+    text = json.dumps(scan_ai_usage(repo, None, None))
     for needle in IDENTITY_STRINGS:
         assert needle not in text
 
@@ -106,13 +117,13 @@ def test_no_identity_string_reaches_the_block(repo: Path) -> None:
 def test_empty_window_has_null_share(repo: Path) -> None:
     sub = repo / "empty"
     sub.mkdir()
-    block = scan_ai_usage(sub, None)
+    block = scan_ai_usage(repo, sub, None)
     assert block["available"] is True
     assert block["total_commits"] == 0 and block["agent_trailer_share"] is None
 
 
 def test_no_git_history_degrades(tmp_path: Path) -> None:
-    block = scan_ai_usage(tmp_path, None)
+    block = scan_ai_usage(tmp_path, None, None)
     assert block == {"available": False, "reason": "no readable git history at the run root"}
 
 
@@ -141,8 +152,18 @@ def test_matcher_has_one_definition() -> None:
     assert not agent_identity.coauthors_have_agent("Claude <claude@example.org>")
 
 
+@pytest.mark.parametrize(("trailer", "assistant"), [
+    (CLAUDE, True), (COPILOT, True), (COPILOT_BOT, True), (COPILOT_AGENT, True),
+    (BOT, False), ("pre-commit-ci[bot] <66853113+pre-commit-ci[bot]@users.noreply.github.com>", False),
+    ("github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>", False),
+    (HUMAN, False),
+])
+def test_ai_assistant_excludes_automation_bots(trailer: str, assistant: bool) -> None:
+    assert agent_identity.coauthors_have_ai_assistant(trailer) is assistant
+
+
 def test_registered_after_agent_environment() -> None:
     keys = [spec.key for spec in SCANS]
     assert keys[-1] == "ai_usage"
     spec = SCANS[-1]
-    assert spec.reads == ("repo_root", "history_window")
+    assert spec.reads == ("repo_root", "scope", "history_window")

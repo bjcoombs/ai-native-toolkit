@@ -263,10 +263,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
     # AI-assisted change share (issue #547): commits in the churn window with an
-    # agent Co-authored-by trailer, as counts and a share. A lower bound on agent
-    # use, never an estimate; merge commits excluded. Matcher: lib.agent_identity.
+    # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
+    # on agent use, never an estimate; merge commits and automation bots
+    # excluded. Matcher: lib.agent_identity.
     ScanSpec(
-        "ai_usage", scan_ai_usage, ("repo_root", "history_window"), STAGE_POST_OFFERS,
+        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window"), STAGE_POST_OFFERS,
     ),
 )
 

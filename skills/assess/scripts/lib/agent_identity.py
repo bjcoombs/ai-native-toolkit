@@ -27,13 +27,12 @@ AI_EMAIL_HINTS = (
     "copilot@",
 )
 
-# The agents AI_EMAIL_HINTS covers, in words, for a block's stated limits. No
-# e-mail address appears here, so a block that carries this list carries no
-# identity string. Keep it in step with AI_EMAIL_HINTS.
+# The AI assistants coauthors_have_ai_assistant counts, in words, for a block's
+# stated limits. No e-mail address appears here, so a block that carries this
+# list carries no identity string. Keep it in step with AI_EMAIL_HINTS.
 COVERED_AGENTS = (
-    "GitHub App accounts ([bot] suffix: Dependabot, Renovate, Copilot coding agent, github-actions)",
     "Claude (Anthropic noreply address)",
-    "GitHub Copilot (copilot@ addresses)",
+    "GitHub Copilot (copilot@ addresses and Copilot [bot] accounts)",
 )
 
 _BRACKETED_EMAIL = re.compile(r"<([^>]+)>")
@@ -69,5 +68,29 @@ def coauthors_have_agent(coauthor_field: str) -> bool:
         emails = _BRACKETED_EMAIL.findall(value)
         target = emails[0] if emails else value
         if identity_is_agent(target):
+            return True
+    return False
+
+
+def is_ai_assistant(email: str) -> bool:
+    """``identity_is_agent`` minus automation bots: an AI assistant's e-mail.
+
+    A ``[bot]`` account counts only when it is Copilot's; Dependabot, Renovate,
+    pre-commit-ci and github-actions are automation, not AI assistance.
+    """
+    e = email.lower()
+    if not identity_is_agent(e):
+        return False
+    return "[bot]" not in e or "copilot" in e
+
+
+def coauthors_have_ai_assistant(coauthor_field: str) -> bool:
+    """True if any Co-Authored-By trailer names an AI assistant (by e-mail)."""
+    for value in coauthor_field.split("\x1d"):
+        value = value.strip()
+        if not value:
+            continue
+        emails = _BRACKETED_EMAIL.findall(value)
+        if is_ai_assistant(emails[0] if emails else value):
             return True
     return False

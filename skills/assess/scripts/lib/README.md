@@ -1426,25 +1426,29 @@ Tests: `tests/test_agent_environment.py`.
 The one definition of an agent identity in a git history: `identity_is_agent(email,
 name)` (the `[bot]` marker on either, or an `AI_EMAIL_HINTS` e-mail; never a display
 name) and `coauthors_have_agent(field)` (any GS-separated `Co-authored-by` value whose
-bracketed e-mail is an agent). `COVERED_AGENTS` names the covered agents in words, with
-no address, for a block's stated limits; keep it in step with `AI_EMAIL_HINTS`.
+bracketed e-mail is an agent). `is_ai_assistant` / `coauthors_have_ai_assistant` are
+the same matcher with non-Copilot `[bot]` accounts removed, for `ai_usage`: a GitHub
+squash merge credits every commit author as a co-author, so an automation bot's
+fix-up commit must not make a change read as AI-assisted. `COVERED_AGENTS` names the
+assistants that counts, in words with no address, for a block's stated limits; keep
+it in step with `AI_EMAIL_HINTS`.
 Consumers: `change_coupling.authorship_analysis`, `promissory_markers`,
 `understanding_analysis` and `ai_usage`. Widening the hints changes all four, so it is
 a change of its own. Tests: `tests/test_ai_usage.py`, `tests/test_change_coupling.py`.
 
 **`ai_usage.py`**
 AI-assisted change share (issue #547), a lower bound on agent use.
-`scan_ai_usage(repo_root, history_window)` runs `git log --no-merges` over the run
-root in the window and emits `ai_usage: {available, window, since, merge_rule,
+`scan_ai_usage(repo_root, scope, history_window)` runs `git log --no-merges` over the
+`--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
 total_commits, agent_trailer_commits, agent_trailer_share, lower_bound,
 covered_agents[], limits[]}`. A commit counts when any `Co-authored-by` trailer names an
-agent per `agent_identity.coauthors_have_agent`; the share is null at zero commits.
+AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded); the share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
 the headless `--window`), or None for full history (`window: "all-time"`);
 `resolve_window` raises on anything else, which degrades the block. `limits` is the
 fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
-`COVERED_AGENTS`). Counts, a share and fixed strings only: no name, e-mail or
+`COVERED_AGENTS`, automation bots not counted). Counts, a share and fixed strings only: no name, e-mail or
 subject. No git history degrades to `available: false`. Tests: `tests/test_ai_usage.py`.
 **`shared_tooling.py`**
 Shared CI sources and agent marketplaces, per repository (issue #566), the

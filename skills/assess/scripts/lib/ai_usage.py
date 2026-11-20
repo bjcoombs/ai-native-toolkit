@@ -32,8 +32,15 @@ covers the same history as the churn axis; the headless signals run passes
 ``--window``. None (all-time churn, no stats, no git) means full history,
 recorded as ``"all-time"``.
 
-Scope: commits touching the run root (``git log -- .`` from ``repo_root``), so
-a ``--scope`` run of a monorepo subtree counts that subtree's commits.
+Scope: commits touching the ``--scope`` subtree when the core passes one
+(``git log -- <scope>``), otherwise every commit under ``repo_root``.
+
+Automation bots. A GitHub squash merge writes a ``Co-authored-by`` trailer for
+every other commit author on the pull request, so a ``pre-commit-ci[bot]`` or
+``github-actions[bot]`` fix-up commit would make a human change read as
+AI-assisted. Only AI-assistant trailers count
+(``agent_identity.coauthors_have_ai_assistant``: the shared matcher with
+non-Copilot ``[bot]`` accounts removed), which keeps the value a floor.
 
 Privacy: counts, a share and fixed strings only. No name, e-mail or commit
 subject reaches the block. No git history degrades to
@@ -46,7 +53,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal, TypedDict
 
-from lib.agent_identity import COVERED_AGENTS, coauthors_have_agent
+from lib.agent_identity import COVERED_AGENTS, coauthors_have_ai_assistant
 
 GIT_TIMEOUT_SECONDS = 20
 
@@ -58,6 +65,7 @@ LIMITS = (
     "Lower bound: commits whose agent trailer was stripped or never written are undercounted.",
     "Lower bound: agent-authored commits without an agent co-author trailer are not counted.",
     "Lower bound: only the covered agents are recognised; other tools are not counted.",
+    "Automation bot co-authors (Dependabot, pre-commit-ci, github-actions) are not counted as AI assistance.",
     "Merge commits are excluded; each merged commit counts once.",
 )
 
@@ -99,13 +107,13 @@ def resolve_window(window: str | None) -> tuple[str, str | None]:
     return window, f"{m.group(1)} {_UNIT[m.group(2)]} ago"
 
 
-def _trailer_fields(repo_root: Path, since: str | None) -> list[str] | None:
+def _trailer_fields(repo_root: Path, scope: Path | None, since: str | None) -> list[str] | None:
     """One co-author field per non-merge commit in the window, or None without git."""
     cmd = ["git", "-C", str(repo_root), "log", "--no-merges",
            "--format=%x1e%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
     if since is not None:
         cmd.append(f"--since={since}")
-    cmd += ["--", "."]
+    cmd += ["--", str(scope) if scope is not None else "."]
     try:
         out = subprocess.run(
             cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
@@ -117,15 +125,15 @@ def _trailer_fields(repo_root: Path, since: str | None) -> list[str] | None:
 
 
 def scan_ai_usage(
-    repo_root: Path, history_window: str | None,
+    repo_root: Path, scope: Path | None, history_window: str | None,
 ) -> AiUsageBlock | AiUsageUnavailable:
-    """Count the window's commits and those with an agent co-author trailer."""
+    """Count the window's commits and those with an AI-assistant co-author trailer."""
     label, since = resolve_window(history_window)
-    fields = _trailer_fields(repo_root, since)
+    fields = _trailer_fields(repo_root, scope, since)
     if fields is None:
         return {"available": False, "reason": "no readable git history at the run root"}
     total = len(fields)
-    agent = sum(1 for f in fields if coauthors_have_agent(f.strip("\n")))
+    agent = sum(1 for f in fields if coauthors_have_ai_assistant(f.strip("\n")))
     return {
         "available": True,
         "window": label,
