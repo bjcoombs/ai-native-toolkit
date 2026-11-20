@@ -29,7 +29,10 @@ salt is never written to the output.
 
 A field pattern is the dotted run of keys from the top of
 `run-context.json`, list levels left out, `{}` for the key of a
-path-keyed map and `*` for any key. A field named `path`, `file`,
+path-keyed map and `*` for any key. A path value with whitespace is
+dropped (a path field can be fed a sentence), but a path-keyed map's
+keys come from the file tree, so a key like `docs/My Notes.md` is kept
+(hashed when hashing is on). A field named `path`, `file`,
 `file_a`, `file_b`, `test_file` or `source_file` is a path in every block,
 and a field named `reason` is dropped in every block without its own rule.
 
@@ -387,7 +390,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `claude_config.source_urls` | dropped |
 | `claude_config.manifest_error` | dropped |
 | `claude_config.findings.kind` | token |
-| `claude_config.findings.key` | token |
+| `claude_config.findings.key` | dropped |
 | `claude_config.findings.value` | dropped |
 | `claude_config.findings.fix` | dropped |
 

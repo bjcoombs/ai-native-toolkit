@@ -157,6 +157,24 @@ def test_path_field_rejects_values_that_are_not_repo_relative(value: str) -> Non
         "skill_files": ["skills/x/SKILL.md"]}
 
 
+def test_path_keyed_map_keeps_a_key_with_whitespace() -> None:
+    ctx = {"instruction_files": {"docs/My Notes.md": {"grade": "B"}},
+           "skill_files": ["docs/My Notes.md"]}
+    assert counts_only(ctx) == {"instruction_files": {"docs/My Notes.md": {"grade": "B"}},
+                                "skill_files": []}
+    hashed = counts_only(ctx, hash_paths=True, salt="s")["instruction_files"]
+    assert len(hashed) == 1 and next(iter(hashed)).startswith(HASH_PREFIX)
+
+
+def test_claude_config_finding_keys_are_dropped() -> None:
+    """An unknown frontmatter key is copied from the file and can be a name."""
+    ctx = {"claude_config": {"findings": [{"kind": "unknown_key", "file": "skills/a/SKILL.md",
+                                           "line": 3, "key": "JaneDoe", "value": "internal",
+                                           "fix": "remove it"}]}}
+    assert counts_only(ctx) == {"claude_config": {"findings": [
+        {"kind": "unknown_key", "file": "skills/a/SKILL.md", "line": 3}]}}
+
+
 def test_map_keys_that_are_data_are_dropped_outside_path_keyed_maps() -> None:
     ctx = {"tool_versions": {"lizard": "1.23.0", "some file.py": "x"},
            "promissory_markers": {"families": {"suppression": {"total": 3}}}}

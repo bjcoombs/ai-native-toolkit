@@ -89,16 +89,18 @@ def _key_kind(pattern: str, key: object) -> str | None:
     return "field" if key in field_names() else None
 
 
-def _is_pathlike(value: str) -> bool:
+def _is_pathlike(value: str, *, allow_space: bool = False) -> bool:
     """A repo-relative path, glob or module name.
 
-    Not absolute, not a URL or ``scheme:`` value, no whitespace (so a sentence
-    read from a doc or an instruction file never passes as a path), no e-mail.
+    Not absolute, not a URL or ``scheme:`` value, no e-mail, and no whitespace
+    unless ``allow_space``: a path field can be fed a sentence read from a doc,
+    so a value there with a space is dropped. A path-keyed map's keys come
+    from the file tree, so ``docs/My Notes.md`` is accepted there.
     """
     return (
         0 < len(value) <= _MAX_PATH
         and value.isprintable()
-        and not any(c.isspace() for c in value)
+        and (allow_space or not any(c.isspace() for c in value))
         and not value.startswith(("/", "~", "\\"))
         and not _SCHEME_RE.match(value)
         and not _EMAIL_RE.search(value)
@@ -111,8 +113,8 @@ class _Filter:
         key = salt if salt is not None else secrets.token_hex(16)
         self._key = key.encode("utf-8")
 
-    def path(self, value: str) -> str | None:
-        return self._hashed(value) if _is_pathlike(value) else None
+    def path(self, value: str, *, allow_space: bool = False) -> str | None:
+        return self._hashed(value) if _is_pathlike(value, allow_space=allow_space) else None
 
     def identifier(self, value: str) -> str | None:
         """An external id: no whitespace or e-mail, hashed like a path."""
@@ -156,7 +158,7 @@ class _Filter:
             kind = _key_kind(pattern, key)
             new_key: str | None
             if kind == "path":
-                new_key = self.path(str(key))
+                new_key = self.path(str(key), allow_space=True)
                 child = _child(pattern, "{}")
             else:
                 new_key = str(key) if kind is not None else None
@@ -268,7 +270,10 @@ def render_doc() -> str:
         "",
         "A field pattern is the dotted run of keys from the top of",
         "`run-context.json`, list levels left out, `{}` for the key of a",
-        "path-keyed map and `*` for any key. A field named `path`, `file`,",
+        "path-keyed map and `*` for any key. A path value with whitespace is",
+        "dropped (a path field can be fed a sentence), but a path-keyed map's",
+        "keys come from the file tree, so a key like `docs/My Notes.md` is kept",
+        "(hashed when hashing is on). A field named `path`, `file`,",
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
         "",

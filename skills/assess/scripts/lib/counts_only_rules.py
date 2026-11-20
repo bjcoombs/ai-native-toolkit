@@ -403,7 +403,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "claude_config.source_urls": DROP,
         "claude_config.manifest_error": DROP,
         "claude_config.findings.kind": TOKEN,
-        "claude_config.findings.key": TOKEN,
+        # The key is copied from the file (an unknown frontmatter key can be a name).
+        "claude_config.findings.key": DROP,
         "claude_config.findings.value": DROP,
         "claude_config.findings.fix": DROP,
     },
