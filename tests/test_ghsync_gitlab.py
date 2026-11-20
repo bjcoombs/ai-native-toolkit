@@ -194,6 +194,7 @@ class Env:
             key = endpoint.replace("/", "__")
             for n, page in enumerate(pages, start=1):
                 (data / f"{key}.{n}.json").write_text(json.dumps(page))
+        self.data = data
         self.glab_log = tmp_path / "glab.log"
         self.gh_log = tmp_path / "gh.log"
         gitconfig = tmp_path / "gitconfig"
@@ -495,6 +496,66 @@ def test_behind_checkout_fast_forwards(env: Env) -> None:
     assert res.returncode == 0, res.stdout + res.stderr
     assert env.head("grp/sub/deep/gamma") == new
     assert _section(res.stdout, "Updated") == ["grp/sub/deep/gamma"]
+
+
+def test_checkout_on_another_branch_is_fetched_not_pulled(env: Env) -> None:
+    """A checkout off the default branch is fetched, left where it is, and
+    listed under Not on default branch."""
+    assert env.sync().returncode == 0
+    checkout = env.checkout("grp/alpha")
+    env.git("checkout", "-q", "-b", "feature", cwd=checkout)
+    head = env.head("grp/alpha")
+    new = env.advance("grp/alpha")
+    res = env.sync()
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert env.git("branch", "--show-current", cwd=checkout) == "feature"
+    assert env.head("grp/alpha") == head
+    assert env.git("rev-parse", "main", cwd=checkout) == head
+    assert env.git("rev-parse", "origin/main", cwd=checkout) == new
+    assert _section(res.stdout, "Not on default branch") == ["grp/alpha (feature)"]
+    assert "grp/alpha" not in _section(res.stdout, "Updated")
+
+
+def test_limit_applies_to_discovered_projects(env: Env) -> None:
+    """--limit without --from-list takes the first N discovered projects."""
+    res = env.sync("--limit", "2")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _checkouts(env.root) == set(SYNCED[:2])
+    assert "Up-to-date: 0 | Updated: 2 | Failed: 0" in res.stdout
+
+
+def test_group_on_second_membership_page_is_synced(env: Env) -> None:
+    """A group returned only on page 2 of the groups call is still found."""
+    (env.data / "ids" / "5").write_text("solo")
+    (env.data / "groups.2.json").write_text(json.dumps([{"id": 5, "full_path": "solo", "path": "solo"}]))
+    for key, page in (
+        ("groups__solo__descendant_groups", []),
+        ("groups__solo__projects", [_project("solo/proj")]),
+        ("groups__solo__projects__shared", []),
+    ):
+        (env.data / f"{key}.1.json").write_text(json.dumps(page))
+    env._make_bare("solo/proj")
+    res = env.sync()
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert _checkouts(env.root) == {*SYNCED, "solo/proj"}
+
+
+def test_quiet_drops_clone_progress_lines(env: Env) -> None:
+    """--quiet suppresses Cloning / Cloned; a failed clone is still named."""
+    shutil.rmtree(env.bare / "grp" / "sub" / "beta.git")
+    res = env.sync()
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "*** Cloning" not in res.stdout
+    assert "*** Cloned" not in res.stdout
+    assert "*** Failed to clone grp/sub/beta" in res.stdout
+    assert _section(res.stdout, "Failed") == ["grp/sub/beta"]
+
+
+def test_without_quiet_clone_progress_lines_print(env: Env) -> None:
+    res = env.run("--host", HOST, root=env.root)
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "*** Cloning grp/alpha" in res.stdout
+    assert "*** Cloned grp/alpha" in res.stdout
 
 
 # ---- --from-list ------------------------------------------------------------
