@@ -600,8 +600,10 @@ told otherwise, from a scratch directory, with a timeout; every failure becomes 
 `failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
 message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
 (`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row;
-`run_fleet` clears that directory first, and a path resolving outside it is not written.
-`remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out. `run_fleet` maps targets over a thread pool of those processes, isolates
+`run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
+`remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
+and treats a host-less URL (`file:///...`) as no remote, so no local path becomes an id.
+A list entry repeating an earlier id is skipped with a note on stderr. `run_fleet` maps targets over a thread pool of those processes, isolates
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.

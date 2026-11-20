@@ -150,7 +150,9 @@ def test_missing_list_entry_becomes_a_target_that_fails(tmp_path):
     ("https://token@github.com/org/repo", "org/repo"),
     ("ssh://git@gl.test:2222/grp/repo.git", "grp/repo"),
     ("git@github.com:org/repo.git", "org/repo"),
-    ("file:///srv/bare/grp/repo.git", "srv/bare/grp/repo"),
+    ("file:///srv/bare/grp/repo.git", None),
+    ("file://", None),
+    ("/srv/bare/repo.git", None),
 ])
 def test_remote_path(tmp_path, url, path):
     checkout = make_checkout(tmp_path / "r", remote=url)
@@ -164,6 +166,19 @@ def test_remote_path(tmp_path, url, path):
 ])
 def test_remote_path_drops_dot_segments(tmp_path, url, path):
     assert fleet.remote_path(make_checkout(tmp_path / "r", remote=url)) == path
+
+
+def test_file_remote_does_not_leak_a_local_path(tmp_path):
+    checkout = make_repo(tmp_path / "elsewhere", "grp/svc", remote="file:///home/user/bare/svc.git")
+    targets = fleet.targets_from_list([str(checkout)], None, tmp_path)
+    assert [t.repo for t in targets] == ["grp/svc"]
+
+
+def test_duplicate_list_ids_are_reported(tmp_path, capsys):
+    root = tmp_path / "froot"
+    make_repo(root, "grpa/svc1")
+    fleet.targets_from_list(["grpa/svc1", "grpa/svc1/svc1-main"], root, tmp_path)
+    assert "skipped list entry grpa/svc1/svc1-main: same id grpa/svc1" in capsys.readouterr().err
 
 
 def test_dot_only_remote_falls_back_to_directory_names(tmp_path):
@@ -239,13 +254,19 @@ def test_run_fleet_clears_old_logs_first(tmp_path):
     logs = tmp_path / "out" / "logs"
     (logs / "old").mkdir(parents=True)
     (logs / "old" / "repo.stderr").write_text("stale", encoding="utf-8")
+    (logs / "important.txt").write_text("keep", encoding="utf-8")
+    (logs / "keep").mkdir()
+    (logs / "keep" / "notes.md").write_text("keep", encoding="utf-8")
 
     def scan(target: Target, scratch: Path, options: ScanOptions) -> fleet.FleetRow:
         fleet.write_stderr_tail(options.log_dir, target, "fresh")
         return fleet._row(target, reason="scan_exit_1")
 
     fleet.run_fleet([Target("g/r", tmp_path)], ScanOptions(log_dir=logs), jobs=1, scan=scan)
-    assert sorted(p.relative_to(logs).as_posix() for p in logs.rglob("*.stderr")) == ["g/r.stderr"]
+    assert sorted(p.relative_to(logs).as_posix() for p in logs.rglob("*") if p.is_file()) == [
+        "g/r.stderr", "important.txt", "keep/notes.md"]
+    assert not (logs / "old").exists()
+    fleet.clear_stderr_logs(tmp_path / "absent")  # no directory: nothing to do
 
 
 def test_stderr_tail_is_skipped_without_a_log_dir_or_on_a_write_error(tmp_path):

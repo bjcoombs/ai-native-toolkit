@@ -39,7 +39,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -74,6 +73,7 @@ FAILURE_REASONS = (MISSING_CHECKOUT, NOT_A_WORK_TREE, SCAN_TIMEOUT, INVALID_OUTP
 # Plus ``scan_exit_<code>`` for a scan process that exits non-zero.
 
 _SKIP_DIRS = frozenset({"worktree"})
+_HOSTLESS_URL = re.compile(r"^[a-z][a-z0-9+.-]*://(?:/|$)", re.IGNORECASE)
 _REMOTE_PATH = re.compile(r"^(?:[a-z+]+://[^/]+/|[^@/:]+@[^:/]+:|[^@/:]+:)(?P<path>.+?)(?:\.git)?/?$")
 
 
@@ -163,7 +163,9 @@ def remote_path(checkout: Path) -> str | None:
     climbs out of a directory it names (the stderr logs); None when nothing is left.
     """
     url = _git(checkout, "config", "--get", "remote.origin.url")
-    match = _REMOTE_PATH.match(url) if url else None
+    if url is None or _HOSTLESS_URL.match(url):
+        return None  # file:///abs/path: a local path, never an id
+    match = _REMOTE_PATH.match(url)
     if not match:
         return None
     segments = [s for s in match.group("path").split("/") if s not in ("", ".", "..")]
@@ -219,7 +221,10 @@ def targets_from_list(entries: Iterable[str], root: Path | None, base: Path) -> 
     for entry in entries:
         repo_dir, checkout = _locate(entry, resolved_root, base)
         repo = _list_id(repo_dir, checkout, resolved_root)
-        targets.setdefault(repo, Target(repo, checkout))
+        if repo in targets:
+            print(f"fleet: skipped list entry {entry}: same id {repo} as an earlier entry", file=sys.stderr)
+            continue
+        targets[repo] = Target(repo, checkout)
     return sorted(targets.values(), key=lambda t: t.repo)
 
 
@@ -319,6 +324,24 @@ def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None) 
     return path
 
 
+def clear_stderr_logs(log_dir: Path) -> None:
+    """Delete the ``*.stderr`` files under ``log_dir`` and the directories that empties.
+
+    Only files this tool writes go; any other file (and its directories) stays.
+    """
+    if not log_dir.is_dir():
+        return
+    for path in log_dir.rglob("*.stderr"):
+        if path.is_file() and not path.is_symlink():
+            path.unlink(missing_ok=True)
+    for directory in sorted((d for d in log_dir.rglob("*") if d.is_dir() and not d.is_symlink()),
+                            key=lambda d: len(d.parts), reverse=True):
+        try:
+            directory.rmdir()  # only succeeds when empty
+        except OSError:
+            pass
+
+
 def _guarded(scan: ScanFn, target: Target, scratch: Path, options: ScanOptions) -> FleetRow:
     try:
         return scan(target, scratch, options)
@@ -331,10 +354,11 @@ def run_fleet(
 ) -> list[FleetRow]:
     """Scan every target with ``jobs`` workers; rows sorted by ``repo``.
 
-    ``options.log_dir`` is cleared first, so it holds only this run's logs.
+    The ``*.stderr`` logs a previous run left in ``options.log_dir`` are removed
+    first, so it holds only this run's; nothing else there is touched.
     """
     if options.log_dir is not None:
-        shutil.rmtree(options.log_dir, ignore_errors=True)
+        clear_stderr_logs(options.log_dir)
     with tempfile.TemporaryDirectory(prefix="fleet-") as scratch, \
             ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         rows = list(pool.map(lambda t: _guarded(scan, t, Path(scratch), options), targets))
