@@ -94,6 +94,11 @@ ever cut, this note is where the intended boundary is written down.
 
 ## Module reference
 
+Windows portability (#712): every text-mode `subprocess.run` names
+`encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
+round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
+`tests/test_windows_portability.py` guards both across `scripts/`.
+
 ### Data collection
 
 **`git_churn.py`**
@@ -573,8 +578,9 @@ the scan degrades. The core provides the `build_run_context` arguments
 (`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
-sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
-specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
+`fleet_config` (the repository's `[ai_usage]`, `[review]` and `[platform]` sections,
+`lib/fleet_config.py`) are setup specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
 stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
 order (#558). Only `anomalies` relies on its stage, staying the last scan key while
 later entries append to the table.
@@ -627,7 +633,8 @@ The headless, signals-only run behind `assess_signals.py` (issue #545). `collect
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
-`history_window` set to `--window` for history-reading scans, and the
+`history_window` set to `--window` for history-reading scans, `fleet_config` merged from
+`--fleet-config` and the target's `.assess/config.toml` (`fleet_config.repo_fleet_config`), and the
 `build_run_context` arguments `requested_scope=None`, `run_date` and
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
@@ -665,6 +672,19 @@ map reads `no_ownership_map` (the full run omits the block), and `stats_summary`
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
+**`tool_lookup.py`**
+Finds the external tools the headless scans need, Windows included (#711). `find_rg`
+resolves ripgrep from `RG_PATH` (when it names a file), then `shutil.which`, then on
+Windows only the WinGet package folder
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\BurntSushi.ripgrep*` (searched recursively
+for `rg.exe`, last path in sorted order), since a user-scope winget install may not create the
+`Links` alias. `RG_MISSING_REASON` names the three lookups and keeps the substring
+`rg not on PATH` that `headless_layers.promissory_markers` maps to `no_rg`.
+`missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
+do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
+stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
+exit codes do not change. Standard library only. Tests: `tests/test_tool_lookup.py`.
+
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
 `SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
@@ -687,7 +707,7 @@ same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
 `checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
-`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0` and `PYTHONUTF8=1` (#712), counts-only unless
 told otherwise, from a scratch directory, with a timeout; every failure becomes a
 `failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
 message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
@@ -944,8 +964,8 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
 reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
-`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
-path hashing and records a maturity-model version; unreadable entries are passed over. One
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
+path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
 `trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
 `fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
@@ -975,10 +995,41 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
-`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
+`fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
+without one, absent before #706 and read as null, so the stamp version stays 1). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
+
+**`fleet_config.py`**
+The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
+`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+#696 and #714). API:
+- `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
+  and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
+  value; both CLIs exit 2 on it.
+- `ai_usage_section` / `review_section` / `platform_section` return the typed section
+  (`AiUsageSection`, `ReviewSection`, `PlatformSection`; `total=False` TypedDicts).
+- `merge_repo_sections(fleet, repo_config)` and `repo_fleet_config(repo_root, fleet)`: the
+  merge rule. A repository's `.assess/config.toml` sections extend the fleet file: list
+  keys are the fleet entries in order then the repository's new ones (fleet indices are
+  stable); a scalar the fleet sets keeps the fleet value (a differing repository value is
+  ignored with a warning); an unset scalar takes the repository value. Repository input
+  that does not validate is skipped with a stderr warning, never raised.
+- `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
+  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  the run stamp.
+
+Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
+(`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`, or
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+A scan reads the merged config through the registry input `fleet_config` (a private setup
+spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
+the fleet file in the headless run). The value is private, never a run-context block, so it
+needs no counts-only rule; a consumer reports counts only. Comparability: `fleet_compare`,
+`fleet_history._MATCH_KEYS` and `fleet_trends.MATCH_KEYS` all key on
+`fleet_config_sha256`. Tests: `tests/test_fleet_config.py`.
 
 **`fleet_doc_freshness.py`**
 Cross-repo doc freshness (issue #664), opt-in: a docs repository's `[[describes]]`
@@ -1020,6 +1071,9 @@ checkout that is not a main clone at its work-tree root, one holding a protected
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
 output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
+The `rmtree` error hook (`_clear_read_only`, #712) makes a read-only file writable and
+retries its deletion once, since Windows refuses to delete git's read-only objects; any
+other failure keeps the clone as `delete_error`.
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
@@ -1032,7 +1086,7 @@ or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` re
 name that is not one plain path component, `entry_dir` refuses a symlinked directory on
 the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
 `run.json` at the current stamp version) or whose stamp differs in maturity-model version,
-window, output mode, scan selection or path hashing, or that holds a different
+window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
 repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
 `choose_entry` then moves to
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
@@ -1063,7 +1117,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 `RunVersionError` for another envelope version or a run with no `run.json`, which callers
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
-adds maturity-model version, window, output mode, scan selection and path hashing; any reason
+adds maturity-model version, window, output mode, scan selection, path hashing and the
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -1281,7 +1336,9 @@ folder->source provenance map (issue #178) consumed by `doc_provenance.py`, and 
 `assess_core.py` and `doc-graph-svg.py`. `resolve_excludes`
 is the single shared path that combines config excludes with CLI `--exclude`; both the treemap
 CLI and `doc-graph-svg.py` call it, so every artifact computes over the identical doc/code set.
-Degrades silently on missing or malformed config rather than blocking the run.
+Degrades silently on missing or malformed config rather than blocking the run. The
+`[ai_usage]`, `[review]` and `[platform]` sections are read by `fleet_config.py`, not here
+(they extend a `--fleet-config` file, #706).
 
 **`decline_markers.py`**
 Reads the `.assess/.no-<tool>` markers that record a permanent decline of an optional
@@ -1886,7 +1943,8 @@ deadline can go stale too. The `unactioned_intent` action states the
 `stale_touches_threshold` it applied. Honours the shared excludes and the
 generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
 degrades aging to `aging_reliable: False` on degenerate history (same verdict as
-`git_churn`).
+`git_churn`). The `rg` binary comes from `tool_lookup.find_rg`, resolved once per
+scan; when none runs the scan is unavailable with `tool_lookup.RG_MISSING_REASON`.
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
@@ -1960,10 +2018,11 @@ and `name` joins the rule names in name order with `", "`, except that a merge w
 exact rule keeps the exact rule's `name`, so a config_drift snapshot of that rule sees
 the wildcards' settings, never a renamed rule. It reuses a
 `protected_branches(project)` read when given one (config_drift reads the list once per
-scan), and returns None only from a readable list shorter than
-`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
-branch by name (the `ghreport.sh` fallback), so an exact rule on a later page combines with the
-first-page wildcards; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+scan). `protected_branches` reads `PROTECTED_PAGE` (100) rules a page until a short page
+ends the list (as `ghreport.sh` does with `--paginate`), so an exact rule and every
+wildcard on any page merge; a refused or malformed later page raises, never a partial
+merge, and a list still full after `PROTECTED_MAX_PAGES` (20) pages raises `truncated`.
+None comes only from that complete list with no cover. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
@@ -2330,6 +2389,42 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`check_command.py`**
+Pure classifier, split from `agent_environment.py` (issue #698) so an offline scan
+can use it without reaching `gh_cli`. `is_check_command(text)` is true for a test
+or check target of a runner `command_resolver.RUNNERS` models (`make test`, `npm
+run ci`, `tox`, the program after `uv run`), or a committed script named for a
+check; an install (`npm ci`, `uv sync --extra test`) never is. `is_check_name(name)`
+splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
+`is_lint_command(text)` walks the same program/target anchoring with `LINT_WORDS`
+(`lint`, `vet`, `clippy` and the linters) and `LINT_PROGRAMS` (`ruff`, `eslint`,
+`mypy` ... run directly), so `make lint` and `npx eslint` count and an install
+naming a linter does not; instruction-file classification does not use it. Used by
+`agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
+lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
+(`test_is_check_command`).
+
+**`ci_checks.py`**
+Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
+maturity model reads it, so the CI row measures CI, not the instruction file.
+`scan_ci_checks(repo_root)` reads the files `command_index.ci_config_files`
+selects (GitHub Actions workflows, `.gitlab-ci.yml`) and writes `{available,
+ci_files, check_commands, included_files, test_or_lint_runs, basis}`. Each line,
+with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
+(`command_index.ci_line_text`), is split into shell segments by
+`command_resolver.extract_commands` on its own (an apostrophe or fence on one line
+cannot swallow the next); `check_commands` counts the lines with a segment that
+`check_command.is_check_command` or `is_lint_command` credits; a bare list item
+that only names a linter (`- mypy` under `matrix:`) does not count. Triggers are
+not read. Known limit: lines are read without a YAML parser, so a command inside a
+non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_runs` is true with any check
+line; with none it is null (`basis: included_jobs`) when a CI file pulls jobs
+from elsewhere (`shared_tooling.pulls_jobs_from_elsewhere`: any top-level GitLab
+`include:`, a job-level `uses:` of another repository's reusable workflow), else
+false (`no_check_command`, or `no_ci` with no CI file). Offline and headless.
+Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
+`tests/test_level_signals.py`.
 
 **`agent_identity.py`**
 The one definition of an agent identity in a git history: `identity_is_agent(email,

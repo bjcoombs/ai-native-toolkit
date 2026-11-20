@@ -47,7 +47,8 @@ def head_commit_date(checkout: Path) -> date | None:
     try:
         done = subprocess.run(
             ["git", "-C", str(checkout), "log", "-1", "--format=%ct", "HEAD"],
-            capture_output=True, text=True, check=True, timeout=30,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=30,
             env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         )
         return datetime.fromtimestamp(int(done.stdout.strip()), tz=timezone.utc).date()

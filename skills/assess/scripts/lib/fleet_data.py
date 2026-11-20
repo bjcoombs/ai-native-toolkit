@@ -152,6 +152,7 @@ class RunDetails(TypedDict):
     counts_only: bool
     paths_hashed: bool
     scans: list[str] | None
+    fleet_config_sha256: str | None  # the --fleet-config comparability key (#706)
     repositories: RepositoryCounts
 
 
@@ -320,6 +321,7 @@ def run_details(stamp: FleetStamp) -> RunDetails:
         "scan_date": stamp["scan_date"], "window": stamp["window"], "levels_version": stamp["levels_version"],
         "counts_only": stamp["counts_only"], "paths_hashed": stamp["paths_hashed"],
         "scans": list(stamp["scans"]) if stamp["scans"] is not None else None,
+        "fleet_config_sha256": stamp.get("fleet_config_sha256"),
         "repositories": {"selected": counts["selected"], "scanned_ok": counts["scanned_ok"],
                          "failed": counts["failed"], "qualifying": counts["qualifying"]},
     }

@@ -314,7 +314,7 @@ def scc_scores(
         raw = subprocess.run(
             ["scc", "--by-file", "--format", "json",
              f"--exclude-dir={excludes}", str(root)],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"warning: scc failed ({e}); continuing without scc scores",
@@ -698,7 +698,7 @@ def _print_biggest(files: list[tuple[Path, int, float, str]], root: Path,
         if aux_data is not None:
             aux_str = f"  {aux_label} {aux_data.get(path, 0):>4d}"
         print(f"  {tokens.get(path, 0):>9,} est.tok  {loc:>7} loc  "
-              f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel}")
+              f"{metric_label} {metric:>5.0f}{aux_str}  [{src:6}]  {rel.as_posix()}")
 
 
 def render(files: list[tuple[Path, int, float, str]],
@@ -757,7 +757,7 @@ def render(files: list[tuple[Path, int, float, str]],
 # ARTIFACT_SCHEMA_VERSION, which assess_core stamps on run-context.json; the
 # treemap keeps its own copy of the constant.
 # test_complexity_treemap asserts the two stay equal.
-ARTIFACT_SCHEMA_VERSION = "1.18.0"
+ARTIFACT_SCHEMA_VERSION = "1.19.0"
 
 
 def _new_run_id() -> str:
@@ -829,9 +829,8 @@ def _scc_version() -> str | None:
     if shutil.which("scc") is None:
         return None
     try:
-        out = subprocess.run(
-            ["scc", "--version"], capture_output=True, text=True, check=True,
-        ).stdout.strip()
+        out = subprocess.run(["scc", "--version"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", check=True).stdout.strip()
     except (subprocess.SubprocessError, OSError):
         return None
     if not out:
@@ -1393,7 +1392,7 @@ def _out_path_and_title(root: Path, scope: Path | None,
     """The SVG path (``-o`` or a name derived from the root and scope) and the
     treemap title."""
     scope_label = (
-        str(scope.relative_to(root)) if scope is not None and scope != root
+        scope.relative_to(root).as_posix() if scope is not None and scope != root
         else None
     )
     default_name = (

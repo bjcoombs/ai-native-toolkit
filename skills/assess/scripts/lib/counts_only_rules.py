@@ -405,6 +405,11 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_source_ids": ID,
         "shared_tooling.marketplace_ids": ID,
     },
+    "ci_checks": {
+        # Counts, a tri-state boolean and the basis token (issue #698).
+        "ci_checks.reason": DROP,
+        "ci_checks.basis": TOKEN,
+    },
     "layer_grades": {
         # A letter grade (A-F) or null; the presence flag is a boolean.
         "layer_grades.reason": DROP,
@@ -592,7 +597,7 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
 # field in neither this set nor FLEET_DATA_RULES.
 FLEET_DATA_KEPT: Final = frozenset({
     "run.toolkit_commit", "run.plugin_version", "run.scan_date", "run.window",
-    "run.levels_version", "run.scans",
+    "run.levels_version", "run.scans", "run.fleet_config_sha256",
     "model.id", "model.title", "model.scope",
     "repos.rows.row", "repos.rows.signal", "views.units.levels.row",
 })

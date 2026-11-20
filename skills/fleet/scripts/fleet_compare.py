@@ -12,7 +12,7 @@ Exit codes:
     2  a run directory is missing or malformed (a stamp missing a key, a bad
        JSON line), or --write cannot be written
     3  the runs are not comparable (different maturity-model version, window, output
-       mode, scan selection, path hashing, major plugin version, or either
+       mode, scan selection, path hashing, fleet config, major plugin version, or either
        run's file versions); the JSON still says why
 
 Run:

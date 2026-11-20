@@ -352,3 +352,13 @@ def test_script_runs_standalone(froot, tmp_path):
                            "--scans", "agent_ops"], capture_output=True, text=True, env=env, check=False)
     assert done.returncode == 0, done.stderr
     assert len(_rows(tmp_path / "o")) == 3
+
+
+def test_missing_layer_package_prints_the_pip_hint_once(froot, tmp_path, monkeypatch, capsys):
+    from lib import tool_lookup
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tool_lookup, "missing_packages", lambda **_: ["grimp"])
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
+    err = capsys.readouterr().err
+    assert err.count("python -m pip install --user grimp") == 1

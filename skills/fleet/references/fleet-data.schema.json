@@ -51,6 +51,12 @@
             }
           ]
         },
+        "fleet_config_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "repositories": {
           "type": "object",
           "properties": {
@@ -78,6 +84,7 @@
       },
       "required": [
         "counts_only",
+        "fleet_config_sha256",
         "levels_version",
         "paths_hashed",
         "plugin_version",

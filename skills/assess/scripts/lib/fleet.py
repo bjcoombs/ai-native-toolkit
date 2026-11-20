@@ -111,6 +111,7 @@ class ScanOptions:
     timeout: int = DEFAULT_TIMEOUT
     log_dir: Path | None = None  # set: a scan_exit_* row's stderr tail lands in <log_dir>/<repo>.stderr
     active_since: date | None = None  # set: an ok row's ``active`` is HEAD committed on or after it
+    fleet_config: Path | None = None  # absolute: scans run with the scratch directory as cwd
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -120,13 +121,16 @@ AfterFn = Callable[[Target, FleetRow], None]
 
 
 def _read_only_env() -> dict[str, str]:
-    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+    # PYTHONUTF8: the scan child reads and writes UTF-8 whatever the host locale
+    # (a Windows code page would otherwise garble or reject non-ASCII text).
+    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"}
 
 
 def _git(path: Path, *args: str) -> str | None:
     try:
         out = subprocess.run(
             ["git", "-C", str(path), *args], capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
             check=True, timeout=30, env=_read_only_env(),
         )
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
@@ -281,6 +285,8 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
         command += ["--window", options.window]
     if options.scans is not None:
         command += ["--scans", options.scans]
+    if options.fleet_config is not None:
+        command += ["--fleet-config", str(options.fleet_config)]
     return command
 
 
@@ -304,7 +310,8 @@ def scan_target(target: Target, scratch: Path, options: ScanOptions) -> FleetRow
     try:
         done = subprocess.run(
             signals_command(target.checkout, out, options), cwd=scratch, env=_read_only_env(),
-            capture_output=True, text=True, timeout=options.timeout, check=False,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=options.timeout, check=False,
         )
     except subprocess.TimeoutExpired:
         return _row(target, reason=SCAN_TIMEOUT)

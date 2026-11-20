@@ -57,7 +57,8 @@ def repo_top(repo_root: Path) -> str | None:
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -98,7 +99,8 @@ def parse_commit_file_sets(
         cmd.append(f"--since={since}")
     try:
         raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return []
@@ -156,7 +158,8 @@ def build_rename_map(repo_root: Path, *, top: str | None = None) -> RenameMap:
            "--name-status", "-M", "--diff-filter=R", "--pretty=format:\x1e%H"]
     try:
         raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return RenameMap({}, complete=False)
@@ -401,7 +404,8 @@ def authorship_analysis(repo_root: Path, path: Path | str) -> Authorship:  # noq
         raw = subprocess.run(
             ["git", "-C", top, "log", "--no-merges", "--numstat",
              f"--format={fmt}", "--", str(path)],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return default
