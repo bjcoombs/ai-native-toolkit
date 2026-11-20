@@ -444,6 +444,34 @@ class DerivedFinding(FindingPaths):
     action: str
 
 
+class FindingsSnapshot(TypedDict):
+    """``findings.json`` and ``run-context.json`` ``prior_findings_snapshot``:
+    the finding method version and every finding's sorted paths."""
+
+    assess_method_version: int
+    findings: list[FindingPaths]
+
+
+class PathMove(TypedDict):
+    """One finding path that appeared or cleared across a method change."""
+
+    finding: str
+    path: str
+
+
+class MethodChange(TypedDict):
+    """``findings_snapshot.method_change``: what the gate prints on a mismatch."""
+
+    prior_method_version: int
+    method_version: int
+    # True when this run's method is older than the snapshot's.
+    downgrade: bool
+    appeared: list[PathMove]
+    cleared: list[PathMove]
+    snapshot: str
+    refreeze: str
+
+
 class AttentionRow(TypedDict):
     """One ``attention`` row: a unit and the negative findings that name it."""
 
