@@ -465,7 +465,7 @@ degrades. `stage` exists to keep
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
-`agent_environment`, `coverage_gate`. Besides
+`agent_environment`, `coverage_gate`, `shared_tooling`. Besides
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
 None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
@@ -1416,6 +1416,29 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`shared_tooling.py`**
+Shared CI sources and agent marketplaces, per repository (issue #566), the
+file-content half of the organisation-wide evidence in #550.
+`scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
+ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
+`path`, `line`, `tracked`) come from the top-level `include:` section of
+`.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
+`gitlab_component` with the host and `@version` dropped) and from `uses:
+<owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
+(`github_reusable_workflow`, keyed on the repository). Local includes, templates,
+`./.github/workflows` references, a job's `trigger:`, keys in nested lists
+(`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
+Symlinks and paths resolving outside the repository are not read. `marketplaces`
+rows (`kind`, `name`, `source`, `id`, `path`, `tracked`) are the
+`.claude-plugin/marketplace.json` manifest (`manifest`) and each
+`extraKnownMarketplaces` entry in `.claude/settings.json` (`settings`, `source` as
+`<kind>:<repo|url|path>`). A marketplace's `id` is its lowercased name, the key
+Claude Code tells marketplaces apart by, so a manifest and a settings entry naming
+it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
+`distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
+`available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+Tests: `tests/test_shared_tooling.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and
