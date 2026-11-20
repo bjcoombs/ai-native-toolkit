@@ -101,6 +101,15 @@ def test_list_entries_in_every_form_name_the_same_repositories(tmp_path):
     assert no_root == fleet.discover_root(root)
 
 
+def test_uncloned_porcelain_entry_keeps_its_layout_id(tmp_path):
+    root = tmp_path / "froot"
+    root.mkdir()
+    targets = fleet.targets_from_list(["a/b/svc9"], root, tmp_path)
+    assert [(t.repo, t.group) for t in targets] == [("a/b/svc9", "a/b")]
+    assert targets[0].checkout == (root / "a" / "b" / "svc9" / "svc9-main").resolve()
+    assert fleet.checkout_problem(targets[0].checkout) == fleet.MISSING_CHECKOUT
+
+
 def test_list_entry_relative_to_the_working_directory(tmp_path):
     make_repo(tmp_path / "froot", "grpa/svc1")
     targets = fleet.targets_from_list(["froot/grpa/svc1/svc1-main"], None, tmp_path)
@@ -270,6 +279,14 @@ def test_out_inside_target(tmp_path):
     assert fleet.out_inside_target(tmp_path / "g" / "r" / "worktree" / "x", targets) == targets[0]
     assert fleet.out_inside_target(tmp_path / "g" / "sibling", targets) is None
     assert fleet.out_inside_target(tmp_path / "out", targets) is None
+
+
+def test_out_beside_a_plain_checkout_named_main(tmp_path):
+    """A plain checkout whose name ends in -main is its own repository directory."""
+    plain = tmp_path / "work" / "svc-main"
+    targets = [Target("work/svc-main", plain)]
+    assert fleet.out_inside_target(tmp_path / "work" / "out", targets) is None
+    assert fleet.out_inside_target(plain / "out", targets) == targets[0]
 
 
 def test_schema_file_matches_the_type():
