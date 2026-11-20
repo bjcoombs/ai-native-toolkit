@@ -1,11 +1,16 @@
 """Shared reader for the views built on one fleet run's ``groups.jsonl`` (issue #553).
 
 The leadership heat map (#570) and the per-team next-steps pages (#571) render
-from the same run output with no rescan. This module holds what both need:
+from the same run output with no rescan. This module is the one place that
+reads that output back, and holds what both views need:
 
+- ``read_jsonl`` reads one JSONL file, every line a JSON object at the expected
+  envelope version; any fault raises ``FleetViewError`` naming ``file:line``,
+  so a view never renders from a half-read or foreign file;
+- ``read_repos`` gives the ``repos.jsonl`` rows sorted by repository id;
 - ``load_groups`` reads ``groups.jsonl`` (a file or the run's ``--out``
-  directory), checks the envelope version and the fields a view reads, refuses
-  a duplicate group and returns the rows sorted by group;
+  directory), checks the fields a view reads, refuses a duplicate group and
+  returns the rows sorted by group;
 - ``rubric_columns`` gives the rubric row ids in rubric order, the same for
   every group (a run evaluates one rubric), refusing a run with no rubric;
 - ``run_rubric_version`` is the single ``rubric_version`` the run carries;
@@ -23,8 +28,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
+from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, FleetRow
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RubricRowLevel
 from lib.rubric import Rubric
 
@@ -57,13 +63,45 @@ def groups_file(path: Path) -> Path:
     return path / GROUPS_FILE if path.is_dir() else path
 
 
-def _check_row(data: Any, where: str) -> GroupRow:
-    if not isinstance(data, dict):
-        raise FleetViewError(f"{where}: not a JSON object")
-    if data.get("fleet_group_version") != FLEET_GROUP_VERSION:
-        raise FleetViewError(
-            f"{where}: fleet_group_version {data.get('fleet_group_version')!r}, "
-            f"this renderer reads {FLEET_GROUP_VERSION}")
+def repos_file(path: Path) -> Path:
+    """``path`` itself, or ``path/repos.jsonl`` when it is a run directory."""
+    return path / REPOS_FILE if path.is_dir() else path
+
+
+def read_jsonl(path: Path, version_key: str, version: int) -> list[tuple[int, dict[str, Any]]]:
+    """Every non-blank line of ``path`` as (line number, JSON object at envelope ``version``)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise FleetViewError(f"{path.name}: cannot read ({exc})") from exc
+    rows: list[tuple[int, dict[str, Any]]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError as exc:
+            raise FleetViewError(f"{path.name}:{number}: not JSON ({exc})") from exc
+        if not isinstance(row, dict):
+            raise FleetViewError(f"{path.name}:{number}: not a JSON object")
+        if row.get(version_key) != version:
+            raise FleetViewError(
+                f"{path.name}:{number}: {version_key} is {row.get(version_key)!r}, expected {version}")
+        rows.append((number, row))
+    return rows
+
+
+def read_repos(path: Path) -> list[FleetRow]:
+    """The ``repos.jsonl`` rows of a run (the file or its directory), sorted by repository id."""
+    file = repos_file(path)
+    rows = read_jsonl(file, "fleet_row_version", FLEET_ROW_VERSION)
+    for number, row in rows:
+        if not isinstance(row.get("repo"), str) or not isinstance(row.get("group"), str):
+            raise FleetViewError(f"{file.name}:{number}: no repo or group id")
+    return sorted((cast(FleetRow, row) for _number, row in rows), key=lambda r: r["repo"])
+
+
+def _check_row(data: dict[str, Any], where: str) -> GroupRow:
     if not isinstance(data.get("group"), str) or not isinstance(data.get("rubric"), list):
         raise FleetViewError(f"{where}: needs a string 'group' and a 'rubric' list")
     if "rubric_version" not in data or not isinstance(data["rubric_version"], (str, type(None))):
@@ -85,19 +123,9 @@ def _check_row(data: Any, where: str) -> GroupRow:
 def load_groups(path: Path) -> list[GroupRow]:
     """The run's group rows, sorted by group; raise ``FleetViewError`` on any fault."""
     file = groups_file(path)
-    try:
-        text = file.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise FleetViewError(f"cannot read {file}: {exc}") from exc
     rows: dict[str, GroupRow] = {}
-    for number, line in enumerate(text.splitlines(), start=1):
-        if not line.strip():
-            continue
-        where = f"{file.name} line {number}"
-        try:
-            data = json.loads(line)
-        except ValueError as exc:
-            raise FleetViewError(f"{where}: invalid JSON ({exc})") from exc
+    for number, data in read_jsonl(file, "fleet_group_version", FLEET_GROUP_VERSION):
+        where = f"{file.name}:{number}"
         row = _check_row(data, where)
         if row["group"] in rows:
             raise FleetViewError(f"{where}: group {row['group']!r} appears twice")

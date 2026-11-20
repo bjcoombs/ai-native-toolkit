@@ -1,5 +1,5 @@
 """Tests for the per-team next-steps pages (issue #571): lib/fleet_next_steps.py,
-lib/next_step_guidance.py, lib/fleet_inputs.py and skills/fleet/scripts/fleet_next_steps.py.
+lib/next_step_guidance.py, the readers in lib/fleet_view.py and skills/fleet/scripts/fleet_next_steps.py.
 
 The golden pages live in ``tests/fixtures/fleet_next_steps/expected/``. Regenerate
 them after an intended change, then review the diff:
@@ -22,7 +22,7 @@ import pytest
 from lib import fleet_next_steps as ns
 from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows
 from lib.fleet_groups import load_settings, roll_up, write_groups
-from lib.fleet_inputs import FleetInputError, read_groups, read_jsonl, read_repos
+from lib.fleet_view import FleetViewError, load_groups, read_jsonl, read_repos
 from lib.next_step_guidance import guidance, measure_hint
 from lib.rubric import load_rubric
 from lib.rubric_signals import DEFAULT_RUBRIC, load_default_rubric, signal_path_validator
@@ -137,7 +137,7 @@ def test_rerendering_the_same_run_is_byte_identical(tmp_path):
 def test_page_levels_agree_with_groups_jsonl(tmp_path):
     pages = _pages(tmp_path)
     titles = {row["id"]: row["title"] for row in RUBRIC["rows"]}
-    for group in read_groups(tmp_path):
+    for group in load_groups(tmp_path):
         page = pages[ns.page_path(group["group"]).as_posix()]
         for entry in group["rubric"]:
             cell = "unknown" if entry["status"] == "unknown" else f"{entry['level']} of "
@@ -149,7 +149,7 @@ def test_every_row_below_top_names_an_unmet_criterion_and_its_repositories(tmp_p
     tops = {row["id"]: len(row["levels"]) for row in RUBRIC["rows"]}
     titles = {row["id"]: ns.text(row["title"]) for row in RUBRIC["rows"]}
     checked = 0
-    for group in read_groups(tmp_path):
+    for group in load_groups(tmp_path):
         page = pages[ns.page_path(group["group"]).as_posix()]
         for entry in group["rubric"]:
             if entry["status"] != "level" or entry["level"] == tops[entry["id"]]:
@@ -230,14 +230,14 @@ def test_missing_output_exits_2(tmp_path, capsys):
 
 def test_mismatched_group_sets_raise(tmp_path):
     fleet_run(tmp_path)
-    groups = read_groups(tmp_path)
+    groups = load_groups(tmp_path)
     with pytest.raises(ns.NextStepsError, match="different groups"):
         ns.build_pages(RUBRIC, read_repos(tmp_path), groups[:1], load_settings(tmp_path / "settings.json"))
 
 
 def test_a_changed_row_set_raises(tmp_path):
     fleet_run(tmp_path)
-    groups = read_groups(tmp_path)
+    groups = load_groups(tmp_path)
     groups[0]["rubric"].append({**groups[0]["rubric"][0], "id": "extra"})
     with pytest.raises(ns.NextStepsError, match="different set of rubric rows"):
         ns.build_pages(RUBRIC, read_repos(tmp_path), groups, load_settings(tmp_path / "settings.json"))
@@ -275,17 +275,17 @@ def test_write_pages_refuses_a_path_outside(tmp_path):
 def test_read_jsonl_names_file_and_line(tmp_path, line, fault):
     path = tmp_path / "repos.jsonl"
     path.write_text("\n" + line + "\n", encoding="utf-8")
-    with pytest.raises(FleetInputError, match=rf"repos.jsonl:2: .*{fault}"):
+    with pytest.raises(FleetViewError, match=rf"repos.jsonl:2: .*{fault}"):
         read_jsonl(path, "fleet_row_version", FLEET_ROW_VERSION)
 
 
 def test_readers_require_ids_and_sort(tmp_path):
     (tmp_path / "repos.jsonl").write_text('{"fleet_row_version": 1}\n', encoding="utf-8")
-    with pytest.raises(FleetInputError, match="no repo or group id"):
+    with pytest.raises(FleetViewError, match="no repo or group id"):
         read_repos(tmp_path)
     (tmp_path / "groups.jsonl").write_text('{"fleet_group_version": 1, "group": "g"}\n', encoding="utf-8")
-    with pytest.raises(FleetInputError, match="no group id or rubric list"):
-        read_groups(tmp_path)
+    with pytest.raises(FleetViewError, match="needs a string 'group' and a 'rubric' list"):
+        load_groups(tmp_path)
     fleet_run(tmp_path)
     assert [r["repo"] for r in read_repos(tmp_path)] == sorted(r["repo"] for r in REPOS)
 
@@ -356,7 +356,7 @@ def test_real_fleet_run_with_the_default_rubric_renders_pages(froot, tmp_path): 
     assert cli.main([str(out)]) == 0
     tops = {row["id"]: len(row["levels"]) for row in load_default_rubric()["rows"]}
     titles = {row["id"]: ns.text(row["title"]) for row in load_default_rubric()["rows"]}
-    for group in read_groups(out):
+    for group in load_groups(out):
         page = (out / ns.page_path(group["group"])).read_text(encoding="utf-8")
         for entry in group["rubric"]:
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]

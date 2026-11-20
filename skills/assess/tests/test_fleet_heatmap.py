@@ -240,9 +240,9 @@ def _one() -> dict[str, object]:
 
 @pytest.mark.parametrize(("rows", "message"), [
     ([], "no group rows"),
-    (["not json"], "invalid JSON"),
+    (["not json"], "groups.jsonl:1: not JSON"),
     ([[1]], "not a JSON object"),
-    ([dict(_one(), fleet_group_version=99)], "fleet_group_version 99"),
+    ([dict(_one(), fleet_group_version=99)], "fleet_group_version is 99, expected 1"),
     ([dict(_one(), group=None)], "needs a string 'group'"),
     ([dict(_one(), rubric=[{"id": "x"}])], "lacks one of"),
     ([dict(_one(), rubric=[{"id": "x", "status": "maybe", "level": None,
@@ -261,6 +261,16 @@ def test_load_groups_refuses_malformed_runs(tmp_path, rows, message):
                     encoding="utf-8")
     with pytest.raises(fv.FleetViewError, match=message):
         fv.load_groups(path)
+
+
+def test_read_repos_reads_a_directory_or_a_file_sorted(tmp_path):
+    rows = [{"fleet_row_version": 1, "repo": r, "group": "g"} for r in ("g/b", "g/a")]
+    _write_lines(tmp_path / "repos.jsonl", list(rows))
+    assert [r["repo"] for r in fv.read_repos(tmp_path)] == ["g/a", "g/b"]
+    assert fv.read_repos(tmp_path / "repos.jsonl") == fv.read_repos(tmp_path)
+    _write_lines(tmp_path / "repos.jsonl", [{"fleet_row_version": 1, "repo": "g/a"}])
+    with pytest.raises(fv.FleetViewError, match="repos.jsonl:1: no repo or group id"):
+        fv.read_repos(tmp_path)
 
 
 def test_load_groups_missing_file(tmp_path):

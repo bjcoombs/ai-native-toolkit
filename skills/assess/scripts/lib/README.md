@@ -651,12 +651,6 @@ the fragment's `scope` and `provider`. The CLI loads the rubric with
 `rubric_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
 
-**`fleet_inputs.py`**
-Reads a fleet run's output back for the views built on it (#570, #571), which never
-rescan: `read_repos` and `read_groups` return `repos.jsonl` and `groups.jsonl` rows
-sorted by id, and `read_jsonl` raises `FleetInputError` naming the file and line on a
-missing file, a non-object line or a wrong envelope version.
-
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
 (issue #571). `build_pages` re-runs `rubric.evaluate` per group on exactly the inputs
@@ -700,11 +694,13 @@ file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_sc
 from `skills/assess`.
 
 **`fleet_view.py`**
-The shared reader for the views built on one fleet run's `groups.jsonl` (#553): the
-heat map (#570) reads it, never `repos.jsonl` or a rescan; `fleet_inputs.read_groups`
-(#571) is a second `groups.jsonl` reader due to fold into `load_groups`.
-`load_groups` takes the file or the run directory, checks `fleet_group_version` and the
-rubric-entry fields a view reads (`FleetViewError` names the line), refuses a duplicate
+The shared reader for the views built on one fleet run's output (#553): the
+heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
+`read_jsonl` reads one file, each line a JSON object at the expected envelope version,
+and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns the
+`repos.jsonl` rows sorted by repository id (a row needs `repo` and `group` ids).
+`load_groups` takes the file or the run directory, checks the rubric-entry fields a view
+reads (`FleetViewError` names the line), refuses a duplicate
 group and sorts by group. `rubric_columns` gives the rubric row ids in rubric order (the
 same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
 version, `check_rubric` matches a rubric file (titles, top levels) to the run, and
