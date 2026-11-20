@@ -621,6 +621,31 @@ its schema version - no stamp field, path or timing - so reruns are byte-identic
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
+**`fleet_groups.py`**
+The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
+`group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
+shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
+no threshold config of its own. `load_settings` reads ghreport settings fragments
+(#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
+`scope`; `settings_for` joins a group to the exact scope or the nearest ancestor;
+`normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
+`{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
+org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
+else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a
+repository's `scans` map (a failed repository's is empty, so it is an unknown
+repository, never a passing one) and `settings_signals` the normalised settings plus
+the fragment's `scope` and `provider`. The CLI loads the rubric with
+`rubric_signals.signal_path_validator()`.
+`write_groups` writes atomically with sorted keys.
+
+**`fleet_group_schema.py`**
+Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
+`RubricRowLevel` (lists and floats included, `settings` values as `{value}` or
+`{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
+file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
+from `skills/assess`.
+
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
