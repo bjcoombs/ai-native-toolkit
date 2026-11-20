@@ -40,12 +40,15 @@ from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.review_reality import scan_review_reality
+from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
-# any spec declared before it.
-PROVIDED_INPUTS = frozenset({
-    "repo_root", "instruction_files", "scope", "excludes", "history_window",
-})
+# any spec declared before it. ``history_window`` is the git-history window a
+# history-reading scan should honour, always in the ``<n>d|w|mo|y`` grammar
+# ("12mo") or None for all history: ``--window`` in the headless signals run,
+# the stats sidecar's churn window (normalised by ``window_from_churn_label``)
+# in ``assess_core``.
+PROVIDED_INPUTS = frozenset({"repo_root", "instruction_files", "scope", "excludes", "history_window"})
 
 STAGE_READ_SIDE = "read_side"
 STAGE_POST_OFFERS = "post_offers"
@@ -64,6 +67,12 @@ class ScanSpec:
     ``degrade`` routes the call through ``safe``; a scan opts out only by
     setting ``gate_reason``, because a gate is the one kind of scan whose
     failure should stop the run.
+
+    ``network`` marks a scan that reads beyond the checkout (GitHub via
+    ``gh``). The headless signals runner (``lib/signals.py``) never calls such
+    a scan's ``fn``: it calls ``offline_fn`` when one is declared - the same
+    scan with its network probe turned off, taking the same reads - and
+    otherwise reports the scan unavailable. ``assess_core`` ignores both fields.
     """
 
     key: str
@@ -72,6 +81,8 @@ class ScanSpec:
     stage: str
     degrade: bool = True
     gate_reason: str = ""
+    network: bool = False
+    offline_fn: Callable[..., Any] | None = None
 
 
 def safe(label: str, fn: Callable[[], Any]) -> Any:
@@ -132,6 +143,13 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
                 f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its callable "
                 f"cannot be called with that many positional arguments"
             )
+        if spec.offline_fn is not None and not spec.network:
+            raise ScanRegistryError(f"scan {spec.key!r} declares an offline_fn but is not a network scan")
+        if spec.offline_fn is not None and not _accepts(spec.offline_fn, len(spec.reads)):
+            raise ScanRegistryError(
+                f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its offline_fn "
+                f"cannot be called with that many positional arguments"
+            )
         if not spec.degrade and not spec.gate_reason:
             raise ScanRegistryError(f"scan {spec.key!r} opts out of degrading without a gate_reason")
         produced_at[spec.key] = stage_index
@@ -182,9 +200,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # branch-protection snapshots diffed against the live GitHub setting via
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
-    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE),
-    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE),
-    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
+    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE, network=True),
+    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
     # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
     # names its file, line and threshold as written; none found reads
     # enforced: false, never inferred from coverage_report. A scoped run reads
@@ -232,10 +250,18 @@ SCANS: tuple[ScanSpec, ...] = (
     # hook, setup script or target), the check command a graded instruction file
     # names, lockfiles per manifest, the Layer 5 Partial cap, and the optional
     # `gh` CI-duration probe. Reads agent_harness for the SessionStart hooks.
+    # Headless runs call it with the probe off (ci_duration reports not_probed).
     ScanSpec(
         "agent_environment", scan_agent_environment,
         ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
+        network=True, offline_fn=partial(scan_agent_environment, probe_ci=False),
     ),
+    # Shared tooling (issue #566): the shared CI sources a pipeline includes
+    # (GitLab `include: project:` / `include: component:`, GitHub reusable
+    # workflows) and the agent marketplaces the repository hosts or names
+    # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
+    # stable id so a fleet roll-up counts distinct sources. Offline file reads.
+    ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
     # AI-assisted change share (issue #547): commits in the churn window with an
     # agent Co-authored-by trailer, as counts and a share. A lower bound on agent
     # use, never an estimate; merge commits excluded. Matcher: lib.agent_identity.

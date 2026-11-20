@@ -9,7 +9,7 @@ authorship analysis uses).
 Block (``ai_usage`` in run-context.json)::
 
     {"available": True,
-     "window": str,                # the history window applied, e.g. "last 12mo", "6mo", "all-time"
+     "window": str,                # the history window applied, e.g. "12mo", "90d", "all-time"
      "since": str | None,          # the git --since expression behind it; None = full history
      "merge_rule": "excluded",     # merge commits are not counted (git log --no-merges)
      "total_commits": int,         # non-merge commits reachable from HEAD in the window
@@ -25,10 +25,12 @@ agent-authored commit with no trailer all go uncounted. Merge commits are
 excluded, the precedent ``change_coupling.authorship_analysis`` set, so a
 merged branch counts its own commits once.
 
-Window. ``assess_core`` passes the churn window ``pick_churn_window`` chose for
-the treemap (``"commits (last 12mo)"``), so the share covers the same history
-as the churn axis; a headless caller may pass a ``<n>d|w|mo|y`` window. None
-(no stats, no git) means full history, recorded as ``"all-time"``.
+Window. ``history_window`` is in the ``<n>d|w|mo|y`` grammar (``"12mo"``):
+``assess_core`` passes the churn window ``pick_churn_window`` chose for the
+treemap, normalised by ``git_churn.window_from_churn_label``, so the share
+covers the same history as the churn axis; the headless signals run passes
+``--window``. None (all-time churn, no stats, no git) means full history,
+recorded as ``"all-time"``.
 
 Scope: commits touching the run root (``git log -- .`` from ``repo_root``), so
 a ``--scope`` run of a monorepo subtree counts that subtree's commits.
@@ -45,7 +47,6 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from lib.agent_identity import COVERED_AGENTS, coauthors_have_agent
-from lib.git_churn import CHURN_WINDOWS
 
 GIT_TIMEOUT_SECONDS = 20
 
@@ -60,9 +61,8 @@ LIMITS = (
     "Merge commits are excluded; each merged commit counts once.",
 )
 
-_HEADLESS_WINDOW = re.compile(r"^([1-9][0-9]*)(d|w|mo|y)$")
+_WINDOW = re.compile(r"^([1-9][0-9]*)(d|w|mo|y)$")
 _UNIT = {"d": "days", "w": "weeks", "mo": "months", "y": "years"}
-_CHURN_LABEL = re.compile(r"^commits \((.+)\)$")
 
 
 class AiUsageBlock(TypedDict):
@@ -86,22 +86,17 @@ class AiUsageUnavailable(TypedDict):
 
 
 def resolve_window(window: str | None) -> tuple[str, str | None]:
-    """``(label, since)`` for a churn label, a ``<n>d|w|mo|y`` window or None.
+    """``(label, since)`` for a ``<n>d|w|mo|y`` window, or all history for None.
 
-    Raises ``ValueError`` on anything else, so a mistyped window never silently
+    Raises ``ValueError`` on anything else, so a malformed window never silently
     widens to full history.
     """
     if window is None:
         return ALL_TIME, None
-    m = _CHURN_LABEL.match(window)
-    label = m.group(1) if m else window
-    for churn_label, since in CHURN_WINDOWS:
-        if label == churn_label:
-            return label, since
-    h = _HEADLESS_WINDOW.match(label)
-    if h:
-        return label, f"{h.group(1)} {_UNIT[h.group(2)]} ago"
-    raise ValueError(f"unrecognised history window {window!r}")
+    m = _WINDOW.match(window)
+    if m is None:
+        raise ValueError(f"unrecognised history window {window!r}")
+    return window, f"{m.group(1)} {_UNIT[m.group(2)]} ago"
 
 
 def _trailer_fields(repo_root: Path, since: str | None) -> list[str] | None:

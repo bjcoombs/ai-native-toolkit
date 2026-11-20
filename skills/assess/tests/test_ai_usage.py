@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import agent_identity, change_coupling  # noqa: E402
 from lib.ai_usage import LIMITS, resolve_window, scan_ai_usage  # noqa: E402
-from lib.git_churn import CHURN_WINDOWS  # noqa: E402
+from lib.git_churn import CHURN_WINDOWS, window_from_churn_label  # noqa: E402
 from lib.scan_registry import SCANS  # noqa: E402
 
 HUMAN = "Ada Person <ada.person@example.org>"
@@ -82,14 +82,19 @@ def test_all_time_counts_are_exact_and_merges_are_excluded(repo: Path) -> None:
     assert block["covered_agents"] == list(agent_identity.COVERED_AGENTS)
 
 
-def test_churn_window_label_filters_by_commit_date(repo: Path) -> None:
-    block = scan_ai_usage(repo, "commits (all-time)")
-    assert block["available"] is True and block["total_commits"] == 7
-    block = scan_ai_usage(repo, "commits (last 5y)")
+def test_window_filters_by_commit_date(repo: Path) -> None:
+    block = scan_ai_usage(repo, "5y")
     assert block["available"] is True
-    assert block["window"] == "last 5y" and block["since"] == "5 years ago"
+    assert block["window"] == "5y" and block["since"] == "5 years ago"
     assert block["total_commits"] == 6
     assert block["agent_trailer_commits"] == 4
+
+
+@pytest.mark.parametrize(("label", "since"), CHURN_WINDOWS)
+def test_every_churn_window_resolves_to_its_since(label: str, since: str | None) -> None:
+    """assess_core's normalised churn window lands on the churn axis's --since."""
+    resolved = resolve_window(window_from_churn_label(f"commits ({label})"))
+    assert resolved[1] == since
 
 
 def test_no_identity_string_reaches_the_block(repo: Path) -> None:
@@ -117,13 +122,12 @@ def test_no_git_history_degrades(tmp_path: Path) -> None:
     ("90d", ("90d", "90 days ago")),
     ("12w", ("12w", "12 weeks ago")),
     ("1y", ("1y", "1 years ago")),
-    *[(f"commits ({label})", (label, since)) for label, since in CHURN_WINDOWS],
 ])
 def test_resolve_window(window: str | None, expected: tuple[str, str | None]) -> None:
     assert resolve_window(window) == expected
 
 
-@pytest.mark.parametrize("window", ["six months", "0mo", "commits (last 7mo)", ""])
+@pytest.mark.parametrize("window", ["six months", "0mo", "commits (last 12mo)", "last 12mo", ""])
 def test_unrecognised_window_raises(window: str) -> None:
     with pytest.raises(ValueError, match="unrecognised history window"):
         resolve_window(window)

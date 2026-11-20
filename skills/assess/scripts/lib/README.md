@@ -94,6 +94,8 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
+into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -467,11 +469,46 @@ degrades. `stage` exists to keep
 hand-wired assignments between the stages are gone. Currently registered:
 `agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
 `instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
-`agent_environment`, `ai_usage`. Besides
+`agent_environment`, `coverage_gate`, `shared_tooling`, `ai_usage`. Besides
 `repo_root` and
 `instruction_files`, the core provides `scope` (the absolute `--scope` path, or
 None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
-`history_window` (the stats sidecar's `churn_window` label, or None).
+`history_window` (a `<n>d|w|mo|y` window or None for all history: `--window` in the
+headless run, the stats sidecar's `churn_window` label normalised by
+`git_churn.window_from_churn_label` in `assess_core`).
+A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
+`review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
+`offline_fn` - the same scan with its probe off, taking the same reads
+(`agent_environment` with `probe_ci=False`). `assess_core` ignores both; the headless
+runner in `signals.py` reads them. `validate` rejects an `offline_fn` on a scan that is
+not `network`, or one that cannot take the spec's reads.
+
+**`signals.py`**
+The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
+the selected registry scans, plus the registry keys they read, through `run_scans` with
+inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`, and
+`history_window` set to `--window` for history-reading scans), so a raising
+scan degrades through `safe` and the run completes. A `network` scan runs its
+`offline_fn` or is reported `{"available": false, "reason": NETWORK_REASON}`. Names in
+`UNREGISTERED_SCANS` (run-context blocks `assess_core` still assigns by hand) are
+reported unavailable with `UNREGISTERED_REASON`; a name the registry also holds is
+dropped at runtime, so migrating a scan needs no edit here. `select_scans` raises
+`UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
+commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
+(each nullable outside git). The window is validated, stamped and passed to the scans
+that read `history_window` (`ai_usage`). Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
+before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
+the network.
+
+**`signals_schema.py`**
+Generates the published `references/signals.schema.json` from the `SignalsDocument` and
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+blocks, and an `if`/`then` rule that an `"available": false` block carries a string
+`reason`. `tests/test_signals.py` fails when the checked-in file differs from
+`build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
@@ -1402,13 +1439,35 @@ root in the window and emits `ai_usage: {available, window, since, merge_rule,
 total_commits, agent_trailer_commits, agent_trailer_share, lower_bound,
 covered_agents[], limits[]}`. A commit counts when any `Co-authored-by` trailer names an
 agent per `agent_identity.coauthors_have_agent`; the share is null at zero commits.
-`merge_rule` is always `"excluded"`. `history_window` is the churn label
-`pick_churn_window` chose (`"commits (last 12mo)"`, from the stats sidecar), a
-headless `<n>d|w|mo|y` window, or None for full history (`window: "all-time"`);
+`merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
+churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
+the headless `--window`), or None for full history (`window: "all-time"`);
 `resolve_window` raises on anything else, which degrades the block. `limits` is the
 fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
 `COVERED_AGENTS`). Counts, a share and fixed strings only: no name, e-mail or
 subject. No git history degrades to `available: false`. Tests: `tests/test_ai_usage.py`.
+**`shared_tooling.py`**
+Shared CI sources and agent marketplaces, per repository (issue #566), the
+file-content half of the organisation-wide evidence in #550.
+`scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
+ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
+`path`, `line`, `tracked`) come from the top-level `include:` section of
+`.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
+`gitlab_component` with the host and `@version` dropped) and from `uses:
+<owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
+(`github_reusable_workflow`, keyed on the repository). Local includes, templates,
+`./.github/workflows` references, a job's `trigger:`, keys in nested lists
+(`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
+Symlinks and paths resolving outside the repository are not read. `marketplaces`
+rows (`kind`, `name`, `source`, `id`, `path`, `tracked`) are the
+`.claude-plugin/marketplace.json` manifest (`manifest`) and each
+`extraKnownMarketplaces` entry in `.claude/settings.json` (`settings`, `source` as
+`<kind>:<repo|url|path>`). A marketplace's `id` is its lowercased name, the key
+Claude Code tells marketplaces apart by, so a manifest and a settings entry naming
+it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
+`distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
+`available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+Tests: `tests/test_shared_tooling.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and
