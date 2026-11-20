@@ -111,6 +111,7 @@ class ScanOptions:
     timeout: int = DEFAULT_TIMEOUT
     log_dir: Path | None = None  # set: a scan_exit_* row's stderr tail lands in <log_dir>/<repo>.stderr
     active_since: date | None = None  # set: an ok row's ``active`` is HEAD committed on or after it
+    fleet_config: Path | None = None  # absolute: scans run with the scratch directory as cwd
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -284,6 +285,8 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
         command += ["--window", options.window]
     if options.scans is not None:
         command += ["--scans", options.scans]
+    if options.fleet_config is not None:
+        command += ["--fleet-config", str(options.fleet_config)]
     return command
 
 
