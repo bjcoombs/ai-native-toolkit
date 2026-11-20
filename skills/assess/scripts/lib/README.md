@@ -1020,6 +1020,21 @@ list (issue #556). Its other readers see every scored file too: `candidate_dead_
 cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
 `tests/test_stats_rows.py`.
 
+**`scc_coverage.py`**
+What scc's file-level complexity covers. `DATA_LANGUAGES` (JSON, YAML, JSONL) splits
+code from data; `backend_by_language` maps each scc language to its per-function
+backend, or null when scc alone scored a file of it with decision points.
+`complexity_unreliable` flags scc-only code files whose density (ccn per NLOC) is under
+`UNRELIABLE_DENSITY_RATIO` (0.1) of their language's median, for files of at least
+`MIN_UNRELIABLE_NLOC` (200) in a language with at least two files of
+`MIN_MEDIAN_NLOC` (20) or more (issue #590): scc's keyword counter loses its place on
+some shell quoting and scores a 2,000-line script near zero. `complexity-treemap.py`
+writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
+(`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
+`anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
+scc-only CCN cells `~N` and flagged ones `(unreliable)`. Ranking is unchanged. Stdlib
+only. Tests: `tests/test_scc_coverage.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
@@ -1837,6 +1852,8 @@ it is one reviewed edit (re-read the pages, change the sets, move the date).
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
 grades only, no paths or code) so they are safe to include in self-feedback issues.
+`COMPLEXITY_UNRELIABLE` fires when `stats_summary.complexity_unreliable` is non-empty
+(`scc_coverage.py`); its detail counts files and languages and gives the largest NLOC.
 
 **`coverage_report.py`**
 Parses an *existing* coverage report into the shape the `test_pressure` scan's
