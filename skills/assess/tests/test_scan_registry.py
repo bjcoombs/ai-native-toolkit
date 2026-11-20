@@ -82,7 +82,7 @@ def test_a_callable_that_cannot_take_its_declared_reads_is_rejected():
     with pytest.raises(ScanRegistryError, match=r"'short'.*1 read"):
         reg.validate((_spec("short", two),))
     with pytest.raises(ScanRegistryError, match=r"'long'.*2 read"):
-        reg.validate((_spec("long", lambda root: 1, reads=("repo_root", "instruction_files")),))
+        reg.validate((_spec("long", lambda root: 1, reads=("repo_root", "run_date")),))
 
     def with_default(_root, _now=None):
         return 1
@@ -139,8 +139,10 @@ def test_the_core_passes_exactly_the_provided_inputs():
     literals = [
         node.value
         for node in ast.walk(core)
-        if isinstance(node, ast.Assign)
-        and any(isinstance(t, ast.Name) and t.id == "scan_inputs" for t in node.targets)
+        if (isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "scan_inputs" for t in node.targets))
+        or (isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name) and node.target.id == "scan_inputs")
     ]
     assert len(literals) == 1 and isinstance(literals[0], ast.Dict)
     keys = {k.value for k in literals[0].keys if isinstance(k, ast.Constant)}
@@ -162,10 +164,123 @@ def test_the_core_drives_every_stage():
     assert driven == set(reg.STAGES)
 
 
-def test_every_table_scan_degrades():
-    """instruction_claims ran outside the wrapper before it moved here."""
-    assert all(spec.degrade for spec in reg.SCANS)
-    assert "instruction_claims" in {spec.key for spec in reg.SCANS}
+def test_every_scan_that_degraded_before_the_migration_still_does():
+    """instruction_claims ran outside the wrapper before it moved here; the
+    scans _safe wrapped in build_run_context keep their degrade and label."""
+    by_key = {spec.key: spec for spec in reg.SCANS}
+    for key in (
+        "agent_ops", "config_drift", "review_reality", "gate_cost_estimate",
+        "coverage_gate", "instruction_claims", "claude_config", "nested_instructions",
+        "agent_harness", "agent_environment", "doc_graph", "archetype", "liveness",
+        "structure_scan", "test_pressure_scan", "promissory",
+    ):
+        assert by_key[key].degrade, key
+    labels = {key: by_key[key].label or key for key in ("liveness", "structure_scan",
+                                                         "test_pressure_scan", "promissory")}
+    assert labels == {"liveness": "liveness", "structure_scan": "structure",
+                      "test_pressure_scan": "test_pressure", "promissory": "promissory_markers"}
+
+
+def test_every_gate_names_its_reason():
+    assert all(spec.degrade or spec.gate_reason for spec in reg.SCANS)
+
+
+# -- private and spread entries -------------------------------------------------
+
+def test_a_private_value_is_readable_but_never_published():
+    specs = (
+        _spec("raw", lambda root: {"n": 1}, private=True),
+        _spec("block", lambda raw: raw["n"] + 1, reads=("raw",)),
+    )
+    reg.validate(specs)
+    ctx: dict = {}
+    inputs = {"repo_root": "r"}
+    reg.run_scans(ctx, inputs, reg.STAGE_READ_SIDE, specs)
+    assert ctx == {"block": 2}
+    assert inputs["raw"] == {"n": 1}
+
+
+def test_a_spread_entry_copies_its_keys_in_returned_order():
+    spec = _spec("group", lambda root: {"b": 2, "a": 1}, spread=("a", "b", "optional"))
+    reg.validate((spec,))
+    ctx: dict = {"first": 0}
+    inputs = {"repo_root": "r"}
+    reg.run_scans(ctx, inputs, reg.STAGE_READ_SIDE, (spec,))
+    assert list(ctx.items()) == [("first", 0), ("b", 2), ("a", 1)]
+    assert inputs["group"] == {"b": 2, "a": 1}
+
+
+def test_a_spread_entry_may_not_return_an_undeclared_key_or_a_non_mapping():
+    with pytest.raises(ScanRegistryError, match=r"undeclared key\(s\) \['c'\]"):
+        reg.run_scans({}, {"repo_root": "r"}, reg.STAGE_READ_SIDE,
+                      (_spec("g", lambda root: {"c": 1}, spread=("a",)),))
+    with pytest.raises(ScanRegistryError, match="not a mapping"):
+        reg.run_scans({}, {"repo_root": "r"}, reg.STAGE_READ_SIDE,
+                      (_spec("g", lambda root: [1], spread=("a",)),))
+
+
+def test_a_degraded_spread_entry_marks_every_declared_key():
+    def boom(_root):
+        raise RuntimeError("kaput")
+
+    ctx: dict = {}
+    reg.run_scans(ctx, {"repo_root": "r"}, reg.STAGE_READ_SIDE,
+                  (_spec("g", boom, spread=("a", "b"), label="grouped"),))
+    marker = {"available": False, "reason": "grouped scan failed: kaput"}
+    assert ctx == {"a": marker, "b": marker}
+
+
+def test_a_private_spread_or_clashing_spread_key_is_rejected():
+    with pytest.raises(ScanRegistryError, match="both private and spread"):
+        reg.validate((_spec("g", lambda root: {}, private=True, spread=("a",)),))
+    with pytest.raises(ScanRegistryError, match=r"\['a'\] written elsewhere"):
+        reg.validate((_spec("a", lambda root: 1), _spec("g", lambda root: {}, spread=("a",))))
+    with pytest.raises(ScanRegistryError, match="written elsewhere"):
+        reg.validate((_spec("g", lambda root: {}, spread=("doc_staleness",)),))
+    # A spread key may share a name with an input: the run header publishes
+    # the relative `scope` while scans read the absolute one.
+    reg.validate((_spec("g", lambda root: {}, spread=("repo_root",)),))
+
+
+def test_a_hand_wired_key_is_readable_only_from_its_stage():
+    reader = _spec("r", lambda v: v, reads=("doc_staleness",))
+    reg.validate((reader,))
+    with pytest.raises(ScanRegistryError, match="later stage"):
+        reg.validate((_spec("r", lambda v: v, reads=("doc_staleness",), stage=reg.STAGE_SETUP),))
+
+
+def test_the_core_assigns_exactly_the_hand_wired_keys():
+    core = ast.parse((SCRIPTS / "assess_core.py").read_text(encoding="utf-8"))
+    build = next(n for n in ast.walk(core)
+                 if isinstance(n, ast.FunctionDef) and n.name == "_attach_doc_staleness")
+    assigned = {
+        target.slice.value
+        for node in ast.walk(build) if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
+    }
+    assert assigned == set(reg.HAND_WIRED)
+
+
+def test_the_run_context_carries_only_declared_keys_in_table_order(tmp_path):
+    """No private value leaks into run-context.json, and the key order is the
+    table's: stage by stage, the hand-wired keys after STAGE_SETUP."""
+    from assess_core import build_run_context
+    from assess_core_helpers import _minimal_repo
+
+    ctx = build_run_context(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
+                            non_interactive=True)
+    declared: list[str] = []
+    for stage in reg.STAGES:
+        for spec in reg.SCANS:
+            if spec.stage == stage and not spec.private:
+                declared.extend(spec.spread or (spec.key,))
+        if stage == reg.STAGE_SETUP:
+            declared.extend(reg.HAND_WIRED)
+    assert list(ctx) == [key for key in declared if key in ctx]
+    spread_keys = {key for spec in reg.SCANS for key in spec.spread}
+    unpublished = {spec.key for spec in reg.SCANS if spec.private or spec.spread} - spread_keys
+    assert not unpublished & set(ctx)
 
 
 def test_network_defaults_off_so_positional_entries_stay_compatible():
