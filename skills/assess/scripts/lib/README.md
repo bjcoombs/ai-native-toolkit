@@ -1520,9 +1520,10 @@ public for `doc_claims`. Tests: `tests/test_instruction_claims.py`.
 **`doc_claims.py`**
 Runs the `instruction_claims` kinds over the doc set and adds one cross-document
 kind (issue #491), no model. `scan_doc_claims(repo_root, instruction_files,
-excludes)` reads the tracked Markdown matching `DOC_CLAIM_GLOBS` (`docs/**/*.md`,
-`skills/*/references/**/*.md`, `skills/*/SKILL.md`), minus `HISTORICAL_DOC_TREES`
-(`docs/design`, `docs/superpowers`, matched from the repo root), the built-in
+scope, excludes)` reads the tracked Markdown matching `DOC_CLAIM_GLOBS` (`docs/**/*.md`,
+`skills/*/references/**/*.md`, `skills/*/SKILL.md`) from the `--scope` directory
+(default the repo root), minus `HISTORICAL_DOC_TREES` (`docs/design`,
+`docs/superpowers` and the ADR and RFC trees, matched from that directory), the built-in
 excluded trees and the user's excludes, and verifies each document's claims with
 `instruction_claims.tally_claims`. The graded instruction files join the
 comparison but are not re-verified (a document that resolves to one, such as

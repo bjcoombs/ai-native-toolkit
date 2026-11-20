@@ -24,9 +24,10 @@ prefix of the other's (``3.11`` and ``3.11.9``, matching the lenient pin check;
 carries no value, so it has no cross-document form.
 
 Scope: the Markdown under ``docs/``, ``skills/*/references/`` and every
-``skills/*/SKILL.md``, minus ``HISTORICAL_DOC_TREES`` (design records that
-describe past intent and may legitimately disagree with current code), the
-built-in excluded trees and the user's excludes; only files the repo tracks
+``skills/*/SKILL.md`` (from the ``--scope`` directory when one is set), minus
+``HISTORICAL_DOC_TREES`` (design records, ADRs and RFCs: they describe past
+intent and may legitimately disagree with current code), the built-in excluded
+trees and the user's excludes; only files the repo tracks
 (any file when it is not a git repo). The graded instruction files join the
 cross-document comparison, since ``CLAUDE.md`` against a guide is the common
 case, but are not re-verified here: ``instruction_claims`` reports those.
@@ -51,6 +52,8 @@ from lib.instruction_claims import (
     tally_claims,
 )
 
+# A claim value two files can disagree on: a pinned version or a claimed count.
+ClaimValue = str | int
 
 
 class DocClaimSite(TypedDict):
@@ -58,7 +61,7 @@ class DocClaimSite(TypedDict):
 
     file: str
     line: int
-    value: Any
+    value: ClaimValue
 
 
 class DocContradiction(TypedDict):
@@ -85,31 +88,34 @@ class DocClaimsBlock(TypedDict):
 # Globs, from the repository root, of the documents whose claims are checked.
 DOC_CLAIM_GLOBS = ("docs/**/*.md", "skills/*/references/**/*.md", "skills/*/SKILL.md")
 # Records of past intent: they describe what was planned, not what is.
-HISTORICAL_DOC_TREES = ("docs/design", "docs/superpowers")
+HISTORICAL_DOC_TREES = (
+    "docs/design", "docs/superpowers", "docs/adr", "docs/adrs", "docs/decisions",
+    "docs/rfcs", "docs/rfc",
+)
 # List caps; the counts beside each list carry the full total.
 MAX_FAILURES = 50
 MAX_CONTRADICTIONS = 25
 
 
-def _version_parts(version: Any) -> tuple[str, ...]:
+def _version_parts(version: ClaimValue) -> tuple[str, ...]:
     return tuple(str(version).split("."))
 
 
-def _versions_agree(a: Any, b: Any) -> bool:
+def _versions_agree(a: ClaimValue, b: ClaimValue) -> bool:
     left, right = _version_parts(a), _version_parts(b)
     shorter = min(len(left), len(right))
     return left[:shorter] == right[:shorter]
 
 
-def _counts_agree(a: Any, b: Any) -> bool:
+def _counts_agree(a: ClaimValue, b: ClaimValue) -> bool:
     return count_within_tolerance(int(a), int(b))
 
 
-CROSS_DOC_VALUE: dict[str, Callable[[Claim], Any]] = {
+CROSS_DOC_VALUE: dict[str, Callable[[Claim], ClaimValue]] = {
     "pin": lambda claim: claim.fields["version"],
     "count": lambda claim: claim.fields["claimed"],
 }
-CROSS_DOC_AGREE: dict[str, Callable[[Any, Any], bool]] = {
+CROSS_DOC_AGREE: dict[str, Callable[[ClaimValue, ClaimValue], bool]] = {
     "pin": _versions_agree,
     "count": _counts_agree,
 }
@@ -118,7 +124,7 @@ CROSS_DOC_AGREE: dict[str, Callable[[Any, Any], bool]] = {
 class _Site(NamedTuple):
     file: str
     line: int
-    value: Any
+    value: ClaimValue
     real: Path
 
 
@@ -129,16 +135,24 @@ def _historical(rel: Path) -> bool:
 
 def doc_claim_files(
     repo_root: Path, excludes: tuple[set[str], list[str]] | None = None,
+    scope: Path | None = None,
 ) -> list[str]:
-    """Repo-relative paths of the documents in scope, sorted."""
+    """Repo-relative paths of the documents in scope, sorted.
+
+    The globs and the historical trees are matched from ``scope`` (the run's
+    ``--scope`` directory, default the repo root); paths are reported, and the
+    excludes matched, relative to the repo root.
+    """
     root = repo_root.resolve()
+    base = (scope or root).resolve()
     tracked = tracked_files(root)
     dirs, patterns = excludes or (set(), [])
     found: set[str] = set()
     for pattern in DOC_CLAIM_GLOBS:
-        for path in root.glob(pattern):
+        for path in base.glob(pattern):
             rel = path.relative_to(root)
-            if (not path.is_file() or _historical(rel) or is_excluded_path(rel)
+            if (not path.is_file() or _historical(path.relative_to(base))
+                    or is_excluded_path(rel)
                     or is_user_excluded(rel, dirs, patterns)
                     or not is_repo_file(path, root, tracked)):
                 continue
@@ -188,6 +202,7 @@ def find_contradictions(claims_by_file: Iterable[tuple[str, Path, list[Claim]]])
 def scan_doc_claims(
     repo_root: Path | str,
     instruction_files: Iterable[str],
+    scope: Path | None = None,
     excludes: tuple[set[str], list[str]] | None = None,
 ) -> DocClaimsBlock:
     """Verify the doc set's claims and find claims two files disagree on.
@@ -199,7 +214,7 @@ def scan_doc_claims(
     count), each ``{kind, path, sites[{file, line, value}]}``.
     """
     root = Path(repo_root)
-    docs = doc_claim_files(root, excludes)
+    docs = doc_claim_files(root, excludes, scope)
     block = empty_block()
     ci_configured = has_ci_config(root)
     pool: list[tuple[str, Path, list[Claim]]] = []

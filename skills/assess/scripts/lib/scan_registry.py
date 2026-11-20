@@ -536,7 +536,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # differently, citing every site. Layer 0 lying-signal evidence.
     ScanSpec(
         "doc_claims", scan_doc_claims,
-        ("repo_root", "instruction_files", "excludes"), STAGE_POST_OFFERS,
+        ("repo_root", "instruction_files", "scope", "excludes"), STAGE_POST_OFFERS,
     ),
 )
 

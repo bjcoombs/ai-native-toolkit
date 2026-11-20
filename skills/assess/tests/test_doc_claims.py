@@ -47,6 +47,24 @@ def test_historical_trees_match_from_the_root_only(tmp_path: Path) -> None:
     assert doc_claim_files(tmp_path) == ["docs/guide/design/now.md"]
 
 
+@pytest.mark.parametrize("tree", ["docs/adr", "docs/decisions", "docs/rfcs"])
+def test_decision_records_are_historical(tmp_path: Path, tree: str) -> None:
+    _write(tmp_path, f"{tree}/0001.md", "text\n")
+    assert doc_claim_files(tmp_path) == []
+
+
+def test_scope_globs_from_the_scope_directory(tmp_path: Path) -> None:
+    _write(tmp_path, "docs/root.md", "text\n")
+    _write(tmp_path, "svc/docs/guide.md", "text\n")
+    _write(tmp_path, "svc/docs/design/old.md", "text\n")
+    assert doc_claim_files(tmp_path, None, tmp_path / "svc") == ["svc/docs/guide.md"]
+    _write(tmp_path, "svc/docs/a.md", PIN_311)
+    _write(tmp_path, "svc/docs/b.md", PIN_312)
+    block = scan_doc_claims(tmp_path, [], tmp_path / "svc")
+    assert [s["file"] for s in block["contradictions"][0]["sites"]] == [
+        "svc/docs/a.md", "svc/docs/b.md"]
+
+
 def test_user_excludes_apply(tmp_path: Path) -> None:
     _write(tmp_path, "docs/keep.md", "text\n")
     _write(tmp_path, "docs/drafts/skip.md", "text\n")
@@ -71,7 +89,7 @@ def test_a_false_pin_in_a_doc_is_a_failure(tmp_path: Path) -> None:
     assert (block["files_scanned"], block["total"], block["failed"]) == (1, 1, 1)
     failure = block["failures"][0]
     assert (failure["file"], failure["line"], failure["kind"]) == ("docs/setup.md", 3, "pin")
-    assert block["excluded_trees"] == ["docs/design", "docs/superpowers"]
+    assert {"docs/design", "docs/superpowers", "docs/adr"} <= set(block["excluded_trees"])
 
 
 def test_two_docs_pinning_different_versions_cite_both_lines(tmp_path: Path) -> None:
