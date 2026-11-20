@@ -361,7 +361,8 @@ a fixture-backed test here alongside any predicate change.
 The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
 `doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
 ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
-directory's code), then a parallel `docs/` tree, explicit code links, and the empty
+directory's code; a skill's `SKILL.md` is a base doc ranked just after `README.md`, so it
+owns its skill's subtree, #614), then a parallel `docs/` tree, explicit code links, and the empty
 `repo-baseline` subject. `subject_spec` records each doc's method and roots as
 repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
 `/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
@@ -1276,8 +1277,10 @@ N and of every lower level holds. A missing key, a null, a path through an
 `available: false` block or a type mismatch makes the criterion `unknown`. A row then
 carries `bounds` (`low`: the definitely-met climb; `high`: below the first definitely
 unmet level above it, else K) and is `unknown` only when they differ, so it is never a
-false 0 or a false pass. `missing_signals` names every unavailable signal even when the
-level is known. Every level's unmet criteria are in the result for next-step guidance.
+false 0 or a false pass. `missing_signals` names every signal whose criterion is
+unknown (unavailable or mistyped) even when the level is known. A criterion's `actual`
+is the resolved value only when it is a finite scalar, null otherwise, and
+`dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
 `load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
@@ -1292,14 +1295,16 @@ segment must be a block name the published headless schema lists
 (`references/signals.schema.json`, `scans.propertyNames`, generated from
 `signals.known_scans`), so one rubric reads a headless document's `scans` or a full
 `run-context.json`; run-context keys outside the schema (`instructions_grade`) are
-rejected. Where `counts_only_schema.ROOTS` types the block, every further segment must
+rejected, and the deterministic layer grades are read through the `layer_grades` block
+instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
 name a field and end on a scalar (no list, no object); an untyped block is open. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
 `<setting>.value` / `.reason`). `load_default_rubric` loads
 `skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
-signal (0, 1, 5, 6, 7, 8), level 1 for Partial and 2 for Present. It can disagree with
-the `/assess` layer verdicts (the file header lists where); no instruction file reads
-level 0 through a never-null byte count, not `unknown`. Tests:
+signal (0, 1, 5, 6, 7, 8; the header says why 2-4 have none), level 1 for Partial and
+2 for Present. It can disagree with the `/assess` layer verdicts (the file header lists
+where); no instruction file reads level 0 through the never-null
+`layer_grades.instruction_file_present`, not `unknown`. Tests:
 `tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
 
@@ -1647,10 +1652,16 @@ https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
 `ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
-protected-branch rule covering a branch (exact name first, else the first `*` wildcard
-rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
-rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
-list once per scan), or None only from a readable list shorter than
+protected-branch rule covering a branch (exact name first, else the `*` wildcard rules
+matching it via `branch_pattern`; a name holding `*` is answered only by its own
+rule). Overlapping wildcards (`release/*` and `*-stable` on `release/1-stable`) are merged
+by `merge_rules` as GitLab applies them, never one picked by order: each `*_access_levels`
+list is the union of the rules' grants with the role grants collapsed to the most
+permissive (lowest non-zero `access_level`, `0` only when every role grant is `0`),
+`allow_force_push` and `code_owner_approval_required` are True when any rule sets them,
+and `name` joins the rule names in name order with `", "`. It reuses a
+`protected_branches(project)` read when given one (config_drift reads the list once per
+scan), and returns None only from a readable list shorter than
 `PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
 branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
 first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
@@ -2075,6 +2086,19 @@ it count once. The two id lists credit git-tracked files only, as `agent_ops` do
 `distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
 Tests: `tests/test_shared_tooling.py`.
+
+**`layer_grades.py`**
+Deterministic layer grades as one registered block (issue #620), so the headless
+signals document carries them and a maturity rubric can name them.
+`scan_layer_grades(instruction_grading)` reads the setup grading
+(`run_setup.instruction_grading`) and writes `{instructions_grade,
+instruction_file_present}`: the best letter grade of the tracked, present instruction
+files (null with none, the top-level `instructions_grade` value, which stays) and
+whether one exists, so a rubric can score "no instruction file" as level 0 rather
+than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
+default rubric's header says why). A short token and a boolean, kept whole by the
+counts-only filter. Tests: `tests/test_layer_grades.py`, and the rubric rows in
+`tests/test_rubric_signals.py`.
 
 **`claude_config_fields.py`**
 The documented frontmatter field sets `claude_config` checks against: skill and

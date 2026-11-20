@@ -167,3 +167,45 @@ def test_scoped_run_keys_match_stats_keys(git_repo) -> None:
     joined = analyze_doc_complexity_join(dict(stats), dict(staleness), repo)
     unit = next(u for u in joined["docs"] if u["path"] == "svc/README.md")
     assert unit["complexity_summarised"] == 20.0
+
+
+def test_skill_md_is_a_base_doc_ranked_after_readme() -> None:
+    """Issue #614: a skill's SKILL.md describes its skill directory, so it is a
+    base doc; a README.md beside it still wins the directory."""
+    from lib.doc_ownership import BASE_DOC_PRECEDENCE, base_doc_for_dir, is_base_doc
+
+    assert BASE_DOC_PRECEDENCE.index("skill.md") == BASE_DOC_PRECEDENCE.index("readme.md") + 1
+    skill = Path("skills/foo/SKILL.md")
+    readme = Path("skills/foo/README.md")
+    design = Path("skills/foo/design.md")
+    assert is_base_doc(skill)
+    assert base_doc_for_dir([design, skill]) == skill
+    assert base_doc_for_dir([skill, readme, design]) == readme
+
+
+def test_skill_md_owns_its_skill_scripts_in_both_blocks(git_repo) -> None:
+    """A SKILL.md owns the code under its skill directory, ahead of the root
+    README, in the staleness block and the complexity join alike."""
+    repo, commit = git_repo
+    (repo / "README.md").write_text("repo map", encoding="utf-8")
+    skill_dir = repo / "skills" / "foo"
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("skill", encoding="utf-8")
+    (skill_dir / "scripts" / "run.py").write_text("v = 0", encoding="utf-8")
+    (repo / "top.py").write_text("t = 0", encoding="utf-8")
+    commit("initial", days_ago=200)
+    for i in range(8):
+        (skill_dir / "scripts" / "run.py").write_text(f"v = {i + 1}", encoding="utf-8")
+        commit(f"change {i}", days_ago=100 - i * 5)
+    staleness = analyze_doc_staleness(repo, generated_sources=[])
+    rows = {d["path"]: d for d in staleness["docs"]}
+    assert rows["skills/foo/SKILL.md"]["base_doc_dir"] == "skills/foo"
+    assert rows["skills/foo/SKILL.md"]["subject_paths"] == ["skills/foo/scripts/run.py"]
+    assert rows["README.md"]["subject_paths"] == ["top.py"]
+
+    stats = {"ccn": {"p95": 10.0},
+             "top_complex": [{"path": "skills/foo/scripts/run.py", "ccn": 30.0}]}
+    joined = analyze_doc_complexity_join(dict(stats), dict(staleness), repo)
+    units = {u["path"]: u for u in joined["docs"]}
+    assert units["skills/foo/SKILL.md"]["complexity_summarised"] == 30.0
+    assert units["README.md"]["complexity_summarised"] == 0.0

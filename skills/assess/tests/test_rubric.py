@@ -380,6 +380,34 @@ def test_non_finite_signal_is_unknown_and_serialises() -> None:
     json.loads(dumps_result(result), parse_constant=lambda c: pytest.fail(f"non-JSON constant {c}"))
 
 
+@pytest.mark.parametrize("signal", ['{"s": [NaN]}', '{"s": {"x": NaN}}', '{"s": [1, [Infinity]]}'])
+def test_nested_non_finite_signal_never_reaches_the_result(signal: str) -> None:
+    """Issue #602: an object or list actual is not echoed, so its NaN cannot be."""
+    rubric = parse_rubric(_rubric(_team_row([_lv(1, {"signal": "s", "op": "eq", "value": 1})])))
+    result = evaluate(rubric, {"name": "g", "settings": None, "repos": {"a": json.loads(signal)}})
+    outcome = result["rows"][0]["repos"]["a"]["levels"][0]["unmet"][0]
+    assert (outcome["reason"], outcome["actual"]) == ("type_mismatch", None)
+    json.loads(dumps_result(result), parse_constant=lambda c: pytest.fail(f"non-JSON constant {c}"))
+
+
+def test_dumps_result_refuses_to_write_a_non_finite_number() -> None:
+    result = evaluate(parse_rubric(_rubric(_team_row([_lv(1)]))), {"name": "g", "settings": None, "repos": {}})
+    result["rows"][0]["aggregation"]["share"] = float("nan")
+    with pytest.raises(ValueError, match="JSON compliant"):
+        dumps_result(result)
+
+
+def test_missing_signals_lists_mistyped_as_well_as_unavailable() -> None:
+    """The documented contract (issue #602): every signal whose criterion is unknown."""
+    row = parse_rubric(_rubric(_team_row([_lv(
+        1, {"signal": "a", "op": "eq", "value": 1}, {"signal": "b", "op": "eq", "value": 1},
+        {"signal": "c", "op": "eq", "value": 1})])))["rows"][0]
+    ev = evaluate_row(row, {"a": "one", "c": 1})
+    reasons = {o["signal"]: o["reason"] for o in ev["levels"][0]["unmet"]}
+    assert reasons == {"a": "type_mismatch", "b": "unavailable"}
+    assert ev["missing_signals"] == ["a", "b"]
+
+
 def test_huge_integer_signal_compares_without_overflow() -> None:
     row = parse_rubric(_rubric(_team_row([_lv(1, {"signal": "s", "op": "gte", "value": 1.5})])))["rows"][0]
     ev = evaluate_row(row, json.loads('{"s": ' + "9" * 400 + "}"))
