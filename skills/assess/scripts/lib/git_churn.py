@@ -16,7 +16,7 @@ import math
 import re
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, NamedTuple
@@ -31,6 +31,7 @@ from lib.assess_config import (
     CONFIG_FILE as ASSESS_CONFIG_FILE,
 )
 from lib.change_coupling import build_rename_map
+from lib.content_paths import RAW_LOG_ARGS, content_paths
 from lib.history_window import WINDOW_PATTERN
 from lib.run_context_types import BulkCommit, JsonDict
 
@@ -67,9 +68,11 @@ def rename_paths(root: Path) -> dict[str, str]:
     return rename_map.paths
 
 
-def _remapped(rel: str, renames: Mapping[str, str] | None) -> str:
-    """``rel`` (relative to the git top) under its current name."""
-    return renames.get(rel, rel) if renames else rel
+def _under(top: Path, base: Path) -> Callable[[str], bool]:
+    """A top-relative path inside ``base``: the walk's pathspec as a predicate,
+    since ``--full-diff`` lists every path a matching commit touched."""
+    prefix = base.resolve().relative_to(top).as_posix() if base.resolve() != top else ""
+    return lambda rel: not prefix or rel == prefix or rel.startswith(prefix + "/")
 
 
 def git_churn_scores(
@@ -86,11 +89,12 @@ def git_churn_scores(
     `renames` maps historical paths (relative to the git top) to current ones,
     as ``change_coupling.build_rename_map`` gives them (issue #425). A commit
     on an old name is credited to the file's current name, and a commit that
-    touches a file under two names counts once, so a file committed five times,
-    renamed, then committed once scores 7, the count ``git log --follow``
-    gives. Without it renames are not followed. Git's own rename detection is
-    off (``--no-renames``) either way, so the count does not depend on the
-    reader's ``diff.renames`` setting.
+    touches a file under two names counts once. A commit that only renames the
+    file (the same blob under the new name) is not a content change and counts
+    nothing (contract I425-2, :mod:`lib.content_paths`), so a file committed
+    five times, renamed, then committed once scores 6. Without it renames are
+    not followed. Git's own rename detection is off (``--no-renames``) either
+    way, so the count does not depend on the reader's ``diff.renames`` setting.
 
     `scope` (an absolute path under `root`) restricts the churn to a subtree:
     git only walks that pathspec and the results are filtered to files under
@@ -111,7 +115,7 @@ def git_churn_scores(
     scope_abs = scope.resolve() if scope is not None else None
 
     cmd = ["git", "-C", repo_top, "-c", "core.quotepath=off", "log",
-           "--pretty=format:%x00", "--name-only", "--no-renames"]
+           "--pretty=format:%x00", *RAW_LOG_ARGS]
     if since:
         cmd.append(f"--since={since}")
     if scope_abs is not None:
@@ -124,14 +128,12 @@ def git_churn_scores(
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return {}
 
+    in_scope = _under(repo, scope_abs) if scope_abs is not None else None
     counts: dict[Path, int] = {}
     for commit in raw.split("\x00"):
         touched: set[Path] = set()
-        for line in commit.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            path = (repo / _remapped(line, renames)).resolve()
+        for rel in content_paths(commit.splitlines(), renames, in_scope):
+            path = (repo / rel).resolve()
             if not path.is_relative_to(root):
                 continue
             # A pathspec narrows which commits git walks, but a commit that
@@ -170,7 +172,7 @@ def commit_epochs_by_file(
     top_path = Path(top).resolve()
     root = repo_root.resolve()
     cmd = ["git", "-C", top, "-c", "core.quotepath=off", "log",
-           "--pretty=format:%x00%at", "--name-only", "--no-renames"]
+           "--pretty=format:%x00%at", *RAW_LOG_ARGS]
     if since:
         cmd.append(f"--since={since}")
     cmd += ["--", str(root)]
@@ -183,18 +185,12 @@ def commit_epochs_by_file(
             FileNotFoundError):
         return None
     epochs: dict[Path, list[tuple[int, int]]] = {}
-    current = (0, -1)
-    for line in raw.splitlines():
-        line = line.strip()
-        if line.startswith("\x00"):
-            current = (int(line[1:] or 0), current[1] + 1)
-        elif line:
-            path = (top_path / _remapped(line, renames)).resolve()
-            if not path.is_relative_to(root):
-                continue
-            seen = epochs.setdefault(path, [])
-            if not seen or seen[-1] != current:
-                seen.append(current)
+    for index, chunk in enumerate(raw.split("\x00")[1:]):
+        at, _, rest = chunk.partition("\n")
+        for rel in content_paths(rest.splitlines(), renames, _under(top_path, root)):
+            path = (top_path / rel).resolve()
+            if path.is_relative_to(root):
+                epochs.setdefault(path, []).append((int(at.strip() or 0), index))
     return epochs
 
 
@@ -467,7 +463,7 @@ def content_commit_clock(
     if not exts:
         return empty
     cmd = ["git", "-C", top, "-c", "core.quotepath=off", "log",
-           "--format=%x01%H %at", "--name-only", "--no-renames", "--"]
+           "--format=%x01%H %at", *RAW_LOG_ARGS, "--"]
     cmd += [f":(glob,icase)**/*{e}" for e in exts]
     try:
         raw = subprocess.run(
@@ -483,15 +479,12 @@ def content_commit_clock(
 
     # Parse newest first: (sha, epoch, docs in `docs` the commit touched).
     commits: list[tuple[str, int, set[Path]]] = []
-    for ln in raw.splitlines():
-        if ln.startswith("\x01"):
-            sha, _, at_raw = ln[1:].partition(" ")
-            commits.append((sha, int(at_raw), set()))
-        elif ln.strip() and commits:
-            rel = ln.strip()
-            p = top_path / rename_to.get(rel, rel)
-            if p in docs:
-                commits[-1][2].add(p)
+    for chunk in raw.split("\x01")[1:]:
+        head_line, _, rest = chunk.partition("\n")
+        sha, _, at_raw = head_line.strip().partition(" ")
+        touched = {top_path / rel for rel in content_paths(
+            rest.splitlines(), rename_to, lambda rel: Path(rel).suffix.lower() in exts)}
+        commits.append((sha, int(at_raw), touched & docs))
 
     # $GIT_DIR/shallow also lists other shallow refs' boundaries (#633).
     walked = {sha for sha, _, _ in commits}

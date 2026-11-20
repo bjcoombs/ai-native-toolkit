@@ -27,16 +27,18 @@ reads (``origin``, else the sole remote):
   exactly as it did before this seam existed.
 
 Protected branches (:func:`branch_protection`): the rule covering a branch is
-read from ``projects/<id>/protected_branches``. A rule named exactly as the
-branch wins; otherwise every rule whose name read as a wildcard (``*`` is
-GitLab's only wildcard) matches covers it, and several covering wildcards are
-merged as GitLab applies them (:func:`merge_rules`: the most permissive level
-wins), never one picked by order; a name holding ``*`` is answered only by the
-rule of that name. "Unprotected" is said only
+read from ``projects/<id>/protected_branches``. GitLab combines every rule
+that matches a branch, and an exact name does not override a wildcard: the
+rule named exactly as the branch and every rule whose name read as a wildcard
+(``*`` is GitLab's only wildcard) matches cover it together, merged as GitLab
+applies them (:func:`merge_rules`), never one picked by order. A merge that
+includes an exact rule keeps that rule's ``name`` (a snapshot of the rule
+names it alone); wildcards alone join their names. A name holding ``*`` is
+answered only by the rule of that name. "Unprotected" is said only
 from a readable, complete list (fewer than ``PROTECTED_PAGE`` rules) with no
 covering rule. A full page (which may continue) without an exact rule asks for
 the branch by name (``protected_branches/<branch>``, the ``ghreport``
-fallback), so an exact rule on a later page outranks a wildcard on the first;
+fallback), so an exact rule on a later page joins the wildcards on the first;
 when that read has no answer a wildcard cover from the page stands, and
 without one the read raises ``truncated``. A 403 or 404 on GitLab usually means
 "no access", so it raises like any other refusal, never "unprotected".
@@ -283,13 +285,20 @@ def _merge_levels(lists: list[list[Any]]) -> list[Any]:
 
 
 def merge_rules(rules: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Overlapping wildcard rules covering one branch, merged as GitLab applies them.
+    """The rules covering one branch, merged as GitLab applies them.
 
-    None for no rule, the rule itself for one. For several (in name order):
-    every ``*_access_levels`` list is merged by :func:`_merge_levels`,
+    None for no rule, the rule itself for one. For several (in the given
+    order; :func:`branch_protection` puts an exact rule first, then wildcards
+    in name order): every ``*_access_levels`` list is
+    merged by :func:`_merge_levels` (the most permissive level wins),
     ``allow_force_push`` and ``code_owner_approval_required`` are True when any
     rule sets them (GitLab checks each across every matching rule), ``name``
     joins the rule names with ``", "``, and any other key is the first rule's.
+
+    The two flags pull in opposite directions under that one ``any``: force
+    push follows the most permissive rule (one rule allowing it allows it),
+    while code-owner approval is the exception that follows the most
+    restrictive (one rule requiring it requires it).
     """
     if len(rules) < 2:
         return rules[0] if rules else None
@@ -321,7 +330,9 @@ def protected_branches(project: GitlabProject) -> list[dict[str, Any]]:
 
 def branch_protection(project: GitlabProject, branch: str,
                       rules: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
-    """The protected-branch rule covering ``branch``, or None when unprotected.
+    """The protected-branch rules covering ``branch``, merged by
+    :func:`merge_rules` (an exact rule with every matching wildcard), or None
+    when unprotected.
 
     ``rules`` is a :func:`protected_branches` read to reuse; it is read here
     when omitted. See the module docstring for the matching order. A
@@ -332,16 +343,16 @@ def branch_protection(project: GitlabProject, branch: str,
     if rules is None:
         rules = protected_branches(project)
     exact = next((r for r in rules if r["name"] == branch), None)
-    if exact is not None:
-        return exact
-    cover = None
-    if "*" not in branch:
-        wild = sorted((r for r in rules if "*" in r["name"]), key=lambda r: str(r["name"]))
-        cover = merge_rules([r for r in wild if branch_pattern(r["name"]).match(branch)])
-    if len(rules) < PROTECTED_PAGE:
-        return cover
-    # A full page may continue: an exact rule on a later page outranks a
-    # wildcard on this one, so ask for the branch by name first.
+    wild: list[dict[str, Any]] = []
+    if "*" not in branch:  # a name holding "*" is a rule name: only its own rule answers
+        wild = [r for r in sorted((r for r in rules if "*" in r["name"]),
+                                  key=lambda r: str(r["name"]))
+                if branch_pattern(r["name"]).match(branch)]
+    if exact is not None or len(rules) < PROTECTED_PAGE:
+        return _with_exact(exact, wild)
+    cover = merge_rules(wild)
+    # A full page may continue: an exact rule on a later page combines with
+    # the wildcards on this one, so ask for the branch by name first.
     enc = project.encoded
     try:
         single = glab_api(project, f"projects/{enc}/protected_branches/{quote(branch, safe='')}")
@@ -352,6 +363,16 @@ def branch_protection(project: GitlabProject, branch: str,
             f"truncated: {len(rules)} protected branches listed without {branch}"
             f" and the single-branch read gave no answer ({e.reason})"
         ) from None
-    if not isinstance(single, dict):
-        raise GhUnavailable("glab_bad_json: the protected branch was not an object")
-    return single
+    if not isinstance(single, dict) or not isinstance(single.get("name"), str):
+        raise GhUnavailable("glab_bad_json: the protected branch was not a named object")
+    return _with_exact(single, [r for r in wild if r["name"] != single["name"]])
+
+
+def _with_exact(exact: dict[str, Any] | None,
+                wild: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """``exact`` merged with the wildcards ``wild`` covering the same branch,
+    keeping the exact rule's ``name``: a snapshot of that rule names it alone,
+    so the wildcards it combines with change its settings, never its name."""
+    if exact is None:
+        return merge_rules(wild)
+    return {**(merge_rules([exact, *wild]) or exact), "name": exact["name"]}
