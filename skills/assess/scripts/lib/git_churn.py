@@ -339,6 +339,13 @@ BULK_COMMIT_DOC_SHARE = 0.5
 # ...and at least this many of them. Below the floor, editing every doc at once
 # is ordinary work on a small doc set (a README and two guides), not a sweep.
 BULK_COMMIT_MIN_DOCS = 10
+
+
+def bulk_commit_need(population: int) -> int:
+    """Files of ``population`` a commit must touch to be bulk (the one rule)."""
+    return max(BULK_COMMIT_MIN_DOCS, int(BULK_COMMIT_DOC_SHARE * population) + 1)
+
+
 # Bound on the skipped-commit list written to run-context.json; the total is
 # reported beside it.
 BULK_COMMITS_SKIPPED_CAP = 20
@@ -483,7 +490,7 @@ def content_commit_clock(
     walked = {sha for sha, _, _ in commits}
     boundary = {sha: at for sha, at in boundary.items()
                 if sha in walked or _reaches_from_head(top, sha)}
-    need = max(BULK_COMMIT_MIN_DOCS, int(BULK_COMMIT_DOC_SHARE * len(docs)) + 1)
+    need = bulk_commit_need(len(docs))
     bulk = {sha for sha, _, touched in commits
             if len(touched) >= need and sha not in boundary}
     epochs: dict[Path, int] = {}

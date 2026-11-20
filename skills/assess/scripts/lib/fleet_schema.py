@@ -5,7 +5,9 @@ mapping ``signals_schema`` uses, so the checked-in file cannot drift from the
 type mypy checks: ``tests/test_fleet.py`` fails when ``SCHEMA_PATH`` differs
 from ``render()`` (``tests/test_fleet_run_stamp.py`` likewise for
 ``STAMP_SCHEMA_PATH``, built from ``FleetStamp`` in ``lib/fleet_stamp.py``).
-Regenerate both after changing either type:
+``FRESHNESS_SCHEMA_PATH`` is built from ``FreshnessRow`` in
+``lib/fleet_doc_freshness.py`` (``tests/test_fleet_doc_freshness.py``).
+Regenerate all three after changing any of the types:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_schema.py
 
@@ -24,6 +26,14 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.fleet import FAILURE_REASONS, STATUS_FAILED, STATUS_OK, FleetRow  # noqa: E402
+from lib.fleet_doc_freshness import (  # noqa: E402
+    METHOD,
+    REASONS,
+    STATUSES,
+    SUBJECTS_CAP,
+    CommitRef,
+    FreshnessRow,
+)
 from lib.fleet_stamp import FleetStamp  # noqa: E402
 from lib.history_window import WINDOW_PATTERN  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
@@ -34,6 +44,9 @@ SCHEMA_PATH = Path(__file__).resolve().parents[3] / "fleet" / "references" / "re
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json"
 STAMP_SCHEMA_PATH = SCHEMA_PATH.with_name("run.schema.json")
 STAMP_SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/run.schema.json"
+FRESHNESS_SCHEMA_PATH = SCHEMA_PATH.with_name("doc_freshness.schema.json")
+FRESHNESS_SCHEMA_ID = ("https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/"
+                       "doc_freshness.schema.json")
 REASON_PATTERN = "^(" + "|".join(FAILURE_REASONS) + r"|scan_exit_-?[0-9]+)$"
 
 
@@ -89,6 +102,41 @@ def build_stamp_schema() -> JsonDict:
     }
 
 
+def build_freshness_schema() -> JsonDict:
+    """The ``doc_freshness.jsonl`` row schema (#664), from ``FreshnessRow``."""
+    hints = get_type_hints(FreshnessRow)
+    lists = ("scope", "commits")  # ``type_schema`` has no list mapping
+    props: JsonDict = {name: type_schema(hint) for name, hint in hints.items() if name not in lists}
+    props["scope"] = {"type": "array", "items": {"type": "string"}}
+    props["commits"] = {"anyOf": [{"type": "array", "maxItems": SUBJECTS_CAP,
+                                   "items": type_schema(CommitRef)}, {"type": "null"}]}
+    props["method"] = {"const": METHOD}
+    props["status"] = {"enum": list(STATUSES)}
+    props["reason"] = {"enum": [*REASONS, None]}
+    props["confidence"] = {"enum": ["high", "low", None]}
+    props["doc_last_change"] = {"anyOf": [
+        {"type": "string", "pattern": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}, {"type": "null"}]}
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": FRESHNESS_SCHEMA_ID,
+        "title": "fleet cross-repo doc freshness row",
+        "description": (
+            "One line of doc_freshness.jsonl written by skills/fleet/scripts/fleet.py: one declared "
+            "[[describes]] mapping. A measured row (current, minor_drift, behind) has a null reason, "
+            "a confidence and a count; any other status has a reason token. commits is null in "
+            "counts-only output. Generated from lib/fleet_doc_freshness.py by lib/fleet_schema.py."
+        ),
+        "type": "object",
+        "properties": {name: props[name] for name in hints},
+        "required": sorted(FreshnessRow.__required_keys__),
+        "additionalProperties": False,
+    }
+
+
+def render_freshness() -> str:
+    return json.dumps(build_freshness_schema(), indent=2) + "\n"
+
+
 def render() -> str:
     return json.dumps(build_schema(), indent=2) + "\n"
 
@@ -99,6 +147,7 @@ def render_stamp() -> str:
 
 if __name__ == "__main__":
     SCHEMA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    for path, text in ((SCHEMA_PATH, render()), (STAMP_SCHEMA_PATH, render_stamp())):
+    for path, text in ((SCHEMA_PATH, render()), (STAMP_SCHEMA_PATH, render_stamp()),
+                       (FRESHNESS_SCHEMA_PATH, render_freshness())):
         path.write_text(text, encoding="utf-8")
         print(f"wrote {path}")

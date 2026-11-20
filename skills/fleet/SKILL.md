@@ -92,6 +92,29 @@ two runs over unchanged checkouts on the same day are byte-identical (except
 with `--hash-paths` and no salt). Repository ids are kept in clear text even
 with hashing on.
 
+## Output: `doc_freshness.jsonl` (opt-in)
+
+Written only when a scanned repository's `.assess/config.toml` declares
+`[[describes]]` mappings (a central docs repository naming the service surface
+each doc describes; see the assess skill's config section). One row per mapping,
+method `cross-repo-explicit`: the service commits to the mapping's `scope`
+authored after the doc's last content change, skipping merges, Dependabot,
+Renovate and other `[bot]` accounts, lockfile or manifest-only commits, and bulk
+mechanical commits (the content clock's rule). `status` is `behind` at 3 or more
+such commits (a starting threshold awaiting tuning on a real fleet),
+`minor_drift` at 1-2, `current` at 0; only `behind` is a finding. A doc or scope
+path that no longer exists is `broken`; a repository absent from the run, a
+shallow checkout whose history ends after the doc's last edit, or a git failure
+is `unknown` with a `reason` token. Rejected entries (a missing `scope`, say) are
+`invalid` rows and the message is printed to stderr. Counts-only rows carry the
+count and the doc's last-change date only; `--full` adds up to five commit shas and subjects so a
+human can check the verdict. `--hash-paths` hashes the doc and scope paths. The
+join runs before any scan (so `--delete-after` cannot remove a checkout it
+needs), costs one `git log` per mapping plus one content-clock pass per docs
+repository, makes no model call, and is kept in the run history beside the
+other files. Schema: [`references/doc_freshness.schema.json`](references/doc_freshness.schema.json).
+Logic: `skills/assess/scripts/lib/fleet_doc_freshness.py`.
+
 ## Output: `groups.jsonl`
 
 One line per group (a repository row's `group`), sorted by group, keys sorted.
@@ -175,16 +198,18 @@ kept counts and each kept repository with its reason token (`scan_not_ok`,
 ## Run history and comparison
 
 Each counts-only run is also kept, so a programme can see what moved since the
-last sprint. The run's `repos.jsonl`, `groups.jsonl` and `run.json` are copied
-to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
+last sprint. The run's `repos.jsonl`, `groups.jsonl` and `run.json` (plus
+`doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`, and `<org>` is
 `--history-org` or the first segment every repository id shares (the distinct
 ones sorted and joined by `+` when they differ, e.g. `grpa+grpb`). A `--full`
 run is not kept: the history holds only counts-only output, so it can live
 outside the scanned repositories.
 
-The history fails closed. Only those three files are written (through a temp
-file, `run.json` last); nothing is ever deleted. `<org>` and the date must each
+The history fails closed. Only those files are written (through a temp
+file, `run.json` last); nothing else is ever deleted, except that a same-day
+rerun that wrote no `doc_freshness.jsonl` removes the replaced entry's copy so
+the entry never mixes two runs. `<org>` and the date must each
 be one plain directory name, no directory on the way may be a symlink, and the
 history may not be inside a target (exit 2 before any scan). These checks run
 only when the history is used: a kept run or a bare `--compare`. With

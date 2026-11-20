@@ -244,6 +244,25 @@ def render_exclusion_disclosure(ctx: dict[str, Any]) -> str:
 GENERATED_DISCLOSURE_VISIBLE = 10
 
 
+def render_declared_cross_repo(ctx: dict[str, Any]) -> str:
+    """The ``[[describes]]`` cross-repo mappings (#664): declared, not measured here.
+
+    ``""`` when none is declared, so a repo without the opt-in renders as before.
+    """
+    rows = (ctx.get("doc_staleness") or {}).get("declared_cross_repo") or []
+    rows = [r for r in rows if isinstance(r, dict)]
+    if not rows:
+        return ""
+    invalid = sum(1 for r in rows if r.get("status") == "invalid")
+    declared = len(rows) - invalid
+    text = (f"_Cross-repo doc mappings (`[[describes]]`): {declared} declared, not measured "
+            "outside fleet mode; `/fleet` over the fleet that holds the described repositories "
+            "measures them._")
+    if invalid:
+        text += f" _{invalid} rejected by config validation._"
+    return text
+
+
 def render_generated_disclosure(ctx: dict[str, Any]) -> str:
     """Name each file the treemap excluded as generated, with its reason.
 
@@ -545,6 +564,9 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
     generated = render_generated_disclosure(ctx)
     if generated:
         keyhole_summary = f"{keyhole_summary}\n\n{generated}"
+    declared = render_declared_cross_repo(ctx)
+    if declared:
+        keyhole_summary = f"{keyhole_summary}\n\n{declared}"
     report = REPORT_TEMPLATE.substitute(
         repo_name=repo_name,
         run_date=ctx.get("run_date", "unknown"),

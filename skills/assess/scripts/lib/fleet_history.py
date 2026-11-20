@@ -43,10 +43,15 @@ from pathlib import Path
 from typing import Any
 
 from lib.fleet import REPOS_FILE
+from lib.fleet_doc_freshness import FRESHNESS_FILE
 from lib.fleet_groups import GROUPS_FILE
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
 HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: run.json last
+# Kept when the run wrote them (``doc_freshness.jsonl`` exists only when a docs
+# repository declares ``[[describes]]``, #664); moved in before ``run.json``, and
+# a same-day entry's stale copy is removed when the new run wrote none.
+OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE,)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
 _MATCH_KEYS = ("rubric_version", "window", "counts_only", "scans", "paths_hashed")
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
@@ -179,13 +184,32 @@ def _stage(out_dir: Path, parent: Path, name: str) -> Path:
     staging = Path(tempfile.mkdtemp(dir=parent, prefix=f".{name}.", suffix=".tmp"))
     try:
         os.chmod(staging, 0o755)
-        for file in HISTORY_FILES:
+        for file in HISTORY_FILES + OPTIONAL_HISTORY_FILES:
+            if file in OPTIONAL_HISTORY_FILES and not (out_dir / file).is_file():
+                continue
             (staging / file).write_bytes((out_dir / file).read_bytes())
             os.chmod(staging / file, 0o644)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
     return staging
+
+
+def _move_in(staging: Path, entry: Path, landed: list[str] | None = None) -> None:
+    """Move the staged files into ``entry``, ``run.json`` last; an optional file the
+    run did not write is removed from the entry first, so it never mixes runs.
+    ``landed`` collects each file name once the entry has changed for it."""
+    done = landed if landed is not None else []
+    for file in OPTIONAL_HISTORY_FILES:
+        if (staging / file).exists():
+            os.replace(staging / file, entry / file)
+            done.append(file)
+        elif (entry / file).exists():
+            (entry / file).unlink()
+            done.append(file)
+    for file in HISTORY_FILES:  # run.json last
+        os.replace(staging / file, entry / file)
+        done.append(file)
 
 
 def _swap_in(staging: Path, entry: Path) -> None:
@@ -197,13 +221,11 @@ def _swap_in(staging: Path, entry: Path) -> None:
     """
     withdrawn = staging / f".old.{RUN_FILE}"
     os.replace(entry / RUN_FILE, withdrawn)
-    moved = False
+    landed: list[str] = []
     try:
-        for file in HISTORY_FILES:  # run.json last
-            os.replace(staging / file, entry / file)
-            moved = True
+        _move_in(staging, entry, landed)
     except BaseException:
-        if not moved:  # nothing new landed: the earlier run is still whole
+        if not landed:  # nothing new landed: the earlier run is still whole
             os.replace(withdrawn, entry / RUN_FILE)
         raise
 
@@ -226,8 +248,7 @@ def persist(out_dir: Path, entry: Path, stamp: FleetStamp, repos: frozenset[str]
         if entry.exists() and (entry / RUN_FILE).exists():
             _swap_in(staging, entry)
         elif entry.exists():  # a matching entry with no run.json holds none of the three files
-            for file in HISTORY_FILES:
-                os.replace(staging / file, entry / file)
+            _move_in(staging, entry)
         else:
             os.rename(staging, entry)
     finally:

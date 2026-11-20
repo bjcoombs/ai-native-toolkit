@@ -101,6 +101,8 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`bulk_commit_need(population)` is the one bulk-commit rule (#333): the content clock
+applies it over the repo's docs, `fleet_doc_freshness` over a service's tracked files.
 Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
 `commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
 the `change_coupling.build_rename_map` paths and credit a commit made under an old name
@@ -773,7 +775,9 @@ renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README).
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
 `if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
-(`build_stamp_schema`, mapping the `scans` name list itself). `tests/test_fleet.py` and
+(`build_stamp_schema`, mapping the `scans` name list itself); and
+`doc_freshness.schema.json` from `fleet_doc_freshness.FreshnessRow`
+(`build_freshness_schema`, status and reason enums, `scope`/`commits` lists mapped itself). `tests/test_fleet.py` and
 `tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
 `uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 
@@ -785,6 +789,25 @@ commit, plugin version, UTC scan date, effective window, rubric version, output 
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
+
+**`fleet_doc_freshness.py`**
+Cross-repo doc freshness (issue #664), opt-in: a docs repository's `[[describes]]`
+mappings (`assess_config.load_describes`: `path` here, `repo` in the fleet, `scope`
+required) are joined in `/fleet` by `freshness_rows`, one row per mapping in
+`<out>/doc_freshness.jsonl` with method `cross-repo-explicit`. The doc side is
+`git_churn.content_commit_clock` over `doc_staleness.discover_doc_files` (newest doc for a
+folder); the service side is one `git log --full-diff` per mapping, counting commits to the
+scope authored (`%at`) after the doc's last content change, skipping merges, automation
+bots (`agent_identity.is_ai_assistant` keeps AI-assistant commits), lockfile/manifest-only
+commits and bulk commits by `git_churn.bulk_commit_need` over the service's tracked files.
+`BEHIND_THRESHOLD` (3) separates `behind` from `minor_drift`/`current`. A missing doc or
+scope path is `broken`; a repository absent from the run, a shallow boundary newer than
+the doc edit, or a git failure is `unknown` with a reason token. Counts-only rows carry no
+subjects or shas (`--full` adds up to five); `--hash-paths` hashes doc and scope paths with
+`counts_only.hash_path`. `assess_config.declared_block` gives standalone `/assess` the
+`doc_staleness.declared_cross_repo` list (declared, not measured); `fleet.py` calls the join
+before any scan so `--delete-after` cannot remove a checkout it needs. Tests:
+`tests/test_fleet_doc_freshness.py`.
 
 **`fleet_activity.py`**
 Whether a fleet repository is active (issue #569): `is_active` compares the checkout's
@@ -810,7 +833,9 @@ linked worktree, or a git call that cannot run. Outcomes never reach a row or th
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`. `history_root` is
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` when the
+run wrote one (`OPTIONAL_HISTORY_FILES`, #664; a same-day replacement without it removes
+the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
 or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a

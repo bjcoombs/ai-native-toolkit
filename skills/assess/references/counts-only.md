@@ -245,6 +245,11 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.docs.provenance.generated_by` | dropped |
 | `doc_staleness.bulk_commits_skipped.sha` | dropped |
 | `doc_staleness.bulk_commits_skipped.date` | token |
+| `doc_staleness.declared_cross_repo.path` | path (hashed when hashing is on) |
+| `doc_staleness.declared_cross_repo.repo` | external id (hashed when hashing is on) |
+| `doc_staleness.declared_cross_repo.scope` | path (hashed when hashing is on) |
+| `doc_staleness.declared_cross_repo.status` | token |
+| `doc_staleness.declared_cross_repo.reason` | token |
 | `stale_hubs.subject_method` | token |
 | `stale_hubs.subject_roots` | path (hashed when hashing is on) |
 | `stale_hubs.subject_paths` | path (hashed when hashing is on) |

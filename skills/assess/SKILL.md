@@ -266,6 +266,17 @@ The script prints a one-line summary (file count, lizard vs scc coverage, churn 
 
    When a generated doc's source is newer than the doc, the staleness verdict is a direct, high-confidence source-vs-doc comparison (git commit time, falling back to mtime) - so a stale generated doc over complex code still surfaces as a `lying_map`, while a fresh one never does.
 
+**Cross-repo mappings (opt-in).** A central docs repository whose docs describe other services can declare each mapping in `.assess/config.toml`; `scope` (the documented surface inside the service) is required, and an entry without it is rejected with a message saying so:
+
+```toml
+[[describes]]
+path = "services/billing.md"   # a doc or folder in this repository
+repo = "grp/billing"           # a repository id in the fleet
+scope = ["api/"]               # or ["openapi.yaml"], ["proto/"]; ["."] = whole repo, low confidence
+```
+
+A standalone `/assess` lists them under `doc_staleness.declared_cross_repo` as declared, not measured outside fleet mode; only `/fleet`, which holds the service checkouts, measures them.
+
 The script's own output directory `.assess/` is excluded automatically - prior runs' `run-context.json` and SVGs never feed the next run's heatmap, the doc graph, or the dead-code scan. Test fixtures under `**/tests/fixtures/**` are likewise excluded automatically - they are inputs that exercise the scanners (sample `CLAUDE.md` / monolithic-instruction files), not navigational docs or live code, so counting them would inflate the orphan rate and depress the Layer 0 navigability read.
 
 **Raw-source-tree exclusion.** The read-side metrics (orphan rate, reachability, broken links) describe the **curated wiki** - the navigable layer an agent traverses. A repo can also track trees of raw, machine-extracted source documents (a disclosure / SAR export of hundreds of `.msg`/`.pdf`/`.docx` files converted to markdown). Those are immutable raw sources: they legitimately have no inbound wiki links and carry machine-extracted, non-navigational links (`mailto:`/`tel:`/footer URLs), so counting them as orphans / broken links inflates the figures and masks the curated signal. The doc graph auto-detects such subtrees - threshold-based: a large subtree that is almost entirely link-isolated *and* carries the machine-extraction fingerprint (`lib/raw_source.py`) - and **excludes** them from the headline metrics, reporting each excluded tree + its file count (`doc_graph.excluded_raw_trees`) and the raw layer's own figures separately (`raw_source_doc_count` / `raw_source_orphan_rate` / `raw_source_broken_links`). A second fingerprint excludes working-notes trees the same way: pattern-named notes (plans, session logs, tickets) mostly linked once from one or two index files, reported as `excluded_working_notes_trees` / `working_notes_doc_count`; in `.assess/config.toml`, directories relative to the repo root (a prefix, not a name matched anywhere like `exclude_dirs`): `working_notes_dirs = ["journal"]` excludes one from the headline and `working_notes_ignore = ["docs/chapters"]` keeps one counted. A repo with neither tree is unaffected. The detection reuses the link graph already built, so there is no second parse.

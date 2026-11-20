@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/doc_freshness.schema.json",
+  "title": "fleet cross-repo doc freshness row",
+  "description": "One line of doc_freshness.jsonl written by skills/fleet/scripts/fleet.py: one declared [[describes]] mapping. A measured row (current, minor_drift, behind) has a null reason, a confidence and a count; any other status has a reason token. commits is null in counts-only output. Generated from lib/fleet_doc_freshness.py by lib/fleet_schema.py.",
+  "type": "object",
+  "properties": {
+    "freshness_row_version": {
+      "type": "integer"
+    },
+    "docs_repo": {
+      "type": "string"
+    },
+    "path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repo": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "method": {
+      "const": "cross-repo-explicit"
+    },
+    "status": {
+      "enum": [
+        "current",
+        "minor_drift",
+        "behind",
+        "unknown",
+        "broken",
+        "invalid"
+      ]
+    },
+    "reason": {
+      "enum": [
+        "repo_not_in_fleet",
+        "repo_checkout_unreadable",
+        "doc_path_missing",
+        "scope_path_missing",
+        "doc_history_unknown",
+        "doc_history_truncated",
+        "service_history_truncated",
+        "service_history_unknown",
+        "invalid_mapping",
+        null
+      ]
+    },
+    "confidence": {
+      "enum": [
+        "high",
+        "low",
+        null
+      ]
+    },
+    "behind_threshold": {
+      "type": "integer"
+    },
+    "commits_since_doc_change": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "doc_last_change": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "commits": {
+      "anyOf": [
+        {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "properties": {
+              "sha": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "date",
+              "sha",
+              "subject"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "behind_threshold",
+    "commits",
+    "commits_since_doc_change",
+    "confidence",
+    "doc_last_change",
+    "docs_repo",
+    "freshness_row_version",
+    "method",
+    "path",
+    "reason",
+    "repo",
+    "scope",
+    "status"
+  ],
+  "additionalProperties": false
+}
