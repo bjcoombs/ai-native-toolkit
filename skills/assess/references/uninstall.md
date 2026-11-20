@@ -85,4 +85,4 @@ grep -rn "assess%2Fbadge.json" "$REPO_ROOT"/README* 2>/dev/null   # no output
 ls "$REPO_ROOT/.github/workflows/assess-gate.yml" 2>/dev/null     # should be absent
 ```
 
-All three silent means the repo is back to its pre-`/assess` state (bar any `assess-finding` tracker items the user chose to keep).
+All three silent means the repo is back to its pre-`/assess` state (bar any `assess-finding` tracker items or upstream issues the user chose to keep).
