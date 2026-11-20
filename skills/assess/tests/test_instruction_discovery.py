@@ -194,6 +194,40 @@ def test_mirror_lines_strips_only_the_leading_header() -> None:
     assert discovery.mirror_lines("a   b\n\n\n  c ") == ["a b", "c"]
 
 
+def test_text_after_a_closing_comment_is_body() -> None:
+    assert discovery.mirror_lines("# T\n<!-- sync -->Always run make check.\nrest") == [
+        "Always run make check.", "rest"]
+    assert discovery.mirror_lines("<!--\nnote\n--> keep this\nrest") == ["keep this", "rest"]
+    # A tail that opens another comment is still header.
+    assert discovery.mirror_lines("<!-- a --><!-- b -->\nrest") == ["rest"]
+    # `<!-->` never closes the comment it opens, so it is body, not a crash.
+    assert discovery.mirror_lines("<!-->\nrest") == ["<!-->", "rest"]
+
+
+def test_differing_text_after_comment_close_is_not_a_mirror(git_repo: Any) -> None:
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", "# C\n<!-- sync -->Run make check.\n" + MIRROR_BODY)
+    _write(repo, "AGENTS.md", "# A\n<!-- sync -->Run make test.\n" + MIRROR_BODY)
+    commit("tail differs")
+    findings = _block(repo)["findings"]
+    assert [(f["kind"], f.get("diff_lines")) for f in findings] == [("claude_shadows_agents", 1)]
+
+
+def test_findings_cap_truncates_mirrors_before_defects(
+    git_repo: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, commit = git_repo
+    monkeypatch.setattr(discovery, "MAX_FINDINGS", 3)
+    for n in range(3):
+        _write(repo, f".cursor/rules/stray{n}.md", "stray")
+    _write(repo, "CLAUDE.md", ROOT_AGENTS)
+    _write(repo, "AGENTS.md", ROOT_AGENTS)
+    commit("defects plus a mirror")
+    block = _block(repo)
+    assert block["findings_total"] == 4
+    assert [f["kind"] for f in block["findings"]] == ["ignored_cursor_md"] * 3
+
+
 def test_diff_line_count() -> None:
     assert discovery.diff_line_count(["a", "b", "c"], ["a", "b", "c"]) == 0
     assert discovery.diff_line_count(["a", "b", "c"], ["a", "x", "c"]) == 1

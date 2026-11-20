@@ -302,12 +302,24 @@ def _directory_files(surface: _Surface) -> dict[str, list[_Candidate]]:
     return by_dir
 
 
+def _comment_close(lines: list[str], start: int) -> tuple[int, str] | None:
+    """The line where the comment opened on ``lines[start]`` closes, and the
+    text after its ``-->``; None when it never closes."""
+    offset = lines[start].index("<!--") + 4
+    for j in range(start, len(lines)):
+        at = lines[j].find("-->", offset if j == start else 0)
+        if at >= 0:
+            return j, lines[j][at + 3:]
+    return None
+
+
 def _strip_header(lines: list[str]) -> list[str]:
     """Drop a file's header: leading blanks, one H1 and leading HTML comments.
 
     Only the prefix before the first other line goes; an unterminated ``<!--``
     is body, so it never swallows the file.
     """
+    lines = list(lines)
     i, seen_h1 = 0, False
     while i < len(lines):
         s = lines[i].strip()
@@ -316,10 +328,15 @@ def _strip_header(lines: list[str]) -> list[str]:
         elif s.startswith("# ") and not seen_h1:
             seen_h1, i = True, i + 1
         elif s.startswith("<!--"):
-            end = next((j for j in range(i, len(lines)) if "-->" in lines[j]), None)
-            if end is None:
+            close = _comment_close(lines, i)
+            if close is None:
                 break
-            i = end + 1
+            end, tail = close
+            # Text after the comment's close on that line is body, not header.
+            if tail.strip():
+                lines[end], i = tail, end
+            else:
+                i = end + 1
         else:
             break
     return lines[i:]
