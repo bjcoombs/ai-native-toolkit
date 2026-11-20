@@ -1156,10 +1156,16 @@ Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
 Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
-(a directory's `CLAUDE.md` differs from its `AGENTS.md` and does not import it) and
-`repeats_parent` (at least half of a nested file's distinct lines, over five or
-more, copy the nearest ancestor's). Files and findings are capped with `_total`
-counts. Tests: `tests/test_instruction_discovery.py`.
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` below the header and does
+not import it; `diff_lines` counts the differing body lines, one changed line
+counting once) and `repeats_parent` (at least half of a nested file's distinct
+lines, over five or more, copy the nearest ancestor's). The two files are compared
+below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
+comments dropped, whitespace collapsed, blank lines dropped), so a pair that
+matches there is reported as the informational `mirrored_instruction_files`, a
+hand-maintained mirror, not as shadowing (#589); a symlink or an import is
+neither. Files and findings are capped with `_total` counts, informational
+mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
 
 **`instruction_budget.py`**
 The always-loaded instruction text per tool for the root context, in lines, words,
