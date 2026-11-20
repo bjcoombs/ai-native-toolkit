@@ -466,9 +466,8 @@ jobs:
               && printf '%s\n' "${FLOOR_CORE}" | grep -q . \
               && [ "${PR_AUTHOR}" = "dependabot[bot]" ] \
               && [ "${PR_ACTOR}" = "dependabot[bot]" ]; then
-            CHECKER="${BASE_SCRIPTS}/floor_check.py"
-            if python "${CHECKER}" pin-bump-only --help > /dev/null 2>&1 \
-                && python "${CHECKER}" pin-bump-only --base "${BASE_SHA}"; then
+            if python "${BASE_SCRIPTS}"/floor_check.py pin-bump-only --help > /dev/null 2>&1 \
+                && python "${BASE_SCRIPTS}"/floor_check.py pin-bump-only --base "${BASE_SHA}"; then
               PIN_BUMP_ONLY=true
             fi
           fi
