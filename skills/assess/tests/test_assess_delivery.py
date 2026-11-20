@@ -35,12 +35,13 @@ def _read_only_bullet() -> str:
 
 
 def test_read_only_offer_leads_with_upstream_issues():
-    bullet = _read_only_bullet()
+    bullet = _read_only_bullet().split("as in Step 6):", 1)[1]
     issues_at = bullet.index("upstream-issues flow")
     pr_at = bullet.index("fork-based PR flow")
     assert issues_at < pr_at
     assert "opt-in" in bullet
     assert "no `.assess/` file for upstream" in bullet
+    assert "`HAS_ISSUES=false`" in _read_only_bullet()
 
 
 def test_upstream_issues_flow_hosts_report_in_fork_without_a_pr():

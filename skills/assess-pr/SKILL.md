@@ -19,9 +19,9 @@ Each offer is independent (uninstall excepted - it's mutually exclusive with the
 
 These are the **write-back phase** of the consent lifecycle (Phase 2; Phase 1 was the tool installs, Phase 3 the mutation pass - see the assess SKILL.md). Do not serialise them into back-to-back modals. Present them as **one batched, multi-select AskUserQuestion**: "Now that the report is written, which of these should I do?" with the options (open a PR, track the Top 3 Actions, freeze a CI gate, file feedback, and - the mutually-exclusive escape hatch - uninstall `/assess` from this repo), pre-filtered by feasibility:
 
-- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible. On a read-only target (READ / TRIAGE) that takes contributions, lead with the **upstream-issues** variant instead: file the Top 3 Actions as issues upstream, each linking the full report hosted in the user's fork (Step 5's upstream-issues flow, then Step 6). Offer the fork snapshot PR against upstream only as a separate, explicit secondary option, noting that maintainers often decline committed generated output. When the target states it takes no contributions (Step 5's no-contributions scan), offer the **no-contributions** variant instead on a read-only target (READ / TRIAGE) or in a clone of the user's own fork: a PR inside the user's fork, never one against upstream. A user who can push to the non-fork repo itself keeps the direct PR option, with the statement quoted.
+- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible. On a read-only target (READ / TRIAGE) that takes contributions and has issues enabled, lead with the **upstream-issues** variant instead (it replaces the generic issue-tracking option below, so the batch lists it once and records it under `issue_tracking`): file the Top 3 Actions as issues upstream, each linking the full report hosted in the user's fork (Step 5's upstream-issues flow, then Step 6). Offer the fork snapshot PR against upstream only as a separate, explicit secondary option, noting that maintainers often decline committed generated output. When the target states it takes no contributions (Step 5's no-contributions scan), offer the **no-contributions** variant instead on a read-only target (READ / TRIAGE) or in a clone of the user's own fork: a PR inside the user's fork, never one against upstream. A user who can push to the non-fork repo itself keeps the direct PR option, with the statement quoted.
 - Drop the **CI gate** option when the workflow could never run (no GitHub remote).
-- Keep **issue tracking** and **feedback** always (feedback needs no repo write).
+- Keep **issue tracking** and **feedback** always (feedback needs no repo write). On a read-only target that takes contributions, issue tracking appears as the upstream-issues option above.
 - **Uninstall** (Step 8) always appears: it removes what this run wrote. It doesn't compose with the write-back offers (no point opening a PR *and* deleting the report), so treat selecting it as "skip the others and clean up".
 
 Then execute the accepted offers **in order** (PR → issues → gate → feedback), because the later ones cross-link to the PR the first may have opened. Uninstall, if chosen, runs instead of the others. The per-step detail below is the execution recipe for each accepted offer; the *asking* happens once, here.
@@ -45,7 +45,7 @@ After writing the files, first **check whether a direct PR is even possible** be
 # type has no `viewerCanPush` field, so don't request it (the CLI errors
 # and the whole call returns empty, silently degrading every write-
 # accessible repo to the "leave local" branch).
-PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner,isFork,owner 2>/dev/null || true)
+PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner,isFork,owner,hasIssuesEnabled 2>/dev/null || true)
 PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty')
 case "$PERM" in
   ADMIN|MAINTAIN|WRITE) CAN_PUSH=1 ;;
@@ -54,6 +54,8 @@ esac
 # A clone of the user's own fork reports ADMIN, so CAN_PUSH alone cannot tell
 # the upstream's maintainer from an outsider working in their fork.
 IS_FORK=$(echo "$PUSH_INFO" | jq -r '.isFork // false')
+# Gates the read-only upstream-issues offer: no issues list, no upstream issues.
+HAS_ISSUES=$(echo "$PUSH_INFO" | jq -r '.hasIssuesEnabled // false')
 # isFork says the repo has a parent, not whose fork it is: a collaborator with
 # push access to someone else's fork also sees isFork=true and WRITE. The
 # current repo counts as the user's own fork only when the viewer owns it.
@@ -142,13 +144,13 @@ done
 Interpret the result:
 
 - `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below. Two cases when `NO_CONTRIBUTIONS=1`. With `IS_FORK=true` the user is working in a clone of a fork (their own reports `ADMIN`; a collaborator on someone else's fork sees `WRITE`); they are the outsider the statement addresses, and a bare `gh pr create` there targets the parent, so offer the no-contributions flow instead (below; its fork step reuses the current repo only when `IS_OWN_FORK=true`). With `IS_FORK=false` the user maintains the repo itself: the statement addresses outsiders, not them, and GitHub will not fork a repo into the account that owns it, so keep the direct flow. In both cases quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE` beside the offer so the user decides knowingly.
-- `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer, in this order: (1) the upstream-issues flow, the default ("file the Top 3 Actions as issues on `<owner>/<repo>`, each linking the full report in your fork?"), which proposes no `.assess/` file for upstream; (2) the fork-based PR flow as an explicit opt-in ("also open a snapshot PR against `<owner>/<repo>` from your fork? Maintainers often decline committed generated output: the `.assess/` files are a dated snapshot that goes stale with the next commit."); (3) "leave local". Do not offer the direct flow. The findings are what a maintainer you do not work with acts on; issues carry them, a snapshot PR mostly does not.
+- `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer, in this order (with `HAS_ISSUES=false` drop option (1): the offers are the fork-based PR flow and "leave local", with issue tracking going to the fork or a personal tracker as in Step 6): (1) the upstream-issues flow, the default ("file the Top 3 Actions as issues on `<owner>/<repo>`, each linking the full report in your fork?"), which proposes no `.assess/` file for upstream; (2) the fork-based PR flow as an explicit opt-in ("also open a snapshot PR against `<owner>/<repo>` from your fork? Maintainers often decline committed generated output: the `.assess/` files are a dated snapshot that goes stale with the next commit."); (3) "leave local". Do not offer the direct flow. The findings are what a maintainer you do not work with acts on; issues carry them, a snapshot PR mostly does not.
 - `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE`, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
 - `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty), whatever `NO_CONTRIBUTIONS` says: skip every PR offer (direct, fork, and no-contributions) and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the batched Phase 2 question.
 
-The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "file the Top 3 Actions as upstream issues linking the report in your fork" first and "fork and open a snapshot PR from your fork" second (two separate options) on a read-only target, "open a PR inside your fork and share the link" when `NO_CONTRIBUTIONS=1` on a read-only target or with `IS_FORK=true`, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
+The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "file the Top 3 Actions as upstream issues linking the report in your fork" first (when `HAS_ISSUES=true`) and "fork and open a snapshot PR from your fork" second (two separate options) on a read-only target, "open a PR inside your fork and share the link" when `NO_CONTRIBUTIONS=1` on a read-only target or with `IS_FORK=true`, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
 
 If the user **selected the PR offer** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
@@ -201,7 +203,7 @@ If the user **did not select the PR offer**: skip it. Files stay in `.assess/` f
 
 ## Step 6: Offer to Track the Top 3 Actions in the User's Issue Tracker
 
-This is the second item in the batched Phase 2 question (its wording there: _"track the Top 3 Actions in your issue tracker - each becomes a closeable, assignable work item rather than a bullet buried in a PR description"_). Execute this step only if the user **selected the issue-tracking offer**.
+This is the second item in the batched Phase 2 question (its wording there: _"track the Top 3 Actions in your issue tracker - each becomes a closeable, assignable work item rather than a bullet buried in a PR description"_). Execute this step only if the user **selected the issue-tracking offer**, or the upstream-issues offer (which is the issue-tracking offer on a read-only target, run after Step 5 hosts the report in the fork).
 
 If the user **did not select** it: skip. The Top 3 Actions table in the PR/report still lists everything inline.
 
@@ -324,6 +326,8 @@ End with a short, tracker-specific summary. Examples:
 
 > Created 3 GitHub issues: #42 (Action 1), #43 (Action 2), #44 (Action 3). Linked from the assessment PR. All labelled `assess-finding` so re-running `/assess` later won't duplicate them.
 
+> Filed 4 issues on `<owner>/<repo>`: #979 (Action 1), #980 (Action 2), #981 and #982 (Action 3, split into two independent changes). Each links the full report in your fork. Unlabelled (no triage access), so a re-run matches them by title.
+
 > Created 3 Task Master tasks under tag `assess-2026-05-22`: #1.1, #1.2, #1.3. Run `task-master next` to start.
 
 > Action 1 already tracked in PROJ-1024 (in progress) - linked. Created PROJ-1198 (Action 2) and PROJ-1199 (Action 3) in Jira.
@@ -419,4 +423,4 @@ jq -r '.uninstall_instructions_path' "$REPO_ROOT/.assess/run-context.json"
 # -> references/uninstall.md (relative to the assess skill directory)
 ```
 
-Read that `references/uninstall.md` and perform each step that applies (skip artifacts the run never created - no CI gate means no workflow to delete). Do each destructive action only after the user has confirmed uninstall, and **do not** close `assess-finding` tracker items - surface them so the user decides. Report back which artifacts were removed and which (if any) were left for the user to handle. If the user prefers to do it themselves, hand them the steps from `references/uninstall.md` rather than performing them.
+Read that `references/uninstall.md` and perform each step that applies (skip artifacts the run never created - no CI gate means no workflow to delete). Do each destructive action only after the user has confirmed uninstall, and **do not** close `assess-finding` tracker items (or the unlabelled upstream issues the upstream-issues flow filed) - surface them so the user decides. Report back which artifacts were removed and which (if any) were left for the user to handle. If the user prefers to do it themselves, hand them the steps from `references/uninstall.md` rather than performing them.
