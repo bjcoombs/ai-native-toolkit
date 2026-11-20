@@ -157,4 +157,7 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 #     looser levels as drift; and a rename-only commit (no content change) is
 #     no longer churn or a content change (contract I425-2), so doc and code
 #     churn, doc ages, staleness ratios and lying_map can move.
-ASSESS_METHOD_VERSION = 14
+# 16: a root ``agents/*.md`` shaped as an agent definition is reported in
+#     ``instruction_placement.loaded_in_full`` even without a plugin manifest
+#     (issue #662), so that list and the scorer evidence drawn from it can move.
+ASSESS_METHOD_VERSION = 16
