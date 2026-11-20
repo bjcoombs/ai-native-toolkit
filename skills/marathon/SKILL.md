@@ -530,17 +530,26 @@ The lead operates as a **tech lead running a sprint** — not a task router.
 
 ### Retro Boundary
 
-The retrospective's self-rewrite scope **excludes** the floor artifacts. The retro may **propose** changes to any of them but must never self-apply one (`FLOOR.md` clause iii): a self-rewriting process with no outcome signal can optimize away its own verification, and that capability is already proven. Excluded (all paths relative to the repo root):
+The retrospective's self-rewrite scope **excludes** the floor artifacts and the gates they rely on. The retro may **propose** a change to any of them but must never self-apply one: a self-rewriting process with no outcome signal can optimize away its own verification, and that capability is already proven. Two groups, with different gates (all paths relative to the repo root):
 
-- `FLOOR.md`
-- the `<!-- floor:cold-verify-completion -->` markers in all four marked files (`skills/marathon/SKILL.md`, `skills/pr-review-merge/SKILL.md`, `skills/tm/SKILL.md`, `skills/issues/SKILL.md`) and the gate invocations alongside them
+**Floor core: needs the maintainer's out-of-band `floor-signoff` approval (`FLOOR.md` clause iii).**
+
+- `FLOOR.md`, including the floor tokens it declares
+- `scripts/floor_check.py`
+- `scripts/floor_anchor.py`
 - `.github/workflows/floor.yml`
+
+**Floor-enforced and canary-gated: never self-applied, but no sign-off.**
+
+- the `<!-- floor:cold-verify-completion -->` markers in all four marked files (`skills/marathon/SKILL.md`, `skills/pr-review-merge/SKILL.md`, `skills/tm/SKILL.md`, `skills/issues/SKILL.md`) and the gate invocations alongside them, whose removal `floor enforcement` fails
 - `scripts/contract/`
 - `scripts/canaries/`
 - `tests/canaries/`
 - `tests/contract/`
 
-A retro proposal touching any of these is recorded for the maintainer's out-of-band sign-off, never enacted by the run itself.
+The gate code and canaries pass `canary suite (semantic layer)` instead of the sign-off (clause iii names them as canary-gated).
+
+A retro proposal touching any of these is recorded for the maintainer, never enacted by the run itself. A floor-core proposal waits for the `floor-signoff` deployment review; the rest go through an ordinary pull request and its gates.
 
 ```
 ## Marathon Complete: <tag>
