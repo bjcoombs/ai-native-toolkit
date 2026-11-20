@@ -17,8 +17,8 @@ not read, so "no gate found" is never misread as "no gate exists".
 A configured threshold is evidence the tooling fails below it *when coverage
 runs*; whether CI runs coverage at all is a separate read (Layer 5).
 
-Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule; never
-an orchestrator.
+Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule and
+``lib.assess_config.is_user_excluded``; never an orchestrator.
 """
 from __future__ import annotations
 
@@ -28,7 +28,11 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from lib.assess_config import is_user_excluded
 from lib.doc_graph import is_excluded_path
+
+# The user's ``--exclude`` / config.toml excludes: (directory names, basename globs).
+Excludes = tuple[set[str], list[str]]
 
 # How deep below the repo root config files are looked for: deep enough for a
 # monorepo package (``packages/web/jest.config.js``, ``skills/x/pyproject.toml``),
@@ -40,6 +44,13 @@ _MAX_BYTES = 1_000_000
 _WINDOW = 15
 
 _NUM = r"(-?\d+(?:\.\d+)?)"
+# A threshold supplied by a variable: ``${{ env.COV_MIN }}`` (GitHub Actions),
+# ``${COV_MIN}`` / ``$COV_MIN`` (shell, GitLab), ``$(COV_MIN)`` (Make, Azure),
+# ``$$COV_MIN`` / ``$${COV_MIN}`` (a shell variable escaped in a Makefile),
+# ``{{ cov_min }}`` (Jinja, Taskfile). The flag still gates; the number is not
+# readable here, so the gate carries ``threshold: null``.
+_TEMPLATE = r"\$\$\{[^}]*\}|\$\$\w+|\$\{\{[^}]*\}\}|\$\{[^}]*\}|\$\([^)]*\)|\$\w+|\{\{[^}]*\}\}"
+_VALUE = r"(?:" + _NUM + r"|(?:" + _TEMPLATE + r"))"
 
 # INI-style section that holds coverage.py's ``fail_under``, by file name.
 _COVERAGE_PY_SECTIONS: dict[str, str] = {
@@ -49,7 +60,18 @@ _COVERAGE_PY_SECTIONS: dict[str, str] = {
     "tox.ini": "coverage:report",
 }
 _SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*(?:[#;].*)?$")
-_FAIL_UNDER_RE = re.compile(r"^\s*fail_under\s*[=:]\s*[\"']?" + _NUM)
+_FAIL_UNDER_RE = re.compile(r"^\s*fail_under\s*[=:]\s*[\"']?" + _VALUE)
+# coverage.py's run section, by file name: ``branch = true`` there makes
+# ``fail_under`` gate the combined line-and-branch total, not line coverage.
+_COVERAGE_PY_RUN_SECTIONS: dict[str, str] = {
+    "pyproject.toml": "tool.coverage.run",
+    ".coveragerc": "run",
+    "setup.cfg": "coverage:run",
+    "tox.ini": "coverage:run",
+}
+_BRANCH_TRUE_RE = re.compile(r"^\s*branch\s*[=:]\s*[\"']?(?:true|yes|on|1)\b",
+                             re.IGNORECASE)
+_COV_BRANCH_FLAG_RE = re.compile(r"--cov-branch\b")
 
 # Command-line forms, read from CI and task-runner files.
 _CLI_FILES = {
@@ -58,12 +80,20 @@ _CLI_FILES = {
     "Jenkinsfile", "azure-pipelines.yml", ".travis.yml", "bitbucket-pipelines.yml",
     "justfile", "Justfile", "Taskfile.yml", "Taskfile.yaml",
 }
-_PYTEST_COV_RE = re.compile(r"--cov-fail-under[=\s]+[\"']?" + _NUM)
+_PYTEST_COV_RE = re.compile(r"--cov-fail-under[=\s]+[\"']?" + _VALUE)
 _COVERAGE_CLI_RE = re.compile(
-    r"\bcoverage\s+(report|xml|json|html|lcov)\b.*--fail-under[=\s]+" + _NUM)
-# Both the ``--check-coverage`` flag and the ``check-coverage`` subcommand.
-_CHECK_COVERAGE_CLI_RE = re.compile(r"\b(nyc|c8)\b.*(?<![\w-])(?:--)?check-coverage\b")
+    r"\bcoverage\s+(report|xml|json|html|lcov)\b.*--fail-under[=\s]+[\"']?" + _VALUE)
+# Both the ``--check-coverage`` flag and the ``check-coverage`` subcommand, but
+# not the ``"check-coverage": true`` config key (read by ``_CHECK_COVERAGE_KEY``).
+_CHECK_COVERAGE_CLI_RE = re.compile(
+    r"\b(nyc|c8)\b.*(?<![\w-])(?:--)?check-coverage\b(?![\"']?\s*:)")
 _LINES_FLAG_RE = re.compile(r"--lines[=\s]+" + _NUM)
+
+# Read at the repo root even on a scoped run: CI and task-runner files run the
+# gates for the scoped package. Package configs (pyproject.toml, package.json,
+# tox.ini, ...) at the root belong to the root package and are dropped.
+_ROOT_CI_FILES = _CLI_FILES - {"pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
+                               "noxfile.py", "package.json"}
 
 # JS/TS config files and the anchor key that opens a threshold block in each.
 _JEST_FILES = re.compile(r"^jest\.config\.(js|ts|mjs|cjs|json)$")
@@ -104,6 +134,15 @@ NOT_DETECTED: tuple[str, ...] = (
     "Vitest before 1.0: `lines` / `branches` directly under `coverage` with no "
     "`thresholds` key",
 )
+# Added on a scoped run: what the scope-limited walk leaves unread or unproven.
+NOT_DETECTED_SCOPED: tuple[str, ...] = (
+    "Root-level package configs on a scoped run (`pyproject.toml`, `setup.cfg`, "
+    "`tox.ini`, `pytest.ini`, `noxfile.py`, `package.json` at the repo root): "
+    "they belong to the root package and are not read",
+    "Whether a gate in a root CI or task-runner file targets the scope: such a "
+    "gate is reported for every scoped run, even one that runs another "
+    "package's suite (`cd packages/b && pytest --cov-fail-under=90`)",
+)
 
 
 Unit = Literal["percent", "ratio", "uncovered_count"]
@@ -126,6 +165,9 @@ class CoverageGate(TypedDict):
 # value was not read (an empty ``coverageThreshold``, a ``thresholds`` block with
 # only ``autoUpdate``), which is reported but not counted as enforced.
 _DEFAULT_THRESHOLD_TOOLS = {"nyc", "c8", "nyc/c8"}
+# A null threshold from coverage.py or pytest-cov only arises from a templated
+# value (``--cov-fail-under=${{ env.COV_MIN }}``): the flag is set, so it gates.
+_NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov"}
 
 
 def _gate(file: str, line: int, tool: str, form: str,
@@ -138,12 +180,38 @@ def _num(text: str) -> float:
     return float(text)
 
 
+def _value(text: str | None) -> float | None:
+    """A threshold as written, or None when it is a template variable."""
+    return None if text is None else float(text)
+
+
+def _branch_configured(name: str, lines: list[str]) -> bool:
+    """True when the file's coverage.py run section sets ``branch = true``."""
+    section = _COVERAGE_PY_RUN_SECTIONS.get(name)
+    if section is None:
+        return False
+    current = None
+    for line in lines:
+        header = _SECTION_RE.match(line)
+        if header:
+            current = header.group(1).strip().strip("\"'")
+        elif current == section and _BRANCH_TRUE_RE.match(line):
+            return True
+    return False
+
+
+def _total_or_lines(branch: bool) -> str:
+    """coverage.py gates the line-and-branch total once branch coverage is on."""
+    return "total" if branch else "lines"
+
+
 def _is_comment(line: str) -> bool:
     stripped = line.lstrip()
     return stripped.startswith(("#", ";", "//"))
 
 
-def _scan_fail_under(rel: str, lines: list[str], section: str) -> list[CoverageGate]:
+def _scan_fail_under(rel: str, lines: list[str], section: str,
+                     branch: bool) -> list[CoverageGate]:
     """coverage.py ``fail_under`` inside the named INI/TOML section."""
     gates: list[CoverageGate] = []
     current = None
@@ -155,31 +223,40 @@ def _scan_fail_under(rel: str, lines: list[str], section: str) -> list[CoverageG
         match = _FAIL_UNDER_RE.match(line) if current == section else None
         if match:
             gates.append(_gate(rel, idx, "coverage.py", f"[{section}] fail_under",
-                               _num(match.group(1)), "percent", "lines"))
+                               _value(match.group(1)), "percent",
+                               _total_or_lines(branch)))
     return gates
 
 
-def _scan_cli(rel: str, lines: list[str]) -> list[CoverageGate]:
-    """``--cov-fail-under``, ``coverage report --fail-under`` and nyc/c8 flags."""
+def _scan_cli(rel: str, lines: list[str], branch: bool = False) -> list[CoverageGate]:
+    """``--cov-fail-under``, ``coverage report --fail-under`` and nyc/c8 flags.
+
+    ``branch`` is the file's own coverage.py ``branch = true``; ``--cov-branch``
+    on the line has the same effect on the metric. A CI or task-runner file
+    carries no coverage.py config, and the package config coverage.py reads at
+    run time is not resolved, so ``lines`` on such a gate means branch mode was
+    not determined, not that it is off.
+    """
     gates: list[CoverageGate] = []
     for idx, line in enumerate(lines, 1):
         if _is_comment(line):
             continue
-        gates.extend(_cli_line_gates(rel, idx, line))
+        gates.extend(_cli_line_gates(rel, idx, line, branch))
     return gates
 
 
-def _cli_line_gates(rel: str, idx: int, line: str) -> list[CoverageGate]:
+def _cli_line_gates(rel: str, idx: int, line: str, branch: bool) -> list[CoverageGate]:
     gates = []
+    metric = _total_or_lines(branch or bool(_COV_BRANCH_FLAG_RE.search(line)))
     match = _PYTEST_COV_RE.search(line)
     if match:
         gates.append(_gate(rel, idx, "pytest-cov", "--cov-fail-under",
-                           _num(match.group(1)), "percent", "lines"))
+                           _value(match.group(1)), "percent", metric))
     match = _COVERAGE_CLI_RE.search(line)
     if match:
         gates.append(_gate(rel, idx, "coverage.py",
                            f"coverage {match.group(1)} --fail-under",
-                           _num(match.group(2)), "percent", "lines"))
+                           _value(match.group(2)), "percent", metric))
     match = _CHECK_COVERAGE_CLI_RE.search(line)
     if match:
         lines_flag = _LINES_FLAG_RE.search(line)
@@ -189,10 +266,8 @@ def _cli_line_gates(rel: str, idx: int, line: str) -> list[CoverageGate]:
     return gates
 
 
-def _window_metric(lines: list[str], start: int, end: int
-                   ) -> tuple[float | None, str | None]:
-    """First ``lines`` value in ``lines[start:end]``, else the first other metric."""
-    window = lines[max(start, 0):end]
+def _window_metric(window: list[str]) -> tuple[float | None, str | None]:
+    """First ``lines`` value in ``window``, else the first other metric."""
     for metric, pattern in _METRIC_RE.items():
         for line in window:
             match = pattern.search(line)
@@ -201,14 +276,70 @@ def _window_metric(lines: list[str], start: int, end: int
     return None, None
 
 
+def _close(lines: list[str], row: int, col: int, limit: int) -> tuple[int, int] | None:
+    """(row, col) of the ``}`` closing the ``{`` at ``lines[row][col]``."""
+    depth = 0
+    for r in range(row, min(limit, len(lines))):
+        text = lines[r]
+        for c in range(col if r == row else 0, len(text)):
+            depth += {"{": 1, "}": -1}.get(text[c], 0)
+            if depth == 0:
+                return r, c
+    return None
+
+
+def _open_before(lines: list[str], row: int, col: int, limit: int) -> tuple[int, int] | None:
+    """(row, col) of the unmatched ``{`` enclosing ``lines[row][col]``."""
+    depth = 0
+    for r in range(row, max(row - limit, -1), -1):
+        text = lines[r]
+        for c in range((col if r == row else len(text)) - 1, -1, -1):
+            depth += {"}": 1, "{": -1}.get(text[c], 0)
+            if depth < 0:
+                return r, c
+    return None
+
+
+def _slice(lines: list[str], start: tuple[int, int], end: tuple[int, int]) -> list[str]:
+    """The text from ``start`` to ``end`` inclusive, as lines."""
+    if start[0] == end[0]:
+        return [lines[start[0]][start[1]:end[1] + 1]]
+    return ([lines[start[0]][start[1]:]] + lines[start[0] + 1:end[0]]
+            + [lines[end[0]][:end[1] + 1]])
+
+
+def _block(lines: list[str], row: int, match: re.Match[str], enclosing: bool
+           ) -> list[str] | None:
+    """The braced object an anchor opens (``coverageThreshold: {...}``), or, when
+    ``enclosing``, the one it sits in (``{"check-coverage": true, ...}``).
+
+    Bounding the read to the object keeps one Jest project's threshold from
+    being credited to its neighbour. None for brace-less config (YAML).
+    """
+    if enclosing:
+        start = _open_before(lines, row, match.start(), _WINDOW + 1)
+    else:
+        brace = lines[row].find("{", match.end())
+        start = (row, brace) if brace >= 0 else None
+        if start is None and row + 1 < len(lines) and lines[row + 1].lstrip().startswith("{"):
+            start = (row + 1, lines[row + 1].index("{"))
+    end = _close(lines, *start, start[0] + _WINDOW * 4) if start else None
+    return _slice(lines, start, end) if start and end else None
+
+
 def _scan_anchor(rel: str, lines: list[str], anchor: re.Pattern[str],
                  tool: str, form: str, before: int = 0) -> list[CoverageGate]:
-    """A threshold block opened by ``anchor``; the metric is read from a window."""
+    """A threshold block opened by ``anchor``; the metric is read from the braced
+    object, or from a line window where the config has no braces."""
     gates: list[CoverageGate] = []
     for idx, line in enumerate(lines, 1):
-        if _is_comment(line) or not anchor.search(line):
+        match = None if _is_comment(line) else anchor.search(line)
+        if match is None:
             continue
-        threshold, metric = _window_metric(lines, idx - 1 - before, idx + _WINDOW)
+        block = _block(lines, idx - 1, match, enclosing=before > 0)
+        if block is None:
+            block = lines[max(idx - 1 - before, 0):idx + _WINDOW]
+        threshold, metric = _window_metric(block)
         unit: Unit = ("uncovered_count" if threshold is not None and threshold < 0
                       else "percent")
         gates.append(_gate(rel, idx, tool, form, threshold, unit, metric))
@@ -257,11 +388,12 @@ def _scanners_for(name: str, rel_parts: tuple[str, ...]
     scanners: list[Callable[[str, list[str]], list[CoverageGate]]] = []
     if name in _COVERAGE_PY_SECTIONS:
         section = _COVERAGE_PY_SECTIONS[name]
-        scanners.append(lambda r, ls: _scan_fail_under(r, ls, section))
+        scanners.append(lambda r, ls: _scan_fail_under(
+            r, ls, section, _branch_configured(name, ls)))
     if name == "package.json":
         scanners.append(_scan_package_json)
     elif name in _CLI_FILES or _is_workflow(name, rel_parts):
-        scanners.append(_scan_cli)
+        scanners.append(lambda r, ls: _scan_cli(r, ls, _branch_configured(name, ls)))
     scanners.extend(_js_jvm_scanners(name))
     return scanners
 
@@ -299,18 +431,45 @@ def _is_workflow(name: str, rel_parts: tuple[str, ...]) -> bool:
     return rel_parts[:1] == (".circleci",)
 
 
-def _candidate_files(root: Path) -> Iterator[tuple[Path, str]]:
-    """Files under ``root`` (bounded depth, built-in excludes) with a scanner."""
-    for dirpath, dirnames, filenames in os.walk(root):
+def _walk(root: Path, base: Path, excludes: Excludes) -> Iterator[Path]:
+    """Repo-relative files under ``base`` (bounded depth below it, built-in and
+    user excludes) that have a scanner."""
+    extra_dirs, extra_patterns = excludes
+    for dirpath, dirnames, filenames in os.walk(base):
         rel_dir = Path(dirpath).relative_to(root)
-        if len(rel_dir.parts) >= _MAX_DEPTH:
+        if len(Path(dirpath).relative_to(base).parts) >= _MAX_DEPTH:
             dirnames[:] = []
-        dirnames[:] = sorted(d for d in dirnames
-                             if not is_excluded_path(rel_dir / d))
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if not is_excluded_path(rel_dir / d)
+            and not is_user_excluded(rel_dir / d, extra_dirs, extra_patterns))
         for name in sorted(filenames):
             rel = rel_dir / name
-            if _scanners_for(name, rel.parts):
-                yield root / rel, rel.as_posix()
+            if (_scanners_for(name, rel.parts)
+                    and not is_user_excluded(rel, extra_dirs, extra_patterns)):
+                yield rel
+
+
+def _candidate_files(root: Path, scope: Path | None,
+                     excludes: Excludes) -> Iterator[tuple[Path, str]]:
+    """Files with a scanner: the whole repo, or for a scoped run the scope plus
+    the root CI and task-runner files, which run the gates for every package.
+    A package-level config outside the scope is not read."""
+    if scope is None or scope == root:
+        rels = list(_walk(root, root, excludes))
+    else:
+        rels = list(_walk(root, scope, excludes))
+        rels += [rel for rel in _walk(root, root, excludes)
+                 if _is_root_ci(rel) and rel not in rels]
+    for rel in rels:
+        yield root / rel, rel.as_posix()
+
+
+def _is_root_ci(rel: Path) -> bool:
+    """A CI definition (by location) or a task-runner file at the repo root."""
+    if len(rel.parts) == 1:
+        return rel.name in _ROOT_CI_FILES
+    return _is_workflow(rel.name, rel.parts)
 
 
 def _read_lines(path: Path) -> list[str] | None:
@@ -324,11 +483,12 @@ def _read_lines(path: Path) -> list[str] | None:
 
 def _gates_something(gate: CoverageGate) -> bool:
     if gate["threshold"] is None:
-        return gate["tool"] in _DEFAULT_THRESHOLD_TOOLS
+        return gate["tool"] in _NULL_THRESHOLD_GATES
     return gate["threshold"] != 0
 
 
-def detect_coverage_gate(repo_root: Path | str) -> dict[str, Any]:
+def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
+                         excludes: Excludes | None = None) -> dict[str, Any]:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
 
     ``{"available": True, "enforced": bool, "gates": [...], "not_detected": [...]}``
@@ -336,11 +496,17 @@ def detect_coverage_gate(repo_root: Path | str) -> dict[str, Any]:
     ``enforced`` is true when at least one gate has a non-zero threshold, or a
     null one from a tool that checks at a built-in default (nyc/c8). A
     ``fail_under = 0``, and a Jest/Vitest anchor whose threshold was not read, are
-    reported but count as gating nothing.
+    reported but count as gating nothing. A templated threshold
+    (``--cov-fail-under=${{ env.COV_MIN }}``) is a gate with ``threshold: null``.
+
+    ``scope`` (absolute, or relative to ``repo_root``) limits the walk to that
+    subtree plus the root CI files; ``excludes`` is the user's ``(dirs,
+    patterns)`` pair, matched as ``is_user_excluded`` matches it everywhere.
     """
-    root = Path(repo_root)
+    root = Path(repo_root).resolve()
+    scope_abs = (root / scope).resolve() if scope else None
     gates: list[CoverageGate] = []
-    for path, rel in _candidate_files(root):
+    for path, rel in _candidate_files(root, scope_abs, excludes or (set(), [])):
         lines = _read_lines(path)
         if lines is None:
             continue
@@ -350,5 +516,6 @@ def detect_coverage_gate(repo_root: Path | str) -> dict[str, Any]:
         "available": True,
         "enforced": any(_gates_something(g) for g in gates),
         "gates": gates,
-        "not_detected": list(NOT_DETECTED),
+        "not_detected": list(NOT_DETECTED) + (
+            list(NOT_DETECTED_SCOPED) if scope_abs not in (None, root) else []),
     }
