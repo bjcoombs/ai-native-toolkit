@@ -6,9 +6,11 @@ maturity-model version ``rubric_version``, and a group line held its rows under
 versions (``fleet_stamp_version``, ``fleet_group_version``) were deliberately
 left at 1, because the history readers reject any other version and a bump
 would drop every earlier dated entry. ``upgrade`` maps the old names to the
-new ones when a stamp or group line is read, so a ``--compare`` baseline, a
-same-day history entry and the trend history written before the rename stay
-comparable.
+new ones when a stamp or group line is read. A run written before the rename
+then loads, matches as a same-day or baseline history entry, and counts in the
+trend history. ``--compare`` judges it by the usual rules: a run from another
+plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
+never as a malformed stamp.
 
 The old names below are the only place the fleet readers still accept them.
 """

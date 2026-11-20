@@ -85,12 +85,27 @@ def test_trend_history_counts_a_pre_rename_entry():
     assert ft.trend_run(raw, load_groups(LEGACY)) is None
 
 
-def test_fleet_compare_against_a_pre_rename_run(tmp_path, capsys):
+PLUGIN_VERSION = json.loads((Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")
+                            .read_text(encoding="utf-8"))["version"]
+
+
+def _other_major(version: str) -> str:
+    major, rest = version.split(".", 1)
+    return f"{int(major) + 1}.{rest}"
+
+
+@pytest.mark.parametrize("earlier_plugin", ["same", "other_major"])
+def test_fleet_compare_against_a_pre_rename_run(earlier_plugin, tmp_path, capsys):
+    """Same plugin major: comparable. Another major (every 1.x run seen from 2.x): refused
+    for the major version alone, never for a malformed stamp or a missing maturity-model key."""
     root = tmp_path / "estate"
     make_repo(root, "acme/svc1", files={"CLAUDE.md": "a\n"})
     make_repo(root, "acme/svc2")
     earlier = tmp_path / "earlier"
     shutil.copytree(LEGACY, earlier)
+    stamp = json.loads((earlier / "run.json").read_text(encoding="utf-8"))
+    stamp["plugin_version"] = PLUGIN_VERSION if earlier_plugin == "same" else _other_major(PLUGIN_VERSION)
+    (earlier / "run.json").write_text(json.dumps(stamp), encoding="utf-8")
     out = tmp_path / "out"
     code = fleet_cli.main([str(root), "--out", str(out), "--scans", "nested_instructions",
                            "--levels", str(LEVELS_FILE), "--no-diagrams", "--no-history",
@@ -98,7 +113,11 @@ def test_fleet_compare_against_a_pre_rename_run(tmp_path, capsys):
     assert code == 0, capsys.readouterr().err
     comparison = json.loads((out / "compare.json").read_text(encoding="utf-8"))
     assert comparison["earlier"]["levels_version"] == "fixture-1"
-    assert not any("maturity-model version" in reason for reason in comparison["reasons"])
+    if earlier_plugin == "same":
+        assert comparison["comparable"] is True and comparison["reasons"] == []
+    else:
+        assert comparison["comparable"] is False
+        assert comparison["reasons"] == [f"major version changed {stamp['plugin_version']}->{PLUGIN_VERSION}"]
     assert entry_repos(earlier) == REPOS
 
 

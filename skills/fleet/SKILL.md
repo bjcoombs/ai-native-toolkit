@@ -147,7 +147,8 @@ the same namespace.
 Runs written before 2.0.0 name these fields `rubric_version` and `rubric` (and
 `run.json` names its version `rubric_version`). Every reader (`heatmap.py`,
 `fleet_next_steps.py`, `--compare` and the run history) maps the old names, so
-earlier history entries stay comparable. The old `--rubric` flag exits 2 naming
+earlier history entries still load and match. `--compare` against a 1.x run from
+2.x is refused for the plugin major version, as for any major change. The old `--rubric` flag exits 2 naming
 `--levels`.
 
 - `team` rows read each repository's signal blocks by block name, as in a

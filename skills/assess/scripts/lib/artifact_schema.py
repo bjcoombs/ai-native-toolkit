@@ -119,12 +119,13 @@ constant each.
 # (was rubric_version), and a group line holds its rows under levels (was
 # rubric); compare.json earlier/later summaries carry levels_version
 # (fleet_compare_version 2). Readers map the old keys (lib/fleet_legacy.py), so
-# runs written before the rename still load and compare. Also documented: a
-# run-context.json structure block reports modularity_q null in two cases, an
-# import graph with no edges (modularity_reason "no_import_edges") and an
-# unavailable block (available false: grimp or networkx not installed, or no
-# importable Python package; the cause is in structure.reason). run-context.json
-# and complexity-stats.json are otherwise unchanged.
+# runs written before the rename still load and match in the history. Also
+# documented: a run-context.json structure block reports modularity_q null in two
+# cases, an import graph with no edges (modularity_reason "no_import_edges") and
+# an unavailable block (available false, cause in structure.reason; the headless
+# marker drops modularity_q and opens its reason with a code: no_grimp,
+# no_networkx, grimp_failed or no_python_packages). run-context.json and
+# complexity-stats.json are otherwise unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.18.0"
 
 # The finding method version: which rules decide the findings a run produces.

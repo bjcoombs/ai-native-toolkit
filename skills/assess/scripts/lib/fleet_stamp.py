@@ -32,7 +32,7 @@ from lib.fleet import STATUS_OK, FleetRow
 
 # Bumped when the stamp's keys change, except for the 2.0.0 maturity-model key renames
 # (#670): readers reject any other version, so lib/fleet_legacy.py maps the old keys
-# instead and earlier history entries stay comparable.
+# instead and earlier history entries still match.
 FLEET_STAMP_VERSION = 1
 RUN_FILE = "run.json"
 

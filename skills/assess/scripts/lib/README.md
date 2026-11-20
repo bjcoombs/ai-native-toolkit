@@ -232,8 +232,10 @@ available with `modularity_q` null and `modularity_reason` `no_import_edges` (nu
 was measured): modules that never import each other have no community structure, and a
 0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
 `modularity_q` is therefore null in two cases: an edgeless graph (`modularity_reason`
-`no_import_edges`) and an unavailable block (`available` false because grimp or networkx
-is not installed or no importable Python package exists; the cause is in `structure.reason`).
+`no_import_edges`) and an unavailable block (`available` false; the cause is in
+`structure.reason`). A headless run reduces that block to the bare marker, whose reason
+opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`;
+`lib/headless_layers.py`), so `modularity_q` is absent there rather than null.
 Tests: `tests/test_structure_graph.py`, `tests/test_level_signals.py`,
 `tests/test_headless_layers.py` (a full signals run and a counts-only one).
 
@@ -1001,8 +1003,10 @@ moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its ne
 (`RENAMED_KEYS`: the version key to `levels_version`, the row list to `levels`); a key
 already under its new name wins, and the input is never mutated. `fleet_view._check_row`,
 `fleet_compare.load_run`, `fleet_history.entry_conflict` and `fleet_trends` (history
-entries) call it, so a `--compare` baseline, a same-day history entry and the trend history
-written before the rename stay comparable. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
+entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
+from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
+never as a malformed stamp. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
 `tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
 
@@ -1501,7 +1505,10 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
-rerun. Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`.
+rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
+parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
+Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
+flag in `tests/test_fleet_legacy.py`.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
