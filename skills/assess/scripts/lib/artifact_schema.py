@@ -149,4 +149,8 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 # 13: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
 #     no longer contradicts a Python pin in one ``.tool-versions``; the L0
 #     "conflicting doc claims" row and scorer evidence can move.
-ASSESS_METHOD_VERSION = 13
+# 14: a repository with no importable Python package reports ``structure``
+#     ``available: false`` instead of an empty graph (issue #663), so keyhole
+#     static metrics and structure_drift tier 1 skip it; findings that read the
+#     static graph can move on such repositories.
+ASSESS_METHOD_VERSION = 14

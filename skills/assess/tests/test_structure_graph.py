@@ -36,10 +36,10 @@ def test_degrades_when_networkx_missing(monkeypatch, tmp_path):
     assert "networkx" in result.reason
 
 
-def test_no_packages_is_available_but_empty(tmp_path):
+def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
     (tmp_path / "loose.py").write_text("x = 1\n")  # no __init__.py anywhere
     result = sg.analyze_structure(tmp_path)
-    assert result.available is True
+    assert result.available is False
     assert result.footprints == []
     assert "no importable" in result.reason
 

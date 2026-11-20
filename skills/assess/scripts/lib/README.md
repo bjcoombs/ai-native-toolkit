@@ -206,7 +206,8 @@ Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
 Degrades to `available: False` when `grimp`/`networkx` are absent rather than
-blocking the run.
+blocking the run, and when no importable Python package exists (nothing measured,
+not an empty graph whose modularity 0 would read as tangled code).
 
 Packages resolve by path, never by import name. grimp's default finder asks
 `importlib.util.find_spec`, which answers from `sys.modules` first, so a target

@@ -692,8 +692,10 @@ def analyze_structure(
             p for p in package_dirs if p.resolve().is_relative_to(scope_abs)
         ]
     if not package_dirs:
+        # Nothing measured, not a measured empty graph: modularity 0.0 would
+        # read as tangled code in a rubric (issue #663).
         return StructureGraphResult(
-            available=True,
+            available=False,
             reason="no importable Python packages found",
             keyhole_budget=budget,
         )

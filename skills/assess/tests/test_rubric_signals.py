@@ -13,6 +13,7 @@ import pytest
 
 from lib.counts_only import counts_only_scans
 from lib.promissory_markers import scan_promissory_markers
+from lib.structure_graph import analyze_structure
 from lib.rubric import Group, RubricError, RubricResult, dumps_result, evaluate, load_rubric, resolve_signal
 from lib.rubric_signals import (
     DEFAULT_RUBRIC,
@@ -258,6 +259,16 @@ def test_default_rubric_covers_every_layer_on_the_golden_run_context() -> None:
         else:
             assert (row["status"], row["level"]) == ("unknown", None), row
             assert row["missing_signals"], row
+
+
+def test_layer_two_is_unknown_on_a_repository_with_no_python_package(tmp_path: Path) -> None:
+    """The import graph is Python-only: no package is unmeasured, not modularity 0."""
+    (tmp_path / "index.js").write_text("module.exports = 1;\n", encoding="utf-8")
+    structure = analyze_structure(tmp_path).as_dict()
+    assert structure["available"] is False
+    row = _row(_run({"r": {"structure": structure}}), "layer-2-design")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "structure.modularity_q" in row["missing_signals"]
 
 
 def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
