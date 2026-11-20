@@ -356,6 +356,30 @@ def test_bats_basename_match_shared_across_sh_and_extensionless_credits_neither(
         assert tc.has_sibling_test(tmp_path, rel, index=index) is False
 
 
+def test_bats_basename_match_untracked_spelling_beside_a_tracked_one_credits_neither(
+    tmp_path: Path,
+) -> None:
+    """Issue #648: a tracked ``pkg/a/run`` in the same directory must not hide
+    that ``pkg/a/run.sh`` is absent from the git index. The untracked script
+    still competes for ``run.bats``, so the tie credits neither spelling, as it
+    would were both tracked."""
+    import subprocess
+
+    for rel in ("pkg/a/run", "pkg/unit-tests/run.bats"):
+        _touch(tmp_path, rel)
+    git = ["git", "-C", str(tmp_path), "-c", "user.email=t@example.com",
+           "-c", "user.name=t"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "init"], check=True)
+    _touch(tmp_path, "pkg/a/run.sh")  # untracked
+    index = tc.build_test_index(tmp_path)
+    assert tc.sibling_test_match(tmp_path, "pkg/a/run.sh", index) is None
+    # The index cannot see the untracked rival, so the tracked script keeps
+    # its credit: only the untracked side is corrected.
+    assert tc.sibling_test_match(tmp_path, "pkg/a/run", index) == tc.MATCH_BASENAME
+
+
 def test_bats_basename_match_closest_of_sh_and_extensionless_wins(
     tmp_path: Path,
 ) -> None:

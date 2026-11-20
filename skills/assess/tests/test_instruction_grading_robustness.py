@@ -17,6 +17,7 @@ fall:
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 
 import pytest
 
@@ -27,6 +28,7 @@ from lib.agent_instructions_grader import (
     RELOCATABLE_MAX_PENALTY,
     WORDS_PER_LINE,
     grade_instructions,
+    loaded_equivalent_lines,
     placement_penalty,
 )
 from lib.instruction_placement import LONG_SECTION_MIN_LINES, PlacementFile, analyse_file
@@ -196,8 +198,9 @@ def test_moving_any_section_to_fetch_on_need_never_lowers_the_size_terms() -> No
         a_words = always_on * rng.choice([1, 5, 12, 30])
         f_words = fetch * rng.choice([1, 5, 12, 30])
         w = min(a_words, k * per_line)
-        before = placement_penalty(_split(always_on, fetch, a_words), f_words)
-        after = placement_penalty(_split(always_on - k, fetch + k, a_words - w), f_words + w)
+        before = placement_penalty(_split(always_on, fetch, a_words), fetch_words=f_words)
+        after = placement_penalty(_split(always_on - k, fetch + k, a_words - w),
+                                  fetch_words=f_words + w)
         total_before = before["always_on_penalty"] + before["relocatable_penalty"]
         total_after = after["always_on_penalty"] + after["relocatable_penalty"]
         case = (always_on, fetch, k, a_words, f_words, w)
@@ -208,17 +211,29 @@ def test_moving_any_section_to_fetch_on_need_never_lowers_the_size_terms() -> No
 def test_b_cap_reads_the_whole_loaded_file() -> None:
     """Reclassification cannot lift the B cap: it reads every loaded line (or
     word-equivalent), always-on or not, so only moving text out of the file does."""
-    assert placement_penalty(_split(300, 101, 300 * 5), 101 * 5)["capped"] is True
-    assert placement_penalty(_split(300, 100, 300 * 5), 100 * 5)["capped"] is False
+    assert placement_penalty(_split(300, 101, 300 * 5), fetch_words=101 * 5)["capped"] is True
+    assert placement_penalty(_split(300, 100, 300 * 5), fetch_words=100 * 5)["capped"] is False
     words = (ALWAYS_ON_GRADE_CAP_LINES + 1) * WORDS_PER_LINE
-    assert placement_penalty(_split(100, 50, words - 600), 600)["capped"] is True
+    assert placement_penalty(_split(100, 50, words - 600), fetch_words=600)["capped"] is True
+
+
+@pytest.mark.parametrize("score", [placement_penalty, loaded_equivalent_lines])
+def test_fetch_words_is_a_required_keyword(score: Callable[..., object]) -> None:
+    """The record holds only the always-on words, so a caller omitting the
+    fetch-on-need words would understate the loaded size (issue #648)."""
+    record = _split(250, 50, 250 * 5)
+    with pytest.raises(TypeError):
+        score(record)
+    with pytest.raises(TypeError):
+        score(record, 50 * 5)
+    score(record, fetch_words=50 * 5)
 
 
 def test_fetch_lines_past_the_relocatable_cap_count_as_always_on() -> None:
     """Past 300 fetch-on-need lines the relocatable term charges nothing more, so
     the rest still count toward the always-on term instead of going free."""
-    at_cap = placement_penalty(_split(250, RELOCATABLE_CAP_LINES, 250 * 5))
-    past = placement_penalty(_split(250, RELOCATABLE_CAP_LINES + 60, 250 * 5))
+    at_cap = placement_penalty(_split(250, RELOCATABLE_CAP_LINES, 250 * 5), fetch_words=0)
+    past = placement_penalty(_split(250, RELOCATABLE_CAP_LINES + 60, 250 * 5), fetch_words=0)
     assert at_cap == {"always_on_penalty": 5, "relocatable_penalty": 30, "capped": True}
     assert past["always_on_penalty"] == 11
 

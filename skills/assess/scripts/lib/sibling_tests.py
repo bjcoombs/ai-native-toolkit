@@ -274,11 +274,15 @@ def _basename_match(index: TestIndex, rel_path: str) -> bool:
     source: they share at least one directory, and no other source that the
     test's name also fits shares as deep a common ancestor with that test."""
     src_dirs = Path(rel_path).parts[:-1]
+    # An untracked source still competes for its test. Checked against its own
+    # key: a rival spelling in the same directory (``run`` beside ``run.sh``)
+    # does not stand in for it (issue #648).
+    untracked = src_dirs not in index.sources_by_key.get(name_key(rel_path), [])
     for name in sibling_test_names(Path(rel_path).name):
         peers = [d for key in _rival_keys(rel_path, name)
                  for d in index.sources_by_key.get(key, [])]
-        if src_dirs not in peers:
-            peers.append(src_dirs)  # an untracked source still competes for its test
+        if untracked:
+            peers.append(src_dirs)
         for test_dirs in index.tests_by_name.get(name, []):
             depth = _common_depth(src_dirs, test_dirs)
             if depth == 0:
