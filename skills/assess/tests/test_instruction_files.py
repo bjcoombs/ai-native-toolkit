@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_core_helpers import _minimal_repo, _seed_assess
 
 
@@ -25,7 +25,7 @@ def test_untracked_instruction_file_flagged_not_graded(git_repo, fixtures_dir: P
     commit("committed instructions")
     (repo / "CLAUDE.md").write_text(good, encoding="utf-8")  # untracked (after commit)
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     assert ".github/copilot-instructions.md" in ctx["instruction_files"]
     assert "CLAUDE.md" not in ctx["instruction_files"]          # untracked -> not graded
     assert "CLAUDE.md" in ctx["untracked_instruction_files"]    # but flagged
@@ -41,7 +41,7 @@ def test_dangling_symlink_instruction_is_broken_ref(git_repo) -> None:
     os.symlink("missing-target.md", repo / ".cursorrules")  # dangling symlink
     commit("init with dangling .cursorrules")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     refs = ctx["broken_instruction_refs"]
     assert any(r.get("path") == ".cursorrules" and "symlink" in r["reason"] for r in refs)
 
@@ -53,7 +53,7 @@ def test_broken_link_to_instruction_file_is_broken_ref(git_repo) -> None:
     (repo / "README.md").write_text("see the [rules](AGENTS.md)", encoding="utf-8")
     commit("init; README links a missing AGENTS.md")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     refs = ctx["broken_instruction_refs"]
     assert any(Path(r.get("target", "")).name == "AGENTS.md" for r in refs)
 
@@ -71,7 +71,7 @@ def test_sensitive_content_surfaced_for_committed_file(git_repo, fixtures_dir: P
     )
     commit("instructions with infra detail")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     flagged = ctx["sensitive_instruction_content"]
     assert "CLAUDE.md" in flagged
     cats = {f["category"] for f in flagged["CLAUDE.md"]}
@@ -93,7 +93,7 @@ def test_sensitive_content_surfaced_for_untracked_file(git_repo, fixtures_dir: P
         good + "\nAWS key AKIAIOSFODNN7EXAMPLE\n", encoding="utf-8"
     )
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     assert "CLAUDE.md" in ctx["untracked_instruction_files"]   # not graded
     assert "CLAUDE.md" in ctx["sensitive_instruction_content"]  # but scanned
     assert any(f["category"] == "cloud_key"
@@ -111,7 +111,7 @@ def test_agents_md_symlink_alias_inherits_claude_grade(git_repo, fixtures_dir: P
     os.symlink("CLAUDE.md", repo / "AGENTS.md")
     commit("CLAUDE.md + AGENTS.md alias")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     files = ctx["instruction_files"]
     assert files["AGENTS.md"]["is_alias"] is True
     assert files["AGENTS.md"]["alias_target"] == "CLAUDE.md"
@@ -131,7 +131,7 @@ def test_agents_md_thin_stub_alias_inherits_grade(git_repo, fixtures_dir: Path) 
     )
     commit("CLAUDE.md + thin AGENTS.md stub")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     files = ctx["instruction_files"]
     assert files["AGENTS.md"]["is_alias"] is True
     assert files["AGENTS.md"]["alias_target"] == "CLAUDE.md"
@@ -141,7 +141,7 @@ def test_agents_md_thin_stub_alias_inherits_grade(git_repo, fixtures_dir: Path) 
 def test_ancestor_instruction_files_key_present(tmp_path: Path) -> None:
     """Issue #57: the ancestor-cascade signal is always surfaced as a list."""
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-28")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     assert isinstance(ctx["ancestor_instruction_files"], list)
 
 
@@ -157,7 +157,7 @@ def test_build_run_context_with_claude_md(tmp_path: Path, fixtures_dir: Path) ->
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "CLAUDE.md" in ctx["instruction_files"]
     # The fixture names paths this repo lacks and no command, so since the
     # #512 rescoring it grades low but above the directive-free bad fixture.
@@ -180,7 +180,7 @@ def test_build_run_context_with_agents_md(tmp_path: Path, fixtures_dir: Path) ->
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "AGENTS.md" in ctx["instruction_files"]
     assert ctx["instruction_files"]["AGENTS.md"]["grade"] != "F"
 
@@ -202,7 +202,7 @@ def test_build_run_context_with_multiple_instruction_files(tmp_path: Path, fixtu
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     keys = set(ctx["instruction_files"].keys())
     assert {"CLAUDE.md", "AGENTS.md", "GEMINI.md"} <= keys
     # Top-level grade reflects the BEST of the present files
@@ -226,7 +226,7 @@ def test_instructions_grade_is_None_when_no_files(tmp_path: Path) -> None:
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["instructions_grade"] is None
     assert ctx["instruction_files"] == {}
 
@@ -252,7 +252,7 @@ def test_scans_github_claude_instructions(tmp_path: Path, fixtures_dir: Path) ->
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ".github/claude-instructions.md" in ctx["instruction_files"]
 
 
@@ -273,7 +273,7 @@ def test_scans_github_claude_review_instructions(tmp_path: Path, fixtures_dir: P
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ".github/claude-review-instructions.md" in ctx["instruction_files"]
 
 
@@ -294,5 +294,5 @@ def test_scans_docs_subdirectory(tmp_path: Path, fixtures_dir: Path) -> None:
         "top_hotspots": [], "top_complex": [], "top_large": [],
     }))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-22")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "docs/CLAUDE.md" in ctx["instruction_files"]

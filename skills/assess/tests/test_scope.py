@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 import assess_core
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from lib.badge import fallback_badge, score_badge
 from lib.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
@@ -201,7 +201,7 @@ def test_scoped_run_routes_artifacts_and_records_scope(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
     _seed_scoped_stats(repo, "service-a", "service-a/app.py")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07",
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07",
                             scope=Path("service-a"))
 
     # Scope recorded in the bus for the report/badge/wiki.
@@ -238,7 +238,7 @@ def test_scoped_run_routes_artifacts_and_records_scope(git_repo) -> None:
 def test_scoped_run_doc_graph_has_no_sibling_signal(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
     _seed_scoped_stats(repo, "service-a", "service-a/app.py")
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07",
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07",
                             scope=Path("service-a"))
     dg = ctx["doc_graph"]
     if dg.get("available"):
@@ -253,7 +253,7 @@ def test_root_run_unchanged_by_scope_support(git_repo) -> None:
     (repo / ".assess").mkdir()
     (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_STATS_SHAPE))
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     assert ctx["scope"] is None
     assert ctx["scope_slug"] is None
     # Artifacts stay at the repo-root .assess/.
@@ -264,7 +264,7 @@ def test_root_run_unchanged_by_scope_support(git_repo) -> None:
 def test_invalid_scope_raises_valueerror(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
     with pytest.raises(ValueError):
-        build_run_context(repo_root=repo, run_date="2026-07-07",
+        build_and_publish_run(repo_root=repo, run_date="2026-07-07",
                           scope=Path("no-such-dir"))
 
 

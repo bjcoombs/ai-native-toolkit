@@ -40,13 +40,15 @@ run id, stats and diff, instruction grading, first-flagged map) are entries too;
 adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. The
 doc-staleness keys and the doc x complexity join joined the table last (#558), so the
 core assigns no key by hand. The table only reads: `run_publish.py` writes the wiki,
-badge and `run-context.json` after the scans (#557).
+badge and `run-context.json` after the scans (#557), so `build_run_context` has no
+file-system side effects and `build_and_publish_run` adds the publish step (#660).
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
-The core keeps only the orchestration: `build_run_context` (one `run_scans` call and
-the publish call), `run_opt_in_mutation` and `main`.
+The core keeps only the orchestration: `build_run_context` (one `run_scans` call,
+writing nothing), `build_and_publish_run` (the same, then the publish call, which
+`main` uses), `run_opt_in_mutation` and `main`.
 Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
@@ -583,7 +585,8 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 `tests/test_run_setup.py`, and the run-context tests that patch a scan here.
 
 **`run_publish.py`**
-The run's side effects, applied after every scan (#557): `publish_run` creates the
+The run's side effects, applied after every scan (#557) by
+`assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
 keys the run header reserved in place, writes `badge.json`, reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
@@ -1083,8 +1086,11 @@ The committed findings snapshot (#554). `build_snapshot` reduces `derived_findin
 names and sorted paths plus `ASSESS_METHOD_VERSION`; `write_snapshot` writes it to
 `findings.json` in the run's artifact directory, with no run id or date so an unchanged
 finding set leaves the file byte-identical. `load_snapshot` reads the previous file back
-before the run overwrites it (`None` when absent or malformed), and `run_publish`
-records it as `prior_findings_snapshot`. `method_change` compares that snapshot with
+before the run overwrites it (`None` when absent or malformed; a numeric-string
+version is read as its integer), and `run_publish` records it as
+`prior_findings_snapshot`. `committed_prior` picks the snapshot the gate compares
+against: the `findings.json` on disk when its method version differs from this run's
+(the gate run directly on a committed snapshot, #661), else the recorded prior. `method_change` compares that snapshot with
 the current findings: on a method-version mismatch it lists the paths that appeared and
 cleared per finding, the snapshot path and the re-freeze command (on a downgrade, when
 this run's method is older than the snapshot's, the toolkit pin to raise instead),

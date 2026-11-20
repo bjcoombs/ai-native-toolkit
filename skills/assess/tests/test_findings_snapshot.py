@@ -4,13 +4,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_core_helpers import _minimal_repo
 from assess_gate import evaluate, format_verdict, main
 from lib.artifact_schema import ASSESS_METHOD_VERSION
 from lib.findings_snapshot import (
     FINDINGS_SNAPSHOT_FILE,
     build_snapshot,
+    committed_prior,
     load_snapshot,
     method_change,
     write_snapshot,
@@ -188,7 +189,7 @@ def test_gate_silent_when_versions_match() -> None:
 
 def test_core_writes_snapshot_and_stamps_method_version(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-11-19")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-11-19")
     assert ctx["assess_method_version"] == ASSESS_METHOD_VERSION
     assert ctx["prior_findings_snapshot"] is None
     snap = json.loads((repo / ".assess" / FINDINGS_SNAPSHOT_FILE).read_text())
@@ -196,7 +197,7 @@ def test_core_writes_snapshot_and_stamps_method_version(tmp_path: Path) -> None:
     # A second run with no change reads the first snapshot back and leaves the
     # file byte-identical, so the gate stays silent.
     before = (repo / ".assess" / FINDINGS_SNAPSHOT_FILE).read_bytes()
-    ctx2 = build_run_context(repo_root=repo, run_date="2026-11-20")
+    ctx2 = build_and_publish_run(repo_root=repo, run_date="2026-11-20")
     assert ctx2["prior_findings_snapshot"] == snap
     assert (repo / ".assess" / FINDINGS_SNAPSHOT_FILE).read_bytes() == before
     assert method_change(ctx2) is None
@@ -211,7 +212,7 @@ def test_run_header_reserves_the_snapshot_key_for_the_publish_step() -> None:
 
 def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, capsys) -> None:
     repo = _minimal_repo(tmp_path)
-    build_run_context(repo_root=repo, run_date="2026-11-19")
+    build_and_publish_run(repo_root=repo, run_date="2026-11-19")
     snap_path = repo / ".assess" / FINDINGS_SNAPSHOT_FILE
     # A snapshot committed under an older method, holding a finding path the
     # current method no longer produces.
@@ -219,7 +220,7 @@ def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, cap
     old["assess_method_version"] = ASSESS_METHOD_VERSION - 1
     old["findings"].append({"name": "retired_finding", "paths": ["src/old.py"]})
     snap_path.write_text(json.dumps(old))
-    build_run_context(repo_root=repo, run_date="2026-11-20")
+    build_and_publish_run(repo_root=repo, run_date="2026-11-20")
     assert main([str(repo)]) == 0
     out = capsys.readouterr().out
     assert (f"from version {ASSESS_METHOD_VERSION - 1} to {ASSESS_METHOD_VERSION}"
@@ -252,3 +253,91 @@ def test_fail_on_failure_with_method_change_exits_1_and_explains(
     assert "not a code change" in out
     assert "appeared (1):\n      lying_map: src/app.py" in out
     assert "FAIL" in out and "lying_map" in out
+
+
+def test_gate_explains_method_change_against_the_committed_snapshot(
+        git_repo, capsys) -> None:
+    """Contract I554-2 (#661), the cold-verifier sequence: run the pipeline,
+    then overwrite the committed findings.json with an older method version,
+    one extra finding (``lying_map``: ``gone/old.py``) and one produced finding
+    path removed. The gate, run directly against that committed snapshot with
+    no fresh pipeline run, names the method change, lists the extra path as
+    cleared and the removed one as appeared, and prints the re-freeze command."""
+    import assess_core
+    repo, commit = git_repo
+    (repo / ".assess").mkdir()
+    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
+        "files_scored": 0, "loc": {}, "ccn": {},
+        "top_hotspots": [], "top_complex": [], "top_large": [],
+    }))
+    (repo / "notes").mkdir()
+    for i in range(12):
+        (repo / "notes" / f"n{i}.md").write_text(f"# Note {i}\n")
+    (repo / "CLAUDE.md").write_text("# KB\n\n<!-- assess-archetype: software -->\n")
+    commit("init")
+    assert assess_core.main([str(repo), "--non-interactive"]) == 0
+    capsys.readouterr()
+
+    snap_path = repo / ".assess" / FINDINGS_SNAPSHOT_FILE
+    snap = json.loads(snap_path.read_text())
+    produced = next(f for f in snap["findings"]
+                    if f["name"] == "override_contradicts_signals")
+    assert produced["paths"] == ["CLAUDE.md"]
+    produced["paths"] = []
+    lying = next((f for f in snap["findings"] if f["name"] == "lying_map"), None)
+    if lying is None:
+        lying = {"name": "lying_map", "paths": []}
+        snap["findings"].append(lying)
+    lying["paths"].append("gone/old.py")
+    snap["assess_method_version"] = ASSESS_METHOD_VERSION - 1
+    snap_path.write_text(json.dumps(snap, indent=2) + "\n")
+
+    assert main([str(repo)]) == 0
+    out = capsys.readouterr().out
+    assert (f"from version {ASSESS_METHOD_VERSION - 1} to {ASSESS_METHOD_VERSION}"
+            in out)
+    assert "not a code change" in out
+    assert "cleared (1):\n      lying_map: gone/old.py" in out
+    assert "appeared (1):\n      override_contradicts_signals: CLAUDE.md" in out
+    assert "Re-freeze:" in out and "assess_core.py <repo_root>" in out
+
+
+def test_gate_reads_a_string_method_version_in_the_committed_snapshot(
+        tmp_path: Path) -> None:
+    """A hand-edited snapshot holding the method version as a numeric string
+    still establishes the prior version rather than reading as no snapshot."""
+    (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(
+        json.dumps({"assess_method_version": "3", "findings": []}))
+    snap = load_snapshot(tmp_path)
+    assert snap is not None and snap["assess_method_version"] == 3
+
+
+def test_committed_prior_prefers_an_older_on_disk_snapshot_in_the_scope_dir(
+        tmp_path: Path) -> None:
+    scoped = tmp_path / ".assess" / "svc"
+    scoped.mkdir(parents=True)
+    on_disk = build_snapshot([{"name": "lying_map", "paths": ["gone/old.py"]}], 1)
+    write_snapshot(scoped, on_disk)
+    recorded = build_snapshot([], 2)
+    ctx = _ctx(recorded, [], version=2, scope_slug="svc", scope="svc")
+    assert committed_prior(ctx, tmp_path) == on_disk
+
+
+def test_committed_prior_keeps_the_recorded_prior_when_disk_is_current(
+        tmp_path: Path) -> None:
+    """In CI the pipeline has just rewritten findings.json at this run's
+    version; the prior it recorded before the rewrite is the committed one."""
+    (tmp_path / ".assess").mkdir()
+    write_snapshot(tmp_path / ".assess", build_snapshot([], 2))
+    recorded = build_snapshot([{"name": "lying_map", "paths": ["a.py"]}], 1)
+    assert committed_prior(_ctx(recorded, [], version=2), tmp_path) == recorded
+    assert committed_prior(_ctx(None, [], version=2), tmp_path) is None
+
+
+def test_load_snapshot_non_integer_string_version_is_none(tmp_path: Path) -> None:
+    """A hand-edited version string ``int`` cannot parse ("²", "v12", "") reads
+    as no snapshot instead of crashing the gate."""
+    for version in ("\u00b2", "v12", "", "1.5"):
+        (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(
+            json.dumps({"assess_method_version": version, "findings": []}))
+        assert load_snapshot(tmp_path) is None, version

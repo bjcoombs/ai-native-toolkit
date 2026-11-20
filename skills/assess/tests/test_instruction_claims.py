@@ -189,12 +189,12 @@ def test_block_is_json_serialisable(repo: Path) -> None:
 
 
 def test_build_run_context_carries_the_block(tmp_path: Path) -> None:
-    from assess_core import build_run_context
+    from assess_core import build_and_publish_run
 
     (tmp_path / "AGENTS.md").write_text(ENFORCED)
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
     (tmp_path / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW_WITHOUT)
-    ctx = build_run_context(repo_root=tmp_path, run_date="2026-09-18")
+    ctx = build_and_publish_run(repo_root=tmp_path, run_date="2026-09-18")
     assert _failures(ctx["instruction_claims"]) == [["AGENTS.md", 5, "enforcement"]]
     written = json.loads((tmp_path / ".assess" / "run-context.json").read_text())
     assert written["instruction_claims"]["failed"] == 1

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from assess_core import build_run_context
+from assess_core import build_and_publish_run
 from assess_core_helpers import _minimal_repo
 from lib import core_scans
 
@@ -32,7 +32,7 @@ def test_test_pressure_block_present_in_ctx(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     assert "test_pressure" in ctx
     tp = ctx["test_pressure"]
     assert "mutation_config_present" in tp
@@ -50,7 +50,7 @@ def test_test_pressure_mutation_not_run_by_default(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
     (repo / "app.py").write_text("def f(): return 1\n", encoding="utf-8")
 
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     tp = ctx["test_pressure"]
     assert tp["mutation_run"] is False
     assert tp["per_file"] == []
@@ -67,7 +67,7 @@ def test_test_pressure_scan_failure_degrades_not_crashes(tmp_path: Path, monkeyp
         raise RuntimeError("simulated test_pressure failure")
 
     monkeypatch.setattr(core_scans, "scan_test_pressure", boom)
-    ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     tp = ctx["test_pressure"]
     assert tp["available"] is False
     assert "reason" in tp
@@ -86,7 +86,7 @@ def test_mutation_not_run_cap_applies_on_default_scan(tmp_path: Path) -> None:
     """The default read-only pass never runs mutation, so Layer 6 is capped at
     Partial and the required annotation is present for the LLM to read."""
     repo = _minimal_repo(tmp_path)
-    ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
+    ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     cap = ctx["mutation_not_run_cap"]
     assert cap["applies"] is True
     assert cap["mutation_run"] is False
