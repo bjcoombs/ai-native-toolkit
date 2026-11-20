@@ -107,6 +107,7 @@ from lib.run_context_types import (
     Distribution, FnCcnBlock, GeneratedExclusion, KeyholeBudget,
     ScoredHotspotRow, SizeBlock, SubtreeTokens,
 )
+from lib.scc_coverage import DATA_LANGUAGES, backend_by_language, complexity_unreliable
 from lib.stats_rows import file_ccn_rows, top_lists
 from lib.treemap_render import (
     ColoredFile, Rect, Rgba, adaptive_cap, blend_to_grey, build_tree, layout, plural, write_svg,
@@ -756,7 +757,7 @@ def render(files: list[tuple[Path, int, float, str]],
 # ARTIFACT_SCHEMA_VERSION, which assess_core stamps on run-context.json; the
 # treemap keeps its own copy of the constant.
 # test_complexity_treemap asserts the two stay equal.
-ARTIFACT_SCHEMA_VERSION = "1.10.0"
+ARTIFACT_SCHEMA_VERSION = "1.11.0"
 
 
 def _new_run_id() -> str:
@@ -788,16 +789,12 @@ def _read_plugin_version() -> str:
 # is a structural change to the sidecar shape (a metric added/removed/redefined)
 # that voids the diff against an older snapshot until the next clean run
 # re-seeds the baseline (lib.diff_reliability._diff_is_reliable reads it).
-STATS_SCHEMA_VERSION = 6  # 2: generated-file content excludes + excluded_generated
+STATS_SCHEMA_VERSION = 7  # 2: generated-file content excludes + excluded_generated
                           # 3: generated test-report excludes + loc/est_tokens max_code/max_data
                           # 4: fn_ccn.source list + backend_by_language, rows max_fn_name
                           # 5: dart-scanner fills max_fn_ccn for Dart rows, moving their score
                           # 6: files key, every scored file's {path, ccn} (#556)
-
-# scc language names counted as data, not code, for the `max_code` / `max_data`
-# split in the stats file. Data files stay in the treemap: a large hand-kept
-# fixture is weight an agent may have to read.
-DATA_LANGUAGES = frozenset({"JSON", "YAML", "JSONL"})
+                          # 7: complexity_unreliable, scc-only files with implausibly low ccn (#590)
 
 # Per-function complexity backends, by name, with whether their counts are
 # approximate. `fn_ccn.source` in the stats file lists the ones that scored a
@@ -1024,33 +1021,6 @@ def _scoring_coverage(files: list[tuple[Path, int, float, str]]) -> dict[str, in
     }
 
 
-def _backend_by_language(
-    files: list[tuple[Path, int, float, str]],
-    langs: dict[Path, str],
-    backend_of: dict[Path, str],
-) -> dict[str, str | None]:
-    """Map each scc language to its per-function backend, or None.
-
-    See ``write_stats`` for which languages get a key.
-    """
-    covered: dict[str, str] = {}
-    uncovered: set[str] = set()
-    for path, _loc, metric, _src in files:
-        lang = langs.get(path)
-        if not lang:
-            continue
-        if path in backend_of:
-            covered[lang] = backend_of[path]
-        elif metric > 0 and lang not in DATA_LANGUAGES:
-            uncovered.add(lang)
-    # A language counts as covered only when no file of it with decision points
-    # fell back to scc: partial coverage reads as null, not as the backend.
-    return {
-        lang: (None if lang in uncovered else covered[lang])
-        for lang in covered.keys() | uncovered
-    }
-
-
 def _enrich_row(path: Path, loc: int, ccn: float, src: str, *,
                 aux_data: dict[Path, int] | None,
                 tokens: dict[Path, int], root: Path,
@@ -1108,12 +1078,12 @@ def _fn_ccn_block(files: list[tuple[Path, int, float, str]],
 
     backends_used = sorted({backend_of[f[0]] for f in files
                             if f[0] in backend_of})
-    backend_by_language = _backend_by_language(files, langs, backend_of)
+    by_language = backend_by_language(files, langs, backend_of)
     return {
         "basis": "per-function",
         "source": [{"name": n, "approximate": FN_BACKENDS.get(n, False)}
                    for n in backends_used],
-        "backend_by_language": dict(sorted(backend_by_language.items())),
+        "backend_by_language": dict(sorted(by_language.items())),
         "function_count": len(fn_population),
         **_distribution(fn_population),
     }
@@ -1203,6 +1173,11 @@ def write_stats(files: list[tuple[Path, int, float, str]],
     ``files`` lists every scored file as ``{path, ccn}``, sorted by path and
     uncapped, for the doc-complexity join (issue #556).
 
+    ``complexity_unreliable`` lists the scc-only files whose ccn is an order of
+    magnitude below their language's median density (``lib.scc_coverage``,
+    issue #590); the run reports them as a ``COMPLEXITY_UNRELIABLE`` anomaly.
+    Their rows still rank on the scc figure, which the report labels approximate.
+
     ``top_hotspots``, ``top_complex`` and ``top_large`` each rank on their own
     key (composite score, aggregate ccn, loc) and break ties on the
     repository-relative path, ascending. Files tie often - many share a
@@ -1273,6 +1248,8 @@ def write_stats(files: list[tuple[Path, int, float, str]],
         # doc-complexity join reads it so a complex file outside every top-10
         # list still reaches the join (issue #556).
         "files": file_ccn_rows(enriched),
+        # scc-only files whose ccn is implausibly low for their size (#590).
+        "complexity_unreliable": complexity_unreliable(files, langs, fn_ccn_by_path, root),
     }
 
     out_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")

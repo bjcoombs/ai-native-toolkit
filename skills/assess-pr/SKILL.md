@@ -174,7 +174,7 @@ If the user **selected the PR offer** (no-contributions flow, `NO_CONTRIBUTIONS=
    Snapshot of this codebase's AI-agent readiness, complexity hotspots, and doc navigability as of <YYYY-MM-DD>.
 
    - **AI Readiness:** <X / 8> — <maturity-label>
-   - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window)
+   - **Hotspot leader:** `<top hotspot path>` (<loc> LOC, ccn <N>, <M> commits in window) - write `ccn ~<N> (approximate)` when the row is scc-only (`source` `scc`, `max_fn_ccn` null), and `ccn unreliable` when its path is in `stats_summary.complexity_unreliable`
    - **Top lying map:** `<top stale-hub doc>` (<N>d stale, subject churn <M>)
 
    ## Top 3 Actions
@@ -258,6 +258,8 @@ For each Top 3 Action, the item should contain:
 - **Title**: the action title verbatim from the Top 3 table
 - **Body**: the action detail (Command / First Step, Hotspot files, the "Why these three" reasoning), a small metadata block (Layer, Effort, link to the assessment PR if one was opened), and a one-line footer linking back to the plugin
 - **Tag / Label / Category** that supports idempotency (see 6c)
+
+A ccn figure in the body follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate, file-level scc)`, a path in `stats_summary.complexity_unreliable` gets `ccn unreliable` instead, and neither is offered as the reason the item is prioritised.
 
 Example minimal body shape (adapt to the tracker's conventions):
 

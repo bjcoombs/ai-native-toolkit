@@ -22,7 +22,7 @@ The deterministic parts are not yours to invent - you paste them. You write the 
 The layers above each measure one axis. The deterministic core also crosses those axes against each other and emits ten named findings - the "where to look" signals no single layer surfaces. Read them once, after the per-layer scans:
 
 ```bash
-jq '.derived_findings, .attention, .attention_low_signal, .keyhole_summary, .prescribed_actions, .gap_actions' "$REPO_ROOT/.assess/run-context.json"
+jq '.derived_findings, .attention, .attention_low_signal, .keyhole_summary, .prescribed_actions, .gap_actions, .stats_summary.complexity_unreliable' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 `derived_findings` is a fixed-order list of ten `{name, paths, action}` objects - all ten always present, `paths` may be empty. Omit a finding from the report when its `paths` is empty. Each pairs an axis-crossing with the action it implies:
@@ -97,6 +97,8 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 
 **Keyhole-size the action.** When an action targets code (not config), prefer the *function* over the *file*: the stats sidecar carries per-function data on each ranked row (`max_fn_ccn` and `max_fn_name`, the worst function's name, filled for files a per-function backend scored - lizard, and the approximate `dart-scanner` for Dart; both are null for files scc scored at file level only), so "extract the dispatch branch of `parseLine` (fn ccn 41), characterization test first" fits one context window where "refactor parser.go (ccn 67)" does not. An action a fresh agent cannot complete inside one keyhole is two actions.
 
+**scc-only ccn is not a priority figure (issue #590).** A row with `source` `scc` and null `max_fn_ccn` carries scc's file-level keyword count, not a parsed complexity, and a path listed in `stats_summary.complexity_unreliable` is one whose count is implausibly low for its size (scc lost its place, often on shell quoting). Never justify an action's rank or order with such a figure: argue from churn, size and the finding instead, and when the figure appears at all write it as "ccn ~N (approximate, file-level scc)" - or "ccn unreliable" for a `complexity_unreliable` path. The Top 3 table is pasted into PR and issue bodies, so this caveat travels with it.
+
 ### Why these three?
 
 <2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the scorecard and to hotspot files where relevant. Be concrete about what each action prevents.>
@@ -126,6 +128,7 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 - **Complexity profile:** per-function ccn p95 <N> (max <M>); file-aggregate ccn p95 <N> (max <M>); p95 est. tokens <N> (max <M>; code <C>, data <D>); p95 NLOC <N> (max <M>; code <C>, data <D>). The code and data maxima come from `max_code` / `max_data` in the `est_tokens` and `loc` blocks (data is scc's JSON, YAML and JSONL); omit a split its snapshot lacks
 - **Top hotspots** (composite `sqrt(effective_ccn) × sqrt(1 + commits) × sqrt(est_tokens)`, with `effective_ccn` the file aggregate weighted toward its worst function: a sub-linear blend of complexity, recent churn, and context-window size, so a file high on *multiple* axes - big AND complex AND churning - is the worst keyhole and leads; a frozen-but-complex file ranks below an equally-sized active one; a churny-but-trivial file can't top on churn alone; and a big-but-simple-stable file can't top on size alone; a co-change breadth term was tested and left out, see the assess skill's `references/hotspot-cochange-experiment.md`). `est_tokens` is the char-based estimate (~chars/4), `ccn` here is the **file aggregate**; the worst single function per file is in parentheses:
   1. `<path>` - <est_tokens> est. tokens (<loc> NLOC), aggregate ccn <N> (worst function `<max_fn_name>` <max_fn_ccn>), <M> commits in window
+     For a row scc scored at file level only (`source` `scc`, `max_fn_ccn` null) write the figure as "aggregate ccn ~N (approximate)", and as "ccn unreliable (scc under-count)" when its path is in `stats_summary.complexity_unreliable`.
   2. ...
   3. ...
 - **Size units:** `loc` in the stats sidecar, and every `LOC` label the core generates (the treemap tooltip, the hotspot pages' `LOC` row, the `index.md` column), is NLOC: code lines with blank and comment lines left out (lizard's count; scc's code count for data files). A file-size ratchet or lint cap, `wc -l`, and the hotspot pages' "lines net" accretion figure count physical lines. Write "<N> NLOC" for the first and "<N> lines" for the second, and never set the two against each other as one file's size: the same file can be 394 NLOC and 723 lines.
