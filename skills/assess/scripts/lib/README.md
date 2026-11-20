@@ -968,7 +968,7 @@ root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
 
 **`instruction_placement.py`**
 Per-section placement of instruction text (#559, part of #419), no model, no grade
-effect. `split_sections` splits a file on ATX headings outside fences and
+effect. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
 frontmatter, at the shallowest level (the next one down when a single heading is a
 document title); deeper headings roll into their section, text before the first
 heading is a section with an empty heading, and a file with no headings is one

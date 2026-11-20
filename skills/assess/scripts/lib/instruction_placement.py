@@ -110,7 +110,7 @@ _POINTER = re.compile(r"\]\(|`[^`\s]+\.(?:md|mdx|rst|txt|adoc)`", re.IGNORECASE)
 
 MAX_RELOCATABLE_PER_FILE = 10
 
-_FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+_FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _INSTRUCTION_BASENAMES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md")
 
@@ -193,21 +193,42 @@ class Classified:
 
 # --- splitting -----------------------------------------------------------------------
 
+def fence_mask(lines: list[str] | tuple[str, ...]) -> list[bool]:
+    """True for each line that is a code fence or inside one (CommonMark rules).
+
+    A fence closes only on a line of the opening character at least as long as
+    the opening run, with nothing after it but whitespace, so a ```` ``` ```` line
+    inside a ``~~~`` block or a shorter run inside a longer fence stays code.
+    An unclosed fence runs to the end of the text.
+    """
+    mask: list[bool] = []
+    opening: str | None = None
+    for line in lines:
+        match = _FENCE.match(line)
+        if opening is None:
+            if match and not (match.group(1)[0] == "`" and "`" in match.group(2)):
+                opening = match.group(1)
+            mask.append(opening is not None)
+            continue
+        mask.append(True)
+        if (match and match.group(1)[0] == opening[0]
+                and len(match.group(1)) >= len(opening) and not match.group(2).strip()):
+            opening = None
+    return mask
+
+
 def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
     """(0-based line, level, text) for each ATX heading outside fences and frontmatter."""
     out: list[tuple[int, int, str]] = []
-    in_fence = False
     start = 0
     if lines and lines[0].strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
                 start = i + 1
                 break
+    code = fence_mask(lines[start:])
     for i in range(start, len(lines)):
-        if _FENCE.match(lines[i]):
-            in_fence = not in_fence
-            continue
-        match = None if in_fence else _HEADING.match(lines[i])
+        match = None if code[i - start] else _HEADING.match(lines[i])
         if match:
             out.append((i, len(match.group(1)), match.group(2)))
     return out
@@ -253,18 +274,10 @@ def split_sections(text: str) -> list[Section]:
 # --- signals ---------------------------------------------------------------------------
 
 def _fenced_and_prose(lines: tuple[str, ...]) -> tuple[int, list[str]]:
-    fenced = 0
-    prose: list[str] = []
-    in_fence = False
-    for line in lines:
-        if _FENCE.match(line):
-            in_fence = not in_fence
-            fenced += 1
-        elif in_fence:
-            fenced += 1
-        elif line.strip() and not _HEADING.match(line):
-            prose.append(line)
-    return fenced, prose
+    code = fence_mask(lines)
+    prose = [line for line, in_code in zip(lines, code, strict=True)
+             if not in_code and line.strip() and not _HEADING.match(line)]
+    return sum(code), prose
 
 
 def dominant_directory(section: Section) -> str | None:

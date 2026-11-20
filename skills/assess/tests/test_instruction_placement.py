@@ -11,6 +11,7 @@ from lib.instruction_placement import (
     ALWAYS_ON_FLAG_LINES,
     LOADED_IN_FULL_MIN_LINES,
     analyse_file,
+    fence_mask,
     scan_instruction_placement,
     split_sections,
 )
@@ -85,6 +86,27 @@ def test_preamble_before_first_heading_and_fenced_hash_lines() -> None:
     sections = split_sections(text)
     assert [(s.heading, s.start, s.end) for s in sections] == [
         ("", 1, 1), ("A", 2, 5), ("B", 6, 6)]
+
+
+def test_fence_closes_only_on_its_own_character_and_length() -> None:
+    text = (
+        "## A\n"
+        "~~~markdown\n```bash\n# inside tilde\n```\n~~~\n"
+        "````md\n```\n# inside long fence\n```\n````\n"
+        "```py\n# closer has text after it\n``` not a closer\n# still code\n```\n"
+        "## B\n"
+    )
+    sections = split_sections(text)
+    assert [(s.heading, s.start) for s in sections] == [("A", 1), ("B", 17)]
+    assert fence_mask(text.splitlines()) == [False] + [True] * 15 + [False]
+
+
+def test_inline_triple_backticks_do_not_open_a_fence() -> None:
+    assert fence_mask(["```code``` inline", "## H"]) == [False, False]
+
+
+def test_unclosed_fence_runs_to_the_end() -> None:
+    assert [s.heading for s in split_sections("## A\n```\n## not\n")] == ["A"]
 
 
 def test_frontmatter_is_not_split() -> None:
