@@ -25,6 +25,7 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
 
 from lib.fleet import FAILURE_REASONS, STATUS_FAILED, STATUS_OK, FleetRow  # noqa: E402
 from lib.fleet_stamp import FleetStamp  # noqa: E402
+from lib.history_window import WINDOW_PATTERN  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals_schema import type_schema  # noqa: E402
 
@@ -72,7 +73,7 @@ def build_stamp_schema() -> JsonDict:
     props: JsonDict = {name: type_schema(hint) for name, hint in hints.items() if name != "scans"}
     props["scans"] = {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
     props["scan_date"] = {"type": "string", "pattern": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
-    props["window"] = {"type": "string", "pattern": r"^[1-9][0-9]*(d|w|mo|y)$"}
+    props["window"] = {"type": "string", "pattern": f"^{WINDOW_PATTERN}$"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": STAMP_SCHEMA_ID,
