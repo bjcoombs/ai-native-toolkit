@@ -193,7 +193,7 @@ ENDPOINT_PATTERNS: tuple[tuple[str, PackageKind, re.Pattern[str]], ...] = (
     ("jira", "tracker", re.compile(r"/rest/api/(?:2|3|latest)/(?:issue|search)\b")),
     ("linear", "tracker", re.compile(r"\bapi[.]linear[.]app\b")),
     ("github", "git_host", re.compile(r"\bapi[.]github[.]com\b")),
-    ("gitlab", "git_host", re.compile(r"/api/v4/projects\b")),
+    ("gitlab", "git_host", re.compile(r"/api/v4/project[s]\b")),
 )
 
 # A CI job that runs an agent: (slug, pattern), matched per CI file.

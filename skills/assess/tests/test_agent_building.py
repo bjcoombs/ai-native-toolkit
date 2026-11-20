@@ -9,13 +9,23 @@ import pytest
 
 from lib import agent_manifests as m
 from lib.agent_building import (
+    CLASSES,
     AgentBuildingBlock,
     classify,
     is_test_path,
     scan_agent_building,
 )
-from lib.agent_building_vocab import lookup, normalise
+from lib.agent_building_vocab import (
+    CI_AGENT_PATTERNS,
+    ENDPOINT_PATTERNS,
+    MCP_SERVER_PATTERNS,
+    PACKAGES,
+    TOOL_LOOP_PATTERNS,
+    lookup,
+    normalise,
+)
 from lib.counts_only import counts_only_scans
+from lib.counts_only_rules import TOKEN_RE
 from lib.scan_registry import SCANS
 
 # ── fixture repositories, one per class ─────────────────────────────────────
@@ -173,12 +183,20 @@ def test_symlinked_config_is_not_credited(tmp_path: Path) -> None:
     assert scan_agent_building(repo)["config"] == []
 
 
-def test_the_toolkit_itself_is_not_an_agent_builder() -> None:
-    # The scan's own pattern source must never match itself.
-    root = Path(__file__).resolve().parents[3]
-    block = scan_agent_building(root)
-    assert block["agent_class"] in ("uses-agent-tooling", "none")
-    assert block["tool_loop_files"] == 0 and block["mcp_server_files"] == 0
+@pytest.mark.parametrize("module", [
+    "agent_building.py", "agent_building_vocab.py", "agent_manifests.py", "fleet_agent_building.py"])
+def test_the_scan_never_matches_its_own_source(module: str) -> None:
+    text = (Path(__file__).resolve().parents[1] / "scripts" / "lib" / module).read_text(encoding="utf-8")
+    # The patterns matched against source files (the CI patterns read CI files only).
+    patterns = [*TOOL_LOOP_PATTERNS, *MCP_SERVER_PATTERNS, *(p for _, _, p in ENDPOINT_PATTERNS)]
+    assert [p.pattern for p in patterns if p.search(text)] == []
+
+
+def test_every_reported_string_is_a_counts_only_token() -> None:
+    slugs = {slug for slug, _ in PACKAGES.values()} | {slug for slug, _, _ in ENDPOINT_PATTERNS}
+    slugs |= {slug for slug, _ in CI_AGENT_PATTERNS} | set(CLASSES)
+    slugs |= {"instruction_file", "mcp_json", "claude_agents", "ci_agent_job"}
+    assert [s for s in sorted(slugs) if not TOKEN_RE.match(s)] == []
 
 
 # ── class rule ──────────────────────────────────────────────────────────────

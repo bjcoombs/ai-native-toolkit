@@ -361,3 +361,21 @@ def test_agent_clusters_are_unnamed_unless_asked(froot, tmp_path, monkeypatch, c
     assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams",
                            "--name-agent-clusters"]) == 0
     assert json.loads((tmp_path / "out" / "agent_clusters.json").read_text(encoding="utf-8"))["named"] is True
+
+
+def test_similar_agent_builders_in_two_groups_are_one_unnamed_cluster(tmp_path, monkeypatch):
+    root = tmp_path / "agents"
+    loop = 'if response.stop_reason == "tool_use":\n    pass\n'
+    for repo in ("team-alpha/ticket-agent", "team-beta/mr-agent"):
+        make_repo(root, repo, files={"requirements.txt": "anthropic\npython-gitlab\njira\n", "agent.py": loop})
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(root), "--out", "out", "--no-history", "--no-diagrams", "--jobs", "1"]) == 0
+    text = (tmp_path / "out" / "agent_clusters.json").read_text(encoding="utf-8")
+    result = json.loads(text)
+    assert [(c["size"], c["groups"], c["pairing"]) for c in result["clusters"]] == [(2, 2, True)]
+    for name in ("team-alpha", "team-beta", "ticket-agent", "mr-agent"):
+        assert name not in text
+    assert fleet_cli.main([str(root), "--out", "out", "--no-history", "--no-diagrams", "--jobs", "1",
+                           "--name-agent-clusters"]) == 0
+    named = json.loads((tmp_path / "out" / "agent_clusters.json").read_text(encoding="utf-8"))
+    assert named["clusters"][0]["repo_ids"] == ["team-alpha/ticket-agent", "team-beta/mr-agent"]

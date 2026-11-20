@@ -30,8 +30,9 @@ size, how many groups it spans, the union and intersection of its members'
 SDK slugs, and its pairing value. The repository ids and group names of its
 members appear only when the caller passes ``name=True`` (``fleet.py
 --name-agent-clusters``, off by default), in either output mode. Clusters are
-ordered by size (largest first), then SDK union, then pairing, so the order
-never depends on a repository name; ids (``c1``, ``c2`` ...) follow that order.
+ordered by size (largest first), then SDK union, pairing, groups spanned and
+shared SDKs, so the order of unnamed clusters never depends on a repository
+name (clusters equal on all of these print identically); ids (``c1``, ``c2`` ...) follow that order.
 """
 from __future__ import annotations
 
@@ -196,7 +197,8 @@ def clusters(rows: Iterable[FleetRow], name: bool = False) -> AgentClusters:
     evidence = sum(1 for row in rows if _block(row) is not None)
     members = _members(rows)
     found = [_cluster(component, name) for component in _components(members)]
-    found.sort(key=lambda c: (-c["size"], c["sdks"], c["pairing"], c.get("repo_ids", [])))
+    found.sort(key=lambda c: (-c["size"], c["sdks"], c["pairing"], -c["groups"], c["shared_sdks"],
+                              c.get("repo_ids", [])))
     for index, cluster in enumerate(found, start=1):
         cluster["id"] = f"c{index}"
     return {
