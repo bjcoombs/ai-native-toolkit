@@ -117,7 +117,7 @@ Enter the top 10: `packages/vite/src/node/plugins/importAnalysisBuild.ts` at 9 (
 
 - Three repositories and one commit each. The data show how much the term reorders the list. They cannot show whether either order better predicts agent failure: no dataset links these files to agent outcomes.
 - Breadth counts every file in the commit, including documentation, lockfiles and version bumps. In a repository that squash-merges PRs, it measures PR size, which follows house rules as well as code coupling.
-- Renames are not followed, the same as the churn count, which is why this repository gives one observation instead of three windows.
+- Renames are not followed (the churn count follows them since issue #425), which is why this repository gives one observation instead of three windows.
 
 ## Reopening the question
 

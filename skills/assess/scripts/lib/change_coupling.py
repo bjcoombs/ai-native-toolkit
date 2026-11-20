@@ -29,6 +29,8 @@ from itertools import combinations
 from pathlib import Path
 from typing import TypedDict
 
+from lib.agent_identity import AI_EMAIL_HINTS as AI_EMAIL_HINTS
+from lib.agent_identity import coauthors_have_agent, identity_is_agent
 from lib.run_context_types import CoChangePair as CoChangePair
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
@@ -43,20 +45,9 @@ GIT_TIMEOUT_SECONDS = 20
 # commit total (the support_pct denominator).
 MAX_COMMIT_FILES_FOR_COUPLING = 50
 
-# --- Agent detection (e-mail based, conservative) ----------------------------
-# We classify by e-mail, NEVER by display name: "Claude", "Cursor" and "Codex"
-# are all real human given names/surnames, and mislabelling a person's work as
-# agent-generated is the failure mode PRD Open Question 6 tells us to avoid.
-# `[bot]` is the GitHub Apps convention (dependabot, renovate, github-actions,
-# copilot all commit as `name[bot]`); the anthropic/copilot addresses cover the
-# common Co-Authored-By trailers. We deliberately do NOT treat bare
-# `noreply@github.com` / `users.noreply.github.com` as a bot - those are the
-# privacy addresses humans use for web-UI commits.
-AI_EMAIL_HINTS = (
-    "[bot]",
-    "noreply@anthropic.com",
-    "copilot@",
-)
+# Agent detection (e-mail based, conservative) lives in lib.agent_identity: one
+# definition shared with the promissory-marker clock, the understanding analysis
+# and the AI-assisted change share. AI_EMAIL_HINTS is re-exported for callers.
 
 _CO_AUTHORED_BY = re.compile(r"co-authored-by:\s*(.+)", re.IGNORECASE)
 
@@ -371,36 +362,6 @@ def containment_ratio(
     return only / touching
 
 
-def _identity_is_agent(email: str, name: str = "") -> bool:
-    """True if an identity belongs to a known bot/agent.
-
-    Matches the ``[bot]`` GitHub Apps marker in either name or e-mail (a reserved
-    convention no human carries, so safe to match on the name), plus the
-    AI-tool e-mail hints. AI tool *names* ("Claude", "Cursor") are never matched
-    - those are real human names too (PRD Open Question 6).
-    """
-    e = email.lower()
-    n = name.lower()
-    if "[bot]" in e or "[bot]" in n:
-        return True
-    return any(hint in e for hint in AI_EMAIL_HINTS)
-
-
-def _coauthors_have_agent(coauthor_field: str) -> bool:
-    """True if any Co-Authored-By trailer names an agent (matched on its e-mail)."""
-    # Trailer values look like "Claude <noreply@anthropic.com>"; we match the
-    # bracketed e-mail, never the display name.
-    for value in coauthor_field.split("\x1d"):
-        value = value.strip()
-        if not value:
-            continue
-        emails = re.findall(r"<([^>]+)>", value)
-        target = emails[0] if emails else value
-        if _identity_is_agent(target):
-            return True
-    return False
-
-
 def authorship_analysis(repo_root: Path, path: Path | str) -> Authorship:  # noqa: C901  # multi-signal B4 heuristic; ccn 19, ratchet target
     """B4: human-anchor / intent-source signals and a conservative class for ``path``.
 
@@ -463,9 +424,9 @@ def authorship_analysis(repo_root: Path, path: Path | str) -> Authorship:  # noq
         _h, an, ae, cn, ce, coauthors = fields[:6]
         total_commits += 1
 
-        author_agent = _identity_is_agent(ae, an)
-        committer_agent = _identity_is_agent(ce, cn)
-        coauthor_agent = _coauthors_have_agent(coauthors)
+        author_agent = identity_is_agent(ae, an)
+        committer_agent = identity_is_agent(ce, cn)
+        coauthor_agent = coauthors_have_agent(coauthors)
         author_human = bool(ae.strip()) and "@" in ae and not author_agent
         committer_human = bool(ce.strip()) and "@" in ce and not committer_agent
 

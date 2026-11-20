@@ -16,7 +16,7 @@ import math
 import re
 import subprocess
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -30,6 +30,7 @@ from lib.assess_config import (
     ASSESS_DIR as ASSESS_OUTPUT_DIR,
     CONFIG_FILE as ASSESS_CONFIG_FILE,
 )
+from lib.change_coupling import build_rename_map
 from lib.run_context_types import BulkCommit, JsonDict
 
 # Cap every git call so a stuck invocation (huge repo, lock contention, a hung
@@ -54,22 +55,48 @@ ASSESS_EXCLUDE_PATHSPEC = f":(exclude){ASSESS_OUTPUT_DIR}"
 ASSESS_CONFIG_PATHSPEC = f"{ASSESS_OUTPUT_DIR}/{ASSESS_CONFIG_FILE}"
 
 
+def rename_paths(root: Path) -> dict[str, str]:
+    """``build_rename_map(root).paths``, with a stderr note when the map is
+    incomplete: git history could not be read for renames, so churn falls back
+    to counting each commit under the name it used (issue #425)."""
+    rename_map = build_rename_map(root)
+    if not rename_map.complete:
+        print("note: rename history unreadable - churn does not follow renames "
+              "on this run.", file=sys.stderr)
+    return rename_map.paths
+
+
+def _remapped(rel: str, renames: Mapping[str, str] | None) -> str:
+    """``rel`` (relative to the git top) under its current name."""
+    return renames.get(rel, rel) if renames else rel
+
+
 def git_churn_scores(
-    root: Path, since: str | None = None, scope: Path | None = None
+    root: Path, since: str | None = None, scope: Path | None = None,
+    renames: Mapping[str, str] | None = None,
 ) -> dict[Path, int]:
     """Return {abs_path: commit_count} for files under root tracked in git.
 
     Returns empty dict if root is not inside a git repo. Commit counts are
     over the full history reachable from HEAD by default. Pass `since` as
     a git-compatible date expression (e.g. "6 months ago") to window the
-    count. Renames are not followed - a file gets credit only under its
-    current name.
+    count.
+
+    `renames` maps historical paths (relative to the git top) to current ones,
+    as ``change_coupling.build_rename_map`` gives them (issue #425). A commit
+    on an old name is credited to the file's current name, and a commit that
+    touches a file under two names counts once, so a file committed five times,
+    renamed, then committed once scores 7, the count ``git log --follow``
+    gives. Without it renames are not followed. Git's own rename detection is
+    off (``--no-renames``) either way, so the count does not depend on the
+    reader's ``diff.renames`` setting.
 
     `scope` (an absolute path under `root`) restricts the churn to a subtree:
     git only walks that pathspec and the results are filtered to files under
-    it. Omit it (the default) for a whole-repo run - the output is then
-    byte-identical to before. Used by `/assess <path>` monorepo scoping so a
-    scoped assessment carries no churn signal from a sibling directory.
+    it. Omit it (the default) for a whole-repo run. Used by `/assess <path>`
+    monorepo scoping so a scoped assessment carries no churn signal from a
+    sibling directory. The pathspec does not reach a scoped file's history
+    under an old name outside the subtree.
     """
     try:
         repo_top = subprocess.run(
@@ -82,8 +109,8 @@ def git_churn_scores(
     repo = Path(repo_top).resolve()
     scope_abs = scope.resolve() if scope is not None else None
 
-    cmd = ["git", "-C", repo_top, "log",
-           "--pretty=format:", "--name-only"]
+    cmd = ["git", "-C", repo_top, "-c", "core.quotepath=off", "log",
+           "--pretty=format:%x00", "--name-only", "--no-renames"]
     if since:
         cmd.append(f"--since={since}")
     if scope_abs is not None:
@@ -97,22 +124,77 @@ def git_churn_scores(
         return {}
 
     counts: dict[Path, int] = {}
+    for commit in raw.split("\x00"):
+        touched: set[Path] = set()
+        for line in commit.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            path = (repo / _remapped(line, renames)).resolve()
+            if not path.is_relative_to(root):
+                continue
+            # A pathspec narrows which commits git walks, but a commit that
+            # touches a scoped file can also touch a sibling one; drop those so
+            # the count is strictly the subtree's.
+            if scope_abs is not None and not path.is_relative_to(scope_abs):
+                continue
+            touched.add(path)
+        for path in touched:
+            counts[path] = counts.get(path, 0) + 1
+    return counts
+
+
+def commit_epochs_by_file(
+    repo_root: Path, since: str | None,
+    renames: Mapping[str, str] | None = None,
+) -> dict[Path, list[tuple[int, int]]] | None:
+    """{abs_path: [(author epoch, commit index)]} over the churn window.
+
+    The per-commit counterpart of `git_churn_scores`: the same walk and the
+    same `renames` remap, keeping each commit's author time (`%at`, the clock
+    the doc side uses) so a caller can count only the commits after a given
+    moment. The commit index lets a caller count distinct commits rather than
+    file-commits; a commit appears once per file even when it touches the file
+    under two names. Paths outside `repo_root` are dropped. None when git fails.
+    """
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            FileNotFoundError):
+        return None
+    top_path = Path(top).resolve()
+    root = repo_root.resolve()
+    cmd = ["git", "-C", top, "-c", "core.quotepath=off", "log",
+           "--pretty=format:%x00%at", "--name-only", "--no-renames"]
+    if since:
+        cmd.append(f"--since={since}")
+    cmd += ["--", str(root)]
+    try:
+        raw = subprocess.run(
+            cmd, capture_output=True, text=True, check=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            FileNotFoundError):
+        return None
+    epochs: dict[Path, list[tuple[int, int]]] = {}
+    current = (0, -1)
     for line in raw.splitlines():
         line = line.strip()
-        if not line:
-            continue
-        path = (repo / line).resolve()
-        try:
-            path.relative_to(root)
-        except ValueError:
-            continue
-        # A pathspec narrows which commits git walks, but a commit that touches
-        # a scoped file can also touch a sibling one; drop those so the count is
-        # strictly the subtree's.
-        if scope_abs is not None and not path.is_relative_to(scope_abs):
-            continue
-        counts[path] = counts.get(path, 0) + 1
-    return counts
+        if line.startswith("\x00"):
+            current = (int(line[1:] or 0), current[1] + 1)
+        elif line:
+            path = (top_path / _remapped(line, renames)).resolve()
+            if not path.is_relative_to(root):
+                continue
+            seen = epochs.setdefault(path, [])
+            if not seen or seen[-1] != current:
+                seen.append(current)
+    return epochs
 
 
 def git_commit_info(root: Path) -> JsonDict:
@@ -516,7 +598,7 @@ def is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
 
 
 def pick_churn_window(
-    root: Path, file_paths: list[Path],
+    root: Path, file_paths: list[Path], renames: Mapping[str, str] | None = None,
 ) -> tuple[dict[Path, int] | None, str | None]:
     """Walk CHURN_WINDOWS narrowest-to-widest; return the first window
     that gives both gradient depth and visual coverage. Falls back to
@@ -525,13 +607,16 @@ def pick_churn_window(
     `file_paths` is the set of scored files; "touched" means touched AND
     scoreable, so coverage % is comparable across windows. Returns
     (per-file-count-dict, "commits (<label>)") or (None, None) when the
-    path isn't inside a git repo.
+    path isn't inside a git repo. Every window follows renames through
+    `renames` (as for `git_churn_scores`), built once here when omitted.
     """
+    if renames is None:
+        renames = rename_paths(root)
     total_files = max(len(file_paths), 1)
     widest_fallback: tuple[dict[Path, int], str] | None = None
 
     for label, since in CHURN_WINDOWS:
-        data = git_churn_scores(root, since=since)
+        data = git_churn_scores(root, since=since, renames=renames)
         if not data:
             continue
         scored_hits = {p: data[p] for p in file_paths if p in data}
