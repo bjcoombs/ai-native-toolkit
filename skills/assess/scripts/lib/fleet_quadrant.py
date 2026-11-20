@@ -89,9 +89,10 @@ def repo_points(levels: Rubric, repos: Sequence[FleetRow]) -> list[RepoPoint]:
 
 
 def median_commits(points: Sequence[RepoPoint]) -> int:
-    """The lower median commit count of the plotted points (0 for none)."""
+    """The lower median commit count of the plotted points, at least 1, so a repository
+    with no commits is never "busy" even in a quiet window."""
     counts = sorted(p["commits"] for p in points if p["commits"] is not None)
-    return counts[(len(counts) - 1) // 2] if counts else 0
+    return max(counts[(len(counts) - 1) // 2] if counts else 0, 1)
 
 
 def at_risk(point: RepoPoint, split: int) -> bool:

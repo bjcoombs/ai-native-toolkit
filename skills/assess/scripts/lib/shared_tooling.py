@@ -122,10 +122,16 @@ def _strip_comment(line: str) -> str:
     return line
 
 
+def pin(ref: str | None) -> str | None:
+    """A pinned ref as recorded: None when absent or when it holds a CI variable (``$TPL_REF``),
+    whose value the file does not say, so ``--full`` and counts-only agree."""
+    ref = (ref or "").strip()
+    return None if not ref or "$" in ref else ref
+
+
 def _component_ref(raw: str) -> str | None:
     """``host/group/project/name@1.0`` -> ``1.0``; None without a version."""
-    ref = raw.partition("@")[2].strip()
-    return ref or None
+    return pin(raw.partition("@")[2])
 
 
 def _component_source(raw: str) -> str:
@@ -277,7 +283,7 @@ def gitlab_includes(text: str, path: str, tracked: bool) -> list[CiInclude]:
     """``include: project:`` / ``include: component:`` entries in a GitLab CI file."""
     entries: list[CiInclude] = []
     keys = _include_keys(text)
-    refs = {item: _unquote(v) or None for _, k, v, item in keys if k == "ref"}
+    refs = {item: pin(_unquote(v)) for _, k, v, item in keys if k == "ref"}
     for number, key, raw_value, item in keys:
         value = _unquote(raw_value)
         if not value or key == "ref":
@@ -359,7 +365,7 @@ def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInc
             "kind": "github_reusable_workflow",
             "source": repo,
             "id": f"github_reusable_workflow:{repo.lower()}",
-            "ref": match.group(2),
+            "ref": pin(match.group(2)),
             "path": path,
             "line": number,
             "tracked": tracked,

@@ -103,7 +103,16 @@ def test_busy_immature_repositories_take_the_alarm_colour():
     split = fq.median_commits(plotted)
     risky = sorted(p["repo"] for p in plotted if fq.at_risk(p, split))
     assert risky == ["mobile/ios", "payments/api", "payments/ledger"]
-    assert fq.median_commits([]) == 0
+    assert fq.median_commits([]) == 1
+
+
+def test_in_a_quiet_window_a_repository_with_no_commits_is_never_busy():
+    quiet: list[fq.RepoPoint] = [
+        {"repo": f"g/r{i}", "commits": c, "maturity": 0.0, "measured_rows": 1, "team_rows": 1}
+        for i, c in enumerate((0, 0, 3))]
+    split = fq.median_commits(quiet)
+    assert split == 1
+    assert [fq.at_risk(p, split) for p in quiet] == [False, False, True]
 
 
 def test_quadrant_labels_never_overlap_each_other_points_or_captions():
