@@ -19,6 +19,7 @@ Exit codes:
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
+        [--counts-only [--hash-paths | --hash-salt VALUE]]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -39,6 +40,12 @@ sys.dont_write_bytecode = True
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.counts_only import (  # noqa: E402
+    add_cli_arguments,
+    counts_only_scans,
+    hash_options,
+    validate_cli_args,
+)
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
     UnknownScanError,
@@ -63,7 +70,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--window", default=DEFAULT_WINDOW,
         help="History window recorded in the run stamp, e.g. 6mo, 90d, 12w, 1y (default: %(default)s).",
     )
-    return parser.parse_args(argv)
+    add_cli_arguments(parser)
+    parsed = parser.parse_args(argv)
+    validate_cli_args(parser, parsed)
+    return parsed
 
 
 def _inside(path: Path, root: Path) -> bool:
@@ -94,6 +104,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     document = build_document(repo_root, requested, args.window)
+    if args.counts_only:
+        # Content-free mode: free text, identities and the target's commit
+        # are dropped; references/counts-only.md lists what each block keeps.
+        hash_paths, salt = hash_options(args)
+        document["scans"] = counts_only_scans(document["scans"], hash_paths=hash_paths, salt=salt)
+        document["stamp"]["target_head"] = None
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")
     return 0
 
