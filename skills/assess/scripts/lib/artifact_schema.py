@@ -126,14 +126,18 @@ constant each.
 # marker drops modularity_q and opens its reason with a code: no_grimp,
 # no_networkx, grimp_failed or no_python_packages). run-context.json and
 # complexity-stats.json are otherwise unchanged.
-# 1.19.0: run-context.json structure gains language (issues #707, #708), the
+# 1.19.0: run-context.json gains ci_checks (issue #698): ci_files,
+# check_commands, included_files, test_or_lint_runs (null when no CI line runs
+# a check but a CI file pulls jobs from elsewhere) and basis. Additive, and
+# complexity-stats.json is unchanged.
+# 1.20.0: run-context.json structure gains language (issues #707, #708), the
 # language of the measured import graph (the largest, one graph per language),
 # null when none was measured. An unavailable block's reason names the dominant
 # source language: no_import_graph_<language>, no_python_packages for a Python
 # repository, no_source_files with no source. Additive: no existing key moves, a
 # Python repository's values are unchanged, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.19.0"
+ARTIFACT_SCHEMA_VERSION = "1.20.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

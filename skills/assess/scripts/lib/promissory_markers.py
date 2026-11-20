@@ -61,12 +61,14 @@ try:
     from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
     from lib.python_regions import PyRegions, load_regions
+    from lib.tool_lookup import RG_MISSING_REASON, find_rg
 except ImportError:  # standalone CLI: script dir is lib/, put scripts/ on path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
     from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
     from lib.python_regions import PyRegions, load_regions
+    from lib.tool_lookup import RG_MISSING_REASON, find_rg
 
 # Default: a marker is stale once this many commits to its file landed after it.
 STALE_TOUCHES_DEFAULT = 5
@@ -354,7 +356,7 @@ def _unavailable_summary(reason: str) -> dict[str, Any]:
 
 def _run(cmd: list[str], cwd: Path) -> str:
     out = subprocess.run(
-        cmd, cwd=cwd, capture_output=True, text=True, errors="replace"
+        cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     return out.stdout
 
@@ -372,12 +374,12 @@ def _extra_globs(
     return globs
 
 
-def _detect(repo_root: Path, extra_globs: list[str]) -> list[Marker]:
+def _detect(repo_root: Path, extra_globs: list[str], rg: str = "rg") -> list[Marker]:
     """Stage 1: one rg pass per family, comment-context filtered."""
     markers: list[Marker] = []
     regions: dict[str, PyRegions | None] = {}
     for family, pattern in FAMILY_PATTERNS.items():
-        cmd = ["rg", "-n", "--no-heading", "--no-messages", "-e", pattern]
+        cmd = [rg, "-n", "--no-heading", "--no-messages", "-e", pattern]
         for g in [*EXCLUDE_GLOBS, *extra_globs]:
             cmd += ["--glob", g]
         cmd.append(".")
@@ -614,7 +616,7 @@ def _classify_authorship(repo_root: Path, markers: list[Marker]) -> None:
         ["git", "log", "--no-walk", "--stdin",
          "--format=%H%x02%ae%x02%an%x02%(trailers:key=Co-Authored-By,valueonly,separator=%x1d)"],
         cwd=repo_root, input="\n".join(shas), capture_output=True,
-        text=True, errors="replace",
+        text=True, encoding="utf-8", errors="replace",
     ).stdout
     agent_by_sha: dict[str, bool] = {}
     for ln in out.splitlines():
@@ -661,16 +663,18 @@ def scan_promissory_markers(
     unactioned-intent signal from a sibling directory. Omit it for a whole-repo
     run.
     """
+    # RG_PATH, then PATH, then the WinGet package folder; bare "rg" as a last try.
+    rg = find_rg() or "rg"
     try:
-        subprocess.run(["rg", "--version"], capture_output=True, check=True)
+        subprocess.run([rg, "--version"], capture_output=True, check=True)
     except (OSError, subprocess.CalledProcessError):
-        return MarkerScan(available=False, reason="rg not on PATH")
+        return MarkerScan(available=False, reason=RG_MISSING_REASON)
     if not (repo_root / ".git").exists():
         return MarkerScan(available=False, reason="not a git repository root")
 
     try:
         markers = _detect(
-            repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns)
+            repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns), rg
         )
         if scope is not None:
             scope_abs = scope.resolve()

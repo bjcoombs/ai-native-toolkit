@@ -94,6 +94,11 @@ ever cut, this note is where the intended boundary is written down.
 
 ## Module reference
 
+Windows portability (#712): every text-mode `subprocess.run` names
+`encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
+round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
+`tests/test_windows_portability.py` guards both across `scripts/`.
+
 ### Data collection
 
 **`git_churn.py`**
@@ -754,6 +759,19 @@ map reads `no_ownership_map` (the full run omits the block), and `stats_summary`
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
+**`tool_lookup.py`**
+Finds the external tools the headless scans need, Windows included (#711). `find_rg`
+resolves ripgrep from `RG_PATH` (when it names a file), then `shutil.which`, then on
+Windows only the WinGet package folder
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\BurntSushi.ripgrep*` (searched recursively
+for `rg.exe`, last path in sorted order), since a user-scope winget install may not create the
+`Links` alias. `RG_MISSING_REASON` names the three lookups and keeps the substring
+`rg not on PATH` that `headless_layers.promissory_markers` maps to `no_rg`.
+`missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
+do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
+stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
+exit codes do not change. Standard library only. Tests: `tests/test_tool_lookup.py`.
+
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
 `SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
@@ -776,7 +794,7 @@ same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
 `checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
-`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0` and `PYTHONUTF8=1` (#712), counts-only unless
 told otherwise, from a scratch directory, with a timeout; every failure becomes a
 `failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
 message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
@@ -1062,6 +1080,9 @@ checkout that is not a main clone at its work-tree root, one holding a protected
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
 output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
+The `rmtree` error hook (`_clear_read_only`, #712) makes a read-only file writable and
+retries its deletion once, since Windows refuses to delete git's read-only objects; any
+other failure keeps the clone as `delete_error`.
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
@@ -1924,7 +1945,8 @@ deadline can go stale too. The `unactioned_intent` action states the
 `stale_touches_threshold` it applied. Honours the shared excludes and the
 generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
 degrades aging to `aging_reliable: False` on degenerate history (same verdict as
-`git_churn`).
+`git_churn`). The `rg` binary comes from `tool_lookup.find_rg`, resolved once per
+scan; when none runs the scan is unavailable with `tool_lookup.RG_MISSING_REASON`.
 Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
 sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
@@ -2368,6 +2390,42 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`check_command.py`**
+Pure classifier, split from `agent_environment.py` (issue #698) so an offline scan
+can use it without reaching `gh_cli`. `is_check_command(text)` is true for a test
+or check target of a runner `command_resolver.RUNNERS` models (`make test`, `npm
+run ci`, `tox`, the program after `uv run`), or a committed script named for a
+check; an install (`npm ci`, `uv sync --extra test`) never is. `is_check_name(name)`
+splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
+`is_lint_command(text)` walks the same program/target anchoring with `LINT_WORDS`
+(`lint`, `vet`, `clippy` and the linters) and `LINT_PROGRAMS` (`ruff`, `eslint`,
+`mypy` ... run directly), so `make lint` and `npx eslint` count and an install
+naming a linter does not; instruction-file classification does not use it. Used by
+`agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
+lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
+(`test_is_check_command`).
+
+**`ci_checks.py`**
+Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
+maturity model reads it, so the CI row measures CI, not the instruction file.
+`scan_ci_checks(repo_root)` reads the files `command_index.ci_config_files`
+selects (GitHub Actions workflows, `.gitlab-ci.yml`) and writes `{available,
+ci_files, check_commands, included_files, test_or_lint_runs, basis}`. Each line,
+with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
+(`command_index.ci_line_text`), is split into shell segments by
+`command_resolver.extract_commands` on its own (an apostrophe or fence on one line
+cannot swallow the next); `check_commands` counts the lines with a segment that
+`check_command.is_check_command` or `is_lint_command` credits; a bare list item
+that only names a linter (`- mypy` under `matrix:`) does not count. Triggers are
+not read. Known limit: lines are read without a YAML parser, so a command inside a
+non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_runs` is true with any check
+line; with none it is null (`basis: included_jobs`) when a CI file pulls jobs
+from elsewhere (`shared_tooling.pulls_jobs_from_elsewhere`: any top-level GitLab
+`include:`, a job-level `uses:` of another repository's reusable workflow), else
+false (`no_check_command`, or `no_ci` with no CI file). Offline and headless.
+Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
+`tests/test_level_signals.py`.
 
 **`agent_identity.py`**
 The one definition of an agent identity in a git history: `identity_is_agent(email,

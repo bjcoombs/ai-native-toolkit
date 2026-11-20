@@ -130,6 +130,7 @@ from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_sta
 from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
 from lib.level_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
+from lib.tool_lookup import warn_missing_packages  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
     TOOLKIT_ROOT,
@@ -448,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
     for message in freshness.errors:
         print(f"fleet: describes: {message}", file=sys.stderr)
     freshness_path = write_freshness(out_dir, freshness.rows)
+    # Each scan runs with this interpreter: one hint here, not one per repository.
+    warn_missing_packages()
     rows = run_fleet(targets, options, args.jobs, after=deleter)
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
