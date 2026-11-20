@@ -115,10 +115,13 @@ def parse_window(window: str) -> str:
     return window
 
 
-def build_inputs(repo_root: Path) -> dict[str, Any]:
+def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is None: a headless run measures the whole checkout.
+    ``history_window`` carries ``--window`` for history-reading scans (#547);
+    ``run_scans`` resolves only the names a scan reads, so it is harmless
+    while no registered scan reads it.
     """
     instruction_files = grade_instruction_files(repo_root)[0]
     return {
@@ -126,6 +129,7 @@ def build_inputs(repo_root: Path) -> dict[str, Any]:
         "instruction_files": instruction_files,
         "scope": None,
         "excludes": load_excludes(repo_root),
+        "history_window": window,
     }
 
 
@@ -147,7 +151,10 @@ def _unavailable(reason: str) -> JsonDict:
     return {"available": False, "reason": reason}
 
 
-def collect(repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SCANS) -> dict[str, JsonDict]:
+def collect(
+    repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SCANS,
+    window: str = DEFAULT_WINDOW,
+) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read) offline; one block per name."""
     needed = _with_dependencies(selected, specs)
     ctx: dict[str, Any] = {}
@@ -162,7 +169,7 @@ def collect(repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] 
         else:
             ctx[spec.key] = _unavailable(NETWORK_REASON)
     if runnable:
-        inputs = build_inputs(repo_root)
+        inputs = build_inputs(repo_root, window)
         for stage in STAGES:
             run_scans(ctx, inputs, stage, runnable)
     return {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected}
@@ -230,5 +237,5 @@ def build_document(
     return {
         "signals_schema_version": SIGNALS_SCHEMA_VERSION,
         "stamp": build_stamp(repo_root, window, toolkit_root),
-        "scans": collect(repo_root, selected, specs),
+        "scans": collect(repo_root, selected, specs, window),
     }

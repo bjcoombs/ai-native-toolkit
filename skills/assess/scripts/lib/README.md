@@ -480,7 +480,8 @@ not `network`, or one that cannot take the spec's reads.
 The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
-`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`), so a raising
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`, and
+`history_window` set to `--window` for history-reading scans), so a raising
 scan degrades through `safe` and the run completes. A `network` scan runs its
 `offline_fn` or is reported `{"available": false, "reason": NETWORK_REASON}`. Names in
 `UNREGISTERED_SCANS` (run-context blocks `assess_core` still assigns by hand) are

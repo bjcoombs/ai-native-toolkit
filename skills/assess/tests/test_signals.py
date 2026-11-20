@@ -226,6 +226,14 @@ def test_the_network_flag_marks_exactly_the_gh_scans():
     assert offline <= network
 
 
+def test_the_window_reaches_a_scan_that_reads_history_window(fixture_repo):
+    specs = (ScanSpec("hist", lambda root: {"available": True}, ("repo_root",), reg.STAGE_READ_SIDE),)
+    inputs = signals.build_inputs(fixture_repo, "90d")
+    assert inputs["history_window"] == "90d"
+    assert set(reg.PROVIDED_INPUTS) <= set(inputs)
+    assert signals.collect(fixture_repo, ["hist"], specs, "90d") == {"hist": {"available": True}}
+
+
 def test_window_parsing():
     for good in ("6mo", "90d", "12w", "1y"):
         assert signals.parse_window(good) == good
