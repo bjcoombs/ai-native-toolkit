@@ -66,8 +66,9 @@
 #     Runs scripts/canaries/run_canaries.py, which drives the REAL gates against
 #     the committed and per-run blind fixtures (no mocks). It is the expensive
 #     semantic layer, so it runs only on PRs that touch a protected path -- a
-#     `canary path filter` job diffs the PR against its base and asks
-#     scripts/floor_check.py which of the changed paths are protected. This
+#     `canary path filter` job diffs the PR against its base and asks the base
+#     ref's copy of scripts/floor_check.py which of the changed paths are
+#     protected (failing closed when that copy cannot answer). This
 #     workflow holds NO path list of its own. Protection is decided by directory
 #     ROLE: a marked component and everything beneath it, the gate code the suite
 #     drives, the canary code and its fixtures, and the floor's own machinery
@@ -381,7 +382,7 @@ jobs:
   # uses -- no new third-party action), rather than a workflow-level `paths:`
   # trigger, because floor.yml must keep running on ALL PRs for the two jobs
   # above. The classification itself is not made here: it is a call to the same
-  # script the deterministic layer runs.
+  # script the deterministic layer runs, at the base ref.
   canary-changes:
     name: canary path filter
     runs-on: ubuntu-latest
@@ -412,11 +413,38 @@ jobs:
           # The one path decision this workflow makes, and it delegates it: the
           # script classifies each changed path by directory role and echoes back
           # the protected subset. Whether that subset is empty is the only thing
-          # read here, so this file never learns a path.
+          # read here, so this file never learns a path. The script asked is the
+          # BASE ref's copy, never the pull request's own: a pull request that
+          # edits the classification is still classified by the logic it
+          # changes, so it cannot report itself clean and skip the sign-off
+          # (FLOOR.md clause iii). Any failure to classify with the base copy
+          # (no script at the base, a base that predates the subcommand or
+          # `--role`, a crash) fails closed: every changed path counts as
+          # protected and as floor core, so the canaries run and sign-off is
+          # requested.
           CHANGED="${RUNNER_TEMP}/floor-changed-paths.txt"
           git diff --name-only "${BASE_SHA}" HEAD > "${CHANGED}"
-          PROTECTED="$(python scripts/floor_check.py protected \
-            --base "${BASE_SHA}" --changed < "${CHANGED}")"
+          BASE_SCRIPTS="${RUNNER_TEMP}/floor-base-scripts"
+          mkdir -p "${BASE_SCRIPTS}"
+          CLASSIFY_FAILED=false
+          git show "${BASE_SHA}:scripts/floor_check.py" \
+            > "${BASE_SCRIPTS}/floor_check.py" 2> /dev/null || CLASSIFY_FAILED=true
+          if ! PROTECTED="$(python "${BASE_SCRIPTS}"/floor_check.py protected \
+              --base "${BASE_SHA}" --changed < "${CHANGED}")"; then
+            CLASSIFY_FAILED=true
+          fi
+          # The same delegated decision, asked for one role: a change to the
+          # floor's own core is what needs the maintainer's sign-off (clause
+          # iii). Same base copy, same base, so the two answers cannot drift.
+          if ! FLOOR_CORE="$(python "${BASE_SCRIPTS}"/floor_check.py protected \
+              --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"; then
+            CLASSIFY_FAILED=true
+          fi
+          if [ "${CLASSIFY_FAILED}" = "true" ]; then
+            echo "::warning::scripts/floor_check.py at the base ${BASE_SHA} could not classify the changed paths, so every changed path is treated as protected floor core."
+            PROTECTED="$(cat "${CHANGED}")"
+            FLOOR_CORE="${PROTECTED}"
+          fi
           if printf '%s\n' "${PROTECTED}" | grep -q .; then
             echo "run_canaries=true" >> "$GITHUB_OUTPUT"
             echo "Protected paths changed: canary suite WILL run."
@@ -425,25 +453,21 @@ jobs:
             echo "run_canaries=false" >> "$GITHUB_OUTPUT"
             echo "No protected paths changed: canary suite will be skipped."
           fi
-          # The same delegated decision, asked for one role: a change to the
-          # floor's own core is what needs the maintainer's sign-off (clause
-          # iii). Same script, same base, so the two answers cannot drift.
-          FLOOR_CORE="$(python scripts/floor_check.py protected \
-            --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"
           # The one exemption (FLOOR.md clause iii): a Dependabot pull request
           # whose floor-core change is workflow `uses:` pin bumps alone. Both
-          # the opener and this run's actor (the pusher or re-runner) must be
-          # Dependabot, so a push onto a Dependabot branch is not exempt. The
-          # verdict is the BASE ref's copy of the script, never the pull
-          # request's own, so no pull request can exempt itself; a base that
-          # predates the subcommand exempts nothing.
+          # the opener and this run's actor (whoever pushed the head under
+          # test; a re-run keeps it) must be Dependabot, so a push onto a
+          # Dependabot branch is not exempt. The verdict is the BASE ref's
+          # copy of the script, never the pull request's own, so no pull
+          # request can exempt itself; a base that predates the subcommand,
+          # or a classification that failed closed, exempts nothing.
           PIN_BUMP_ONLY=false
-          if printf '%s\n' "${FLOOR_CORE}" | grep -q . \
+          if [ "${CLASSIFY_FAILED}" = "false" ] \
+              && printf '%s\n' "${FLOOR_CORE}" | grep -q . \
               && [ "${PR_AUTHOR}" = "dependabot[bot]" ] \
               && [ "${PR_ACTOR}" = "dependabot[bot]" ]; then
-            CHECKER="${RUNNER_TEMP}/floor_check_base.py"
-            if git show "${BASE_SHA}:scripts/floor_check.py" > "${CHECKER}" 2> /dev/null \
-                && python "${CHECKER}" pin-bump-only --help > /dev/null 2>&1 \
+            CHECKER="${BASE_SCRIPTS}/floor_check.py"
+            if python "${CHECKER}" pin-bump-only --help > /dev/null 2>&1 \
                 && python "${CHECKER}" pin-bump-only --base "${BASE_SHA}"; then
               PIN_BUMP_ONLY=true
             fi

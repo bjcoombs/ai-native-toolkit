@@ -122,6 +122,9 @@ ARTIFACT_SCHEMA_VERSION = "1.12.0"
 #    whole-file size curve (issue #560), which moves instruction grades.
 # 8: a bats suite is a test file and credits its shell script (issue #593), so a
 #    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
-# 9: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
-#    owns its skill directory's code in doc staleness and the complexity join.
-ASSESS_METHOD_VERSION = 9
+# 9: a parallel-tree ``run.bats`` equally close to a ``run.sh`` and an
+#    extensionless ``run`` credits neither (issue #635), so a test_focus signal or a
+#    hotspot "Has test file" row can move.
+# 10: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
+#     owns its skill directory's code in doc staleness and the complexity join.
+ASSESS_METHOD_VERSION = 10

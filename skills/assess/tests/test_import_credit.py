@@ -399,6 +399,11 @@ def test_bats_load_prefers_dot_bash_like_bats_core(tmp_path: Path) -> None:
     "source '$BATS_TEST_DIRNAME/../scripts/common.sh'",  # literal $ in single quotes
     'true # disabled; source "$BATS_TEST_DIRNAME/../scripts/common.sh"',
     'run x  # load ../scripts/common.sh',
+    # Issue #635: braced and loaded single-quoted anchors, and a ``.`` command
+    # behind an inline comment, are as dead as the plain forms.
+    "source '${BATS_TEST_DIRNAME}/../scripts/common.sh'",
+    "load '$BATS_TEST_DIRNAME/../scripts/common.sh'",
+    'true # off; . "$BATS_TEST_DIRNAME/../scripts/common.sh"',
 ])
 def test_bats_single_quoted_anchor_or_trailing_comment_credits_nothing(
     tmp_path: Path, line: str,
@@ -414,3 +419,27 @@ def test_bats_hash_inside_quotes_is_not_a_comment(tmp_path: Path) -> None:
                           'echo "a # b"; source "$BATS_TEST_DIRNAME/../scripts/common.sh"'
                           + BATS_TEST})
     assert _credited(tmp_path, "scripts/common.sh") is True
+
+
+def test_bats_single_quoted_tail_after_a_double_quoted_anchor_credits(
+    tmp_path: Path,
+) -> None:
+    """Issue #635: only a ``$`` inside single quotes is literal; a
+    single-quoted tail after a double-quoted anchor is a plain path."""
+    _write(tmp_path, {
+        "scripts/common.sh": "f() { :; }\n",
+        "tests/launcher.bats":
+            "source \"$BATS_TEST_DIRNAME\"'/../scripts/common.sh'" + BATS_TEST,
+    })
+    assert _credited(tmp_path, "scripts/common.sh") is True
+
+
+def test_bats_load_falls_back_to_the_name_as_written(tmp_path: Path) -> None:
+    """Issue #635: bats-core 1.14 tries ``<name>.bash`` first and then
+    ``<name>``, so with no ``helper.bash`` the bare ``helper`` is credited."""
+    _write(tmp_path, {
+        "scripts/helper": "f() { :; }\n",
+        "tests/launcher.bats": "load ../scripts/helper" + BATS_TEST,
+    })
+    index = tc.build_test_index(tmp_path)
+    assert tc.sibling_test_match(tmp_path, "scripts/helper", index) == tc.MATCH_IMPORT
