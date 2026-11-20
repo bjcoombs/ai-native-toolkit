@@ -302,3 +302,12 @@ def test_unlistable_workflow_dir_keeps_other_evidence(git_repo, monkeypatch) -> 
     block = scan_shared_tooling(repo)
     assert block["ci_source_ids"] == ["gitlab_project:g/p"]
     assert block["marketplace_ids"] == ["marketplace:m"]
+
+
+def test_unknown_git_tracking_is_unavailable_not_empty(tmp_path: Path) -> None:
+    _write(tmp_path, ".claude-plugin/marketplace.json", {"name": "m"})
+    block = scan_shared_tooling(tmp_path)
+    assert block["available"] is False
+    assert "tracking unknown" in block["reason"]
+    assert [m["tracked"] for m in block["marketplaces"]] == [False]
+    assert distinct_ids([block])["marketplaces"] == []

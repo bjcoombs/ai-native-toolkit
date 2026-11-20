@@ -489,6 +489,16 @@ MIN_MAX = 3          # max commits per file must clear this for visible gradient
 MIN_COVERAGE_PCT = 10.0   # % of scored files with any activity in the window
 
 
+def is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
+    """Whether ``path`` is in a ``tracked_files`` set; untracked when unknowable."""
+    if tracked is None:
+        return False
+    try:
+        return path.resolve() in tracked
+    except OSError:
+        return False
+
+
 def pick_churn_window(
     root: Path, file_paths: list[Path],
 ) -> tuple[dict[Path, int] | None, str | None]:

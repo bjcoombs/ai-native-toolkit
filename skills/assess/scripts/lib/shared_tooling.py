@@ -33,9 +33,9 @@ import json
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
-from lib.git_churn import tracked_files
+from lib.git_churn import is_tracked, tracked_files
 
 _GITLAB_CI = ".gitlab-ci.yml"
 _WORKFLOWS_DIR = ".github/workflows"
@@ -76,6 +76,7 @@ class SharedToolingBlock(TypedDict):
     marketplaces: list[MarketplaceRef]
     ci_source_ids: list[str]
     marketplace_ids: list[str]
+    reason: NotRequired[str]
 
 
 class DistinctIds(TypedDict):
@@ -354,15 +355,6 @@ def settings_marketplaces(data: Any, path: str, tracked: bool) -> list[Marketpla
     ]
 
 
-def _is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
-    if tracked is None:
-        return False
-    try:
-        return path.resolve() in tracked
-    except OSError:
-        return False
-
-
 def _in_repo_file(repo_root: Path, path: Path) -> bool:
     """A regular file inside the repository: no symlink, no read outside it.
 
@@ -401,11 +393,11 @@ def _ci_includes(repo_root: Path, tracked: frozenset[Path] | None) -> list[CiInc
     entries: list[CiInclude] = []
     gitlab = repo_root / _GITLAB_CI
     if _in_repo_file(repo_root, gitlab) and (text := _read_text(gitlab)) is not None:
-        entries += gitlab_includes(text, _GITLAB_CI, _is_tracked(gitlab, tracked))
+        entries += gitlab_includes(text, _GITLAB_CI, is_tracked(gitlab, tracked))
     for workflow in _workflow_files(repo_root):
         if (text := _read_text(workflow)) is not None:
             rel = workflow.relative_to(repo_root).as_posix()
-            entries += github_reusable_workflows(text, rel, _is_tracked(workflow, tracked))
+            entries += github_reusable_workflows(text, rel, is_tracked(workflow, tracked))
     return entries
 
 
@@ -414,12 +406,12 @@ def _marketplaces(repo_root: Path, tracked: frozenset[Path] | None) -> list[Mark
     manifest = repo_root / _MARKETPLACE_MANIFEST
     if _in_repo_file(repo_root, manifest):
         entries += manifest_marketplace(
-            _read_json(manifest), _MARKETPLACE_MANIFEST, _is_tracked(manifest, tracked)
+            _read_json(manifest), _MARKETPLACE_MANIFEST, is_tracked(manifest, tracked)
         )
     settings = repo_root / _SETTINGS
     if _in_repo_file(repo_root, settings):
         entries += settings_marketplaces(
-            _read_json(settings), _SETTINGS, _is_tracked(settings, tracked)
+            _read_json(settings), _SETTINGS, is_tracked(settings, tracked)
         )
     return entries
 
@@ -430,13 +422,18 @@ def scan_shared_tooling(repo_root: Path) -> SharedToolingBlock:
     tracked = tracked_files(repo_root)
     ci_includes = _ci_includes(repo_root, tracked)
     marketplaces = _marketplaces(repo_root, tracked)
-    return {
-        "available": True,
+    block: SharedToolingBlock = {
+        "available": tracked is not None,
         "ci_includes": ci_includes,
         "marketplaces": marketplaces,
         "ci_source_ids": sorted({e["id"] for e in ci_includes if e["tracked"]}),
         "marketplace_ids": sorted({e["id"] for e in marketplaces if e["tracked"]}),
     }
+    if tracked is None:
+        # Empty id lists here mean "tracking unknown", not "shares nothing":
+        # a roll-up must skip this repository rather than count it as zero.
+        block["reason"] = "git tracking unknown (not a git checkout, or git failed)"
+    return block
 
 
 def distinct_ids(blocks: Iterable[Mapping[str, Any]]) -> DistinctIds:
