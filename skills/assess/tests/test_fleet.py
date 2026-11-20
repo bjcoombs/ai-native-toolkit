@@ -204,6 +204,14 @@ def test_scan_that_cannot_start(tmp_path, monkeypatch):
     assert row["reason"] == fleet.SCAN_ERROR
 
 
+def test_scan_child_runs_with_optional_locks_off(tmp_path, monkeypatch):
+    """Every git call the scan process makes inherits GIT_OPTIONAL_LOCKS=0."""
+    monkeypatch.setenv("GIT_OPTIONAL_LOCKS", "1")
+    _fake_signals(tmp_path, monkeypatch, "import os\nsys.exit(0 if os.environ.get('GIT_OPTIONAL_LOCKS') == '0' else 7)\n")
+    row = fleet.scan_target(Target("g/r", make_checkout(tmp_path / "r")), tmp_path, ScanOptions())
+    assert row["reason"] == fleet.INVALID_OUTPUT  # exited 0: the variable was set; wrote nothing
+
+
 def test_scan_ok_keeps_only_the_scans(tmp_path, monkeypatch):
     doc = {"signals_schema_version": 1, "stamp": {"scan_date": "x"}, "scans": {"a": {"n": 1}}}
     _fake_signals(tmp_path, monkeypatch, f"open(out, 'w').write(json.dumps({doc!r}))\n")
@@ -259,7 +267,8 @@ def test_out_inside_target(tmp_path):
     assert fleet.out_inside_target(checkout / "deep", targets) == targets[0]
     assert fleet.out_inside_target(tmp_path / "g" / "r", targets) == targets[0]
     assert fleet.out_inside_target(plain, targets) == targets[1]
-    assert fleet.out_inside_target(tmp_path / "g" / "r" / "worktree", targets) is None
+    assert fleet.out_inside_target(tmp_path / "g" / "r" / "worktree" / "x", targets) == targets[0]
+    assert fleet.out_inside_target(tmp_path / "g" / "sibling", targets) is None
     assert fleet.out_inside_target(tmp_path / "out", targets) is None
 
 

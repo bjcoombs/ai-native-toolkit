@@ -65,11 +65,14 @@ def froot(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def _snapshot(root: Path) -> dict[str, str]:
     """Every checkout's status and full file listing (including .git), to prove no writes."""
     state: dict[str, str] = {}
+    # The listing is read first and this status runs with optional locks off:
+    # a plain ``git status`` would itself refresh a racy .git/index.
     for checkout in sorted(root.glob("*/*/*-main")):
-        status = subprocess.run(["git", "-C", str(checkout), "status", "--porcelain", "--ignored"],
-                                capture_output=True, text=True, check=True).stdout
         listing = sorted(f"{p.relative_to(checkout)}:{p.stat().st_mtime_ns}"
                          for p in checkout.rglob("*") if p.is_file())
+        status = subprocess.run(["git", "-C", str(checkout), "status", "--porcelain", "--ignored"],
+                                capture_output=True, text=True, check=True,
+                                env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"}).stdout
         state[str(checkout)] = status + "\n".join(listing)
     return state
 

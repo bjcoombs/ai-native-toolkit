@@ -332,10 +332,10 @@ def write_rows(out_dir: Path, rows: Iterable[FleetRow]) -> Path:
 
 
 def out_inside_target(out_dir: Path, targets: Iterable[Target]) -> Target | None:
-    """The target whose repository directory would hold ``out_dir``, if any."""
+    """The target whose repository directory (checkout, ``worktree/`` and all) would hold ``out_dir``, if any."""
     out = out_dir.resolve()
     for target in targets:
         repo_dir = target.checkout.parent if target.checkout.name.endswith("-main") else target.checkout
-        if out == target.checkout or target.checkout in out.parents or out == repo_dir:
+        if out in (target.checkout, repo_dir) or target.checkout in out.parents or repo_dir in out.parents:
             return target
     return None
