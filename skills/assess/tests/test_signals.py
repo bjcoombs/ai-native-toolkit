@@ -175,7 +175,7 @@ def test_registry_migration_moves_a_name_from_unavailable_to_run(fixture_repo):
 
 def test_unregistered_names_are_disjoint_from_the_reported_scans():
     """A scan reported headless must leave UNREGISTERED_SCANS in the same PR."""
-    reported = {spec.key for spec in reg.SCANS if signals._reported(spec)}
+    reported = {spec.key for spec in signals.SIGNAL_SCANS if signals._reported(spec)}
     assert not set(signals.UNREGISTERED_SCANS) & reported
 
 

@@ -50,6 +50,16 @@ Run:
 """
 # /// script
 # requires-python = ">=3.11"
+# dependencies = [
+#     # Each scan runs assess_signals.py with this interpreter, so these are
+#     # its layer 2-4 dependencies (lib/headless_layers.py): the import graph
+#     # and the file size and complexity scores. Without them each block
+#     # reports unavailable with a named reason. lizard is pinned to the
+#     # treemap's version.
+#     "networkx",
+#     "grimp",
+#     "lizard==1.23.0",
+# ]
 # ///
 from __future__ import annotations
 
