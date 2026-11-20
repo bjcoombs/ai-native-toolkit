@@ -150,6 +150,15 @@ def test_inferred_units_emptied_by_the_mapping_are_dropped() -> None:
     assert _units(ownership) == {"elsewhere": ("org", None, "mapping")}
 
 
+def test_a_declared_unit_keeps_its_emptied_inferred_parent() -> None:
+    mapping = _map('[[unit]]\nid = "grp/sub/new"\nkind = "team"\nparent = "grp/sub"\n'
+                   '[[unit]]\nid = "x"\nkind = "org"\n[[repo]]\nrepo = "grp/sub/p"\nownership = "x"\n')
+    ownership, _ = fu.build_trees(["grp/sub/p"], mapping)
+    ids = {u["id"] for u in ownership["units"]}
+    assert ids == {"grp", "grp/sub", "grp/sub/new", "x"}
+    assert all(u["parent"] is None or u["parent"] in ids for u in ownership["units"])
+
+
 def test_repo_owners_prefer_the_mapping() -> None:
     mapping = _map(MAPPING)
     owners = fu.repo_owners(mapping, {"grp/proj4": ["@x"], "grp/sub/proj1": ["@y"]}, ["grp/proj4", "grp/sub/proj1"])
@@ -207,6 +216,7 @@ def test_load_units_reads_a_file_and_reports_faults(tmp_path: Path) -> None:
     ("https://github.com/acme/svc1.git", "https://github.com/acme/svc1"),
     ("https://user:t0ken@GitLab.Example.com/grp/sub/proj.git/", "https://gitlab.example.com/grp/sub/proj"),
     ("ssh://git@gitlab.example.com:2222/grp/sub/proj.git", "https://gitlab.example.com/grp/sub/proj"),
+    ("https://gitlab.example.com:8443/grp/proj.git", "https://gitlab.example.com:8443/grp/proj"),
     ("gitlab.example.com:grp/proj", "https://gitlab.example.com/grp/proj"),
     ("file:///srv/repos/x.git", None),
     ("/srv/repos/x.git", None),
@@ -229,7 +239,7 @@ def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
 
 
-def test_repo_facts_read_origin_and_codeowners(tmp_path: Path) -> None:
+def test_repo_facts_read_origin_and_codeowners(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     checkout = tmp_path / "svc"
     (checkout / ".github").mkdir(parents=True)
     _git(checkout, "init", "-q")
@@ -240,6 +250,11 @@ def test_repo_facts_read_origin_and_codeowners(tmp_path: Path) -> None:
     assert facts["acme/svc"].web_url == "https://github.com/acme/svc"
     assert facts["acme/svc"].owners == ("@acme/eng",)
     assert facts["acme/gone"] == (None, ())
+    def denied(self: Path) -> bool:
+        raise PermissionError("denied")
+    monkeypatch.setattr(Path, "is_dir", denied)
+    assert repo_facts(Target("acme/svc", checkout)) == (None, ())
+    monkeypatch.undo()
     bare = tmp_path / "bare"
     bare.mkdir()
     assert repo_facts(Target("x/bare", bare)) == (None, ())

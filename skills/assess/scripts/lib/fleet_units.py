@@ -321,12 +321,12 @@ def _finish(view: str, units: dict[str, Unit], placement: dict[str, str]) -> Tre
     """Check the tree, drop empty inferred units and give inferred units their kind."""
     _check_tree(view, units)
     occupied: set[str] = set()
-    for uid in placement.values():
+    for uid in [*placement.values(), *(u for u, unit in units.items() if unit["source"] == SRC_MAPPING)]:
         current: str | None = uid
         while current is not None and current not in occupied:
             occupied.add(current)
             current = units[current]["parent"]
-    kept = {uid: unit for uid, unit in units.items() if uid in occupied or unit["source"] == SRC_MAPPING}
+    kept = {uid: unit for uid, unit in units.items() if uid in occupied}
     holders = set(placement.values())
     for uid, unit in kept.items():
         if unit["source"] != SRC_MAPPING:

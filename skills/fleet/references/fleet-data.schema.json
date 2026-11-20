@@ -11,9 +11,6 @@
     "run": {
       "type": "object",
       "properties": {
-        "fleet_stamp_version": {
-          "type": "integer"
-        },
         "toolkit_commit": {
           "type": [
             "string",
@@ -81,7 +78,6 @@
       },
       "required": [
         "counts_only",
-        "fleet_stamp_version",
         "levels_version",
         "paths_hashed",
         "plugin_version",

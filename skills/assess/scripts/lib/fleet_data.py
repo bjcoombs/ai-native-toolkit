@@ -55,7 +55,7 @@ from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_flee
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
 from lib.fleet_maturity import SCOPE, mean_share
-from lib.fleet_stamp import FleetStamp
+from lib.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet_units import Tree
 from lib.levels import Evaluation, MaturityModel, Row, evaluate_row
 
@@ -140,9 +140,24 @@ class DataRepo(TypedDict):
     rows: list[Cell]
 
 
+class RunDetails(TypedDict):
+    """The run stamp's fields, copied one by one so a new ``run.json`` field never
+    changes this document without a ``FLEET_DATA_VERSION`` bump."""
+
+    toolkit_commit: str | None
+    plugin_version: str
+    scan_date: str
+    window: str
+    levels_version: str | None
+    counts_only: bool
+    paths_hashed: bool
+    scans: list[str] | None
+    repositories: RepositoryCounts
+
+
 class FleetData(TypedDict):
     fleet_data_version: int
-    run: FleetStamp
+    run: RunDetails
     model: list[ModelRow]
     views: list[View]
     repos: list[DataRepo]
@@ -298,6 +313,18 @@ def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Ce
     return {"view": view, "units": sorted(units, key=lambda u: u["key"])}
 
 
+def run_details(stamp: FleetStamp) -> RunDetails:
+    counts = stamp["repositories"]
+    return {
+        "toolkit_commit": stamp["toolkit_commit"], "plugin_version": stamp["plugin_version"],
+        "scan_date": stamp["scan_date"], "window": stamp["window"], "levels_version": stamp["levels_version"],
+        "counts_only": stamp["counts_only"], "paths_hashed": stamp["paths_hashed"],
+        "scans": list(stamp["scans"]) if stamp["scans"] is not None else None,
+        "repositories": {"selected": counts["selected"], "scanned_ok": counts["scanned_ok"],
+                         "failed": counts["failed"], "qualifying": counts["qualifying"]},
+    }
+
+
 def model_rows(maturity_model: MaturityModel | None) -> list[ModelRow]:
     if maturity_model is None:
         return []
@@ -335,7 +362,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         })
     return {
         "fleet_data_version": FLEET_DATA_VERSION,
-        "run": stamp,
+        "run": run_details(stamp),
         "model": model_rows(maturity_model),
         "views": [build_view(tree, team_rows, cells, shares, privacy) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),

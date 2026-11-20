@@ -9,7 +9,7 @@ import pytest
 
 from fleet_data_fixture import FIXTURES, ROWS, SALT, STAMP, VARIANTS, WEB_URLS, build, model
 from lib import fleet_data as fd
-from lib.counts_only_rules import FLEET_DATA_RULES, classify_fleet_data
+from lib.counts_only_rules import FLEET_DATA_KEPT, FLEET_DATA_RULES, classify_fleet_data
 from lib.fleet_data_schema import SCHEMA_PATH, render
 from lib.fleet_units import build_trees, empty_map
 from lib.levels import parse_levels
@@ -128,6 +128,32 @@ def test_the_same_salt_gives_the_same_bytes_and_another_salt_does_not() -> None:
 def test_privacy_for_full_ignores_any_salt() -> None:
     assert fd.privacy_for(True, "s") == fd.Privacy(full=True, salt=None)
     assert fd.privacy_for(False, "s") == fd.Privacy(full=False, salt="s")
+
+
+def _string_fields(tp: object, prefix: str = "") -> set[str]:
+    """Dotted patterns of every field of ``tp`` (a TypedDict) that can hold a string."""
+    import types
+    from typing import Union, get_args, get_origin, get_type_hints, is_typeddict
+    found: set[str] = set()
+    for name, hint in get_type_hints(tp).items():
+        pattern = f"{prefix}{name}"
+        stack = [hint]
+        while stack:
+            current = stack.pop()
+            if current is str:
+                found.add(pattern)
+            elif is_typeddict(current):
+                found |= _string_fields(current, pattern + ".")
+            elif get_origin(current) in (list, Union, types.UnionType):
+                stack.extend(get_args(current))
+    return found
+
+
+def test_every_string_field_has_a_rule_or_is_kept_on_purpose() -> None:
+    fields = _string_fields(fd.FleetData)
+    assert fields - set(FLEET_DATA_RULES) - FLEET_DATA_KEPT == set()
+    assert set(FLEET_DATA_RULES) - fields == set()  # no stale rule
+    assert not FLEET_DATA_KEPT & set(FLEET_DATA_RULES)
 
 
 def test_every_string_field_is_classified() -> None:

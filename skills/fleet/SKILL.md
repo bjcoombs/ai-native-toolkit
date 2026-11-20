@@ -44,7 +44,7 @@ their rows `unknown`.
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
 | `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json`, `DIR/fleet-data.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
-| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson). Unreadable input exits 2. |
+| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
@@ -228,7 +228,7 @@ repository's own mean share. `org` rows read a group's settings, not a repositor
 they have no unit roll-up; their levels are in `groups.jsonl`.
 
 **Repositories.** Each has `key` (its id), `status`, `reason`, `active`, `web_url` (the
-`origin` remote as `https://<host>/<path>`, credentials, port and `.git` dropped; `null`
+`origin` remote as `https://<host>/<path>`, credentials, an ssh port and `.git` dropped; `null`
 for a local remote), `owners` and `owner_count` (the mapping's owners, else the
 CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), `mean_share`,
 and `rows`, one cell per `team` row: `status`, `level`, `top_level` and the criterion
@@ -238,7 +238,7 @@ names the signal that could not be read and `reason` (`unavailable`, `type_misma
 `not_scanned` for a failed repository).
 
 **Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, tokens and
-web URLs, writes a string `value` that is not a short token as `set`, and drops unit
+web URLs (so the host name of each remote appears, in `--out` and the run history), writes a string `value` that is not a short token as `set`, and drops unit
 names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, every unit
 and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no
 name, owner or web URL is written: the file names no repository, group or host. Hashes

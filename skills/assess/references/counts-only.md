@@ -567,8 +567,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 Patterns from the top of `fleet-data.json`, not of a run-context. A
 unit or repository key is always kept (hashed, spaces allowed, under
 path hashing); under hashing no name, owner or web URL is written.
-Maturity-model fields (`model.*`, `repos.rows.row`, `repos.rows.signal`)
-come from the `--levels` file and are kept as written. A string
+The run stamp (`run.*`) and maturity-model fields (`model.*`, the row ids,
+`repos.rows.signal`) come from the run and the `--levels` file and are
+kept as written. A string
 `repos.rows.value` that is not a token is written `set`.
 
 | Field | Kept as |

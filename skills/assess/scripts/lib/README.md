@@ -794,8 +794,8 @@ CODEOWNERS ones; `unmatched_repos` names mapped repositories the run did not inc
 **`fleet_repo_facts.py`**
 What the units tree and `fleet-data.json` read from each checkout before any scan
 (#703): `web_url` normalises the `origin` remote (scp, `ssh://`, `http(s)://`) to
-`https://<host>/<path>`, dropping credentials, port and `.git`, and gives None for a
-local remote; `default_owners` takes the owners on the last catch-all rule of the first
+`https://<host>/<path>`, dropping credentials, an ssh port and `.git` (an http(s) port
+is kept), and gives None for a local remote; `default_owners` takes the owners on the last catch-all rule of the first
 CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab section
 headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
 read gives no URL and no owners.

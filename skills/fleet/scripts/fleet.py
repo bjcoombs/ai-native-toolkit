@@ -433,6 +433,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --out {args.out} is inside target {inside.repo}; the fleet run never "
               "writes into a target", file=sys.stderr)
         return 2
+    # Web URLs and CODEOWNERS are read before any scan, so --delete-after cannot remove a
+    # checkout first. The trees are built before anything is written, so a mapping that
+    # names a missing unit exits 2 and leaves nothing behind.
+    facts = collect_facts(targets, args.jobs)
+    codeowners = {repo: list(f.owners) for repo, f in facts.items()}
+    try:
+        trees = build_trees((t.repo for t in targets), units, settings, codeowners)
+    except UnitsError as e:
+        print(f"error: --units {args.units}: {e}", file=sys.stderr)
+        return 2
+    for repo in unmatched_repos(units, (t.repo for t in targets)):
+        print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
     today = datetime.now(timezone.utc).date()
     window = args.window or DEFAULT_WINDOW
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
@@ -478,17 +490,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
               file=sys.stderr)
         return 2
-    # Web URLs and CODEOWNERS are read before any scan, so --delete-after cannot remove a
-    # checkout first; the trees are built now, so a mapping that names a missing unit exits 2.
-    facts = collect_facts(targets, args.jobs)
-    codeowners = {repo: list(f.owners) for repo, f in facts.items()}
-    try:
-        trees = build_trees((t.repo for t in targets), units, settings, codeowners)
-    except UnitsError as e:
-        print(f"error: --units {args.units}: {e}", file=sys.stderr)
-        return 2
-    for repo in unmatched_repos(units, (t.repo for t in targets)):
-        print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
     protected = [out_dir, Path.cwd(), TOOLKIT_ROOT, *([entry] if entry is not None else [])]
     deleter = CloneDeleter(protected) if args.delete_after else None
     # Cross-repo doc freshness (#664) reads both checkouts: before any scan, so

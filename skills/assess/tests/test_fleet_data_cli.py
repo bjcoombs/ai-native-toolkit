@@ -65,6 +65,6 @@ def test_hashed_run_names_no_repository(froot, tmp_path, monkeypatch):  # noqa: 
 def test_a_bad_units_file_exits_2_before_any_scan(froot, tmp_path, monkeypatch, capsys, text, message):  # noqa: F811
     monkeypatch.chdir(tmp_path)
     (tmp_path / "units.toml").write_text(text, encoding="utf-8")
-    assert fleet_cli.main([str(froot), "--out", "out", "--units", "units.toml", "--no-history"]) == 2
+    assert fleet_cli.main([str(froot), "--out", "out", "--units", "units.toml", "--history-dir", "hist"]) == 2
     assert message in capsys.readouterr().err
-    assert not (tmp_path / "out" / "repos.jsonl").exists()
+    assert not (tmp_path / "out").exists() and not (tmp_path / "hist").exists()

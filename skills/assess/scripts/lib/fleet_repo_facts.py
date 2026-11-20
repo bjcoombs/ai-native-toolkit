@@ -5,8 +5,8 @@ may remove a clone once it is scanned, and a counts-only scan drops owners):
 
 - **Web URL.** The ``origin`` remote, normalised to ``https://<host>/<path>``:
   scp-style (``git@host:grp/repo.git``), ``ssh://`` (any user and port) and
-  ``http(s)://`` remotes all give the same URL; embedded credentials, the
-  port, a trailing ``.git`` and a trailing slash are dropped. GitHub and
+  ``http(s)://`` remotes all give the same URL; embedded credentials, an ssh
+  port, a trailing ``.git`` and a trailing slash are dropped (an http(s) port is kept). GitHub and
   GitLab serve a repository at exactly that URL (GitLab at any group depth).
   A local remote (``file://``, a bare path) or none gives None.
 - **Default owners.** The owners on the last catch-all rule (``*`` or ``**``) of
@@ -33,8 +33,8 @@ CODEOWNERS_FILES = (".github/CODEOWNERS", ".gitlab/CODEOWNERS", "CODEOWNERS", "d
 CATCH_ALL = frozenset({"*", "**", "/**"})
 
 _SCP = re.compile(r"^(?:[^@/:\s]+@)?(?P<host>[^/:\s]+):(?!//)(?P<path>.+)$")
-_URL = re.compile(r"^(?P<scheme>ssh|git|https?|git\+ssh|ssh\+git)://(?:[^@/\s]*@)?(?P<host>[^/:\s]+)(?::\d*)?/(?P<path>.+)$",
-                  re.IGNORECASE)
+_URL = re.compile(r"^(?P<scheme>ssh|git|https?|git\+ssh|ssh\+git)://(?:[^@/\s]*@)?(?P<host>[^/:\s]+)"
+                  r"(?::(?P<port>\d*))?/(?P<path>.+)$", re.IGNORECASE)
 _OWNER = re.compile(r"^@\S+$|^[^@\s]+@[^@\s]+$")
 
 
@@ -57,7 +57,12 @@ def web_url(remote: str | None) -> str | None:
     segments = [s for s in segments if s]
     if not segments:
         return None
-    return f"https://{match.group('host').lower()}/{'/'.join(segments)}"
+    host = match.group("host").lower()
+    # An http(s) remote's port serves the web UI too; an ssh port never does.
+    port = match.groupdict().get("port")
+    if port and match.group("scheme").lower().startswith("http"):
+        host = f"{host}:{port}"
+    return f"https://{host}/{'/'.join(segments)}"
 
 
 def default_owners(text: str) -> tuple[str, ...]:
@@ -86,9 +91,12 @@ def codeowners_text(checkout: Path) -> str | None:
 
 def repo_facts(target: Target) -> RepoFacts:
     """One checkout's web URL and CODEOWNERS default owners."""
-    if not target.checkout.is_dir():
+    try:
+        if not target.checkout.is_dir():
+            return RepoFacts(None, ())
+        text = codeowners_text(target.checkout)
+    except OSError:  # an unreadable checkout never stops the run; its scan reports it
         return RepoFacts(None, ())
-    text = codeowners_text(target.checkout)
     return RepoFacts(web_url(_git(target.checkout, "config", "--get", "remote.origin.url")),
                      default_owners(text) if text is not None else ())
 
