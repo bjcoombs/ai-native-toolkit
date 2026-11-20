@@ -32,17 +32,21 @@ Two modules are the identified co-change hotspots in the git history:
   the six named derived findings. Because it touches every upstream signal, it
   co-changes with the core on almost every schema or signal-set change.
 
-The seam is narrowing. A scan that reads only what the core hands it and feeds no
-later block is declared once in `scan_registry.py` (`SCANS`) and run by one loop, so
-adding such a scan edits its own module, its test, that table and this file - not
-`assess_core.py`. Scans still hand-wired in `build_run_context` move to the table in
-batches; until then both patterns exist, and the table is the one to extend.
+The seam is narrowing. Every run-context block is declared once in `scan_registry.py`
+(`SCANS`) and run by one loop, so adding a scan edits its own module, its test, that
+table and this file - not `assess_core.py`. The setup steps (scope, artifact directory,
+run id, stats and diff, instruction grading, first-flagged map) are entries too; their
+adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. Only the
+doc-staleness keys (`scan_registry.HAND_WIRED`) are still assigned by hand, held back
+for the 2.0.0 rewrite (#424, #425). The table only reads: `run_publish.py` writes the
+wiki, badge and `run-context.json` after the scans (#557).
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
-The core keeps only the orchestration: `build_run_context`, `run_opt_in_mutation` and
-`main`, plus `_new_run_id` and `_read_plugin_version`. Its helpers live in seven modules, one per seam: `instruction_files.py`
+The core keeps only the orchestration: `build_run_context` (the stage calls, the
+hand-wired doc-staleness keys and the publish call), `run_opt_in_mutation` and `main`.
+Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
 pages, index and log for one run), `context_blocks.py` (scan results serialised into
@@ -453,29 +457,62 @@ Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 
 **`scan_registry.py`**
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
-the run-context `key`, the callable, the names it `reads` (passed positionally: a
-core-provided input from `PROVIDED_INPUTS`, or the key of an earlier spec), the
-`stage` of `build_run_context` it runs at, and whether it degrades. `run_scans`
-routes every degrading spec through `safe`, which turns any exception into
-`{"available": False, "reason": ...}` so one broken scan never stops the run; a spec
-opts out only with a `gate_reason`. `validate` runs at import and raises
-`ScanRegistryError` on a duplicate key, an unknown stage, a read that nothing
-provides, a read of a key produced at a later stage, or a callable that cannot take
-its declared reads, so a mis-declared scan fails
-before any run. `run_scans` resolves reads outside the wrapper: an input the core did
-not pass raises `ScanRegistryError` and stops the run, while a failure inside the scan
-degrades. `stage` exists to keep
-`run-context.json` key order unchanged while scans migrate here; it goes when the
-hand-wired assignments between the stages are gone. Currently registered:
-`agent_ops`, `config_drift`, `review_reality`, `gate_cost_estimate`,
-`instruction_claims`, `claude_config`, `nested_instructions`, `agent_harness`,
-`agent_environment`, `coverage_gate`, `shared_tooling`, `ai_usage`. Besides
-`repo_root` and
-`instruction_files`, the core provides `scope` (the absolute `--scope` path, or
-None), `excludes` (the `(dirs, patterns)` pair from `.assess/config.toml`) and
-`history_window` (a `<n>d|w|mo|y` window or None for all history: `--window` in the
-headless run, the stats sidecar's `churn_window` label normalised by
-`git_churn.window_from_churn_label` in `assess_core`).
+the `key`, the callable, the names it `reads` (passed positionally: a core-provided
+input from `PROVIDED_INPUTS`, a `HAND_WIRED` key, or the key of an earlier spec), the
+`stage` of `build_run_context` it runs at, and whether it degrades. By default the
+value is published as `ctx[key]`; a `private` spec's value (the stats, the diff, a raw
+scan result) is kept in the inputs mapping for later specs and never reaches
+`run-context.json`; a `spread` spec returns a mapping whose keys, all declared, are
+copied into the context in returned order (the 25-key run header, the eleven keyhole
+keys), with optional keys simply absent. `run_scans` routes every degrading spec
+through `safe` (from `degrade.py`), which turns any exception into
+`{"available": False, "reason": ...}` labelled by `label` or the key, so one broken
+scan never stops the run; a degraded spread spec marks every key it declares. A spec
+opts out only with a `gate_reason` (the setup steps, and serialisers whose source
+already degrades). `validate` runs at import and raises `ScanRegistryError` on a
+duplicate key, an unknown stage, a read that nothing provides, a read of a key
+produced at a later stage, a callable that cannot take its declared reads, a spec
+both private and spread, or a run-context key written twice, so a mis-declared scan
+fails before any run. `run_scans` resolves reads outside the wrapper: an input the
+core did not pass raises `ScanRegistryError` and stops the run, while a failure inside
+the scan degrades. The core provides the `build_run_context` arguments
+(`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
+absolute `--scope` path, or None), `instruction_files`, `excludes` (the
+`(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
+sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
+specs. Stages
+(`setup`, `read_side`, `post_offers`, `final`) keep `run-context.json` key order;
+they collapse once the `HAND_WIRED` doc-staleness keys move here.
+
+**`run_setup.py`**
+Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
+`new_run_id`, `current_stats` / `prior_stats`, `stats_diff` (dropping a graduation the
+generated-file filter caused), `instruction_grading`, `rename_map` and
+`measured_commit` (the git-churn call sites #424 and #425 rewrite), `config_excludes`,
+`first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
+`run_header`, which returns the first 25 run-context keys (`RUN_HEADER_KEYS`) with the
+four `WIKI_KEYS` reserved as None for the publish step. Reads only. Tests:
+`tests/test_run_setup.py`.
+
+**`core_scans.py`**
+Read-side adapters for the scan table (#557): one callable per registered block,
+taking its reads positionally and calling the scan module or `context_blocks`
+serialiser that owns the block's shape (doc graph, liveness, structure, coverage,
+test pressure and focus, promissory markers, accretion, the keyhole integration and
+its disclosures, decline markers, offers, anomalies). `anomalies` reads the run header
+only, which holds every key `detect_anomalies` inspects. No logic of its own. Tests:
+`tests/test_run_setup.py`, and the run-context tests that patch a scan here.
+
+**`run_publish.py`**
+The run's side effects, applied after every scan (#557): `publish_run` creates the
+artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
+keys the run header reserved in place, writes `badge.json` and then
+`run-context.json`. Tests: `tests/test_run_setup.py`.
+
+**`degrade.py`**
+`safe` and `unavailable`: the "a broken scan never blocks the assessment" wrapper and
+its marker. Kept apart from `scan_registry.py` so the modules the table imports
+(`context_blocks.py`) can use it without importing the table.
 A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
 `review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
 `offline_fn` - the same scan with its probe off, taking the same reads
@@ -487,13 +524,19 @@ not `network`, or one that cannot take the spec's reads.
 The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
 the selected registry scans, plus the registry keys they read, through `run_scans` with
 inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
-`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`, and
-`history_window` set to `--window` for history-reading scans), so a raising
-scan degrades through `safe` and the run completes. A `network` scan runs its
-`offline_fn` or is reported `{"available": false, "reason": NETWORK_REASON}`. Names in
-`UNREGISTERED_SCANS` (run-context blocks `assess_core` still assigns by hand) are
-reported unavailable with `UNREGISTERED_REASON`; a name the registry also holds is
-dropped at runtime, so migrating a scan needs no edit here. `select_scans` raises
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
+`history_window` set to `--window` for history-reading scans, and the
+`build_run_context` arguments `requested_scope=None`, `run_date` and
+`non_interactive=True`), so a raising scan degrades through `safe` and the run
+completes. A name the runner provides is never recomputed from the table. A
+`network` scan runs its `offline_fn` or is reported
+`{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
+outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
+#557) are reported; the core's entries run only when a reported scan reads one, and
+the publish step never runs. Names in `UNREGISTERED_SCANS` (run-context blocks
+`assess_core` assembles, several of which report `available: false` without the
+`reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
+name a reported scan also holds is dropped at runtime. `select_scans` raises
 `UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
 commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
 (each nullable outside git). The window is validated, stamped and passed to the scans
@@ -738,9 +781,10 @@ top hotspot (status from the stats diff, first-flagged date, the `Has test file`
 from `_has_sibling_test`, marker debt and accretion in the briefing), retires orphan and
 excluded-before-finalize pages, adds graduated hotspots to `index.md` with their current
 metrics, saves `first-flagged.json`, replaces a superseded unfinalized log entry and
-appends this run's, then verifies the log chain. It returns a `RunWiki` (the test index
-it built, the retired and dropped paths, the chain verdict) for `build_run_context` to
-copy into run-context.json. Tests: `tests/test_run_wiki.py`,
+appends this run's, then verifies the log chain. The hot-file test index comes in as
+`hot_test_index`, built once by the scan table and shared with `test_focus`. It
+returns a `RunWiki` (the retired and dropped paths, the chain verdict) for
+`run_publish.publish_run` to copy into run-context.json. Tests: `tests/test_run_wiki.py`,
 `tests/test_sibling_tests.py`, `tests/test_log_supersede.py`.
 
 **`wiki_state.py`**

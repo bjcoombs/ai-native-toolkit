@@ -8,13 +8,15 @@ and returns one JSON-ready document: a run stamp plus one block per scan.
 
 It never writes, never reaches the network and never prompts. A scan declared
 ``network`` runs its ``offline_fn`` when it has one and is otherwise reported
-``{"available": false, "reason": ...}``; so is every scan still hand-wired in
-``assess_core.build_run_context`` (``UNREGISTERED_SCANS``). A scan that raises
-degrades through the registry's ``safe`` wrapper and the run completes.
+``{"available": false, "reason": ...}``; so is every block in
+``UNREGISTERED_SCANS``. A scan that raises degrades through the registry's
+``safe`` wrapper and the run completes.
 
-The scan list is the registry plus ``UNREGISTERED_SCANS`` minus anything the
-registry already holds, so a scan migrating into the table moves from
-unavailable to run without an edit here.
+The scan list is every published registry key outside the core's own adapter
+modules (``CORE_MODULES``), plus ``UNREGISTERED_SCANS``, so a scan added to the
+table in its own module runs here without an edit. The core's entries (setup
+state, the run header, the serialised blocks) run only when a reported scan
+reads one of them; the publish step that writes the wiki is never called.
 """
 from __future__ import annotations
 
@@ -39,10 +41,13 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # Per-scan blocks carry their own shapes and are not versioned here.
 SIGNALS_SCHEMA_VERSION = 1
 
-# Run-context blocks ``assess_core.build_run_context`` still assigns by hand
-# (#418 migrates them into the registry). Names only: the headless runner
-# reports each as unavailable until it is registered. A name the registry
-# also holds is dropped at runtime, so a migration needs no edit here.
+# Run-context blocks ``assess_core`` assembles itself: by hand
+# (``scan_registry.HAND_WIRED``) or through its own table entries in
+# ``CORE_MODULES`` (#557). Names only: the headless runner reports each as
+# unavailable. Several report ``available: false`` without the ``reason`` the
+# published schema requires (``dead_code`` with no tool, ``coverage_report``
+# with no report), so they stay unreported until each shape is checked. A name
+# a reported scan also holds is dropped at runtime.
 UNREGISTERED_SCANS: tuple[str, ...] = (
     "stats_summary",
     "diff",
@@ -68,9 +73,12 @@ UNREGISTERED_SCANS: tuple[str, ...] = (
 )
 
 UNREGISTERED_REASON = (
-    "not_registered: still hand-wired in assess_core.build_run_context; "
+    "not_registered: assembled by assess_core.build_run_context; "
     "the headless runner covers registered scans only"
 )
+
+# The modules that hold the core's own table entries (#557).
+CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
 NETWORK_REASON = "network: reads GitHub via gh; the headless runner makes no network calls"
 
 DEFAULT_WINDOW = "6mo"
@@ -88,9 +96,14 @@ class UnknownScanError(ValueError):
         super().__init__(f"unknown scan(s): {', '.join(self.names)}")
 
 
+def _reported(spec: ScanSpec) -> bool:
+    """A registered scan the runner reports: published, single-key, not the core's own."""
+    return not spec.private and not spec.spread and spec.fn.__module__ not in CORE_MODULES
+
+
 def known_scans(specs: Iterable[ScanSpec] = SCANS) -> list[str]:
     """Every scan name the runner accepts, registry first, in table order."""
-    registered = [spec.key for spec in specs]
+    registered = [spec.key for spec in specs if _reported(spec)]
     return registered + [name for name in UNREGISTERED_SCANS if name not in registered]
 
 
@@ -122,10 +135,16 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any
     ``scope`` is None: a headless run measures the whole checkout.
     ``history_window`` carries ``--window`` for history-reading scans
     (``ai_usage``, #547).
+    Besides the ``build_run_context`` arguments, it supplies the setup values
+    ``instruction_files``, ``scope``, ``excludes`` and ``history_window``
+    itself; the table never recomputes a name the runner provides.
     """
     instruction_files = grade_instruction_files(repo_root)[0]
     return {
         "repo_root": repo_root,
+        "requested_scope": None,
+        "run_date": datetime.now(timezone.utc).date().isoformat(),
+        "non_interactive": True,
         "instruction_files": instruction_files,
         "scope": None,
         "excludes": load_excludes(repo_root),
@@ -133,14 +152,20 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW) -> dict[str, Any
     }
 
 
-def _with_dependencies(selected: Iterable[str], specs: Sequence[ScanSpec]) -> set[str]:
-    """``selected`` plus every registry key a selected scan reads, transitively."""
+def _with_dependencies(
+    selected: Iterable[str], specs: Sequence[ScanSpec], provided: Iterable[str] = (),
+) -> set[str]:
+    """``selected`` plus every registry key a selected scan reads, transitively.
+
+    Only reported scans are selectable; a name in ``provided`` is never recomputed.
+    """
     by_key = {spec.key: spec for spec in specs}
+    skip = set(provided)
     needed: set[str] = set()
-    pending = [name for name in selected if name in by_key]
+    pending = [name for name in selected if name in by_key and _reported(by_key[name])]
     while pending:
         key = pending.pop()
-        if key in needed:
+        if key in needed or key in skip:
             continue
         needed.add(key)
         pending.extend(name for name in by_key[key].reads if name in by_key)
@@ -156,7 +181,8 @@ def collect(
     window: str = DEFAULT_WINDOW,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read) offline; one block per name."""
-    needed = _with_dependencies(selected, specs)
+    inputs = build_inputs(repo_root, window)
+    needed = _with_dependencies(selected, specs, inputs)
     ctx: dict[str, Any] = {}
     runnable: list[ScanSpec] = []
     for spec in specs:
@@ -169,7 +195,6 @@ def collect(
         else:
             ctx[spec.key] = _unavailable(NETWORK_REASON)
     if runnable:
-        inputs = build_inputs(repo_root, window)
         for stage in STAGES:
             run_scans(ctx, inputs, stage, runnable)
     return {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected}
