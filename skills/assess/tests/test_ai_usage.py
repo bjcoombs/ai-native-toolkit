@@ -206,6 +206,7 @@ def test_ai_assistant_excludes_automation_bots(trailer: str, assistant: bool) ->
 def test_registered_after_the_setup_values_it_reads() -> None:
     keys = [spec.key for spec in SCANS]
     spec = SCANS[keys.index("ai_usage")]
-    assert spec.reads == ("repo_root", "scope", "history_window")
+    assert spec.reads == ("repo_root", "scope", "history_window", "fleet_config")
+    assert keys.index("fleet_config") < keys.index("ai_usage")
     assert keys.index("scope") < keys.index("ai_usage")
     assert keys.index("history_window") < keys.index("ai_usage")

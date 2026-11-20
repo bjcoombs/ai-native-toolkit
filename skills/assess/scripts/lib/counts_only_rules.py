@@ -418,12 +418,15 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
     "ai_usage": {
         # window is the <n>d|w|mo|y grammar or "all-time"; since is the git
         # expression behind it ("12 months ago"), redundant with window.
-        # covered_agents and limits are fixed sentences: kept as their length.
+        # covered_agents, covered_author_agents and limits are fixed sentences:
+        # kept as their length. agent_identity_rule_commits is a positional list
+        # of counts (#695), kept as numbers; no rule pattern ever reaches it.
         "ai_usage.reason": DROP,
         "ai_usage.window": TOKEN,
         "ai_usage.since": DROP,
         "ai_usage.merge_rule": TOKEN,
         "ai_usage.covered_agents": DROP,
+        "ai_usage.covered_author_agents": DROP,
         "ai_usage.limits": DROP,
     },
     "agent_harness": {

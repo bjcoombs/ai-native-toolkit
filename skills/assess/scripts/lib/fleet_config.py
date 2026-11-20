@@ -27,7 +27,7 @@ API:
 Adding a key (a consumer PR): add one line to the section's table in
 ``SECTION_KEYS`` naming a validator (``string_list``, ``table_list``,
 ``string``, ``boolean``, ``positive_int``, or your own with the ``Validator``
-signature), add the key to the section's TypedDict (``total=False``), and
+signature; ``regex`` and ``one_of`` are here too), add the key to the section's TypedDict (``total=False``), and
 document it in ``skills/fleet/SKILL.md``. Scans read the merged config through
 the registry input ``fleet_config`` (add it to the spec's ``reads``).
 
@@ -56,12 +56,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import tomllib
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict, cast
 
+from lib.agent_identity import RULE_FIELDS
 from lib.assess_config import TomlTable, load_config
 
 
@@ -97,6 +99,27 @@ def positive_int(value: object, key: str) -> object:
     return value
 
 
+def regex(value: object, key: str) -> object:
+    """A string that compiles as a Python regular expression. The error names the key,
+    never the pattern or the ``re.error`` text (which quotes it)."""
+    if not isinstance(value, str):
+        raise FleetConfigError(f"{key}: expected a string")
+    try:
+        re.compile(value)
+    except re.error:
+        raise FleetConfigError(f"{key}: expected a valid regular expression") from None
+    return value
+
+
+def one_of(*choices: str) -> Validator:
+    """A validator for a string that is one of ``choices``."""
+    def validate(value: object, key: str) -> object:
+        if not isinstance(value, str) or value not in choices:
+            raise FleetConfigError(f"{key}: expected one of {', '.join(choices)}")
+        return value
+    return validate
+
+
 def table_list(fields: Mapping[str, Validator], required: frozenset[str] = frozenset()) -> Validator:
     """A validator for an array of tables (``[[section.key]]``) with these fields."""
     def validate(value: object, key: str) -> object:
@@ -120,14 +143,30 @@ def table_list(fields: Mapping[str, Validator], required: frozenset[str] = froze
 # The sections and the keys each defines. Empty until the consumer issues add theirs.
 SectionKeys = Mapping[str, Validator]
 SECTION_KEYS: Mapping[str, SectionKeys] = {
-    "ai_usage": {},  # #695
+    "ai_usage": {  # #695
+        "agent_identities": table_list({"pattern": regex, "field": one_of(*RULE_FIELDS)},
+                                       frozenset({"pattern"})),
+        "token_users_as_agents": boolean,
+    },
     "review": {},  # #696
     "platform": {},  # #714
 }
 
 
+class AgentIdentityEntry(TypedDict, total=False):
+    """One ``[[ai_usage.agent_identities]]`` rule: a regular expression and the field it
+    reads (``email``, ``username`` or ``name``; left out, the e-mail and the username)."""
+
+    pattern: str
+    field: str
+
+
 class AiUsageSection(TypedDict, total=False):
-    """``[ai_usage]``: keys added by #695."""
+    """``[ai_usage]`` (#695): in-house agent identities, matched by ``ai_usage`` through
+    ``agent_identity.AuthorMatcher``. Per-rule counts are reported by list position."""
+
+    agent_identities: list[AgentIdentityEntry]
+    token_users_as_agents: bool
 
 
 class ReviewSection(TypedDict, total=False):
