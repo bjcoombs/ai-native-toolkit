@@ -57,7 +57,14 @@ constant each.
 # relocatable sections with line ranges, signals and a suggested home; agent and
 # SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.7.0"
+# 1.8.0: instruction files are scored on always-on size and share (issue #560).
+# Each instruction_files and nested_instructions.files entry gains the
+# subscores always_on_lines, always_on_pct, fetch_on_need_lines,
+# always_on_flagged, always_on_penalty and relocatable_penalty, and
+# instruction_file_size gains always_on_lines. bloat_penalty is now their
+# penalties' sum and size_grade_capped reads always-on lines. Additive: no key
+# moves or changes type, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.8.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -66,4 +73,6 @@ ARTIFACT_SCHEMA_VERSION = "1.7.0"
 # with the version in the committed .assess/findings.json and explains the
 # finding moves instead of failing on them unexplained.
 # 1: the baseline (issue #554).
-ASSESS_METHOD_VERSION = 1
+# 2: instruction files are graded on always-on size and share instead of the
+#    whole-file size curve (issue #560), which moves instruction grades.
+ASSESS_METHOD_VERSION = 2

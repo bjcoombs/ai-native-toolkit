@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -368,13 +369,13 @@ def _repeats(by_dir: dict[str, list[_Candidate]]) -> list[InstructionFinding]:
 
 
 def _grade(
-    cand: _Candidate, repo_root: Path, clock: ContentClock, skills_present: bool,
+    cand: _Candidate, repo_root: Path, clock: ContentClock, skills: Mapping[str, str],
     repo: RepoContext | None,
 ) -> NestedInstructionFile:
     days = clock.days(repo_root / cand.rel)
     freshness = days if days is not None else 0
     grade = grade_instructions(cand.body, freshness_days=freshness,
-                               skills_present=skills_present, repo=repo, path=cand.rel)
+                               skills=skills, repo=repo, path=cand.rel)
     scope: InstructionScope = {
         "directory": cand.directory, "globs": cand.globs,
         "always_loaded": cand.always_loaded,
@@ -413,7 +414,7 @@ def discover_nested_instructions(
     *,
     tracked: frozenset[Path] | None,
     clock: ContentClock,
-    skills_present: bool,
+    skills: Mapping[str, str],
     repo: RepoContext | None,
     graded_elsewhere: frozenset[str],
     extra_exclude_dirs: set[str] | None = None,
@@ -425,7 +426,11 @@ def discover_nested_instructions(
     (``lib.instruction_content.build_repo_context``), built from the same tree
     as the one the root files are graded with. ``graded_elsewhere`` holds the root locations ``grade_instruction_files``
     already grades; they feed the budget and the findings but get no second
-    graded entry here.
+    graded entry here. ``skills`` holds the ``SKILL.md`` texts
+    (``lib.instruction_placement.skill_texts``) the grade's always-on split
+    compares sections against. A file is graded on its body, after any
+    frontmatter, so a rule file's always-on lines leave out the frontmatter
+    its ``instruction_placement`` record counts.
     """
     repo_root = repo_root.resolve()
     surface = _collect(repo_root, tracked, extra_exclude_dirs or set(),
@@ -435,7 +440,7 @@ def discover_nested_instructions(
     def is_tracked(p: Path) -> bool:
         return is_repo_file(p, repo_root, tracked)
 
-    graded = [_grade(c, repo_root, clock, skills_present, repo)
+    graded = [_grade(c, repo_root, clock, skills, repo)
               for c in surface.candidates if c.rel not in graded_elsewhere]
     findings = (_dead_globs(repo_root, surface) + _stray_md(surface)
                 + _shadowing(repo_root, by_dir, tracked) + _repeats(by_dir))

@@ -324,3 +324,12 @@ def test_registered_last_in_the_scan_table() -> None:
     spec = SCANS[-1]
     assert spec.key == "instruction_placement"
     assert "nested_instructions" in spec.reads
+
+
+def test_a_section_that_is_the_whole_file_is_not_long() -> None:
+    """A heading-less file is one section; ``long_section`` measures a section
+    against the rest of the file, so it cannot fire on the whole file."""
+    text = "Paths: `src/a.py` `src/b.py` `src/c.py`.\n" + "x\n" * 60
+    record = analyse_file(text, "CLAUDE.md", "instruction", {})
+    assert record["fetch_on_need_lines"] == 0
+    assert record["unclassified_lines"] == 61

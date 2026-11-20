@@ -14,10 +14,12 @@ studies say helps an agent, not on how much the file says:
     positive_directives / tradeoff_phrases / verifiable_outcomes: credited up
                          to a small floor only; past it, more instructions
                          lower instruction-following accuracy (IFScale)
-    size curve:          a penalty growing from 200 lines for an always-loaded
-                         file, halved (never waived) when the repo delegates
-                         to skills; past about twice the curve's start the
-                         grade is capped at B
+    always-on size and share: the file split on its headings
+                         (``lib.instruction_placement.analyse_file``); a
+                         penalty for always-on lines past 200 when they are
+                         more than half the file, another for the lines that
+                         belong in a skill or a nested file but load on every
+                         task, and a B cap past 400 always-on lines
     content penalties:   directory-tree blocks, repository-overview sections,
                          and lines repeated from the root README
     freshness:           days since last content change
@@ -36,8 +38,8 @@ from __future__ import annotations
 import math
 import posixpath
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 from typing import TypedDict
 
 from lib.command_resolver import Command, Resolution, extract_commands, resolve
@@ -49,7 +51,8 @@ from lib.instruction_content import (
     overview_headings,
     readme_overlap_pct,
 )
-from lib.run_context_types import GradeFinding, JsonDict
+from lib.instruction_placement import ALWAYS_ON_FLAG_LINES, PlacementFile, analyse_file
+from lib.run_context_types import GradeFinding
 
 
 class SensitiveFinding(TypedDict):
@@ -57,19 +60,6 @@ class SensitiveFinding(TypedDict):
 
     category: str
     evidence: str
-
-
-class SizeMetrics(TypedDict):
-    line_count: int
-    word_count: int
-    exceeds_line_threshold: bool
-    exceeds_word_threshold: bool
-
-
-class SkillsDelegation(TypedDict):
-    delegates_to_skills: bool
-    delegation_pointers: int
-    delegation_samples: list[str]
 
 
 POSITIVE_DIRECTIVE_PATTERNS = [
@@ -117,30 +107,32 @@ VERIFIABLE_PATTERNS = [
     r"\brg\s+(?:(?:-{1,2}[\w-]+\s+)+\S|(?:-{1,2}[\w-]+\s+)*['\"]\S)",
 ]
 
-# Size curve for an always-loaded instruction file. Claude Code's memory docs
-# say "target under 200 lines per CLAUDE.md file"
-# (https://code.claude.com/docs/en/memory); OpenAI keeps AGENTS.md near 100
-# lines (https://openai.com/index/harness-engineering/). Gloaguen et al.
+# Always-on size and share (issue #560, replacing the #517 whole-file curve).
+# Every line of an always-loaded file is paid on every task: Gloaguen et al.
 # (2026, https://arxiv.org/html/2602.11988v1) measured context files raising
-# agent cost 19-23% while lifting success about 4% at best, so every line past
-# the ceiling is paid on every task. The penalty starts above
-# SIZE_THRESHOLD_LINES and grows one point per SIZE_LINES_PER_POINT lines (300
-# lines: -10, 400: -20), capped at SIZE_MAX_PENALTY. Words get the same curve
-# at about 12 words a line, so a file of very long lines cannot dodge it.
-SIZE_THRESHOLD_LINES = 200
-SIZE_THRESHOLD_WORDS = 2400
-SIZE_LINES_PER_POINT = 10
-SIZE_WORDS_PER_POINT = 120
-SIZE_MAX_PENALTY = 30
-# Delegating to skills (a skills directory or pointers in the text) moves
-# topic guidance out of the always-loaded file, but the file itself is still
-# read on every task, so its size is still paid: delegation divides the
-# penalty by SKILLS_DELEGATION_DIVISOR and never waives it.
-SKILLS_DELEGATION_DIVISOR = 2
-# Past about twice the curve's start, no amount of other credit makes the file
-# lean: the grade is capped at B (score SIZE_GRADE_CAP_SCORE), skills or not.
-SIZE_GRADE_CAP_LINES = 2 * SIZE_THRESHOLD_LINES
-SIZE_GRADE_CAP_WORDS = 2 * SIZE_THRESHOLD_WORDS
+# agent cost 19-23% while lifting success about 4% at best. The file is split
+# on its headings (``lib.instruction_placement``) and two kinds of line cost
+# points, one point per ``*_LINES_PER_POINT`` lines, each capped:
+#
+# - always-on lines past ``ALWAYS_ON_FLAG_LINES`` (200, Claude Code's own
+#   "target under 200 lines per CLAUDE.md file",
+#   https://code.claude.com/docs/en/memory), only when the file is flagged:
+#   those lines are also more than half the file. Pointers, rules and
+#   identity are what the layer is for; past 200 lines even they cost.
+# - fetch-on-need lines: sections that belong in a skill, a nested file or an
+#   existing SKILL.md, which a two-line pointer would replace. This is the
+#   share term: a file that is mostly reference pays for it at any size, and a
+#   large file that is mostly always-on content pays nothing for the share.
+#
+# Past ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines no amount of other credit
+# makes the file lean: the grade is capped at B (``SIZE_GRADE_CAP_SCORE``).
+# Skills beside the file no longer halve anything: the placement split names
+# what to move, so delegation is credited by moving it.
+ALWAYS_ON_LINES_PER_POINT = 10
+ALWAYS_ON_MAX_PENALTY = 30
+RELOCATABLE_LINES_PER_POINT = 10
+RELOCATABLE_MAX_PENALTY = 30
+ALWAYS_ON_GRADE_CAP_LINES = 2 * ALWAYS_ON_FLAG_LINES
 SIZE_GRADE_CAP_SCORE = 59
 
 # Scoring weights (points each, cap). Verified commands carry the most credit;
@@ -167,17 +159,6 @@ VERIFIABLE_POINTS, VERIFIABLE_CAP = 5, 10
 TREE_PENALTY = 10
 OVERVIEW_PENALTY = 5
 README_OVERLAP_STEPS = ((50, 15), (25, 8))  # (overlap % at least, penalty)
-
-# Skills delegation detection - text patterns that indicate progressive
-# disclosure (guidance factored into on-demand skills rather than inlined).
-SKILL_DELEGATION_PATTERNS = [
-    r"\.claude/skills/",
-    r"skills/\w+/SKILL\.md",
-    r"skill\s+\(.*?loaded\s+on\s+demand",
-    r"via\s+the\s+`?\w+-?\w*`?\s+skill",
-    r"load(?:s|ed)?\s+on\s+demand",
-    r"progressive\s+disclosure",
-]
 
 # --- Sensitive-content scan (issue #56) -----------------------------------
 # Before /assess recommends committing ANY instruction file - especially to a
@@ -360,108 +341,36 @@ def count_verifiable_outcomes(text: str) -> int:
     return _count(text, VERIFIABLE_PATTERNS)
 
 
-def compute_size_metrics(text: str) -> SizeMetrics:
-    """Return line_count, word_count, and threshold-exceeded flags."""
-    lines = text.splitlines()
-    words = len(text.split())
-    return {
-        "line_count": len(lines),
-        "word_count": words,
-        "exceeds_line_threshold": len(lines) > SIZE_THRESHOLD_LINES,
-        "exceeds_word_threshold": words > SIZE_THRESHOLD_WORDS,
-    }
+class PlacementPenalty(TypedDict):
+    """The always-on size and share penalty for one file (see the constants)."""
+
+    always_on_penalty: int
+    relocatable_penalty: int
+    capped: bool
 
 
-def detect_skills_delegation(text: str) -> SkillsDelegation:
-    """Detect if an instruction file delegates to skills (progressive-disclosure
-    pointers). Presence means the repo factors guidance into on-demand skills
-    rather than inlining everything into one monolithic file."""
-    matches: list[str] = []
-    for p in SKILL_DELEGATION_PATTERNS:
-        found = re.findall(p, text, re.IGNORECASE)
-        matches.extend(found)
-    return {
-        "delegates_to_skills": len(matches) > 0,
-        "delegation_pointers": len(matches),
-        "delegation_samples": matches[:5],  # first 5 for evidence
-    }
+def placement_penalty(record: PlacementFile) -> PlacementPenalty:
+    """Score one ``instruction_placement`` record on always-on size and share.
 
-
-def detect_skills_dir(repo_root: Path) -> JsonDict:
-    """Check for the presence of skills directories in the repo.
-
-    Looks for `.claude/skills/` and `skills/` and counts the `*/SKILL.md`
-    files within. A repo with skills is using progressive disclosure, which
-    halves a large instruction file's size penalty but never waives it.
+    ``always_on_penalty``: one point per ``ALWAYS_ON_LINES_PER_POINT``
+    always-on lines past ``ALWAYS_ON_FLAG_LINES``, when the record is
+    ``flagged`` (those lines are also more than half the file), capped at
+    ``ALWAYS_ON_MAX_PENALTY``. ``relocatable_penalty``: one point per
+    ``RELOCATABLE_LINES_PER_POINT`` fetch-on-need lines, capped at
+    ``RELOCATABLE_MAX_PENALTY``. ``capped``: a flagged file past
+    ``ALWAYS_ON_GRADE_CAP_LINES`` always-on lines grades at most B.
     """
-    skills_paths = [
-        repo_root / ".claude" / "skills",
-        repo_root / "skills",
-    ]
-    found_dirs: list[str] = []
-    skill_files: list[str] = []
-    for sp in skills_paths:
-        if sp.is_dir():
-            found_dirs.append(str(sp.relative_to(repo_root)))
-            for skill_md in sp.glob("*/SKILL.md"):
-                skill_files.append(str(skill_md.relative_to(repo_root)))
+    flagged = record["flagged"]
+    always_on = record["always_on_lines"]
+    over = max(0, always_on - ALWAYS_ON_FLAG_LINES) if flagged else 0
     return {
-        "skills_dirs_present": len(found_dirs) > 0,
-        "skills_dirs": found_dirs,
-        "skills_count": len(skill_files),
-        "skill_files": skill_files,
+        "always_on_penalty": min(math.ceil(over / ALWAYS_ON_LINES_PER_POINT),
+                                 ALWAYS_ON_MAX_PENALTY),
+        "relocatable_penalty": min(
+            math.ceil(record["fetch_on_need_lines"] / RELOCATABLE_LINES_PER_POINT),
+            RELOCATABLE_MAX_PENALTY),
+        "capped": flagged and always_on > ALWAYS_ON_GRADE_CAP_LINES,
     }
-
-
-def compute_bloat_penalty(
-    size_metrics: SizeMetrics,
-    skills_present: bool,
-    delegates_to_skills: bool,
-) -> tuple[int, str | None]:
-    """Compute the size-curve penalty for an always-loaded instruction file.
-
-    Returns: (penalty_points, remediation_message)
-
-    - Within ``SIZE_THRESHOLD_LINES`` lines and ``SIZE_THRESHOLD_WORDS`` words
-      -> no penalty.
-    - Over it -> one point per ``SIZE_LINES_PER_POINT`` lines (or
-      ``SIZE_WORDS_PER_POINT`` words) over, the larger of the two, capped at
-      ``SIZE_MAX_PENALTY``.
-    - With skills factoring (a skills dir or delegation pointers) -> that
-      penalty divided by ``SKILLS_DELEGATION_DIVISOR``, rounded up. The file
-      is still loaded on every task, so delegation never waives it.
-    """
-    lines = size_metrics["line_count"]
-    words = size_metrics["word_count"]
-    is_oversized = (
-        size_metrics["exceeds_line_threshold"]
-        or size_metrics["exceeds_word_threshold"]
-    )
-    if not is_oversized:
-        return 0, None
-
-    line_penalty = math.ceil(max(0, lines - SIZE_THRESHOLD_LINES) / SIZE_LINES_PER_POINT)
-    word_penalty = math.ceil(max(0, words - SIZE_THRESHOLD_WORDS) / SIZE_WORDS_PER_POINT)
-    penalty = min(max(line_penalty, word_penalty), SIZE_MAX_PENALTY)
-    if skills_present or delegates_to_skills:
-        return math.ceil(penalty / SKILLS_DELEGATION_DIVISOR), (
-            f"Instruction file exceeds size threshold ({lines} lines, {words} words; "
-            f"the curve starts at {SIZE_THRESHOLD_LINES} lines). The repo delegates "
-            "to skills, which halves the penalty, but this file still loads on "
-            "every task. Remediation: move more topic guidance into the skills "
-            "and keep the root file to commands and constraints."
-        )
-
-    remediation = (
-        f"Instruction file exceeds size threshold ({lines} lines, {words} words; "
-        f"the curve starts at {SIZE_THRESHOLD_LINES} lines) without factoring "
-        "guidance into on-demand skills. Remediation: factor guidance into "
-        "on-demand skills - extract topic-specific guidance into "
-        "`.claude/skills/*/SKILL.md` files loaded when relevant, keeping the root "
-        "instruction file lean."
-    )
-
-    return penalty, remediation
 
 
 # Scores below this are an F (see ``_letter_grade``).
@@ -559,8 +468,7 @@ def grade_instructions(
     text: str,
     freshness_days: int,
     *,
-    skills_present: bool = False,
-    delegates_to_skills: bool | None = None,
+    skills: Mapping[str, str] | None = None,
     repo: RepoContext | None,
     path: str = "",
 ) -> Grade:
@@ -576,19 +484,22 @@ def grade_instructions(
         path_references_existing: 3 points each, capped at 15
         verifiable_outcomes:      5 points each, capped at 10
         freshness penalty:        -10 if > 365 days, -5 if > 180
-        bloat_penalty:            the size curve (``compute_bloat_penalty``),
-                                  halved when the repo delegates to skills
-        size grade cap:           over 400 lines or 4800 words the score is
-                                  capped at 59 (a B), skills or not
+        bloat_penalty:            always-on size and share
+                                  (``placement_penalty``): -1 per 10 always-on
+                                  lines past 200 when they are over half the
+                                  file (cap 30), plus -1 per 10 fetch-on-need
+                                  lines (cap 30)
+        size grade cap:           a flagged file over 400 always-on lines is
+                                  capped at 59 (a B)
         content_penalty:          -10 for a directory-tree block, -5 for a
                                   repository-overview section, -8 / -15 when
                                   25% / 50% of the file's lines repeat the README
 
     Args:
-        skills_present: whether the repo has a skills directory (auto-detected
-            by the caller via ``detect_skills_dir``).
-        delegates_to_skills: whether the text itself contains progressive-
-            disclosure pointers. ``None`` (the default) auto-detects from text.
+        skills: every ``SKILL.md`` text by repo-relative path
+            (``lib.instruction_placement.skill_texts``), so a section a skill
+            already holds counts as fetch-on-need, as in the
+            ``instruction_placement`` block. ``None`` compares against none.
         repo: the repository context, required so a caller cannot drop it
             by accident. ``None`` is the explicit text-only opt-out: no
             command earns credit, path references are counted unverified, and
@@ -599,16 +510,14 @@ def grade_instructions(
 
     Subscore keys read downstream (``positive_directives``,
     ``tradeoff_phrases``, ``path_references``, ``verifiable_outcomes``,
-    ``line_count``, ``word_count``, ``bloat_penalty``) keep their meaning:
+    ``line_count``, ``word_count``) keep their meaning, and ``bloat_penalty``
+    stays the total size penalty (now ``always_on_penalty`` plus
+    ``relocatable_penalty``):
     ``path_references`` stays the raw count, and the credited count is
     ``path_references_existing``.
     """
     if not text.strip():
         return Grade(score=0, grade="F", subscores={})
-
-    # Auto-detect delegation from text when not explicitly provided.
-    if delegates_to_skills is None:
-        delegates_to_skills = detect_skills_delegation(text)["delegates_to_skills"]
 
     sub = {
         "positive_directives": count_positive_directives(text),
@@ -616,9 +525,13 @@ def grade_instructions(
         "path_references": count_path_references(text),
         "verifiable_outcomes": count_verifiable_outcomes(text),
     }
-    size_metrics = compute_size_metrics(text)
-    sub["line_count"] = size_metrics["line_count"]
-    sub["word_count"] = size_metrics["word_count"]
+    sub["line_count"] = len(text.splitlines())
+    sub["word_count"] = len(text.split())
+    placement = analyse_file(text, path or "CLAUDE.md", "instruction", skills or {})
+    sub["always_on_lines"] = placement["always_on_lines"]
+    sub["always_on_pct"] = round(placement["always_on_share"] * 100)
+    sub["fetch_on_need_lines"] = placement["fetch_on_need_lines"]
+    sub["always_on_flagged"] = int(placement["flagged"])
 
     findings: list[GradeFinding] = []
     if repo is not None:
@@ -644,9 +557,10 @@ def grade_instructions(
     score += _capped(sub["verifiable_outcomes"], VERIFIABLE_POINTS, VERIFIABLE_CAP)
     score -= _freshness_penalty(freshness_days)
 
-    bloat_penalty, _bloat_remediation = compute_bloat_penalty(
-        size_metrics, skills_present, delegates_to_skills
-    )
+    size = placement_penalty(placement)
+    sub["always_on_penalty"] = size["always_on_penalty"]
+    sub["relocatable_penalty"] = size["relocatable_penalty"]
+    bloat_penalty = size["always_on_penalty"] + size["relocatable_penalty"]
     sub["bloat_penalty"] = bloat_penalty
     sub["content_penalty"] = _content_penalty(sub)
     # Before the size and content penalties and before clamping, so a reader
@@ -655,9 +569,7 @@ def grade_instructions(
     score -= bloat_penalty + sub["content_penalty"]
 
     score = max(0, min(score, 100))
-    sub["size_grade_capped"] = int(
-        sub["line_count"] > SIZE_GRADE_CAP_LINES or sub["word_count"] > SIZE_GRADE_CAP_WORDS
-    )
+    sub["size_grade_capped"] = int(size["capped"])
     if sub["size_grade_capped"]:
         score = min(score, SIZE_GRADE_CAP_SCORE)
     return Grade(score=score, grade=_letter_grade(score), subscores=sub, findings=findings)

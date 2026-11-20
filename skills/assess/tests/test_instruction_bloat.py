@@ -1,11 +1,13 @@
-"""Tests for the instruction-file size curve, its skills-delegation halving, and the size grade cap.
+"""Tests for the instruction-file score on always-on size and share (issue #560).
 
-The core thesis (see `test_monolith_scores_strictly_below_lean_plus_skills`):
-an oversized monolithic instruction file that is NOT factored into on-demand
-skills scores STRICTLY BELOW the same file in a repo that delegates to skills,
-and the delegating repo still pays half the penalty: an always-loaded file
-costs context on every task whether or not skills exist. Past about twice the
-curve's start the grade is capped at B either way.
+The grader splits the file on its headings (``lib.instruction_placement``) and
+charges two kinds of line: always-on lines past 200 when they are more than
+half the file, and fetch-on-need lines that a pointer would replace. This
+replaced the #517 whole-file curve, its skills-delegation halving and its word
+leg. The core thesis (``test_600_line_file_scores_below_the_same_file_with_a_pointer``):
+a long file whose bulk belongs in a skill scores below the same file with that
+section replaced by a two-line pointer, although the pointer version is all
+always-on.
 """
 from __future__ import annotations
 
@@ -15,196 +17,184 @@ from pathlib import Path
 import pytest
 
 from lib.agent_instructions_grader import (
-    SIZE_GRADE_CAP_LINES,
+    ALWAYS_ON_GRADE_CAP_LINES,
+    ALWAYS_ON_MAX_PENALTY,
+    RELOCATABLE_MAX_PENALTY,
     SIZE_GRADE_CAP_SCORE,
-    SIZE_GRADE_CAP_WORDS,
-    SIZE_MAX_PENALTY,
-    SIZE_THRESHOLD_LINES,
-    SIZE_THRESHOLD_WORDS,
-    compute_bloat_penalty,
-    compute_size_metrics,
-    detect_skills_delegation,
-    detect_skills_dir,
     grade_instructions,
+    placement_penalty,
 )
 from lib.instruction_content import build_repo_context
+from lib.instruction_files import grade_instruction_files
+from lib.instruction_placement import (
+    ALWAYS_ON_FLAG_LINES,
+    PlacementFile,
+    analyse_file,
+    detect_skills_dir,
+    scan_instruction_placement,
+    skill_texts,
+)
+from test_instruction_placement import _filler, _kubernetes_section, _rules_block, _write
 
 
-def test_bloat_penalty_on_monolith(fixtures_dir: Path) -> None:
-    """Monolithic 600+ line file without skills gets a bloat penalty."""
-    text = (fixtures_dir / "monolithic_instructions.md").read_text()
-    size = compute_size_metrics(text)
-    assert size["exceeds_line_threshold"] is True
-
-    penalty, msg = compute_bloat_penalty(
-        size, skills_present=False, delegates_to_skills=False
-    )
-    assert penalty >= 5
-    assert msg is not None
-    assert "factor guidance into on-demand skills" in msg
+def _record(always_on: int, fetch: int, flagged: bool) -> PlacementFile:
+    total = always_on + fetch
+    return {
+        "path": "CLAUDE.md", "kind": "instruction", "total_lines": total,
+        "always_on_lines": always_on, "always_on_share": round(always_on / total, 2),
+        "fetch_on_need_lines": fetch, "unclassified_lines": 0, "sections_total": 1,
+        "flagged": flagged, "relocatable": [], "relocatable_total": 0,
+    }
 
 
-def test_no_bloat_penalty_with_skills(fixtures_dir: Path) -> None:
-    """Lean file with skills delegation gets no bloat penalty."""
-    repo = fixtures_dir / "lean_with_skills"
-    text = (repo / "CLAUDE.md").read_text()
-    size = compute_size_metrics(text)
-    skills = detect_skills_dir(repo)
-    delegation = detect_skills_delegation(text)
-
-    penalty, msg = compute_bloat_penalty(
-        size,
-        skills["skills_dirs_present"],
-        delegation["delegates_to_skills"],
-    )
-    assert penalty == 0
-    assert msg is None
+def _pointer() -> str:
+    return "## Kubernetes\nSee the `kubernetes-commands` skill.\n"
 
 
-def test_oversized_but_factored_into_skills_is_halved_not_waived(fixtures_dir: Path) -> None:
-    """An oversized hub file in a repo that delegates to skills pays half the
-    penalty: the skills move topic guidance out, but this file still loads on
-    every task."""
-    text = (fixtures_dir / "monolithic_instructions.md").read_text()
-    size = compute_size_metrics(text)
-    assert size["exceeds_line_threshold"] is True
-    full, full_msg = compute_bloat_penalty(size, skills_present=False, delegates_to_skills=False)
-    assert full == SIZE_MAX_PENALTY
-    assert full_msg is not None and "factor guidance into on-demand skills" in full_msg
-
-    for skills_present, delegates in ((True, False), (False, True), (True, True)):
-        penalty, msg = compute_bloat_penalty(
-            size, skills_present=skills_present, delegates_to_skills=delegates
-        )
-        assert penalty == SIZE_MAX_PENALTY // 2
-        assert msg is not None and "halves the penalty" in msg
+# --- the #419 success criterion ------------------------------------------------------
 
 
-@pytest.mark.parametrize(("lines", "full", "halved"), [
-    (200, 0, 0), (201, 1, 1), (210, 1, 1), (220, 2, 1), (230, 3, 2),
-    (300, 10, 5), (500, SIZE_MAX_PENALTY, SIZE_MAX_PENALTY // 2),
+def test_600_line_file_scores_below_the_same_file_with_a_pointer(tmp_path: Path) -> None:
+    """A 600-line CLAUDE.md with a 40-line identity and rules block, a 300-line
+    Kubernetes section of fenced commands and a skills directory scores lower
+    than the same file with that section replaced by a two-line pointer."""
+    _write(tmp_path, ".claude/skills/deploy/SKILL.md", "---\nname: deploy\n---\nDeploy.\n")
+    skills = skill_texts(tmp_path)
+    assert list(skills) == [".claude/skills/deploy/SKILL.md"]
+    full = _rules_block() + _kubernetes_section(300) + _filler(260)
+    pointed = _rules_block() + _pointer() + _filler(260)
+    assert len(full.splitlines()) == 600
+
+    with_section = grade_instructions(full, 1, skills=skills, repo=None, path="CLAUDE.md")
+    with_pointer = grade_instructions(pointed, 1, skills=skills, repo=None, path="CLAUDE.md")
+
+    sub = with_section.subscores
+    assert (sub["always_on_lines"], sub["fetch_on_need_lines"], sub["always_on_pct"]) == (300, 300, 50)
+    assert sub["always_on_flagged"] == 0  # half the file, not more
+    assert sub["relocatable_penalty"] == RELOCATABLE_MAX_PENALTY
+    ptr = with_pointer.subscores
+    assert (ptr["always_on_lines"], ptr["fetch_on_need_lines"], ptr["always_on_flagged"]) == (302, 0, 1)
+    assert ptr["always_on_penalty"] == 11
+    assert with_section.score < with_pointer.score
+
+
+def test_small_file_that_is_mostly_reference_pays_for_it() -> None:
+    """Share, not size: a 120-line file whose bulk is one tool's command
+    reference is not flagged (under 200 always-on lines) but pays for the
+    lines a pointer would replace."""
+    text = _rules_block() + _kubernetes_section(80)
+    assert len(text.splitlines()) == 120
+    grade = grade_instructions(text, 1, repo=None)
+    pointed = grade_instructions(_rules_block() + _pointer(), 1, repo=None)
+    assert grade.subscores["always_on_flagged"] == 0
+    assert grade.subscores["fetch_on_need_lines"] == 80
+    assert grade.subscores["relocatable_penalty"] == 8
+    assert pointed.subscores["bloat_penalty"] == 0
+    assert grade.score < pointed.score
+
+
+def test_section_a_skill_already_holds_costs_points(tmp_path: Path) -> None:
+    """A section duplicating an existing SKILL.md is fetch-on-need only when the
+    grader is given the skills, as the placement block is."""
+    shared = "\n".join(f"Step {i}: rotate the signing key for tenant {i} in the vault."
+                       for i in range(20))
+    _write(tmp_path, "skills/rotate/SKILL.md", f"---\nname: rotate\n---\n{shared}\n")
+    text = "# Project\n\n## Key rotation\n\n" + shared + "\n"
+    without = grade_instructions(text, 1, repo=None)
+    with_skills = grade_instructions(text, 1, skills=skill_texts(tmp_path), repo=None)
+    assert without.subscores["fetch_on_need_lines"] == 0
+    assert with_skills.subscores["fetch_on_need_lines"] == 22
+    assert with_skills.subscores["relocatable_penalty"] == 3
+    assert with_skills.score < without.score
+
+
+# --- placement_penalty -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("always_on", "penalty"), [
+    (200, 0), (201, 1), (210, 1), (211, 2), (300, 10), (400, 20), (500, ALWAYS_ON_MAX_PENALTY),
+    (1200, ALWAYS_ON_MAX_PENALTY),
 ])
-def test_delegation_halves_rounding_up(lines: int, full: int, halved: int) -> None:
-    size = compute_size_metrics("x\n" * lines)
-    assert compute_bloat_penalty(size, False, False)[0] == full
-    assert compute_bloat_penalty(size, True, False)[0] == halved
-    assert compute_bloat_penalty(size, False, True)[0] == halved
+def test_always_on_curve_when_flagged(always_on: int, penalty: int) -> None:
+    result = placement_penalty(_record(always_on, 0, flagged=always_on > ALWAYS_ON_FLAG_LINES))
+    assert result["always_on_penalty"] == penalty
+    assert result["relocatable_penalty"] == 0
 
 
-def test_monolith_scores_strictly_below_lean_plus_skills(fixtures_dir: Path) -> None:
-    """REGRESSION TEST (core thesis): the same guidance scores STRICTLY LOWER
-    as an unfactored monolith than in a repo that delegates to skills, and
-    the delegating repo still pays a penalty.
+def test_always_on_lines_cost_nothing_when_not_flagged() -> None:
+    """Half the file or less always-on: the size term is off and the share term
+    (the fetch-on-need lines) carries the penalty."""
+    result = placement_penalty(_record(300, 300, flagged=False))
+    assert result["always_on_penalty"] == 0
+    assert result["relocatable_penalty"] == RELOCATABLE_MAX_PENALTY
 
-    Grading the same text two ways isolates the delegation as the sole
-    difference.
-    """
+
+@pytest.mark.parametrize(("fetch", "penalty"), [
+    (0, 0), (1, 1), (10, 1), (11, 2), (150, 15), (300, RELOCATABLE_MAX_PENALTY),
+])
+def test_relocatable_curve(fetch: int, penalty: int) -> None:
+    assert placement_penalty(_record(50, fetch, flagged=False))["relocatable_penalty"] == penalty
+
+
+def test_cap_needs_a_flagged_file_past_the_cap_lines() -> None:
+    assert ALWAYS_ON_GRADE_CAP_LINES == 2 * ALWAYS_ON_FLAG_LINES
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES, 0, True))["capped"] is False
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 0, True))["capped"] is True
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 500, False))["capped"] is False
+
+
+# --- grade_instructions ------------------------------------------------------------
+
+
+def test_small_file_no_penalty() -> None:
+    grade = grade_instructions("Use bcrypt for password hashing.\n" * 100, 1, repo=None)
+    assert grade.subscores["bloat_penalty"] == 0
+    assert grade.subscores["size_grade_capped"] == 0
+
+
+def test_bloat_penalty_is_the_sum_of_both_terms() -> None:
+    text = "## Notes\n" + "x\n" * 300
+    grade = grade_instructions(text, 1, repo=None)
+    sub = grade.subscores
+    assert sub["always_on_flagged"] == 1
+    assert sub["bloat_penalty"] == sub["always_on_penalty"] + sub["relocatable_penalty"] == 11
+
+
+def test_word_count_alone_no_longer_costs_points() -> None:
+    """The #517 word leg is gone: the split is line-based."""
+    grade = grade_instructions(" ".join(["word"] * 9000) + "\n", 1, repo=None)
+    assert grade.subscores["word_count"] == 9000
+    assert grade.subscores["bloat_penalty"] == 0
+
+
+def test_monolith_fixture_is_flagged_and_capped(fixtures_dir: Path) -> None:
+    """The 625-line monolith is all always-on: flagged, the full size penalty,
+    and capped at B whether or not skills sit beside it."""
     text = (fixtures_dir / "monolithic_instructions.md").read_text()
-
-    monolith_grade = grade_instructions(
-        text, freshness_days=10, skills_present=False, delegates_to_skills=False, repo=None)
-    factored_grade = grade_instructions(
-        text, freshness_days=10, skills_present=True, repo=None)
-
-    assert monolith_grade.subscores["bloat_penalty"] >= 5
-    assert 0 < factored_grade.subscores["bloat_penalty"] < monolith_grade.subscores["bloat_penalty"]
-    assert monolith_grade.score < factored_grade.score
+    grade = grade_instructions(text, 10, repo=None)
+    assert grade.subscores["always_on_flagged"] == 1
+    assert grade.subscores["always_on_penalty"] == ALWAYS_ON_MAX_PENALTY
+    assert grade.subscores["size_grade_capped"] == 1
+    assert grade.score <= SIZE_GRADE_CAP_SCORE
 
 
 def test_lean_fixture_repo_detects_skills_and_avoids_penalty(fixtures_dir: Path) -> None:
-    """End-to-end on the lean fixture repo: skills dir is detected, delegation
-    pointers are present, and the graded file carries no bloat penalty."""
     repo = fixtures_dir / "lean_with_skills"
     text = (repo / "CLAUDE.md").read_text()
-
     skills = detect_skills_dir(repo)
     assert skills["skills_dirs_present"] is True
     assert skills["skills_count"] == 2
     assert any("java-conventions" in f for f in skills["skill_files"])
-
-    grade = grade_instructions(
-        text, freshness_days=10, skills_present=skills["skills_dirs_present"], repo=None)
+    grade = grade_instructions(text, 10, skills=skill_texts(repo), repo=None)
     assert grade.subscores["bloat_penalty"] == 0
 
 
 def test_graceful_no_skills_dir(tmp_path: Path) -> None:
-    """Repos without any skills directory degrade gracefully."""
     skills = detect_skills_dir(tmp_path)
-    assert skills["skills_dirs_present"] is False
-    assert skills["skills_count"] == 0
-    assert skills["skill_files"] == []
-    assert skills["skills_dirs"] == []
+    assert skills == {"skills_dirs_present": False, "skills_dirs": [],
+                      "skills_count": 0, "skill_files": []}
+    assert skill_texts(tmp_path) == {}
 
-
-def test_small_file_no_penalty() -> None:
-    """Small/legitimate instruction files are never penalized."""
-    small_text = "Use bcrypt for password hashing.\n" * 100  # 100 lines
-    size = compute_size_metrics(small_text)
-
-    assert size["exceeds_line_threshold"] is False
-    assert size["exceeds_word_threshold"] is False
-    penalty, msg = compute_bloat_penalty(
-        size, skills_present=False, delegates_to_skills=False
-    )
-    assert penalty == 0
-    assert msg is None
-
-
-def test_threshold_boundary_lines() -> None:
-    """Files at exactly the line threshold are not penalized; one more is."""
-    boundary_text = "Line\n" * SIZE_THRESHOLD_LINES
-    size = compute_size_metrics(boundary_text)
-    assert size["line_count"] == SIZE_THRESHOLD_LINES
-    assert size["exceeds_line_threshold"] is False
-
-    over_text = "Line\n" * (SIZE_THRESHOLD_LINES + 1)
-    over_size = compute_size_metrics(over_text)
-    assert over_size["exceeds_line_threshold"] is True
-    penalty, _ = compute_bloat_penalty(
-        over_size, skills_present=False, delegates_to_skills=False
-    )
-    assert penalty == 1
-
-
-def test_penalty_curve_by_lines() -> None:
-    """One point per SIZE_LINES_PER_POINT lines past 200, capped at SIZE_MAX_PENALTY."""
-    def lines_penalty(n: int) -> int:
-        size = compute_size_metrics("x\n" * n)
-        return compute_bloat_penalty(size, False, False)[0]
-
-    assert lines_penalty(200) == 0
-    assert lines_penalty(210) == 1
-    assert lines_penalty(300) == 10
-    assert lines_penalty(400) == 20
-    assert lines_penalty(500) == SIZE_MAX_PENALTY
-    assert lines_penalty(1200) == SIZE_MAX_PENALTY
-
-
-def test_penalty_curve_by_words() -> None:
-    """Words follow the same curve from 2400 words, one point per 120."""
-    def words_penalty(n: int) -> int:
-        # Few lines, many words: isolates the word-count metric.
-        size = compute_size_metrics(" ".join(["word"] * n))
-        return compute_bloat_penalty(size, False, False)[0]
-
-    assert words_penalty(2400) == 0
-    assert words_penalty(2401) == 1
-    assert words_penalty(3600) == 10
-    assert words_penalty(9000) == SIZE_MAX_PENALTY
-
-
-def test_penalty_takes_higher_of_two_metrics() -> None:
-    """When both metrics exceed, the higher penalty wins."""
-    # 250 lines (-5 by lines) but 4791 words (-20 by words) -> expect -20.
-    text = ("word " * 19 + "word\n") * 239 + "x\n" * 11
-    size = compute_size_metrics(text)
-    assert size["line_count"] == 250
-    assert size["word_count"] == 4791
-    penalty, _ = compute_bloat_penalty(size, False, False)
-    assert penalty == 20
-
-
-# --- Size grade cap -----------------------------------------------------------
 
 # Earns well over the B ceiling before size: verifiable outcomes, tradeoffs,
 # directives and existing-unverified paths (repo=None counts them all).
@@ -216,55 +206,56 @@ _RICH = (
 )
 
 
-def _padded(lines: int) -> str:
-    return _RICH + "x\n" * (lines - _RICH.count("\n"))
-
-
-def test_cap_constants_are_twice_the_curve_start() -> None:
-    assert SIZE_GRADE_CAP_LINES == 2 * SIZE_THRESHOLD_LINES
-    assert SIZE_GRADE_CAP_WORDS == 2 * SIZE_THRESHOLD_WORDS
-
-
-@pytest.mark.parametrize("skills_present", [False, True])
-def test_grade_cap_by_lines(skills_present: bool) -> None:
-    at = grade_instructions(_padded(SIZE_GRADE_CAP_LINES), 1, skills_present=skills_present,
-                            delegates_to_skills=skills_present, repo=None)
-    over = grade_instructions(_padded(SIZE_GRADE_CAP_LINES + 1), 1, skills_present=skills_present,
-                              delegates_to_skills=skills_present, repo=None)
-    assert at.subscores["size_grade_capped"] == 0
-    assert over.subscores["size_grade_capped"] == 1
-    assert over.score <= SIZE_GRADE_CAP_SCORE
-    assert over.grade == "B" or over.score < 50
-
-
-def test_grade_cap_by_words_with_skills() -> None:
-    """A short file of very long lines is capped on words, skills or not."""
-    long_words = _RICH + " ".join(["word"] * (SIZE_GRADE_CAP_WORDS + 1)) + "\n"
-    grade = grade_instructions(long_words, 1, skills_present=True, repo=None)
-    assert grade.subscores["line_count"] < SIZE_GRADE_CAP_LINES
-    assert grade.subscores["size_grade_capped"] == 1
-    assert grade.score <= SIZE_GRADE_CAP_SCORE
-
-
 def test_cap_binds_when_the_score_would_be_higher(tmp_path: Path, fixtures_dir: Path) -> None:
     """The cap lowers a score above B and leaves a lower one alone."""
     root = tmp_path / "repo"
     shutil.copytree(fixtures_dir / "instruction_grading" / "repo", root)
     commands = "`npm test` `make check` `make fmt` `make lint`\n"
-    rich = commands + _RICH * 3 + " ".join(["word"] * SIZE_GRADE_CAP_WORDS) + "\n"
-    capped = grade_instructions(rich, 1, skills_present=True, repo=build_repo_context(root))
+    rich = commands + _RICH * 3 + "x\n" * ALWAYS_ON_GRADE_CAP_LINES
+    capped = grade_instructions(rich, 1, repo=build_repo_context(root))
     assert capped.subscores["verified_commands"] == 4
     assert capped.subscores["size_grade_capped"] == 1
     assert capped.subscores["score_before_penalties"] - capped.subscores["bloat_penalty"] > SIZE_GRADE_CAP_SCORE
     assert capped.score == SIZE_GRADE_CAP_SCORE
     assert capped.grade == "B"
 
-    plain = "x\n" * (SIZE_GRADE_CAP_LINES + 1)
-    low = grade_instructions(plain, 1, repo=None)
+    low = grade_instructions("x\n" * (ALWAYS_ON_GRADE_CAP_LINES + 1), 1, repo=None)
     assert low.subscores["size_grade_capped"] == 1
     assert low.score < SIZE_GRADE_CAP_SCORE
 
 
 def test_small_file_is_never_capped() -> None:
-    grade = grade_instructions(_RICH, 1, repo=None)
-    assert grade.subscores["size_grade_capped"] == 0
+    assert grade_instructions(_RICH, 1, repo=None).subscores["size_grade_capped"] == 0
+
+
+# --- one computation: the grade and the block agree ---------------------------------
+
+
+def test_graded_file_matches_its_placement_record(git_repo) -> None:
+    """The grade's always-on numbers are the instruction_placement record's."""
+    repo, commit = git_repo
+    _write(repo, "CLAUDE.md", _rules_block() + _kubernetes_section(300) + _filler(260))
+    shared = "\n".join(f"Step {i}: rotate the signing key for tenant {i} in the vault."
+                       for i in range(20))
+    _write(repo, ".claude/skills/rotate/SKILL.md", f"---\nname: rotate\n---\n{shared}\n")
+    _write(repo, "AGENTS.md", "# Agents\n\n## Key rotation\n\n" + shared + "\n")
+    commit("init")
+    files = grade_instruction_files(repo)[0]
+    entries = {rel: {"present": True} for rel in files}
+    block = scan_instruction_placement(repo, entries, None)
+    assert {r["path"] for r in block["files"]} == {"CLAUDE.md", "AGENTS.md"}
+    for record in block["files"]:
+        sub = files[record["path"]]["subscores"]
+        assert sub["always_on_lines"] == record["always_on_lines"]
+        assert sub["fetch_on_need_lines"] == record["fetch_on_need_lines"]
+        assert sub["always_on_flagged"] == int(record["flagged"])
+        assert sub["always_on_pct"] == round(record["always_on_share"] * 100)
+    assert files["AGENTS.md"]["subscores"]["fetch_on_need_lines"] > 0
+
+
+def test_analyse_file_is_the_graders_split() -> None:
+    text = _rules_block() + _kubernetes_section(300) + _filler(260)
+    record = analyse_file(text, "CLAUDE.md", "instruction", {})
+    sub = grade_instructions(text, 1, repo=None, path="CLAUDE.md").subscores
+    assert sub["always_on_lines"] == record["always_on_lines"]
+    assert sub["fetch_on_need_lines"] == record["fetch_on_need_lines"]
