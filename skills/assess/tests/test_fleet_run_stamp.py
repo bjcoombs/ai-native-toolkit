@@ -259,7 +259,7 @@ def test_a_checkout_that_is_not_its_work_tree_root_is_kept(tmp_path):
 def test_a_failed_rmtree_is_kept_and_reported(tmp_path, monkeypatch):
     checkout = _pushed_repo(tmp_path / "root", "grp/svc")
 
-    def boom(_path: object) -> None:
+    def boom(_path: object, **_kwargs: object) -> None:
         raise OSError("busy")
     monkeypatch.setattr(fleet_cleanup.shutil, "rmtree", boom)
     assert delete_clone(_target(checkout), _row("grp/svc"), []) == fleet_cleanup.KEEP_DELETE_ERROR

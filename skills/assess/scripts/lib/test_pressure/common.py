@@ -60,6 +60,6 @@ def _is_test_file(path: Path) -> bool:
 
 def _rel(repo_root: Path, path: Path) -> str:
     try:
-        return str(path.relative_to(repo_root))
+        return path.relative_to(repo_root).as_posix()
     except ValueError:  # pragma: no cover
-        return str(path)
+        return path.as_posix()

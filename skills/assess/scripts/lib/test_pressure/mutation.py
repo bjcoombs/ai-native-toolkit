@@ -359,7 +359,8 @@ def _mutmut_major_from_metadata(exe: str) -> int | None:
         proc = subprocess.run(
             [interpreter, "-c",
              "from importlib.metadata import version; print(version('mutmut'))"],
-            capture_output=True, text=True, timeout=15, check=False)
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=15, check=False)
     except (subprocess.TimeoutExpired, OSError):
         return None
     m = re.match(r"\s*(\d+)\.", proc.stdout or "")
@@ -376,7 +377,7 @@ def _mutmut_major_from_cli() -> int | None:
         with tempfile.TemporaryDirectory(prefix="assess-mutmut-probe-") as tmp:
             proc = subprocess.run(
                 ["mutmut", "--version"], cwd=tmp, capture_output=True,
-                text=True, timeout=30, check=False)
+                text=True, encoding="utf-8", errors="replace", timeout=30, check=False)
     except (subprocess.TimeoutExpired, OSError):
         return None
     out = f"{proc.stdout or ''}\n{proc.stderr or ''}"
@@ -439,7 +440,8 @@ def run_bounded_mutation(repo_root: Path,
     try:
         proc = subprocess.run(
             spec["cmd"](repo_root, scope), cwd=str(repo_root),
-            capture_output=True, text=True, timeout=MUTATION_TIMEOUT, check=False,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=MUTATION_TIMEOUT, check=False,
         )
     except subprocess.TimeoutExpired:
         return {"mutation_run": False, "available": True, "tool": spec["tool"],
@@ -489,7 +491,8 @@ def _run_mutmut_junitxml(repo_root: Path, timeout: float) -> list[MutationFileRe
     try:
         proc = subprocess.run(
             ["mutmut", "junitxml"], cwd=str(repo_root),
-            capture_output=True, text=True, timeout=max(1.0, timeout), check=False,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=max(1.0, timeout), check=False,
         )
     except (subprocess.TimeoutExpired, OSError):  # pragma: no cover - defensive
         return []

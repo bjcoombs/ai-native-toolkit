@@ -101,7 +101,7 @@ def build_tree(files_with_color: list[ColoredFile], root: Path,
         leaf = Node(
             name=rel.parts[-1], size=area, color=color,
             loc=size, est_tokens=est_tokens, metric=metric, aux_metric=aux_val,
-            aux_label=aux_label, rel_path=str(rel), is_file=True,
+            aux_label=aux_label, rel_path=rel.as_posix(), is_file=True,
         )
         if node_overrides and path in node_overrides:
             for k, v in node_overrides[path].items():

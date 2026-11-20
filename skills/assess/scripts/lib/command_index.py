@@ -359,17 +359,31 @@ def _nox(root: Path, files: frozenset[str]) -> TargetSet | None:
     return TargetSet(frozenset(names))
 
 
-def _ci_lines(root: Path, files: frozenset[str]) -> tuple[str, ...]:
-    ci_files = sorted(
+def ci_config_files(files: Iterable[str]) -> list[str]:
+    """The CI configuration files among ``files`` (GitHub Actions workflows, GitLab CI)."""
+    return sorted(
         f for f in files
         if f in CI_CONFIG_FILES
         or (f.startswith(CI_CONFIG_PREFIXES) and f.endswith((".yml", ".yaml")))
     )
+
+
+def ci_line_text(line: str) -> str:
+    """One CI configuration line with its ``- ``, ``run:`` / ``script:`` lead and extra spaces dropped."""
+    text = re.sub(r"^\s*(?:-\s+)?(?:run:|script:)?\s*", "", line)
+    return " ".join(text.split())
+
+
+def read_config(root: Path, rel: str) -> str:
+    """A config file's text, or empty when unreadable or over ``MAX_CONFIG_BYTES``."""
+    return _read(root, rel)
+
+
+def _ci_lines(root: Path, files: frozenset[str]) -> tuple[str, ...]:
     lines: list[str] = []
-    for rel in ci_files:
+    for rel in ci_config_files(files):
         for line in _read(root, rel).splitlines():
-            text = re.sub(r"^\s*(?:-\s+)?(?:run:|script:)?\s*", "", line)
-            text = " ".join(text.split())
+            text = ci_line_text(line)
             if text:
                 lines.append(text)
     return tuple(lines)

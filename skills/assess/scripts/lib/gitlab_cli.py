@@ -172,7 +172,8 @@ def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS) -> str:
     cmd = ["glab", *args]
     shown = " ".join(cmd)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=timeout)
     except FileNotFoundError:
         raise GhUnavailable("glab_not_installed: the glab CLI is not on PATH") from None
     except subprocess.TimeoutExpired:

@@ -70,7 +70,12 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / ".claude").mkdir()
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".github" / "workflows" / "ci.yml").write_text(_CI_WORKFLOW, encoding="utf-8")
     return _scans(_commit(repo))
+
+
+_CI_WORKFLOW = "on: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make check\n"
 
 
 @pytest.fixture(scope="module")
@@ -354,6 +359,49 @@ def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any])
     assert levels["layer-0-instructions"] == 2
     assert levels["layer-5-ci"] == 2
     assert levels["layer-8-agent-ops"] == 1
+
+
+def _ci_repo(root: Path, workflow: str | None, instructions: bool) -> dict[str, Any]:
+    root.mkdir()
+    (root / "Makefile").write_text("test:\n\tpython -m pytest\n", encoding="utf-8")
+    if workflow is not None:
+        (root / ".github" / "workflows").mkdir(parents=True)
+        (root / ".github" / "workflows" / "ci.yml").write_text(workflow, encoding="utf-8")
+    if instructions:
+        (root / "CLAUDE.md").write_text("# Guide\n\nRun `make test`.\n", encoding="utf-8")
+    return _scans(_commit(root))
+
+
+def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) -> None:
+    """Issue #698: a CI test job is level 1 with no instruction file; naming the check is 2."""
+    ci = _CI_WORKFLOW.replace("make check", "make test")
+    bare = _ci_repo(tmp_path / "bare", ci, instructions=False)
+    assert bare["ci_checks"]["test_or_lint_runs"] is True
+    assert _row(_run({"r": bare}), "layer-5-ci")["level"] == 1
+    named = _ci_repo(tmp_path / "named", ci, instructions=True)
+    assert _row(_run({"r": named}), "layer-5-ci")["level"] == 2
+
+
+def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:
+    """The accepted regression: a named check alone no longer reaches any Layer 5 level."""
+    deploy = _CI_WORKFLOW.replace("make check", "make deploy")
+    for name, workflow in (("none", None), ("deploy", deploy)):
+        scans = _ci_repo(tmp_path / name, workflow, instructions=True)
+        assert scans["agent_environment"]["layer5_cap"]["applies"] is False
+        assert scans["ci_checks"]["test_or_lint_runs"] is False
+        assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
+
+
+def test_layer_five_is_unknown_when_ci_jobs_come_only_from_includes(tmp_path: Path) -> None:
+    root = tmp_path / "included"
+    root.mkdir()
+    (root / ".gitlab-ci.yml").write_text(
+        "include:\n  - component: gitlab.com/acme/ci/python@1.0\n", encoding="utf-8")
+    scans = _scans(_commit(root))
+    assert scans["ci_checks"]["basis"] == "included_jobs"
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "ci_checks.test_or_lint_runs" in row["missing_signals"]
 
 
 def test_no_instruction_file_is_zero_but_a_missing_block_is_unknown(

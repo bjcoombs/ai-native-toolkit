@@ -160,7 +160,8 @@ def _repo_top(repo_root: Path) -> str | None:
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -185,7 +186,7 @@ def _accumulate_history(repo_top: str) -> dict[str, _FileHistory]:
     ]
     try:
         raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True, errors="replace",
+            cmd, capture_output=True, text=True, encoding="utf-8", check=True, errors="replace",
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):

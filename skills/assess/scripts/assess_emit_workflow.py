@@ -78,7 +78,8 @@ def _run(cmd: list[str]) -> tuple[int, str, str]:
     The only door to the network (tests stub it), via ``gh`` / ``git`` on PATH.
     """
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
+        out = subprocess.run(cmd, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=20, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         return 127, "", str(exc)
     return out.returncode, out.stdout, out.stderr
@@ -153,7 +154,8 @@ def _default_branch(repo_root: Path) -> str:
     try:
         out = subprocess.run(
             ["git", "-C", str(repo_root), "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-            capture_output=True, text=True, timeout=5, check=False,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=5, check=False,
         )
         ref = out.stdout.strip()
         if ref:
@@ -193,7 +195,7 @@ def _path_filters(repo_root: Path, paths: list[str], paths_ignore: list[str]) ->
         return [], []
     globs = ", ".join(DEFAULT_PATHS_IGNORE)
     print(
-        f"Applied the default paths-ignore ({globs}): {source.relative_to(repo_root)} "
+        f"Applied the default paths-ignore ({globs}): {source.relative_to(repo_root).as_posix()} "
         "already filters pull requests by path, so docs-only and .assess/-only PRs skip "
         "the gate, and doc-truth findings (lying_map, orphaned_understanding) no longer "
         "gate them. A skipped PR reports no gate check at all, so a required status check "

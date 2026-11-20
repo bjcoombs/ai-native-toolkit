@@ -72,7 +72,7 @@ WRAP = 104
 LINE_H = 16.0
 AXIS_LABEL = "Mean share of top level"
 Y_TICKS = (0.0, 0.25, 0.5, 0.75, 1.0)
-MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed")
+MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed", "fleet_config_sha256")
 
 # Series colours (light, dark), assigned to groups in sorted order; past the eighth
 # group the colours repeat with a dashed line.
