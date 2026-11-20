@@ -56,7 +56,7 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
 | `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
@@ -75,6 +75,7 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
+| `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
@@ -180,6 +181,7 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `repos`, `scanned`, `failed` | Repository rows in the group, those with `status: ok`, and the rest. |
 | `shared_tooling_repos` | Repositories whose `shared_tooling` block is available: the evidence the two counts below rest on. |
 | `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. `null` when `shared_tooling_repos` is 0 (every scan failed or degraded, or `--scans` left the block out), never a false 0. |
+| `agent_building` | Scanned repositories per agent-building class: `{repos, builds_agent, builds_mcp_server, uses_agent_tooling, none}`, where `repos` counts those with an available `agent_building` block. An inventory, not a level. `null` when no repository's block is available, never a false 0; absent in rows written before it was added. Classes: see [agent clusters](#output-agent_clustersjson). |
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
 | `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with an unavailable setting's reason reduced to `unknown` and a value's reason to `null`; `--full` keeps them. `null` without a match. |
 | `levels_version` | The maturity model's `version`; `null` without `--levels`. |
@@ -208,6 +210,49 @@ earlier history entries still load and match. `--compare` against a 1.x run from
 
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
+
+## Output: `agent_clusters.json`
+
+Which teams are building the same agent? Written on every run from the
+`agent_building` blocks in `repos.jsonl` (an unscored inventory, issue #689).
+Logic: `skills/assess/scripts/lib/fleet_agent_building.py`; per-repository scan:
+`skills/assess/scripts/lib/agent_building.py`. Not kept in the run history.
+
+Each repository gets one class, first match wins:
+
+1. `builds-agent`: an agent framework is declared in a dependency manifest
+   (LangChain, LangGraph, the Claude Agent SDK, OpenAI Agents, CrewAI ...), or a
+   model SDK is declared (Anthropic, OpenAI, Gemini ...) and either a source file
+   matches a tool-call loop or the repository has the API-client pairing.
+2. `builds-mcp-server`: a source file registers MCP server tools, resources or prompts.
+3. `uses-agent-tooling`: agent configuration only: an agent hint file (`CLAUDE.md`,
+   `AGENTS.md` ...), `.mcp.json`, `.claude/agents/`, or a CI job that runs an agent.
+4. `none`: otherwise, including a model SDK with no tool-call loop and no pairing.
+
+The pairing is an issue-tracker API client (Jira, Linear) and a Git-host API
+client (GitHub, GitLab) in the same repository, from manifests or REST endpoints
+in source: the marker of a ticket-to-merge-request agent. Test files, vendored
+trees and untracked files are not evidence. SDKs, config kinds, trackers and
+hosts are slugs from a pinned vocabulary, so counts-only keeps them.
+
+Cluster rule: two `builds-agent` repositories are linked when they have the same
+class, the Jaccard similarity of their SDK and framework sets is at least 0.5
+(two empty sets are not similar), and they have the same pairing value (both
+carry the issue-tracker plus Git-host marker, or neither does). Clusters are the
+connected components of that relation; a single repository is not a cluster.
+Deterministic and offline.
+
+| Key | Value |
+|-----|-------|
+| `agent_clusters_version` | File version (1). |
+| `rule` | The cluster rule in words. |
+| `named` | `true` with `--name-agent-clusters`. |
+| `evidence_repos` | Scanned repositories with an available `agent_building` block. |
+| `builds_agent_repos`, `clustered_repos` | `builds-agent` repositories, and how many of them are in a cluster. |
+| `clusters` | Largest first, then by SDK union and pairing (never by name): `id` (`c1`, `c2` ...), `agent_class`, `size`, `groups` (distinct groups spanned), `sdks` (union), `shared_sdks` (intersection), `pairing`. Only with `--name-agent-clusters`: `repo_ids` and `group_ids`. |
+
+Without the naming flag no repository id or group name appears in the file, so a
+cluster says that two teams build similar agents without saying which.
 
 ## Output: `run.json`
 

@@ -35,14 +35,13 @@ rule named exactly as the branch and every rule whose name read as a wildcard
 applies them (:func:`merge_rules`), never one picked by order. A merge that
 includes an exact rule keeps that rule's ``name`` (a snapshot of the rule
 names it alone); wildcards alone join their names. A name holding ``*`` is
-answered only by the rule of that name. "Unprotected" is said only
-from a readable, complete list (fewer than ``PROTECTED_PAGE`` rules) with no
-covering rule. A full page (which may continue) without an exact rule asks for
-the branch by name (``protected_branches/<branch>``, the ``ghreport``
-fallback), so an exact rule on a later page joins the wildcards on the first;
-when that read has no answer a wildcard cover from the page stands, and
-without one the read raises ``truncated``. A 403 or 404 on GitLab usually means
-"no access", so it raises like any other refusal, never "unprotected".
+answered only by the rule of that name. The list is read page by page
+(``PROTECTED_PAGE`` rules each) until a short page ends it, so an exact rule
+and every wildcard on any page are merged; a list still full after
+``PROTECTED_MAX_PAGES`` pages raises ``truncated`` rather than merge part of
+it. "Unprotected" is said only from that complete list with no covering rule.
+A 403 or 404 on GitLab usually means "no access", so it raises like any other
+refusal, never "unprotected".
 
 Typical use::
 
@@ -106,8 +105,10 @@ _UNREACHABLE_RE = re.compile(
 )
 
 
-# GitLab's REST page maximum; a protected-branch list this long may continue.
+# GitLab's REST page maximum; a protected-branch page this long may continue.
 PROTECTED_PAGE = 100
+# Pages read before a still-full protected-branch list is called truncated.
+PROTECTED_MAX_PAGES = 20
 
 
 @dataclass(frozen=True)
@@ -318,19 +319,30 @@ def merge_rules(rules: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def protected_branches(project: GitlabProject) -> list[dict[str, Any]]:
-    """The first page of the project's protected-branch rules, each with a name.
+    """Every protected-branch rule of the project, each with a name.
 
-    Raises GhUnavailable on a refused or malformed read. Read it once and pass
-    it to :func:`branch_protection` for every branch a scan asks about.
+    Reads ``PROTECTED_PAGE`` rules a page until a short page ends the list.
+    Raises GhUnavailable on a refused or malformed page, and ``truncated``
+    when the list is still full after ``PROTECTED_MAX_PAGES`` pages. Read it
+    once and pass it to :func:`branch_protection` for every branch a scan asks
+    about.
     """
-    got = glab_api(project, f"projects/{project.encoded}/protected_branches"
-                            f"?per_page={PROTECTED_PAGE}")
-    if not isinstance(got, list):
-        raise GhUnavailable("glab_bad_json: the protected branch list was not a list")
-    rules = [r for r in got if isinstance(r, dict) and isinstance(r.get("name"), str)]
-    if len(rules) != len(got):
-        raise GhUnavailable("glab_bad_json: a protected branch has no name")
-    return rules
+    base = f"projects/{project.encoded}/protected_branches?per_page={PROTECTED_PAGE}"
+    rules: list[dict[str, Any]] = []
+    for page in range(1, PROTECTED_MAX_PAGES + 1):
+        got = glab_api(project, base if page == 1 else f"{base}&page={page}")
+        if not isinstance(got, list):
+            raise GhUnavailable("glab_bad_json: the protected branch list was not a list")
+        named = [r for r in got if isinstance(r, dict) and isinstance(r.get("name"), str)]
+        if len(named) != len(got):
+            raise GhUnavailable("glab_bad_json: a protected branch has no name")
+        rules += named
+        if len(got) < PROTECTED_PAGE:
+            return rules
+    raise GhUnavailable(
+        f"truncated: the protected branch list is still full after {len(rules)} rules"
+        f" ({PROTECTED_MAX_PAGES} pages)"
+    )
 
 
 def branch_protection(project: GitlabProject, branch: str,
@@ -339,11 +351,11 @@ def branch_protection(project: GitlabProject, branch: str,
     :func:`merge_rules` (an exact rule with every matching wildcard), or None
     when unprotected.
 
-    ``rules`` is a :func:`protected_branches` read to reuse; it is read here
-    when omitted. See the module docstring for the matching order. A
+    ``rules`` is a complete :func:`protected_branches` read to reuse; it is
+    read here when omitted. See the module docstring for the matching order. A
     ``branch`` holding ``*`` is a rule name, not a branch: only the rule of
     that name answers for it, never another wildcard. Raises GhUnavailable on
-    any refused or malformed read, and when the list may be incomplete.
+    any refused or malformed read, and when the list is truncated.
     """
     if rules is None:
         rules = protected_branches(project)
@@ -353,24 +365,7 @@ def branch_protection(project: GitlabProject, branch: str,
         wild = [r for r in sorted((r for r in rules if "*" in r["name"]),
                                   key=lambda r: str(r["name"]))
                 if branch_pattern(r["name"]).match(branch)]
-    if exact is not None or len(rules) < PROTECTED_PAGE:
-        return _with_exact(exact, wild)
-    cover = merge_rules(wild)
-    # A full page may continue: an exact rule on a later page combines with
-    # the wildcards on this one, so ask for the branch by name first.
-    enc = project.encoded
-    try:
-        single = glab_api(project, f"projects/{enc}/protected_branches/{quote(branch, safe='')}")
-    except GhUnavailable as e:
-        if cover is not None:
-            return cover
-        raise GhUnavailable(
-            f"truncated: {len(rules)} protected branches listed without {branch}"
-            f" and the single-branch read gave no answer ({e.reason})"
-        ) from None
-    if not isinstance(single, dict) or not isinstance(single.get("name"), str):
-        raise GhUnavailable("glab_bad_json: the protected branch was not a named object")
-    return _with_exact(single, [r for r in wild if r["name"] != single["name"]])
+    return _with_exact(exact, wild)
 
 
 def _with_exact(exact: dict[str, Any] | None,
