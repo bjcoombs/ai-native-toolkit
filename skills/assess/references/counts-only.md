@@ -221,6 +221,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.docs.subject_method` | token |
 | `doc_staleness.docs.confidence` | token |
 | `doc_staleness.docs.last_change_basis` | token |
+| `doc_staleness.docs.last_commit_days_bound` | token |
+| `doc_staleness.history_boundary_date` | token |
 | `doc_staleness.docs.provenance.method` | token |
 | `doc_staleness.docs.provenance.sources` | path (hashed when hashing is on) |
 | `doc_staleness.docs.provenance.generated_by` | dropped |
@@ -229,6 +231,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `stale_hubs.subject_method` | token |
 | `stale_hubs.confidence` | token |
 | `stale_hubs.last_change_basis` | token |
+| `stale_hubs.last_commit_days_bound` | token |
 | `stale_hubs.provenance.method` | token |
 | `stale_hubs.provenance.sources` | path (hashed when hashing is on) |
 | `stale_hubs.provenance.generated_by` | dropped |

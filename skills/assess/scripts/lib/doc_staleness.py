@@ -94,6 +94,7 @@ class DocStalenessRow(TypedDict):
     code_churn_since_doc_change: int | None
     confidence: str
     last_change_basis: NotRequired[str]
+    last_commit_days_bound: NotRequired[str]
     provenance: NotRequired[DocProvenance]
 
 
@@ -127,6 +128,8 @@ class DocStalenessBlock(TypedDict):
     bulk_commits_skipped_total: int
     bulk_commit_scan_complete: bool
     creation_date_fallback_count: int
+    history_truncated: bool
+    history_boundary_date: str | None
     association: DocAssociation
     modularity: DocModularity
 
@@ -176,6 +179,10 @@ class DocStaleness:
     # False when the rename map could not be read (issue #425): both churn
     # counts may miss commits made under an old name.
     renames_followed: bool = True
+    # Shallow clone (issue #544): churn is truncated for every doc, and a doc
+    # whose newest visible change is the boundary has a lower-bound age.
+    history_truncated: bool = False
+    age_is_lower_bound: bool = False
 
     @property
     def confidence(self) -> str:
@@ -183,9 +190,9 @@ class DocStaleness:
         # stale-ratio computed against it is a coarse proxy. Mark it low so a
         # reader knows to discount before acting on the ranking. A creation-date
         # fallback is low for the same reason: its age is not a content age, and
-        # so is a churn count that could not follow renames.
+        # so is a churn count that could not follow renames or a truncated history.
         if (self.subject_method == "repo-baseline" or self.last_change_basis == "creation"
-                or not self.renames_followed):
+                or not self.renames_followed or self.history_truncated):
             return "low"
         return "high"
 
@@ -204,6 +211,8 @@ class DocStaleness:
         }
         if self.last_change_basis != "content":
             d["last_change_basis"] = self.last_change_basis
+        if self.age_is_lower_bound:
+            d["last_commit_days_bound"] = "lower"
         if self.provenance_method:
             d["provenance"] = {
                 "method": self.provenance_method,
@@ -612,6 +621,8 @@ def _doc_row(
         provenance_generated_by=generated_by,
         source_newer=src_newer,
         renames_followed=ctx.renames_complete,
+        history_truncated=ctx.clock.truncated,
+        age_is_lower_bound=d in ctx.clock.lower_bound,
     )
 
 
@@ -768,6 +779,10 @@ def analyze_doc_staleness(
         "creation_date_fallback_count": sum(
             1 for d in docs if d in clock.creation_fallback
         ),
+        # Shallow clone: history before the newest boundary commit's date may be
+        # missing; rows then carry confidence "low" and, at the boundary, a bound.
+        "history_truncated": clock.truncated,
+        "history_boundary_date": clock.boundary_date,
         "association": {
             "code_file_count": len(code_files),
             "doc_count": len(docs),

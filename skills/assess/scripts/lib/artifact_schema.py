@@ -61,6 +61,9 @@ constant each.
 # commits in the history window with an AI-assistant Co-authored-by trailer, as
 # a lower bound with its window, merge rule and limits. Additive;
 # complexity-stats.json is unchanged.
+# 1.7.0 (also): doc_staleness gains history_truncated and history_boundary_date,
+# and its rows (and stale_hubs) an optional last_commit_days_bound: "lower"
+# (issue #544). Additive; complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.7.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -72,4 +75,7 @@ ARTIFACT_SCHEMA_VERSION = "1.7.0"
 # 1: the baseline (issue #554).
 # 2: churn counts follow renames, moving staleness ratios, lying_map and hotspot
 # ranks for files renamed inside the churn window (issue #425).
-ASSESS_METHOD_VERSION = 2
+# 3: on a shallow clone every doc-staleness row is confidence "low", which keeps
+# it out of lying_map and halves its stale-hub priority (issue #544). A full
+# clone's findings do not move.
+ASSESS_METHOD_VERSION = 3
