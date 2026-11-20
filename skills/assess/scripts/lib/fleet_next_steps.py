@@ -23,8 +23,8 @@ difference (a different rubric or settings than the run used), so a page never
 disagrees with the run.
 
 Counts-only: a page holds repository and group ids, rubric titles and
-operands (caller-authored), counts and the actual values of criteria. An
-actual value is a number, a boolean, a short token (``TOKEN_RE``) or ``set``
+operands (caller-authored, printed in clear), counts and the actual values of
+criteria. An actual value is a number, a boolean, a short token (``TOKEN_RE``) or ``set``
 for any other string, the same reduction ``groups.jsonl`` applies to settings.
 
 Output is deterministic: rows in rubric order, repositories sorted, no date.
@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import math
 import re
+from urllib.parse import quote
 from collections.abc import Iterable, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
@@ -93,9 +94,10 @@ def scalar(value: Any) -> str:
 
 
 def operand(value: Any) -> str:
+    """A rubric operand: caller-authored, so a string prints in clear as a code span."""
     if isinstance(value, list):
-        return "[" + ", ".join(scalar(v) for v in value) + "]"
-    return scalar(value)
+        return "[" + ", ".join(operand(v) for v in value) + "]"
+    return code(value) if isinstance(value, str) else scalar(value)
 
 
 def expression(criterion: Criterion | CriterionOutcome) -> str:
@@ -264,7 +266,7 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
     lines = [f"Level unknown{span}. {gap}", ""]
     for signal in result["missing_signals"]:
         names = sorted(n for n, ev in evaluations.items() if signal in ev["missing_signals"])
-        hint = ("The scan failed in each of them; its `logs/` file says why."
+        hint = ("The repository scan failed in each of them; the reason token is listed below."
                 if all(n in failed for n in names) else measure_hint(signal))
         lines.append(f"- {code(signal)}: not measured in {len(names)} of {_repos(len(evaluations))}. {hint}")
     undetermined = result.get("unknown_repos", [])
@@ -340,7 +342,7 @@ def index_page(rubric: Rubric, groups: Sequence[GroupRow]) -> str:
         known = [r for r in group["rubric"] if r["status"] == "level" and r["level"] is not None]
         top = sum(1 for r in known if r["level"] == tops.get(r["id"]))
         unknown = len(group["rubric"]) - len(known)
-        link = page_path(group["group"]).as_posix()
+        link = quote(page_path(group["group"]).as_posix())
         lines.append(f"| [{code(group['group'], True)}]({link}) | {group['repos']} | {top} | "
                      f"{len(known) - top} | {unknown} |")
     return "\n".join(lines) + "\n"
@@ -356,6 +358,9 @@ def build_pages(rubric: Rubric, repos: Iterable[FleetRow], groups: Sequence[Grou
         raise NextStepsError("repos.jsonl and groups.jsonl name different groups; they are not one run")
     pages: dict[str, str] = {INDEX_FILE: index_page(rubric, groups)}
     for group in groups:
+        if group["rubric_version"] is None:
+            raise NextStepsError("the fleet run had no --rubric, so groups.jsonl holds no levels; "
+                                 "rerun fleet.py with --rubric")
         if group["rubric_version"] != rubric["version"]:
             raise NextStepsError(
                 f"groups.jsonl was rolled up with rubric {group['rubric_version']!r}, not "

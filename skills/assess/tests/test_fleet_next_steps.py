@@ -26,6 +26,7 @@ from lib.fleet_inputs import FleetInputError, read_groups, read_jsonl, read_repo
 from lib.next_step_guidance import guidance, measure_hint
 from lib.rubric import load_rubric
 from lib.rubric_signals import DEFAULT_RUBRIC, load_default_rubric, signal_path_validator
+from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
 
 FIXTURES = Path(__file__).parent / "fixtures" / "fleet_next_steps"
 EXPECTED = FIXTURES / "expected"
@@ -167,7 +168,7 @@ def test_unknown_names_missing_signals_and_never_reads_as_failure(tmp_path):
     assert "Holding the group back" not in section
     instructions = page.split("## Agent instructions\n", 1)[1].split("\n## ", 1)[0]
     assert "Level unknown (between 0 and 1 of 2)" in instructions
-    assert "The scan failed in each of them" in instructions
+    assert "The repository scan failed in each of them" in instructions
     assert "cap the group at level 1" in instructions and "`grpa/svc2` (now 340)" in instructions
     grpb = _pages(tmp_path / "b")["teams/grpb.md"]
     assert "No ghreport settings matched this group" in grpb
@@ -341,3 +342,37 @@ def test_measure_hints():
 
 def test_default_rubric_toml_parses():
     assert tomllib.loads(DEFAULT_RUBRIC.read_text(encoding="utf-8"))["version"]
+
+
+# --- end to end --------------------------------------------------------------
+
+
+def test_real_fleet_run_with_the_default_rubric_renders_pages(froot, tmp_path):  # noqa: F811
+    out = tmp_path / "out"
+    assert fleet_cli.main([str(froot), "--rubric", str(DEFAULT_RUBRIC), "--out", str(out)]) == 0
+    assert cli.main([str(out)]) == 0
+    tops = {row["id"]: len(row["levels"]) for row in load_default_rubric()["rows"]}
+    titles = {row["id"]: ns.text(row["title"]) for row in load_default_rubric()["rows"]}
+    for group in read_groups(out):
+        page = (out / ns.page_path(group["group"])).read_text(encoding="utf-8")
+        for entry in group["rubric"]:
+            section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
+            if entry["status"] == "unknown":
+                assert "not a failure" in section
+            elif entry["level"] < tops[entry["id"]]:
+                assert "\n1. **" in section and "Holding the group back" in section
+    assert "No repository-native wording" not in "".join(
+        p.read_text(encoding="utf-8") for p in out.rglob("*.md"))
+
+
+def test_a_run_without_a_rubric_says_so(froot, tmp_path, capsys):  # noqa: F811
+    out = tmp_path / "out"
+    assert fleet_cli.main([str(froot), "--out", str(out)]) == 0
+    assert cli.main([str(out)]) == 2
+    assert "the fleet run had no --rubric" in capsys.readouterr().err
+
+
+def test_index_links_are_percent_encoded():
+    group = {"group": "my team", "repos": 1, "rubric": []}
+    page = ns.index_page(RUBRIC, [group])  # type: ignore[list-item]
+    assert "(teams/my%20team.md)" in page

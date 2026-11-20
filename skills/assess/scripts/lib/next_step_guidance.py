@@ -227,8 +227,8 @@ _MEASURE_HINTS = {
                      "scan leaves it unavailable.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
                       "calls, so this is not measured there.",
-    "test_pressure": "The mutation pass is opt-in and executes code; a run without it does not "
-                     "measure this.",
+    "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
+                     "headless fleet scan does not.",
 }
 _SETTING_HINT = ("ghreport could not read this setting (token scope or provider tier); rerun "
                  "ghreport with access to group settings and pass them to the fleet run with "

@@ -29,9 +29,9 @@ Level 1 of 2. To reach level 2:
 
 Level unknown (between 0 and 1 of 2). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
 
-- `agent_environment.check.named_total`: not measured in 1 of 3 repositories. The scan failed in each of them; its `logs/` file says why.
-- `nested_instructions.budget.claude_code.bytes`: not measured in 1 of 3 repositories. The scan failed in each of them; its `logs/` file says why.
-- `nested_instructions.budget.claude_code.lines`: not measured in 1 of 3 repositories. The scan failed in each of them; its `logs/` file says why.
+- `agent_environment.check.named_total`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
+- `nested_instructions.budget.claude_code.bytes`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
+- `nested_instructions.budget.claude_code.lines`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
 - Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
 
 Measured unmet criteria already cap the group at level 1, whatever the missing signals show. Toward level 2:
@@ -67,12 +67,12 @@ Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: 
 
 Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
 
-- `agent_ops.summary.permissions_encoded`: not measured in 1 of 3 repositories. The scan failed in each of them; its `logs/` file says why.
+- `agent_ops.summary.permissions_encoded`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
 - Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
 
 ## Shared tooling
 
 Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
 
-- `shared_tooling.available`: not measured in 1 of 3 repositories. The scan failed in each of them; its `logs/` file says why.
+- `shared_tooling.available`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
 - Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
