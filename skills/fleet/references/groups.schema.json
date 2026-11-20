@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/groups.schema.json",
+  "title": "fleet group row",
+  "description": "One line of groups.jsonl written by skills/fleet/scripts/fleet.py: a group's repository counts, distinct shared CI sources and marketplaces, joined ghreport settings and each rubric row's whole level. Generated from lib/fleet_groups.py by lib/fleet_group_schema.py.",
+  "type": "object",
+  "properties": {
+    "fleet_group_version": {
+      "type": "integer"
+    },
+    "group": {
+      "type": "string"
+    },
+    "repos": {
+      "type": "integer"
+    },
+    "scanned": {
+      "type": "integer"
+    },
+    "failed": {
+      "type": "integer"
+    },
+    "distinct_ci_sources": {
+      "type": "integer"
+    },
+    "distinct_marketplaces": {
+      "type": "integer"
+    },
+    "settings_scope": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "settings": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "oneOf": [
+              {
+                "required": [
+                  "value"
+                ],
+                "properties": {
+                  "value": {}
+                },
+                "additionalProperties": false
+              },
+              {
+                "required": [
+                  "available",
+                  "reason"
+                ],
+                "properties": {
+                  "available": {
+                    "const": false
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rubric_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rubric": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "org",
+              "team"
+            ]
+          },
+          "status": {
+            "enum": [
+              "level",
+              "unknown"
+            ]
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "aggregation": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "rule": {
+                    "type": "string"
+                  },
+                  "share": {
+                    "type": [
+                      "integer",
+                      "number"
+                    ]
+                  }
+                },
+                "required": [
+                  "rule",
+                  "share"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing_signals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unknown_repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "aggregation",
+          "id",
+          "level",
+          "missing_signals",
+          "scope",
+          "status",
+          "unknown_repos"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "distinct_ci_sources",
+    "distinct_marketplaces",
+    "failed",
+    "fleet_group_version",
+    "group",
+    "repos",
+    "rubric",
+    "rubric_version",
+    "scanned",
+    "settings",
+    "settings_scope"
+  ],
+  "additionalProperties": false
+}

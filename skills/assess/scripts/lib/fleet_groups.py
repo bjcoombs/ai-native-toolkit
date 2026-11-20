@@ -1,0 +1,224 @@
+"""Fleet group roll-up: repository rows to one row per group (issue #568).
+
+Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
+``groups.jsonl`` row per group (a row's ``group``), carrying:
+
+- repository counts (rows, scanned, failed);
+- the distinct shared CI sources and marketplaces the group's repositories
+  reference (``shared_tooling.distinct_ids``, git-tracked files only);
+- the group settings joined from ghreport's settings fragments (#565);
+- each rubric row's whole level, or ``unknown``, with the aggregation rule used,
+  evaluated by ``lib/rubric.py`` (#563). There is no second threshold config.
+
+Rubric inputs:
+
+- ``team`` rows run against each repository's signal blocks. A path may be
+  written in run-context form (``nested_instructions.available``) or
+  signals-document form (``scans.nested_instructions.available``). A failed
+  repository joins the roll-up with no signals, so its level is unknown and a
+  ``min`` team row never reads better than the evidence allows.
+- ``org`` rows run against the group's settings. Each ghreport setting
+  ``{value, reason}`` is read as ``<field>.value`` (``two_factor.value`` is
+  ``"on"`` or ``"off"``); a value of ``"unknown"`` becomes an unavailable block,
+  so the rubric reports the row unknown, never a false 0. A group with no
+  matching fragment has no settings: every org row is unknown.
+
+Settings join: a fragment's ``scope`` matches a group exactly or, failing
+that, the nearest ancestor (a GitLab top-level group's settings cover its
+subgroups); ``settings_scope`` names the fragment used.
+
+Counts-only output (the default) reduces each setting to a token: a value that
+is already a short token (``on``, ``off``, ``full``) is kept, any other
+(ruleset or push-rule names) becomes ``set``; reasons are dropped. Evaluation
+always sees the full values. Rows are sorted by group with sorted keys, so a
+rerun over the same inputs is byte-identical.
+"""
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
+from typing import Any, TypedDict
+
+from lib.counts_only_rules import TOKEN_RE
+from lib.fleet import STATUS_OK, FleetRow
+from lib.rubric import Aggregation, Rubric, evaluate
+from lib.run_context_types import JsonDict
+from lib.shared_tooling import distinct_ids
+
+FLEET_GROUP_VERSION = 1
+GROUPS_FILE = "groups.jsonl"
+SETTINGS_META_KEYS = frozenset({"scope", "provider"})
+UNKNOWN = "unknown"
+SET = "set"
+
+
+class SettingsError(ValueError):
+    """The settings input cannot be read; the message names the file and the fault."""
+
+
+class RubricRowLevel(TypedDict):
+    id: str
+    scope: str  # "org" | "team"
+    status: str  # "level" | "unknown"
+    level: int | None  # whole level; None when unknown
+    aggregation: Aggregation | None  # the team rule used; None for org rows
+    missing_signals: list[str]
+    unknown_repos: list[str]  # team rows: repositories whose own level is undetermined
+
+
+class GroupRow(TypedDict):
+    fleet_group_version: int
+    group: str
+    repos: int
+    scanned: int  # rows with status ok
+    failed: int
+    distinct_ci_sources: int
+    distinct_marketplaces: int
+    settings_scope: str | None  # the fragment joined; None when none matched
+    settings: JsonDict | None  # normalised (and, counts-only, reduced) settings
+    rubric_version: str | None  # None without a rubric
+    rubric: list[RubricRowLevel]
+
+
+# --- settings input --------------------------------------------------------
+
+
+def _fragments_in(path: Path) -> list[Path]:
+    if path.is_dir():
+        nested = path / "settings"  # a ghreport --render-dir
+        folder = nested if nested.is_dir() else path
+        return sorted(folder.glob("*.json"))
+    return [path]
+
+
+def load_settings(path: Path) -> dict[str, JsonDict]:
+    """ghreport settings fragments by scope, from a file (object or array) or a directory."""
+    if not path.exists():
+        raise SettingsError(f"settings {path}: not found")
+    by_scope: dict[str, JsonDict] = {}
+    for file in _fragments_in(path):
+        try:
+            data: Any = json.loads(file.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise SettingsError(f"settings {file.name}: unreadable ({exc})") from exc
+        for fragment in data if isinstance(data, list) else [data]:
+            scope = fragment.get("scope") if isinstance(fragment, dict) else None
+            if not isinstance(scope, str) or not scope:
+                raise SettingsError(f"settings {file.name}: a fragment has no 'scope'")
+            if scope in by_scope:
+                raise SettingsError(f"settings {file.name}: scope {scope!r} given twice")
+            by_scope[scope] = fragment
+    return by_scope
+
+
+def normalise_settings(fragment: Mapping[str, Any]) -> JsonDict:
+    """Each setting as ``{value}``, or ``{available: false, reason}`` when unknown or malformed."""
+    out: JsonDict = {}
+    for key in sorted(k for k in fragment if k not in SETTINGS_META_KEYS):
+        raw = fragment[key]
+        value = raw.get("value") if isinstance(raw, dict) else None
+        if value is None or value == UNKNOWN:
+            reason = raw.get("reason") if isinstance(raw, dict) else None
+            out[key] = {"available": False, "reason": str(reason) if reason else UNKNOWN}
+        else:
+            out[key] = {"value": value}
+    return out
+
+
+def reduce_settings(settings: JsonDict) -> JsonDict:
+    """The counts-only form: token values kept, any other value ``set``, reasons dropped."""
+    out: JsonDict = {}
+    for key, block in settings.items():
+        if block.get("available") is False:
+            out[key] = {"available": False, "reason": UNKNOWN}
+            continue
+        value = block["value"]
+        token = isinstance(value, (bool, int)) or (isinstance(value, str) and TOKEN_RE.match(value))
+        out[key] = {"value": value if token else SET}
+    return out
+
+
+def settings_for(group: str, by_scope: Mapping[str, JsonDict]) -> tuple[str | None, JsonDict | None]:
+    """The fragment for ``group``: an exact scope match, else the nearest ancestor's."""
+    parts = group.split("/")
+    for depth in range(len(parts), 0, -1):
+        scope = "/".join(parts[:depth])
+        if scope in by_scope:
+            return scope, normalise_settings(by_scope[scope])
+    return None, None
+
+
+# --- roll-up ---------------------------------------------------------------
+
+
+def repo_signals(row: FleetRow) -> JsonDict:
+    """A repository's rubric data: its blocks at the top level and under ``scans``."""
+    scans = row["scans"] or {}
+    return {**scans, "scans": scans}
+
+
+def _rubric_levels(rubric: Rubric, group: str, settings: JsonDict | None,
+                   rows: Sequence[FleetRow]) -> list[RubricRowLevel]:
+    result = evaluate(rubric, {
+        "name": group, "settings": settings,
+        "repos": {row["repo"]: repo_signals(row) for row in rows},
+    })
+    return [{
+        "id": r["id"], "scope": r["scope"], "status": r["status"], "level": r["level"],
+        "aggregation": r.get("aggregation"), "missing_signals": r["missing_signals"],
+        "unknown_repos": r.get("unknown_repos", []),
+    } for r in result["rows"]]
+
+
+def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
+              by_scope: Mapping[str, JsonDict], counts_only: bool = True) -> GroupRow:
+    """One group's roll-up row."""
+    scope, settings = settings_for(group, by_scope)
+    ok = [row for row in rows if row["status"] == STATUS_OK]
+    blocks = [row["scans"]["shared_tooling"] for row in ok
+              if row["scans"] and isinstance(row["scans"].get("shared_tooling"), dict)]
+    ids = distinct_ids(blocks)
+    shown = settings if settings is None or not counts_only else reduce_settings(settings)
+    return {
+        "fleet_group_version": FLEET_GROUP_VERSION,
+        "group": group,
+        "repos": len(rows),
+        "scanned": len(ok),
+        "failed": len(rows) - len(ok),
+        "distinct_ci_sources": len(ids["ci_sources"]),
+        "distinct_marketplaces": len(ids["marketplaces"]),
+        "settings_scope": scope,
+        "settings": shown,
+        "rubric_version": rubric["version"] if rubric else None,
+        "rubric": _rubric_levels(rubric, group, settings, rows) if rubric else [],
+    }
+
+
+def roll_up(rows: Iterable[FleetRow], rubric: Rubric | None, by_scope: Mapping[str, JsonDict],
+            counts_only: bool = True) -> list[GroupRow]:
+    """One row per group present in ``rows``, sorted by group."""
+    groups: dict[str, list[FleetRow]] = {}
+    for row in rows:
+        groups.setdefault(row["group"], []).append(row)
+    return [group_row(name, sorted(members, key=lambda r: r["repo"]), rubric, by_scope, counts_only)
+            for name, members in sorted(groups.items())]
+
+
+def write_groups(out_dir: Path, rows: Iterable[GroupRow]) -> Path:
+    """Write ``<out_dir>/groups.jsonl`` through a temp file and ``os.replace``."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / GROUPS_FILE
+    text = "".join(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n" for row in rows)
+    fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{GROUPS_FILE}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, target)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    return target

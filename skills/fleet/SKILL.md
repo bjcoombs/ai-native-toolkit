@@ -35,8 +35,9 @@ no third-party dependencies.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`; a `DIR` inside any target is refused. |
-| `--rubric FILE` | A maturity rubric in the `lib/rubric.py` TOML format. Validated now (an invalid rubric exits 2); the per-group roll-up that applies it is a later addition. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl` and `DIR/groups.jsonl`; a `DIR` inside any target is refused. |
+| `--rubric FILE` | A maturity rubric in the `lib/rubric.py` TOML format (an invalid rubric exits 2). Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
+| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
 | `--scans a,b` | Only these scans (default: all). |
@@ -49,7 +50,7 @@ no third-party dependencies.
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--rubric`, an unknown scan or a bad window.
+invalid `--rubric` or `--settings`, an unknown scan or a bad window.
 
 ## Output: `repos.jsonl`
 
@@ -76,6 +77,37 @@ Rows carry no absolute path, timing, error text or per-repository stamp, so
 two runs over unchanged checkouts on the same day are byte-identical (except
 with `--hash-paths` and no salt). Repository ids are kept in clear text even
 with hashing on.
+
+## Output: `groups.jsonl`
+
+One line per group (a repository row's `group`), sorted by group, keys sorted.
+Schema: [`references/groups.schema.json`](references/groups.schema.json).
+Logic: `skills/assess/scripts/lib/fleet_groups.py`.
+
+| Key | Value |
+|-----|-------|
+| `fleet_group_version` | Row envelope version (1). |
+| `group` | The group id. |
+| `repos`, `scanned`, `failed` | Repository rows in the group, those with `status: ok`, and the rest. |
+| `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. |
+| `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
+| `settings` | That fragment's settings, each `{value}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any other (ruleset or push-rule names) as `set`, with reasons reduced to `unknown`; `--full` keeps them. `null` without a match. |
+| `rubric_version` | The rubric's `version`; `null` without `--rubric`. |
+| `rubric` | One entry per rubric row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
+
+Rubric signal paths, evaluated by `lib/rubric.py` with no second threshold config:
+
+- `team` rows read each repository's signal blocks, written in run-context form
+  (`nested_instructions.budget.claude_code.lines`) or signals-document form
+  (`scans.nested_instructions.budget.claude_code.lines`). A failed repository
+  joins with no signals, so its level is unknown: a `min` row never reads better
+  than the evidence.
+- `org` rows read the joined settings as `<setting>.value`, for example
+  `two_factor.value` `eq "on"`. A setting ghreport reported `unknown`, or a
+  group with no settings, makes the row `unknown`, never a false 0.
+
+Group rows contain no timing or per-run stamp, so a rerun over unchanged
+inputs on the same day is byte-identical.
 
 ## Guarantees
 

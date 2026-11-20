@@ -5,7 +5,11 @@ its own process from a worker pool, counts-only by default, and writes one JSON
 line per repository to ``<out>/repos.jsonl``, sorted by repository id. A scan
 process that exits non-zero leaves its stderr tail in ``<out>/logs/<repo>.stderr``. The row
 shape is ``skills/fleet/references/repos.schema.json``; the logic lives in
-``skills/assess/scripts/lib/fleet.py``.
+``skills/assess/scripts/lib/fleet.py``. It then rolls the rows up to one
+line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
+``skills/fleet/references/groups.schema.json``): repository counts, distinct
+shared CI sources and marketplaces, the joined ``--settings`` and each
+``--rubric`` row's whole level.
 
 Target repositories are never written to.
 
@@ -15,10 +19,10 @@ Exit codes:
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --rubric, or bad scan arguments
+       --rubric or --settings, or bad scan arguments
 
 Run:
-    uv run fleet.py ROOT --out DIR [--rubric FILE] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--rubric FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
@@ -52,7 +56,9 @@ from lib.fleet import (  # noqa: E402
     targets_from_list,
     write_rows,
 )
-from lib.rubric import RubricError, load_rubric  # noqa: E402
+from lib.fleet_groups import SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
+from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals import UnknownScanError, parse_window, select_scans  # noqa: E402
 
 
@@ -75,8 +81,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--out", required=True, help="Output directory; repos.jsonl is written here.")
     parser.add_argument(
         "--rubric", metavar="FILE",
-        help="Maturity rubric (TOML, lib/rubric.py format). Validated here; the group roll-up "
-             "that applies it is not yet part of the runner.",
+        help="Maturity rubric (TOML, lib/rubric.py format). Each group row in groups.jsonl "
+             "carries every rubric row's whole level (or unknown) and the aggregation rule used.",
+    )
+    parser.add_argument(
+        "--settings", metavar="PATH",
+        help="Group settings from ghreport (#565): a JSON fragment file, a JSON array of "
+             "fragments, or a directory of fragment files (a ghreport --render-dir works: its "
+             "settings/ subdirectory is read). Joined to each group by scope, nearest ancestor first.",
     )
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
                         help="Repositories scanned in parallel (default: CPU count).")
@@ -120,15 +132,19 @@ def _targets(args: argparse.Namespace) -> list[Target]:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    rubric: Rubric | None = None
+    settings: dict[str, JsonDict] = {}
     try:
         if args.rubric is not None:
-            load_rubric(Path(args.rubric))
+            rubric = load_rubric(Path(args.rubric))
+        if args.settings is not None:
+            settings = load_settings(Path(args.settings))
         if args.scans is not None:
             select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
-    except (RubricError, UnknownScanError, ValueError, OSError) as e:
+    except (RubricError, SettingsError, UnknownScanError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     if not targets:
@@ -148,8 +164,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     rows = run_fleet(targets, options, args.jobs)
     path = write_rows(out_dir, rows)
+    groups_path = write_groups(out_dir, roll_up(rows, rubric, settings, counts_only=not args.full))
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
-    print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}", file=sys.stderr)
+    print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
+          file=sys.stderr)
     for row in failed:
         print(f"  failed: {row['repo']} ({row['reason']})", file=sys.stderr)
     return 0
