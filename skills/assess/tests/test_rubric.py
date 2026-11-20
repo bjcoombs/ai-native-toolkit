@@ -333,6 +333,53 @@ def test_malformed_rubric_fails_at_load(rubric: dict[str, Any], message: str) ->
         parse_rubric(rubric)
 
 
+@pytest.mark.parametrize(
+    ("op", "value"),
+    [
+        ("gte", "nan"),
+        ("lt", "inf"),
+        ("gt", "-inf"),
+        ("eq", "nan"),
+        ("ne", "inf"),
+        ("in", "[1.0, nan]"),
+        ("not_in", "[inf]"),
+    ],
+)
+def test_non_finite_operand_fails_at_load(tmp_path: Path, op: str, value: str) -> None:
+    rubric = tmp_path / "nan.toml"
+    rubric.write_text(
+        'version = "v"\n[[rows]]\nid = "r"\ntitle = "R"\nscope = "org"\n'
+        f'[[rows.levels]]\nlevel = 1\ncriteria = [{{ signal = "s", op = "{op}", value = {value} }}]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(RubricError, match="r' level 1 s"):
+        load_rubric(rubric)
+
+
+@pytest.mark.parametrize("share", ["nan", "inf"])
+def test_non_finite_share_fails_at_load(tmp_path: Path, share: str) -> None:
+    rubric = tmp_path / "share.toml"
+    rubric.write_text(
+        'version = "v"\n[[rows]]\nid = "r"\ntitle = "R"\nscope = "team"\n'
+        f'aggregation = "share"\nshare = {share}\n'
+        '[[rows.levels]]\nlevel = 1\ncriteria = [{ signal = "s", op = "eq", value = 1 }]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(RubricError, match="'share' must be"):
+        load_rubric(rubric)
+
+
+def test_non_finite_signal_is_unknown_and_serialises() -> None:
+    row = parse_rubric(_rubric(_team_row([_lv(1, {"signal": "s", "op": "gte", "value": 1})])))["rows"][0]
+    ev = evaluate_row(row, {"s": float("nan")})
+    assert (ev["status"], ev["missing_signals"]) == ("unknown", ["s"])
+    outcome = ev["levels"][0]["unmet"][0]
+    assert (outcome["reason"], outcome["actual"]) == ("type_mismatch", None)
+    result = evaluate(parse_rubric(_rubric(_team_row([_lv(1, {"signal": "s", "op": "gte", "value": 1})]))),
+                      {"name": "g", "settings": None, "repos": {"a": {"s": float("inf")}}})
+    json.loads(dumps_result(result), parse_constant=lambda c: pytest.fail(f"non-JSON constant {c}"))
+
+
 def test_unreadable_toml_fails_at_load(tmp_path: Path) -> None:
     bad = tmp_path / "bad.toml"
     bad.write_text("version = \n", encoding="utf-8")

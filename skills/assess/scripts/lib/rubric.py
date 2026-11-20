@@ -75,6 +75,7 @@ byte-identical JSON for identical inputs.
 from __future__ import annotations
 
 import json
+import math
 import tomllib
 from fractions import Fraction
 from pathlib import Path
@@ -355,7 +356,11 @@ def _validate_paths(rows: list[Row], validator: PathValidator) -> None:
 
 
 def _is_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """A finite int or float. TOML allows nan and inf; they compare False and
+    serialise to invalid JSON, so neither an operand nor a signal may be one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value)
 
 
 def _kind(value: Any) -> str | None:
@@ -410,7 +415,8 @@ def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> Criterio
     }
     if actual is _UNAVAILABLE:
         return outcome
-    outcome["actual"] = actual
+    non_finite = isinstance(actual, float) and not math.isfinite(actual)
+    outcome["actual"] = None if non_finite else actual
     expected = _kind(value[0]) if isinstance(value, list) else _kind(value)
     if _kind(actual) != expected:
         outcome["reason"] = "type_mismatch"
