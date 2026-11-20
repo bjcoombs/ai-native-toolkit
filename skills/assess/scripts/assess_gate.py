@@ -70,7 +70,8 @@ class GateVerdict(TypedDict):
     # breach ``count``/``paths``; ``metric`` tells them apart.
     threshold_breaches: list[JsonDict]
     excluded_by_config: JsonDict | None
-    excluded_generated: list[JsonDict] | None
+    # A list of rows, or the unavailable marker when that scan failed.
+    excluded_generated: list[JsonDict] | JsonDict | None
     # Set when the committed findings snapshot was written by another finding
     # method version: the findings moved because the method did.
     method_change: NotRequired[MethodChange | None]
@@ -317,11 +318,14 @@ def _format_method_change(change: MethodChange | None) -> list[str]:
 GENERATED_DISCLOSURE_MAX_PATHS = 10
 
 
-def _format_generated_disclosure(excluded_generated: list[JsonDict] | None) -> str:
+def _format_generated_disclosure(excluded_generated: list[JsonDict] | JsonDict | None) -> str:
     """A summary line naming each distinct reason files were excluded as
     generated, then one indented ``path (reason)`` line per file (capped at
     ``GENERATED_DISCLOSURE_MAX_PATHS``), or ``""`` when none were, so a clean
-    run's log is unchanged."""
+    run's log is unchanged. A failed scan (the unavailable marker) says the
+    exclusions were not disclosed rather than reading as none."""
+    if isinstance(excluded_generated, dict):
+        return f"  generated-file exclusions not disclosed: {excluded_generated.get('reason')}"
     rows = [
         r for r in (excluded_generated or [])
         if isinstance(r, dict) and r.get("path") and r.get("reason")
