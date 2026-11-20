@@ -52,7 +52,8 @@
         "skills/assess/scripts/lib/test_pressure/mutmut3.py",
         "skills/assess/scripts/lib/wiki_writer.py",
         "skills/assess/tests/test_assess_finalize.py",
-        "skills/assess/tests/test_complexity_treemap.py"
+        "skills/assess/tests/test_complexity_treemap.py",
+        "tests/test_ghsync_gitlab.py"
       ]
     },
     {
