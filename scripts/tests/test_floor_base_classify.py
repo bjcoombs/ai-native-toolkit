@@ -9,14 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.test_floor_pin_exempt import (  # noqa: F401  (`repo` is a fixture)
-    DEPENDABOT,
-    _bump,
-    _commit,
-    _git,
-    _run_filter,
-    repo,
-)
+from tests import test_floor_pin_exempt as pin
+from tests.test_floor_pin_exempt import DEPENDABOT, _bump, _commit, _git, _run_filter
+
+# The pin-exemption suite's `repo` fixture: a base holding the floor core.
+repo = pin.repo
 
 CORE_CHANGED = "floor_core_changed=true"
 CORE_CLEAN = "floor_core_changed=false"
