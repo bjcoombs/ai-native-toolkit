@@ -284,12 +284,14 @@ code, and the run history still keeps only its three files. `--no-diagrams` turn
 |------|----------|------------|
 | `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--rubric` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--rubric` or without team rows. |
 | `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep is dotted as unknown. |
+| `trend.svg` | Is each team improving? | The run history: each group's mean maturity level (the plain mean of its row levels that are known) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode and path hashing, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. End labels give the last level and the change over the last unbroken stretch. Skipped with fewer than 3 comparable runs, without `--rubric`, or when the run is not kept in the history (`--no-history`, `--full`). |
 
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
-`shared_tooling` evidence, is named on a hatched strip. Colours follow the viewer's light or
+`shared_tooling` evidence, is named on a hatched strip, and a group with no level in a run
+breaks its trend line and is named on a hatched note. Colours follow the viewer's light or
 dark scheme. The SVGs have no script and no external font or link, and the same run draws the
 same bytes. Logic: `lib/fleet_diagrams.py`, `lib/fleet_quadrant.py`,
-`lib/fleet_tooling_map.py`, on the shared helpers in `lib/fleet_svg.py`.
+`lib/fleet_tooling_map.py`, `lib/fleet_trends.py`, on the shared helpers in `lib/fleet_svg.py`.
 
 ## Leadership heat map: `heatmap.py`
 

@@ -830,8 +830,8 @@ an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (
 
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
-reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; only `run.json` and
-`groups.jsonl`) dated before this run whose stamp matches on window, scans, output mode and
+reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode and
 path hashing and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
 `trend_run(stamp, groups)` is one run's point per group, `mean_level` the plain mean of the

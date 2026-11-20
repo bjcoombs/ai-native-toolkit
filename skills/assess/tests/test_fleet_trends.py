@@ -7,6 +7,7 @@ The golden under ``tests/fixtures/fleet_trends/`` locks the whole render; regene
 from __future__ import annotations
 
 import json
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -63,6 +64,7 @@ def test_svg_is_self_contained_and_well_formed():
     assert ET.fromstring(content).tag == f"{SVG_NS}svg"
     assert "<script" not in content and "href" not in content and "@import" not in content
     assert "prefers-color-scheme: dark" in content and ".s-series7{" in content
+    assert re.findall(r"https?://[^\s\"']+", content) == ["http://www.w3.org/2000/svg"]
     assert overridden_text_attributes(content) == []
 
 
@@ -173,6 +175,13 @@ def test_a_long_group_name_is_truncated_with_the_full_name_as_tooltip():
     content = ft.render_trend(runs(FIXTURES))
     assert f"<title>{LONG}</title>" in content
     assert "platform/infrastructu… 2.5" in content
+
+
+def test_group_names_are_escaped():
+    drawn = [_run(d, "v", {'web<&>"ui': 1.0, "x": None}) for d in ("a", "b", "c")]
+    content = ft.render_trend(drawn)
+    ET.fromstring(content)
+    assert 'web&lt;&amp;&gt;"ui 1.0' in content and "<&>" not in content
 
 
 def test_date_ticks_thin_out_but_keep_the_last_run():

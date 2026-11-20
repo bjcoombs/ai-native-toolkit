@@ -14,8 +14,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+from lib.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
 from lib.fleet_groups import FLEET_GROUP_VERSION, GroupRow, RubricRowLevel  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, FleetStamp  # noqa: E402
+from lib.rubric import Rubric  # noqa: E402
 from lib.fleet_trends import TrendRun, history_runs, render_trend, series_runs, trend_run  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "fleet_trends"
@@ -85,7 +87,10 @@ def runs(root: Path) -> list[TrendRun]:
 
 
 def goldens(root: Path) -> dict[str, str]:
-    return {"expected-trend.svg": render_trend(runs(root))}
+    """The trend render and a report embedding it (the other diagrams skip: no repositories)."""
+    levels: Rubric = {"version": "levels-2", "rows": []}
+    report = report_markdown(build_diagrams(levels, [], "6mo", history=runs(root)))
+    return {"expected-trend.svg": render_trend(runs(root)), "expected-report.md": report}
 
 
 if __name__ == "__main__":

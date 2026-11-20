@@ -11,8 +11,8 @@ level, or absent from a run, has no value there: its line breaks and the gap is
 named on a hatched note, never drawn at zero.
 
 **Comparable runs.** ``history_runs`` reads the ``<date>[.<n>]`` entries under
-the history ``<org>`` directory (``lib/fleet_history.py``): only ``run.json``
-and ``groups.jsonl``. An entry counts when its stamp is at this toolkit's stamp
+the history ``<org>`` directory (``lib/fleet_history.py``): ``run.json`` and
+``groups.jsonl``, and ``repos.jsonl`` only to choose between same-day runs. An entry counts when its stamp is at this toolkit's stamp
 version, matches this run on window, scan selection, output mode and path
 hashing, and records a maturity-model version; an unreadable or malformed
 entry is passed over, never an error. One run per scan date: the entry over
@@ -116,18 +116,20 @@ def _read_entry(entry: Path, current: FleetStamp) -> TrendRun | None:
 
 def history_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str]) -> list[TrendRun]:
     """Earlier comparable runs under ``org_dir``, one per scan date before this run's, oldest first."""
-    by_date: dict[str, tuple[bool, int, TrendRun]] = {}
+    by_date: dict[str, list[tuple[int, Path, TrendRun]]] = {}
     for (date, suffix), entry in dated_entries(org_dir):
         if date >= current["scan_date"]:
             continue
         run = _read_entry(entry, current)
-        if run is None or run["label"] != date:
-            continue
-        same_set = entry_repos(entry) == repos
-        held = by_date.get(date)
-        if held is None or (same_set, suffix) > (held[0], held[1]):
-            by_date[date] = (same_set, suffix, run)
-    return [by_date[date][2] for date in sorted(by_date)]
+        if run is not None and run["label"] == date:
+            by_date.setdefault(date, []).append((suffix, entry, run))
+    chosen = []
+    for date in sorted(by_date):
+        options = by_date[date]  # by suffix; repos.jsonl is read only to choose between same-day runs
+        if len(options) > 1:
+            options = sorted(options, key=lambda o: (entry_repos(o[1]) == repos, o[0]))
+        chosen.append(options[-1][2])
+    return chosen
 
 
 def series_runs(earlier: Sequence[TrendRun], current: TrendRun) -> list[TrendRun]:

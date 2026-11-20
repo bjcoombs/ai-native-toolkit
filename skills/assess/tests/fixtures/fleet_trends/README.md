@@ -9,7 +9,7 @@ A fixture run history for `tests/test_fleet_trends.py`:
   window (2026-05-20, not comparable) and a malformed entry (2026-04-20).
 - This run (2026-11-20) is held in memory in `tests/fleet_trends_fixture.py`, as `fleet.py`
   holds it.
-- `expected-trend.svg`: the golden render.
+- `expected-trend.svg`, `expected-report.md`: the golden render and a report embedding it.
 
 Everything here except this README is generated: never hand-edit or hand-merge it. After a
 deliberate change, regenerate from `skills/assess` and review the diff:
