@@ -566,6 +566,35 @@ blocks, and an `if`/`then` rule that an `"available": false` block carries a str
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
 from `skills/assess`.
 
+**`fleet.py`**
+The core of `skills/fleet/scripts/fleet.py` (issue #567): headless signals across a
+ghsync root or a list, one JSONL row per repository. `discover_root` walks
+`<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
+checkout is reported rather than skipped), never descending into a found repository,
+`worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
+directory, a plain checkout or a root-relative path; `layout_id` gives both inputs the
+same `repo` id (the path under the root, prefixed with the root's name when one
+segment), a listed path outside the root falling back to `remote_path` (the `origin`
+URL's path) and then to its last two directory names. `scan_target` checks
+`checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
+told otherwise, from a scratch directory, with a timeout; every failure becomes a
+`failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
+message text. `run_fleet` maps targets over a thread pool of those processes, isolates
+a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
+`repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
+its schema version - no stamp field, path or timing - so reruns are byte-identical.
+`run_salt` draws one salt per run for `--hash-paths`. The row shape is the `FleetRow`
+TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
+readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
+
+**`fleet_schema.py`**
+Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
+`signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
+`if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
+checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
+from `skills/assess`.
+
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
 (broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
