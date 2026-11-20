@@ -620,7 +620,7 @@ def tracked_files(root: Path) -> frozenset[Path] | None:
         raw = subprocess.run(
             ["git", "-C", str(root), "ls-files", "--full-name", "-z"],
             capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
+            encoding="utf-8", errors="surrogateescape", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None

@@ -95,7 +95,7 @@ ever cut, this note is where the intended boundary is written down.
 ## Module reference
 
 Windows portability (#712): every text-mode `subprocess.run` names
-`encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` where a path must
+`encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
 round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
 `tests/test_windows_portability.py` guards both across `scripts/`.
 

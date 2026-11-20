@@ -534,7 +534,7 @@ def _copy_repo(repo_root: Path, dest: Path) -> bool:
         proc = subprocess.run(
             ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
             cwd=str(repo_root), env=_git_env(), capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
+            encoding="utf-8", errors="surrogateescape",
             timeout=60, check=False)
         listed = [f for f in (proc.stdout or "").split("\0") if f] \
             if proc.returncode == 0 else []

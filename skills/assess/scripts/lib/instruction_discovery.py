@@ -212,7 +212,7 @@ def _ls_files(repo_root: Path) -> set[str]:
         raw = subprocess.run(
             ["git", "-C", str(repo_root), "ls-files", "-z"],
             capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
+            encoding="utf-8", errors="surrogateescape", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return set()

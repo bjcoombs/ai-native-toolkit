@@ -542,7 +542,7 @@ def _detect_discoverable(repo_root: Path, files: list[Path]) -> tuple[list[str],
         # observability/) - never the repo-root dir name, which says nothing.
         dir_parts = rel.parts[:-1]
         if _RUNBOOK_NAME_RE.search(path.stem) or any(_RUNBOOK_NAME_RE.search(p) for p in dir_parts):
-            signals.add(f"runbook/observability doc: {rel}")
+            signals.add(f"runbook/observability doc: {rel.as_posix()}")
             runbooks.append(path)
             continue
         # Body-level fallback: weaker than a filename, so require >=2 distinct
@@ -550,7 +550,7 @@ def _detect_discoverable(repo_root: Path, files: list[Path]) -> tuple[list[str],
         # shouldn't tip a repo to discoverable (rung 2).
         hits = {m.group(1).lower() for m in _RUNBOOK_CONTENT_RE.finditer(_read(path))}
         if len(hits) >= _RUNBOOK_CONTENT_MIN_HITS:
-            signals.add(f"observability content ({', '.join(sorted(hits))}): {rel}")
+            signals.add(f"observability content ({', '.join(sorted(hits))}): {rel.as_posix()}")
             runbooks.append(path)
     return sorted(signals), runbooks
 

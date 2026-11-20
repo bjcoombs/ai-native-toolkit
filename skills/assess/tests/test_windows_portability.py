@@ -56,16 +56,36 @@ def test_every_text_mode_subprocess_call_names_its_encoding():
     assert missing == []
 
 
+def _relative_path_names(scope: ast.AST) -> set[str]:
+    """Names bound directly to a ``relative_to(...)`` Path within one function."""
+    return {t.id for node in ast.walk(scope) if isinstance(node, ast.Assign)
+            and _is_relative_to_call(node.value) for t in node.targets if isinstance(t, ast.Name)}
+
+
+def _native(node: ast.AST, names: set[str]) -> bool:
+    return _is_relative_to_call(node) or (isinstance(node, ast.Name) and node.id in names)
+
+
 def test_no_relative_path_is_stringified_with_native_separators():
     native = []
     for rel, tree in _sources():
-        for node in ast.walk(tree):
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id == "str" and node.args and _is_relative_to_call(node.args[0])):
-                native.append(f"{rel}:{node.lineno}")
-            if isinstance(node, ast.FormattedValue) and _is_relative_to_call(node.value):
-                native.append(f"{rel}:{node.lineno}")
-    assert native == []
+        scopes = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        for scope in [tree, *scopes]:
+            names = _relative_path_names(scope) if scope is not tree else set()
+            for node in ast.walk(scope):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                        and node.func.id == "str" and node.args and _native(node.args[0], names)):
+                    native.append(f"{rel}:{node.lineno}")
+                if isinstance(node, ast.FormattedValue) and _native(node.value, names):
+                    native.append(f"{rel}:{node.lineno}")
+    assert sorted(set(native)) == []
+
+
+def test_the_separator_guard_sees_a_name_bound_from_relative_to():
+    source = "def f(p, root):\n    rel = p.relative_to(root)\n    return f'doc: {rel}'\n"
+    scope = ast.parse(source).body[0]
+    fstring = next(n for n in ast.walk(scope) if isinstance(n, ast.FormattedValue))
+    assert _native(fstring.value, _relative_path_names(scope))
 
 
 # --- UTF-8 under a non-UTF-8 locale ------------------------------------------
