@@ -775,7 +775,9 @@ renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README).
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
 `if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
-(`build_stamp_schema`, mapping the `scans` name list itself). `tests/test_fleet.py` and
+(`build_stamp_schema`, mapping the `scans` name list itself); and
+`doc_freshness.schema.json` from `fleet_doc_freshness.FreshnessRow`
+(`build_freshness_schema`, status and reason enums, `scope`/`commits` lists mapped itself). `tests/test_fleet.py` and
 `tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
 `uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 
@@ -831,7 +833,9 @@ linked worktree, or a git call that cannot run. Outcomes never reach a row or th
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`. `history_root` is
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` when the
+run wrote one (`OPTIONAL_HISTORY_FILES`, #664; a same-day replacement without it removes
+the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
 or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a

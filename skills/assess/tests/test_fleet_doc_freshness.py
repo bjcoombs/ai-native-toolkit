@@ -6,12 +6,15 @@ import os
 import subprocess
 from pathlib import Path
 
+import jsonschema
 import pytest
 
 from lib import fleet_doc_freshness as fdf
 from lib.assess_config import load_describes
 from lib.doc_staleness import analyze_doc_staleness
 from lib.fleet_doc_freshness import Checkout, freshness_rows, measure
+from lib.fleet_history import persist
+from lib.fleet_schema import FRESHNESS_SCHEMA_PATH, build_freshness_schema, render_freshness
 from test_fleet_cli import fleet_cli
 
 DOC_EDIT = 1_700_000_000
@@ -348,8 +351,9 @@ def test_fleet_cli_writes_doc_freshness_before_delete_after(tmp_path, capsys):
         _git(checkout, "fetch", "-q", "origin")
     out = tmp_path / "out"
 
+    hist = tmp_path / "hist"
     code = fleet_cli.main([str(root), "--out", str(out), "--scans", "shared_tooling",
-                           "--no-history", "--jobs", "1", "--delete-after"])
+                           "--history-dir", str(hist), "--jobs", "1", "--delete-after"])
 
     assert code == 0
     rows = [json.loads(ln) for ln in (out / fdf.FRESHNESS_FILE).read_text().splitlines()]
@@ -357,6 +361,8 @@ def test_fleet_cli_writes_doc_freshness_before_delete_after(tmp_path, capsys):
         ("grp/billing", fdf.BEHIND, 5, None)]
     assert "doc freshness: 1 declared mappings: 1 behind" in capsys.readouterr().err
     assert not svc.exists() and not _docs.exists()  # deleted after the join read them
+    kept = list(hist.glob(f"*/*/{fdf.FRESHNESS_FILE}"))
+    assert len(kept) == 1 and kept[0].read_text() == (out / fdf.FRESHNESS_FILE).read_text()
 
 
 def test_summary_line_orders_statuses():
@@ -440,3 +446,61 @@ def test_counts_only_rules_keep_declared_mapping_fields():
     assert hashed[0]["status"] == "declared_not_measured"
     assert hashed[1]["reason"] == "invalid_mapping"
     assert all(str(v).startswith("h:") for v in (hashed[0]["path"], hashed[0]["repo"], *hashed[0]["scope"]))
+
+
+def test_freshness_schema_file_matches_the_type():
+    assert FRESHNESS_SCHEMA_PATH.read_text(encoding="utf-8") == render_freshness()
+
+
+def test_every_row_shape_validates_against_the_schema(tmp_path):
+    root, _docs, svc = _fleet(tmp_path, config=DESCRIBES + DESCRIBES.replace("api/", "gone/")
+                              + '[[describes]]\npath = "README.md"\nrepo = "grp/absent"\nscope = ["."]\n'
+                              + '[[describes]]\npath = "README.md"\nrepo = "grp/billing"\n')
+    _api_commits(svc, 6)
+    schema = build_freshness_schema()
+    targets = _targets(root, "grp/docs", "grp/billing")
+    seen: set[str] = set()
+    for full, salt in ((True, None), (False, None), (False, "s")):
+        for row in freshness_rows(targets, full=full, hash_salt=salt).rows:
+            jsonschema.validate(json.loads(json.dumps(row)), schema)
+            seen.add(row["status"])
+    assert seen == {fdf.BEHIND, fdf.BROKEN, fdf.UNKNOWN, fdf.INVALID}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**row, "status": "stale"}, schema)
+
+
+def _run_files(out: Path, freshness: bool) -> None:
+    out.mkdir(exist_ok=True)
+    (out / "repos.jsonl").write_text('{"repo": "org/a"}\n')
+    (out / "groups.jsonl").write_text("{}\n")
+    (out / "run.json").write_text(json.dumps(
+        {"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo", "counts_only": True,
+         "scans": None, "paths_hashed": False}))
+    path = out / fdf.FRESHNESS_FILE
+    if freshness:
+        path.write_text('{"status": "behind"}\n')
+    else:
+        path.unlink(missing_ok=True)
+
+
+def test_history_keeps_doc_freshness_and_drops_a_stale_same_day_copy(tmp_path):
+    stamp = json.loads(json.dumps({"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo",
+                                   "counts_only": True, "scans": None, "paths_hashed": False}))
+    out, entry = tmp_path / "out", tmp_path / "hist" / "org" / "2026-11-20"
+    _run_files(out, freshness=True)
+    persist(out, entry, stamp, frozenset({"org/a"}))
+    assert (entry / fdf.FRESHNESS_FILE).read_text() == '{"status": "behind"}\n'
+
+    _run_files(out, freshness=False)  # a same-day rerun with no mappings
+    persist(out, entry, stamp, frozenset({"org/a"}))
+    assert not (entry / fdf.FRESHNESS_FILE).exists()
+    assert (entry / "run.json").exists()
+
+
+def test_history_without_doc_freshness_is_unchanged(tmp_path):
+    stamp = json.loads(json.dumps({"fleet_stamp_version": 1, "rubric_version": None, "window": "6mo",
+                                   "counts_only": True, "scans": None, "paths_hashed": False}))
+    out, entry = tmp_path / "out", tmp_path / "hist" / "org" / "2026-11-20"
+    _run_files(out, freshness=False)
+    persist(out, entry, stamp, frozenset({"org/a"}))
+    assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]

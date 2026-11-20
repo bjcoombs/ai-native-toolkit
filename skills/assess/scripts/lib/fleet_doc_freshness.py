@@ -21,7 +21,10 @@ file is written. Trust before coverage, so every rule leans toward saying less:
   lockfiles or dependency manifests (unless the scope names that file
   itself, as ``scope = ["package.json"]`` does), or when it is a bulk mechanical commit by
   ``git_churn``'s rule (``bulk_commit_need``), applied with the service's
-  tracked files as the population. Merges are skipped.
+  tracked files as the population. Merges are skipped. The rule's floor of
+  ten files was set for doc sets: in a small service (15-20 tracked files) an
+  ordinary commit touching ten or more files is skipped as bulk, so the count
+  can only go down there, the safe direction.
 - **Same clock as ``doc_staleness``.** The doc side is ``git_churn``'s content
   clock (bulk commits skipped); a folder takes its newest doc. Both sides use
   author time (``%at``), so a service commit authored before the doc edit and
@@ -95,6 +98,11 @@ DOC_HISTORY_TRUNCATED = "doc_history_truncated"
 SERVICE_HISTORY_TRUNCATED = "service_history_truncated"
 SERVICE_HISTORY_UNKNOWN = "service_history_unknown"
 INVALID_MAPPING = "invalid_mapping"  # also assess_config.declared_block's token
+
+STATUSES = (CURRENT, MINOR_DRIFT, BEHIND, UNKNOWN, BROKEN, INVALID)
+REASONS = (REPO_NOT_IN_FLEET, REPO_CHECKOUT_UNREADABLE, DOC_PATH_MISSING, SCOPE_PATH_MISSING,
+           DOC_HISTORY_UNKNOWN, DOC_HISTORY_TRUNCATED, SERVICE_HISTORY_TRUNCATED,
+           SERVICE_HISTORY_UNKNOWN, INVALID_MAPPING)
 
 # Basenames of lockfiles and dependency manifests: a commit whose in-scope files
 # are all of these is a dependency bump, not a change to the documented surface.
