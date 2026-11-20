@@ -11,7 +11,8 @@ The rule, in precedence order (the PRD's ordered fallbacks):
      walking up its directory ancestry (the ``CODEOWNERS`` / ``.gitignore``
      nearest-match rule). A directory has at most one base doc, picked by
      ``BASE_DOC_PRECEDENCE``, so two docs never tie for a directory: a
-     ``README.md`` beside a ``design.md`` owns the directory's code.
+     ``README.md`` beside a ``design.md`` owns the directory's code. A skill's
+     ``SKILL.md`` is a base doc, so it owns its skill directory's code (#614).
   2. ``parallel-docs-tree`` -- a doc under a ``docs/`` tree whose name matches
      a code directory describes every code file under that directory.
   3. ``explicit-links`` -- the code files the doc links to.
@@ -40,8 +41,12 @@ from typing import TypedDict
 from lib.run_context_types import DocToCodeEdge
 
 # Docs that describe the directory they live in. Precedence (best first) when a
-# directory holds more than one candidate.
-BASE_DOC_PRECEDENCE = ["readme.md", "index.md", "_index.md", "agents.md", "claude.md"]
+# directory holds more than one candidate. A skill's ``SKILL.md`` is a base doc
+# (issue #614): it describes the skill directory's scripts, so it owns that
+# subtree's code. A ``README.md`` beside it still wins the directory.
+BASE_DOC_PRECEDENCE = [
+    "readme.md", "skill.md", "index.md", "_index.md", "agents.md", "claude.md",
+]
 # Boilerplate that names a directory but does not *describe* its code.
 BOILERPLATE_BASENAMES = {
     "license.md", "license", "changelog.md", "contributing.md",

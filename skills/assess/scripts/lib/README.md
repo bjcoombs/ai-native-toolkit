@@ -361,7 +361,8 @@ a fixture-backed test here alongside any predicate change.
 The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
 `doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
 ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
-directory's code), then a parallel `docs/` tree, explicit code links, and the empty
+directory's code; a skill's `SKILL.md` is a base doc ranked just after `README.md`, so it
+owns its skill's subtree, #614), then a parallel `docs/` tree, explicit code links, and the empty
 `repo-baseline` subject. `subject_spec` records each doc's method and roots as
 repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
 `/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
