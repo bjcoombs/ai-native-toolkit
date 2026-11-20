@@ -44,11 +44,15 @@ constant each.
 # agent setup, the check command an instruction file names, lockfiles per
 # manifest, copilot-setup-steps.yml findings, the Layer 5 Partial cap and the
 # optional gh CI-duration probe. Additive; complexity-stats.json is unchanged.
-# 1.5.0: run-context.json gains assess_method_version and
+# 1.5.0: run-context.json gains shared_tooling (issue #566): per repository, the
+# shared CI sources its pipelines include and the agent marketplaces it hosts or
+# names, each with a stable id a fleet roll-up counts distinct. Additive; no
+# existing key moves, and complexity-stats.json is unchanged.
+# 1.6.0: run-context.json gains assess_method_version and
 # prior_findings_snapshot, and each run writes .assess/findings.json, the
 # committed snapshot of finding names and paths (issue #554). Additive: no
 # existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.5.0"
+ARTIFACT_SCHEMA_VERSION = "1.6.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

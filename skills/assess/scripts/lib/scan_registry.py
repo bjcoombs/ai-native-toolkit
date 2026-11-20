@@ -39,6 +39,7 @@ from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.review_reality import scan_review_reality
+from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``. A spec may read these, or the key of
 # any spec declared before it.
@@ -233,6 +234,12 @@ SCANS: tuple[ScanSpec, ...] = (
         "agent_environment", scan_agent_environment,
         ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
     ),
+    # Shared tooling (issue #566): the shared CI sources a pipeline includes
+    # (GitLab `include: project:` / `include: component:`, GitHub reusable
+    # workflows) and the agent marketplaces the repository hosts or names
+    # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
+    # stable id so a fleet roll-up counts distinct sources. Offline file reads.
+    ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
 )
 
 validate(SCANS)
