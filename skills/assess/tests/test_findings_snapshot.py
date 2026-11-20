@@ -202,6 +202,13 @@ def test_core_writes_snapshot_and_stamps_method_version(tmp_path: Path) -> None:
     assert method_change(ctx2) is None
 
 
+def test_run_header_reserves_the_snapshot_key_for_the_publish_step() -> None:
+    from lib import run_setup
+    keys = run_setup.RUN_HEADER_KEYS
+    assert keys.index("assess_method_version") == keys.index("artifact_schema_version") + 1
+    assert "prior_findings_snapshot" in keys
+
+
 def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, capsys) -> None:
     repo = _minimal_repo(tmp_path)
     build_run_context(repo_root=repo, run_date="2026-11-19")
