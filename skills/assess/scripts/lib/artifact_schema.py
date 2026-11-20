@@ -52,7 +52,12 @@ constant each.
 # prior_findings_snapshot, and each run writes .assess/findings.json, the
 # committed snapshot of finding names and paths (issue #554). Additive: no
 # existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.6.0"
+# 1.7.0: run-context.json gains instruction_placement (issue #559): each
+# instruction file split on its headings, its always-on lines and share, and the
+# relocatable sections with line ranges, signals and a suggested home; agent and
+# SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.7.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
