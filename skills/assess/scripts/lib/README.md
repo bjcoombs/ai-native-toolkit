@@ -133,6 +133,8 @@ Three signals derived from `git log`:
   (high = an island safe for keyhole edits).
 - B4 authorship: human/agent/mixed/unknown classification, e-mail-based and
   deliberately conservative (never labels a human's work "agent" on weak evidence).
+  The matcher (`identity_is_agent`, `coauthors_have_agent`, `AI_EMAIL_HINTS`) lives
+  in `agent_identity.py`; `AI_EMAIL_HINTS` is re-exported here.
 
 `parse_commit_file_sets` lists each commit's files under the names they had then.
 `build_rename_map` reads `git log --name-status -M --diff-filter=R` into a `RenameMap`:
@@ -539,8 +541,8 @@ the publish step never runs. Names in `UNREGISTERED_SCANS` (run-context blocks
 name a reported scan also holds is dropped at runtime. `select_scans` raises
 `UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
 commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
-(each nullable outside git). The window is validated and stamped only: no registered
-scan reads a history window yet. Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+(each nullable outside git). The window is validated, stamped and passed to the scans
+that read `history_window` (`ai_usage`). Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
@@ -970,6 +972,28 @@ while adding +100 of new functions still regresses. `restructured` never reaches
 a helper extraction.
 
 ### Scoring
+
+**`rubric.py`**
+Loads a caller-supplied maturity rubric (TOML via stdlib `tomllib`) and evaluates it
+from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
+once per group from the group settings; `team`: per repository from its
+`run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
+numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
+`not_in`) over dotted signal paths. A row reaches level N only when every criterion of
+N and of every lower level holds. A missing key, a null, a path through an
+`available: false` block or a type mismatch makes the criterion `unknown`. A row then
+carries `bounds` (`low`: the definitely-met climb; `high`: below the first definitely
+unmet level above it, else K) and is `unknown` only when they differ, so it is never a
+false 0 or a false pass. `missing_signals` names every unavailable signal even when the
+level is known. Every level's unmet criteria are in the result for next-step guidance.
+A team roll-up applies the rule to the low and the high bounds and reports a level
+only when both agree; `unknown_repos` names the repositories whose level is open.
+`load_rubric` / `parse_rubric` raise `RubricError` before evaluation on a missing
+version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
+key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
+rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
+rerun. No default rubric ships here. Tests: `tests/test_rubric.py` with fixtures under
+`tests/fixtures/rubric/`.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
@@ -1604,6 +1628,38 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`agent_identity.py`**
+The one definition of an agent identity in a git history: `identity_is_agent(email,
+name)` (the `[bot]` marker on either, or an `AI_EMAIL_HINTS` e-mail; never a display
+name) and `coauthors_have_agent(field)` (any GS-separated `Co-authored-by` value whose
+bracketed e-mail is an agent). `is_ai_assistant` / `coauthors_have_ai_assistant` are
+the same matcher with non-Copilot `[bot]` accounts removed, for `ai_usage`: a GitHub
+squash merge credits every commit author as a co-author, so an automation bot's
+fix-up commit must not make a change read as AI-assisted. `COVERED_AGENTS` names the
+assistants that counts, in words with no address, for a block's stated limits; keep
+it in step with `AI_EMAIL_HINTS`.
+Consumers: `change_coupling.authorship_analysis`, `promissory_markers`,
+`understanding_analysis` and `ai_usage`. Widening the hints changes all four, so it is
+a change of its own. Tests: `tests/test_ai_usage.py`, `tests/test_change_coupling.py`.
+
+**`ai_usage.py`**
+AI-assisted change share (issue #547), a lower bound on agent use.
+`scan_ai_usage(repo_root, scope, history_window)` runs `git log --no-merges` over the
+`--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
+total_commits, agent_trailer_commits, agent_trailer_share, lower_bound,
+covered_agents[], limits[]}`. A commit counts when any `Co-authored-by` trailer names an
+AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded); the share is null at zero commits.
+`merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
+churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
+the headless `--window`), or None for full history (`window: "all-time"`);
+`resolve_window` raises on anything else, which degrades the block. `limits` is the
+fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
+`COVERED_AGENTS`, automation bots not counted). Counts, a share and fixed strings only: no name, e-mail or
+subject. A missing git, a timeout, a non-repository and a shallow clone (or one
+`rev-parse --is-shallow-repository` cannot confirm is full) each degrade to
+`available: false` with a fixed reason of their own: a truncated history can put the
+share above the true value. Tests: `tests/test_ai_usage.py`.
 
 **`shared_tooling.py`**
 Shared CI sources and agent marketplaces, per repository (issue #566), the

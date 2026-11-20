@@ -57,6 +57,10 @@ constant each.
 # relocatable sections with line ranges, signals and a suggested home; agent and
 # SKILL.md files over 200 lines in a separate loaded_in_full list. Additive;
 # complexity-stats.json is unchanged.
+# 1.7.0 (also): run-context.json gains ai_usage (issue #547): the share of
+# commits in the history window with an AI-assistant Co-authored-by trailer, as
+# a lower bound with its window, merge rule and limits. Additive;
+# complexity-stats.json is unchanged.
 # 1.8.0: complexity-stats.json gains `files`, every scored file as {path, ccn},
 # uncapped and sorted by path, read by the doc-complexity join (issue #556).
 # Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
