@@ -136,7 +136,8 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 #    extensionless ``run`` credits neither (issue #635), so a test_focus signal or a
 #    hotspot "Has test file" row can move.
 # 10: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
-#     owns its skill directory's code in doc staleness and the complexity join.
+#     owns its skill directory's code in doc staleness and the complexity join,
+#     and can move doc_staleness.modularity (base_doc_dir_ratio).
 # 11: a leading HTML comment only one of a CLAUDE.md / AGENTS.md pair carries is
 #     compared, not stripped, so it turns a mirrored_instruction_files into a
 #     claude_shadows_agents; text after a header comment's ``-->`` (an H1
@@ -149,4 +150,9 @@ ARTIFACT_SCHEMA_VERSION = "1.14.0"
 # 13: doc_claims compares pins per (pinned file, tool) (issue #610), so a Node pin
 #     no longer contradicts a Python pin in one ``.tool-versions``; the L0
 #     "conflicting doc claims" row and scorer evidence can move.
-ASSESS_METHOD_VERSION = 13
+# 14: a tracked source's rival shell spelling no longer hides an untracked
+#     ``run.sh`` beside it, so the pair ties for ``run.bats`` (issue #648); and a
+#     GitLab exact protected-branch rule combines with every matching wildcard,
+#     so a config_drift snapshot of the exact rule can report the wildcards'
+#     looser levels as drift.
+ASSESS_METHOD_VERSION = 14

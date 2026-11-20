@@ -120,7 +120,7 @@ def test_section_a_skill_already_holds_costs_points(tmp_path: Path) -> None:
     (1200, ALWAYS_ON_MAX_PENALTY),
 ])
 def test_always_on_curve(always_on: int, penalty: int) -> None:
-    result = placement_penalty(_record(always_on, 0, flagged=always_on > ALWAYS_ON_FLAG_LINES))
+    result = placement_penalty(_record(always_on, 0, flagged=always_on > ALWAYS_ON_FLAG_LINES), fetch_words=0)
     assert result["always_on_penalty"] == penalty
     assert result["relocatable_penalty"] == 0
 
@@ -128,7 +128,7 @@ def test_always_on_curve(always_on: int, penalty: int) -> None:
 def test_always_on_term_ignores_the_share_flag() -> None:
     """The size term does not read ``flagged``: half the file or less
     always-on still pays for always-on lines past 200."""
-    assert placement_penalty(_record(300, 300, flagged=False))["always_on_penalty"] == 10
+    assert placement_penalty(_record(300, 300, flagged=False), fetch_words=0)["always_on_penalty"] == 10
 
 
 def test_adding_reference_lines_never_lowers_the_penalty() -> None:
@@ -147,14 +147,14 @@ def test_adding_reference_lines_never_lowers_the_penalty() -> None:
     (0, 0), (1, 1), (10, 1), (11, 2), (150, 15), (300, RELOCATABLE_MAX_PENALTY),
 ])
 def test_relocatable_curve(fetch: int, penalty: int) -> None:
-    assert placement_penalty(_record(50, fetch, flagged=False))["relocatable_penalty"] == penalty
+    assert placement_penalty(_record(50, fetch, flagged=False), fetch_words=0)["relocatable_penalty"] == penalty
 
 
 def test_cap_past_the_cap_lines_flagged_or_not() -> None:
     assert ALWAYS_ON_GRADE_CAP_LINES == 2 * ALWAYS_ON_FLAG_LINES
-    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES, 0, True))["capped"] is False
-    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 0, True))["capped"] is True
-    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 500, False))["capped"] is True
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES, 0, True), fetch_words=0)["capped"] is False
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 0, True), fetch_words=0)["capped"] is True
+    assert placement_penalty(_record(ALWAYS_ON_GRADE_CAP_LINES + 1, 500, False), fetch_words=0)["capped"] is True
 
 
 # --- grade_instructions ------------------------------------------------------------
@@ -196,7 +196,7 @@ def test_very_long_lines_cannot_dodge_the_always_on_term() -> None:
 def test_word_equivalents_follow_the_line_thresholds(words: int, penalty: int, capped: bool) -> None:
     record = _record(100, 0, flagged=False)
     record["always_on_words"] = words
-    result = placement_penalty(record)
+    result = placement_penalty(record, fetch_words=0)
     assert (result["always_on_penalty"], result["capped"]) == (penalty, capped)
 
 
