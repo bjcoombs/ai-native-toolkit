@@ -204,6 +204,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_claims.failures.reason` | dropped |
 | `doc_claims.contradictions.kind` | token |
 | `doc_claims.contradictions.sites.value` | dropped |
+| `doc_claims.contradictions.conflict_pair.value` | dropped |
 
 ## doc_graph
 

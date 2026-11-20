@@ -221,6 +221,17 @@ def test_a_doc_outside_skills_is_not_rebased(tmp_path: Path) -> None:
     assert rebase_skill_claims(tmp_path, "skills/a/notes/x.md", claims) == claims
 
 
+def test_conflict_pair_skips_agreeing_sites_in_the_same_file(tmp_path: Path) -> None:
+    # A.md states 3.11 twice; the first two sites agree, so the cited pair is
+    # A.md's first line against B.md, never two lines of A.md.
+    _write(tmp_path, "docs/A.md", PIN_311 + "\nPython 3.11 is pinned in `.python-version`.\n")
+    _write(tmp_path, "docs/B.md", PIN_312)
+    found = scan_doc_claims(tmp_path, [])["contradictions"][0]
+    assert len(found["sites"]) == 3
+    assert [[s["file"], s["line"], s["value"]] for s in found["conflict_pair"]] == [
+        ["docs/A.md", 3, "3.11"], ["docs/B.md", 5, "3.12"]]
+
+
 def test_different_paths_and_enforcement_claims_never_contradict(tmp_path: Path) -> None:
     _write(tmp_path, "docs/a.md", "Python 3.11 is pinned in `.python-version`.\n"
                                   "`scripts/x.sh` is enforced in CI.\n")

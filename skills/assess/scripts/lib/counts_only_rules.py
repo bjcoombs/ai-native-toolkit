@@ -247,6 +247,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "doc_claims.failures.reason": DROP,
         "doc_claims.contradictions.kind": TOKEN,
         "doc_claims.contradictions.sites.value": DROP,
+        "doc_claims.contradictions.conflict_pair.value": DROP,
     },
     "doc_graph": {
         "doc_graph.reason": DROP,

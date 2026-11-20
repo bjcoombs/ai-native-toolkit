@@ -79,6 +79,9 @@ class DocContradiction(TypedDict):
     kind: str
     path: str
     sites: list[DocClaimSite]
+    # The first two sites, in ``sites`` order, from different files whose values
+    # disagree: the pair a report cites.
+    conflict_pair: list[DocClaimSite]
 
 
 class DocClaimsBlock(TypedDict):
@@ -224,14 +227,19 @@ def _read(root: Path, rel: str) -> tuple[Path, str] | None:
 
 def _contradiction(kind: str, path: str, sites: list[_Site]) -> DocContradiction | None:
     agree = CROSS_DOC_AGREE[kind]
-    clash = any(a.real != b.real and not agree(a.value, b.value)
-                for i, a in enumerate(sites) for b in sites[i + 1:])
-    if not clash:
-        return None
     ordered = sorted(sites, key=lambda s: (s.file, s.line))
+    pair = next(((a, b) for i, a in enumerate(ordered) for b in ordered[i + 1:]
+                 if a.real != b.real and not agree(a.value, b.value)), None)
+    if pair is None:
+        return None
+
+    def site(s: _Site) -> DocClaimSite:
+        return DocClaimSite(file=s.file, line=s.line, value=s.value)
+
     return {
         "kind": kind, "path": path,
-        "sites": [DocClaimSite(file=s.file, line=s.line, value=s.value) for s in ordered],
+        "sites": [site(s) for s in ordered],
+        "conflict_pair": [site(pair[0]), site(pair[1])],
     }
 
 
@@ -291,7 +299,7 @@ def scan_doc_claims(
     counters and ``failures`` for those documents (``failures`` capped at
     ``MAX_FAILURES``; ``failed`` is the full count), and ``contradictions``
     (capped at ``MAX_CONTRADICTIONS``; ``contradictions_total`` is the full
-    count), each ``{kind, path, sites[{file, line, value}]}``.
+    count), each ``{kind, path, sites[{file, line, value}], conflict_pair}``.
     """
     root = Path(repo_root)
     docs = doc_claim_files(root, excludes, scope)

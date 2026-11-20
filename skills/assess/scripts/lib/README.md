@@ -1585,7 +1585,9 @@ the file contains (two tools in one `.tool-versions`) is dropped. The kind is a 
 `CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
 `_VERIFIERS`. The core writes the run-context block `doc_claims`
 (`{files_scanned, excluded_trees, total, verified, failed, failures[...],
-contradictions_total, contradictions[{kind, path, sites[{file, line, value}]}]}`,
+contradictions_total, contradictions[{kind, path, sites[{file, line, value}],
+conflict_pair}]}` (`conflict_pair`: the first two sites from different files that
+disagree),
 lists capped at `MAX_FAILURES` and `MAX_CONTRADICTIONS`; `{available: false,
 reason}` when the scan raised). Rules that conflict in meaning stay out of the
 core. Tests: `tests/test_doc_claims.py`.
