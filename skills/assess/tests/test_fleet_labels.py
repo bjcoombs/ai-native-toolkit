@@ -234,14 +234,22 @@ def test_check_labels_names_every_problem():
         "not json",
         json.dumps([1]),
         json.dumps({**good, "path": "z/z", "label": "sdk", "confidence": True, "model": " "}),
-        json.dumps({**good, "path": "a/w", "confidence": 1}),  # an int, not the written float
+        json.dumps({**good, "path": "a/w", "confidence": 1}),  # an int: valid, as in the schema
     ])
     problems = fl.check_labels(text, ["a/x", "b/y", "c/missing"])
     joined = "\n".join(problems)
     for needle in ("line 4: not JSON", "line 5: not a JSON object", "label 'sdk'",
-                   "confidence True", "model is not", "line 7: confidence 1 ",
+                   "confidence True", "model is not",
                    "not sorted", "a/x: more than one row", "z/z: not in", "c/missing: no row"):
         assert needle in joined, needle
+    assert "line 7" not in joined
+
+
+@pytest.mark.parametrize("confidence", [0, 1, 0.5, 1.0])
+def test_schema_and_check_agree_on_valid_confidence(confidence: Any):
+    row = {"path": "a/b", "label": "docs", "confidence": confidence, "model": "m"}
+    assert not list(jsonschema.Draft202012Validator(fl.build_schema()).iter_errors(row))
+    assert fl.check_labels(json.dumps(row), ["a/b"]) == []
 
 
 # --- join: display and filter only ------------------------------------------------
@@ -351,6 +359,8 @@ def test_cli_prompt_batches(out: Path, capsys):
     captured = capsys.readouterr()
     assert "batch 1 of 2 (1 repositories)" in captured.err
     assert '"path":"grpb/lib1"' in captured.out and '"path":"grpa/svc1"' not in captured.out
+    assert cli.main(["prompt", str(out), "--batch-size", "3", "--count"]) == 0
+    assert capsys.readouterr().out == "2\n"
     assert cli.main(["prompt", str(out), "--batch", "5"]) == 2
     assert cli.main(["prompt", str(out), "--batch-size", "0"]) == 2
     assert "out of range" in capsys.readouterr().err
@@ -364,6 +374,7 @@ def test_cli_write_then_check(out: Path, monkeypatch, capsys):
     assert cli.main(["write", str(out), "--model", "claude-haiku-test"]) == 0
     err = capsys.readouterr().err
     assert "4 repositories, 2 answered" in err
+    assert "warning: 2 of 4 repositories had no answer" in err
     assert "missing (2): grpa/svc2, grpb/gone" in err and "coerced (1): grpb/lib1" in err
     assert cli.main(["check", str(out)]) == 0
     with (out / fl.LABELS_FILE).open("a", encoding="utf-8") as handle:

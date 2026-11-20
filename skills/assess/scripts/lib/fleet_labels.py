@@ -329,7 +329,8 @@ def _row_problems(row: Any, where: str) -> list[str]:
     if row.get("label") not in LABELS:
         problems.append(f"{where}: label {row.get('label')!r} is not one of {', '.join(LABELS)}")
     confidence = row.get("confidence")
-    if normalise_confidence(confidence) is None or not isinstance(confidence, float):
+    # Same rule as the schema's ``"type": "number", 0..1``: an integer 0 or 1 is valid.
+    if normalise_confidence(confidence) is None:
         problems.append(f"{where}: confidence {confidence!r} is not a number in [0, 1]")
     if not isinstance(row.get("model"), str) or not row["model"].strip():
         problems.append(f"{where}: model is not a non-empty string")

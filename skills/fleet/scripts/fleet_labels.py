@@ -3,15 +3,17 @@
 Labelling runs after ``fleet.py`` and never changes its output. The model step
 (a Haiku subagent the skill runs) sits between two commands here:
 
-    prompt  OUT [--batch-size N] [--batch K]
+    prompt  OUT [--batch-size N] [--batch K | --count]
             Print the model instructions plus one compact digest per repository
             of OUT/repos.jsonl (batch K of the rows sorted by id; the batch count
-            goes to stderr). Reads the rows only, never source.
+            goes to stderr). With --count, print only the number of batches.
+            Reads the rows only, never source.
     write   OUT --model ID [--answers FILE]
             Read the model's reply (FILE, or stdin), join it to OUT/repos.jsonl
             and write OUT/labels.jsonl: one row per repository, every label in
             the closed set (anything else becomes "other"; a missing answer is
-            "other" with confidence 0). A summary goes to stderr.
+            "other" with confidence 0). A summary goes to stderr, with a
+            warning line when any repository has no answer.
     check   OUT
             Validate OUT/labels.jsonl against OUT/repos.jsonl.
 
@@ -70,6 +72,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     prompt.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
                         help="Repositories per prompt (default: %(default)s).")
     prompt.add_argument("--batch", type=int, default=0, help="Which batch, from 0 (default: 0).")
+    prompt.add_argument("--count", action="store_true",
+                        help="Print only the number of batches, for a loop over all of them.")
     write = sub.add_parser("write", help="Join the model's reply to repos.jsonl and write labels.jsonl.")
     write.add_argument("out", help="The fleet output directory holding repos.jsonl.")
     write.add_argument("--model", required=True, help="The model id that produced the answers.")
@@ -84,6 +88,9 @@ def _prompt(args: argparse.Namespace, out: Path) -> int:
     if args.batch_size < 1:
         raise LabelsError("--batch-size must be at least 1")
     parts = batches(read_repos(out / REPOS_FILE), args.batch_size)
+    if args.count:
+        print(len(parts))
+        return 0
     if not 0 <= args.batch < len(parts):
         raise LabelsError(f"--batch {args.batch} is out of range: {len(parts)} batch(es)")
     print(f"fleet_labels: batch {args.batch} of {len(parts)} ({len(parts[args.batch])} repositories)",
@@ -109,6 +116,9 @@ def _write(args: argparse.Namespace, out: Path) -> int:
           file=sys.stderr)
     notes = (("missing", report["missing"]), ("coerced", report["coerced"]),
              ("unknown", report["unknown"]), ("duplicates", report["duplicates"]))
+    if report["missing"]:
+        print(f"warning: {len(report['missing'])} of {len(rows)} repositories had no answer and "
+              "were written as other (confidence 0); did every batch run?", file=sys.stderr)
     for key, paths in notes:
         if paths:
             print(f"  {key} ({len(paths)}): {', '.join(paths)}", file=sys.stderr)

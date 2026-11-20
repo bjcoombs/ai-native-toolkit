@@ -139,10 +139,11 @@ answers becomes `other`. The model reads a compact digest of each
 `repos.jsonl` row (its path, status and counts-only facts), never source.
 
 <!-- chat-skip:start -->
-1. Print the prompt for each batch (25 repositories each; stderr names the
-   batch count):
+1. Count the batches (25 repositories each), then print the prompt for every
+   batch, `0` to count minus one:
 
    ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" prompt fleet-out --count
    uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" prompt fleet-out --batch 0
    ```
 
@@ -159,12 +160,20 @@ answers becomes `other`. The model reads a compact digest of each
    uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" check fleet-out
    ```
 
-Outside Claude Code the same model call works headless:
-`fleet_labels.py prompt fleet-out | claude -p --model haiku --tools "" > answers.txt`.
+Outside Claude Code the same model calls work headless, one per batch:
+
+```bash
+n=$(uv run fleet_labels.py prompt fleet-out --count)
+: > answers.txt
+for b in $(seq 0 $((n - 1))); do
+  uv run fleet_labels.py prompt fleet-out --batch "$b" | claude -p --model haiku --tools "" >> answers.txt
+done
+```
 <!-- chat-skip:end -->
 
-`write` prints how many repositories were answered and lists the missing,
-coerced, unknown and duplicate paths. Report those to the user; a missing
+`write` prints how many repositories were answered, warns when any had no
+answer (a skipped batch shows up here), and lists the missing, coerced,
+unknown and duplicate paths. Report those to the user; a missing
 answer is written as `other` with confidence 0, not retried silently.
 
 **`labels.jsonl`** sits beside `repos.jsonl`, one row per repository, sorted by
