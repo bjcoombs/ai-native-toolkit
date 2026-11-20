@@ -86,6 +86,14 @@ def _flag(change: str, done_when: str) -> Wording:
     return wording
 
 
+def _flag_count(change: str, done_when: str) -> Wording:
+    """Wording for a ``gt 0`` / ``gte 1`` count criterion."""
+    def wording(op: str, value: Operand) -> Guidance | None:
+        fits = op == "gt" and value == 0 or op == "gte" and value == 1
+        return {"change": change, "done_when": done_when} if fits else None
+    return wording
+
+
 def _instructions_present(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
@@ -191,6 +199,66 @@ def _approved(op: str, value: Operand) -> Guidance | None:
                          "one approving review."}
 
 
+def _modularity(op: str, value: Operand) -> Guidance | None:
+    bound = _at_least(op, value)
+    if bound is None:
+        return None
+    return {"change": "Group the code into modules that import mostly within themselves, so the "
+                      "import graph splits into clear communities.",
+            "done_when": f"The import graph's modularity (Newman Q) is {'above' if op == 'gt' else 'at least'} "
+                         f"{bound:g} on the next full `/assess` run."}
+
+
+def _front_doors(op: str, value: Operand) -> Guidance | None:
+    bound = _at_least(op, value)
+    if bound is None:
+        return None
+    return {"change": "Import other packages through their public entry point (the package "
+                      "itself), not their internal submodules.",
+            "done_when": f"{_share(op, bound)[0].upper()}{_share(op, bound)[1:]} of imports that "
+                         "cross a package boundary name the package, not one of its submodules."}
+
+
+def _suppressions_present(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
+    return {"change": "Run a linter over the code in CI and the agent's check command.",
+            "done_when": "A linter (ruff, ESLint, golangci-lint or similar) is configured and run "
+                         "by CI; its suppressions (`noqa`, `eslint-disable`, `nolint`) appear "
+                         "where a finding is accepted."}
+
+
+def _suppressions_stale(op: str, value: Operand) -> Guidance | None:
+    number = _number(value)
+    if number is None or op not in ("lte", "lt"):
+        return None
+    bound = f"{number:g} or fewer" if op == "lte" else f"fewer than {number:g}"
+    return {"change": "Fix the findings behind long-lived bare lint suppressions, or give each "
+                      "kept one an inline reason.",
+            "done_when": f"{bound[0].upper()}{bound[1:]} suppressions without a reason have "
+                         "survived repeated edits to their file."}
+
+
+def _ownership_map(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
+    return {"change": "Declare module ownership and boundaries in a `CODEOWNERS` file or an "
+                      "`ARCHITECTURE.md`.",
+            "done_when": "A committed `CODEOWNERS` or `ARCHITECTURE.md` names paths that exist in "
+                         "the repository."}
+
+
+def _file_size(op: str, value: Operand) -> Guidance | None:
+    number = _number(value)
+    if number is None or op not in ("lte", "lt"):
+        return None
+    bound = f"{number:g} lines or fewer" if op == "lte" else f"fewer than {number:g} lines"
+    return {"change": f"Split large source files and enforce a file-size limit in CI, so 95% of "
+                      f"files stay at {bound}.",
+            "done_when": f"A CI check fails a file over the limit, and 95% of source files are "
+                         f"{bound}."}
+
+
 def _setting(name: str) -> Wording:
     label = SETTING_NAMES.get(name, f"`{name}` setting")
 
@@ -218,6 +286,20 @@ _WORDING: dict[str, Wording] = {
     "agent_environment.check.named_total": _check_named,
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
+    "structure.modularity_q": _modularity,
+    "structure.front_door_ratio": _front_doors,
+    "structure.cross_package_edges": _flag_count(
+        "Split the code into more than one top-level package, with imports between them.",
+        "At least one module imports from a different top-level package of the repository."),
+    "promissory_markers.families.suppression.total": _suppressions_present,
+    "promissory_markers.families.suppression.stale": _suppressions_stale,
+    "structure_drift.tier_0.matched_patterns": _ownership_map,
+    "promissory_markers.aging_reliable": _flag(
+        "Assess a full-history clone, not a shallow or squashed one, so lint suppressions can "
+        "be aged.",
+        "`git rev-parse --is-shallow-repository` prints `false` and most changed files have "
+        "more than one commit in the history."),
+    "stats_summary.loc.p95": _file_size,
     "coverage_gate.enforced": _flag(
         "Make the test run fail when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -242,8 +324,19 @@ _WORDING: dict[str, Wording] = {
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
 
+_FULL_RUN = ("Only a full `/assess` run assembles the `{}` block; a headless fleet scan "
+             "reports it unavailable.")
+
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
+    "structure": _FULL_RUN.format("structure"),
+    "stats_summary": _FULL_RUN.format("stats_summary"),
+    "promissory_markers": _FULL_RUN.format("promissory_markers") + " A repository with no lint "
+                          "suppressions has no `suppression` family, so it reads unknown there too.",
+    "structure_drift": _FULL_RUN.format("structure_drift") + " A full run omits it when the "
+                       "repository commits no supported ownership map (`CODEOWNERS`, "
+                       "`ARCHITECTURE.md`, `DESIGN.md`, or a `README.md` that declares module "
+                       "boundaries).",
     "observability": "Only a full `/assess` run reports the observability rung; a headless fleet "
                      "scan leaves it unavailable.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
