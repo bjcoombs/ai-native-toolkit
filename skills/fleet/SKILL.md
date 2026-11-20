@@ -163,6 +163,43 @@ kept counts and each kept repository with its reason token (`scan_not_ok`,
 `local_changes`, `stash`, `unpushed_commits`, `linked_worktrees`, `git_error`,
 `delete_error`). Deletion never changes `repos.jsonl` or `run.json`.
 
+## Team next-steps pages
+
+`fleet_next_steps.py` turns one run's output into one Markdown page per group,
+with no rescan. Pass the rubric and settings the run used; every page level is
+checked against `groups.jsonl` and a difference exits 2.
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --rubric rubric.toml --settings settings/
+```
+<!-- chat-skip:end -->
+
+| Flag | Meaning |
+|------|---------|
+| `OUT` | The run's `--out` directory. Pages go to `OUT/teams.md` (index) and `OUT/teams/<group>.md`; the previous run's `*.md` pages there are removed first. |
+| `--rubric FILE` | The rubric the run used (default: the shipped `skills/assess/rubrics/default.toml`). A different `version` exits 2. |
+| `--settings PATH` | The ghreport settings the run used, in the `fleet.py --settings` forms. |
+
+Each page holds:
+
+- the group's level on every rubric row, with the roll-up rule;
+- for each row below its top level, the unmet criteria of the next level, one
+  numbered step per criterion, so a team can take or leave each on its own.
+  A step leads with the change and a "done when" a maintainer can check in the
+  repository or its platform settings; the signal expression follows as an
+  optional re-run check. A team row lists the repositories holding the group
+  back, each with its current value, and apart from them the repositories that
+  could not be measured; an org row names the settings scope it applies to;
+- for an `unknown` row, the signals that were not measured, in how many
+  repositories, and how to measure them: a measurement gap, not a failure.
+  When measured repositories already fail a higher level, those criteria follow.
+
+Pages are counts-only (ids, counts, numbers, booleans and short tokens; any
+other value prints as `set`) and byte-identical when rerendered from the same
+run. Exit codes: `0` pages written; `2` a missing or malformed output file, an
+invalid rubric or settings, or inputs that disagree with the run.
+
 ## Guarantees
 
 - **Never writes to a target.** Scans run with `GIT_OPTIONAL_LOCKS=0`, from a

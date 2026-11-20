@@ -654,6 +654,47 @@ the fragment's `scope` and `provider`. The CLI loads the rubric with
 `rubric_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
 
+**`fleet_inputs.py`**
+Reads a fleet run's output back for the views built on it (#570, #571), which never
+rescan: `read_repos` and `read_groups` return `repos.jsonl` and `groups.jsonl` rows
+sorted by id, and `read_jsonl` raises `FleetInputError` naming the file and line on a
+missing file, a non-object line or a wrong envelope version.
+
+**`fleet_next_steps.py`**
+The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
+(issue #571). `build_pages` re-runs `rubric.evaluate` per group on exactly the inputs
+`fleet_groups` evaluated (`repo_signals`, `settings_for`, `settings_signals`), then
+checks each row's status and level against `groups.jsonl` and raises
+`NextStepsError` on any difference (a different `--rubric` or `--settings`, or files
+from two runs). Each page: a levels table, then per row the next level's unmet
+criteria, collected cumulatively over levels 1..next (under `share` a repository can
+sit below the group level), one numbered step per criterion. A team step lists the
+repositories where that criterion is definitely unmet, with the current value; a
+repository below the next level with no unmet criterion is listed apart as not
+measured (a failed scan with its reason token). An org step names the settings scope.
+An `unknown` row (keyed on `status`, not on `missing_signals`) names each missing
+signal, how many repositories lack it and how to measure it, the rolled-up bounds,
+and the criteria measured repositories already fail above the high bound. Values
+print counts-only (`scalar`: numbers, booleans, `TOKEN_RE` tokens, else `set`);
+rubric titles are escaped (`text`), ids are code spans (`code`). `write_pages` writes
+`teams.md` and `teams/<group>.md` after `clear_pages` removes the previous run's
+`*.md` pages, and refuses a path that resolves outside the output directory;
+`page_path` refuses an id with an empty, dot or backslash segment. Golden pages:
+`tests/fixtures/fleet_next_steps/expected/` (regeneration command in the test
+module's docstring).
+
+**`next_step_guidance.py`**
+Repository-native wording for a rubric criterion. `guidance(signal, op, value)` gives
+the one change and a "done when" a maintainer checks without the plugin (a file
+state, a command, a platform setting), templated on the criterion's own operator and
+value. A compound check (`agent_environment.layer5_cap.applies`) is worded on the
+parts actually unmet: `parts` reads a repository's `layer5_cap.unmet` tokens, the page
+passes their union across the repositories a step lists and annotates each repository
+with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
+then states the signal expression alone. `measure_hint(signal)` says why a signal can
+be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
+permission). Every signal of `rubrics/default.toml` has wording (tested).
+
 **`fleet_group_schema.py`**
 Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 `RubricRowLevel` (lists and floats included, `settings` values as `{value}` or

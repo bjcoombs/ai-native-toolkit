@@ -1,0 +1,286 @@
+"""Repository-native wording for a rubric criterion: the change and its "done when".
+
+A team page (``lib/fleet_next_steps.py``) turns each unmet rubric criterion into
+one next step a team can accept or decline on its own. A signal path such as
+``agent_environment.check.named_total`` means nothing to a maintainer without
+the plugin, so each step leads with:
+
+- ``change``: the one change that moves the criterion;
+- ``done_when``: how a maintainer checks it in the repository's own terms (a
+  file state, a command, a CI or platform setting), never a signal path.
+
+The signal expression follows on the page as the optional re-run check.
+
+``guidance(signal, op, value)`` builds the wording from the criterion's own
+operator and value, so a caller's rubric that reuses a signal with another
+threshold gets that threshold. It returns ``None`` for a signal it has no
+wording for, or an operator/value shape the wording does not fit; the page
+then states the signal expression alone. ``measure_hint(signal)`` says why a
+signal can be unavailable and how to get it measured, so an ``unknown`` level
+reads as a measurement gap, never as a failure.
+
+Every signal in the shipped ``rubrics/default.toml`` has wording here
+(``tests/test_fleet_next_steps.py`` checks it).
+"""
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, TypedDict
+
+from lib.rubric import Scalar
+
+
+class Guidance(TypedDict):
+    change: str
+    done_when: str
+
+
+Operand = Scalar | list[Scalar]
+Wording = Callable[[str, Operand], Guidance | None]
+PartsWording = Callable[[str, Operand, Sequence[str]], Guidance | None]
+
+# The setting names ghreport reports, as a maintainer reads them.
+SETTING_NAMES = {
+    "two_factor": "two-factor authentication requirement",
+    "push_rules": "push rules",
+    "default_branch_protection": "default branch protection",
+    "rulesets": "rulesets",
+}
+
+_INSTRUCTION_TEXT = ("the always-loaded Claude Code instructions (root `CLAUDE.md`, the files it "
+                     "imports, unscoped `.claude/rules/*.md`)")
+
+
+def _is_true(op: str, value: Operand) -> bool:
+    return (op == "eq" and value is True) or (op == "ne" and value is False)
+
+
+def _is_false(op: str, value: Operand) -> bool:
+    return (op == "eq" and value is False) or (op == "ne" and value is True)
+
+
+def _number(value: Operand) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
+def _percent(value: int | float) -> str:
+    return f"{value * 100:g}%"
+
+
+def _at_least(op: str, value: Operand) -> int | float | None:
+    """The lower bound ``gte N`` / ``gt N`` sets, or None for any other shape."""
+    number = _number(value)
+    return number if number is not None and op in ("gte", "gt") else None
+
+
+def _flag(change: str, done_when: str) -> Wording:
+    def wording(op: str, value: Operand) -> Guidance | None:
+        return {"change": change, "done_when": done_when} if _is_true(op, value) else None
+    return wording
+
+
+def _instructions_present(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
+    return {"change": "Add agent instructions in a root `CLAUDE.md` (a one-line `CLAUDE.md` holding "
+                      "`@AGENTS.md` counts).",
+            "done_when": "A non-empty `CLAUDE.md` is committed at the repository root."}
+
+
+def _instructions_lines(op: str, value: Operand) -> Guidance | None:
+    number = _number(value)
+    if number is None or op not in ("lte", "lt"):
+        return None
+    bound = f"{number:g} lines or fewer" if op == "lte" else f"fewer than {number:g} lines"
+    return {"change": f"Cut {_INSTRUCTION_TEXT} to {bound}.",
+            "done_when": f"`wc -l` over those files totals {bound}."}
+
+
+def _check_named(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
+    return {"change": "Name the command an agent runs to check its work (for example `make check` "
+                      "or `npm test`) in the agent instruction file.",
+            "done_when": "`CLAUDE.md` or `AGENTS.md` names a check command that exists in the "
+                         "repository (a Makefile target, a package script or a committed script)."}
+
+
+def _claims_hold(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0 or op == "lt" and value == 1 or op == "lte" and value == 0):
+        return None
+    return {"change": "Correct the instruction-file sentences that no longer match the repository: "
+                      "a script said to run in CI that CI does not call, a version said to be "
+                      "pinned in a file that does not hold it, a file count that is out of date.",
+            "done_when": "Each script the instruction files say CI runs appears in the CI "
+                         "configuration, and each pin and count they state matches the files."}
+
+
+_CHECK_NAMED = "check_named"
+_SETUP = "setup_or_lockfile"
+_LAYER5_PARTS = {
+    _CHECK_NAMED: ("name a check command that resolves (a Makefile target, a package script or a "
+                   "committed script) in the agent instruction file",
+                   "`CLAUDE.md` or `AGENTS.md` names a check command that exists in the repository"),
+    _SETUP: ("commit a lockfile for every dependency manifest, or a setup (`.devcontainer/`, a "
+             "setup script, `copilot-setup-steps`)",
+             "every dependency manifest has its lockfile committed, or a devcontainer or setup "
+             "script is committed"),
+}
+
+
+def _layer5_cap(op: str, value: Operand, parts: Sequence[str] = ()) -> Guidance | None:
+    """Worded on the cap's ``unmet`` tokens when known; both halves when not."""
+    if not _is_false(op, value):
+        return None
+    known = [p for p in (_CHECK_NAMED, _SETUP) if p in parts]
+    chosen = known or [_CHECK_NAMED, _SETUP]
+    change = " and ".join(_LAYER5_PARTS[p][0] for p in chosen)
+    done = ", and ".join(_LAYER5_PARTS[p][1] for p in chosen)
+    return {"change": change[0].upper() + change[1:] + ".", "done_when": done[0].upper() + done[1:] + "."}
+
+
+_RUNGS = {
+    1: ("Emit runtime telemetry (OpenTelemetry, Prometheus, an APM agent or structured logging).",
+        "The service's code or configuration initialises a telemetry library or structured logger."),
+    2: ("Tell the agent where runtime truth lives in an `OBSERVABILITY.md` or runbook.",
+        "An `OBSERVABILITY.md` or runbook is committed and names the dashboards, logs and traces."),
+    3: ("Give the agent an invokable path to runtime state: an MCP server or repository skill "
+        "over logs and metrics, or a documented, runnable query command.",
+        "The repository commits an MCP server entry, a skill or a documented command that "
+        "returns live logs or metrics."),
+}
+
+
+def _observability(op: str, value: Operand) -> Guidance | None:
+    bound = _at_least(op, value)
+    if bound is None:
+        return None
+    rung = int(bound) + (1 if op == "gt" else 0)
+    if rung not in _RUNGS:
+        return None
+    change, done_when = _RUNGS[rung]
+    return {"change": change, "done_when": done_when}
+
+
+def _reviewed(op: str, value: Operand) -> Guidance | None:
+    bound = _at_least(op, value)
+    if bound is None:
+        return None
+    share = "some" if op == "gt" and bound == 0 else f"at least {_percent(bound)} of the"
+    return {"change": f"Have {share} merged pull requests reviewed by someone other than the "
+                      "author before merge.",
+            "done_when": "Branch protection or a ruleset on the default branch requires a pull "
+                         "request review, and the merged pull requests show a review by a "
+                         "second account."}
+
+
+def _approved(op: str, value: Operand) -> Guidance | None:
+    bound = _at_least(op, value)
+    if bound is None:
+        return None
+    return {"change": f"Require an approving review before merge (at least {_percent(bound)} of "
+                      "merged pull requests approved by someone other than the author).",
+            "done_when": "Branch protection or a ruleset on the default branch requires at least "
+                         "one approving review."}
+
+
+def _setting(name: str) -> Wording:
+    label = SETTING_NAMES.get(name, f"`{name}` setting")
+
+    def wording(op: str, value: Operand) -> Guidance | None:
+        if op == "eq" and isinstance(value, str):
+            return {"change": f"Set the group's {label} to `{value}`.",
+                    "done_when": f"The group settings page shows the {label} as `{value}`."}
+        if op == "in" and isinstance(value, list):
+            options = ", ".join(f"`{v}`" for v in value)
+            return {"change": f"Set the group's {label} to one of {options}.",
+                    "done_when": f"The group settings page shows the {label} as one of {options}."}
+        if op == "ne" and isinstance(value, str):
+            return {"change": f"Change the group's {label} from `{value}`.",
+                    "done_when": f"The group settings page no longer shows the {label} as `{value}`."}
+        return None
+    return wording
+
+
+_WORDING: dict[str, Wording] = {
+    "nested_instructions.budget.claude_code.bytes": _instructions_present,
+    "nested_instructions.budget.claude_code.lines": _instructions_lines,
+    "agent_environment.check.named_total": _check_named,
+    "instruction_claims.failed": _claims_hold,
+    "observability.rung": _observability,
+    "coverage_gate.enforced": _flag(
+        "Make the test run fail when line coverage drops below a floor.",
+        "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
+        "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it fails."),
+    "test_pressure.mutation_run": _flag(
+        "Run mutation testing against the test suite.",
+        "A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a "
+        "run of it completes."),
+    "review_reality.reviewed_share": _reviewed,
+    "review_reality.approved_share": _approved,
+    "agent_ops.summary.permissions_encoded": _flag(
+        "Commit the agent's permissions: an `allow`, `deny` or `ask` list in `.claude/settings.json`.",
+        "`.claude/settings.json` is tracked in git and its `permissions` lists at least one entry."),
+    "agent_ops.summary.hooks_present": _flag(
+        "Commit an agent hook: a `hooks` entry in `.claude/settings.json` or a script in "
+        "`.claude/hooks/`.",
+        "`git ls-files .claude` lists a settings file with a `hooks` entry or a script under "
+        "`.claude/hooks/`."),
+    "agent_ops.summary.routines_present": _flag(
+        "Commit an agent routine definition under `.claude/workflows/` or `.claude/routines/`.",
+        "`git ls-files .claude/workflows .claude/routines` lists at least one file."),
+}
+_WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
+
+# Why a signal can be unavailable, by its first path segment (the block name).
+_MEASURE_HINTS = {
+    "observability": "Only a full `/assess` run reports the observability rung; a headless fleet "
+                     "scan leaves it unavailable.",
+    "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
+                      "calls, so this is not measured there.",
+    "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
+                     "headless fleet scan does not.",
+}
+_SETTING_HINT = ("ghreport could not read this setting (token scope or provider tier); rerun "
+                 "ghreport with access to group settings and pass them to the fleet run with "
+                 "`--settings`.")
+
+
+# Signals whose wording depends on which part of a compound check is unmet,
+# read from the repository's own block by ``parts``.
+_PARTS_WORDING: dict[str, PartsWording] = {"agent_environment.layer5_cap.applies": _layer5_cap}
+_PARTS_PATH = {"agent_environment.layer5_cap.applies": ("agent_environment", "layer5_cap", "unmet")}
+
+
+def parts(signal: str, scans: Mapping[str, Any]) -> list[str]:
+    """The unmet-part tokens a repository's block reports for ``signal`` (empty when none)."""
+    node: Any = scans
+    for key in _PARTS_PATH.get(signal, ()):
+        node = node.get(key) if isinstance(node, dict) else None
+    if isinstance(node, str):
+        return [node]
+    return sorted(str(p) for p in node) if isinstance(node, list) and signal in _PARTS_PATH else []
+
+
+def guidance(signal: str, op: str, value: Operand, unmet_parts: Sequence[str] = ()) -> Guidance | None:
+    """The repository-native change and done-when for one criterion, or None.
+
+    ``unmet_parts`` (from ``parts``, across the repositories the step lists)
+    narrows the wording of a compound check to the parts actually unmet."""
+    if signal in _PARTS_WORDING:
+        return _PARTS_WORDING[signal](op, value, unmet_parts)
+    wording = _WORDING.get(signal)
+    return wording(op, value) if wording else None
+
+
+def measure_hint(signal: str) -> str:
+    """Why ``signal`` can be unavailable and how to get it measured."""
+    block = signal.split(".", 1)[0]
+    if block in SETTING_NAMES or block in ("scope", "provider"):
+        return _SETTING_HINT
+    return _MEASURE_HINTS.get(
+        block,
+        f"The `{block}` scan reported it unavailable or did not run: check the fleet run's "
+        "`--scans` and its `logs/` directory.")
