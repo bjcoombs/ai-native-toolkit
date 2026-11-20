@@ -726,11 +726,27 @@ hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
+**`fleet_agent_building.py`**
+The fleet roll-up of the `agent_building` block (issue #689), read from `repos.jsonl`
+rows (counts-only rows carry every field it reads). `group_counts` gives a group's
+scanned repositories per class, the `groups.jsonl` `agent_building` field (`null` with
+no available block, never a false 0). `clusters(rows, name=False)` links two
+`builds-agent` repositories when they have the same class, a Jaccard similarity of
+their `sdks` sets of at least 0.5 (two empty sets are not similar), and the same
+`pairing` value; clusters are the connected components of that relation with two or
+more members (union-find). Each cluster carries `id`, `agent_class`, `size`, `groups`
+(distinct groups spanned), `sdks` (union), `shared_sdks` (intersection) and `pairing`;
+`repo_ids` and `group_ids` only with `name=True` (`fleet.py --name-agent-clusters`).
+Clusters sort by size, then SDK union, then pairing, never by a repository name.
+`write_clusters` writes `agent_clusters.json` atomically on every run, so a rerun
+without the naming flag replaces a named file. The file is not kept in the run
+history. Tests: `tests/test_fleet_agent_building.py`.
+
 **`fleet_groups.py`**
 The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
 `group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
 shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
-only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each maturity model row's level through `levels.evaluate` with its
+only; null with no available block, `shared_tooling_repos` counting the evidence), the agent-building class counts (`fleet_agent_building.group_counts`, #689; `NotRequired`, absent in older rows), the joined settings, and each maturity model row's level through `levels.evaluate` with its
 `top_level` (the row's number of levels, #684, so a history entry reads as a share of top
 level without the model file; additive and `NotRequired`, absent in older rows), with
 no threshold config of its own. `load_settings` reads ghreport settings fragments
@@ -2433,6 +2449,47 @@ Claude Code tells marketplaces apart by, so a manifest and a settings entry nami
 it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
 `distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+
+**`agent_building.py`**
+What a repository builds with agents, per repository (issue #689): an inventory, not
+scored, and named by no maturity model row. `scan_agent_building(repo_root)` writes
+`{available, agent_class, sdks[], agent_framework, llm_sdk, manifests, config[],
+ci_agents[], tool_loop_files, mcp_server_files, source_files_read, source_files_capped,
+issue_trackers[], git_hosts[], pairing}`. Evidence: (a) dependency names from the
+manifests `agent_manifests.reader_for` recognises (`package.json`, `pyproject.toml`,
+`requirements*.txt`, `Pipfile`, `go.mod`, `pom.xml`, Gradle, `Cargo.toml`, `Gemfile`,
+`*.csproj`), mapped through the pinned `agent_building_vocab.PACKAGES` table to slugs of
+kind `framework`, `llm`, `mcp`, `tracker` or `git_host`; (b) `config` kinds
+`instruction_file` (`instruction_files.INSTRUCTION_FILE_PATHS`), `mcp_json`,
+`claude_agents` and `ci_agent_job` (`CI_AGENT_PATTERNS` in `.gitlab-ci.yml` and
+`.github/workflows/*.yml`); (c) the count of source files matching
+`TOOL_LOOP_PATTERNS` and `MCP_SERVER_PATTERNS`; (d) issue-tracker and Git-host clients
+from manifests or `ENDPOINT_PATTERNS`, `pairing` when both are present. Every string is
+a vocabulary slug, so counts-only keeps the block whole. `classify` is the class rule,
+first match wins: `builds-agent` (an agent framework, or a model SDK with a tool-call
+loop or the pairing), `builds-mcp-server` (an MCP server pattern), `uses-agent-tooling`
+(any config kind), else `none`. A model SDK with no loop and no pairing is `none`.
+Git-tracked files only, symlinks skipped; manifests and source under
+`doc_graph.is_excluded_path` trees, and test files (`is_test_path`), are not read by
+the heuristic; at most `MAX_SOURCE_FILES` files of `MAX_FILE_BYTES`. The vocabulary
+patterns use `[.]` and `[(]` so the module never matches its own source. Outside a git
+checkout the block is `available: false`. `agent_identity` is not used: it matches git
+commit identities, and this scan reads files. Tests: `tests/test_agent_building.py`.
+
+**`agent_building_vocab.py`**
+The pinned vocabulary of `agent_building` (issue #689): `PACKAGES` maps a declared
+dependency name (exact, or a `*` prefix family) to `(slug, kind)`; `lookup` tries the
+name as written and PEP 503-normalised (`normalise`), exact before the longest prefix.
+`TOOL_LOOP_PATTERNS`, `MCP_SERVER_PATTERNS`, `ENDPOINT_PATTERNS` and
+`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics. Widening a table changes
+classes, so it is a change of its own. Tests: `tests/test_agent_building.py`.
+
+**`agent_manifests.py`**
+Dependency names declared in one manifest file (issue #689), stdlib only: one reader
+per format (`package_json`, `pyproject`, `requirements`, `pipfile`, `go_mod`,
+`pom_xml`, `gradle`, `cargo_toml`, `gemfile`, `csproj`), and `reader_for(basename)`
+picking one. A file a reader cannot parse yields no names. Tests:
+`tests/test_agent_building.py`.
 Tests: `tests/test_shared_tooling.py`.
 
 **`layer_grades.py`**
