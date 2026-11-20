@@ -206,7 +206,7 @@ def _modularity(op: str, value: Operand) -> Guidance | None:
     return {"change": "Group the code into modules that import mostly within themselves, so the "
                       "import graph splits into clear communities.",
             "done_when": f"The import graph's modularity (Newman Q) is {'above' if op == 'gt' else 'at least'} "
-                         f"{bound:g} on the next full `/assess` run."}
+                         f"{bound:g} on the next run."}
 
 
 def _front_doors(op: str, value: Operand) -> Guidance | None:
@@ -324,19 +324,21 @@ _WORDING: dict[str, Wording] = {
 }
 _WORDING.update({f"{name}.value": _setting(name) for name in SETTING_NAMES})
 
-_FULL_RUN = ("Only a full `/assess` run assembles the `{}` block; a headless fleet scan "
-             "reports it unavailable.")
+_NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it and rerun."
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
-    "structure": _FULL_RUN.format("structure"),
-    "stats_summary": _FULL_RUN.format("stats_summary"),
-    "promissory_markers": _FULL_RUN.format("promissory_markers") + " A repository with no lint "
+    "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
+                               "`no_networkx`)") + " The import graph reads Python only: a "
+                 "repository with no importable Python package reads unknown "
+                 "(`no_python_packages`).",
+    "stats_summary": _NEEDS.format("stats_summary", "lizard is missing (`no_lizard`)"),
+    "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
+                                        "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",
-    "structure_drift": _FULL_RUN.format("structure_drift") + " A full run omits it when the "
-                       "repository commits no supported ownership map (`CODEOWNERS`, "
-                       "`ARCHITECTURE.md`, `DESIGN.md`, or a `README.md` that declares module "
-                       "boundaries).",
+    "structure_drift": "Unavailable (`no_ownership_map`) when the repository commits no "
+                       "supported ownership map (`CODEOWNERS`, `ARCHITECTURE.md`, `DESIGN.md`, "
+                       "or a `README.md` that declares module boundaries).",
     "observability": "Only a full `/assess` run reports the observability rung; a headless fleet "
                      "scan leaves it unavailable.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "

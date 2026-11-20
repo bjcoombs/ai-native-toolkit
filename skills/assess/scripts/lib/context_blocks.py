@@ -182,6 +182,15 @@ def _structure_drift_block(
     return block
 
 
+def structure_drift_tier_0(repo_root: Path) -> dict[str, Any] | None:
+    """The ``structure_drift`` block with tier 0 only (tier 1 marked unavailable).
+
+    For the headless runner (``lib/headless_layers.py``), which never builds the
+    keyhole behaviour block tier 1 reads. None when there is no ownership map.
+    """
+    return _structure_drift_block(repo_root, {"available": False})
+
+
 def attach_structure_drift(
     ctx: dict[str, Any], repo_root: Path, tier_1: dict[str, Any],
 ) -> None:
