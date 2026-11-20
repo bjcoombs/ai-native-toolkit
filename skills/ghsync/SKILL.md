@@ -68,7 +68,7 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghsync.sh" --org meridianhub --root ~/dev/gith
 | `--porcelain` | Machine-readable repo list: one path per line to stdout (GitHub: the repo name; GitLab: `path_with_namespace`), all chatter to stderr; implies `--list-repos`. Consumed by `/ghreport` and by `--from-list`. |
 | `--dry-run` | Show what would be cloned/updated without making changes. On GitLab it creates no directory and writes no `.gh_archived_repos`; on GitHub it still refreshes `.gh_archived_repos` in the root |
 | `--limit N` | Process only the first N repos (useful for a quick test) |
-| `--quiet` | Suppress per-repository chatter; keep the final summary |
+| `--quiet` | Suppress per-repository chatter, including the `Cloning` / `Cloned` lines; keep failures and the final summary |
 | `--org NAME` | GitHub only. Org or personal account to sync (default: basename of `--root` / cwd) |
 | `--list-teams` | GitHub only. List your teams in the org (with repo counts) and exit; orgs only |
 | `--host HOST` | GitLab only. Host to sync (default: `gitlab.com`); `https://` and a trailing `/` are accepted, and so is a web port (`host:8443`) |

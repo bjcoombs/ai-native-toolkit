@@ -215,7 +215,8 @@ def _lib_imports(module: str) -> set[str]:
 
 
 def _reaches_gh(module: str) -> bool:
-    """True when ``module`` imports ``lib.gh_cli``, directly or through other lib modules."""
+    """True when ``module`` imports ``lib.gh_cli`` or ``lib.gitlab_cli`` (the platform
+    clients), directly or through other lib modules."""
     seen: set[str] = set()
     pending = [module]
     while pending:
@@ -224,11 +225,17 @@ def _reaches_gh(module: str) -> bool:
             continue
         seen.add(current)
         pending.extend(_lib_imports(current))
-    return "gh_cli" in seen
+    return bool({"gh_cli", "gitlab_cli"} & seen)
+
+
+def test_reaches_gh_counts_both_platform_clients():
+    assert _reaches_gh("gitlab_cli")
+    assert _reaches_gh("gh_cli")
 
 
 def test_the_network_flag_marks_exactly_the_gh_scans():
-    """A scan is ``network`` iff its module reaches ``lib.gh_cli`` (the only network client)."""
+    """A scan is ``network`` iff its module reaches a platform client
+    (``lib.gh_cli`` or ``lib.gitlab_cli``, the only network clients)."""
     reaching = {
         spec.key for spec in reg.SCANS
         if _reaches_gh(spec.fn.__module__.removeprefix("lib."))

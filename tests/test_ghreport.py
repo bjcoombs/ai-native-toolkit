@@ -244,3 +244,193 @@ def test_missing_ghsync_exits_nonzero(tmp_path):
     )
     assert res.returncode != 0
     assert "ghsync.sh not found" in res.stderr
+
+
+# ---- org settings ------------------------------------------------------------
+# A `gh` stub for the full pipeline whose `orgs/...` answers come from files:
+# $GH_DATA/<path with / as __>.json is served, <key>.err holds an HTTP status
+# to fail with (printed the way gh prints it), and a missing file is a 404.
+GH_STUB_SETTINGS = r"""#!/usr/bin/env bash
+echo "gh $*" >> "$GH_LOG"
+sub=$1; shift || true
+case "$sub" in
+  auth) exit 0 ;;
+  repo)
+    echo '[{"name":"openrepo","isArchived":false,"defaultBranchRef":{"name":"main"}}]'
+    exit 0 ;;
+esac
+path=$1
+case "$path" in
+  users/*) echo "${GH_USER_TYPE:-Organization}" ;;
+  user/teams) echo "" ;;
+  orgs/*)
+    key=${path%%\?*}
+    key=${key//\//__}
+    if [ -f "$GH_DATA/$key.err" ]; then
+      code=$(cat "$GH_DATA/$key.err")
+      echo "gh: Request failed (HTTP $code)" >&2
+      exit 1
+    fi
+    [ -f "$GH_DATA/$key.json" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+    cat "$GH_DATA/$key.json" ;;
+  *pulls*) echo '[]' ;;
+  *actions/runs*) echo '{"workflow_runs":[]}' ;;
+  *alerts*) echo 0 ;;
+  */branches/*/protection) echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;
+  repos/testorg/*) echo '{"default_branch":"main"}' ;;
+  *) echo "" ;;
+esac
+"""
+
+ORG_SETTINGS = ("two_factor", "push_rules", "default_branch_protection", "rulesets")
+
+
+def _run_with_org(tmp_path, responses, *extra):
+    stub_dir = tmp_path / "bin"
+    stub_dir.mkdir()
+    gh = stub_dir / "gh"
+    gh.write_text(GH_STUB_SETTINGS)
+    gh.chmod(0o755)
+    data = tmp_path / "gh-data"
+    data.mkdir()
+    for path, body in responses.items():
+        key = path.replace("/", "__")
+        if isinstance(body, int):
+            (data / f"{key}.err").write_text(str(body))
+        else:
+            (data / f"{key}.json").write_text(json.dumps(body))
+    root = tmp_path / "root"
+    root.mkdir()
+    env = dict(os.environ)
+    env.update(PATH=f"{stub_dir}:{env['PATH']}", GH_DATA=str(data),
+               GH_LOG=str(tmp_path / "gh.log"))
+    return subprocess.run(
+        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root), "--quiet", *extra],
+        capture_output=True, text=True, timeout=90, env=env,
+    ), root
+
+
+def _org_settings(out, scope="testorg"):
+    lines = out.split("Org settings")[1].splitlines()
+    start = lines.index(f"- {scope}")
+    found = {}
+    for ln in lines[start + 1:]:
+        if not ln.startswith("  - "):
+            break
+        key, value = ln[4:].split(": ", 1)
+        found[key] = value
+    return found
+
+
+def test_org_settings_non_owner_reads_unknown(tmp_path):
+    """A non-owner sees the org without its 2FA field and cannot list
+    rulesets: every setting is unknown with a reason, none is off."""
+    res, root = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg"},
+        "orgs/testorg/rulesets": 403,
+    })
+    assert res.returncode == 0, res.stderr
+    settings = _org_settings(res.stdout)
+    assert set(settings) == set(ORG_SETTINGS)
+    assert settings["two_factor"] == "unknown (no access: readable by org owners only)"
+    for name in ("push_rules", "default_branch_protection", "rulesets"):
+        assert settings[name].startswith("unknown (") and "HTTP 403" in settings[name], name
+    assert "1 org(s): 0 setting(s) off, 4 unknown" in res.stdout
+    # The per-repo output is unchanged.
+    assert "1 repo(s): 0 with failing CI" in res.stdout
+    assert "| openrepo | 0 | none | 0 | 0 | 0 | unprotected |" in res.stdout
+    body = next(root.glob("org-state-testorg-*.md")).read_text()
+    assert "## Org settings" in body
+    assert "1 org(s): 0 setting(s) off, 4 unknown" in body
+
+
+def test_org_settings_unreadable_org(tmp_path):
+    res, _ = _run_with_org(tmp_path, {}, "--no-file")
+    settings = _org_settings(res.stdout)
+    assert all(v.startswith("unknown (") and "HTTP 404" in v for v in settings.values()), settings
+    assert "0 setting(s) off" in res.stdout
+
+
+def test_org_settings_owner(tmp_path):
+    rulesets = [
+        {"id": 1, "name": "main-guard", "target": "branch", "enforcement": "active"},
+        {"id": 2, "name": "no-big-files", "target": "push", "enforcement": "active"},
+        {"id": 3, "name": "trial", "target": "branch", "enforcement": "evaluate"},
+        {"id": 4, "name": "some-repos", "target": "branch", "enforcement": "active"},
+    ]
+    res, _ = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg", "two_factor_requirement_enabled": True},
+        "orgs/testorg/rulesets": rulesets,
+        "orgs/testorg/rulesets/1": {**rulesets[0], "conditions": {
+            "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []},
+            "repository_name": {"include": ["~ALL"], "exclude": []}}},
+        "orgs/testorg/rulesets/4": {**rulesets[3], "conditions": {
+            "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []},
+            "repository_name": {"include": ["api-*"], "exclude": []}}},
+    }, "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert _org_settings(res.stdout) == {
+        "two_factor": "on",
+        "push_rules": "no-big-files (active)",
+        "default_branch_protection": "ruleset: main-guard",
+        "rulesets": "4: main-guard (active), no-big-files (active), trial (evaluate), some-repos (active)",
+    }
+    assert "1 org(s): 0 setting(s) off, 0 unknown" in res.stdout
+
+
+def test_org_settings_off(tmp_path):
+    res, _ = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg", "two_factor_requirement_enabled": False},
+        "orgs/testorg/rulesets": [],
+    }, "--no-file")
+    assert set(_org_settings(res.stdout).values()) == {"off"}
+    assert "1 org(s): 4 setting(s) off, 0 unknown" in res.stdout
+
+
+def test_unreadable_ruleset_detail_is_unknown_not_off(tmp_path):
+    res, _ = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg", "two_factor_requirement_enabled": True},
+        "orgs/testorg/rulesets": [{"id": 7, "name": "guard", "target": "branch", "enforcement": "active"}],
+        "orgs/testorg/rulesets/7": 403,
+    }, "--no-file")
+    value = _org_settings(res.stdout)["default_branch_protection"]
+    assert value.startswith("unknown (ruleset 7 unreadable") and "HTTP 403" in value
+    assert _org_settings(res.stdout)["push_rules"] == "off"
+
+
+def test_render_dir_settings_subdir_is_not_a_repo_row(fragments_dir, tmp_path):
+    (fragments_dir / "settings").mkdir()
+    (fragments_dir / "settings" / "org.json").write_text(json.dumps({
+        "scope": "demo", "provider": "github",
+        "two_factor": {"value": "unknown", "reason": "no access: readable by org owners only"},
+        "push_rules": {"value": "off", "reason": None},
+        "default_branch_protection": {"value": "ruleset: guard", "reason": None},
+        "rulesets": {"value": "1: guard (active)", "reason": None},
+    }))
+    res = _render(fragments_dir, tmp_path, "--no-file")
+    assert res.returncode == 0, res.stderr
+    assert "5 repo(s)" in res.stdout
+    data_rows = [ln for ln in res.stdout.splitlines()
+                 if ln.startswith("| ") and "Repo" not in ln and "---" not in ln]
+    assert len(data_rows) == 5
+    assert "1 org(s): 1 setting(s) off, 1 unknown" in res.stdout
+    assert _org_settings(res.stdout, "demo")["default_branch_protection"] == "ruleset: guard"
+
+
+def test_render_dir_without_settings_has_no_settings_section(fragments_dir, tmp_path):
+    res = _render(fragments_dir, tmp_path)
+    assert "Org settings" not in res.stdout
+    body = next(tmp_path.glob("org-state-demo-*.md")).read_text()
+    assert "## Org settings" not in body
+
+
+def test_personal_account_names_the_reason(tmp_path, monkeypatch):
+    """A personal account has no org settings: the 404 is explained as that,
+    not as missing access, and no ruleset call is made."""
+    monkeypatch.setenv("GH_USER_TYPE", "User")
+    res, _ = _run_with_org(tmp_path, {}, "--no-file")
+    assert res.returncode == 0, res.stderr
+    settings = _org_settings(res.stdout)
+    assert set(settings) == set(ORG_SETTINGS)
+    assert set(settings.values()) == {"unknown (personal account: no org settings)"}
+    assert "rulesets" not in (tmp_path / "gh.log").read_text()
