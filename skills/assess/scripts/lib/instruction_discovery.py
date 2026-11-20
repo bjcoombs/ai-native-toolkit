@@ -17,8 +17,10 @@ graded with ``grade_instructions`` and recorded with its scope; the block also
 carries the always-loaded budget per tool (``instruction_budget``) and four
 integrity findings: a scope glob that matches no tracked file, a plain ``.md``
 under ``.cursor/rules``, a ``CLAUDE.md`` that shadows a different ``AGENTS.md``
-in its directory without importing it, and a nested file that mostly repeats
-its parent. Deterministic and read-only: no network, no model.
+in its directory without importing it (with the count of differing lines), and
+a nested file that mostly repeats its parent. A ``CLAUDE.md`` identical to its
+``AGENTS.md`` below the header (H1 and leading HTML comments) is reported as an
+informational ``mirrored_instruction_files`` instead (issue #589). Deterministic and read-only: no network, no model.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import os
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from pathlib import Path, PurePosixPath
 
 from lib.agent_instructions_grader import grade_instructions
@@ -300,11 +303,68 @@ def _directory_files(surface: _Surface) -> dict[str, list[_Candidate]]:
     return by_dir
 
 
+def _comment_close(lines: list[str], start: int) -> tuple[int, str] | None:
+    """The line where the comment opened on ``lines[start]`` closes, and the
+    text after its ``-->``; None when it never closes."""
+    offset = lines[start].index("<!--") + 4
+    for j in range(start, len(lines)):
+        at = lines[j].find("-->", offset if j == start else 0)
+        if at >= 0:
+            return j, lines[j][at + 3:]
+    return None
+
+
+def _strip_header(lines: list[str]) -> list[str]:
+    """Drop a file's header: leading blanks, one H1 and leading HTML comments.
+
+    Only the prefix before the first other line goes; an unterminated ``<!--``
+    is body, so it never swallows the file.
+    """
+    lines = list(lines)
+    i, seen_h1 = 0, False
+    while i < len(lines):
+        s = lines[i].strip()
+        if not s:
+            i += 1
+        elif s.startswith("# ") and not seen_h1:
+            seen_h1, i = True, i + 1
+        elif s.startswith("<!--"):
+            close = _comment_close(lines, i)
+            if close is None:
+                break
+            end, tail = close
+            # Text after the comment's close on that line is body, not header.
+            if tail.strip():
+                lines[end], i = tail, end
+            else:
+                i = end + 1
+        else:
+            break
+    return lines[i:]
+
+
+def mirror_lines(text: str) -> list[str]:
+    """A file's body below its header, whitespace-collapsed, blank lines dropped."""
+    body = _strip_header(text.splitlines())
+    return [" ".join(line.split()) for line in body if line.strip()]
+
+
+def diff_line_count(a: list[str], b: list[str]) -> int:
+    """Lines that differ between two bodies; one changed line counts once."""
+    ops = SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+    return sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in ops if tag != "equal")
+
+
 def _shadowing(
     repo_root: Path, by_dir: dict[str, list[_Candidate]], tracked: frozenset[Path] | None,
-) -> list[InstructionFinding]:
-    """A directory whose CLAUDE.md hides a different, unimported AGENTS.md."""
-    out: list[InstructionFinding] = []
+) -> tuple[list[InstructionFinding], list[InstructionFinding]]:
+    """Per directory, a CLAUDE.md that hides a different, unimported AGENTS.md
+    (``claude_shadows_agents``), or one that is a hand-kept copy of it below the
+    header (``mirrored_instruction_files``, informational). A symlink or an
+    import is neither. Returns ``(shadows, mirrors)``.
+    """
+    shadows: list[InstructionFinding] = []
+    mirrors: list[InstructionFinding] = []
 
     def is_tracked(p: Path) -> bool:
         return is_repo_file(p, repo_root, tracked)
@@ -315,21 +375,33 @@ def _shadowing(
         if not claude or not agents:
             continue
         agent = agents[0]
-        if any(c.body.strip() == agent.body.strip() for c in claude):
-            continue
         agent_real = (repo_root / agent.rel).resolve()
         if any((repo_root / c.rel).resolve() == agent_real for c in claude):
             continue
         loaded, _skipped = follow_imports([c.rel for c in claude], repo_root, is_tracked)
         if agent.rel in loaded:
             continue
-        out.append({
+        agent_lines = mirror_lines(agent.body)
+        if not agent_lines and not any(mirror_lines(c.body) for c in claude):
+            continue  # two empty files carry nothing to shadow or mirror
+        mirror = next((c for c in claude if mirror_lines(c.body) == agent_lines), None)
+        if mirror is not None:
+            mirrors.append({
+                "kind": "mirrored_instruction_files", "path": mirror.rel, "parent": agent.rel,
+                "detail": f"`{mirror.rel}` and `{agent.rel}` are kept identical below "
+                          "their headers, a hand-maintained mirror; both tools read "
+                          "the same instructions",
+            })
+            continue
+        diff = diff_line_count(mirror_lines(claude[0].body), agent_lines)
+        shadows.append({
             "kind": "claude_shadows_agents", "path": claude[0].rel, "parent": agent.rel,
+            "diff_lines": diff,
             "detail": f"Claude Code reads `{claude[0].rel}` and never `{agent.rel}`, "
-                      "which differs; add `@AGENTS.md` to the CLAUDE.md or make one "
-                      "a symlink to the other",
+                      f"which differs by {diff} line(s) below the header; add "
+                      "`@AGENTS.md` to the CLAUDE.md or make one a symlink to the other",
         })
-    return out
+    return shadows, mirrors
 
 
 def _nearest_parent(directory: str, by_dir: dict[str, list[_Candidate]]) -> str | None:
@@ -442,8 +514,10 @@ def discover_nested_instructions(
 
     graded = [_grade(c, repo_root, clock, skills, repo)
               for c in surface.candidates if c.rel not in graded_elsewhere]
+    shadows, mirrors = _shadowing(repo_root, by_dir, tracked)
+    # Informational mirrors go last so the cap never drops a defect for one.
     findings = (_dead_globs(repo_root, surface) + _stray_md(surface)
-                + _shadowing(repo_root, by_dir, tracked) + _repeats(by_dir))
+                + shadows + _repeats(by_dir) + mirrors)
     claude_roots, unscoped, agents_by_dir = _budget_inputs(surface, by_dir)
     return {
         "available": True,

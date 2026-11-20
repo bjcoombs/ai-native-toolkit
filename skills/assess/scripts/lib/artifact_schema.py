@@ -107,6 +107,9 @@ ARTIFACT_SCHEMA_VERSION = "1.12.0"
 # 4: the complexity join takes doc ownership from the doc-staleness rule
 #    (lib.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
-# 5: instruction files are graded on always-on size and share instead of the
+# 5: a CLAUDE.md identical to its AGENTS.md below the header (H1 and leading
+#    HTML comments) is the informational mirrored_instruction_files, not the
+#    capping claude_shadows_agents (issue #589).
+# 6: instruction files are graded on always-on size and share instead of the
 #    whole-file size curve (issue #560), which moves instruction grades.
-ASSESS_METHOD_VERSION = 5
+ASSESS_METHOD_VERSION = 6
