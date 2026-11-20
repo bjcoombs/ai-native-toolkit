@@ -93,7 +93,7 @@ from lib.fleet_history import (  # noqa: E402
     persist,
     safe_component,
 )
-from lib.fleet_inputs import FleetInputError  # noqa: E402
+from lib.fleet_view import FleetViewError  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, build_stamp, write_stamp  # noqa: E402
 from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
 from lib.rubric_signals import signal_path_validator  # noqa: E402
@@ -242,7 +242,7 @@ def _load_earlier(run_dir: str | None, org_dir: Path, planned: JsonDict) -> Flee
     """The ``--compare`` run, the reason it cannot be compared, or None (no ``--compare``, or
     no matching history entry for a bare ``--compare``).
 
-    Raises ``FleetInputError`` when the directory is missing or malformed.
+    Raises ``FleetViewError`` when the directory is missing or malformed.
     """
     if run_dir is None:
         return None
@@ -322,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     except HistoryError as e:
         print(f"error: run history: {e} (use --history-dir or --history-org)", file=sys.stderr)
         return 2
-    except FleetInputError as e:
+    except FleetViewError as e:
         print(f"error: --compare {args.compare}: {e}", file=sys.stderr)
         return 2
     options = ScanOptions(

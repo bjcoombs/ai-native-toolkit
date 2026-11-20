@@ -12,7 +12,7 @@ from lib import fleet_compare as fc
 from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows
 from lib.fleet_compare import FleetRun, compare, load_run, signal_changes
 from lib.fleet_groups import roll_up, write_groups
-from lib.fleet_inputs import FleetInputError
+from lib.fleet_view import FleetViewError
 from lib.fleet_stamp import FleetStamp, build_stamp, write_stamp
 from test_fleet_groups import RUBRIC
 
@@ -199,25 +199,25 @@ def test_load_run_refuses_other_versions_and_missing_files(tmp_path):
     with pytest.raises(fc.RunVersionError, match="before the run stamp"):
         load_run(tmp_path / "unstamped")
 
-    with pytest.raises(FleetInputError, match="not a fleet run"):
+    with pytest.raises(FleetViewError, match="not a fleet run"):
         load_run(tmp_path / "absent")
     (tmp_path / "bad").mkdir()
     (tmp_path / "bad" / "run.json").write_text("[1]", encoding="utf-8")
-    with pytest.raises(FleetInputError, match="not a JSON object"):
+    with pytest.raises(FleetViewError, match="not a JSON object"):
         load_run(tmp_path / "bad")
     (tmp_path / "bad" / "run.json").write_text("{", encoding="utf-8")
-    with pytest.raises(FleetInputError, match="cannot read"):
+    with pytest.raises(FleetViewError, match="cannot read"):
         load_run(tmp_path / "bad")
 
 
 def test_first_version_reports_malformed_lines(tmp_path):
     path = tmp_path / "x.jsonl"
     path.write_text("\n{bad\n", encoding="utf-8")
-    with pytest.raises(FleetInputError, match="not JSON"):
+    with pytest.raises(FleetViewError, match="not JSON"):
         fc._first_version(path, "k")
     path.write_text("[1]\n", encoding="utf-8")
     assert fc._first_version(path, "k") is None
-    with pytest.raises(FleetInputError, match="cannot read"):
+    with pytest.raises(FleetViewError, match="cannot read"):
         fc._first_version(tmp_path / "absent", "k")
 
 

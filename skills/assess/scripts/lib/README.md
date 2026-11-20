@@ -660,12 +660,6 @@ the fragment's `scope` and `provider`. The CLI loads the rubric with
 `rubric_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
 
-**`fleet_inputs.py`**
-Reads a fleet run's output back for the views built on it (#570, #571), which never
-rescan: `read_repos` and `read_groups` return `repos.jsonl` and `groups.jsonl` rows
-sorted by id, and `read_jsonl` raises `FleetInputError` naming the file and line on a
-missing file, a non-object line or a wrong envelope version.
-
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
 (issue #571). `build_pages` re-runs `rubric.evaluate` per group on exactly the inputs
@@ -707,6 +701,34 @@ Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 `{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
+
+**`fleet_view.py`**
+The shared reader for the views built on one fleet run's output (#553): the
+heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
+`read_jsonl` reads one file, each line a JSON object at the expected envelope version,
+and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns the
+`repos.jsonl` rows sorted by repository id (a row needs `repo` and `group` ids).
+`load_groups` takes the file or the run directory, checks the rubric-entry fields a view
+reads (`FleetViewError` names the line), refuses a duplicate
+group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
+map exits 2 on it while the team pages write an empty index. `rubric_columns` gives the rubric row ids in rubric order (the
+same for every group; a run without `--rubric` is refused), `run_rubric_version` the one
+version, `check_rubric` matches a rubric file (titles, top levels) to the run, and
+`compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
+`delta` or `was`), marking the comparison not comparable across rubric versions.
+
+**`fleet_heatmap.py`**
+The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
+`treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and rubric
+rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer OrRd 9-class
+ramp (`ORRD_9`; `ramp_step` scales a level by its row's top level when a rubric file
+gives one, else indexes the ramp), text colour from the per-step `STEP_TEXT` table, and
+every known cell prints its level. `unknown` is the hatched `UNKNOWN_FILL`, never a ramp
+colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in reading
+order) and the key names the missing signals in visible text. A comparison adds
+`change_text` under the level. White background, `html.escape`d text, labels truncated
+by character count, fixed number formatting: the same run gives the same bytes. Golden
+renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README).
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -773,7 +795,9 @@ a `cause` of `level` (set unchanged), `set` (only the set moved) or `set_and_lev
 set and the evidence moved; team rows read repository signals, org rows the group's
 settings). `signal_changes` lists the changed leaves of each repository's `scans` map.
 `write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
-only a regular `compare.json` carrying `fleet_compare_version`.
+only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
+`heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
+plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by

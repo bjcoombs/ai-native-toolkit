@@ -1,7 +1,7 @@
 """Per-team next-steps pages in Markdown from one fleet run (issue #571).
 
 Reads a fleet run's output (``repos.jsonl`` and ``groups.jsonl``, through
-``lib/fleet_inputs.py``) plus the rubric and settings the run used, and renders
+``lib/fleet_view.py``) plus the rubric and settings the run used, and renders
 one page per group, with no rescan:
 
 - the group's level on every rubric row, with the roll-up rule;

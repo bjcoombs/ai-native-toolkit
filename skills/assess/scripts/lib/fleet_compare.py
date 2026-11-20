@@ -50,7 +50,7 @@ from typing import Any, TypedDict, cast
 from lib.diff_reliability import _diff_is_reliable
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow
-from lib.fleet_inputs import FleetInputError, read_groups, read_repos
+from lib.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
 FLEET_COMPARE_VERSION = 1
@@ -144,13 +144,13 @@ def _first_version(path: Path, key: str) -> object:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise FleetInputError(f"{path.name}: cannot read ({exc.strerror})") from exc
+        raise FleetViewError(f"{path.name}: cannot read ({exc.strerror})") from exc
     for line in text.splitlines():
         if line.strip():
             try:
                 row = json.loads(line)
             except ValueError as exc:
-                raise FleetInputError(f"{path.name}: not JSON ({exc})") from exc
+                raise FleetViewError(f"{path.name}: not JSON ({exc})") from exc
             return row.get(key) if isinstance(row, dict) else None
     return None
 
@@ -159,20 +159,20 @@ def load_run(run_dir: Path) -> FleetRun:
     """One run's stamp, repository rows and group rows.
 
     Raises ``RunVersionError`` when a file is at another envelope version (or
-    there is no ``run.json``: a run from before #569), ``FleetInputError`` when
+    there is no ``run.json``: a run from before #569), ``FleetViewError`` when
     a file is missing or malformed.
     """
     stamp_path = run_dir / RUN_FILE
     if not stamp_path.is_file():
         if (run_dir / REPOS_FILE).is_file():
             raise RunVersionError(f"{run_dir.name}: no {RUN_FILE} (a run from before the run stamp)")
-        raise FleetInputError(f"{run_dir}: not a fleet run (no {RUN_FILE} or {REPOS_FILE})")
+        raise FleetViewError(f"{run_dir}: not a fleet run (no {RUN_FILE} or {REPOS_FILE})")
     try:
         stamp: Any = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise FleetInputError(f"{RUN_FILE}: cannot read ({exc})") from exc
+        raise FleetViewError(f"{RUN_FILE}: cannot read ({exc})") from exc
     if not isinstance(stamp, dict):
-        raise FleetInputError(f"{RUN_FILE}: not a JSON object")
+        raise FleetViewError(f"{RUN_FILE}: not a JSON object")
     if stamp.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
         raise RunVersionError(f"run stamp version {stamp.get('fleet_stamp_version')!r}, "
                               f"this toolkit reads {FLEET_STAMP_VERSION}")
@@ -181,7 +181,7 @@ def load_run(run_dir: Path) -> FleetRun:
         found = _first_version(run_dir / name, key)
         if found is not None and found != version:
             raise RunVersionError(f"{name} {key} {found!r}, this toolkit reads {version}")
-    return FleetRun(cast(FleetStamp, stamp), read_repos(run_dir), read_groups(run_dir))
+    return FleetRun(cast(FleetStamp, stamp), read_repos(run_dir), load_groups(run_dir))
 
 
 # --- comparability ---------------------------------------------------------
@@ -353,6 +353,28 @@ def compare(earlier: FleetRun, later: FleetRun) -> Comparison:
     return {"fleet_compare_version": FLEET_COMPARE_VERSION, "comparable": True, "reasons": [],
             "notes": notes, "earlier": _summary(earlier.stamp), "later": _summary(later.stamp),
             "movement": movement, "repositories": overall, "groups": groups, "repos": repos}
+
+
+def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
+    """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
+
+    ``reasons`` says why the runs are not comparable (this module's rule: rubric
+    version, window, output mode, scans, path hashing, plugin major version,
+    file versions); ``set_moved`` names the groups whose measured set moved, so
+    a level change there is not read as a real one. Both are empty when either
+    path is not a stamped run directory (a bare ``groups.jsonl``): the view then
+    compares levels only.
+    """
+    if not ((now / RUN_FILE).is_file() and (then / RUN_FILE).is_file()):
+        return [], []
+    try:
+        later, earlier = load_run(now), load_run(then)
+    except (RunVersionError, FleetViewError) as exc:
+        return [str(exc)], []
+    result = compare(earlier, later)
+    if not result["comparable"]:
+        return result["reasons"], []
+    return [], [group["group"] for group in result["groups"] if group["set_changed"]]
 
 
 def dumps_comparison(comparison: Comparison) -> str:

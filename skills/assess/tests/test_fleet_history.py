@@ -341,3 +341,53 @@ def test_compare_script_runs_standalone(froot2, tmp_path):
                           capture_output=True, text=True, env={**os.environ, "PYTHONPATH": ""}, check=False)
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout)["comparable"]
+
+
+# --- heatmap.py --compare goes through the same rule ------------------------
+
+
+def _load_heatmap_cli() -> ModuleType:
+    path = COMPARE_SCRIPT.with_name("heatmap.py")
+    spec = importlib.util.spec_from_file_location("heatmap_cli_552", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
+    from test_fleet_groups import RUBRIC_TOML
+    heatmap = _load_heatmap_cli()
+    rubric = tmp_path / "rubric.toml"
+    rubric.write_text(RUBRIC_TOML, encoding="utf-8")
+
+    def run(out: str, *extra: str) -> Path:
+        assert fleet_cli.main([str(froot2), "--out", str(tmp_path / out), "--rubric", str(rubric),
+                               "--no-history", "--scans", "nested_instructions", *extra]) == 0
+        return tmp_path / out
+
+    first, other_window = run("a"), run("b", "--window", "90d")
+    assert heatmap.main([str(other_window), "--compare", str(first), "--output", str(tmp_path / "w.svg")]) == 0
+    assert "window changed" in (tmp_path / "w.svg").read_text(encoding="utf-8")
+
+    (froot2 / "acme" / "svc2" / "svc2-main" / "CLAUDE.md").write_text("x\n", encoding="utf-8")
+    import shutil
+    shutil.rmtree(froot2 / "acme" / "svc2")
+    fewer = run("c")
+    assert heatmap.main([str(fewer), "--compare", str(first), "--output", str(tmp_path / "s.svg")]) == 0
+    assert "measured set changed in acme" in (tmp_path / "s.svg").read_text(encoding="utf-8")
+
+    # a bare groups.jsonl still compares levels only
+    assert heatmap.main([str(fewer), "--compare", str(first / "groups.jsonl"),
+                         "--output", str(tmp_path / "g.svg")]) == 0
+    assert "measured set changed" not in (tmp_path / "g.svg").read_text(encoding="utf-8")
+
+
+def test_view_check_reports_unreadable_runs(tmp_path):
+    from lib.fleet_compare import view_check
+    for name in ("now", "then"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "run.json").write_text('{"fleet_stamp_version": 9}', encoding="utf-8")
+    reasons, moved = view_check(tmp_path / "now", tmp_path / "then")
+    assert "stamp version" in reasons[0] and moved == []
+    assert view_check(tmp_path / "now", tmp_path / "absent") == ([], [])

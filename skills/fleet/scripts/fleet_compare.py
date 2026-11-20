@@ -40,7 +40,7 @@ from lib.fleet_compare import (  # noqa: E402
     not_comparable,
     summary_lines,
 )
-from lib.fleet_inputs import FleetInputError  # noqa: E402
+from lib.fleet_view import FleetViewError  # noqa: E402
 
 EXIT_NOT_COMPARABLE = 3
 
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             comparison = compare(load_run(Path(args.earlier)), later)
         except RunVersionError as e:
             comparison = not_comparable(later.stamp, [f"earlier run: {e}"])
-    except (RunVersionError, FleetInputError) as e:
+    except (RunVersionError, FleetViewError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     text = dumps_comparison(comparison)

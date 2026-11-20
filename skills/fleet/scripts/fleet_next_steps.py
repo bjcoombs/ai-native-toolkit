@@ -34,7 +34,7 @@ ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
 from lib.fleet_groups import SettingsError, load_settings  # noqa: E402
-from lib.fleet_inputs import FleetInputError, read_groups, read_repos  # noqa: E402
+from lib.fleet_view import FleetViewError, load_groups, read_repos  # noqa: E402
 from lib.fleet_next_steps import NextStepsError, build_pages, write_pages  # noqa: E402
 from lib.rubric import RubricError, load_rubric  # noqa: E402
 from lib.rubric_signals import DEFAULT_RUBRIC, signal_path_validator  # noqa: E402
@@ -60,9 +60,9 @@ def main(argv: list[str] | None = None) -> int:
         rubric = load_rubric(Path(args.rubric), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
-        pages = build_pages(rubric, read_repos(out_dir), read_groups(out_dir), settings)
+        pages = build_pages(rubric, read_repos(out_dir), load_groups(out_dir), settings)
         written = write_pages(out_dir, pages)
-    except (RubricError, SettingsError, FleetInputError, NextStepsError) as e:
+    except (RubricError, SettingsError, FleetViewError, NextStepsError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     print(f"fleet next steps: {len(written) - 1} team pages -> {out_dir / 'teams'}", file=sys.stderr)
