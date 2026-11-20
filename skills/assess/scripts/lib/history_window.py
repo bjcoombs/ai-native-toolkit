@@ -21,7 +21,7 @@ _UNIT = r"(?:d|w|mo|y)"
 # callers that find a window inside a longer string.
 WINDOW_PATTERN = _COUNT + _UNIT
 
-_WINDOW = re.compile(rf"^({_COUNT})({_UNIT})$")
+_WINDOW = re.compile(rf"({_COUNT})({_UNIT})")
 _UNITS: dict[str, WindowUnit] = {"d": "d", "w": "w", "mo": "mo", "y": "y"}
 
 
@@ -31,7 +31,7 @@ def split_window(window: str) -> tuple[int, WindowUnit]:
     Raises ``ValueError`` on anything outside the grammar; callers re-raise
     with their own message.
     """
-    match = _WINDOW.match(window)
+    match = _WINDOW.fullmatch(window)  # "$" would accept a trailing newline
     if match is None:
         raise ValueError(f"not a <n>d|w|mo|y window: {window!r}")
     return int(match.group(1)), _UNITS[match.group(2)]

@@ -218,6 +218,16 @@ def test_scorer_agent_appears_in_the_loaded_in_full_report_on_this_repo() -> Non
 # --- signals and homes --------------------------------------------------------------
 
 
+def test_scorer_remediation_keeps_non_negotiable_lines_always_on() -> None:
+    """A size signal relocates a long rules-headed section despite its heading
+    (#619), so the scorer's remediation copy must say its non-negotiable lines
+    stay in the always-on file (issue #648)."""
+    scorer = (REPO_ROOT / "agents" / "assess-layer-scorer.md").read_text(encoding="utf-8")
+    [line] = [ln for ln in scorer.splitlines()
+              if ln.startswith("- `instruction_file_size[path].bloat_penalty > 0`")]
+    assert "non-negotiable lines stay in the always-on file" in line
+
+
 def test_rules_heading_does_not_keep_a_long_command_section_always_on() -> None:
     """Size signals beat wording (#619): a 300-line fenced section renamed onto
     an always-on word stays relocatable, so the rename cannot lower the penalty."""

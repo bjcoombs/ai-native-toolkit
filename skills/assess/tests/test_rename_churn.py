@@ -91,14 +91,16 @@ def test_code_churn_follows_a_rename(tmp_path: Path) -> None:
     renames = cc.build_rename_map(repo).paths
 
     assert renames == {"pkg/a.py": "pkg/b.py"}
-    # Five commits as a.py, the rename commit and one as b.py: `git log --follow`.
-    assert git_churn_scores(repo, renames=renames)[b] == follow == 7
+    # Five commits as a.py and one as b.py: `git log --follow` less the
+    # rename-only commit, which changes no content (contract I425-2).
+    assert follow == 7
+    assert git_churn_scores(repo, renames=renames)[b] == follow - 1 == 6
     assert git_churn_scores(repo)[b] == 2
     epochs = commit_epochs_by_file(repo, None, renames)
-    assert epochs is not None and len(epochs[b]) == 7
+    assert epochs is not None and len(epochs[b]) == 6
     # pick_churn_window builds the map itself when none is passed.
     churn, _label = pick_churn_window(repo, [b])
-    assert churn == {b: 7}
+    assert churn == {b: 6}
 
 
 def test_renamed_code_file_yields_the_same_finding(tmp_path: Path) -> None:
@@ -127,10 +129,10 @@ def test_renamed_document_yields_no_new_lying_map(tmp_path: Path) -> None:
         for days in (190, 180, 170, 160):
             _append(repo, doc, f"Edit at {days}.\n")
             _commit(repo, "doc edit", days)
-        if rename:
+        if rename:  # a rename with an edit: a content change under the new name
             _git(repo, "mv", "pkg/pkg.md", "pkg/README.md")
-        else:
-            _append(repo, doc, "Another edit.\n")
+            doc = "pkg/README.md"
+        _append(repo, doc, "Another edit.\n")
         _commit(repo, "rename or edit", 150)
         for i, days in enumerate((140, 130, 120, 110, 100, 90)):
             _append(repo, "pkg/a.py", f"x = {i}\n")
@@ -141,6 +143,65 @@ def test_renamed_document_yields_no_new_lying_map(tmp_path: Path) -> None:
         findings[rename] = _join_finding(repo, "pkg/a.py", "pkg/README.md")
     assert findings[True] == findings[False]
     assert findings[True] != "lying_map"
+
+
+def _doc_history(repo: Path, rename: bool) -> None:
+    """Contract I425-2: ``docs/guide.md`` created 100 days ago and edited in
+    four commits 90 to 60 days ago. With ``rename`` it is created as
+    ``docs/old.md`` and moved to ``docs/guide.md`` in a commit of its own 70
+    days ago, between the edits, with no content change."""
+    doc = "docs/old.md" if rename else "docs/guide.md"
+    _append(repo, doc, "# Guide\n")
+    _append(repo, "src/app.py", "x = 0\n")
+    _commit(repo, "create", 100)
+    for days in (90, 80):
+        _append(repo, doc, f"Edit at {days}.\n")
+        _commit(repo, "doc edit", days)
+    if rename:
+        _git(repo, "mv", doc, "docs/guide.md")
+        _commit(repo, "rename only", 70)
+        doc = "docs/guide.md"
+    for days in (65, 60):
+        _append(repo, doc, f"Edit at {days}.\n")
+        _commit(repo, "doc edit", days)
+    for i, days in enumerate((50, 40, 30, 20, 10, 5)):
+        _append(repo, "src/app.py", f"x = {i}\n")
+        _commit(repo, "code edit", days)
+
+
+def test_a_rename_only_commit_is_not_doc_churn(tmp_path: Path) -> None:
+    """Contract I425-2: the twin with a pure ``git mv`` reports the same doc
+    churn, last-change age and lying_map paths as the twin without one."""
+    rows, lying = {}, {}
+    for rename in (False, True):
+        repo = _repo(tmp_path / f"i{rename}")
+        _doc_history(repo, rename)
+        block = analyze_doc_staleness(repo)
+        row = next(d for d in block["docs"] if d["path"] == "docs/guide.md")
+        rows[rename] = (row["doc_churn_in_window"], row["last_commit_days"])
+        stats = {"ccn": {"p95": 8.0}, "top_complex": [{"path": "src/app.py", "ccn": 30.0}]}
+        joined = analyze_doc_complexity_join(stats, block, repo)
+        lying[rename] = joined["findings"]["lying_maps"]
+    assert rows[True] == rows[False]
+    assert rows[False][0] == 5
+    assert lying[True] == lying[False]
+
+
+def test_a_trailing_rename_only_commit_does_not_reset_the_doc_age(tmp_path: Path) -> None:
+    ages = {}
+    for rename in (False, True):
+        repo = _repo(tmp_path / f"t{rename}")
+        _append(repo, "docs/old.md", "# Guide\n")
+        _commit(repo, "create", 100)
+        _append(repo, "docs/old.md", "Edit.\n")
+        _commit(repo, "edit", 90)
+        if rename:
+            _git(repo, "mv", "docs/old.md", "docs/guide.md")
+            _commit(repo, "rename only", 10)
+        row = next(d for d in analyze_doc_staleness(repo)["docs"]
+                   if d["path"] in ("docs/old.md", "docs/guide.md"))
+        ages[rename] = row["last_commit_days"]
+    assert ages[True] == ages[False] == 90
 
 
 def test_rename_map_failure_marks_docs_low_confidence(
@@ -189,8 +250,37 @@ def test_commit_epochs_from_a_subdirectory_use_top_relative_renames(tmp_path: Pa
     epochs = commit_epochs_by_file(sub, None, renames)
     assert epochs is not None
     assert set(epochs) == {(sub / "new.py").resolve()}
-    assert len(epochs[(sub / "new.py").resolve()]) == 3
-    assert git_churn_scores(sub, renames=renames) == {(sub / "new.py").resolve(): 3}
+    assert len(epochs[(sub / "new.py").resolve()]) == 2  # the pure rename is not churn
+    assert git_churn_scores(sub, renames=renames) == {(sub / "new.py").resolve(): 2}
+
+
+def test_a_rename_into_a_scope_is_not_churn_under_a_pathspec(tmp_path: Path) -> None:
+    """A pure move from outside the scope or sub-directory root into it: the
+    pathspec alone would hide the delete side and count the add (contract I425-2)."""
+    repo = _repo(tmp_path / "p")
+    _append(repo, "other/a.py", "a = 1\n")
+    _append(repo, "pkg/z.py", "z = 1\n")
+    _commit(repo, "init", 50)
+    _append(repo, "other/a.py", "a = 2\n")
+    _commit(repo, "edit", 40)
+    (repo / "pkg").mkdir(exist_ok=True)
+    _git(repo, "mv", "other/a.py", "pkg/a.py")
+    _commit(repo, "move only", 30)
+    renames = cc.build_rename_map(repo).paths
+    assert renames == {"other/a.py": "pkg/a.py"}
+    pkg = (repo / "pkg").resolve()
+    moved = (pkg / "a.py").resolve()
+    z = (pkg / "z.py").resolve()
+    # The move is the only commit the pathspec reaches for a.py, and it is not
+    # churn; its history under other/ stays outside the scope, as before.
+    assert git_churn_scores(repo, scope=pkg, renames=renames) == {z: 1}
+    # A sub-directory root without a scope walks the whole history: two edits.
+    assert git_churn_scores(pkg, renames=renames) == {moved: 2, z: 1}
+    # commit_epochs_by_file walks with the root as its pathspec, like a scope.
+    epochs = commit_epochs_by_file(pkg, None, renames)
+    assert epochs is not None and set(epochs) == {z}
+    # Unscoped, the whole history follows the rename: two edits, no move.
+    assert git_churn_scores(repo, renames=renames)[moved] == 2
 
 
 def test_commit_epochs_outside_git(tmp_path: Path) -> None:

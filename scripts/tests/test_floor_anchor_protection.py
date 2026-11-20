@@ -86,6 +86,23 @@ def test_unreadable_branch_protection_raises(anchor_env, monkeypatch, status):
         check_required_check(REPO, "main", "t")
 
 
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_permission_denied_protection_read_is_unreadable(anchor_env, monkeypatch, status):
+    # Contract I410-3: a 403 is a token without admin:read, the same as a 401.
+    # It must fail closed as unreadable protection with the FLOOR_ANCHOR_TOKEN
+    # remedy, not fall through to the generic unexpected-response path.
+    calls: list[str] = []
+    monkeypatch.setattr(
+        floor_anchor, "_get", _recording_get(status, calls, (FLOOR, ANCHOR))
+    )
+    with pytest.raises(AnchorError) as exc:
+        check_required_check(REPO, "main", "t")
+    message = str(exc.value)
+    assert message.startswith(f"cannot read branch protection (HTTP {status})")
+    assert "FLOOR_ANCHOR_TOKEN" in message
+    assert "unexpected" not in message
+
+
 def test_ruleset_alone_can_require_both_floor_checks(anchor_env, monkeypatch):
     calls: list[str] = []
     monkeypatch.setattr(
