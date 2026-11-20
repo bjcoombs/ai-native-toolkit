@@ -21,6 +21,7 @@ byte-identical, so it only shows in a diff when a finding moved.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -55,36 +56,49 @@ RAISE_PIN_COMMAND = (
 )
 
 
+def _encodable(s: object) -> bool:
+    """A string that can be written back out as UTF-8. A hand-edited JSON
+    escape such as ``"\\ud800"`` loads as a lone surrogate, which would raise
+    later when the gate prints it."""
+    if not isinstance(s, str):
+        return False
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def _entry_paths(entry: dict[str, Any]) -> list[str]:
+    """The string paths of one finding entry; a missing or non-list ``paths``
+    (a hand-edited ``"paths": 5`` or ``"paths": "a.py"``) has none."""
+    paths = entry.get("paths")
+    if not isinstance(paths, list):
+        return []
+    return [p for p in paths if _encodable(p)]
+
+
+def _entry_is_clean(entry: object) -> bool:
+    """Whether ``build_snapshot`` keeps every part of a loaded entry."""
+    if not isinstance(entry, dict) or not _encodable(entry.get("name")):
+        return False
+    paths = entry.get("paths", [])
+    return isinstance(paths, list) and all(_encodable(p) for p in paths)
+
+
 def build_snapshot(findings: list[Any], method_version: int) -> FindingsSnapshot:
     """The snapshot for one run's ``derived_findings``: names in run order,
-    paths sorted so the committed file only changes when a finding moves."""
+    paths sorted so the committed file only changes when a finding moves.
+    Entries without a string name are skipped; non-string paths are dropped."""
     rows: list[FindingPaths] = []
-    for f in findings:
-        if not isinstance(f, dict) or not isinstance(f.get("name"), str):
+    for f in findings if isinstance(findings, list) else []:
+        if not isinstance(f, dict) or not _encodable(f.get("name")):
             continue
-        paths = f.get("paths") or []
-        rows.append({
-            "name": f["name"],
-            "paths": sorted({p for p in paths if isinstance(p, str)}),
-        })
+        rows.append({"name": f["name"], "paths": sorted(set(_entry_paths(f)))})
     return {"assess_method_version": method_version, "findings": rows}
 
 
-def load_snapshot(assess_dir: Path) -> FindingsSnapshot | None:
-    """Read the previous ``findings.json``; ``None`` when absent or malformed.
-
-    A malformed file cannot establish a prior method version, so it is treated
-    as no snapshot: the gate then has nothing to compare, never a false move.
-    """
-    path = assess_dir / FINDINGS_SNAPSHOT_FILE
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(raw, dict):
-        return None
-    version = raw.get("assess_method_version")
-    findings = raw.get("findings")
+def _parse_version(version: object) -> int | None:
     # A hand-edited file may hold the version as a numeric string ("12").
     # ``isdigit`` alone would accept "²", which ``int`` rejects.
     if isinstance(version, str):
@@ -94,9 +108,75 @@ def load_snapshot(assess_dir: Path) -> FindingsSnapshot | None:
             return None
     if not isinstance(version, int) or isinstance(version, bool):
         return None
+    return version
+
+
+def read_snapshot(assess_dir: Path) -> tuple[FindingsSnapshot | None, str | None]:
+    """Read the previous ``findings.json`` as ``(snapshot, reason)``.
+
+    ``reason`` is a fixed token naming what was wrong with the file, or
+    ``None`` when it was absent or clean. A file that cannot establish a prior
+    method version gives ``(None, reason)``: ``unreadable``, ``not_utf8``,
+    ``invalid_json`` (including an integer too long to parse), ``too_deep``,
+    ``not_object``, ``version_missing``, ``version_invalid``,
+    ``findings_missing`` or ``findings_not_list``. A file whose version and
+    list are sound but with some unusable entries (not an object, no string
+    name, non-list ``paths``, a non-string path) gives the snapshot of the
+    rest with ``malformed_entries``. Never raises on file content.
+    """
+    path = assess_dir / FINDINGS_SNAPSHOT_FILE
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        return None, None
+    except OSError:
+        return None, "unreadable"
+    try:
+        # ``utf-8-sig`` accepts the BOM some Windows editors add.
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return None, "not_utf8"
+    try:
+        raw = json.loads(text)
+    except RecursionError:
+        return None, "too_deep"
+    except ValueError:  # JSONDecodeError, or an over-long integer literal
+        return None, "invalid_json"
+    if not isinstance(raw, dict):
+        return None, "not_object"
+    if "assess_method_version" not in raw:
+        return None, "version_missing"
+    version = _parse_version(raw["assess_method_version"])
+    if version is None:
+        return None, "version_invalid"
+    if "findings" not in raw:
+        return None, "findings_missing"
+    findings = raw["findings"]
     if not isinstance(findings, list):
-        return None
-    return build_snapshot(findings, version)
+        return None, "findings_not_list"
+    reason = None if all(_entry_is_clean(f) for f in findings) else "malformed_entries"
+    return build_snapshot(findings, version), reason
+
+
+def load_snapshot(assess_dir: Path) -> FindingsSnapshot | None:
+    """Read the previous ``findings.json``; ``None`` when absent or malformed.
+
+    A malformed file cannot establish a prior method version, so it is treated
+    as no snapshot: the gate then has nothing to compare, never a false move.
+    A malformed file prints one stderr line naming the ``read_snapshot``
+    reason (an absent file is silent), in the pipeline as well as the gate,
+    since in CI the pipeline overwrites the file before the gate reads it.
+    """
+    snapshot, reason = read_snapshot(assess_dir)
+    if reason is not None:
+        effect = ("unusable entries skipped" if snapshot is not None
+                  else "treated as no prior snapshot")
+        print(
+            f"/assess: {(assess_dir / FINDINGS_SNAPSHOT_FILE).as_posix()} is "
+            f"malformed ({reason}); {effect}.",
+            file=sys.stderr,
+        )
+    return snapshot
 
 
 def committed_prior(ctx: dict[str, Any], repo_root: Path) -> FindingsSnapshot | None:
@@ -132,11 +212,9 @@ def write_snapshot(assess_dir: Path, snapshot: FindingsSnapshot) -> None:
 
 def _paths_by_name(findings: list[Any]) -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
-    for f in findings:
+    for f in findings if isinstance(findings, list) else []:
         if isinstance(f, dict) and isinstance(f.get("name"), str):
-            paths = f.get("paths") or []
-            out.setdefault(f["name"], set()).update(
-                p for p in paths if isinstance(p, str))
+            out.setdefault(f["name"], set()).update(_entry_paths(f))
     return out
 
 

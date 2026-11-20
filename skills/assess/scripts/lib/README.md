@@ -1332,9 +1332,15 @@ a run produces on unchanged code. `assess_core` stamps it in run-context.json an
 The committed findings snapshot (#554). `build_snapshot` reduces `derived_findings` to
 names and sorted paths plus `ASSESS_METHOD_VERSION`; `write_snapshot` writes it to
 `findings.json` in the run's artifact directory, with no run id or date so an unchanged
-finding set leaves the file byte-identical. `load_snapshot` reads the previous file back
-before the run overwrites it (`None` when absent or malformed; a numeric-string
-version is read as its integer), and `run_publish` records it as
+finding set leaves the file byte-identical. `read_snapshot` reads the previous file back
+before the run overwrites it as `(snapshot, reason)` and never raises on file content: a
+hand-edited file that cannot establish a method version (bad encoding, invalid or too deeply
+nested JSON, wrong top-level type, a missing or non-integer version, missing or non-list
+findings) is `None` with a fixed reason token, and unusable entries (non-object, no string
+name, non-list `paths`, non-string or unencodable paths) are skipped under
+`malformed_entries` (#668). A numeric-string version is read as its integer and a UTF-8
+BOM is accepted. `load_snapshot` returns the snapshot alone and prints one stderr line
+naming any reason (an absent file is silent), and `run_publish` records it as
 `prior_findings_snapshot`. `committed_prior` picks the snapshot the gate compares
 against: the `findings.json` on disk when its method version differs from this run's
 (the gate run directly on a committed snapshot, #661), else the recorded prior. `method_change` compares that snapshot with
