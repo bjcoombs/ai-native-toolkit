@@ -38,10 +38,13 @@
 #   /assess applies. The promissory_markers scan lists a family only when it
 #   found a marker, so a repository with no suppressions (a clean linter, or
 #   none) is unknown, not 0. A suppression is stale once it survives enough
-#   edits to its file, so a young repository reads few stale ones.
+#   edits to its file, so level 2 also needs aging_reliable: on degenerate
+#   history (a shallow clone, a squashed import) a stale count of 0 says
+#   nothing.
 # - Layer 4 reads a declared boundary and the outcome of the commonest
 #   architecture test: level 1 is a committed ownership or boundary map
-#   (CODEOWNERS, ARCHITECTURE.md) with at least one pattern matching a
+#   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
+#   module boundaries) with at least one pattern matching a
 #   tracked file, level 2 adds a file-size outcome (95% of scored files at
 #   500 lines or fewer). Neither proves an architecture test runs in CI,
 #   which is what /assess looks for. With no map the structure_drift block
@@ -132,7 +135,10 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 2
-  criteria = [{ signal = "promissory_markers.families.suppression.stale", op = "lte", value = 10 }]
+  criteria = [
+    { signal = "promissory_markers.families.suppression.stale", op = "lte", value = 10 },
+    { signal = "promissory_markers.aging_reliable", op = "eq", value = true },
+  ]
 
 [[rows]]
 id = "layer-4-architecture"

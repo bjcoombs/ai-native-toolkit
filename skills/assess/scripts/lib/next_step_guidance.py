@@ -283,6 +283,11 @@ _WORDING: dict[str, Wording] = {
     "promissory_markers.families.suppression.total": _suppressions_present,
     "promissory_markers.families.suppression.stale": _suppressions_stale,
     "structure_drift.tier_0.matched_patterns": _ownership_map,
+    "promissory_markers.aging_reliable": _flag(
+        "Assess a full-history clone, not a shallow or squashed one, so lint suppressions can "
+        "be aged.",
+        "`git rev-parse --is-shallow-repository` prints `false` and most changed files have "
+        "more than one commit in the history."),
     "stats_summary.loc.p95": _file_size,
     "coverage_gate.enforced": _flag(
         "Make the test run fail when line coverage drops below a floor.",
@@ -318,7 +323,9 @@ _MEASURE_HINTS = {
     "promissory_markers": _FULL_RUN.format("promissory_markers") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",
     "structure_drift": _FULL_RUN.format("structure_drift") + " A full run omits it when the "
-                       "repository commits no `CODEOWNERS` or `ARCHITECTURE.md`.",
+                       "repository commits no supported ownership map (`CODEOWNERS`, "
+                       "`ARCHITECTURE.md`, `DESIGN.md`, or a `README.md` that declares module "
+                       "boundaries).",
     "observability": "Only a full `/assess` run reports the observability rung; a headless fleet "
                      "scan leaves it unavailable.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "

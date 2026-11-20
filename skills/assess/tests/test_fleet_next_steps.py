@@ -369,7 +369,7 @@ def test_measure_hints():
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
     assert "full `/assess` run" in measure_hint("structure.modularity_q")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
-    assert "`CODEOWNERS`" in measure_hint("structure_drift.tier_0.matched_patterns")
+    assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.matched_patterns")
 
 
 def test_default_rubric_toml_parses():

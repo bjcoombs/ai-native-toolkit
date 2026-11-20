@@ -279,6 +279,10 @@ def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, 
     stale["promissory_markers"]["families"]["suppression"]["stale"] = 11
     assert _row(_run({"r": stale}), "layer-3-linters")["level"] == 1
 
+    shallow = copy.deepcopy(suppressed_repo)   # degenerate history: stale 0 says nothing
+    shallow["promissory_markers"]["aging_reliable"] = False
+    assert _row(_run({"r": shallow}), "layer-3-linters")["level"] == 1
+
     none = copy.deepcopy(suppressed_repo)
     del none["promissory_markers"]["families"]["suppression"]
     row = _row(_run({"r": none}), "layer-3-linters")
