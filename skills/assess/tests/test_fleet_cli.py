@@ -189,9 +189,9 @@ def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsy
     (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
     base = [str(root), "--rubric", "levels.toml", "--history-dir", "hist"]
     assert fleet_cli.main([*base, "--out", "first"]) == 0
-    assert "slope.svg skipped: no earlier run to compare against" in capsys.readouterr().err
+    assert "slope.svg skipped: no earlier run compared" in capsys.readouterr().err
     first = (tmp_path / "first" / "report.md").read_text(encoding="utf-8")
-    assert "Not drawn: skipped: no earlier run to compare against (run with --compare)." in first
+    assert "Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run)." in first
     assert "[![Maturity by layer](./layer-bars.svg)](./layer-bars.svg)" in first
     assert not (tmp_path / "first" / "slope.svg").exists()
     assert fleet_cli.main([*base, "--out", "second", "--compare"]) == 0

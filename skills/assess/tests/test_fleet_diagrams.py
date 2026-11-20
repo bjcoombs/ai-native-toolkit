@@ -251,7 +251,7 @@ def test_skipped_diagrams_say_why_in_the_report():
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     none = "skipped: no repositories in the run."
     assert [d["skipped"] for d in empty] == [
-        none, none, "skipped: no earlier run to compare against (run with --compare).", none]
+        none, none, "skipped: no earlier run compared (no --compare, or no history entry matched this run).", none]
     report = fd.report_markdown(no_levels)
     assert "Not drawn: skipped: the run had no maturity model" in report
     assert "[![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)" in report

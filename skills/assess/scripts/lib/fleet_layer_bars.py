@@ -42,6 +42,7 @@ MAX_LABEL = 34  # characters of a row title at 12.5px
 MIN_COUNT_W = 18.0  # narrower segments carry their count in the tooltip only
 WRAP = 104
 LINE_H = 16.0
+MAX_NAMED = 5  # unknown repositories named per bar before "and N more"
 
 
 class LayerBar(TypedDict):
@@ -74,6 +75,16 @@ def layer_bars(levels: Rubric, repos: Sequence[FleetRow]) -> list[LayerBar]:
     return bars
 
 
+def unknown_names(bar: LayerBar, total: int) -> str:
+    """The repositories with an unknown level for a bar, capped so a fleet-wide gap stays one line."""
+    names = bar["unknown"]
+    if len(names) == total:
+        return f"all {total} repositories"
+    if len(names) <= MAX_NAMED:
+        return ", ".join(names)
+    return f"{', '.join(names[:MAX_NAMED])} and {len(names) - MAX_NAMED} more"
+
+
 def axis_step(total: int) -> int:
     """An integer tick step giving at most about seven ticks."""
     return max(1, int(svg.nice_ceiling(total / 7)))
@@ -94,9 +105,12 @@ def _legend(bars: Sequence[LayerBar], left: float, cursor: float) -> tuple[list[
             lead = f"Rows with top level {top}:"
             parts.append(svg.text(x, cursor, lead, size=11.5, cls="muted"))
             x += svg.text_width(lead, 11.5) + 10
+        start = x
         for level in range(top + 1):
             step = svg.ramp_step(level, top)
             label = f"Level {level}" + (" (top)" if level == top else "")
+            if x + 20 + svg.text_width(label, 11.5) > WIDTH - PAD:  # wrap a long ramp
+                x, cursor = start, cursor + LINE_H + 2
             parts.append(f'<rect x="{x:.1f}" y="{cursor - 11:.1f}" width="14.0" height="14.0" '
                          f'fill="{ORRD_9[step]}" class="s-muted" stroke-width="0.6"/>')
             parts.append(svg.text(x + 20, cursor, label, size=11.5, cls="fg"))
@@ -129,7 +143,7 @@ def render_layer_bars(bars: Sequence[LayerBar], org_rows: Sequence[str] = ()) ->
     bottom = TOP + ROW_H * len(bars)
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{total} repositories · one bar per team row of the maturity "
-                     "model, split by the level each repository reaches", cls="muted"),
+                     "model, split by level reached", cls="muted"),
             svg.text(PAD, PAD + 58, "A wide pale or hatched band is where the whole fleet is behind",
                      size=11.5, cls="muted")]
     step = axis_step(total)
@@ -158,14 +172,14 @@ def render_layer_bars(bars: Sequence[LayerBar], org_rows: Sequence[str] = ()) ->
                          cls="muted"))
     parts, cursor = _legend(bars, left, bottom + 58)
     body += parts
-    notes = [f"Level unknown for {b['title']}: {', '.join(b['unknown'])}." for b in bars if b["unknown"]]
+    notes = [f"Level unknown for {b['title']}: {unknown_names(b, total)}." for b in bars if b["unknown"]]
     if org_rows:
         notes.append("Not drawn: org rows read group settings, not repositories: "
                      + ", ".join(org_rows) + ".")
     cursor += 4
     for note in notes:
         for line in textwrap.wrap(note, WRAP):
-            body.append(svg.text(left, cursor, line, size=11.5, cls="muted"))
+            body.append(svg.text(PAD, cursor, line, size=11.5, cls="muted"))
             cursor += LINE_H
     desc = ("Stacked horizontal bars, one per team row of the maturity model: how many fleet "
             "repositories reach each level, pale to dark; repositories with an undetermined level "

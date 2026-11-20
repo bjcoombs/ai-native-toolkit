@@ -140,7 +140,7 @@ def test_slope_skips_say_why():
 
     assert skipped(levels, real) is None
     assert skipped(levels, None) == (
-        "skipped: no earlier run to compare against (run with --compare).")
+        "skipped: no earlier run compared (no --compare, or no history entry matched this run).")
     refused = not_comparable(None, ["window changed '6mo'->'3mo'"])
     assert skipped(levels, refused) == (
         "skipped: the earlier run is not comparable (window changed '6mo'->'3mo').")
@@ -213,3 +213,49 @@ def test_layer_bars_skip_without_levels_team_rows_or_repositories():
 
 def test_axis_step_gives_whole_ticks():
     assert [flb.axis_step(n) for n in (1, 7, 14, 15, 60, 400)] == [1, 1, 2, 5, 10, 100]
+
+
+def _text_boxes(text: str) -> list[svg.Box]:
+    boxes = []
+    for match in re.finditer(r'<text x="([\d.-]+)" y="([\d.-]+)" font-size="([\d.]+)"[^>]*'
+                             r'text-anchor="(\w+)"[^>]*>([^<]*)', text):
+        x, y, size, anchor, content = match.groups()
+        content = content.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+        boxes.append(svg.text_box(float(x), float(y), content, float(size), anchor))
+    return boxes
+
+
+def test_long_slope_labels_stay_inside_the_canvas():
+    long_title = "Layer 9: a very long maturity model row title that keeps going"
+    levels = _levels()
+    levels = {**levels, "rows": [{**row, "title": long_title} for row in levels["rows"]]}
+    text = fs.render_slope(fs.slope_view(levels, _comparison([
+        _group("platform-engineering/shared/very-long-subgroup-name", [_move("instructions", 0, 2)]),
+        _group("g", [_move("instructions", 2, 0, cause="set")]),
+    ])))
+    for box in _text_boxes(text):
+        assert box.x >= fs.PAD and box.x + box.w <= fs.WIDTH - fs.PAD, box
+
+
+def test_rows_left_out_of_a_mean_are_named_visibly():
+    text = fs.render_slope(_fixture_view())
+    assert "Rows left out of a mean, not known in both runs (left out/rows): data\u00a0(2/3)" in text
+
+
+def test_layer_bars_legend_and_notes_stay_inside_and_scale_to_a_large_fleet():
+    many = [{**_repos()[0], "repo": f"grp/svc{i:03d}"} for i in range(150)]
+    many += [{**_repos()[0], "repo": f"grp/dead{i:03d}", "status": "failed", "scans": None}
+             for i in range(7)]
+    levels = _levels()
+    wide = {**levels["rows"][2], "id": "wide", "title": "Eight levels",
+            "levels": [{**levels["rows"][2]["levels"][0], "level": n} for n in range(1, 9)]}
+    gap = {**levels["rows"][1], "id": "gap", "title": "Unmeasured layer",
+           "levels": [{"level": 1, "criteria": [{"signal": "not.collected", "op": "eq", "value": 1}]}]}
+    model: Rubric = {**levels, "rows": [*levels["rows"], wide, gap]}
+    bars = flb.layer_bars(model, many)
+    text = flb.render_layer_bars(bars)
+    assert "Level unknown for Unmeasured layer: all 157 repositories." in text
+    assert "grp/dead000, grp/dead001, grp/dead002, grp/dead003, grp/dead004 and 2 more." in text
+    for box in _text_boxes(text):
+        assert box.x >= 0 and box.x + box.w <= flb.WIDTH - flb.PAD, box
+    assert "Level 8 (top)" in text

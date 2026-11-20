@@ -73,7 +73,8 @@ def _slope(levels: Rubric | None, comparison: Comparison | None) -> Diagram:
     entry: Diagram = {"file": fleet_slope.FILE, "title": SLOPE_TITLE, "question": SLOPE_QUESTION,
                       "svg": None, "skipped": None}
     if comparison is None:
-        entry["skipped"] = "skipped: no earlier run to compare against (run with --compare)."
+        entry["skipped"] = ("skipped: no earlier run compared (no --compare, or no history entry "
+                            "matched this run).")
     elif not comparison["comparable"]:
         entry["skipped"] = ("skipped: the earlier run is not comparable ("
                             + "; ".join(comparison["reasons"]) + ").")

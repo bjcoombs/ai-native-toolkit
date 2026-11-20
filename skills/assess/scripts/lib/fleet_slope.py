@@ -41,8 +41,8 @@ LX, RX = 250.0, 460.0
 PLOT_T = 112.0
 PLOT_H = 240.0
 LABEL_GAP = 17.0  # minimum vertical distance between end-label baselines
-MAX_GROUP = 28  # characters of a group name on the left
-MAX_WHY = 46  # characters of the right-hand "group: row then→now" note
+MAX_GROUP = 24  # characters of a group name on the left
+MAX_WHY = 42  # characters of the right-hand "group: row then→now" note
 WRAP = 116
 LINE_H = 16.0
 
@@ -215,6 +215,15 @@ def render_slope(view: SlopeView) -> str:
         body.append(svg.text(PAD, cursor, "* the group's measured set of repositories moved too, "
                              "so that change is not a level change alone", size=11.5, cls="muted"))
         cursor += LINE_H + 4
+    # a no-break space keeps each group with its count when the note wraps
+    partial = [f"{g['group']}\u00a0({g['rows'] - g['paired_rows']}/{g['rows']})" for g in groups
+               if g["paired_rows"] < g["rows"]]
+    if partial:
+        for line in textwrap.wrap("Rows left out of a mean, not known in both runs (left out/rows): "
+                                  + ", ".join(partial), WRAP):
+            body.append(svg.text(PAD, cursor, line, size=11.5, cls="muted"))
+            cursor += LINE_H
+        cursor += 4
     unknown = [_unknown_text(g) for g in view["groups"] if g["then"] is None or g["now"] is None]
     if unknown:
         lines = textwrap.wrap("Not plotted, unknown is not zero: " + ", ".join(unknown), WRAP)
