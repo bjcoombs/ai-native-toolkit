@@ -38,12 +38,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.badge import write_findings_badge
 from lib.context_blocks import build_stale_hubs, dict_or, doc_to_code_edges
+from lib.counts_only import COUNTS_ONLY_FILE
+from lib.counts_only import add_cli_arguments as add_counts_only_arguments
+from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.coverage_report import load_coverage_data
 from lib.doc_staleness import analyze_doc_staleness
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
-from lib.run_scope import load_current_stats, resolve_scope
+from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_registry import (
     STAGE_FINAL,
     STAGE_POST_OFFERS,
@@ -233,7 +236,9 @@ def main(argv: list[str] | None = None) -> int:
             "run (unchanged). Pass the same `--scope` to `--opt-in-mutation`."
         ),
     )
+    add_counts_only_arguments(parser)
     parsed = parser.parse_args(argv)
+    validate_counts_only_args(parser, parsed)
     repo_root = Path(parsed.repo_root).resolve()
     if parsed.opt_in_mutation:
         return run_opt_in_mutation(repo_root, scope=parsed.scope)
@@ -249,6 +254,10 @@ def main(argv: list[str] | None = None) -> int:
         # with a non-zero exit rather than a traceback.
         print(f"error: {e}", file=sys.stderr)
         return 2
+    content_free = apply_counts_only(ctx, parsed)
+    if content_free is not None:
+        out = assess_dir_for(repo_root, ctx.get("scope_slug") or "") / COUNTS_ONLY_FILE
+        out.write_text(json.dumps(content_free, indent=2), encoding="utf-8")
     print(json.dumps(ctx["diff"]))
     return 0
 
