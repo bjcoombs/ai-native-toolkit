@@ -12,9 +12,9 @@ owner we compute, per module:
     ``change_coupling.authorship_analysis`` - reused, never re-derived, so the
     conservative agent/human classification stays defined one way.)
   - **intent source** (B4) - is there an externalised spec/doc stating what the
-    code *should* do? Computed from doc->code association (a doc whose directory
-    is an ancestor of the module), the same path-proximity edges
-    ``doc_staleness`` / the C-signal join use. Presence, not freshness: a stale
+    code *should* do? Computed from doc presence (any doc whose directory is an
+    ancestor of the module), a looser test than the ``lib.doc_ownership`` rule
+    ``doc_staleness`` and the C-signal join share. Presence, not freshness: a stale
     doc still externalises intent (its *staleness* is signal C's lying-map
     finding, not this one's).
   - **authorship class** (B4) - human / agent / mixed / unknown, passed through
@@ -117,8 +117,7 @@ def _high_ccn_threshold(complexity_stats: JsonDict) -> float:
 def _doc_dirs(doc_staleness: JsonDict) -> list[tuple[str, ...]]:
     """Directory parts of every doc, only when the staleness signal is available.
 
-    A repo-root doc yields ``()`` (it is an ancestor of everything), matching the
-    doc->code association the C-signal join and ``doc_staleness`` use.
+    A repo-root doc yields ``()`` (it is an ancestor of everything).
     """
     if not doc_staleness.get("available", False):
         return []
@@ -132,10 +131,9 @@ def _doc_dirs(doc_staleness: JsonDict) -> list[tuple[str, ...]]:
 def _has_intent_source(code_path: str, doc_dirs: list[tuple[str, ...]]) -> bool:
     """True if any doc's directory is an ancestor of ``code_path``.
 
-    Same path-proximity rule as the doc-staleness association: a doc covers code
-    in its own directory and below. A repo-root doc (``()``) therefore covers
-    everything - intentionally, so this stays consistent with how the C-signal
-    join decides a unit is documented; the orphaned-understanding finding is
+    A presence test, not the ownership rule (``lib.doc_ownership``): any doc
+    covers code in its own directory and below. A repo-root doc (``()``)
+    therefore covers everything - intentionally; the orphaned-understanding finding is
     deliberately conservative (it should fire only when there is *no* externalised
     intent anywhere up the tree).
     """

@@ -52,7 +52,12 @@ constant each.
 # prior_findings_snapshot, and each run writes .assess/findings.json, the
 # committed snapshot of finding names and paths (issue #554). Additive: no
 # existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.6.0"
+# 1.7.0: each run-context.json doc_staleness.docs row gains subject_roots (the
+# ownership rule's roots) and subject_paths (up to 20 sorted subject paths), from
+# lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
+# 0 (it owns no subject), the same value the documentation block reports.
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.7.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -61,4 +66,7 @@ ARTIFACT_SCHEMA_VERSION = "1.6.0"
 # with the version in the committed .assess/findings.json and explains the
 # finding moves instead of failing on them unexplained.
 # 1: the baseline (issue #554).
-ASSESS_METHOD_VERSION = 1
+# 2: the complexity join takes doc ownership from the doc-staleness rule
+#    (lib.doc_ownership, issue #555): a README beside a design doc owns the
+#    directory's code, and a non-base doc owns none by directory.
+ASSESS_METHOD_VERSION = 2

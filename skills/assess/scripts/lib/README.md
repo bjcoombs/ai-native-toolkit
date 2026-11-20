@@ -336,9 +336,22 @@ set of notes a hub surfaces. Pure - no filesystem walk, no `doc_graph` import - 
 `doc_graph.py` owns discovery/excludes and consumes this module's parse + selection. Add
 a fixture-backed test here alongside any predicate change.
 
+**`doc_ownership.py`**
+The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
+`doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
+ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
+directory's code), then a parallel `docs/` tree, explicit code links, and the empty
+`repo-baseline` subject. `subject_spec` records each doc's method and roots as
+repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
+`/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
+Staleness expands them over every discovered code file and exports each row's
+`subject_roots`, `subject_code_count` and up to `SUBJECT_PATHS_CAP` sorted
+`subject_paths`; the join expands the same roots over the scored files, so the cap never
+hides an owned file from it. Tests: `tests/test_doc_ownership.py`.
+
 **`doc_staleness.py`**
-Doc-staleness metric for Layer 0. Associates each doc with the code it describes via
-nearest-ancestor base-doc rules, computes code churn relative to doc maintenance, and
+Doc-staleness metric for Layer 0. Associates each doc with the code it describes through
+`doc_ownership.py`, computes code churn relative to doc maintenance, and
 emits a signed ratio (high = decaying map). `ratio` is the whole-window ratio
 (`window_ratio`, subject churn over doc edits) capped by `code_churn_since_doc_change`,
 the distinct subject commits authored after the doc's last content change, so a doc is a
@@ -373,7 +386,10 @@ negative = the doc is a lying map over complex code (worse than no doc). The joi
 multiplies complexity by a signed freshness score so trivial code generates near-zero
 signal regardless of doc state. When a doc carries a `doc_provenance` verdict, freshness
 comes from the source-vs-doc comparison (a direct, high-confidence signal that bypasses
-the churn-ratio confidence guards) instead of the ratio.
+the churn-ratio confidence guards) instead of the ratio. Which code a doc covers comes
+from the staleness rows through `doc_subjects` (the `doc_ownership.py` rule), and each
+unit's `subject_code_count` is the staleness row's value, so both blocks report one count
+per document. `_extract_file_ccn` is the single read of the stats' per-file CCN.
 
 ### Ownership and structure drift
 
