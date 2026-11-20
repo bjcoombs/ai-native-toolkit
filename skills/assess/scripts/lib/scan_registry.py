@@ -36,6 +36,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 from lib import core_scans as cs
@@ -43,7 +44,6 @@ from lib import run_setup as rs
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
-from lib.archetype import analyze_archetype
 from lib.claude_config import scan_claude_config
 from lib.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
@@ -51,13 +51,14 @@ from lib.degrade import unavailable
 from lib.coverage_gate import detect_coverage_gate
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
-from lib.instruction_files import detect_ancestor_instructions, nested_instruction_surface
+from lib.instruction_files import nested_instruction_surface
 from lib.review_reality import scan_review_reality
 from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``: the arguments of
 # ``build_run_context``. A spec may read these, or the key of any spec declared
-# before it (``instruction_files``, ``scope`` and ``excludes`` are setup specs).
+# before it (``instruction_files``, ``scope``, ``excludes`` and ``history_window``
+# are setup specs).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
 
 STAGE_SETUP = "setup"
@@ -89,6 +90,12 @@ class ScanSpec:
     failure should stop the run. ``label`` names the scan in a degrade reason
     when it differs from ``key``. ``private`` and ``spread`` are described in
     the module docstring; a degraded spread spec marks every key it declares.
+
+    ``network`` marks a scan that reads beyond the checkout (GitHub via
+    ``gh``). The headless signals runner (``lib/signals.py``) never calls such
+    a scan's ``fn``: it calls ``offline_fn`` when one is declared - the same
+    scan with its network probe turned off, taking the same reads - and
+    otherwise reports the scan unavailable. ``assess_core`` ignores both fields.
     """
 
     key: str
@@ -100,6 +107,8 @@ class ScanSpec:
     label: str = ""
     private: bool = False
     spread: tuple[str, ...] = ()
+    network: bool = False
+    offline_fn: Callable[..., Any] | None = None
 
 
 def _accepts(fn: Callable[..., Any], count: int) -> bool:
@@ -154,6 +163,13 @@ def validate(
         if not _accepts(spec.fn, len(spec.reads)):
             raise ScanRegistryError(
                 f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its callable "
+                f"cannot be called with that many positional arguments"
+            )
+        if spec.offline_fn is not None and not spec.network:
+            raise ScanRegistryError(f"scan {spec.key!r} declares an offline_fn but is not a network scan")
+        if spec.offline_fn is not None and not _accepts(spec.offline_fn, len(spec.reads)):
+            raise ScanRegistryError(
+                f"scan {spec.key!r} declares {len(spec.reads)} read(s) but its offline_fn "
                 f"cannot be called with that many positional arguments"
             )
         if not spec.degrade and not spec.gate_reason:
@@ -288,6 +304,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # `.assess/config.toml` excludes, loaded once and read by every scan.
     ScanSpec("excludes", rs.config_excludes, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
+    # The git-history window a history-reading scan honours: the stats
+    # sidecar's churn window in the `<n>d|w|mo|y` grammar, or None for all
+    # history. The headless signals run provides `--window` instead.
+    ScanSpec("history_window", rs.history_window, ("current",), STAGE_SETUP, private=True,
+             degrade=False, gate_reason=_SETUP),
     ScanSpec("measured_commit", rs.measured_commit, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
     ScanSpec("superseded", rs.superseded_run, ("assess_dir", "run_date", "measured_commit"),
@@ -338,9 +359,9 @@ SCANS: tuple[ScanSpec, ...] = (
              ("instruction_grading",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_UNWRAPPED),
     # Software repo or knowledge base (#224); a knowledge base marks L2-L7 N/A.
-    ScanSpec("archetype", analyze_archetype, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("archetype", cs.archetype, ("repo_root",), STAGE_READ_SIDE),
     # Instruction files above the repo root that reach no fresh clone (#57).
-    ScanSpec("ancestor_instruction_files", detect_ancestor_instructions, ("repo_root",),
+    ScanSpec("ancestor_instruction_files", cs.ancestor_instructions, ("repo_root",),
              STAGE_READ_SIDE,
              degrade=False, gate_reason=_UNWRAPPED),
     # Progressive disclosure: skills factoring and oversized instruction files.
@@ -391,9 +412,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # branch-protection snapshots diffed against the live GitHub setting via
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
-    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE),
-    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE),
-    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
+    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE, network=True),
+    ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
     # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
     # names its file, line and threshold as written; none found reads
     # enforced: false, never inferred from coverage_report. A scoped run reads
@@ -484,9 +505,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # hook, setup script or target), the check command a graded instruction file
     # names, lockfiles per manifest, the Layer 5 Partial cap, and the optional
     # `gh` CI-duration probe. Reads agent_harness for the SessionStart hooks.
+    # Headless runs call it with the probe off (ci_duration reports not_probed).
     ScanSpec(
         "agent_environment", scan_agent_environment,
         ("repo_root", "instruction_files", "agent_harness", "excludes"), STAGE_POST_OFFERS,
+        network=True, offline_fn=partial(scan_agent_environment, probe_ci=False),
     ),
     # Shared tooling (issue #566): the shared CI sources a pipeline includes
     # (GitLab `include: project:` / `include: component:`, GitHub reusable

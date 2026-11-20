@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/signals.schema.json",
+  "title": "assess signals document",
+  "description": "Output of skills/assess/scripts/assess_signals.py: a run stamp plus one block per scan. Generated from lib/run_context_types.py by lib/signals_schema.py.",
+  "type": "object",
+  "properties": {
+    "signals_schema_version": {
+      "type": "integer"
+    },
+    "stamp": {
+      "type": "object",
+      "properties": {
+        "toolkit_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plugin_version": {
+          "type": "string"
+        },
+        "scan_date": {
+          "type": "string"
+        },
+        "window": {
+          "type": "string"
+        },
+        "target_head": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_dirty": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "plugin_version",
+        "scan_date",
+        "target_dirty",
+        "target_head",
+        "toolkit_commit",
+        "window"
+      ],
+      "additionalProperties": false
+    },
+    "scans": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "if": {
+          "properties": {
+            "available": {
+              "const": false
+            }
+          },
+          "required": [
+            "available"
+          ]
+        },
+        "then": {
+          "properties": {
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "scans",
+    "signals_schema_version",
+    "stamp"
+  ],
+  "additionalProperties": false
+}

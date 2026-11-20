@@ -281,3 +281,16 @@ def test_the_run_context_carries_only_declared_keys_in_table_order(tmp_path):
     spread_keys = {key for spec in reg.SCANS for key in spec.spread}
     unpublished = {spec.key for spec in reg.SCANS if spec.private or spec.spread} - spread_keys
     assert not unpublished & set(ctx)
+
+
+def test_network_defaults_off_so_positional_entries_stay_compatible():
+    spec = _spec("plain", lambda root: 1)
+    assert spec.network is False and spec.offline_fn is None
+
+
+def test_offline_fn_requires_a_network_scan_and_matching_reads():
+    with pytest.raises(ScanRegistryError, match="not a network scan"):
+        reg.validate((_spec("x", lambda root: 1, offline_fn=lambda root: 2),))
+    with pytest.raises(ScanRegistryError, match="offline_fn"):
+        reg.validate((_spec("x", lambda root: 1, network=True, offline_fn=lambda: 2),))
+    reg.validate((_spec("x", lambda root: 1, network=True, offline_fn=lambda root: 2),))

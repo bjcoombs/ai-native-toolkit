@@ -98,6 +98,8 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
+into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -473,8 +475,10 @@ fails before any run. `run_scans` resolves reads outside the wrapper: an input t
 core did not pass raises `ScanRegistryError` and stops the run, while a failure inside
 the scan degrades. The core provides the `build_run_context` arguments
 (`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
-absolute `--scope` path, or None), `instruction_files` and `excludes` (the
-`(dirs, patterns)` pair from `.assess/config.toml`) are setup specs. Stages
+absolute `--scope` path, or None), `instruction_files`, `excludes` (the
+`(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
+sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
+specs. Stages
 (`setup`, `read_side`, `post_offers`, `final`) keep `run-context.json` key order;
 they collapse once the `HAND_WIRED` doc-staleness keys move here.
 
@@ -507,6 +511,45 @@ keys the run header reserved in place, writes `badge.json` and then
 `safe` and `unavailable`: the "a broken scan never blocks the assessment" wrapper and
 its marker. Kept apart from `scan_registry.py` so the modules the table imports
 (`context_blocks.py`) can use it without importing the table.
+A spec sets `network=True` when it reads GitHub through `gh` (`config_drift`,
+`review_reality`, `gate_cost_estimate`, `agent_environment`), and may name an
+`offline_fn` - the same scan with its probe off, taking the same reads
+(`agent_environment` with `probe_ci=False`). `assess_core` ignores both; the headless
+runner in `signals.py` reads them. `validate` rejects an `offline_fn` on a scan that is
+not `network`, or one that cannot take the spec's reads.
+
+**`signals.py`**
+The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
+the selected registry scans, plus the registry keys they read, through `run_scans` with
+inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
+`history_window` set to `--window` for history-reading scans, and the
+`build_run_context` arguments `requested_scope=None`, `run_date` and
+`non_interactive=True`), so a raising scan degrades through `safe` and the run
+completes. A name the runner provides is never recomputed from the table. A
+`network` scan runs its `offline_fn` or is reported
+`{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
+outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
+#557) are reported; the core's entries run only when a reported scan reads one, and
+the publish step never runs. Names in `UNREGISTERED_SCANS` (run-context blocks
+`assess_core` assembles, several of which report `available: false` without the
+`reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
+name a reported scan also holds is dropped at runtime. `select_scans` raises
+`UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
+commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
+(each nullable outside git). The window is validated and stamped only: no registered
+scan reads a history window yet. Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
+before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
+the network.
+
+**`signals_schema.py`**
+Generates the published `references/signals.schema.json` from the `SignalsDocument` and
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+blocks, and an `if`/`then` rule that an `"available": false` block carries a string
+`reason`. `tests/test_signals.py` fails when the checked-in file differs from
+`build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads

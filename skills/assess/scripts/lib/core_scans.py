@@ -18,6 +18,7 @@ from typing import Any
 
 from lib.accretion_ratchet import AccretionScan, scan_accretion_ratchet
 from lib.anomaly_detector import detect_anomalies
+from lib.archetype import analyze_archetype
 from lib.assess_config import WorkingNotesConfig, load_structure_config, load_working_notes_config
 from lib.change_coupling import RenameMap
 from lib.context_blocks import (
@@ -35,7 +36,11 @@ from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
 from lib.doc_graph import build_doc_graph
 from lib.gap_actions import build_gap_actions
-from lib.instruction_files import broken_instruction_refs, instruction_file_size
+from lib.instruction_files import (
+    broken_instruction_refs,
+    detect_ancestor_instructions,
+    instruction_file_size,
+)
 from lib.interactivity import build_offers_block
 from lib.keyhole_signals import integrate
 from lib.liveness_scan import scan_liveness
@@ -101,6 +106,16 @@ def instruction_refs(doc_graph_block: dict[str, Any], grading: tuple[Any, ...]) 
 def sensitive_instruction_content(grading: tuple[Any, ...]) -> Any:
     """Redacted sensitive-content findings in candidate instruction files (#56)."""
     return grading[5]
+
+
+def archetype(repo_root: Path) -> dict[str, Any]:
+    """Software repo or knowledge base (#224); a knowledge base marks L2-L7 N/A."""
+    return analyze_archetype(repo_root)
+
+
+def ancestor_instructions(repo_root: Path) -> list[str]:
+    """Instruction files above the repo root that reach no fresh clone (#57)."""
+    return detect_ancestor_instructions(repo_root)
 
 
 def skills_blocks(grading: tuple[Any, ...]) -> dict[str, Any]:

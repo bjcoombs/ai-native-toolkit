@@ -23,7 +23,7 @@ from lib.assess_config import load_excludes
 from lib.change_coupling import RenameMap, build_rename_map
 from lib.context_blocks import generated_exclusion
 from lib.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
-from lib.git_churn import git_commit_info
+from lib.git_churn import git_commit_info, window_from_churn_label
 from lib.instruction_files import grade_instruction_files
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.stats_diff import StatsDiff, diff_stats, load_stats
@@ -141,6 +141,11 @@ def measured_commit(repo_root: Path) -> dict[str, Any]:
     One of the git-churn call sites issues #424 and #425 rewrite.
     """
     return git_commit_info(repo_root)
+
+
+def history_window(current: dict[str, Any]) -> str | None:
+    """The stats sidecar's churn window as ``<n>d|w|mo|y``, or None for all history."""
+    return window_from_churn_label(current.get("churn_window"))
 
 
 def config_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
