@@ -17,7 +17,7 @@ Run it on any repository. It is **read-only** apart from its report: it never ed
 | Orchestrator (you) | the session model | enumerates docs, builds clusters, spawns comparers, validates citations, merges, writes the report |
 | Comparer | **Haiku** | reads one cluster and reports contradictions with both sides cited |
 
-The orchestrator never judges whether two statements contradict. It **only clusters and merges**. A finding that no comparer reported never enters the report, and a comparer finding is never dropped on the orchestrator's opinion. The one exception is the mechanical citation check in Step 5, and every finding it drops is listed in the report. This split is what makes Haiku's quality measurable: the evals in [`evals/README.md`](./evals/README.md) grade the comparers, not a larger model cleaning up after them.
+The orchestrator never judges whether two statements contradict. It **only clusters and merges**. A finding that no comparer reported never enters the report, and a comparer finding is never dropped on the orchestrator's opinion. The one exception is the mechanical citation check in Step 5, and every finding it drops is listed in the report. This split is what makes Haiku's quality measurable: the evals in [`evals/doc-contradictions/README.md`](../../evals/doc-contradictions/README.md) grade the comparers, not a larger model cleaning up after them.
 
 ## Arguments
 
@@ -51,7 +51,7 @@ If no document is left, write the report with `Documents scanned: 0` and stop.
 
 A cluster is a set of docs that talk about the same thing, plus the code they describe. Build it from structure, not from your own reading of the prose.
 
-1. **Doc edges.** For each doc, collect the repo paths it points at: markdown link targets (`[text](path)`) and backticked paths that exist on disk. Resolve relative links against the doc's directory.
+1. **Doc edges.** For each doc, collect the repo paths it points at: the target of every markdown link and every backticked path that exist on disk. Resolve relative links against the doc's directory.
 2. **Subject code.** A doc's subject code is every non-doc file it points at, plus, for a doc whose directory holds code (a module `README.md`), the code files in that directory.
 3. **Components.** Two docs join the same cluster when one links to the other, or when they share a subject code file. Take the connected components.
 4. **Leftovers.** A doc with no edges joins the cluster of the other docs in its top-level directory. Root-level loose docs form one cluster.
@@ -99,7 +99,12 @@ When there are two or more clusters and at least one hub, spawn **one more** com
 
 For each finding in every comparer's array:
 
-1. **Citation check (mechanical).** Each side's `path` must exist, `line` must be within the file, and the side's `quote` must appear on that line or within two lines of it. Fix an off-by-up-to-two line number to the line that holds the quote. Drop a finding whose quote is not there, and list it under "Dropped by citation check" with the reason. Do not re-judge the contradiction itself.
+1. **Citation check (mechanical).** For each side, run `rg -nF -- '<quote>' '<path>'` (escape any single quote in the quote). The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
+   - The cited `line` is among the hits: keep the finding as cited.
+   - The cited `line` is not a hit, but exactly one hit lies within two lines of it: replace `line` with that hit.
+   - Otherwise (no hit, the file is missing, or several nearby hits): drop the finding and list it under "Dropped by citation check" with the `rg` result.
+
+   Do not re-judge the contradiction itself.
 2. **Excluded paths.** Drop a finding that cites an excluded path, and count it in the header.
 3. **Dedupe.** Two findings that cite the same pair of locations (in either order) are one finding: keep the higher confidence and both explanations.
 
@@ -107,7 +112,7 @@ Keep the raw comparer arrays in your working context until the report is written
 
 ## Step 6: write the report
 
-Write `$REPO_ROOT/.doc-contradictions/report.md` (create the directory) and print the same content. Order findings high, then medium, then low confidence, and within a confidence doc-vs-code first.
+Write `$REPO_ROOT/.doc-contradictions/report.md` (create the directory) and print the same content. Order findings high, then medium, then low confidence, and within a confidence doc-vs-code first. Cite every path repo-relative; strip a `REPO_ROOT` prefix a comparer included.
 
 ```markdown
 # Documentation contradictions
@@ -142,7 +147,7 @@ Write `$REPO_ROOT/.doc-contradictions/report.md` (create the directory) and prin
 - Omit "Dropped by citation check" when nothing was dropped.
 - Every finding cites both sides as `path:line` with the quoted text. A finding with one side is not a contradiction; the citation check drops it.
 
-Close with one line to the user: the report path and the count by confidence.
+Close with one line to the user: the report path and the count by confidence. Add no observations of your own about the documents, not even as an aside marked as yours: a contradiction the comparers did not report is out of this skill's output by design, and an orchestrator remark is exactly the larger-model rescue the Haiku evals must not contain.
 
 ## What counts as a contradiction
 

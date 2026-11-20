@@ -4,7 +4,7 @@ Back to the [README](../README.md). The limits are constants in `src/limits.py`.
 
 ## Size
 
-The upload limit is ten megabytes (10 * 1024 * 1024 bytes).
+The upload limit is ten mebibytes (10 * 1024 * 1024 bytes).
 A bigger file gets HTTP 413.
 
 ## Time

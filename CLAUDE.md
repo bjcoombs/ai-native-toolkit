@@ -4,7 +4,7 @@ In-repo contract for agents editing `ai-native-toolkit`. Repo-specific rules onl
 
 ## Scope of this repo
 
-Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess`, `/huddle`, `/deslop`, `/ghsync`, `/skill-forge`, `/semantic-compress`), user-invoked framework skills (`/6hats`, `/understand`), opt-in personal workflow skills (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`, `/tm-marathon-config-example`), and team-orchestration library skills (`marathon`, `pr-review-merge`, `ab-equivalence`) composed by the other skills rather than invoked standalone. Every component is a skill under `skills/<name>/SKILL.md` or an agent under `agents/`; there is no `commands/` directory.
+Source for the `ai-native-toolkit` Claude Code plugin. Portable skills (`/assess`, `/huddle`, `/deslop`, `/ghsync`, `/skill-forge`, `/semantic-compress`, `/doc-contradictions`), user-invoked framework skills (`/6hats`, `/understand`), opt-in personal workflow skills (`/tm`, `/issues`, `/fix-pr`, `/fix-develop`, `/tm-marathon-config-example`), and team-orchestration library skills (`marathon`, `pr-review-merge`, `ab-equivalence`) composed by the other skills rather than invoked standalone. Every component is a skill under `skills/<name>/SKILL.md` or an agent under `agents/`; there is no `commands/` directory.
 
 The deliverable is markdown, plus a Python deterministic core under `skills/assess/scripts/` (with `lib/`) and a standalone-skill build under `scripts/`. No application runtime. The pytest suites, the ruff + mypy gates and the floor checks gate merge.
 
