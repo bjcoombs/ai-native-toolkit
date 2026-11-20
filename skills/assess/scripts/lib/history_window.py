@@ -14,11 +14,14 @@ from typing import Literal
 
 WindowUnit = Literal["d", "w", "mo", "y"]
 
+_COUNT = r"[1-9][0-9]*"
+_UNIT = r"(?:d|w|mo|y)"
+
 # The window grammar as a regex fragment (no anchors, no capture groups), for
 # callers that find a window inside a longer string.
-WINDOW_PATTERN = r"[1-9][0-9]*(?:d|w|mo|y)"
+WINDOW_PATTERN = _COUNT + _UNIT
 
-_WINDOW = re.compile(r"^([1-9][0-9]*)(d|w|mo|y)$")
+_WINDOW = re.compile(rf"^({_COUNT})({_UNIT})$")
 _UNITS: dict[str, WindowUnit] = {"d": "d", "w": "w", "mo": "mo", "y": "y"}
 
 
