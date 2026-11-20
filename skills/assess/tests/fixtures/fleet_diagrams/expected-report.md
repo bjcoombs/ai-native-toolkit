@@ -13,3 +13,9 @@ Which busy repositories are least mature?
 What breaks if a shared template changes, and who drifted off it?
 
 [![Shared tooling](./shared-tooling.svg)](./shared-tooling.svg)
+
+## Group trends
+
+Is each team improving?
+
+Not drawn: skipped: the run is not kept in the run history (--no-history or --full), so no earlier runs.

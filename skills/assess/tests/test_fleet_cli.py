@@ -204,6 +204,50 @@ def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, 
     assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
 
 
+def _seed_earlier(entry: Path, dates: tuple[str, ...]) -> None:
+    """Copy a history entry to earlier scan dates, as if the fleet ran on those days."""
+    for date in dates:
+        earlier = entry.parent / date
+        shutil.copytree(entry, earlier)
+        stamp = json.loads((earlier / "run.json").read_text(encoding="utf-8"))
+        (earlier / "run.json").write_text(json.dumps({**stamp, "scan_date": date}), encoding="utf-8")
+
+
+def test_trend_lines_need_three_dated_runs_in_the_history(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "troot"
+    make_repo(root, "grpa/svc1", files={"CLAUDE.md": "rules\n"})
+    make_repo(root, "grpb/lib1")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    args = [str(root), "--rubric", "levels.toml", "--history-dir", "hist"]
+    assert fleet_cli.main([*args, "--out", "o1"]) == 0
+    report = (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
+    assert "Not drawn: skipped: 1 comparable dated run(s), the trend needs at least 3" in report
+    assert "trend.svg skipped: 1 comparable" in capsys.readouterr().err
+    (today,) = (tmp_path / "hist" / "grpa+grpb").iterdir()
+    _seed_earlier(today, ("2000-01-01", "2000-02-01"))
+    assert fleet_cli.main([*args, "--out", "o2"]) == 0
+    assert fleet_cli.main([*args, "--out", "o3"]) == 0
+    trend = (tmp_path / "o2" / "trend.svg").read_bytes()
+    assert trend == (tmp_path / "o3" / "trend.svg").read_bytes()
+    assert b"3 dated runs, 2000-01-01 to " in trend
+    assert "[![Group trends](./trend.svg)](./trend.svg)" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+    assert fleet_cli.main([*args, "--out", "o2", "--no-history"]) == 0
+    assert not (tmp_path / "o2" / "trend.svg").exists()
+    assert "the run is not kept in the run history" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+
+
+def test_an_unreadable_history_is_no_trend_never_a_failure(tmp_path, monkeypatch, capsys):
+    from fleet_trends_fixture import CURRENT_GROUPS, CURRENT_STAMP
+
+    def boom(*_args: object) -> None:
+        raise PermissionError("denied")
+    monkeypatch.setattr(fleet_cli, "history_runs", boom)
+    assert fleet_cli._trend_history(tmp_path, tmp_path, CURRENT_STAMP, CURRENT_GROUPS, []) is None
+    assert "fleet: diagrams: run history not read (PermissionError)" in capsys.readouterr().err
+    assert fleet_cli._trend_history(None, None, CURRENT_STAMP, CURRENT_GROUPS, []) is None
+
+
 def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):
     def boom(*_args: object) -> None:
         raise OSError("disk full")
@@ -211,7 +255,7 @@ def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):
     fleet_cli._diagrams(tmp_path, False, None, [], "6mo")
     assert "fleet: diagrams: not written (OSError: disk full)" in capsys.readouterr().err
 
-    def bug(*_args: object) -> None:
+    def bug(*_args: object, **_kwargs: object) -> None:
         raise ValueError("render bug")
     monkeypatch.setattr(fleet_cli, "build_diagrams", bug)
     fleet_cli._diagrams(tmp_path, False, None, [], "6mo")
