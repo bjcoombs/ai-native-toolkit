@@ -194,6 +194,18 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_claims.failures.version` | dropped |
 | `instruction_claims.failures.reason` | dropped |
 
+## doc_claims
+
+| Field | Kept as |
+|---|---|
+| `doc_claims.excluded_trees` | path (hashed when hashing is on) |
+| `doc_claims.failures.kind` | token |
+| `doc_claims.failures.version` | dropped |
+| `doc_claims.failures.reason` | dropped |
+| `doc_claims.contradictions.kind` | token |
+| `doc_claims.contradictions.sites.value` | dropped |
+| `doc_claims.contradictions.conflict_pair.value` | dropped |
+
 ## doc_graph
 
 | Field | Kept as |

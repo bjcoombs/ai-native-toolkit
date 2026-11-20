@@ -1342,8 +1342,16 @@ failure returns None so the caller degrades exactly as before. `parse_remote` re
 https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
-`ghsync.sh`'s `--host` normalisation. Tests: `tests/test_review_reality_gitlab.py`
-(stubbed `glab`/`gh` as the whole `PATH`, offline).
+`ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
+protected-branch rule covering a branch (exact name first, else the first `*` wildcard
+rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
+rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
+list once per scan), or None only from a readable list shorter than
+`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
+branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
+first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
+`tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
@@ -1353,7 +1361,16 @@ live setting via `gh_cli`. Snapshots are ruleset exports - tracked JSON with a
 a file missing either is skipped, never reported - and classic branch-protection exports - tracked JSON under
 `.github/` with `required_status_checks`, `enforce_admins` or
 `required_pull_request_reviews` at the top level (branch from the export's `url`,
-else the file stem). The diff is snapshot-driven (keys only the API returns are
+else the file stem) - and, on GitLab, protected-branch exports: tracked JSON under
+`.gitlab/` with `push_access_levels` or `merge_access_levels` at the top level (branch
+from its `name`, a name or `*` wildcard, else the file stem), diffed against
+`gitlab_cli.branch_protection` with each access level compared on `access_level`,
+`user_id`, `group_id` and `deploy_key_id` only. A GitLab remote (`gitlab_cli.open_gitlab`) compares only
+GitLab snapshots and any other remote only GitHub ones; `snapshots` lists the compared
+kind, and a repo whose snapshots are all of the other provider's kind is `available:
+False` with reason `other_provider`, never clean. On GitLab a refused protected-branch
+read (403 or 404) or an incomplete list degrades the block; only a complete readable
+list without a covering rule is a `branch_protection` drift entry. The diff is snapshot-driven (keys only the API returns are
 not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
 shape into `X`. Lists are sets. Write-shape restriction lists (plain user, team
 and app names) compare against the read shape's objects projected onto
@@ -1377,7 +1394,8 @@ identities in `key`, and up to three added names per changed list; never a live
 object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
-in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
+alongside any change to discovery or the diff.
 
 **`review_reality.py`**
 Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
@@ -1415,9 +1433,11 @@ and `bot_review_share` are null (approvals are the only evidence read), and
 null. `review_required` reads the project's approval rules: a non-`report_approver`
 rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
 wildcard matching the default branch, is True; a rule scoped to all protected branches
-is unknown; a refused read is null. Any refused merge-request or approvals read (403
+covers it when `gitlab_cli.branch_protection` finds the default branch protected, does
+not when the complete list leaves it unprotected, and is null when that read (made at
+most once) is refused or incomplete; a refused read is null. Any refused merge-request or approvals read (403
 and 404 included) degrades the whole block. Tests: `tests/test_review_reality.py`,
-`tests/test_review_reality_gitlab.py`.
+`tests/test_review_reality_gitlab.py`, `tests/test_gitlab_protected_branches.py`.
 
 **`gate_cost.py`**
 Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
@@ -1577,7 +1597,38 @@ The core writes the result as the run-context block `instruction_claims`
 nothing matched; `{available: false, reason}` with no counts when the scan itself
 raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
-(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
+(which returns the extra failure fields). `tally_claims` and `has_ci_config` are
+public for `doc_claims`. Tests: `tests/test_instruction_claims.py`.
+
+**`doc_claims.py`**
+Runs the `instruction_claims` kinds over the doc set and adds one cross-document
+kind (issue #491), no model. `scan_doc_claims(repo_root, instruction_files,
+scope, excludes)` reads the tracked Markdown matching `DOC_CLAIM_GLOBS` (`docs/**/*.md`,
+`skills/*/references/**/*.md`, `skills/*/SKILL.md`) from the `--scope` directory
+(default the repo root), minus `HISTORICAL_DOC_TREES` (`docs/design`,
+`docs/superpowers` and the ADR and RFC trees, matched from that directory), the built-in
+excluded trees and the user's excludes, and verifies each document's claims with
+`instruction_claims.tally_claims`. The graded instruction files join the
+comparison but are not re-verified (a document that resolves to one, such as
+`docs/CLAUDE.md`, is left to `instruction_claims`). The cross-document kind,
+`contradiction`, groups `pin` and `count` claims by kind and path and reports a
+group when two different files (by resolved path) disagree: two pins disagree
+unless one version's dotted components prefix the other's, two counts unless
+they are within `count_within_tolerance`. One finding per group lists every
+site, so both conflicting lines are cited; a claim the repo cannot verify still
+takes part. A skill's `SKILL.md` and `references/` claims resolve against
+`skills/<name>/` (`rebase_skill_claims`; the repo root only when just that reading
+exists), before verification and grouping. Pins group by pinned file, so a pin finding whose every version
+the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+`CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
+`_VERIFIERS`. The core writes the run-context block `doc_claims`
+(`{files_scanned, excluded_trees, total, verified, failed, failures[...],
+contradictions_total, contradictions[{kind, path, sites[{file, line, value}],
+conflict_pair}]}` (`conflict_pair`: the first two sites from different files that
+disagree),
+lists capped at `MAX_FAILURES` and `MAX_CONTRADICTIONS`; `{available: false,
+reason}` when the scan raised). Rules that conflict in meaning stay out of the
+core. Tests: `tests/test_doc_claims.py`.
 
 **`claude_config.py`**
 Flags Claude Code configuration the runtime treats as legacy or silently ignores

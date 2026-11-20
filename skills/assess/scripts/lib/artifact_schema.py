@@ -65,13 +65,17 @@ constant each.
 # uncapped and sorted by path, read by the doc-complexity join (issue #556).
 # Additive; run-context.json is unchanged. STATS_SCHEMA_VERSION moves 5->6, so
 # the cross-run diff is disarmed once against a pre-#556 snapshot.
-# 1.9.0: each run-context.json doc_staleness.docs row gains subject_roots (the
+# 1.9.0: run-context.json gains doc_claims (issue #491): the instruction-claim
+# kinds verified across the doc set, and cross-document contradictions (two
+# files giving one checkable claim different values, every site cited).
+# Additive; complexity-stats.json is unchanged.
+# 1.10.0: each run-context.json doc_staleness.docs row gains subject_roots (the
 # ownership rule's roots), base_doc_dir (the directory the doc is the base doc
 # of, or null) and subject_paths (up to 20 sorted subject paths), from
 # lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.9.0"
+ARTIFACT_SCHEMA_VERSION = "1.10.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

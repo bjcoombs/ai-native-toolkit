@@ -92,6 +92,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/gitlab_cli.py` + the GitLab path of `lib/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
+| `test_gitlab_protected_branches.py` | `lib/gitlab_cli.branch_protection` + the GitLab paths of `lib/config_drift.py` and `lib/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - enforced coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
@@ -100,6 +101,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
 | `test_diff_reliability.py` | `lib/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
 | `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
+| `test_doc_claims.py` | `lib/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
 | `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
 | `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
 | `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |

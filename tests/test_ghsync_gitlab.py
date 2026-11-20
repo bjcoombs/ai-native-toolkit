@@ -203,6 +203,7 @@ class Env:
             "[user]\n\tname = Test\n\temail = test@example.com\n"
             "[init]\n\tdefaultBranch = main\n"
             "[commit]\n\tgpgsign = false\n"
+            "[uploadpack]\n\tallowFilter = true\n"
             f'[url "{base}"]\n'
             f"\tinsteadOf = https://{HOST}/\n"
             f"\tinsteadOf = https://{HOST}:8443/\n"
@@ -250,12 +251,18 @@ class Env:
         self.git("commit", "-q", "-m", "init", cwd=work)
         self.git("push", "-q", "origin", "main", cwd=work)
 
-    def advance(self, path: str) -> str:
+    def advance(self, path: str, date: str | None = None) -> str:
         work = self.tmp / "seed" / path
         with (work / "CHANGES").open("a") as fh:
             fh.write("more\n")
         self.git("add", "CHANGES", cwd=work)
-        self.git("commit", "-q", "-m", "advance", cwd=work)
+        dated = {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else {}
+        subprocess.run(
+            ["git", "commit", "-q", "-m", "advance"],
+            cwd=work,
+            check=True,
+            env={**self.env, **dated},
+        )
         self.git("push", "-q", "origin", "main", cwd=work)
         return self.git("rev-parse", "HEAD", cwd=work)
 
@@ -558,6 +565,61 @@ def test_without_quiet_clone_progress_lines_print(env: Env) -> None:
     assert "*** Cloned grp/alpha" in res.stdout
 
 
+# ---- analysis-only mirrors ----------------------------------------------------
+
+
+def _config(env: Env, cwd: Path, key: str) -> str | None:
+    res = subprocess.run(
+        ["git", "config", "--get", key],
+        cwd=cwd,
+        env=env.env,
+        capture_output=True,
+        text=True,
+    )
+    return res.stdout.strip() if res.returncode == 0 else None
+
+
+def _missing_objects(env: Env, cwd: Path) -> list[str]:
+    out = env.git("rev-list", "--objects", "--missing=print", "--all", cwd=cwd)
+    return [ln for ln in out.splitlines() if ln.startswith("?")]
+
+
+def test_partial_clone_keeps_history_without_historic_blobs(env: Env) -> None:
+    env.advance("grp/sub/beta")
+    env.advance("grp/sub/beta")
+    res = env.sync("--partial")
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "filtering not recognized" not in res.stdout + res.stderr
+    checkout = env.checkout("grp/sub/beta")
+    assert _config(env, checkout, "remote.origin.partialclonefilter") == "blob:none"
+    assert _missing_objects(env, checkout)
+    seed = env.tmp / "seed" / "grp/sub/beta"
+    log = ("log", "--name-only", "--format=%H %s")
+    assert env.git(*log, cwd=checkout) == env.git(*log, cwd=seed)
+
+
+def test_shallow_since_truncates_history(env: Env) -> None:
+    new = env.advance("grp/alpha", date="2099-01-01T00:00:00")
+    res = env.sync("--shallow-since=2098-01-01")
+    assert res.returncode == 0, res.stdout + res.stderr
+    checkout = env.checkout("grp/alpha")
+    assert env.git("rev-parse", "--is-shallow-repository", cwd=checkout) == "true"
+    assert env.git("rev-list", "HEAD", cwd=checkout).split() == [new]
+
+
+def test_clone_flags_never_convert_an_existing_full_clone(env: Env) -> None:
+    assert env.sync().returncode == 0
+    new = env.advance("grp/alpha", date="2099-01-01T00:00:00")
+    res = env.sync("--filter", "blob:none", "--shallow-since", "2098-01-01")
+    assert res.returncode == 0, res.stdout + res.stderr
+    checkout = env.checkout("grp/alpha")
+    assert env.head("grp/alpha") == new
+    assert env.git("rev-parse", "--is-shallow-repository", cwd=checkout) == "false"
+    assert _config(env, checkout, "remote.origin.partialclonefilter") is None
+    assert _config(env, checkout, "remote.origin.promisor") is None
+    assert _missing_objects(env, checkout) == []
+
+
 # ---- --from-list ------------------------------------------------------------
 
 
@@ -804,7 +866,16 @@ def test_help_documents_gitlab_flags(env: Env) -> None:
         timeout=60,
     )
     assert res.returncode == 0
-    for flag in ("--provider", "--host", "--group", "--from-list", "--porcelain"):
+    for flag in (
+        "--provider",
+        "--host",
+        "--group",
+        "--from-list",
+        "--porcelain",
+        "--partial",
+        "--filter",
+        "--shallow-since",
+    ):
         assert flag in res.stdout, flag
     # The whole header block prints, ending at its closing rule.
     assert res.stdout.rstrip().splitlines()[-1].startswith("# ====")
