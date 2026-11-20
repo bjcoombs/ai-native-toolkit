@@ -578,7 +578,9 @@ the network.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
-`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
+whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
+custom table, and the namespace `rubric_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
@@ -1055,8 +1057,24 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
-rerun. No default rubric ships here. Tests: `tests/test_rubric.py` with fixtures under
-`tests/fixtures/rubric/`.
+rerun. Tests: `tests/test_rubric.py` with fixtures under `tests/fixtures/rubric/`.
+
+**`rubric_signals.py`**
+The real `PathValidator` for `rubric.py`, and the default rubric. A `team` path's first
+segment must be a block name the published headless schema lists
+(`references/signals.schema.json`, `scans.propertyNames`, generated from
+`signals.known_scans`), so one rubric reads a headless document's `scans` or a full
+`run-context.json`; run-context keys outside the schema (`instructions_grade`) are
+rejected. Where `counts_only_schema.ROOTS` types the block, every further segment must
+name a field and end on a scalar (no list, no object); an untyped block is open. An
+`org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
+`<setting>.value` / `.reason`). `load_default_rubric` loads
+`skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
+signal (0, 1, 5, 6, 7, 8), level 1 for Partial and 2 for Present. It can disagree with
+the `/assess` layer verdicts (the file header lists where); no instruction file reads
+level 0 through a never-null byte count, not `unknown`. Tests:
+`tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
+and the golden `run-context.json`.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
