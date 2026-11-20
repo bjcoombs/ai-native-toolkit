@@ -487,7 +487,7 @@ gitlab_settings_groups() {
     local raw
     raw=$(gitlab_api_all "groups?min_access_level=10&per_page=100" 2>/dev/null) || return 0
     jq -rs 'if all(.[]; type=="array") then [.[][] | .full_path // empty] else [] end
-            | . as $all | .[] | select(. as $p | any($all[]; . != $p and ($p | startswith(. + "/"))) | not)' \
+            | . as $all | .[] | select(. as $p | any($all[]; . as $q | $q != $p and ($p | startswith($q + "/"))) | not)' \
         <<< "$raw" 2>/dev/null | sort -u
 }
 

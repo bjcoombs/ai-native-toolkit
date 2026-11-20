@@ -766,3 +766,16 @@ def test_render_dir_replays_settings_from_their_subdirectory(tmp_path: Path) -> 
     assert "1 project(s)" in res.stdout
     assert "1 group(s): 0 setting(s) off, 4 unknown" in res.stdout
     assert _settings(res.stdout, "grp")["two_factor"] == "unknown (denied: no access or tier (HTTP 403))"
+
+
+def test_settings_cover_only_top_level_member_groups(tmp_path: Path) -> None:
+    """Membership in a group and its subgroup yields one settings entry, for
+    the top-level group: the subgroup is not reported separately."""
+    env = Env(tmp_path, {"groups": [[_group("grp"), _group("grp/sub")]]})
+    res = env.run("--host", HOST, "--no-file")
+    assert res.returncode == 0, res.stderr
+    section = res.stdout.split("Group settings")[1]
+    assert "1 group(s):" in section
+    assert "- grp\n" in section
+    assert "- grp/sub" not in section
+    assert not any("groups/grp%2Fsub/push_rule" in c for c in env.api_calls())
