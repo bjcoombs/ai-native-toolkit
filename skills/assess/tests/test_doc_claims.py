@@ -181,6 +181,18 @@ def test_a_pin_the_file_does_not_hold_still_contradicts(tmp_path: Path) -> None:
     assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
 
 
+@pytest.mark.parametrize(("pin_file", "content", "a", "b"), [
+    (".python-version", "11.2.0\n", "Python 1.2", "Python 11.2.0"),
+    (".tool-versions", "nodejs 20.11.0\n", "Node 20.1", "Node 20.11.0"),
+])
+def test_a_version_inside_a_longer_one_does_not_reconcile(
+        tmp_path: Path, pin_file: str, content: str, a: str, b: str) -> None:
+    _write(tmp_path, pin_file, content)
+    _write(tmp_path, "docs/a.md", f"{a} is pinned in `{pin_file}`.\n")
+    _write(tmp_path, "docs/b.md", f"{b} is pinned in `{pin_file}`.\n")
+    assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
+
+
 def test_different_paths_and_enforcement_claims_never_contradict(tmp_path: Path) -> None:
     _write(tmp_path, "docs/a.md", "Python 3.11 is pinned in `.python-version`.\n"
                                   "`scripts/x.sh` is enforced in CI.\n")

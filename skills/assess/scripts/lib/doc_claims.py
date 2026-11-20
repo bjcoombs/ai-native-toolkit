@@ -38,13 +38,13 @@ checkable claims and stay out of this deterministic core.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import is_excluded_path, is_repo_file
-from lib.evidence_check import is_referenced_in
 from lib.git_churn import tracked_files
 from lib.instruction_claims import (
     Claim,
@@ -211,8 +211,21 @@ def _reconciled(root: Path, contradiction: DocContradiction) -> bool:
     """
     if contradiction["kind"] != "pin":
         return False
-    return all(is_referenced_in(root, str(site["value"]), contradiction["path"])
-               for site in contradiction["sites"])
+    pinned = root / contradiction["path"]
+    try:
+        if not pinned.resolve().is_relative_to(root.resolve()):
+            return False
+        text = pinned.read_text(encoding="utf-8")
+    except (OSError, RuntimeError, UnicodeDecodeError):
+        return False
+    return all(_holds_version(text, str(site["value"])) for site in contradiction["sites"])
+
+
+def _holds_version(text: str, version: str) -> bool:
+    """True when ``version`` occurs as a whole version or its leading components:
+    ``3.11`` is held by ``3.11.9``, but ``1.2`` is not held by ``11.2.0`` and
+    ``20.1`` is not held by ``20.11.0``."""
+    return re.search(rf"(?<![\d.]){re.escape(version)}(?!\d)", text) is not None
 
 
 def scan_doc_claims(
