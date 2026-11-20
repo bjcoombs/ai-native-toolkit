@@ -1,7 +1,7 @@
-<!-- assess:run_id=20261011125246-0d249381 artifact_schema_version=1.4.0 -->
+<!-- assess:run_id=20261120124339-d8481c65 artifact_schema_version=1.14.0 -->
 # Hotspot: `skills/assess/scripts/lib/doc_graph.py`
 
-_First flagged: 2026-05-31. Last seen: 2026-10-11. Status: persistent._
+_First flagged: 2026-05-31. Last seen: 2026-11-20. Status: persistent._
 
 ## Current metrics
 
@@ -10,7 +10,7 @@ _First flagged: 2026-05-31. Last seen: 2026-10-11. Status: persistent._
 | LOC | 705 |
 | Cyclomatic complexity (file aggregate) | 209 |
 | Worst function | `_derive_signals` (15) |
-| Commits in churn window | 23 |
+| Commits in churn window | 24 |
 | Has test file | yes |
 
 ## History across runs
@@ -26,14 +26,14 @@ _First flagged: 2026-05-31. Last seen: 2026-10-11. Status: persistent._
 | 2026-10-08 | de900b5c | 705 | 209 | 23 | persistent |
 | 2026-10-08 | 32cb78d4 | 705 | 209 | 23 | persistent |
 | 2026-10-11 | 0d249381 | 705 | 209 | 23 | persistent |
+| 2026-11-20 | d8481c65 | 705 | 209 | 24 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/doc_graph.py`:
 
-Hotspot (persistent). 705 LOC, aggregate cyclomatic complexity 209 (worst function `_derive_signals` 15), 23 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 705 LOC, aggregate cyclomatic complexity 209 (worst function `_derive_signals` 15), 24 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 
-- Pin the survivor clusters in _derive_signals and build_doc_graph (305 of 1,315 mutants survive)
-
+This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.

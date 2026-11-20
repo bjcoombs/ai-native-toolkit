@@ -172,3 +172,16 @@
 
 ---
 <!-- chain:08dc3a03e8e5e473 -->
+<!-- assess:run_id=20261120124339-d8481c65 artifact_schema_version=1.14.0 -->
+## 2026-11-20 (v1.225.0, run d8481c65)
+
+- **Files scored:** 326
+- **AI Readiness:** 7.5 / 8 (AI-Native)
+- **Instructions grade:** A
+- **Hotspot transitions:** 4 graduated, 1 regressed, 0 restructured, 4 new, 5 persistent
+- **Top action:** Extract the per-file branches of cmd_markers in scripts/floor_check.py (fn ccn 22) into named helpers in the same file, behind characterization tests
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:0ef38a53a6937073 -->
