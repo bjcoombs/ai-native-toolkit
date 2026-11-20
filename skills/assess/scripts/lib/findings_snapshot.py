@@ -29,15 +29,18 @@ from lib.run_context_types import FindingPaths, FindingsSnapshot, MethodChange, 
 FINDINGS_SNAPSHOT_FILE = "findings.json"
 
 # Printed by the gate on a method-version mismatch. ``{snapshot}`` is the
-# snapshot's repo-relative path. The headless form runs the same two steps, in
-# the same order, as the gate action's render step (action.yml): the treemap
-# refreshes complexity-stats.json, then the core computes the findings from it.
+# snapshot's repo-relative path, ``{artifact_dir}`` the run's artifact directory
+# (``.assess`` or ``.assess/<scope-slug>``) and ``{scope_args}`` the
+# ``--scope <path>`` a scoped run passes to both steps (empty for a whole-repo
+# run). The headless form runs the same two steps, in the same order, as the
+# gate action's render step (action.yml): the treemap refreshes
+# complexity-stats.json, then the core computes the findings from it.
 REFREEZE_COMMAND = (
-    "re-run /assess, or headless from the assess skill directory: "
-    "`uv run scripts/complexity-treemap.py <repo_root> "
-    "-o <repo_root>/.assess/complexity-heatmap.svg "
-    "--stats <repo_root>/.assess/complexity-stats.json && "
-    "uv run scripts/assess_core.py <repo_root>`; then commit {snapshot}"
+    "re-run /assess{scope_arg}, or headless from the assess skill directory: "
+    "`uv run scripts/complexity-treemap.py <repo_root>{scope_args} "
+    "-o <repo_root>/{artifact_dir}/complexity-heatmap.svg "
+    "--stats <repo_root>/{artifact_dir}/complexity-stats.json && "
+    "uv run scripts/assess_core.py <repo_root>{scope_args}`; then commit {snapshot}"
 )
 
 # Printed instead when this run's method version is older than the snapshot's:
@@ -131,12 +134,18 @@ def method_change(ctx: dict[str, Any]) -> MethodChange | None:
         appeared.extend({"finding": name, "path": p} for p in sorted(new - old))
         cleared.extend({"finding": name, "path": p} for p in sorted(old - new))
     slug = ctx.get("scope_slug")
-    snapshot = f".assess/{slug}/{FINDINGS_SNAPSHOT_FILE}" if slug else (
-        f".assess/{FINDINGS_SNAPSHOT_FILE}")
+    scope = ctx.get("scope")
+    artifact_dir = f".assess/{slug}" if slug else ".assess"
+    snapshot = f"{artifact_dir}/{FINDINGS_SNAPSHOT_FILE}"
+    scoped = bool(slug) and isinstance(scope, str) and bool(scope)
     downgrade = prior_version > current_version
     refreeze = (
         RAISE_PIN_COMMAND.format(prior=prior_version, snapshot=snapshot)
-        if downgrade else REFREEZE_COMMAND.format(snapshot=snapshot)
+        if downgrade else REFREEZE_COMMAND.format(
+            snapshot=snapshot, artifact_dir=artifact_dir,
+            scope_arg=f" {scope}" if scoped else "",
+            scope_args=f" --scope {scope}" if scoped else "",
+        )
     )
     return {
         "prior_method_version": prior_version,

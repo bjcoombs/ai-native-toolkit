@@ -18,11 +18,12 @@ from lib.findings_snapshot import (
 
 
 def _ctx(prior: dict | None, current: list[dict], version: int = 2,
-         scope_slug: str | None = None) -> dict:
+         scope_slug: str | None = None, scope: str | None = None) -> dict:
     return {
         "assess_method_version": version,
         "prior_findings_snapshot": prior,
         "derived_findings": current,
+        "scope": scope,
         "scope_slug": scope_slug,
     }
 
@@ -119,14 +120,30 @@ def test_older_method_than_snapshot_points_at_the_pin_not_a_refreeze() -> None:
     assert "from version 3 to 2" in out
     assert "older than the one that wrote the snapshot" in out
     assert "cleared (1):\n      lying_map: a.py" in out
-    assert "Re-freeze: raise the toolkit version" in out
+    assert "Raise pin: raise the toolkit version" in out
+    assert "Re-freeze:" not in out
 
 
 def test_method_change_names_the_scoped_snapshot() -> None:
     prior = {"assess_method_version": 1, "findings": []}
-    change = method_change(_ctx(prior, [], scope_slug="services-api"))
+    change = method_change(_ctx(prior, [], scope_slug="services-api",
+                                scope="services/api"))
     assert change is not None
     assert change["snapshot"] == ".assess/services-api/findings.json"
+    # The re-freeze command scopes both steps and writes into the slug directory.
+    refreeze = change["refreeze"]
+    assert "re-run /assess services/api" in refreeze
+    assert refreeze.count("--scope services/api") == 2
+    assert "--stats <repo_root>/.assess/services-api/complexity-stats.json" in refreeze
+    assert "commit .assess/services-api/findings.json" in refreeze
+
+
+def test_unscoped_refreeze_has_no_scope_flag() -> None:
+    prior = {"assess_method_version": 1, "findings": []}
+    change = method_change(_ctx(prior, []))
+    assert change is not None
+    assert "--scope" not in change["refreeze"]
+    assert "--stats <repo_root>/.assess/complexity-stats.json" in change["refreeze"]
 
 
 # --- gate rendering --------------------------------------------------------------

@@ -308,7 +308,8 @@ def _format_method_change(change: MethodChange | None) -> list[str]:
         lines.extend(f"      {m['finding']}: {m['path']}" for m in shown)
         if len(moves) > len(shown):
             lines.append(f"      +{len(moves) - len(shown)} more")
-    lines.append(f"    Re-freeze: {change['refreeze']}")
+    label = "Raise pin" if change["downgrade"] else "Re-freeze"
+    lines.append(f"    {label}: {change['refreeze']}")
     return lines
 
 
