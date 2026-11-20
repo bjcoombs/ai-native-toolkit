@@ -20,6 +20,7 @@ from typing import Any
 
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION, ASSESS_METHOD_VERSION
 from lib.assess_config import load_excludes
+from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.change_coupling import RenameMap, build_rename_map
 from lib.context_blocks import generated_exclusion
 from lib.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
@@ -152,6 +153,12 @@ def history_window(current: dict[str, Any]) -> str | None:
 def config_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     """``.assess/config.toml`` excludes, read by every scan."""
     return load_excludes(repo_root)
+
+
+def fleet_config(repo_root: Path) -> FleetConfig:
+    """The ``[ai_usage]``, ``[review]`` and ``[platform]`` sections of ``.assess/config.toml``
+    (no fleet file in an interactive run; ``lib/fleet_config.py``). Never raises on repo input."""
+    return repo_fleet_config(repo_root)
 
 
 def first_flagged(assess_dir: Path, rename_map: RenameMap) -> dict[str, str]:

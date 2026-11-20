@@ -85,6 +85,7 @@
           "ancestor_instruction_files",
           "archetype",
           "behaviour",
+          "ci_checks",
           "claude_config",
           "config_drift",
           "coverage_gate",

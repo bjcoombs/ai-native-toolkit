@@ -125,7 +125,8 @@ def _git(repo_root: Path, *args: str) -> str:
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), *args],
-            capture_output=True, text=True, check=True, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", check=True, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except FileNotFoundError as e:
         raise _GitUnavailable(REASON_NO_GIT) from e

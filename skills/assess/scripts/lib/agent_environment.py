@@ -68,8 +68,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, NotRequired, TypedDict
 
 from lib.assess_config import is_user_excluded
+from lib.check_command import is_check_command, is_check_name
 from lib.command_index import RepoIndex, build_index
-from lib.command_resolver import RUNNERS, command_words, extract_commands, resolve
+from lib.command_resolver import extract_commands, resolve
 from lib.doc_graph import is_excluded_path
 from lib.gh_cli import GhUnavailable, gh_json, open_github
 
@@ -91,21 +92,6 @@ COPILOT_ALLOWED_KEYS = frozenset({
 COPILOT_MAX_TIMEOUT = 59
 SETUP_SCRIPTS = ("script/setup", "script/bootstrap", "bin/setup", "init.sh")
 SETUP_TARGETS = frozenset({"setup", "bootstrap"})
-CHECK_WORDS = frozenset({
-    "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
-})
-_ALWAYS_CHECK = frozenset({"pytest", "py.test", "tox", "nox"})
-_PM_TEST = frozenset({"test", "t", "tst"})
-_PM_INSTALL = frozenset({
-    "install", "i", "add", "remove", "rm", "update", "up", "upgrade", "dlx", "exec",
-    "create", "init", "link", "publish", "setup", "x",
-})
-_JS_TEST_RUNNERS = frozenset({"jest", "vitest", "mocha", "ava", "jasmine", "cypress"})
-_VALUED_FLAGS = frozenset({
-    "-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd", "--prefix", "--project",
-    "--with", "--extra", "--group", "--only-group", "--python", "-p", "--package", "--from",
-    "--filter", "-F", "--workspace", "-w", "-e", "-s", "--manifest-path",
-})
 # Instruction files a coding agent loads at session start. A bot prompt
 # (`.github/claude-review-instructions.md`) or `docs/CLAUDE.md` is graded, but
 # naming a check there does not put it in front of the agent doing the work.
@@ -411,89 +397,6 @@ def _setup(index: RepoIndex, harness: Any) -> tuple[list[SetupSource], list[EnvF
 # --- check entry points --------------------------------------------------------
 
 
-def _is_check_name(name: str) -> bool:
-    return any(part in CHECK_WORDS for part in re.split(r"[:_./-]", name.lower()))
-
-
-def _positionals(args: list[str]) -> list[str]:
-    """Non-flag words, with the value of a known valued flag (``--with pytest``) dropped."""
-    out: list[str] = []
-    skip = False
-    for word in args:
-        if skip:
-            skip = False
-        elif word.startswith("-"):
-            skip = word in _VALUED_FLAGS
-        else:
-            out.append(word)
-    return out
-
-
-def _drop_leading_flags(args: list[str]) -> list[str]:
-    """``args`` from the first positional on: the program ``uv run --with x`` runs."""
-    i = 0
-    while i < len(args) and args[i].startswith("-"):
-        i += 2 if args[i] in _VALUED_FLAGS else 1
-    return args[i:]
-
-
-def _js_check(head: str, pos: list[str]) -> bool:
-    """A package-manager or ``npx`` / ``bunx`` command that runs a check."""
-    if not pos:
-        return False
-    if head in ("npx", "bunx"):
-        if pos[0] == "playwright":
-            return pos[1:2] == ["test"]
-        return pos[0] in _JS_TEST_RUNNERS or _is_check_name(pos[0])
-    if pos[0] in ("run", "run-script"):
-        return len(pos) > 1 and _is_check_name(pos[1])
-    # npm runs only its test aliases without `run`; `npm ci` installs.
-    # `bun ci` is a frozen install; in pnpm and yarn `ci` is a script name.
-    if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
-        return pos[0] in _PM_TEST
-    # pnpm, yarn and bun run a package script named as the subcommand.
-    return pos[0] in _PM_TEST or _is_check_name(pos[0])
-
-
-def _check_target(words: list[str]) -> bool:
-    """Whether the program, subcommand or target a command runs is a check."""
-    head, pos = words[0], _positionals(words[1:])
-    if head in _ALWAYS_CHECK:
-        return True
-    if head in ("uv", "poetry", "uvx"):
-        rest = words[1:]
-        if head != "uvx":
-            if not pos or pos[0] != "run":
-                return False  # sync, install, add: setup, not a check
-            rest = rest[rest.index("run") + 1:]
-        program = _drop_leading_flags(rest)
-        return bool(program) and _check_target(program)
-    if head in ("npx", "bunx", "npm", "pnpm", "yarn", "bun"):
-        return _js_check(head, pos)
-    if head in ("python", "python3"):
-        if "-m" in words:
-            module = words[words.index("-m") + 1:words.index("-m") + 2]
-            return bool(module) and module[0] in _ALWAYS_CHECK
-        return bool(pos) and _is_check_name(PurePosixPath(pos[0]).name)
-    if head in ("bash", "sh", "zsh", "source"):
-        return bool(pos) and _is_check_name(PurePosixPath(pos[0]).name)
-    if head.startswith("./") and head not in RUNNERS:
-        return _is_check_name(PurePosixPath(head).name)
-    # make, just, go, cargo, mvn, gradle: the first target or goal names the work.
-    return bool(pos) and _is_check_name(pos[0])
-
-
-def is_check_command(text: str) -> bool:
-    """A command an agent runs to check its work: a check target of a modelled runner or script."""
-    words = command_words(text)
-    if not words:
-        return False
-    head = words[0]
-    if head not in RUNNERS and not head.startswith("./"):
-        return False
-    return _check_target(words)
-
-
 def _entry_points(index: RepoIndex) -> list[CheckEntry]:
     out: list[CheckEntry] = []
     families = ((index.npm_scripts, "npm run", "package.json"),
@@ -502,7 +405,7 @@ def _entry_points(index: RepoIndex) -> list[CheckEntry]:
                 (index.tox_envs, "tox -e", "tox"),
                 (index.nox_sessions, "nox -s", "noxfile.py"))
     for family, runner, source in families:
-        for name in sorted(n for n in (family.names if family else frozenset()) if _is_check_name(n)):
+        for name in sorted(n for n in (family.names if family else frozenset()) if is_check_name(n)):
             out.append({"command": f"{runner} {name}", "source": source})
     if index.tox_envs is not None:
         out.append({"command": "tox", "source": "tox"})

@@ -187,7 +187,7 @@ def _git(checkout: Path, *args: str) -> str | None:
     try:
         return subprocess.run(
             ["git", "-C", str(checkout), "-c", "core.quotepath=off", *args],
-            capture_output=True, text=True, check=True, errors="replace",
+            capture_output=True, text=True, encoding="utf-8", check=True, errors="replace",
             timeout=GIT_TIMEOUT_SECONDS,
         ).stdout
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):

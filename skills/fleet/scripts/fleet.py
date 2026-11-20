@@ -27,6 +27,12 @@ over the run history, ``lib/fleet_trends.py``), ``slope.svg`` (from the ``--comp
 result) and ``layer-bars.svg``, or the reason each was skipped;
 ``--no-diagrams`` turns them off.
 
+``--fleet-config FILE`` (``lib/fleet_config.py``, #706) is validated before any scan
+and every repository scan gets the same copy of it; a repository's own
+``.assess/config.toml`` sections extend it for that repository. ``run.json``
+records its canonical sha256 and per-section entry counts, never a value, and
+runs with different configs do not compare.
+
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
 (``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
@@ -43,13 +49,14 @@ Exit codes:
        --levels or --settings (a settings directory with no fragment files included),
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
-       location, or an unreadable --compare run
+       location, an unreadable --compare run, or an unreadable or invalid
+       --fleet-config (the message names the key)
 
 Run:
     uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history] [--no-diagrams] [--name-agent-clusters]
+        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -71,6 +78,7 @@ import argparse
 import os
 import sys
 import tempfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -117,6 +125,7 @@ from lib.fleet_diagrams import (  # noqa: E402
     clear_diagrams,
     write_diagrams,
 )
+from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.fleet_history import (  # noqa: E402
     HistoryError,
@@ -134,6 +143,7 @@ from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_sta
 from lib.levels import add_renamed_flag, LevelsError, load_levels, MaturityModel  # noqa: E402
 from lib.level_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
+from lib.tool_lookup import warn_missing_packages  # noqa: E402
 from lib.signals import (  # noqa: E402
     DEFAULT_WINDOW,
     TOOLKIT_ROOT,
@@ -180,6 +190,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Group settings from ghreport (#565): a JSON fragment file, a JSON array of "
              "fragments, or a directory of fragment files (a ghreport --render-dir works: its "
              "settings/ subdirectory is read). Joined to each group by scope, nearest ancestor first.",
+    )
+    parser.add_argument(
+        "--fleet-config", metavar="FILE",
+        help="Fleet settings (TOML): the [ai_usage], [review] and [platform] sections, validated "
+             "before any scan and passed to every repository scan. A repository's own "
+             ".assess/config.toml sections extend it. run.json records its sha256.",
     )
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1,
                         help="Repositories scanned in parallel (default: CPU count).")
@@ -377,12 +393,29 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
     print(f"fleet: diagrams -> {out_dir / REPORT_FILE}", file=sys.stderr)
 
 
+def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: CloneDeleter | None,
+              fleet_config_text: str | None) -> list[FleetRow]:
+    """Every scan. With ``--fleet-config``, each reads one private copy of the text validated
+    before any scan, by absolute path, so an edit mid-run cannot reach some scans only."""
+    if fleet_config_text is None:
+        return run_fleet(targets, options, jobs, after=deleter)
+    with tempfile.TemporaryDirectory(prefix="fleet-config-") as tmp:
+        copy = Path(tmp).resolve() / "fleet-config.toml"
+        copy.write_text(fleet_config_text, encoding="utf-8")
+        return run_fleet(targets, replace(options, fleet_config=copy), jobs, after=deleter)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     maturity_model: MaturityModel | None = None
     scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
+    fleet_config: FleetConfig | None = None
+    fleet_config_text: str | None = None
     try:
+        if args.fleet_config is not None:
+            fleet_config_text = read_fleet_config(Path(args.fleet_config))
+            fleet_config = parse_fleet_config(fleet_config_text)
         if args.levels is not None:
             maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
@@ -392,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.window is not None:
             parse_window(args.window)
         targets = _targets(args)
+    except FleetConfigError as e:
+        print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
+        return 2
     except (LevelsError, SettingsError, UnknownScanError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -412,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
         "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
+        "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
     }
     keeps_history = not args.no_history and not args.full
     try:
@@ -457,7 +494,9 @@ def main(argv: list[str] | None = None) -> int:
     for message in freshness.errors:
         print(f"fleet: describes: {message}", file=sys.stderr)
     freshness_path = write_freshness(out_dir, freshness.rows)
-    rows = run_fleet(targets, options, args.jobs, after=deleter)
+    # Each scan runs with this interpreter: one hint here, not one per repository.
+    warn_missing_packages()
+    rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text)
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
@@ -467,6 +506,7 @@ def main(argv: list[str] | None = None) -> int:
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
+        fleet_config=fleet_config,
     )
     write_stamp(out_dir, stamp)
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)

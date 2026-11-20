@@ -27,9 +27,8 @@ def resolve_scope(
         raise ValueError(f"scope path does not exist: {scope_abs}")
     if not scope_abs.is_relative_to(repo_root):
         raise ValueError(f"scope path is not under repo root {repo_root}: {scope_abs}")
-    rel = scope_abs.relative_to(repo_root)
-    slug = str(rel).replace("/", "-").replace("\\", "-")
-    return scope_abs, str(rel), slug
+    rel = scope_abs.relative_to(repo_root).as_posix()
+    return scope_abs, rel, rel.replace("/", "-")
 
 
 def assess_dir_for(repo_root: Path, scope_slug: str) -> Path:

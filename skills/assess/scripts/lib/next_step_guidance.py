@@ -284,6 +284,11 @@ _WORDING: dict[str, Wording] = {
         "`git ls-files` lists a `CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`."),
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
+    "ci_checks.test_or_lint_runs": _flag(
+        "Run the test suite or linter in CI: a GitHub Actions workflow or `.gitlab-ci.yml` job "
+        "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
+        "lint command."),
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,
@@ -345,6 +350,10 @@ _MEASURE_HINTS = {
                      "scan leaves it unavailable.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
                       "calls, so this is not measured there.",
+    "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
+                 "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
+                 "`include:` or component, a reusable workflow from another repository): the "
+                 "check may live in the included file, which the scan does not read.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
 }

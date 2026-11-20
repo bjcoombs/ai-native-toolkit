@@ -692,7 +692,7 @@ def build_doc_graph(
         )
 
     def rel(p: Path) -> str:
-        return str(p.relative_to(repo_root))
+        return p.relative_to(repo_root).as_posix()
 
     texts: dict[Path, str] = {}
     discovered = list(docs)  # the walked set; `docs` grows with cited .claude docs
