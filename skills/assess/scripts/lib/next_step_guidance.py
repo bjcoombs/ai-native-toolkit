@@ -75,6 +75,11 @@ def _at_least(op: str, value: Operand) -> int | float | None:
     return number if number is not None and op in ("gte", "gt") else None
 
 
+def _share(op: str, bound: int | float) -> str:
+    """``gte N`` as "at least N%", strict ``gt N`` as "more than N%"."""
+    return f"{'more than' if op == 'gt' else 'at least'} {_percent(bound)}"
+
+
 def _flag(change: str, done_when: str) -> Wording:
     def wording(op: str, value: Operand) -> Guidance | None:
         return {"change": change, "done_when": done_when} if _is_true(op, value) else None
@@ -168,7 +173,7 @@ def _reviewed(op: str, value: Operand) -> Guidance | None:
     bound = _at_least(op, value)
     if bound is None:
         return None
-    share = "some" if op == "gt" and bound == 0 else f"at least {_percent(bound)} of the"
+    share = "some" if op == "gt" and bound == 0 else f"{_share(op, bound)} of the"
     return {"change": f"Have {share} merged pull requests reviewed by someone other than the "
                       "author before merge.",
             "done_when": "Branch protection or a ruleset on the default branch requires a pull "
@@ -180,7 +185,7 @@ def _approved(op: str, value: Operand) -> Guidance | None:
     bound = _at_least(op, value)
     if bound is None:
         return None
-    return {"change": f"Require an approving review before merge (at least {_percent(bound)} of "
+    return {"change": f"Require an approving review before merge ({_share(op, bound)} of "
                       "merged pull requests approved by someone other than the author).",
             "done_when": "Branch protection or a ruleset on the default branch requires at least "
                          "one approving review."}
@@ -206,6 +211,9 @@ def _setting(name: str) -> Wording:
 
 _WORDING: dict[str, Wording] = {
     "nested_instructions.budget.claude_code.bytes": _instructions_present,
+    "layer_grades.instruction_file_present": _flag(
+        "Commit an agent instruction file (`CLAUDE.md` or `AGENTS.md` at the repository root).",
+        "`git ls-files` lists a `CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`."),
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
     "instruction_claims.failed": _claims_hold,

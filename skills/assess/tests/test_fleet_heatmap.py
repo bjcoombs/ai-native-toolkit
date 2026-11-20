@@ -318,6 +318,26 @@ def test_check_rubric_refuses_another_rubric(tmp_path):
         fv.check_rubric(dict(rubric, rows=rubric["rows"][:1]), _groups())  # type: ignore[arg-type]
 
 
+def test_check_rubric_names_a_run_without_a_rubric():
+    rubric = load_rubric(FIXTURES / "rubric.toml")
+    bare = [dict(g, rubric_version=None, rubric=[]) for g in _groups()]
+    with pytest.raises(fv.FleetViewError) as exc:
+        fv.check_rubric(rubric, bare)  # type: ignore[arg-type]
+    assert "without --rubric" in str(exc.value)
+    assert "None" not in str(exc.value)
+
+
+def test_comparison_against_a_run_without_a_rubric_says_so():
+    bare = [dict(g, rubric_version=None, rubric=[]) for g in _groups()]
+    then_bare = fv.compare_levels(_groups(), bare)  # type: ignore[arg-type]
+    assert not then_bare["comparable"]
+    assert then_bare["note"] == ("change not shown: the earlier run had no rubric, "
+                                 "this run used rubric fixture-1")
+    now_bare = fv.compare_levels(bare, _groups())  # type: ignore[arg-type]
+    assert now_bare["note"] == ("change not shown: the earlier run used rubric fixture-1, "
+                                "this run had no rubric")
+
+
 def test_compare_levels_kinds():
     now = _groups()
     then = fv.load_groups(FIXTURES / "earlier")

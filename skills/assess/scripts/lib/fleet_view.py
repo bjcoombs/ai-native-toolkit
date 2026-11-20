@@ -160,6 +160,10 @@ def run_rubric_version(groups: Sequence[GroupRow]) -> str | None:
 def check_rubric(rubric: Rubric, groups: Sequence[GroupRow]) -> None:
     """Refuse a rubric file that is not the one the run evaluated."""
     version = run_rubric_version(groups)
+    if version is None:
+        raise FleetViewError(f"the run has no rubric levels (fleet.py ran without --rubric), so "
+                             f"rubric file version {rubric['version']!r} cannot apply: rerun fleet.py "
+                             "with --rubric")
     if rubric["version"] != version:
         raise FleetViewError(f"rubric file is version {rubric['version']!r}, the run used {version!r}")
     if [row["id"] for row in rubric["rows"]] != rubric_columns(groups):
@@ -186,14 +190,22 @@ def _change(now: RubricRowLevel, then: RubricRowLevel | None) -> Change:
     return {"kind": "was", "then": then_level, "delta": None}
 
 
+def _incomparable_note(then_version: str | None, now_version: str | None) -> str:
+    """Why two runs' levels are not compared; a run without --rubric is named as having none."""
+    if then_version is None:
+        return f"change not shown: the earlier run had no rubric, this run used rubric {now_version}"
+    if now_version is None:
+        return f"change not shown: the earlier run used rubric {then_version}, this run had no rubric"
+    return f"change not shown: the earlier run used rubric {then_version}, this run {now_version}"
+
+
 def compare_levels(now: Sequence[GroupRow], then: Sequence[GroupRow]) -> Comparison:
     """Each current cell against the earlier run; not comparable across rubric versions."""
     removed = sorted({g["group"] for g in then} - {g["group"] for g in now})
     now_version, then_version = run_rubric_version(now), run_rubric_version(then)
     if then and now_version != then_version:
         return {"comparable": False, "removed_groups": removed, "changes": {},
-                "note": f"change not shown: the earlier run used rubric {then_version}, "
-                        f"this run {now_version}"}
+                "note": _incomparable_note(then_version, now_version)}
     earlier = {g["group"]: {e["id"]: e for e in g["rubric"]} for g in then}
     changes: dict[str, dict[str, Change]] = {}
     for group in now:

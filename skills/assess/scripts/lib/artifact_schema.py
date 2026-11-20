@@ -92,7 +92,11 @@ constant each.
 # instruction_placement record always_on_words). bloat_penalty is now their
 # penalties' sum and size_grade_capped reads always-on lines. Additive: no key
 # moves or changes type, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.12.0"
+# 1.13.0: run-context.json gains layer_grades (issue #620): instructions_grade
+# and instruction_file_present as one registered block, so the headless signals
+# document carries them and a rubric can name them. Additive; the top-level
+# instructions_grade key stays, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.13.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -125,9 +129,11 @@ ARTIFACT_SCHEMA_VERSION = "1.12.0"
 # 9: a parallel-tree ``run.bats`` equally close to a ``run.sh`` and an
 #    extensionless ``run`` credits neither (issue #635), so a test_focus signal or a
 #    hotspot "Has test file" row can move.
-# 10: wording and padding inside an instruction-file section no longer lower its
-#    penalty (issue #619): command_reference is an absolute fenced count, a size
-#    signal beats always-on wording, fetch lines past the relocatable cap count
-#    as always-on, and the B cap reads the whole loaded file. Instruction grades
-#    can move.
-ASSESS_METHOD_VERSION = 10
+# 10: a skill's SKILL.md is a base doc ranked after README.md (issue #614), so it
+#     owns its skill directory's code in doc staleness and the complexity join.
+# 11: wording and padding inside an instruction-file section no longer lower its
+#     penalty (issue #619): command_reference is an absolute fenced count, a size
+#     signal beats always-on wording, fetch lines past the relocatable cap count
+#     as always-on, and the B cap reads the whole loaded file. Instruction grades
+#     can move.
+ASSESS_METHOD_VERSION = 11

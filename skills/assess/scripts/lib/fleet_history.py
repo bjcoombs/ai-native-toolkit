@@ -12,8 +12,11 @@ live outside the scanned repositories.
 
 Writes are narrow and fail closed:
 
-- each of the three files is written through a temp file and ``os.replace``,
-  ``run.json`` last; nothing in the history is ever deleted;
+- the three files are written to a hidden temp sibling of the entry first; a
+  new entry is that directory renamed into place in one step, and a same-day
+  entry being replaced has its ``run.json`` withdrawn before the new files
+  move in, ``run.json`` last, so a failure part-way never leaves a mixed entry
+  that reads as a run; nothing else in the history is ever deleted;
 - ``<org>`` and ``<scan_date>`` must each be one safe path component, and no
   existing directory on the way from the root to the entry may be a symlink;
 - a same-day entry is replaced only when it is this tool's (a readable
@@ -33,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -170,24 +174,62 @@ def latest_matching(org_dir: Path, stamp: Mapping[str, Any], repos: frozenset[st
     return matching[0] if matching else None
 
 
-def _replace(source: Path, target: Path) -> None:
-    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
+def _stage(out_dir: Path, parent: Path, name: str) -> Path:
+    """A hidden sibling directory of ``parent/name`` holding copies of the run's three files."""
+    staging = Path(tempfile.mkdtemp(dir=parent, prefix=f".{name}.", suffix=".tmp"))
     try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(source.read_bytes())
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, target)
+        os.chmod(staging, 0o755)
+        for file in HISTORY_FILES:
+            (staging / file).write_bytes((out_dir / file).read_bytes())
+            os.chmod(staging / file, 0o644)
     except BaseException:
-        Path(tmp).unlink(missing_ok=True)
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return staging
+
+
+def _swap_in(staging: Path, entry: Path) -> None:
+    """Move the staged files over an existing entry, its ``run.json`` withdrawn first.
+
+    Until the new ``run.json`` lands the entry has none, so ``latest_matching``
+    never selects it and ``entry_conflict`` never reuses it: a failure part-way
+    leaves an entry nothing reads as a run, never a mixed one.
+    """
+    withdrawn = staging / f".old.{RUN_FILE}"
+    os.replace(entry / RUN_FILE, withdrawn)
+    moved = False
+    try:
+        for file in HISTORY_FILES:  # run.json last
+            os.replace(staging / file, entry / file)
+            moved = True
+    except BaseException:
+        if not moved:  # nothing new landed: the earlier run is still whole
+            os.replace(withdrawn, entry / RUN_FILE)
         raise
 
 
 def persist(out_dir: Path, entry: Path, stamp: FleetStamp, repos: frozenset[str]) -> Path:
-    """Copy the run's three files from ``out_dir`` into ``entry``; raises ``HistoryError`` on a conflict."""
+    """Copy the run's three files from ``out_dir`` into ``entry``; raises ``HistoryError`` on a conflict.
+
+    The files are first written to a hidden sibling directory, so a failed
+    write never touches the history. A new entry is that directory renamed
+    into place in one step. A same-day entry being replaced loses its
+    ``run.json`` before the new files move in (``_swap_in``); its other files
+    are left alone.
+    """
     conflict = entry_conflict(entry, stamp, repos)
     if conflict is not None:
         raise HistoryError(conflict)
-    entry.mkdir(parents=True, exist_ok=True)
-    for name in HISTORY_FILES:
-        _replace(out_dir / name, entry / name)
+    entry.parent.mkdir(parents=True, exist_ok=True)
+    staging = _stage(out_dir, entry.parent, entry.name)
+    try:
+        if entry.exists() and (entry / RUN_FILE).exists():
+            _swap_in(staging, entry)
+        elif entry.exists():  # a matching entry with no run.json holds none of the three files
+            for file in HISTORY_FILES:
+                os.replace(staging / file, entry / file)
+        else:
+            os.rename(staging, entry)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     return entry

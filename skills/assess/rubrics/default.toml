@@ -12,17 +12,29 @@
 # the knowledge-base archetype's N/A layers); a rubric reads signals only.
 # Known gaps:
 #
-# - Layers 2 (code design), 3 (linters) and 4 (architecture tests) have no row:
-#   /assess judges them by reading configuration and code, and no scan reports
-#   a signal for them. The rubric reports nothing for these layers rather than
-#   a proxy that reads as a verdict.
-# - Layer 0 reads presence from the size of the always-loaded Claude Code
-#   instruction text (root CLAUDE.md, its imports, unscoped .claude/rules),
-#   which is 0, never null, when there is none. So "no instruction file" is
-#   level 0, as /assess scores a null instructions_grade Missing, and a missing
-#   nested_instructions block is unknown. instructions_grade itself is a
-#   run-context key outside the headless schema, so a rubric cannot name it.
-#   A repository with only AGENTS.md reads level 0 here; /assess credits it.
+# - Layers 2 (code design), 3 (linters) and 4 (architecture tests) have no row
+#   because no deterministic signal stands for them: /assess judges them by
+#   reading configuration and code. Layer 2 has no scan. Layer 3's one
+#   deterministic input, the stale-suppression count in promissory_markers, is
+#   an erosion cap on a linter /assess has already found, not evidence that a
+#   linter exists, so as a row it would credit a repository with no linter. The
+#   linting capability state (capability_offers, language_capabilities) covers
+#   JVM and Dart only and is not in the headless schema. Layer 4 has no scan:
+#   structure_drift checks ownership maps, not architecture tests. The rubric
+#   reports nothing for these layers rather than a proxy that reads as a
+#   verdict (issue #620).
+# - Layer 0 level 1 reads layer_grades.instruction_file_present: a committed
+#   instruction file at any known root location (CLAUDE.md, AGENTS.md,
+#   GEMINI.md, .cursorrules, Copilot), the presence /assess scores. A boolean, never
+#   null, so "no instruction file" is level 0, as /assess scores a null
+#   instructions_grade Missing, and a missing layer_grades block is unknown.
+#   layer_grades.instructions_grade (the letter grade, null with no file) is
+#   available to a rubric too; this one does not grade on the letter, since
+#   /assess weighs it with the instruction text. Level 2 reads the size of the
+#   always-loaded Claude Code instruction text (root CLAUDE.md or, without
+#   one, AGENTS.md, its imports, unscoped .claude/rules); a repository whose
+#   only instruction file is for another tool (.cursorrules, Copilot) reaches
+#   level 1 with that size 0.
 # - Layer 1 reads the observability rung, which only a full /assess run
 #   produces: a headless run reports it unavailable, so the row is unknown.
 # - Layer 7 reads review_reality, which needs GitHub: a headless run makes no
@@ -32,7 +44,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.1"
+version = "default-2026.11.2"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -43,7 +55,7 @@ aggregation = "min"
   [[rows.levels]]
   level = 1
   criteria = [
-    { signal = "nested_instructions.budget.claude_code.bytes", op = "gt", value = 0 },
+    { signal = "layer_grades.instruction_file_present", op = "eq", value = true },
   ]
 
   [[rows.levels]]
