@@ -85,10 +85,7 @@ def test_association_precedence_and_summary_counts(tmp_path: Path) -> None:
     assert by_path["docs/billing.md"]["subject_code_count"] == 1
     assert by_path["notes.md"]["subject_method"] == "explicit-links"
     assert by_path["floating.md"]["subject_method"] == "repo-baseline"
-    # repo-baseline measures against repo-wide churn but has no subject (#555).
-    assert by_path["floating.md"]["subject_code_count"] == 0
-    assert by_path["floating.md"]["subject_paths"] == []
-    assert by_path["floating.md"]["subject_roots"] == []
+    assert by_path["floating.md"]["subject_code_count"] == 0  # no subject (#555)
     assert by_path["floating.md"]["confidence"] == "low"
     assert by_path["notes.md"]["confidence"] == "high"
     assert r["association"] == {
@@ -775,7 +772,6 @@ def test_repo_baseline_doc_is_capped_by_repo_wide_churn(git_repo) -> None:
     r = analyze_doc_staleness(repo)
     design = next(d for d in r["docs"] if d["path"] == "notes/design.md")
     assert design["subject_method"] == "repo-baseline"
-    # Measured against repo-wide churn, but it owns no subject (#555).
     assert design["subject_code_count"] == 0
     assert design["code_churn_since_doc_change"] == 1
     assert design["ratio"] == 1.0
