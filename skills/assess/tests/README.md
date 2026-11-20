@@ -35,6 +35,7 @@ Every `test_*.py` file in this directory has a row below.
 | `assess_core_helpers.py` | repo-seeding helpers shared by `test_assess_core.py` and the lib suites split from it (not a test module) |
 | `test_assess_finalize.py` | `scripts/assess_finalize.py` - LLM write-back; placeholder substitution in `log.md` and `hotspots/*.md` |
 | `test_assess_gate.py` | `scripts/assess_gate.py` - CI regression gate; complexity and containment threshold checks and exit codes |
+| `test_findings_snapshot.py` | `lib/findings_snapshot.py` + `scripts/assess_gate.py` - the committed `findings.json`, the method-version comparison and the gate note it prints |
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
 | `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |

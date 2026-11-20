@@ -48,6 +48,8 @@ _VOLATILE_TOP_LEVEL = (
     "diff_reliable",
     "diff_version_note",
     "prior_stats_exists",
+    # The findings.json read back from disk, like the prior stats sidecar.
+    "prior_findings_snapshot",
 )
 
 #: Sub-keys of ``measured_commit`` that identify the specific commit/work-tree

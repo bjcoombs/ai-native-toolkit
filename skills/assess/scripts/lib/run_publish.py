@@ -2,7 +2,8 @@
 
 The scan table only reads. This step writes: the artifact directory, the
 ``.assess/`` wiki (hotspot pages, index.md, the log.md entry and its checksum
-chain, first-flagged.json), the findings badge and ``run-context.json``. The
+chain, first-flagged.json), the findings badge, the committed findings snapshot
+(findings.json) and ``run-context.json``. The
 wiki's results fill the four keys the run header reserved for them
 (``run_setup.WIKI_KEYS``) in place, so their position in the file is unchanged.
 """
@@ -12,7 +13,9 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from lib.artifact_schema import ASSESS_METHOD_VERSION
 from lib.badge import write_findings_badge
+from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.run_setup import read_plugin_version
 from lib.run_wiki import write_run_wiki
 
@@ -49,4 +52,9 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     write_findings_badge(
         assess_dir, promissory, ctx["derived_findings"], run_id=state["run_id"], scope=scope_rel,
     )
+    # The committed findings snapshot (#554): read the previous one back before
+    # overwriting it, so the gate can explain a method-version change by the
+    # findings that appeared and cleared since.
+    ctx["prior_findings_snapshot"] = load_snapshot(assess_dir)
+    write_snapshot(assess_dir, build_snapshot(ctx["derived_findings"], ASSESS_METHOD_VERSION))
     (assess_dir / "run-context.json").write_text(json.dumps(ctx, indent=2), encoding="utf-8")
