@@ -52,7 +52,8 @@ def _scans(*, bytes_: int = 900, lines: int = 40, named: int = 1, enforced: bool
 def _row(repo: str, scans: dict[str, Any] | None, reason: str | None = None) -> FleetRow:
     return {"fleet_row_version": FLEET_ROW_VERSION, "repo": repo, "group": repo.rsplit("/", 1)[0],
             "status": "ok" if scans is not None else "failed", "reason": reason,
-            "signals_schema_version": 1 if scans is not None else None, "scans": scans}
+            "signals_schema_version": 1 if scans is not None else None, "scans": scans,
+            "active": True if scans is not None else None}
 
 
 def _setting(value: str) -> dict[str, Any]:
@@ -270,7 +271,7 @@ def test_write_pages_refuses_a_path_outside(tmp_path):
 
 @pytest.mark.parametrize(("line", "fault"), [
     ("not json", "not JSON"), ("[1]", "not a JSON object"),
-    ('{"fleet_row_version": 99}', "expected 1"),
+    ('{"fleet_row_version": 99}', f"expected {FLEET_ROW_VERSION}"),
 ])
 def test_read_jsonl_names_file_and_line(tmp_path, line, fault):
     path = tmp_path / "repos.jsonl"
@@ -280,7 +281,7 @@ def test_read_jsonl_names_file_and_line(tmp_path, line, fault):
 
 
 def test_readers_require_ids_and_sort(tmp_path):
-    (tmp_path / "repos.jsonl").write_text('{"fleet_row_version": 1}\n', encoding="utf-8")
+    (tmp_path / "repos.jsonl").write_text(f'{{"fleet_row_version": {FLEET_ROW_VERSION}}}\n', encoding="utf-8")
     with pytest.raises(FleetViewError, match="no repo or group id"):
         read_repos(tmp_path)
     (tmp_path / "groups.jsonl").write_text('{"fleet_group_version": 1, "group": "g"}\n', encoding="utf-8")

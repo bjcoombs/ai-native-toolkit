@@ -512,8 +512,14 @@ keys), with optional keys simply absent. `run_scans` routes every degrading spec
 through `safe` (from `degrade.py`), which turns any exception into
 `{"available": False, "reason": ...}` labelled by `label` or the key, so one broken
 scan never stops the run; a degraded spread spec marks every key it declares. A spec
-opts out only with a `gate_reason` (the setup steps, and serialisers whose source
-already degrades). `validate` runs at import and raises `ScanRegistryError` on a
+opts out only with a `gate_reason` drawn from `GATE_REASONS` (the setup steps, the
+invalid-scope usage error, scans that normalise their own failure such as
+`test_pressure` and `plugin_version`, and serialisers whose source already degrades);
+every other entry degrades, and each reader of its key accepts the marker (#623:
+`gap_actions` proposes no coverage action for a failed coverage read, the report and
+gate say a failed `excluded_generated` was not disclosed, a failed
+`mutation_not_run_cap` keeps Layer 6 capped, and `counts_only` keeps a marker under
+a path-keyed or dropped key as `{"available": false}`). `validate` runs at import and raises `ScanRegistryError` on a
 duplicate key, an unknown stage, a read that nothing provides, a read of a key
 produced at a later stage, a callable that cannot take its declared reads, a spec
 both private and spread, or a run-context key written twice, so a mis-declared scan
@@ -629,7 +635,10 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. The row shape is the `FleetRow`
+`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
+(`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
+`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -723,9 +732,39 @@ renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README).
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
-`if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
-checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
-from `skills/assess`.
+`if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
+(`build_stamp_schema`, mapping the `scans` name list itself). `tests/test_fleet.py` and
+`tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
+`uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
+
+**`fleet_stamp.py`**
+The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
+commit, plugin version, UTC scan date, effective window, rubric version, output mode
+(`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true). No path,
+salt, timing or input mode, so a
+root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+writes atomically with sorted keys.
+
+**`fleet_activity.py`**
+Whether a fleet repository is active (issue #569): `is_active` compares the checkout's
+`HEAD` committer date (`head_commit_date`, UTC, read
+from git with optional locks off) with `window_start(window, today)`, which counts back
+in whole days, months and years by calendar (clamped to month end), validating the
+window with `signals.parse_window`. Close to `ghsync --active-since`, not identical:
+ghsync counts 30-day months from now on platform dates. `scan_target` sets
+each ok row's `active` from `ScanOptions.active_since`, so it is read before
+`--delete-after` can remove the clone. An unreadable `HEAD` is not active.
+
+**`fleet_cleanup.py`**
+`--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;
+`delete_clone` removes only the scanned `<repo>/<repo>-main` checkout, then `rmdir`s an
+empty `worktree/` and repository directory. `deletion_problem` fails closed with a
+keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
+checkout that is not a main clone at its work-tree root, one holding a protected path
+(`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
+output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
+linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -992,7 +1031,7 @@ program names and identities are dropped, and a dropped list of strings becomes 
 length. A string field with no rule is dropped too (allow-list, not deny-list). Path
 hashing is opt-in: HMAC-SHA256 under a random per-call salt, or a fixed `--hash-salt`
 so hashes join across runs. `unclassified_strings` lists the string fields a
-run-context holds with no rule. `add_cli_arguments` / `validate_cli_args` /
+run-context holds with no rule. A block that degraded to the scan table's unavailable marker is read as a record even where its key is path-keyed or dropped, so it survives as `{"available": false}` (#623). `add_cli_arguments` / `validate_cli_args` /
 `apply_cli` give `assess_core.py --counts-only` (which writes
 `run-context.counts-only.json` beside `run-context.json`) and the headless entry point
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an

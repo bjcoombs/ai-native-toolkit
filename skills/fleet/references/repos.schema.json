@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json",
   "title": "fleet repository row",
-  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version and scans. Generated from lib/fleet.py by lib/fleet_schema.py.",
+  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans and active. An ok row's active says whether its HEAD was committed inside the run's window. Generated from lib/fleet.py by lib/fleet_schema.py.",
   "type": "object",
   "properties": {
     "fleet_row_version": {
@@ -69,9 +69,16 @@
           "type": "null"
         }
       ]
+    },
+    "active": {
+      "type": [
+        "boolean",
+        "null"
+      ]
     }
   },
   "required": [
+    "active",
     "fleet_row_version",
     "group",
     "reason",
@@ -112,6 +119,9 @@
             "type": "null"
           },
           "signals_schema_version": {
+            "type": "null"
+          },
+          "active": {
             "type": "null"
           }
         }

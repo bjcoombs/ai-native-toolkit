@@ -19,6 +19,7 @@ import pytest
 
 from lib import fleet_heatmap as fh
 from lib import fleet_view as fv
+from lib.fleet import FLEET_ROW_VERSION
 from lib.fleet_group_schema import build_schema
 from lib.fleet_groups import GroupRow
 from lib.rubric import load_rubric
@@ -264,11 +265,11 @@ def test_load_groups_refuses_malformed_runs(tmp_path, rows, message):
 
 
 def test_read_repos_reads_a_directory_or_a_file_sorted(tmp_path):
-    rows = [{"fleet_row_version": 1, "repo": r, "group": "g"} for r in ("g/b", "g/a")]
+    rows = [{"fleet_row_version": FLEET_ROW_VERSION, "repo": r, "group": "g"} for r in ("g/b", "g/a")]
     _write_lines(tmp_path / "repos.jsonl", list(rows))
     assert [r["repo"] for r in fv.read_repos(tmp_path)] == ["g/a", "g/b"]
     assert fv.read_repos(tmp_path / "repos.jsonl") == fv.read_repos(tmp_path)
-    _write_lines(tmp_path / "repos.jsonl", [{"fleet_row_version": 1, "repo": "g/a"}])
+    _write_lines(tmp_path / "repos.jsonl", [{"fleet_row_version": FLEET_ROW_VERSION, "repo": "g/a"}])
     with pytest.raises(fv.FleetViewError, match="repos.jsonl:1: no repo or group id"):
         fv.read_repos(tmp_path)
 

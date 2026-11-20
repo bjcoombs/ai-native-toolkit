@@ -246,19 +246,17 @@ def run_scans(
             ctx[spec.key] = value
 
 
-# Gate reasons for entries that ran outside the degrade wrapper before they
-# moved into the table, and still do.
+# The reasons an entry may give for opting out of the degrade wrapper (#418
+# requirement 3, #623). Every other entry degrades: its readers accept the
+# unavailable marker in place of its usual shape.
 _SETUP = (
     "run setup: later entries and the publish step read this value, so a "
     "failure stops the run rather than feeding them an unavailable marker"
 )
 _BAD_SCOPE = "an invalid --scope is a usage error the CLI reports with exit code 2"
 _SELF_DEGRADING = "degrades internally to an explicit unavailable result; a raise here is a bug"
-_UNWRAPPED = (
-    "assigned outside the degrade wrapper before the migration; a marker dict in "
-    "place of this block's list, string or capped shape would mislead its readers"
-)
 _SERIALISER = "copies fields out of an earlier result that already carries its own degrade"
+GATE_REASONS = frozenset({_SETUP, _BAD_SCOPE, _SELF_DEGRADING, _SERIALISER})
 
 KEYHOLE_KEYS = (
     "structure", "behaviour", "documentation", "understanding", "runtime",
@@ -348,12 +346,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # churn, following renames (#425), over the doc graph's doc->code edges.
     ScanSpec("doc_staleness", cs.doc_staleness, ("repo_root", "doc_graph", "excludes", "scope"),
              STAGE_READ_SIDE),
-    ScanSpec("stale_hubs", cs.stale_hubs, ("doc_graph", "doc_staleness"), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+    ScanSpec("stale_hubs", cs.stale_hubs, ("doc_graph", "doc_staleness"), STAGE_READ_SIDE),
     # Degenerate git history (every file ~1 commit): churn-derived findings are
     # discounted. Read off the doc-staleness block, its single source of truth.
-    ScanSpec("churn_degenerate", cs.churn_degenerate, ("doc_staleness",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+    ScanSpec("churn_degenerate", cs.churn_degenerate, ("doc_staleness",), STAGE_READ_SIDE),
     # The doc x complexity join (Signal C), read by the keyhole documentation
     # block. A failed join degrades that block, not the run.
     ScanSpec("doc_join", cs.doc_join, ("current", "doc_staleness", "repo_root"),
@@ -361,27 +357,22 @@ SCANS: tuple[ScanSpec, ...] = (
     # Instruction-surface integrity (Layer 0): uncommitted instruction files,
     # broken instruction references, and redacted sensitive content (#56).
     ScanSpec("untracked_instruction_files", cs.untracked_instruction_files,
-             ("instruction_grading",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             ("instruction_grading",), STAGE_READ_SIDE),
     ScanSpec("broken_instruction_refs", cs.instruction_refs,
-             ("doc_graph", "instruction_grading"), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             ("doc_graph", "instruction_grading"), STAGE_READ_SIDE),
     ScanSpec("sensitive_instruction_content", cs.sensitive_instruction_content,
-             ("instruction_grading",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             ("instruction_grading",), STAGE_READ_SIDE),
     # Software repo or knowledge base (#224); a knowledge base marks L2-L7 N/A.
     ScanSpec("archetype", cs.archetype, ("repo_root",), STAGE_READ_SIDE),
     # Instruction files above the repo root that reach no fresh clone (#57).
     ScanSpec("ancestor_instruction_files", cs.ancestor_instructions, ("repo_root",),
-             STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             STAGE_READ_SIDE),
     # Progressive disclosure: skills factoring and oversized instruction files.
     ScanSpec("skills", cs.skills_blocks, ("instruction_grading",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER,
              spread=("skills_present", "skills_count", "skill_files")),
     ScanSpec("instruction_file_size", cs.instruction_sizes, ("instruction_files",),
-             STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             STAGE_READ_SIDE),
     # Layer 1 liveness. A failed scan yields explicit unavailable blocks, never
     # "no observability"; capability keys appear only when a language is found.
     ScanSpec("liveness", cs.liveness_scan, ("repo_root", "excludes", "scope"), STAGE_READ_SIDE,
@@ -396,23 +387,22 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("coverage_data", cs.coverage_data, ("repo_root",), STAGE_READ_SIDE, private=True,
              degrade=False, gate_reason=_SELF_DEGRADING),
     ScanSpec("coverage_report", cs.coverage_report, ("repo_root", "coverage_data"),
-             STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             STAGE_READ_SIDE),
     # Layer 1 write-side truth pressure, read-only (the mutation pass is off).
     ScanSpec("test_pressure_scan", cs.test_pressure_scan,
              ("repo_root", "current", "coverage_data"), STAGE_READ_SIDE,
              private=True, label="test_pressure"),
+    # normalize_test_pressure turns a failed scan into the block's own
+    # unavailable shape (null mutation_config_present, empty heuristic
+    # buckets), which its readers rely on; the bare marker would drop those.
     ScanSpec("test_pressure", cs.test_pressure_block, ("test_pressure_scan",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             degrade=False, gate_reason=_SELF_DEGRADING),
     # Layer 6 cap while the mutation tier has not run; assess_finalize enforces it.
-    ScanSpec("mutation_not_run_cap", cs.mutation_cap, ("test_pressure",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+    ScanSpec("mutation_not_run_cap", cs.mutation_cap, ("test_pressure",), STAGE_READ_SIDE),
     ScanSpec("test_focus", cs.test_focus,
              ("repo_root", "current", "coverage_data", "test_pressure", "hot_test_index"),
-             STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
-    ScanSpec("promissory_markers", cs.promissory_block, ("promissory",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             STAGE_READ_SIDE),
+    ScanSpec("promissory_markers", cs.promissory_block, ("promissory",), STAGE_READ_SIDE),
     # Agent-operations guardrails (permission allowlists, hooks, sandbox rules,
     # routine definitions): Layer 8 workflow-maturity evidence. Tracked-only
     # credit - an uncommitted settings file reaches no clone. Deliberately
@@ -436,8 +426,7 @@ SCANS: tuple[ScanSpec, ...] = (
     ),
     # Accretion filtered to files already in the top complexity/size band.
     ScanSpec("accretion_ratchet", cs.accretion_ratchet, ("accretion_scan", "current"),
-             STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             STAGE_READ_SIDE),
     # Keyhole readiness: structure, behaviour, documentation, understanding and
     # runtime blocks, derived findings, attention and the report products.
     # integrate() wraps each block in its own catch-all.
@@ -451,19 +440,18 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("keyhole_blocks", cs.keyhole_blocks, ("keyhole",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=KEYHOLE_KEYS),
     ScanSpec("gap_actions", cs.gap_actions,
-             ("coverage_report", "doc_graph", "current", "archetype"), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             ("coverage_report", "doc_graph", "current", "archetype"), STAGE_READ_SIDE),
     ScanSpec("exclusion_disclosures", cs.exclusion_disclosures, ("keyhole", "excludes"),
              STAGE_READ_SIDE, degrade=False, gate_reason=_SERIALISER,
              spread=("excluded_by_config", "excluded_as_archive", "pruned_finding_paths")),
-    ScanSpec("excluded_generated", cs.generated_exclusions, ("current",), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+    ScanSpec("excluded_generated", cs.generated_exclusions, ("current",), STAGE_READ_SIDE),
     # Declared ownership map vs where the code lives; omitted with no map.
     ScanSpec("structure_drift_block", cs.structure_drift, ("repo_root", "keyhole"),
              STAGE_READ_SIDE, degrade=False, gate_reason=_SELF_DEGRADING,
              spread=("structure_drift",)),
+    # "unknown" when the manifest cannot be read: a string, as decline reads it.
     ScanSpec("plugin_version", rs.read_plugin_version, (), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+             degrade=False, gate_reason=_SELF_DEGRADING),
     # Active permanent declines of the optional tools (.assess/.no-<tool>).
     ScanSpec("decline", cs.decline_blocks, ("assess_dir", "plugin_version"), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER,
@@ -471,11 +459,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     ScanSpec("offers_block", cs.offers_blocks, ("non_interactive",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=("interactive", "offers")),
-    ScanSpec("uninstall_instructions_path", cs.uninstall_instructions_path, (), STAGE_READ_SIDE,
-             degrade=False, gate_reason=_UNWRAPPED),
+    ScanSpec("uninstall_instructions_path", cs.uninstall_instructions_path, (), STAGE_READ_SIDE),
     # -- STAGE_FINAL: last key of run-context.json ----------------------------
-    ScanSpec("anomalies", cs.anomalies, ("run_header",), STAGE_FINAL,
-             degrade=False, gate_reason=_UNWRAPPED),
+    ScanSpec("anomalies", cs.anomalies, ("run_header",), STAGE_FINAL),
     # -- STAGE_POST_OFFERS ----------------------------------------------------
     # Checkable claims in the graded instruction files ("`x.sh` is enforced in
     # CI", "Node 20.11.0 is pinned in `.nvmrc`"), verified against the repo; a

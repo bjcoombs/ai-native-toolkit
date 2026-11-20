@@ -287,7 +287,8 @@ def test_scan_failures_become_reason_tokens(tmp_path, monkeypatch, body, reason)
     target = Target("grp/r", make_checkout(tmp_path / "r"))
     row = fleet.scan_target(target, tmp_path, ScanOptions(timeout=2))
     assert row == {"fleet_row_version": fleet.FLEET_ROW_VERSION, "repo": "grp/r", "group": "grp",
-                   "status": "failed", "reason": reason, "signals_schema_version": None, "scans": None}
+                   "status": "failed", "reason": reason, "signals_schema_version": None, "scans": None,
+                   "active": None}
     jsonschema.validate(row, build_schema())
 
 

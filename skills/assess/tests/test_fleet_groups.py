@@ -54,7 +54,8 @@ def _row(repo: str, scans: dict[str, object] | None) -> FleetRow:  # scans: test
     return {"fleet_row_version": FLEET_ROW_VERSION, "repo": repo, "group": repo.rsplit("/", 1)[0],
             "status": "ok" if scans is not None else "failed",
             "reason": None if scans is not None else "not_a_git_work_tree",
-            "signals_schema_version": 1 if scans is not None else None, "scans": scans}
+            "signals_schema_version": 1 if scans is not None else None, "scans": scans,
+            "active": True if scans is not None else None}
 
 
 def _scans(lines: int, markets: list[str], ci: list[str] | None = None) -> dict[str, object]:

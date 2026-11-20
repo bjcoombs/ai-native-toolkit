@@ -25,7 +25,8 @@ last segment.
 
 Determinism: rows are sorted by ``repo`` and serialised with sorted keys, and
 carry no absolute path, duration, stderr text or per-run stamp field (the run
-stamp is #569's). Two runs over unchanged checkouts on the same day write
+stamp is ``run.json``, lib/fleet_stamp.py). An ``ok`` row's ``active`` says
+whether its ``HEAD`` was committed inside the window (lib/fleet_activity.py). Two runs over unchanged checkouts on the same day write
 byte-identical files. ``--hash-paths`` without a salt draws one salt per run,
 so such a run joins within itself but is not byte-identical across runs.
 
@@ -45,14 +46,17 @@ import tempfile
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict
 
+from lib.fleet_activity import is_active
 from lib.run_context_types import JsonDict
 
 # Bumped when a row's envelope (the keys below) changes. Scan blocks carry
 # their own shapes, versioned by ``signals_schema_version``.
-FLEET_ROW_VERSION = 1
+# 2 (#569): ``active``.
+FLEET_ROW_VERSION = 2
 REPOS_FILE = "repos.jsonl"
 SIGNALS_SCRIPT = Path(__file__).resolve().parents[1] / "assess_signals.py"
 DEFAULT_TIMEOUT = 600
@@ -85,6 +89,7 @@ class FleetRow(TypedDict):
     reason: str | None  # failure token; None when ok
     signals_schema_version: int | None  # None when failed
     scans: dict[str, JsonDict] | None  # assess_signals ``scans``; None when failed
+    active: bool | None  # HEAD committed inside the window; None when failed or not checked
 
 
 @dataclass(frozen=True)
@@ -105,9 +110,13 @@ class ScanOptions:
     scans: str | None = None  # comma-separated, passed through
     timeout: int = DEFAULT_TIMEOUT
     log_dir: Path | None = None  # set: a scan_exit_* row's stderr tail lands in <log_dir>/<repo>.stderr
+    active_since: date | None = None  # set: an ok row's ``active`` is HEAD committed on or after it
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
+# Called in the worker with each target's row as soon as it is in hand
+# (``--delete-after``, lib/fleet_cleanup.py). It must not raise.
+AfterFn = Callable[[Target, FleetRow], None]
 
 
 def _read_only_env() -> dict[str, str]:
@@ -231,7 +240,8 @@ def targets_from_list(entries: Iterable[str], root: Path | None, base: Path) -> 
 # --- scanning --------------------------------------------------------------
 
 
-def _row(target: Target, *, reason: str | None = None, document: JsonDict | None = None) -> FleetRow:
+def _row(target: Target, *, reason: str | None = None, document: JsonDict | None = None,
+         active: bool | None = None) -> FleetRow:
     return {
         "fleet_row_version": FLEET_ROW_VERSION,
         "repo": target.repo,
@@ -240,6 +250,7 @@ def _row(target: Target, *, reason: str | None = None, document: JsonDict | None
         "reason": reason,
         "signals_schema_version": document["signals_schema_version"] if document else None,
         "scans": document["scans"] if document else None,
+        "active": active if document else None,
     }
 
 
@@ -301,7 +312,11 @@ def scan_target(target: Target, scratch: Path, options: ScanOptions) -> FleetRow
         return _row(target, reason=f"scan_exit_{done.returncode}")
     document = _load_document(out)
     out.unlink(missing_ok=True)
-    return _row(target, reason=INVALID_OUTPUT) if document is None else _row(target, document=document)
+    if document is None:
+        return _row(target, reason=INVALID_OUTPUT)
+    since = options.active_since
+    return _row(target, document=document,
+                active=None if since is None else is_active(target.checkout, since))
 
 
 def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None) -> Path | None:
@@ -349,10 +364,22 @@ def _guarded(scan: ScanFn, target: Target, scratch: Path, options: ScanOptions) 
         return _row(target, reason=SCAN_ERROR)
 
 
+def _scan_then(scan: ScanFn, after: AfterFn | None, target: Target, scratch: Path,
+               options: ScanOptions) -> FleetRow:
+    row = _guarded(scan, target, scratch, options)
+    if after is not None:
+        after(target, row)
+    return row
+
+
 def run_fleet(
     targets: Sequence[Target], options: ScanOptions, jobs: int, scan: ScanFn = scan_target,
+    after: AfterFn | None = None,
 ) -> list[FleetRow]:
     """Scan every target with ``jobs`` workers; rows sorted by ``repo``.
+
+    ``after`` (when given) runs in the worker on each target's row right after
+    its scan, before the next target starts on that worker.
 
     The ``*.stderr`` logs a previous run left in ``options.log_dir`` are removed
     first, so it holds only this run's; nothing else there is touched.
@@ -361,7 +388,7 @@ def run_fleet(
         clear_stderr_logs(options.log_dir)
     with tempfile.TemporaryDirectory(prefix="fleet-") as scratch, \
             ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        rows = list(pool.map(lambda t: _guarded(scan, t, Path(scratch), options), targets))
+        rows = list(pool.map(lambda t: _scan_then(scan, after, t, Path(scratch), options), targets))
     return sorted(rows, key=lambda r: r["repo"])
 
 
