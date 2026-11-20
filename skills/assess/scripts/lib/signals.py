@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
@@ -33,6 +32,7 @@ from typing import Any
 
 from lib.assess_config import load_excludes
 from lib.git_churn import git_commit_info
+from lib.history_window import split_window
 from lib.instruction_files import grade_instruction_files
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
@@ -81,7 +81,6 @@ CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
 NETWORK_REASON = "network: reads GitHub via gh; the headless runner makes no network calls"
 
 DEFAULT_WINDOW = "6mo"
-_WINDOW = re.compile(r"^[1-9][0-9]*(d|w|mo|y)$")
 
 # skills/assess/scripts/lib/signals.py -> the toolkit checkout root.
 TOOLKIT_ROOT = Path(__file__).resolve().parents[4]
@@ -123,8 +122,10 @@ def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SC
 
 def parse_window(window: str) -> str:
     """Validate a ``--window`` like ``6mo``, ``90d``, ``12w`` or ``1y``."""
-    if not _WINDOW.match(window):
-        raise ValueError(f"invalid window {window!r}: expected <n>d, <n>w, <n>mo or <n>y")
+    try:
+        split_window(window)
+    except ValueError:
+        raise ValueError(f"invalid window {window!r}: expected <n>d, <n>w, <n>mo or <n>y") from None
     return window
 
 
