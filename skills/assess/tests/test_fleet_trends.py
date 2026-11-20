@@ -22,7 +22,7 @@ from fleet_trends_fixture import (CURRENT_STAMP, ENTRIES, FIXTURES, LEVELS, LONG
 from svg_cascade import overridden_text_attributes
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
-def _run(label: str, version: str, means: dict[str, float | None], scaled: bool = False) -> ft.TrendRun:
+def _run(label: str, version: str, means: dict[str, float | None], scaled: bool = True) -> ft.TrendRun:
     return {"label": label, "levels_version": version, "means": means, "scaled": scaled}
 
 
@@ -75,24 +75,18 @@ def test_history_keeps_comparable_runs_before_today_oldest_first():
     assert labels == ["2026-06-20", "2026-07-20", "2026-08-20", "2026-09-20", "2026-10-20", "2026-11-20"]
 
 
-def test_mean_level_is_the_mean_of_known_team_row_levels():
-    assert ft.mean_level(group("g", (1, 2, None))) == 1.5
-    assert ft.mean_level(group("g", (1, 2), org=0)) == 1.5  # org rows are left out
-    assert ft.mean_level(group("g", (None, None))) is None
-
-
 def test_a_group_mean_is_the_mean_share_of_top_level_over_known_team_rows():
     assert ft.group_mean(group("g", (1, 2, None), top=4, org=0)) == (1 / 4 + 2 / 4) / 2
     assert ft.group_mean(group("g", (None,), top=4)) is None
 
 
-def test_a_run_with_top_levels_is_a_share_and_one_without_is_a_marked_plain_mean():
+def test_a_run_with_top_levels_is_a_share_and_one_without_is_marked_not_drawn():
     new = ft.trend_run(stamp("2026-01-01", "v"), [group("g", (1, 2), top=TOP)])
     old = ft.trend_run(stamp("2026-01-01", "v"), [group("g", (1, 2))])
     assert new is not None and old is not None
     assert (new["scaled"], new["means"]["g"]) == (True, 0.5)
-    assert (old["scaled"], old["means"]["g"]) == (False, 1.5)
-    # one known team row without a top level makes the whole run a plain mean
+    assert (old["scaled"], old["means"]["g"]) == (False, None)
+    # one known team row without a top level marks the whole run
     mixed = ft.trend_run(stamp("2026-01-01", "v"), [group("g", (1,), top=TOP), group("h", (2,))])
     assert mixed is not None and mixed["scaled"] is False
 
@@ -103,32 +97,31 @@ def test_an_older_entry_of_this_runs_model_version_takes_its_top_levels(tmp_path
     _entry(org, "2026-02-01", [group("g", (1, 2))], version="levels-1")
     found = ft.history_runs(org, CURRENT_STAMP, REPOS, LEVELS)
     assert [(r["label"], r["scaled"], r["means"]["g"]) for r in found] == [
-        ("2026-01-01", True, 0.5), ("2026-02-01", False, 1.5)]
+        ("2026-01-01", True, 0.5), ("2026-02-01", False, None)]
     assert all(not r["scaled"] for r in ft.history_runs(org, CURRENT_STAMP, REPOS))  # no model given
 
 
-def test_a_legacy_entry_is_still_plotted_hollow_and_explained():
-    content = ft.render_trend(runs(FIXTURES))
-    assert ft.MIXED_NOTE in content and ft.AXIS_LABEL in content
-    assert "Hollow points: runs kept before the history recorded each row" in content
-    assert content.count('class="f-bg s-series') > 0
-    assert "(plain mean level) on 2026-06-20" in content
-    scaled_only = [r for r in runs(FIXTURES) if r["scaled"]]
-    plain = ft.render_trend(scaled_only)
-    assert ft.MIXED_NOTE not in plain and "Hollow points" not in plain and "f-bg s-series" not in plain
-    assert ft.layout(scaled_only).y_ticks == [0.0, 0.25, 0.5, 0.75, 1.0]
-
-
-def test_a_unit_change_breaks_the_line_like_a_version_change():
-    drawn = [_run("a", "v", {"g": 1.0}), _run("b", "v", {"g": 0.5}, scaled=True),
-             _run("c", "v", {"g": 0.75}, scaled=True)]
-    assert ft._segments(drawn, "g") == [[0], [1, 2]]
-    plan = ft.layout(drawn)
-    assert plan.breaks == [1]
-    assert (plan.labels[0].delta, plan.labels[0].scaled) == (0.25, True)
+def test_runs_without_top_levels_are_named_not_drawn_on_a_share_axis():
+    drawn = runs(FIXTURES)
+    hidden = ft.hidden_note(drawn)
+    assert hidden == ("3 earlier runs on an older maturity-model version not shown: "
+                      "2026-06-20, 2026-07-20, 2026-08-20")
     content = ft.render_trend(drawn)
-    assert "share of top level</text>" in content
-    assert "g 0.75" in content and "+0.25" in content
+    assert hidden in content and ft.AXIS_LABEL in content
+    assert "2026-06-20</text>" not in content  # no date tick for a hidden run
+    assert ft.layout(drawn).x == ft.layout(ft.share_runs(drawn)).x
+    assert ft.hidden_note(ft.share_runs(drawn)) is None
+    labels = re.findall(r'text-anchor="end" class="t-muted">([0-9.]+)<', content)
+    assert labels == ["0", "0.25", "0.5", "0.75", "1"]  # always 0 to 1
+
+
+def test_too_few_share_runs_is_a_skip_that_names_the_hidden_runs():
+    old = [_run(f"2026-0{m}-01", "v1", {"g": None}, scaled=False) for m in (1, 2)]
+    entry = _trend([*old, _run("2026-03-01", "v2", {"g": 0.5}), _run("2026-04-01", "v2", {"g": 0.5})])
+    assert entry["svg"] is None
+    assert entry["skipped"] == ("skipped: 2 comparable dated run(s), the trend needs at least 3 (same "
+                                "window, scans and output mode, with a maturity model; 2 earlier runs on "
+                                "an older maturity-model version not shown: 2026-01-01, 2026-02-01).")
 
 
 def test_a_run_without_a_maturity_model_is_not_a_point(tmp_path):
@@ -140,12 +133,12 @@ def test_a_run_without_a_maturity_model_is_not_a_point(tmp_path):
 
 def test_one_run_per_date_prefers_this_runs_repository_set(tmp_path):
     org = tmp_path / "acme"
-    _entry(org, "2026-01-01", [group("g", (1,))], repos=tuple(sorted(REPOS)))
-    _entry(org, "2026-01-01.2", [group("g", (3,))], repos=("payments/api",))  # a partial rerun
-    _entry(org, "2026-02-01", [group("g", (1,))])
-    _entry(org, "2026-02-01.2", [group("g", (2,))])  # same set unknown: the highest suffix
+    _entry(org, "2026-01-01", [group("g", (1,), top=TOP)], repos=tuple(sorted(REPOS)))
+    _entry(org, "2026-01-01.2", [group("g", (3,), top=TOP)], repos=("payments/api",))  # a partial rerun
+    _entry(org, "2026-02-01", [group("g", (1,), top=TOP)])
+    _entry(org, "2026-02-01.2", [group("g", (2,), top=TOP)])  # same set unknown: the highest suffix
     found = ft.history_runs(org, CURRENT_STAMP, REPOS)
-    assert [(r["label"], r["means"]["g"]) for r in found] == [("2026-01-01", 1.0), ("2026-02-01", 2.0)]
+    assert [(r["label"], r["means"]["g"]) for r in found] == [("2026-01-01", 1 / TOP), ("2026-02-01", 2 / TOP)]
 
 
 def test_unreadable_entries_and_a_missing_directory_are_passed_over(tmp_path):
@@ -239,8 +232,7 @@ def test_date_ticks_thin_out_but_keep_the_last_run():
 
 
 def test_delta_text():
-    assert [ft._delta_text(d) for d in (None, 0.0, 0.5, -0.2)] == ["", "0.0", "+0.5", "-0.2"]
-    assert [ft._delta_text(d, scaled=True) for d in (0.0, 0.25)] == ["0.00", "+0.25"]
+    assert [ft._delta_text(d) for d in (None, 0.0, 0.25, -0.2)] == ["", "0.00", "+0.25", "-0.20"]
 
 
 # --- in the report ------------------------------------------------------------------

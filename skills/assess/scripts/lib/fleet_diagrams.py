@@ -137,9 +137,11 @@ def _trend(levels: Rubric | None, history: Sequence[TrendRun] | None) -> Diagram
         entry["skipped"] = NO_TEAM_ROWS
     elif history is None:
         entry["skipped"] = NO_HISTORY
-    elif len(history) < fleet_trends.MIN_RUNS:
-        entry["skipped"] = (f"skipped: {len(history)} comparable dated run(s), the trend needs at least "
-                            f"{fleet_trends.MIN_RUNS} (same window, scans and output mode, with a maturity model).")
+    elif len(shown := fleet_trends.share_runs(history)) < fleet_trends.MIN_RUNS:
+        hidden = fleet_trends.hidden_note(history)
+        entry["skipped"] = (f"skipped: {len(shown)} comparable dated run(s), the trend needs at least "
+                            f"{fleet_trends.MIN_RUNS} (same window, scans and output mode, with a maturity model"
+                            + (f"; {hidden}" if hidden else "") + ").")
     else:
         entry["svg"] = fleet_trends.render_trend(history)
     return entry

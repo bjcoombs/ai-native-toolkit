@@ -8,10 +8,11 @@ over its ``team`` rows in ``groups.jsonl``: each known row level as a share of t
 row's ``top_level``, the unit and row set of the slope chart (#675) and the
 quadrant (#684). An entry written before ``groups.jsonl`` carried ``top_level``
 takes each row's top level from this run's maturity model when the entry used the
-same version (same version, same rows). Otherwise a run with any known team row
-lacking a top level falls back to the plain mean of its known team-row levels: the run is marked unscaled, its points are drawn hollow
-and the caption says they are plain means, and a line breaks wherever the unit
-changes, so a share and a plain mean are never joined. A group with no team row
+same version (same version, same rows). Any other run with a known team row
+lacking a top level (an entry on an older maturity-model version) is marked
+unscaled and not drawn: the axis is always 0 to 1 share of top level, and a plain
+mean on it would read as a false drop. The caption names those runs, and the
+trend counts only share runs toward ``MIN_RUNS``. A group with no team row
 at a level, or absent from a run, has no value there: its line breaks and the
 gap is named on a hatched note, never drawn at zero.
 
@@ -28,7 +29,7 @@ history, so a failed history write still shows it) is the last point. At most
 
 **Maturity-model version.** A change of version between two runs breaks every
 line there (``--compare`` refuses to compare across versions) and a dashed rule
-marks it; so does a change between plain-mean and share runs. Each run's point is still drawn, so a one-run segment is a dot.
+marks it. Each run's point is still drawn, so a one-run segment is a dot.
 
 ``layout`` is shared by the renderer and its tests: end labels are spread by
 ``fleet_svg.spread_vertical`` so they never overlap. Deterministic: groups and
@@ -69,7 +70,7 @@ TICK_W = 78.0  # room one date tick label needs
 WRAP = 104
 LINE_H = 16.0
 AXIS_LABEL = "Mean share of top level"
-MIXED_NOTE = "(hollow: plain mean level)"
+Y_TICKS = (0.0, 0.25, 0.5, 0.75, 1.0)
 MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed")
 
 # Series colours (light, dark), assigned to groups in sorted order; past the eighth
@@ -86,7 +87,7 @@ class TrendRun(TypedDict):
     label: str  # the scan date
     levels_version: str  # the maturity-model version the run used
     means: dict[str, float | None]  # group -> mean share of top level; None: no team row at a level
-    scaled: bool  # False: an entry without top levels, so ``means`` are plain mean levels
+    scaled: bool  # False: an entry without top levels on an older model version; not drawn
 
 
 # --- reading the history ------------------------------------------------------
@@ -102,13 +103,6 @@ def scaled(groups: Sequence[GroupRow]) -> bool:
     """Every known team row in the run carries a positive ``top_level`` (#684)."""
     return all(type(top := row.get("top_level")) is int and top > 0
                for group in groups for row in _known(group))
-
-
-def mean_level(group: GroupRow) -> float | None:
-    """The plain mean of the group's known team-row levels (the fallback for an entry
-    without top levels); None when none is known."""
-    levels = [row["level"] or 0 for row in _known(group)]
-    return sum(levels) / len(levels) if levels else None
 
 
 def group_mean(group: GroupRow) -> float | None:
@@ -143,9 +137,23 @@ def trend_run(stamp: Mapping[str, Any], groups: Sequence[GroupRow],
         return None
     groups = with_top_levels(groups, levels, version)
     unit = scaled(groups)
-    mean = group_mean if unit else mean_level
     return {"label": stamp["scan_date"], "levels_version": version, "scaled": unit,
-            "means": {g["group"]: mean(g) for g in sorted(groups, key=lambda g: g["group"])}}
+            "means": {g["group"]: group_mean(g) if unit else None
+                      for g in sorted(groups, key=lambda g: g["group"])}}
+
+
+def share_runs(runs: Sequence[TrendRun]) -> list[TrendRun]:
+    """The runs the trend draws: those whose means are shares of top level."""
+    return [run for run in runs if run["scaled"]]
+
+
+def hidden_note(runs: Sequence[TrendRun]) -> str | None:
+    """Names the runs left out for want of top levels; None when none is."""
+    old = [run["label"] for run in runs if not run["scaled"]]
+    if not old:
+        return None
+    return (f"{len(old)} earlier run{'s' if len(old) > 1 else ''} on an older maturity-model version "
+            f"not shown: {', '.join(old)}")
 
 
 def _comparable(stamp: Any, current: FleetStamp) -> bool:
@@ -198,7 +206,6 @@ class EndLabel:
     name: str  # possibly truncated
     value: float
     delta: float | None  # over the last unbroken segment; None for a one-run segment
-    scaled: bool  # the segment is a share of top level (two decimals), not a plain mean
     point: tuple[float, float]
     y: float  # baseline after spacing
 
@@ -208,20 +215,18 @@ class Layout:
     groups: list[str]
     x: list[float]
     y: LinearScale
-    y_ticks: list[float]  # value-axis gridlines
     labels: list[EndLabel]
     ticks: list[int]  # run indices given a date label
-    breaks: list[int]  # run indices where the maturity-model version or the unit changes
+    breaks: list[int]  # run indices where the maturity-model version changes
 
 
 def _break_before(runs: Sequence[TrendRun], i: int) -> bool:
-    """Run ``i`` changes the maturity-model version or the unit (share against plain mean)."""
-    return (runs[i]["levels_version"] != runs[i - 1]["levels_version"]
-            or runs[i]["scaled"] != runs[i - 1]["scaled"])
+    """Run ``i`` changes the maturity-model version."""
+    return runs[i]["levels_version"] != runs[i - 1]["levels_version"]
 
 
 def _segments(runs: Sequence[TrendRun], group: str) -> list[list[int]]:
-    """Runs where ``group`` has a value, split at gaps, version changes and unit changes."""
+    """Runs where ``group`` has a value, split at gaps and version changes."""
     segments: list[list[int]] = []
     for i, run in enumerate(runs):
         if run["means"].get(group) is None:
@@ -241,16 +246,13 @@ def _tick_indices(count: int, spacing: float) -> list[int]:
 
 
 def layout(runs: Sequence[TrendRun]) -> Layout:
+    """The plan for the share runs in ``runs`` (``share_runs``); the others are not drawn."""
+    runs = share_runs(runs)
     groups = sorted({g for run in runs for g in run["means"]})
-    values = [v for run in runs for v in run["means"].values() if v is not None]
-    if all(run["scaled"] for run in runs):
-        y_ticks = [0.0, 0.25, 0.5, 0.75, 1.0]
-    else:  # plain means of older entries run past 1: whole-level gridlines
-        y_ticks = [float(t) for t in range(max(1, math.ceil(max(values, default=0.0))) + 1)]
     spacing = (PLOT_R - PLOT_L) / max(len(runs) - 1, 1)
     xs = [PLOT_L + spacing * i for i in range(len(runs))]
-    y = LinearScale(0.0, y_ticks[-1], PLOT_T + PLOT_H, PLOT_T)
-    ends: list[tuple[str, float, float | None, bool, tuple[float, float]]] = []
+    y = LinearScale(0.0, 1.0, PLOT_T + PLOT_H, PLOT_T)
+    ends: list[tuple[str, float, float | None, tuple[float, float]]] = []
     for group in groups:
         segments = _segments(runs, group)
         if not segments:
@@ -259,24 +261,22 @@ def layout(runs: Sequence[TrendRun]) -> Layout:
         value = runs[last[-1]]["means"][group]
         first = runs[last[0]]["means"][group]
         assert value is not None and first is not None
-        unit = runs[last[-1]]["scaled"]
-        delta = round(value - first, 2 if unit else 1) if len(last) > 1 else None
-        ends.append((group, value, delta, unit, (xs[last[-1]], y(value))))
+        delta = round(value - first, 2) if len(last) > 1 else None
+        ends.append((group, value, delta, (xs[last[-1]], y(value))))
     spread = svg.spread_vertical([point[1] + 4 for *_, point in ends], LABEL_GAP)
-    labels = [EndLabel(group, svg.truncate(group, NAME_CHARS), value, delta, unit, point, ly)
-              for (group, value, delta, unit, point), ly in zip(ends, spread)]
+    labels = [EndLabel(group, svg.truncate(group, NAME_CHARS), value, delta, point, ly)
+              for (group, value, delta, point), ly in zip(ends, spread)]
     breaks = [i for i in range(1, len(runs)) if _break_before(runs, i)]
-    return Layout(groups, xs, y, y_ticks, labels, _tick_indices(len(runs), spacing), breaks)
+    return Layout(groups, xs, y, labels, _tick_indices(len(runs), spacing), breaks)
 
 
 # --- render -------------------------------------------------------------------
 
 
-def _delta_text(delta: float | None, scaled: bool = False) -> str:
+def _delta_text(delta: float | None) -> str:
     if delta is None:
         return ""
-    places = 2 if scaled else 1
-    return f"{0:.{places}f}" if delta == 0 else f"{delta:+.{places}f}"
+    return "0.00" if delta == 0 else f"{delta:+.2f}"
 
 
 def _gaps(runs: Sequence[TrendRun], groups: Sequence[str]) -> list[str]:
@@ -311,14 +311,17 @@ def _series_class(index: int) -> tuple[str, str]:
 
 
 def render_trend(runs: Sequence[TrendRun]) -> str:
-    """The trend chart as an SVG document; the same runs give the same bytes."""
+    """The trend chart as an SVG document; the same runs give the same bytes. Only the share
+    runs are drawn; the others are named under the chart (``hidden_note``)."""
+    hidden = hidden_note(runs)
+    runs = share_runs(runs)
     plan = layout(runs)
     bottom = PLOT_T + PLOT_H
     body = [svg.text(PAD, PAD + 18, TITLE, size=18, weight="bold", cls="fg"),
             svg.text(PAD, PAD + 40, f"{len(runs)} dated runs, {runs[0]['label']} to {runs[-1]['label']} "
                      "· mean share of top level per group (team rows with a level)", cls="muted"),
             svg.text(PAD, PAD + 58, svg.truncate(_versions_line(runs), WRAP), size=11.5, cls="muted")]
-    for tick in plan.y_ticks:
+    for tick in Y_TICKS:
         ty = plan.y(tick)
         body.append(f'<line x1="{PLOT_L:.1f}" y1="{ty:.1f}" x2="{PLOT_R:.1f}" y2="{ty:.1f}" '
                     f'class="s-rule" stroke-width="0.6"/>')
@@ -332,9 +335,7 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
         bx = (plan.x[i - 1] + plan.x[i]) / 2
         body.append(f'<line x1="{bx:.1f}" y1="{PLOT_T - 14:.1f}" x2="{bx:.1f}" y2="{bottom:.1f}" '
                     f'class="s-muted" stroke-dasharray="4 4"/>')
-        caption = (f"maturity model {runs[i]['levels_version']}"
-                   if runs[i]["levels_version"] != runs[i - 1]["levels_version"]
-                   else "share of top level" if runs[i]["scaled"] else "plain mean level")
+        caption = f"maturity model {runs[i]['levels_version']}"
         box = svg.text_box(bx + 4, PLOT_T - 18, caption, 11)
         if box.x + box.w <= WIDTH - PAD and not any(svg.overlaps(box, other) for other in taken):
             taken.append(box)
@@ -348,21 +349,18 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
                 body.append(f'<polyline points="{coords}" fill="none" class="s-{role}" '
                             f'stroke-width="2"{dash}/>')
             for (px, py), i in zip(points, segment):
-                unit = "" if runs[i]["scaled"] else " (plain mean level)"
-                tip = f"{group}: {runs[i]['means'][group]:.2f}{unit} on {runs[i]['label']}"
-                fill = (f'class="f-{role}"' if runs[i]["scaled"]
-                        else f'class="f-bg s-{role}" stroke-width="1.5"')
-                body.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" {fill}>'
+                tip = f"{group}: {runs[i]['means'][group]:.2f} on {runs[i]['label']}"
+                body.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" class="f-{role}">'
                             f'<title>{svg.esc(tip)}</title></circle>')
     for label in plan.labels:
         role, _ = _series_class(plan.groups.index(label.group))
         px, py = label.point
         body.append(f'<line x1="{px + 5:.1f}" y1="{py:.1f}" x2="{LABEL_X - 4:.1f}" y2="{label.y - 4:.1f}" '
                     f'class="s-rule" stroke-width="1"/>')
-        name = f"{label.name} {label.value:.2f}" if label.scaled else f"{label.name} {label.value:.1f}"
+        name = f"{label.name} {label.value:.2f}"
         body.append(svg.text(LABEL_X, label.y, name, size=LABEL_SIZE, cls=role, weight="600",
                              tooltip=label.group))
-        delta = _delta_text(label.delta, label.scaled)
+        delta = _delta_text(label.delta)
         if delta:
             tone = "accent" if delta.startswith("+") else "bad" if delta.startswith("-") else "muted"
             body.append(svg.text(LABEL_X + svg.text_width(name, LABEL_SIZE) + 6, label.y, delta,
@@ -370,20 +368,14 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
     body.append(svg.text((PLOT_L + PLOT_R) / 2, bottom + 38, "Fleet run (scan date)", anchor="middle",
                          cls="muted"))
     mid = PLOT_T + PLOT_H / 2
-    mixed = not all(run["scaled"] for run in runs)
-    for ax, line, size in ((18.0, AXIS_LABEL, 12.0), *([(32.0, MIXED_NOTE, 10.5)] if mixed else [])):
-        body.append(svg.text(ax, mid, line, size=size, anchor="middle", cls="muted",
-                             extra=f' transform="rotate(-90 {ax:.0f} {mid:.1f})"'))
+    body.append(svg.text(22.0, mid, AXIS_LABEL, size=12.0, anchor="middle", cls="muted",
+                         extra=f' transform="rotate(-90 22 {mid:.1f})"'))
     cursor = max(bottom + 60, max((label.y for label in plan.labels), default=0.0) + 20)
     body.append(svg.text(PLOT_L, cursor, "End label: group, its mean in its last run, and the change "
                          "over its last unbroken stretch", size=11.5, cls="muted"))
     cursor += LINE_H
-    if mixed:
-        old = [run["label"] for run in runs if not run["scaled"]]
-        for line in textwrap.wrap(
-                "Hollow points: runs kept before the history recorded each row's top level, "
-                "plotted as the plain mean of the team-row levels, not a share, and never joined "
-                "to a share: " + ", ".join(old), WRAP):
+    if hidden:
+        for line in textwrap.wrap(hidden, WRAP):
             body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))
             cursor += LINE_H
     gaps = _gaps(runs, plan.groups)
@@ -394,8 +386,8 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
         body.extend(parts)
         cursor += height
     desc = ("Line chart of each fleet group's mean share of top level across dated fleet runs, "
-            "oldest on the left; a line breaks where the maturity-model version or the unit changes, "
-            "older runs without top levels are hollow plain means, and runs where a group has no "
-            "level are listed on a hatched note, not drawn at zero.")
+            "oldest on the left; a line breaks where the maturity-model version changes, older runs "
+            "without top levels are named, not drawn, and runs where a group has no level are "
+            "listed on a hatched note, not drawn at zero.")
     return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body,
                         style=svg.theme_style(SERIES_ROLES), defs=THEMED_HATCH)
