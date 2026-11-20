@@ -165,4 +165,7 @@ ARTIFACT_SCHEMA_VERSION = "1.15.0"
 #     ``available: false`` instead of an empty graph (issue #663), so keyhole
 #     static metrics and structure_drift tier 1 skip it; findings that read the
 #     static graph can move on such repositories.
-ASSESS_METHOD_VERSION = 15
+# 16: a root ``agents/*.md`` shaped as an agent definition is reported in
+#     ``instruction_placement.loaded_in_full`` even without a plugin manifest
+#     (issue #662), so that list and the scorer evidence drawn from it can move.
+ASSESS_METHOD_VERSION = 16
