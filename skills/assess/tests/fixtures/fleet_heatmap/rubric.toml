@@ -1,0 +1,24 @@
+version = "fixture-1"
+
+[[rows]]
+id = "org2fa"
+title = "Two-factor"
+scope = "org"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
+
+[[rows]]
+id = "teamdocs"
+title = "Team instructions and shared tooling across repositories"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "shared_tooling.available", op = "eq", value = true }]

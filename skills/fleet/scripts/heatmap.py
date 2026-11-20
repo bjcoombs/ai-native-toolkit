@@ -1,0 +1,106 @@
+"""Leadership heat map from one fleet run (issue #570).
+
+Reads ``<out>/groups.jsonl`` written by ``fleet.py --rubric`` and writes one SVG:
+groups as rows, rubric rows as columns, each cell the whole level reached,
+``unknown`` hatched apart from level 0 with the missing signal named in a key.
+No rescan, no model, no network: the same run gives a byte-identical file. The
+logic lives in ``skills/assess/scripts/lib/fleet_heatmap.py`` and the shared
+reader in ``lib/fleet_view.py``.
+
+Exit codes:
+    0  the SVG was written
+    2  usage error: unreadable or malformed groups.jsonl, a run without rubric
+       levels, a --rubric file that is not the run's rubric, or an unreadable
+       --compare run
+
+Run:
+    uv run heatmap.py RUN [--rubric FILE] [--compare EARLIER_RUN] [--output FILE]
+"""
+# /// script
+# requires-python = ">=3.11"
+# ///
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+
+# skills/fleet/scripts -> skills/assess/scripts (the plugin ships both skills)
+ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
+sys.path.insert(0, str(ASSESS_SCRIPTS))
+
+from lib.fleet_heatmap import columns_for, render_heatmap  # noqa: E402
+from lib.fleet_view import (  # noqa: E402
+    Comparison,
+    FleetViewError,
+    check_rubric,
+    compare_levels,
+    groups_file,
+    load_groups,
+)
+from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
+
+HEATMAP_FILE = "heatmap.svg"
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Render the leadership heat map SVG from a fleet run's groups.jsonl.",
+    )
+    parser.add_argument("run", help="The fleet run: its --out directory or its groups.jsonl.")
+    parser.add_argument(
+        "--rubric", metavar="FILE",
+        help="The rubric file the run used: gives column titles and each row's top level, so "
+             "colour is scaled per row. Refused when its version or rows differ from the run's.",
+    )
+    parser.add_argument(
+        "--compare", metavar="EARLIER_RUN",
+        help="An earlier fleet run (directory or groups.jsonl): each cell shows its change. "
+             "Not shown, with a note, when the rubric versions differ.",
+    )
+    parser.add_argument("--output", metavar="FILE",
+                        help=f"SVG path (default: {HEATMAP_FILE} beside groups.jsonl).")
+    return parser.parse_args(argv)
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    run = Path(args.run)
+    rubric: Rubric | None = None
+    comparison: Comparison | None = None
+    try:
+        groups = load_groups(run)
+        if args.rubric is not None:
+            rubric = load_rubric(Path(args.rubric))
+            check_rubric(rubric, groups)
+        columns = columns_for(groups, rubric)
+        if args.compare is not None:
+            comparison = compare_levels(groups, load_groups(Path(args.compare)))
+    except (FleetViewError, RubricError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    out = Path(args.output) if args.output else groups_file(run).parent / HEATMAP_FILE
+    _write(out, render_heatmap(groups, columns, comparison))
+    print(f"heatmap: {len(groups)} groups x {len(columns)} rubric rows -> {out}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
