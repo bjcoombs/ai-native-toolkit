@@ -99,13 +99,13 @@ When there are two or more clusters and at least one hub, spawn **one more** com
 
 For each finding in every comparer's array:
 
-1. **Citation check (mechanical).** For each side, run `rg -nF -- '<quote>' '<path>'` (escape any single quote in the quote). The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
+1. **Citation check (mechanical).** For each side, write the quote verbatim to a temporary file with your file-writing tool, not through a shell string (code quotes often hold `'` or `"`), then run `rg -nF -f <quote-file> -- '<path>'`. The `rg` hit numbers are the only evidence; never move a line number by reasoning about the file or counting lines yourself.
    - The cited `line` is among the hits: keep the finding as cited.
    - The cited `line` is not a hit, but exactly one hit lies within two lines of it: replace `line` with that hit.
    - Otherwise (no hit, the file is missing, or several nearby hits): drop the finding and list it under "Dropped by citation check" with the `rg` result.
 
    Do not re-judge the contradiction itself.
-2. **Excluded paths.** Drop a finding that cites an excluded path, and count it in the header.
+2. **Excluded paths.** Drop a finding that cites an excluded path, and count it in the header's `Dropped (cited an excluded path)` line.
 3. **Dedupe.** Two findings that cite the same pair of locations (in either order) are one finding: keep the higher confidence and both explanations.
 
 Keep the raw comparer arrays in your working context until the report is written: the report's appendix records how many findings each comparer returned.
@@ -120,6 +120,7 @@ Write `$REPO_ROOT/.doc-contradictions/report.md` (create the directory) and prin
 - Repository: <REPO_ROOT basename>
 - Documents scanned: <n> in <k> clusters; cross-cluster pass over <h> hub docs (or: skipped, one cluster)
 - Excluded: docs/design/ (<n> docs), docs/superpowers/ (<n> docs)<, user globs>
+- Dropped (cited an excluded path): <n>
 - Comparison model: haiku (<k + 1> comparer runs)
 - Contradictions: <total> (<doc-vs-doc> doc-vs-doc, <doc-vs-code> doc-vs-code)
 
