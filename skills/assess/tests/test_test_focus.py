@@ -456,3 +456,4 @@ def test_skill_md_mutation_scope_jq_mirrors_test_path_rule() -> None:
     focus_line = next(line for line in skill.splitlines() if line.startswith("FOCUS_FILES="))
     assert IS_TEST_RE.pattern.replace("\\", "\\\\") in focus_line
     assert '"__tests__"' in focus_line
+    assert 'endswith(".bats")' in focus_line

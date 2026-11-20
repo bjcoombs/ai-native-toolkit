@@ -324,3 +324,49 @@ def test_this_repo_credits_keyhole_signals() -> None:
     index = tc.build_test_index(repo)
     assert tc.sibling_test_match(repo, rel, index) == tc.MATCH_IMPORT
     assert tc.has_sibling_test(repo, rel, index=index) is True
+
+
+BATS_TEST = '\n@test "it runs" {\n  run true\n}\n'
+
+
+@pytest.mark.parametrize("line", [
+    'source "$BATS_TEST_DIRNAME/../scripts/common.sh"',
+    "source ${BATS_TEST_DIRNAME}/../scripts/common.sh",
+    '. "${BATS_TEST_DIRNAME}/../scripts/common.sh"',
+    "setup() { load '../scripts/common'; }",
+    "load ../scripts/common.sh",
+])
+def test_bats_suite_credits_the_script_it_loads(tmp_path: Path, line: str) -> None:
+    """Issue #593: a bats suite named after no script credits what it loads by
+    a suite-anchored path (``load`` also tries ``.bash``)."""
+    script = "scripts/common.bash" if line.startswith("setup") else "scripts/common.sh"
+    _write(tmp_path, {script: "f() { :; }\n", "scripts/other.sh": "g() { :; }\n",
+                      "tests/launcher.bats": line + BATS_TEST})
+    index = tc.build_test_index(tmp_path)
+    assert tc.sibling_test_match(tmp_path, script, index) == tc.MATCH_IMPORT
+    assert tc.has_sibling_test(tmp_path, "scripts/other.sh", index=index) is False
+
+
+@pytest.mark.parametrize("line", [
+    "source scripts/common.sh",  # cwd-relative: unknowable
+    'source "$ROOT/scripts/common.sh"',  # another variable
+    'source "$BATS_TEST_DIRNAME/../scripts/$NAME.sh"',
+    '# source "$BATS_TEST_DIRNAME/../scripts/common.sh"',
+    "load /abs/scripts/common.sh",
+    'source "$BATS_TEST_DIRNAME/../../outside.sh"',
+])
+def test_bats_unresolvable_or_commented_load_credits_nothing(
+    tmp_path: Path, line: str,
+) -> None:
+    _write(tmp_path, {"scripts/common.sh": "f() { :; }\n",
+                      "tests/launcher.bats": line + BATS_TEST})
+    assert _credited(tmp_path, "scripts/common.sh") is False
+
+
+def test_bats_without_a_test_case_credits_nothing(tmp_path: Path) -> None:
+    """A helper ``.bats`` file that defines no ``@test`` is support, not
+    evidence."""
+    _write(tmp_path, {"scripts/common.sh": "f() { :; }\n",
+                      "tests/helpers.bats":
+                          'source "$BATS_TEST_DIRNAME/../scripts/common.sh"\n'})
+    assert _credited(tmp_path, "scripts/common.sh") is False

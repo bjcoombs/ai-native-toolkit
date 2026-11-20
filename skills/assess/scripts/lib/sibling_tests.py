@@ -8,6 +8,10 @@ list, and the copies drifted: a Java ``src/FooTest.java`` credited ``Foo.java``
 on the hotspot page while the focus table called the same file ``unsupported``.
 The conventions live here once so a new idiom lands in every consumer at once.
 
+Names are per-extension (``foo_test.go`` for ``foo.go``) with one
+cross-extension rule: a bats suite ``foo.bats`` is the test of ``foo.sh`` or an
+extensionless ``foo`` script, and any ``*.bats`` file is a test.
+
 Layers, narrowest first:
 
 - :func:`sibling_test_names` / :func:`is_test_path` - pure name rules.
@@ -73,7 +77,7 @@ from pathlib import Path
 
 from lib.doc_graph import EXCLUDE_DIRS, is_excluded_path
 from lib.git_churn import tracked_files
-from lib.import_credit import FileReader, ImportCredits
+from lib.import_credit import BATS_SUFFIX, FileReader, ImportCredits
 
 # Test-file name builders keyed off a source file's stem + suffix (``.ext``
 # including the dot, or empty). A cheap precision heuristic, not a build graph.
@@ -86,13 +90,17 @@ TEST_SIBLING_BUILDERS: tuple[Callable[[str, str], str], ...] = (
     lambda stem, ext: f"{stem}Test{ext}",     # Java/Kotlin/C# (JUnit)
     lambda stem, ext: f"{stem}Tests{ext}",    # C#/Swift (XCTest, MSTest)
 )
+# A bats suite tests a shell script under its own extension: ``foo.bats`` for
+# ``foo.sh`` or an extensionless ``foo``. Only these source suffixes get the
+# cross-extension name, so a ``foo.bats`` never credits ``foo.py``.
+BATS_SOURCE_SUFFIXES: frozenset[str] = frozenset({"", ".sh"})
 # Directories beside a source file that hold its tests. Probed for every
 # builder name and for the bare source name.
 ADJACENT_TEST_DIRS: tuple[str, ...] = ("__tests__", "tests", "test", "spec")
 # Directories that hold a parallel test tree at some ancestor. ``__tests__`` is a
 # JS co-location idiom, never a repo-level tree, so it is not one of them.
 TREE_TEST_DIRS: tuple[str, ...] = ("tests", "test", "spec")
-# Stem markers meaning the file IS a test.
+# Stem markers meaning the file IS a test (a ``.bats`` suffix is one too).
 IS_TEST_RE = re.compile(r"(^test_|_test$|\.test$|\.spec$|_spec$|Tests?$)")
 # Bound on how many ancestor directories the tree walk visits.
 MAX_ANCESTOR_LEVELS = 16
@@ -132,20 +140,26 @@ def sibling_test_names(name: str) -> list[str]:
     """Conventional test-file names for a source file name, one per builder. A
     hyphenated stem also yields its underscore spelling, since a Python test for
     ``complexity-treemap.py`` has to be importable as
-    ``test_complexity_treemap.py``."""
+    ``test_complexity_treemap.py``. A shell script (``.sh`` or no extension)
+    also yields its bats suite name, ``<stem>.bats``."""
     p = Path(name)
     stem, ext = p.stem, p.suffix
     if not stem:
         return []
     stems = [stem] + ([stem.replace("-", "_")] if "-" in stem else [])
-    return [build(s, ext) for s in stems for build in TEST_SIBLING_BUILDERS]
+    names = [build(s, ext) for s in stems for build in TEST_SIBLING_BUILDERS]
+    if ext in BATS_SOURCE_SUFFIXES:
+        names.append(stem + BATS_SUFFIX)  # bats names keep the hyphens
+    return names
 
 
 def is_test_path(rel_path: str) -> bool:
     """True when the file is itself a test: its stem follows a test naming
-    convention, or it lives under a ``__tests__/`` directory."""
+    convention, it is a ``.bats`` suite, or it lives under a ``__tests__/``
+    directory."""
     p = Path(rel_path)
-    return bool(IS_TEST_RE.search(p.stem)) or "__tests__" in p.parts[:-1]
+    return (bool(IS_TEST_RE.search(p.stem)) or p.suffix == BATS_SUFFIX
+            or "__tests__" in p.parts[:-1])
 
 
 def name_key(rel_path: str) -> str:

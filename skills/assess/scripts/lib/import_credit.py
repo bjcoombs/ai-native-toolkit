@@ -24,8 +24,15 @@ The scan is static and bounded:
   ``import '<spec>'``, ``import('<spec>')`` and ``require('<spec>')``. Only
   relative specifiers (``./`` / ``../``) count; a package or alias specifier
   (``react``, ``@/lib/x``) needs a resolver config this tier does not read, so
-  those tests keep only the name match. Other languages keep only the name
-  match.
+  those tests keep only the name match.
+- A bats suite (``*.bats`` with an ``@test`` line) credits the repository files
+  it ``source``s / ``.``s / ``load``s by a path anchored at the suite's own
+  directory: ``$BATS_TEST_DIRNAME/<path>`` (braces and quotes allowed), or a
+  bare relative ``load <path>``, which bats itself resolves against the suite
+  (also tried with ``.bash`` appended). A path that still holds a variable, a
+  command substitution or a glob, or a bare relative ``source`` (resolved
+  against the caller's working directory, which the scan cannot know), credits
+  nothing. Other languages keep only the name match.
 - Every module a qualifying test imports directly is credited, not only the
   first: a split test imports its subject by name, and an integration test that
   imports five modules does execute all five. The credit is
@@ -88,6 +95,16 @@ _JS_SPEC_RE = re.compile(
 # an import spelled inside a string literal still matches.
 _JS_COMMENT_RE = re.compile(r"^[ \t]*(?:/\*.*?\*/|//[^\n]*)", re.DOTALL | re.MULTILINE)
 _JS_TEST_RE = re.compile(r"\b(?:it|test|describe)(?:\.\w+)?\s*\(")
+
+BATS_SUFFIX = ".bats"
+# A bats test case: ``@test "name" {`` at the start of a line.
+_BATS_TEST_RE = re.compile(r"^[ \t]*@test\s", re.MULTILINE)
+# A ``source`` / ``.`` / ``load`` command at the start of a line (optionally
+# after ``;``, ``&&`` or a ``{``); group 1 is the command, group 2 its first argument.
+_BATS_LOAD_RE = re.compile(
+    r"""(?:^|[;&|{]\s*)[ \t]*(source|\.|load)[ \t]+("[^"\n]*"|'[^'\n]*'|[^\s;&|#]+)""",
+    re.MULTILINE)
+_BATS_DIR_RE = re.compile(r"^\$(?:BATS_TEST_DIRNAME\b|\{BATS_TEST_DIRNAME\})")
 
 Module = tuple[str, ...]
 
@@ -245,6 +262,45 @@ def js_imports(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
     return out
 
 
+def _bats_target(command: str, arg: str, test_dir: str) -> str | None:
+    """The repo-relative path one ``source`` / ``.`` / ``load`` argument names,
+    or ``None`` when it is not anchored at the suite's directory or still holds
+    shell expansion after the anchor."""
+    path = arg.replace('"', "").replace("'", "")
+    anchored = _BATS_DIR_RE.match(path)
+    if anchored:
+        path = path[anchored.end():].lstrip("/")
+    elif command != "load" or path.startswith("/"):
+        return None  # cwd-relative or absolute: not resolvable from the repo
+    if not path or any(c in path for c in "$`*?[~"):
+        return None
+    target = posixpath.normpath(posixpath.join(test_dir, path))
+    if target.startswith("../") or target == "..":
+        return None  # above the repository root
+    return target
+
+
+def bats_sources(source: str, test_dir: str, files: frozenset[str]) -> list[str]:
+    """Repo-relative files a bats suite loads by a suite-anchored path, or an
+    empty list when it defines no ``@test``. A ``load`` also tries the path
+    with ``.bash`` appended, as bats does."""
+    if not _BATS_TEST_RE.search(source):
+        return []
+    out: list[str] = []
+    for line in source.splitlines():
+        if line.lstrip().startswith("#"):
+            continue  # a commented-out load is not evidence
+        for command, arg in _BATS_LOAD_RE.findall(line):
+            target = _bats_target(command, arg, test_dir)
+            if target is None:
+                continue
+            candidates = [target] + ([target + ".bash"] if command == "load" else [])
+            hit = next((c for c in candidates if c in files), None)
+            if hit is not None:
+                out.append(hit)
+    return out
+
+
 def _is_support(rel_path: str) -> bool:
     return any(part in SUPPORT_DIRS for part in PurePosixPath(rel_path).parts[:-1])
 
@@ -265,8 +321,8 @@ class ImportCredits:
     def __init__(self, read: Callable[[str], str | None], tests: Iterable[str],
                  sources: Iterable[str]) -> None:
         self._read = read
-        self._tests = sorted(t for t in tests
-                             if t.endswith(PY_SUFFIX) or t.endswith(JS_SUFFIXES))
+        self._tests = sorted(t for t in tests if t.endswith(PY_SUFFIX)
+                             or t.endswith(JS_SUFFIXES) or t.endswith(BATS_SUFFIX))
         self._sources = sorted(s for s in sources if not _is_support(s))
         self._support = sorted(s for s in sources if _is_support(s))
         self._credited: frozenset[str] | None = None
@@ -302,6 +358,8 @@ class ImportCredits:
                     hit = _resolve(target, test_dirs, by_stem, by_module)
                     if hit in files:
                         credited.add(hit)
+            elif test.endswith(BATS_SUFFIX):
+                credited.update(bats_sources(text, "/".join(test_dirs), files))
             else:
                 credited.update(js_imports(text, "/".join(test_dirs), files))
         return frozenset(credited)
