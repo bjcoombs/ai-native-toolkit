@@ -36,11 +36,12 @@ stops winget creating its `Links` alias. When none is found the block reads
 
 ## The run sequence in PowerShell
 
-`$AssessDir` is the assess skill's directory (the one holding `SKILL.md` and
-`scripts/`); in Claude Code, `SKILL.md` sets it from the path Claude Code fills
-in. Forward slashes work in PowerShell paths.
+`$AssessDir` is the assess skill's directory: the one holding `SKILL.md` and
+`scripts/`. Set it first (in Claude Code, `SKILL.md` gives the filled-in path).
+Forward slashes work in PowerShell paths.
 
 ```powershell
+$AssessDir = "C:/path/to/skills/assess"   # the directory holding SKILL.md and scripts/
 $REPO_ROOT = git rev-parse --show-toplevel
 New-Item -ItemType Directory -Force "$REPO_ROOT/.assess" | Out-Null
 
