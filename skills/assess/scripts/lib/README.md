@@ -37,16 +37,16 @@ The seam is narrowing. Every run-context block is declared once in `scan_registr
 (`SCANS`) and run by one loop, so adding a scan edits its own module, its test, that
 table and this file - not `assess_core.py`. The setup steps (scope, artifact directory,
 run id, stats and diff, instruction grading, first-flagged map) are entries too; their
-adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. Only the
-doc-staleness keys (`scan_registry.HAND_WIRED`) are still assigned by hand, held back
-for the 2.0.0 rewrite (#424, #425). The table only reads: `run_publish.py` writes the
-wiki, badge and `run-context.json` after the scans (#557).
+adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. The
+doc-staleness keys and the doc x complexity join joined the table last (#558), so the
+core assigns no key by hand. The table only reads: `run_publish.py` writes the wiki,
+badge and `run-context.json` after the scans (#557).
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
-The core keeps only the orchestration: `build_run_context` (the stage calls, the
-hand-wired doc-staleness keys and the publish call), `run_opt_in_mutation` and `main`.
+The core keeps only the orchestration: `build_run_context` (one `run_scans` call and
+the publish call), `run_opt_in_mutation` and `main`.
 Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
@@ -99,6 +99,17 @@ Shared git-churn machinery: per-file commit counts over a configurable window, p
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
 one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
+`commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
+the `change_coupling.build_rename_map` paths and credit a commit made under an old name
+to the file's current name, once per commit, so the count matches `git log --follow` (a
+file committed five times, renamed, then committed once scores 7). `pick_churn_window`
+builds the map when it is not given one; `rename_paths` does that for the treemap's
+`--by churn` call and prints a stderr note when the map is incomplete. `doc_staleness`
+shares one map per HEAD between the churn reads and the content clock, and marks every
+doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
+Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
+does not move a count. Tests: `tests/test_rename_churn.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
@@ -339,9 +350,24 @@ set of notes a hub surfaces. Pure - no filesystem walk, no `doc_graph` import - 
 `doc_graph.py` owns discovery/excludes and consumes this module's parse + selection. Add
 a fixture-backed test here alongside any predicate change.
 
+**`doc_ownership.py`**
+The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
+`doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
+ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
+directory's code), then a parallel `docs/` tree, explicit code links, and the empty
+`repo-baseline` subject. `subject_spec` records each doc's method and roots as
+repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
+`/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
+Staleness expands them over every discovered code file and exports each row's
+`subject_roots`, `base_doc_dir`, `subject_code_count` and up to `SUBJECT_PATHS_CAP`
+sorted `subject_paths`; the join expands the same roots over the scored files, so the cap
+never hides an owned file from it. Every base doc stays an ancestor in the walk, even one
+that owns no discovered code, because the treemap scores languages the staleness
+discovery does not list. Tests: `tests/test_doc_ownership.py`.
+
 **`doc_staleness.py`**
-Doc-staleness metric for Layer 0. Associates each doc with the code it describes via
-nearest-ancestor base-doc rules, computes code churn relative to doc maintenance, and
+Doc-staleness metric for Layer 0. Associates each doc with the code it describes through
+`doc_ownership.py`, computes code churn relative to doc maintenance, and
 emits a signed ratio (high = decaying map). `ratio` is the whole-window ratio
 (`window_ratio`, subject churn over doc edits) capped by `code_churn_since_doc_change`,
 the distinct subject commits authored after the doc's last content change, so a doc is a
@@ -376,7 +402,12 @@ negative = the doc is a lying map over complex code (worse than no doc). The joi
 multiplies complexity by a signed freshness score so trivial code generates near-zero
 signal regardless of doc state. When a doc carries a `doc_provenance` verdict, freshness
 comes from the source-vs-doc comparison (a direct, high-confidence signal that bypasses
-the churn-ratio confidence guards) instead of the ratio.
+the churn-ratio confidence guards) instead of the ratio. Which code a doc covers comes
+from the staleness rows through `doc_subjects` (the `doc_ownership.py` rule), and each
+unit's `subject_code_count` is the staleness row's value, so both blocks report one count
+per document. That count covers discovered code files only, while `complexity_summarised`
+sums the join subject over the scored files, so a base doc owning only files discovery
+skips (Lua, say) can report `subject_code_count` 0 with non-zero complexity. `_extract_file_ccn` is the single read of the stats' per-file CCN.
 
 ### Ownership and structure drift
 
@@ -459,8 +490,8 @@ Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 **`scan_registry.py`**
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
 the `key`, the callable, the names it `reads` (passed positionally: a core-provided
-input from `PROVIDED_INPUTS`, a `HAND_WIRED` key, or the key of an earlier spec), the
-`stage` of `build_run_context` it runs at, and whether it degrades. By default the
+input from `PROVIDED_INPUTS` or the key of an earlier spec), its `stage`, and whether it
+degrades. By default the
 value is published as `ctx[key]`; a `private` spec's value (the stats, the diff, a raw
 scan result) is kept in the inputs mapping for later specs and never reaches
 `run-context.json`; a `spread` spec returns a mapping whose keys, all declared, are
@@ -481,15 +512,16 @@ the scan degrades. The core provides the `build_run_context` arguments
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
 sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
-specs. Stages
-(`setup`, `read_side`, `post_offers`, `final`) keep `run-context.json` key order;
-they collapse once the `HAND_WIRED` doc-staleness keys move here.
+specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
+order (#558). Only `anomalies` relies on its stage, staying the last scan key while
+later entries append to the table.
 
 **`run_setup.py`**
 Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
 `new_run_id`, `current_stats` / `prior_stats`, `stats_diff` (dropping a graduation the
 generated-file filter caused), `instruction_grading`, `rename_map` and
-`measured_commit` (the git-churn call sites #424 and #425 rewrite), `config_excludes`,
+`measured_commit`, `config_excludes`,
 `first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
 `run_header`, which returns the first 27 run-context keys (`RUN_HEADER_KEYS`) with the
 four `WIKI_KEYS` and `prior_findings_snapshot` reserved as None for the publish step. Reads only. Tests:
@@ -500,7 +532,12 @@ Read-side adapters for the scan table (#557): one callable per registered block,
 taking its reads positionally and calling the scan module or `context_blocks`
 serialiser that owns the block's shape (doc graph, liveness, structure, coverage,
 test pressure and focus, promissory markers, accretion, the keyhole integration and
-its disclosures, decline markers, offers, anomalies). `anomalies` reads the run header
+its disclosures, decline markers, offers, anomalies), plus the doc-staleness entries
+(#558): `doc_staleness` (over the doc graph's doc->code edges, degrading under its own
+label), `stale_hubs`, `churn_degenerate` and the private `doc_join`
+(`analyze_doc_complexity_join`), which the keyhole integration reads for its
+`documentation` block; a failed join degrades that block with reason
+`documentation scan failed: ...`. `anomalies` reads the run header
 only, which holds every key `detect_anomalies` inspects. No logic of its own. Tests:
 `tests/test_run_setup.py`, and the run-context tests that patch a scan here.
 
@@ -549,10 +586,46 @@ the network.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
-`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
+whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
+custom table, and the namespace `rubric_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
+
+**`fleet.py`**
+The core of `skills/fleet/scripts/fleet.py` (issue #567): headless signals across a
+ghsync root or a list, one JSONL row per repository. `discover_root` walks
+`<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
+checkout is reported rather than skipped), never descending into a found repository,
+`worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
+directory, a plain checkout or a root-relative path; `layout_id` gives both inputs the
+same `repo` id (the path under the root, prefixed with the root's name when one
+segment), a listed path outside the root falling back to `remote_path` (the `origin`
+URL's path) and then to its last two directory names. `scan_target` checks
+`checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0`, counts-only unless
+told otherwise, from a scratch directory, with a timeout; every failure becomes a
+`failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
+message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
+(`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row;
+`run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
+`remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
+and treats a host-less URL (`file:///...`) as no remote, so no local path becomes an id.
+A list entry repeating an earlier id is skipped with a note on stderr. `run_fleet` maps targets over a thread pool of those processes, isolates
+a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
+`repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
+its schema version - no stamp field, path or timing - so reruns are byte-identical.
+`run_salt` draws one salt per run for `--hash-paths`. The row shape is the `FleetRow`
+TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
+readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
+
+**`fleet_schema.py`**
+Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
+`signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
+`if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
+checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
 from `skills/assess`.
 
 **`run_context_types.py`**
@@ -935,6 +1008,18 @@ stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snaps
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
 `tests/test_complexity_treemap.py`.
 
+**`stats_rows.py`**
+The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
+`top_lists` ranks the enriched rows into `top_hotspots` / `top_complex` / `top_large`
+(ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
+`{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
+`_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
+list (issue #556). Its other readers see every scored file too: `candidate_dead_weight`
+(through `keyhole_signals._high_complexity_paths`) and `orphaned_understanding`
+(through `understanding_analysis._extract_file_ccn`). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
+`tests/test_stats_rows.py`.
+
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
 transitions: graduated (was in top list, now absent), regressed, restructured, new,
@@ -982,8 +1067,24 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
-rerun. No default rubric ships here. Tests: `tests/test_rubric.py` with fixtures under
-`tests/fixtures/rubric/`.
+rerun. Tests: `tests/test_rubric.py` with fixtures under `tests/fixtures/rubric/`.
+
+**`rubric_signals.py`**
+The real `PathValidator` for `rubric.py`, and the default rubric. A `team` path's first
+segment must be a block name the published headless schema lists
+(`references/signals.schema.json`, `scans.propertyNames`, generated from
+`signals.known_scans`), so one rubric reads a headless document's `scans` or a full
+`run-context.json`; run-context keys outside the schema (`instructions_grade`) are
+rejected. Where `counts_only_schema.ROOTS` types the block, every further segment must
+name a field and end on a scalar (no list, no object); an untyped block is open. An
+`org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
+`<setting>.value` / `.reason`). `load_default_rubric` loads
+`skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
+signal (0, 1, 5, 6, 7, 8), level 1 for Partial and 2 for Present. It can disagree with
+the `/assess` layer verdicts (the file header lists where); no instruction file reads
+level 0 through a never-null byte count, not `unknown`. Tests:
+`tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
+and the golden `run-context.json`.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
@@ -1303,8 +1404,16 @@ failure returns None so the caller degrades exactly as before. `parse_remote` re
 https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
 groups, and rejects a host or path segment outside a strict character set (the remote
 comes from the assessed repository and reaches argv). `normalize_host` ports
-`ghsync.sh`'s `--host` normalisation. Tests: `tests/test_review_reality_gitlab.py`
-(stubbed `glab`/`gh` as the whole `PATH`, offline).
+`ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
+protected-branch rule covering a branch (exact name first, else the first `*` wildcard
+rule in name order, via `branch_pattern`; a name holding `*` is answered only by its own
+rule), reusing a `protected_branches(project)` read when given one (config_drift reads the
+list once per scan), or None only from a readable list shorter than
+`PROTECTED_PAGE` (100) with no cover; a full page without an exact rule asks for the
+branch by name (the `ghreport.sh` fallback), so an exact rule on a later page outranks a
+first-page wildcard; when that read fails a wildcard cover stands, else it raises `truncated`. A 403 or 404 raises
+like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
+`tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
@@ -1314,7 +1423,16 @@ live setting via `gh_cli`. Snapshots are ruleset exports - tracked JSON with a
 a file missing either is skipped, never reported - and classic branch-protection exports - tracked JSON under
 `.github/` with `required_status_checks`, `enforce_admins` or
 `required_pull_request_reviews` at the top level (branch from the export's `url`,
-else the file stem). The diff is snapshot-driven (keys only the API returns are
+else the file stem) - and, on GitLab, protected-branch exports: tracked JSON under
+`.gitlab/` with `push_access_levels` or `merge_access_levels` at the top level (branch
+from its `name`, a name or `*` wildcard, else the file stem), diffed against
+`gitlab_cli.branch_protection` with each access level compared on `access_level`,
+`user_id`, `group_id` and `deploy_key_id` only. A GitLab remote (`gitlab_cli.open_gitlab`) compares only
+GitLab snapshots and any other remote only GitHub ones; `snapshots` lists the compared
+kind, and a repo whose snapshots are all of the other provider's kind is `available:
+False` with reason `other_provider`, never clean. On GitLab a refused protected-branch
+read (403 or 404) or an incomplete list degrades the block; only a complete readable
+list without a covering rule is a `branch_protection` drift entry. The diff is snapshot-driven (keys only the API returns are
 not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
 shape into `X`. Lists are sets. Write-shape restriction lists (plain user, team
 and app names) compare against the read shape's objects projected onto
@@ -1338,7 +1456,8 @@ identities in `key`, and up to three added names per changed list; never a live
 object or a whole live list;
 with no snapshots it calls nothing and reports `entries: []`. Any refused or
 failed read degrades the whole block, never a partial clean result. Add a case
-in `tests/test_config_drift.py` alongside any change to discovery or the diff.
+in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
+alongside any change to discovery or the diff.
 
 **`review_reality.py`**
 Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
@@ -1376,9 +1495,11 @@ and `bot_review_share` are null (approvals are the only evidence read), and
 null. `review_required` reads the project's approval rules: a non-`report_approver`
 rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
 wildcard matching the default branch, is True; a rule scoped to all protected branches
-is unknown; a refused read is null. Any refused merge-request or approvals read (403
+covers it when `gitlab_cli.branch_protection` finds the default branch protected, does
+not when the complete list leaves it unprotected, and is null when that read (made at
+most once) is refused or incomplete; a refused read is null. Any refused merge-request or approvals read (403
 and 404 included) degrades the whole block. Tests: `tests/test_review_reality.py`,
-`tests/test_review_reality_gitlab.py`.
+`tests/test_review_reality_gitlab.py`, `tests/test_gitlab_protected_branches.py`.
 
 **`gate_cost.py`**
 Actions cost of the CI gate the assess-pr skill offers, so the offer can state it.
@@ -1538,7 +1659,38 @@ The core writes the result as the run-context block `instruction_claims`
 nothing matched; `{available: false, reason}` with no counts when the scan itself
 raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
 claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
-(which returns the extra failure fields). Tests: `tests/test_instruction_claims.py`.
+(which returns the extra failure fields). `tally_claims` and `has_ci_config` are
+public for `doc_claims`. Tests: `tests/test_instruction_claims.py`.
+
+**`doc_claims.py`**
+Runs the `instruction_claims` kinds over the doc set and adds one cross-document
+kind (issue #491), no model. `scan_doc_claims(repo_root, instruction_files,
+scope, excludes)` reads the tracked Markdown matching `DOC_CLAIM_GLOBS` (`docs/**/*.md`,
+`skills/*/references/**/*.md`, `skills/*/SKILL.md`) from the `--scope` directory
+(default the repo root), minus `HISTORICAL_DOC_TREES` (`docs/design`,
+`docs/superpowers` and the ADR and RFC trees, matched from that directory), the built-in
+excluded trees and the user's excludes, and verifies each document's claims with
+`instruction_claims.tally_claims`. The graded instruction files join the
+comparison but are not re-verified (a document that resolves to one, such as
+`docs/CLAUDE.md`, is left to `instruction_claims`). The cross-document kind,
+`contradiction`, groups `pin` and `count` claims by kind and path and reports a
+group when two different files (by resolved path) disagree: two pins disagree
+unless one version's dotted components prefix the other's, two counts unless
+they are within `count_within_tolerance`. One finding per group lists every
+site, so both conflicting lines are cited; a claim the repo cannot verify still
+takes part. A skill's `SKILL.md` and `references/` claims resolve against
+`skills/<name>/` (`rebase_skill_claims`; the repo root only when just that reading
+exists), before verification and grouping. Pins group by pinned file, so a pin finding whose every version
+the file contains (two tools in one `.tool-versions`) is dropped. The kind is a pair of tables, `CROSS_DOC_VALUE` (claim -> value) and
+`CROSS_DOC_AGREE` (two values -> agree), mirroring `_EXTRACTORS` and
+`_VERIFIERS`. The core writes the run-context block `doc_claims`
+(`{files_scanned, excluded_trees, total, verified, failed, failures[...],
+contradictions_total, contradictions[{kind, path, sites[{file, line, value}],
+conflict_pair}]}` (`conflict_pair`: the first two sites from different files that
+disagree),
+lists capped at `MAX_FAILURES` and `MAX_CONTRADICTIONS`; `{available: false,
+reason}` when the scan raised). Rules that conflict in meaning stay out of the
+core. Tests: `tests/test_doc_claims.py`.
 
 **`claude_config.py`**
 Flags Claude Code configuration the runtime treats as legacy or silently ignores

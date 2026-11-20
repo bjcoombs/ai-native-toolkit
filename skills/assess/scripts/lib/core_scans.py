@@ -28,13 +28,17 @@ from lib.context_blocks import (
     attach_keyhole_blocks,
     attach_liveness_blocks,
     attach_structure_drift,
+    build_stale_hubs,
     coverage_report_block,
     dict_or,
+    doc_to_code_edges,
     excluded_generated,
 )
 from lib.coverage_report import detect_coverage_report, load_coverage_data
 from lib.decline_markers import build_decline_block
+from lib.doc_complexity_join import analyze_doc_complexity_join
 from lib.doc_graph import build_doc_graph
+from lib.doc_staleness import analyze_doc_staleness
 from lib.gap_actions import build_gap_actions
 from lib.instruction_files import (
     broken_instruction_refs,
@@ -89,6 +93,38 @@ def doc_graph(
         repo_root, extra_exclude_dirs=dirs, extra_exclude_patterns=patterns, scope=scope,
         working_notes_dirs=notes.dirs, working_notes_ignore=notes.ignore,
     ).as_dict()
+
+
+# -- doc staleness and the doc x complexity join -----------------------------
+
+def doc_staleness(
+    repo_root: Path, doc_graph_block: dict[str, Any], excludes: Excludes, scope: Path | None,
+) -> Any:
+    """Doc staleness over the doc graph's doc->code edges (``lib.doc_staleness``)."""
+    dirs, patterns = excludes
+    return analyze_doc_staleness(
+        repo_root, doc_to_code_edges=doc_to_code_edges(doc_graph_block),
+        extra_exclude_dirs=dirs, extra_exclude_patterns=patterns, scope=scope,
+    )
+
+
+def stale_hubs(doc_graph_block: dict[str, Any], staleness: Any) -> list[dict[str, Any]]:
+    """Doc-graph PageRank x doc staleness: the priority Layer 0 signal."""
+    return build_stale_hubs(doc_graph_block, staleness)
+
+
+def churn_degenerate(staleness: Any) -> bool:
+    """True when every file shows ~1 commit (shallow clone, fresh import,
+    squashed tree): churn-derived findings are discounted and the treemap
+    saturation axis is inactive. Single source of truth: the doc-staleness
+    block (``lib.git_churn.churn_is_degenerate``); False when that degraded.
+    """
+    return bool(dict_or(staleness, {}).get("churn_degenerate", False))
+
+
+def doc_join(current: dict[str, Any], staleness: Any, repo_root: Path) -> Any:
+    """The doc x complexity join (Signal C) the keyhole documentation block reads."""
+    return analyze_doc_complexity_join(current, dict_or(staleness, {}), repo_root)
 
 
 # -- instruction surface -----------------------------------------------------
@@ -215,7 +251,7 @@ def accretion_by_file(scan: AccretionScan) -> dict[str, dict[str, Any]]:
 def keyhole(
     repo_root: Path, current: dict[str, Any], doc_staleness: Any, liveness: dict[str, Any],
     structure: Any, test_pressure: Any, promissory: Any, accretion: Any, archetype: Any,
-    excludes: Excludes, scope: Path | None, rename_map: RenameMap,
+    excludes: Excludes, scope: Path | None, rename_map: RenameMap, join: Any,
 ) -> KeyholeIntegration:
     """The five keyhole blocks, derived findings, attention and report products."""
     return integrate(
@@ -226,7 +262,7 @@ def keyhole(
         promissory_markers=dict_or(promissory, None), accretion_ratchet=accretion,
         archetype=dict_or(archetype, None),
         exclude_dirs=excludes[0], exclude_patterns=excludes[1], scope=scope,
-        rename_map=rename_map,
+        rename_map=rename_map, doc_join=join,
     )
 
 

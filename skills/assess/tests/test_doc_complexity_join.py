@@ -11,7 +11,7 @@ and ``analyze_doc_staleness``'s return) -- no git, no filesystem -- so every
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from lib.doc_complexity_join import (
     MIN_HIGH_CCN,
@@ -39,6 +39,8 @@ def _staleness(docs: list[dict]) -> dict:
 
 
 def _doc(path: str, ratio: float, confidence: str = "high") -> dict:
+    """A base doc owning its directory under the shared ownership rule."""
+    parent = PurePosixPath(path).parent.as_posix()
     return {
         "path": path,
         "ratio": ratio,
@@ -47,6 +49,7 @@ def _doc(path: str, ratio: float, confidence: str = "high") -> dict:
         "code_churn_in_window": int(ratio * 4),
         "subject_code_count": 1,
         "subject_method": "nearest-ancestor",
+        "subject_roots": ["" if parent == "." else parent],
         "confidence": confidence,
     }
 
@@ -219,9 +222,12 @@ def _gen_doc(path: str, source_newer, ratio: float = 0.0,
              confidence: str = "low") -> dict:
     """A generated doc carrying a provenance verdict. ratio is deliberately set
     low/zero (the churn signal is irrelevant once provenance decides freshness)
-    and confidence "low" to prove the provenance verdict bypasses the guard."""
+    and confidence "low" to prove the provenance verdict bypasses the guard.
+    A non-base doc owns nothing by directory (#555), so it reaches the complex
+    file through an explicit link."""
     d = _doc(path, ratio, confidence=confidence)
-    d["subject_method"] = "repo-baseline"
+    d["subject_method"] = "explicit-links"
+    d["subject_roots"] = ["pkg/engine/core.py"]
     d["provenance"] = {
         "method": "frontmatter",
         "sources": ["data/jira.tsv"],
@@ -233,7 +239,7 @@ def _gen_doc(path: str, source_newer, ratio: float = 0.0,
 
 def test_generated_doc_source_not_moved_is_not_lying_map() -> None:
     """source_newer False -> freshness +1 -> good_contract, never lying_map,
-    even though the churn ratio is low-confidence (repo-baseline). This is the
+    even though the churn ratio is low-confidence. This is the
     issue #178 hard requirement: an accurate generated doc is not a lying map."""
     staleness = _staleness([_gen_doc("pkg/engine/api.md", source_newer=False)])
     result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("."))
@@ -245,7 +251,7 @@ def test_generated_doc_source_not_moved_is_not_lying_map() -> None:
 
 def test_generated_doc_source_moved_on_is_lying_map() -> None:
     """source_newer True -> freshness -1 -> lying_map over complex code, and the
-    repo-baseline low-confidence guard does NOT suppress it (the provenance
+    low-confidence guard does NOT suppress it (the provenance
     verdict is a direct, high-confidence source comparison)."""
     staleness = _staleness([_gen_doc("pkg/engine/api.md", source_newer=True)])
     result = analyze_doc_complexity_join(COMPLEXITY_STATS, staleness, Path("."))
@@ -258,7 +264,7 @@ def test_generated_doc_source_moved_on_is_lying_map() -> None:
 
 def test_provenance_indeterminate_falls_back_to_ratio() -> None:
     """source_newer None (no usable timestamps) -> the churn ratio decides, so a
-    busy-ratio repo-baseline doc stays unclassified under the low-confidence
+    busy-ratio low-confidence doc stays unclassified under the low-confidence
     guard exactly as before provenance existed."""
     staleness = _staleness([_gen_doc("pkg/engine/api.md", source_newer=None,
                                       ratio=5.0)])

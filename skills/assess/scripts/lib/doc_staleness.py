@@ -33,13 +33,13 @@ skipped on the doc side only: a code-only sweep after a doc fix (a formatter
 run, a licence-header pass over source files) counts in full on the code side,
 which is the one route left by which a just-corrected doc can be re-flagged.
 
-Associating a doc with the code it describes uses the **nearest-ancestor
-base-doc rule** (same nearest-match logic as ``CODEOWNERS`` / ``.gitignore``):
-each code file is owned by the nearest base doc walking up its directory
-ancestry, and a base doc's subject is its subtree down to the next base doc.
-When co-location is absent we fall back, in order, to a parallel ``docs/`` tree,
-the doc's explicit code links, then repo-wide churn. The method used is reported
-per doc so the limits are auditable.
+Associating a doc with the code it describes uses the one ownership rule in
+``lib.doc_ownership`` (nearest-ancestor base doc, then a parallel ``docs/`` tree,
+the doc's explicit code links, then repo-wide churn), the same rule the
+complexity join applies. Each row reports the method (``subject_method``), the
+rule's roots (``subject_roots``), the subject size (``subject_code_count``) and
+up to ``SUBJECT_PATHS_CAP`` of its paths (``subject_paths``), so a finding's
+subject can be checked.
 
 Churn comes from ``lib.git_churn`` -- the same machinery the complexity treemap
 uses, so churn is computed one way across the whole skill.
@@ -58,16 +58,29 @@ from lib.doc_graph import (
     is_excluded_path,
     is_repo_file,
 )
+from lib.doc_ownership import (
+    REPO_BASELINE,
+    SubjectSpec,
+    bounded_subject_paths,
+    build_base_doc_dirs,
+    code_ownership,
+    explicit_links,
+    rel_posix,
+    resolve_subjects,
+    subject_spec,
+)
 from lib.doc_provenance import resolve_doc_sources, source_is_newer
 from lib.git_churn import (
     CHURN_WINDOWS,
     GIT_TIMEOUT_SECONDS,
     ContentClock,
     churn_is_degenerate,
+    commit_epochs_by_file,
     content_commit_clock,
     pick_churn_window,
     tracked_files,
 )
+from lib.change_coupling import RenameMap
 from lib.run_context_types import BulkCommit, DocToCodeEdge
 
 
@@ -87,6 +100,9 @@ class DocStalenessRow(TypedDict):
     code_churn_in_window: int
     subject_code_count: int
     subject_method: str
+    subject_roots: list[str]
+    base_doc_dir: str | None
+    subject_paths: list[str]
     ratio: float
     window_ratio: float
     code_churn_since_doc_change: int | None
@@ -129,14 +145,6 @@ class DocStalenessBlock(TypedDict):
     modularity: DocModularity
 
 
-# Docs that describe the directory they live in. Precedence (best first) when a
-# directory holds more than one candidate.
-BASE_DOC_PRECEDENCE = ["readme.md", "index.md", "_index.md", "agents.md", "claude.md"]
-# Boilerplate that names a directory but does not *describe* its code.
-BOILERPLATE_BASENAMES = {
-    "license.md", "license", "changelog.md", "contributing.md",
-    "code_of_conduct.md", "security.md", "notice.md", "authors.md",
-}
 # A repo at or above this many hand-written code files is "large" enough that
 # missing modular base docs is a navigability gap rather than needless overhead.
 LARGE_REPO_CODE_FILES = 40
@@ -151,6 +159,11 @@ class DocStaleness:
     subject_code_count: int
     subject_method: str
     ratio: float
+    # The ownership rule's roots for this doc and its bounded, sorted subject
+    # paths (repo-relative POSIX); see lib.doc_ownership.
+    subject_roots: tuple[str, ...] = ()
+    base_doc_dir: str | None = None
+    subject_paths: tuple[str, ...] = ()
     # Whole-window ratio and the subject churn after the doc's last content
     # change; `ratio` is the smaller of the two (see the module docstring).
     # `code_churn_since_doc_change` is None when the doc has no commit or the
@@ -171,14 +184,19 @@ class DocStaleness:
     # `last_commit_days` is the doc's creation date, not a content age (a doc
     # regenerated in bulk on every release). "content" otherwise.
     last_change_basis: str = "content"
+    # False when the rename map could not be read (issue #425): both churn
+    # counts may miss commits made under an old name.
+    renames_followed: bool = True
 
     @property
     def confidence(self) -> str:
         # repo-baseline uses repo-wide churn (no derivable subject), so a
         # stale-ratio computed against it is a coarse proxy. Mark it low so a
         # reader knows to discount before acting on the ranking. A creation-date
-        # fallback is low for the same reason: its age is not a content age.
-        if self.subject_method == "repo-baseline" or self.last_change_basis == "creation":
+        # fallback is low for the same reason: its age is not a content age, and
+        # so is a churn count that could not follow renames.
+        if (self.subject_method == "repo-baseline" or self.last_change_basis == "creation"
+                or not self.renames_followed):
             return "low"
         return "high"
 
@@ -190,6 +208,9 @@ class DocStaleness:
             "code_churn_in_window": self.code_churn_in_window,
             "subject_code_count": self.subject_code_count,
             "subject_method": self.subject_method,
+            "subject_roots": list(self.subject_roots),
+            "base_doc_dir": self.base_doc_dir,
+            "subject_paths": list(self.subject_paths),
             "ratio": round(self.ratio, 2),
             "window_ratio": round(self.window_ratio, 2),
             "code_churn_since_doc_change": self.code_churn_since_doc_change,
@@ -276,28 +297,38 @@ def content_clock(repo_root: Path) -> ContentClock:
     the doc-staleness metric and the instruction grader agree on which commits
     are bulk. Both calls share one build per HEAD (see `_clock_at`).
     """
+    repo_root = repo_root.resolve()
+    return _clock_at(repo_root, _head(repo_root))
+
+
+def _head(repo_root: Path) -> str | None:
+    """HEAD's sha, the cache key for the clock and the rename map; None on failure."""
     import subprocess
 
-    repo_root = repo_root.resolve()
     try:
-        head = subprocess.run(
+        return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
             capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip() or None
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        head = None
-    return _clock_at(repo_root, head)
+        return None
+
+
+@lru_cache(maxsize=4)
+def _renames_at(repo_root: Path, head: str | None) -> RenameMap:
+    """The rename map, built once per (repo, HEAD) for the clock and the churn."""
+    from lib.change_coupling import build_rename_map
+
+    return build_rename_map(repo_root)
 
 
 @lru_cache(maxsize=4)
 def _clock_at(repo_root: Path, head: str | None) -> ContentClock:
     """Build the clock once per (repo, HEAD): doc discovery, rename map, git pass."""
-    from lib.change_coupling import build_rename_map
-
     # A rename map that could not be read leaves renames unfollowed, so the scan
     # is not complete: a renamed doc whose only visible commit is a bulk rename
     # falls back to a creation date.
-    rename_map = build_rename_map(repo_root)
+    rename_map = _renames_at(repo_root, head)
     renames = tuple(sorted(rename_map.paths.items()))
     clock = content_commit_clock(
         repo_root, frozenset(discover_doc_files(repo_root)), head, renames
@@ -315,101 +346,12 @@ def _safe_rel(path: Path, repo_root: Path) -> str:
         return str(path)
 
 
-def _is_base_doc(doc: Path) -> bool:
-    """True if `doc` describes the directory it lives in (a base doc)."""
-    name = doc.name.lower()
-    if name in BOILERPLATE_BASENAMES:
-        return False
-    if name in BASE_DOC_PRECEDENCE:
-        return True
-    # `<dir>.md` convention: a doc named after its own parent directory.
-    if doc.stem.lower() == doc.parent.name.lower():
-        return True
-    # MOC notes describe a cluster, so they act as base docs too.
-    from lib.doc_graph import _is_declared_moc
-
-    return _is_declared_moc(doc)
-
-
-def _base_doc_for_dir(directory: Path, docs_in_dir: list[Path]) -> Path | None:
-    """Pick the single base doc representing `directory` by precedence."""
-    base = [d for d in docs_in_dir if _is_base_doc(d)]
-    if not base:
-        return None
-    def rank(d: Path) -> int:
-        name = d.name.lower()
-        return BASE_DOC_PRECEDENCE.index(name) if name in BASE_DOC_PRECEDENCE else len(BASE_DOC_PRECEDENCE)
-    return sorted(base, key=lambda d: (rank(d), str(d)))[0]
-
-
-def _build_base_doc_dirs(repo_root: Path, docs: list[Path]) -> dict[Path, Path]:
-    """Map directory -> its base doc, for every directory that has one."""
-    by_dir: dict[Path, list[Path]] = {}
-    for d in docs:
-        by_dir.setdefault(d.parent, []).append(d)
-    result: dict[Path, Path] = {}
-    for directory, dir_docs in by_dir.items():
-        base = _base_doc_for_dir(directory, dir_docs)
-        if base is not None:
-            result[directory] = base
-    return result
-
-
-def _nearest_base_doc(code_file: Path, base_doc_dirs: dict[Path, Path], repo_root: Path) -> Path | None:
-    """Walk up from the code file's directory; return the nearest base doc."""
-    current = code_file.parent
-    while True:
-        if current in base_doc_dirs:
-            return base_doc_dirs[current]
-        if current == repo_root or current.parent == current:
-            return None
-        if repo_root not in current.parents and current != repo_root:
-            return None
-        current = current.parent
-
-
 def _window_since(churn_label: str | None) -> str | None:
     """The `--since` expression behind a `pick_churn_window` label."""
     for label, since in CHURN_WINDOWS:
         if churn_label == f"commits ({label})":
             return since
     return None
-
-
-def commit_epochs_by_file(
-    repo_root: Path, since: str | None,
-) -> dict[Path, list[tuple[int, int]]] | None:
-    """{abs_path: [(author epoch, commit index)]} over the churn window.
-
-    The per-commit counterpart of `git_churn.git_churn_scores`: the same walk,
-    keeping each commit's author time (`%at`, the clock the doc side uses) so a
-    caller can count only the commits after a given moment. The commit index
-    lets a caller count distinct commits rather than file-commits. None when
-    git fails.
-    """
-    import subprocess
-
-    cmd = ["git", "-C", str(repo_root), "log", "--relative",
-           "--pretty=format:%x00%at", "--name-only"]
-    if since:
-        cmd.append(f"--since={since}")
-    try:
-        raw = subprocess.run(
-            cmd, capture_output=True, text=True, check=True,
-            timeout=GIT_TIMEOUT_SECONDS,
-        ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
-            FileNotFoundError):
-        return None
-    epochs: dict[Path, list[tuple[int, int]]] = {}
-    current = (0, -1)
-    for line in raw.splitlines():
-        line = line.strip()
-        if line.startswith("\x00"):
-            current = (int(line[1:] or 0), current[1] + 1)
-        elif line:
-            epochs.setdefault((repo_root / line).resolve(), []).append(current)
-    return epochs
 
 
 def subject_epochs(
@@ -450,24 +392,6 @@ def behind_ratio(
     return min(window_ratio, float(since_doc)), since_doc
 
 
-def _parallel_docs_subject(
-    doc: Path, repo_root: Path, code_dirs: set[Path],
-) -> list[Path] | None:
-    """Fallback (b): a doc under a `docs/` tree mapping to a code dir by name.
-
-    `docs/payments.md` (or `docs/payments/index.md`) -> the `payments` code dir.
-    """
-    rel = doc.relative_to(repo_root)
-    if "docs" not in {p.lower() for p in rel.parts}:
-        return None
-    candidates = {doc.stem.lower(), doc.parent.name.lower()}
-    matches = [d for d in code_dirs if d.name.lower() in candidates]
-    if not matches:
-        return None
-    # Prefer the shallowest matching code dir for determinism.
-    return sorted(matches, key=lambda d: (len(d.parts), str(d)))[:1]
-
-
 @dataclass(frozen=True)
 class _ChurnContext:
     """Repo-wide inputs every doc's staleness row is measured against."""
@@ -479,6 +403,7 @@ class _ChurnContext:
     repo_wide_code_churn: int
     clock: ContentClock
     generated_sources: list[tuple[str, list[str]]]
+    renames_complete: bool = True
 
 
 def _resolve_docs(
@@ -499,66 +424,13 @@ def _resolve_docs(
     return [d.resolve() for d in doc_files]
 
 
-def _explicit_links(
-    repo_root: Path, doc_to_code_edges: list[DocToCodeEdge] | None,
-) -> dict[str, list[Path]]:
-    """Explicit doc->code links (fallback c): doc rel -> [code abs paths]."""
-    explicit: dict[str, list[Path]] = {}
-    for edge in (doc_to_code_edges or []):
-        code_abs = (repo_root / edge["code"]).resolve()
-        explicit.setdefault(edge["doc"], []).append(code_abs)
-    return explicit
-
-
-def _code_ownership(
-    code_files: list[Path], base_doc_dirs: dict[Path, Path], repo_root: Path,
-) -> tuple[dict[Path, Path], dict[Path, list[Path]]]:
-    """Nearest-ancestor ownership: (code file -> owning base doc, base doc ->
-    the code subtree it owns down to the next base doc)."""
-    code_owner: dict[Path, Path] = {}
-    for c in code_files:
-        owner = _nearest_base_doc(c, base_doc_dirs, repo_root)
-        if owner is not None:
-            code_owner[c] = owner
-    owned_by_doc: dict[Path, list[Path]] = {}
-    for code, owner in code_owner.items():
-        owned_by_doc.setdefault(owner, []).append(code)
-    return code_owner, owned_by_doc
-
-
-def _doc_subject(
-    d: Path,
-    doc_rel: str,
-    ctx: _ChurnContext,
-    owned_by_doc: dict[Path, list[Path]],
-    code_dirs: set[Path],
-    explicit: dict[str, list[Path]],
-) -> tuple[list[Path], str]:
-    """The code a doc describes and the method that found it.
-
-    Association precedence (per the PRD's ordered fallbacks): co-located base
-    doc (nearest-ancestor) -> a parallel docs/ tree -> the doc's explicit code
-    links -> repo-wide churn baseline (an empty subject).
-    """
-    if d in owned_by_doc:
-        return owned_by_doc[d], "nearest-ancestor"
-    par = _parallel_docs_subject(d, ctx.repo_root, code_dirs)
-    if par is not None:
-        subject = [c for c in ctx.code_files if any(sd in c.parents for sd in par)]
-        return subject, "parallel-docs-tree"
-    if explicit.get(doc_rel):
-        return explicit[doc_rel], "explicit-links"
-    return [], "repo-baseline"
-
-
 def _subject_churn(
     subject: list[Path], method: str, ctx: _ChurnContext,
-) -> tuple[int, int, list[int] | None]:
-    """``(code churn, subject file count, sorted subject commit epochs)``."""
-    if method != "repo-baseline":
+) -> tuple[int, list[int] | None]:
+    """``(code churn, sorted subject commit epochs)``."""
+    if method != REPO_BASELINE:
         return (
             sum(ctx.churn_map.get(c, 0) for c in subject),
-            len(subject),
             subject_epochs(subject, ctx.commit_epochs),
         )
     # repo-baseline has no derivable subject, so the ratio uses repo-wide
@@ -567,12 +439,9 @@ def _subject_churn(
     # `last_commit_days` is the corrective signal (the heatmap colours by
     # staleness, and a floating doc won't be a graph hub, so its stale_hubs
     # priority stays low). Read ratio together with subject_method and
-    # last_commit_days, not on its own.
-    return (
-        ctx.repo_wide_code_churn,
-        len(ctx.code_files),
-        ctx.baseline_epochs,
-    )
+    # last_commit_days, not on its own. The subject itself stays empty, so
+    # `subject_code_count` is 0 here, matching the complexity join.
+    return ctx.repo_wide_code_churn, ctx.baseline_epochs
 
 
 def _provenance(
@@ -591,10 +460,13 @@ def _provenance(
 
 
 def _doc_row(
-    d: Path, doc_rel: str, subject: list[Path], method: str, ctx: _ChurnContext,
+    d: Path, doc_rel: str, spec: SubjectSpec, subject_rels: list[str],
+    abs_of: dict[str, Path], ctx: _ChurnContext,
 ) -> DocStaleness:
     """One doc's staleness row against its subject."""
-    code_churn, subject_count, measured = _subject_churn(subject, method, ctx)
+    method = spec["method"]
+    subject = [abs_of[r] for r in subject_rels]
+    code_churn, measured = _subject_churn(subject, method, ctx)
     doc_churn = ctx.churn_map.get(d, 0)
     window_ratio = code_churn / max(doc_churn, 1)
     # Behind-the-subject cap: only churn after the doc's last content change
@@ -620,8 +492,11 @@ def _doc_row(
         last_change_basis="creation" if d in ctx.clock.creation_fallback else "content",
         doc_churn_in_window=doc_churn,
         code_churn_in_window=code_churn,
-        subject_code_count=subject_count,
+        subject_code_count=len(subject_rels),
         subject_method=method,
+        subject_roots=tuple(spec["roots"]),
+        base_doc_dir=spec["base_dir"],
+        subject_paths=tuple(bounded_subject_paths(subject_rels)),
         ratio=ratio,
         window_ratio=window_ratio,
         code_churn_since_doc_change=since_doc,
@@ -629,6 +504,7 @@ def _doc_row(
         provenance_sources=prov_source_rels,
         provenance_generated_by=generated_by,
         source_newer=src_newer,
+        renames_followed=ctx.renames_complete,
     )
 
 
@@ -703,7 +579,11 @@ def analyze_doc_staleness(
 
     # Churn: pick a window over the code files (the subject we care about), then
     # score both docs and code in that window for the ratio.
-    churn_map, churn_label = pick_churn_window(repo_root, code_files + docs)
+    # Both churn reads follow renames through the clock's rename map (#425).
+    head = _head(repo_root)
+    rename_map = _renames_at(repo_root, head)
+    churn_map, churn_label = pick_churn_window(
+        repo_root, code_files + docs, rename_map.paths)
     if churn_map is None:
         churn_map = {}
         churn_label = None
@@ -722,9 +602,10 @@ def analyze_doc_staleness(
     # Per-commit author times over the same window, for the behind-the-subject
     # cap. A repo-baseline doc measures against every code file, so that list is
     # sorted once here rather than per doc.
-    commit_epochs = commit_epochs_by_file(repo_root, _window_since(churn_label))
+    commit_epochs = commit_epochs_by_file(
+        repo_root, _window_since(churn_label), rename_map.paths)
     # Last content change per doc, skipping bulk mechanical commits (#333).
-    clock = content_clock(repo_root)
+    clock = _clock_at(repo_root, head)
     ctx = _ChurnContext(
         repo_root=repo_root,
         code_files=code_files,
@@ -734,23 +615,38 @@ def analyze_doc_staleness(
         repo_wide_code_churn=sum(churn_map.get(c, 0) for c in code_files),
         clock=clock,
         generated_sources=generated_sources,
+        renames_complete=rename_map.complete,
     )
 
-    base_doc_dirs = _build_base_doc_dirs(repo_root, docs)
+    base_doc_dirs = build_base_doc_dirs(docs)
     code_dirs = {c.parent for c in code_files}
-    explicit = _explicit_links(repo_root, doc_to_code_edges)
-    code_owner, owned_by_doc = _code_ownership(code_files, base_doc_dirs, repo_root)
+    explicit = explicit_links(repo_root, doc_to_code_edges)
+    code_owner = code_ownership(code_files, base_doc_dirs, repo_root)
+
+    # One ownership rule (lib.doc_ownership): a spec per doc, expanded over the
+    # discovered code files by repo-relative POSIX key, the key the complexity
+    # join expands the same specs over. An explicit link to a file outside the
+    # discovered code (excluded, or not code) is not part of any subject.
+    abs_of = {rel_posix(c, repo_root): c for c in code_files}
+    owning_docs = set(code_owner.values())
+    base_docs = set(base_doc_dirs.values())
+    specs = {
+        str(d.relative_to(repo_root)): subject_spec(
+            d, str(d.relative_to(repo_root)), repo_root, owning_docs, base_docs,
+            code_dirs, explicit,
+        )
+        for d in docs
+    }
+    subjects = resolve_subjects(abs_of, specs)
 
     results: list[DocStaleness] = []
     method_counts: dict[str, int] = {}
     for d in docs:
         doc_rel = str(d.relative_to(repo_root))
-        subject, method = _doc_subject(
-            d, doc_rel, ctx, owned_by_doc, code_dirs, explicit,
-        )
-        method_counts[method] = method_counts.get(method, 0) + 1
-        results.append(_doc_row(d, doc_rel, subject, method, ctx))
-    docs_mapping_to_code = len(docs) - method_counts.get("repo-baseline", 0)
+        spec = specs[doc_rel]
+        method_counts[spec["method"]] = method_counts.get(spec["method"], 0) + 1
+        results.append(_doc_row(d, doc_rel, spec, subjects[doc_rel], abs_of, ctx))
+    docs_mapping_to_code = len(docs) - method_counts.get(REPO_BASELINE, 0)
 
     # Association-derivability is itself a Layer 0 signal.
     code_under_base = sum(1 for c in code_files if c in code_owner)

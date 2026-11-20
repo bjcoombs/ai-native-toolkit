@@ -41,9 +41,8 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # Per-scan blocks carry their own shapes and are not versioned here.
 SIGNALS_SCHEMA_VERSION = 1
 
-# Run-context blocks ``assess_core`` assembles itself: by hand
-# (``scan_registry.HAND_WIRED``) or through its own table entries in
-# ``CORE_MODULES`` (#557). Names only: the headless runner reports each as
+# Run-context blocks ``assess_core`` assembles through its own table entries in
+# ``CORE_MODULES`` (#557, #558). Names only: the headless runner reports each as
 # unavailable. Several report ``available: false`` without the ``reason`` the
 # published schema requires (``dead_code`` with no tool, ``coverage_report``
 # with no report), so they stay unreported until each shape is checked. A name
@@ -89,7 +88,7 @@ TOOLKIT_ROOT = Path(__file__).resolve().parents[4]
 
 
 class UnknownScanError(ValueError):
-    """``--scans`` named a scan that is neither registered nor hand-wired."""
+    """``--scans`` named a scan that is neither reported nor a core block."""
 
     def __init__(self, names: Sequence[str]) -> None:
         self.names = list(names)

@@ -26,6 +26,7 @@ from lib.ai_usage import AiUsageBlock
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.coverage_gate import CoverageGate
+from lib.doc_claims import DocClaimsBlock
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
@@ -101,6 +102,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
+    ("doc_claims", DocClaimsBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),

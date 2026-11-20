@@ -18,6 +18,28 @@ Snapshots (git-tracked only, paths relative to ``repo_root``):
   object has any of ``required_status_checks``, ``enforce_admins``,
   ``required_pull_request_reviews``. The branch comes from the export's ``url``
   (``.../branches/<branch>/protection``), else the file stem.
+- **GitLab protected branch**: a JSON file under ``.gitlab/`` whose top-level
+  object has ``push_access_levels`` or ``merge_access_levels`` - the shape
+  ``GET projects/:id/protected_branches/:name`` returns. The branch (a name or
+  a ``*`` wildcard) is the export's ``name``, else the file stem.
+
+Provider. A remote that ``gitlab_cli.open_gitlab`` resolves to a GitLab project
+compares only GitLab snapshots; any other remote compares only GitHub ones,
+through ``gh_cli``. ``snapshots`` lists only the compared kind. When no snapshot
+of the remote's provider is tracked the block is ``{"available": False,
+"reason": "other_provider: ..."}`` with every snapshot listed - an uncompared
+snapshot is never reported clean.
+
+A GitLab snapshot is diffed against the live rule covering its branch
+(``gitlab_cli.branch_protection``: the rule of the same name, else the first
+wildcard rule in name order that matches). A readable, complete list with no
+covering rule is an ``("branch_protection", "present", "absent")`` entry; a
+refused read (403 and 404 included: on GitLab a 404 usually means "no access")
+or an incomplete list degrades the whole block, never "no protection". Access
+level lists carry no identity field: each level is compared on
+``GITLAB_LEVEL_FIELDS`` only (its label and any key only the live API adds are
+not drift), and a change is reported as a count or an ``items`` entry, never
+the live levels.
 
 The diff is driven by the snapshot: every key it records is compared; keys only
 the live API returns (metadata, fields the export left out) are not drift.
@@ -50,9 +72,10 @@ Block: ``{"available", "entries": [{"file", "key", "tracked", "live"}],
 "dropped", "snapshots"}``. Entries are ranked worst first: one-sided
 (``"absent"``) entries, then boolean flips, then other value changes; only the
 first ``MAX_ENTRIES`` are kept and ``dropped`` counts the rest. No snapshots, or
-none that differ, gives ``available: True`` with ``entries: []``. Any GitHub read that fails degrades the whole block to
+none that differ, gives ``available: True`` with ``entries: []``. Any platform read that fails degrades the whole block to
 ``{"available": False, "reason"}`` (``no_access`` on HTTP 403) - never a
-partial clean result. GitHub access goes through ``gh_cli``.
+partial clean result. GitHub access goes through ``gh_cli``, GitLab access
+through ``gitlab_cli``.
 """
 from __future__ import annotations
 
@@ -64,6 +87,7 @@ from typing import Any
 from urllib.parse import quote
 
 from lib.gh_cli import GhUnavailable, gh_api, open_github, unavailable
+from lib.gitlab_cli import GitlabProject, branch_protection, open_gitlab, protected_branches
 from lib.git_churn import tracked_files
 
 # Metadata the API adds or rewrites on every read; never configuration.
@@ -74,6 +98,12 @@ IGNORED_KEYS = frozenset({
 })
 
 PROTECTION_KEYS = ("required_status_checks", "enforce_admins", "required_pull_request_reviews")
+GITLAB_PROTECTION_KEYS = ("push_access_levels", "merge_access_levels")
+
+GITLAB_KINDS = frozenset({"gitlab_protected_branch"})
+
+# What an access level is: who it grants. Its label and id are presentation.
+GITLAB_LEVEL_FIELDS = ("access_level", "user_id", "group_id", "deploy_key_id")
 
 # A snapshot bigger than this is not a hand-kept config export.
 MAX_SNAPSHOT_BYTES = 1_000_000
@@ -94,7 +124,8 @@ _BRANCH_FROM_URL = re.compile(r"/branches/(?P<branch>.+)/protection/?$")
 # is skipped without a JSON parse, so a repo with many tracked JSON files pays
 # a substring probe per file, not a parse.
 _PROBE_KEYS = ('"rules"', '"required_status_checks"', '"enforce_admins"',
-               '"required_pull_request_reviews"')
+               '"required_pull_request_reviews"', '"push_access_levels"',
+               '"merge_access_levels"')
 
 
 def _load_json(path: Path) -> Any:
@@ -123,11 +154,16 @@ def _is_protection(doc: Any) -> bool:
     return isinstance(doc, dict) and any(k in doc for k in PROTECTION_KEYS)
 
 
+def _is_gitlab_protection(doc: Any) -> bool:
+    return isinstance(doc, dict) and any(k in doc for k in GITLAB_PROTECTION_KEYS)
+
+
 def find_snapshots(repo_root: Path) -> list[dict[str, Any]]:
     """Tracked snapshots under ``repo_root``, sorted by path.
 
-    Each item: ``{"file", "kind": "ruleset"|"branch_protection", "doc"}``,
-    plus ``"branch"`` for a protection export.
+    Each item: ``{"file", "kind", "doc"}`` with kind ``ruleset``,
+    ``branch_protection`` or ``gitlab_protected_branch``, plus ``"branch"``
+    for a protection export.
     """
     root = repo_root.resolve()
     tracked = tracked_files(root)
@@ -142,6 +178,7 @@ def find_snapshots(repo_root: Path) -> list[dict[str, Any]]:
         except ValueError:
             continue
         under_github = rel.startswith(".github/")
+        under_gitlab = rel.startswith(".gitlab/")
         doc = _load_json(path)
         if doc is None:
             continue
@@ -151,6 +188,11 @@ def find_snapshots(repo_root: Path) -> list[dict[str, Any]]:
             m = _BRANCH_FROM_URL.search(str(doc.get("url") or ""))
             branch = m.group("branch") if m else path.stem
             out.append({"file": rel, "kind": "branch_protection", "doc": doc, "branch": branch})
+        elif under_gitlab and _is_gitlab_protection(doc):
+            name = doc.get("name")
+            branch = name if isinstance(name, str) and name else path.stem
+            out.append({"file": rel, "kind": "gitlab_protected_branch", "doc": doc,
+                        "branch": branch})
     return out
 
 
@@ -336,6 +378,64 @@ def _live_protection(slug: str, branch: str) -> dict[str, Any] | Missing:
     return live if isinstance(live, dict) else ("branch_protection", "present", "absent")
 
 
+def _gitlab_levels(doc: Any) -> Any:
+    """``*_access_levels`` items projected onto the non-null ``GITLAB_LEVEL_FIELDS``,
+    so a label, an id, a key only the live API adds, or an explicit null an
+    export omitted is never drift."""
+    if not isinstance(doc, dict):
+        return doc
+    out = dict(doc)
+    for key, value in doc.items():
+        if key.endswith("_access_levels") and isinstance(value, list):
+            out[key] = [{f: item[f] for f in GITLAB_LEVEL_FIELDS if item.get(f) is not None}
+                        if isinstance(item, dict) else item for item in value]
+    return out
+
+
+def _gitlab_entries(project: GitlabProject,
+                    snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drift entries for GitLab protected-branch snapshots; raises GhUnavailable."""
+    rules = protected_branches(project)  # one list read per scan
+    entries: list[dict[str, Any]] = []
+    for snap in snapshots:
+        live = branch_protection(project, snap["branch"], rules)
+        diffs = ([("branch_protection", "present", "absent")] if live is None
+                 else diff_values(_gitlab_levels(snap["doc"]), _gitlab_levels(live)))
+        entries += [{"file": snap["file"], "key": k, "tracked": t, "live": lv}
+                    for k, t, lv in diffs]
+    return entries
+
+
+def _github_entries(repo_root: Path, snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drift entries for GitHub ruleset and protection snapshots; raises GhUnavailable."""
+    repo = open_github(repo_root)
+    summaries: list[dict[str, Any]] | None = None
+    entries: list[dict[str, Any]] = []
+    for snap in snapshots:
+        if snap["kind"] == "ruleset":
+            if summaries is None:
+                # Repository-level rulesets only: an inherited org ruleset
+                # is not what a repo snapshot mirrors, and its id does not
+                # resolve on the repo-scoped detail endpoint. 100 is the
+                # API's page maximum and a deliberate ceiling - a repo with
+                # more rulesets of its own than that is out of scope.
+                got = gh_api(
+                    f"repos/{repo.slug}/rulesets?per_page=100&includes_parents=false"
+                )
+                summaries = [s for s in got if isinstance(s, dict)] if isinstance(got, list) else []
+            found = _live_ruleset(repo.slug, snap["doc"], summaries)
+            name = snap["doc"].get("name") or snap["doc"].get("id")
+            live: dict[str, Any] | Missing = ("ruleset", name, "absent") if found is None else found
+        else:
+            live = _live_protection(repo.slug, snap["branch"])
+        diffs = [live] if isinstance(live, tuple) else diff_values(snap["doc"], live)
+        entries += [
+            {"file": snap["file"], "key": k, "tracked": t, "live": lv}
+            for k, t, lv in diffs
+        ]
+    return entries
+
+
 def scan_config_drift(repo_root: Path) -> dict[str, Any]:
     """Build the ``config_drift`` run-context block (see module docstring)."""
     snapshots = find_snapshots(repo_root)
@@ -343,31 +443,18 @@ def scan_config_drift(repo_root: Path) -> dict[str, Any]:
     if not snapshots:
         return {"available": True, "entries": [], "dropped": 0, "snapshots": []}
     try:
-        repo = open_github(repo_root)
-        summaries: list[dict[str, Any]] | None = None
-        entries: list[dict[str, Any]] = []
-        for snap in snapshots:
-            if snap["kind"] == "ruleset":
-                if summaries is None:
-                    # Repository-level rulesets only: an inherited org ruleset
-                    # is not what a repo snapshot mirrors, and its id does not
-                    # resolve on the repo-scoped detail endpoint. 100 is the
-                    # API's page maximum and a deliberate ceiling - a repo with
-                    # more rulesets of its own than that is out of scope.
-                    got = gh_api(
-                        f"repos/{repo.slug}/rulesets?per_page=100&includes_parents=false"
-                    )
-                    summaries = [s for s in got if isinstance(s, dict)] if isinstance(got, list) else []
-                found = _live_ruleset(repo.slug, snap["doc"], summaries)
-                name = snap["doc"].get("name") or snap["doc"].get("id")
-                live: dict[str, Any] | Missing = ("ruleset", name, "absent") if found is None else found
-            else:
-                live = _live_protection(repo.slug, snap["branch"])
-            diffs = [live] if isinstance(live, tuple) else diff_values(snap["doc"], live)
-            entries += [
-                {"file": snap["file"], "key": k, "tracked": t, "live": lv}
-                for k, t, lv in diffs
-            ]
+        project = open_gitlab(repo_root)
+        on_gitlab = project is not None
+        compared = [s for s in snapshots if (s["kind"] in GITLAB_KINDS) == on_gitlab]
+        if not compared:
+            raise GhUnavailable(
+                "other_provider: the remote is GitLab and every tracked snapshot is a "
+                "GitHub export" if on_gitlab else
+                "other_provider: the remote was not resolved as GitLab and every "
+                "tracked snapshot is a GitLab export")
+        listed = [{"file": s["file"], "kind": s["kind"]} for s in compared]
+        entries = (_gitlab_entries(project, compared) if project is not None
+                   else _github_entries(repo_root, compared))
     except GhUnavailable as e:
         return {**unavailable(e.reason), "snapshots": listed}
     ranked = rank_entries(entries)
