@@ -38,6 +38,21 @@ tracked source file, so a very large repository can need a longer `--timeout`. `
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`.
 
+The observability rung, the doc graph, doc staleness and the archetype are
+read from committed files and git history, so a fleet run measures them
+(Layer 1 and the doc-freshness row get a level). Some blocks are measured
+only by a full `/assess` run of one repository and always read unavailable
+here, with the reason code `not_registered`: `dead_code`, `runtime` and
+`understanding` (the costly scans, opt-in to a full run), plus the blocks a full
+run assembles from its own state (`diff`, `behaviour`, `documentation`,
+`derived_findings`, `coverage_report`, `test_pressure`, `test_focus`,
+`accretion_ratchet`, `gap_actions`, `ancestor_instruction_files`). Blocks that
+read GitHub (`config_drift`, `review_reality`, `gate_cost_estimate`) read
+unavailable with the code `network`: a fleet run makes no network call. Doc
+staleness reads unavailable (`not_git_root`) outside a git work tree, and its
+stale share is null on a shallow clone, so the doc-freshness row is `unknown`
+there.
+
 | Flag | Meaning |
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |

@@ -101,10 +101,10 @@ def test_network_scans_are_unavailable_and_agent_environment_runs_offline(fixtur
 
 def test_unregistered_scans_are_listed_unavailable(fixture_repo, tmp_path):
     out = tmp_path / "signals.json"
-    assert _run(fixture_repo, out, "--scans", "doc_graph,agent_ops") == 0
+    assert _run(fixture_repo, out, "--scans", "dead_code,agent_ops") == 0
     scans = json.loads(out.read_text(encoding="utf-8"))["scans"]
-    assert list(scans) == ["agent_ops", "doc_graph"]
-    assert scans["doc_graph"] == {"available": False, "reason": signals.UNREGISTERED_REASON}
+    assert list(scans) == ["agent_ops", "dead_code"]
+    assert scans["dead_code"] == {"available": False, "reason": signals.UNREGISTERED_REASON}
 
 
 def test_a_selected_scan_pulls_in_what_it_reads_but_reports_only_itself(fixture_repo, tmp_path):
@@ -184,7 +184,7 @@ def test_the_core_entries_are_not_reported_as_scans():
     and list keys never become scan names."""
     known = set(signals.known_scans())
     assert not {"run_id", "plugin_version", "anomalies", "current", "run_header"} & known
-    assert "doc_graph" in known and "doc_graph" in signals.UNREGISTERED_SCANS
+    assert "dead_code" in known and "dead_code" in signals.UNREGISTERED_SCANS
 
 
 def test_unregistered_names_are_run_context_keys_the_core_assigns():

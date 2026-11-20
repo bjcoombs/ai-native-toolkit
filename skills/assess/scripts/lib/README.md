@@ -436,7 +436,13 @@ carries `history_truncated: true` and `history_boundary_date`, every row is conf
 `low`, and a doc whose newest visible change is the boundary carries
 `last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
 floor. Its ratio still rests only on subject commits after the boundary, so the
-boundary listing every code file does not make it stale. The `modularity` block's `base_doc_dir_ratio`
+boundary listing every code file does not make it stale. `summary` (#699) carries the integer
+counts a maturity model reads: `measured_docs` (rows with a code subject of their own,
+every method but `repo-baseline`), `stale_docs` (those `doc_complexity_join.is_stale`
+marks: ratio above `STALENESS_RATIO_THRESHOLD`, or a newer declared source) and
+`stale_pct` (their share, a whole percent rounded up). Both counts are null on a truncated
+or degenerate history, or with no measured doc, so the doc-freshness row reads unknown.
+Paths are repo-relative POSIX (`as_posix`) on every platform. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
 within 0-1 (tests: `tests/test_doc_modularity.py`).
@@ -636,8 +642,9 @@ completes. A name the runner provides is never recomputed from the table. A
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
-registry with `headless_layers.HEADLESS_SCANS` in place of every core entry that
-publishes one of their names, and of every entry that reads a displaced one (#667). Names in `UNREGISTERED_SCANS` (run-context blocks
+registry with `HEADLESS_SCANS` (`headless_layers.py`, #667, and `headless_static.py`,
+#699) in place of every core entry that publishes one of their names, and of every entry
+that reads a displaced one. Names in `UNREGISTERED_SCANS` (run-context blocks
 `assess_core` assembles, several of which report `available: false` without the
 `reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
 name a reported scan also holds is dropped at runtime. `select_scans` raises
@@ -664,6 +671,16 @@ and a maturity model row reads `unknown`. It diverges from the full run in two p
 map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
+
+**`headless_static.py`**
+The headless runner's entries for the four static blocks the core publishes from
+`core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
+directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
+`doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
+doc->code edges; needs a git work tree: `not_git_root`) and `archetype`. A scan that
+raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
+maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
+`signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and

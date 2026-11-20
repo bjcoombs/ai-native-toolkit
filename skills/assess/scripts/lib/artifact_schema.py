@@ -126,7 +126,12 @@ constant each.
 # marker drops modularity_q and opens its reason with a code: no_grimp,
 # no_networkx, grimp_failed or no_python_packages). run-context.json and
 # complexity-stats.json are otherwise unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.18.0"
+# 1.19.0: run-context.json doc_staleness gains summary (issue #699): integer
+# measured_docs, stale_docs and stale_pct (null on a truncated or degenerate
+# history), read by the default maturity model's doc-freshness row. Row paths
+# are repo-relative POSIX on every platform. Additive; no finding moves, and
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.19.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

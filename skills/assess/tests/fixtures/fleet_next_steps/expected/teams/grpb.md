@@ -44,7 +44,7 @@ Level 0 of 2. To reach level 1: 0 of 1 repository already there; the rule needs 
 
 Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
 
-- `observability.rung`: not measured in 1 of 1 repository. Only a full `/assess` run reports the observability rung; a headless fleet scan leaves it unavailable.
+- `observability.rung`: not measured in 1 of 1 repository. Read from committed files by a full `/assess` run and a headless scan alike; unavailable when the scan raised (`scan_failed`) or the scan came from an older toolkit, which measured it in a full run only.
 - Repositories whose own level is undetermined (1): `grpb/lib1`.
 
 ## Agent permissions

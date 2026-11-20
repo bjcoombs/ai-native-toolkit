@@ -17,7 +17,8 @@ modules (``CORE_MODULES``), plus ``UNREGISTERED_SCANS``, so a scan added to the
 table in its own module runs here without an edit. ``lib.headless_layers``
 supplies the blocks the core builds from setup state a headless run lacks
 (``structure``, ``stats_summary``, ``promissory_markers``, ``structure_drift``;
-#667), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
+#667) and ``lib.headless_static`` the static ones (``observability``,
+``doc_graph``, ``doc_staleness``, ``archetype``; #699), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
 state, the run header, the serialised blocks) run only when a reported scan
 reads one of them; the publish step that writes the wiki is never called.
 """
@@ -36,7 +37,8 @@ from typing import Any
 from lib.assess_config import load_excludes
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
-from lib.headless_layers import HEADLESS_SCANS
+from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
+from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
 from lib.instruction_files import grade_instruction_files
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
@@ -53,11 +55,7 @@ SIGNALS_SCHEMA_VERSION = 1
 # a reported scan also holds is dropped at runtime.
 UNREGISTERED_SCANS: tuple[str, ...] = (
     "diff",
-    "doc_graph",
-    "doc_staleness",
     "dead_code",
-    "observability",
-    "archetype",
     "ancestor_instruction_files",
     "behaviour",
     "documentation",
@@ -75,6 +73,10 @@ UNREGISTERED_REASON = (
     "not_registered: assembled by assess_core.build_run_context; "
     "the headless runner covers registered scans only"
 )
+
+# The headless runner's own entries (``lib.headless_layers``, #667;
+# ``lib.headless_static``, #699).
+HEADLESS_SCANS: tuple[ScanSpec, ...] = (*LAYER_SCANS, *STATIC_SCANS)
 
 # The modules that hold the core's own table entries (#557).
 CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
