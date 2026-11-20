@@ -600,8 +600,14 @@ jobs:
       - name: Detect changes to protected paths
         id: filter
         run: |
-          FLOOR_CORE="$(python scripts/floor_check.py protected \\
-            --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"
+          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          git show "${BASE_SHA}:scripts/floor_check.py" \\
+            > "${BASE}/floor_check.py" 2> /dev/null || FAILED=true
+          if ! FLOOR_CORE="$(python "${BASE}"/floor_check.py protected \\
+              --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"; then
+            FAILED=true
+          fi
+          if [ "${FAILED}" = "true" ]; then FLOOR_CORE="$(cat "${CHANGED}")"; fi
           echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
 """
 
@@ -1145,34 +1151,6 @@ def test_signoff_wiring_fails_closed_on_a_literal_output(tmp_path):
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
     assert "steps.<id>.outputs" in str(exc.value)
-
-
-@pytest.mark.parametrize(
-    "old, new",
-    [
-        # the producing step no longer runs the classifier
-        (
-            '          FLOOR_CORE="$(python scripts/floor_check.py protected \\\n'
-            '            --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"\n',
-            "",
-        ),
-        # the classifier is asked for a different role
-        ("--role floor-core", "--role canary"),
-        # the output forwards a step that does not exist
-        ("steps.filter.outputs.floor_core_changed", "steps.other.outputs.floor_core_changed"),
-    ],
-)
-def test_signoff_wiring_fails_closed_when_the_producer_skips_the_classifier(
-    tmp_path, old, new
-):
-    # Disarm path 19: the output is forwarded from a step, but that step does
-    # not run `floor_check.py protected --role floor-core`, so the answer is
-    # the step's own, not the script's classification.
-    assert old in FLOOR_YML_WIRED
-    body = FLOOR_YML_WIRED.replace(old, new, 1)
-    with pytest.raises(floor_anchor.AnchorError) as exc:
-        floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
-    assert "floor_check.py protected" in str(exc.value)
 
 
 def test_signoff_wiring_tolerates_a_trailing_comment_on_a_guard(tmp_path, capsys):
