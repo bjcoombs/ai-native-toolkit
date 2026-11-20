@@ -821,7 +821,10 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 # Org / group settings, into a subdirectory the per-repo glob skips. A
 # settings query that fails outright degrades to all-unknown for its scope
-# rather than aborting the per-repository report.
+# rather than aborting the per-repository report. Called on the left of `||`,
+# the query functions run with errexit off: a step inside them must turn its
+# own failure into an `unknown` with a reason (as each API read does), never
+# fall through to a verdict such as `off`.
 mkdir -p "$TMP_DIR/settings"
 if [ "$PROVIDER" = gitlab ]; then
     if settings_groups=$(gitlab_settings_groups); then
