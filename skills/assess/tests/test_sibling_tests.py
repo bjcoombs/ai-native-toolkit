@@ -340,3 +340,29 @@ def test_bats_flat_match_shared_across_sh_and_extensionless_is_dropped(
     block = compute_test_focus(["a/run.sh", "b/run"], None, None, repo_root=tmp_path)
     assert {e["test_signal"] for e in block["entries"]} == {"unsupported"}
     assert tc.shared_name_keys(["a/run.sh", "b/run"]) == frozenset({"run.bats"})
+
+
+def test_bats_basename_match_shared_across_sh_and_extensionless_credits_neither(
+    tmp_path: Path,
+) -> None:
+    """Issue #635: ``pkg/a/run.sh`` and ``pkg/b/run`` both name ``run.bats``,
+    so a parallel-tree ``pkg/unit-tests/run.bats`` equally close to both is a
+    tie the basename tier credits to neither."""
+    for rel in ("pkg/a/run.sh", "pkg/b/run", "pkg/unit-tests/run.bats"):
+        _touch(tmp_path, rel)
+    index = tc.build_test_index(tmp_path)
+    for rel in ("pkg/a/run.sh", "pkg/b/run"):
+        assert tc.sibling_test_match(tmp_path, rel, index) is None
+        assert tc.has_sibling_test(tmp_path, rel, index=index) is False
+
+
+def test_bats_basename_match_closest_of_sh_and_extensionless_wins(
+    tmp_path: Path,
+) -> None:
+    """The shared bats name is a rivalry, not a veto: the script sharing the
+    deeper directory with the suite keeps the credit."""
+    for rel in ("pkg/a/run.sh", "other/b/run", "pkg/unit-tests/run.bats"):
+        _touch(tmp_path, rel)
+    index = tc.build_test_index(tmp_path)
+    assert tc.sibling_test_match(tmp_path, "pkg/a/run.sh", index) == tc.MATCH_BASENAME
+    assert tc.sibling_test_match(tmp_path, "other/b/run", index) is None
