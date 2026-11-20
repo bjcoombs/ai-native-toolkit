@@ -1,6 +1,6 @@
 ---
 name: ghreport
-description: "Read-only org repo state report for GitHub or GitLab. Reuses ghsync's repo discovery (on GitHub, teams union org-repo-list; on GitLab, every group you belong to with nested subgroups and shared projects) but, instead of cloning, queries each repo's remote state - on GitHub open PRs, CI on the default branch, open security alerts (Dependabot / code-scanning / secret-scanning) and branch protection; on GitLab open merge requests, the latest default-branch pipeline, open vulnerabilities and default-branch protection - and rolls it into a terminal summary plus a timestamped markdown file. Endpoints the token or tier cannot read are reported as no-access / unknown, never as a clean zero. TRIGGER when the user types /ghreport, asks 'what state are the org's repos in', wants an org health report or repo state snapshot, asks about open PRs / failing GitHub Actions / security alerts across a whole org or personal account, or asks the same of GitLab: 'what state are our GitLab projects in', open merge requests / failing pipelines / vulnerabilities across a GitLab group or self-hosted GitLab host."
+description: "Read-only org repo state report for GitHub or GitLab. Reuses ghsync's repo discovery (on GitHub, teams union org-repo-list; on GitLab, every group you belong to with nested subgroups and shared projects) but, instead of cloning, queries each repo's remote state - on GitHub open PRs, CI on the default branch, open security alerts (Dependabot / code-scanning / secret-scanning) and branch protection; on GitLab open merge requests, the latest default-branch pipeline, open vulnerabilities and default-branch protection - plus org or group settings (two-factor enforcement, push rules, default branch protection for new projects, org rulesets), and rolls it into a terminal summary plus a timestamped markdown file. Endpoints the token or tier cannot read are reported as no-access / unknown, never as a clean zero. TRIGGER when the user types /ghreport, asks 'what state are the org's repos in', wants an org health report or repo state snapshot, asks about open PRs / failing GitHub Actions / security alerts across a whole org or personal account, or asks the same of GitLab: 'what state are our GitLab projects in', open merge requests / failing pipelines / vulnerabilities across a GitLab group or self-hosted GitLab host."
 ---
 
 # ghreport: what state are an org's repos in?
@@ -56,6 +56,37 @@ so this covers a project emptied between discovery and the query.)
 tier, the role, or the endpoint being unavailable on this GitLab version
 (GitLab documents the REST `projects/:id/vulnerabilities` endpoint as
 deprecated).
+
+## Org and group settings
+
+After the per-repo table, the report adds one section for settings that are
+set once for a whole org or group rather than per repository. It never
+changes the per-repo table, headline or Needs attention list.
+
+| Field | GitHub (per org) | GitLab (per group) |
+|-------|------------------|--------------------|
+| `two_factor` | `orgs/{org}` `two_factor_requirement_enabled` (owners only) | `groups/{id}` `require_two_factor_authentication` |
+| `push_rules` | org rulesets with target `push` | `groups/{id}/push_rule`: the enabled rules (a paid tier) |
+| `default_branch_protection` | active org branch rulesets on `~DEFAULT_BRANCH` (or `~ALL`) of `~ALL` repositories, read in full from `orgs/{org}/rulesets/{id}` | `groups/{id}` `default_branch_protection`, else `default_branch_protection_defaults` |
+| `rulesets` | `orgs/{org}/rulesets`: count, names and enforcement | always `unknown`: GitLab has no group rulesets |
+
+On GitLab the section covers `--group`, or each top-level group you belong
+to. A GitHub personal account has no org settings, so its four fields read
+`unknown (personal account: no org settings)`. If the GitLab group list
+cannot be read, the section still appears, as one entry for the host with
+every field `unknown (group list unreadable)`. On GitLab,
+`default_branch_protection` reads `off` only when developers can push and
+force push is allowed; force push allowed with stricter push access is
+appended as `force push: allowed`. The field names are the same on both providers.
+
+Every value is the setting's value, `off`, or `unknown` with the reason
+(`denied: no access or tier (HTTP 403)`, `not found: no access, tier, or
+endpoint missing (HTTP 404)`, `no access: readable by org owners only`,
+`unreadable response`). An unreadable value is never `off`: a non-owner on
+GitHub reads `two_factor: unknown`, and on GitLab a `404` from `push_rule`
+(which GitLab also answers when no rule is set) is `unknown`. The section's
+own headline counts `off` and `unknown` separately, so an unreadable setting
+is never counted as off.
 
 ### The no-access rule
 
@@ -120,12 +151,13 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghreport.sh" --provider gitlab --host gitlab.e
 | `--limit N` | Only the first N repos (quick test against a large org) |
 | `--quiet` | Suppress the per-repo progress dots; keep the summary and file |
 | `--no-file` | Terminal only; do not write the markdown file |
-| `--render-dir DIR` | Skip discovery + querying and render a report from a directory of previously-collected per-repo JSON fragments (replay / testing) |
+| `--render-dir DIR` | Skip discovery + querying and render a report from a directory of previously-collected per-repo JSON fragments (replay / testing); org or group settings fragments are read from its `settings/` subdirectory |
 
 ## Output
 
 - **Terminal:** a one-line headline (counts that tripped a signal), a rollup
-  table, and a "Needs attention" section listing only the repos with an issue.
+  table, a "Needs attention" section listing only the repos with an issue,
+  and the org or group settings section.
 - **File** (unless `--no-file`): `org-state-<org>-<YYYY-MM-DD>.md` in the root,
   with the full table and per-section detail. On GitLab `<org>` is the host,
   plus the group with `/` written as `-` when `--group` is given.
