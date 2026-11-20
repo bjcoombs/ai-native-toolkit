@@ -151,9 +151,9 @@ miss. Right after a repository's row is in hand, its checkout
   `.git` directory at its work-tree root, not a linked worktree);
 - `git status --porcelain --ignored` is empty: no change, no untracked or
   ignored file (a local `.env` keeps the clone);
-- no stash, no commit on `HEAD`, a local branch or a tag that no remote branch
-  holds (a local-only tag, or a clone with no remote, keeps it), and no linked
-  worktree;
+- no stash, no commit on `HEAD` or any ref (branch, tag, note, replace or
+  custom ref) that no remote branch holds (a clone with no remote is always
+  kept), and no linked worktree;
 - it is not, and does not contain, `--out`, the working directory or the toolkit
   itself.
 

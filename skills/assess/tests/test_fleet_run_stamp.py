@@ -159,6 +159,7 @@ def test_sibling_worktree_content_survives(tmp_path):
     ("unpushed", fleet_cleanup.KEEP_UNPUSHED),
     ("unpushed_branch", fleet_cleanup.KEEP_UNPUSHED),
     ("local_tag", fleet_cleanup.KEEP_UNPUSHED),
+    ("local_note", fleet_cleanup.KEEP_UNPUSHED),
     ("linked_worktree", fleet_cleanup.KEEP_WORKTREES),
     ("protected_out", fleet_cleanup.KEEP_PROTECTED),
     ("protected_self", fleet_cleanup.KEEP_PROTECTED),
@@ -193,6 +194,8 @@ def test_a_clone_with_something_to_lose_is_kept(tmp_path, setup, reason, monkeyp
         _git(checkout, "commit", "-q", "--allow-empty", "-m", "tagged only")
         _git(checkout, "tag", "v-local")
         _git(checkout, "checkout", "-q", "main")
+    elif setup == "local_note":
+        _git(checkout, "notes", "add", "-m", "only here", "HEAD")  # a commit held only by refs/notes/commits
     elif setup == "linked_worktree":
         _git(checkout, "worktree", "add", "-q", str(checkout.parent / "worktree" / "feat"), "-b", "feat")
     elif setup == "protected_out":

@@ -736,7 +736,7 @@ empty `worktree/` and repository directory. `deletion_problem` fails closed with
 keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
 checkout that is not a main clone at its work-tree root, one holding a protected path
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
-output, a stash, a commit on `HEAD`, a local branch or a tag that no remote branch holds, a
+output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
 
 **`fleet_labels.py`**
