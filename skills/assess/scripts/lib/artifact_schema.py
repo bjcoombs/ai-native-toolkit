@@ -53,7 +53,8 @@ constant each.
 # committed snapshot of finding names and paths (issue #554). Additive: no
 # existing key moves, and complexity-stats.json is unchanged.
 # 1.7.0: each run-context.json doc_staleness.docs row gains subject_roots (the
-# ownership rule's roots) and subject_paths (up to 20 sorted subject paths), from
+# ownership rule's roots), base_doc_dir (the directory the doc is the base doc
+# of, or null) and subject_paths (up to 20 sorted subject paths), from
 # lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.

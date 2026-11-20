@@ -18,22 +18,11 @@ _Generated <<normalized>>._
 
 ## Keyhole Readiness
 
-1 structural concern (1 unexplained complexity), 0 safe zones.
-
-_Attention ranking is low signal (no attention row lands in more than one finding): only rank 1 is prescribed._
+No structural concerns, 0 safe zones.
 
 ## Cross-Layer Findings (Keyhole Readiness)
 
-### unexplained_complexity
-
-Action: write the missing contract (do NOT auto-generate)
-
-Paths:
-- src/a.py
-
-### Attention List (Priority Order)
-
-- src/a.py (score 1): unexplained_complexity
+_No cross-layer findings surfaced - no path crossed an axis boundary._
 
 ## Changes Since Last Run
 

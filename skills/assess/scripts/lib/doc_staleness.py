@@ -99,6 +99,7 @@ class DocStalenessRow(TypedDict):
     subject_code_count: int
     subject_method: str
     subject_roots: list[str]
+    base_doc_dir: str | None
     subject_paths: list[str]
     ratio: float
     window_ratio: float
@@ -159,6 +160,7 @@ class DocStaleness:
     # The ownership rule's roots for this doc and its bounded, sorted subject
     # paths (repo-relative POSIX); see lib.doc_ownership.
     subject_roots: tuple[str, ...] = ()
+    base_doc_dir: str | None = None
     subject_paths: tuple[str, ...] = ()
     # Whole-window ratio and the subject churn after the doc's last content
     # change; `ratio` is the smaller of the two (see the module docstring).
@@ -200,6 +202,7 @@ class DocStaleness:
             "subject_code_count": self.subject_code_count,
             "subject_method": self.subject_method,
             "subject_roots": list(self.subject_roots),
+            "base_doc_dir": self.base_doc_dir,
             "subject_paths": list(self.subject_paths),
             "ratio": round(self.ratio, 2),
             "window_ratio": round(self.window_ratio, 2),
@@ -510,6 +513,7 @@ def _doc_row(
         subject_code_count=len(subject_rels),
         subject_method=method,
         subject_roots=tuple(spec["roots"]),
+        base_doc_dir=spec["base_dir"],
         subject_paths=tuple(bounded_subject_paths(subject_rels)),
         ratio=ratio,
         window_ratio=window_ratio,
@@ -636,9 +640,11 @@ def analyze_doc_staleness(
     # discovered code (excluded, or not code) is not part of any subject.
     abs_of = {rel_posix(c, repo_root): c for c in code_files}
     owning_docs = set(code_owner.values())
+    base_docs = set(base_doc_dirs.values())
     specs = {
         str(d.relative_to(repo_root)): subject_spec(
-            d, str(d.relative_to(repo_root)), repo_root, owning_docs, code_dirs, explicit,
+            d, str(d.relative_to(repo_root)), repo_root, owning_docs, base_docs,
+            code_dirs, explicit,
         )
         for d in docs
     }

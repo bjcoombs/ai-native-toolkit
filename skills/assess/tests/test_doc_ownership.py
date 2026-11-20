@@ -20,7 +20,7 @@ from lib.doc_staleness import analyze_doc_staleness
 
 
 def _na(root: str) -> SubjectSpec:
-    return {"method": "nearest-ancestor", "roots": [root]}
+    return {"method": "nearest-ancestor", "roots": [root], "base_dir": root}
 
 
 def test_nearest_ancestor_owns_down_to_next_base_doc() -> None:
@@ -37,10 +37,12 @@ def test_nearest_ancestor_owns_down_to_next_base_doc() -> None:
 def test_parallel_explicit_and_baseline_specs() -> None:
     specs: dict[str, SubjectSpec] = {
         "README.md": _na(""),
-        "docs/billing.md": {"method": "parallel-docs-tree", "roots": ["billing"]},
-        "notes.md": {"method": "explicit-links", "roots": ["auth/login.py", "gone.py"]},
-        "floating.md": {"method": "repo-baseline", "roots": []},
-        "old.md": {"method": "", "roots": []},
+        "docs/billing.md": {"method": "parallel-docs-tree", "roots": ["billing"],
+                            "base_dir": None},
+        "notes.md": {"method": "explicit-links", "roots": ["auth/login.py", "gone.py"],
+                     "base_dir": None},
+        "floating.md": {"method": "repo-baseline", "roots": [], "base_dir": None},
+        "old.md": {"method": "", "roots": [], "base_dir": None},
     }
     code = ["billing/x.py", "billing/deep/y.py", "billingx/z.py", "auth/login.py"]
     subjects = resolve_subjects(code, specs)
@@ -50,6 +52,18 @@ def test_parallel_explicit_and_baseline_specs() -> None:
     assert subjects["README.md"] == sorted(code)
     assert subjects["floating.md"] == []
     assert subjects["old.md"] == []
+
+
+def test_base_doc_without_discovered_code_still_owns_scored_files() -> None:
+    """A base doc that owned no discovered code (a fallback method) is still
+    the nearest ancestor of a scored file the discovery missed (a language it
+    does not list), so that file is never handed to a doc further up."""
+    specs: dict[str, SubjectSpec] = {
+        "README.md": _na(""),
+        "lua/README.md": {"method": "repo-baseline", "roots": [], "base_dir": "lua"},
+    }
+    subjects = resolve_subjects(["lua/x.lua", "top.py"], specs)
+    assert subjects == {"README.md": ["top.py"], "lua/README.md": ["lua/x.lua"]}
 
 
 def test_bounded_subject_paths_and_rel_posix(tmp_path: Path) -> None:
@@ -97,7 +111,9 @@ def test_readme_beside_design_doc_owns_the_code_in_both_blocks(git_repo) -> None
     rows = {d["path"]: d for d in staleness["docs"]}
     assert rows["pkg/README.md"]["subject_paths"] == ["pkg/engine.py"]
     assert rows["pkg/README.md"]["subject_roots"] == ["pkg"]
+    assert rows["pkg/README.md"]["base_doc_dir"] == "pkg"
     assert rows["pkg/design.md"]["subject_paths"] == []
+    assert rows["pkg/design.md"]["base_doc_dir"] is None
 
     stats = {"ccn": {"p95": 10.0}, "top_complex": [{"path": "pkg/engine.py", "ccn": 30.0}]}
     joined = analyze_doc_complexity_join(dict(stats), dict(staleness), repo)

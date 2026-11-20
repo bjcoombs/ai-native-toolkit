@@ -179,16 +179,18 @@ def doc_subjects(
     """Each staleness doc's subject among `code_paths` (stats-relative keys).
 
     The single read of the ownership rule for the join: the specs come from the
-    rows' ``subject_method`` / ``subject_roots``. A row without roots (an older
-    run-context) has an empty subject rather than a second, guessed rule.
+    rows' ``subject_method`` / ``subject_roots`` / ``base_doc_dir``. A row
+    without them (an older run-context) has an empty subject rather than a
+    second, guessed rule.
     """
-    specs: dict[str, SubjectSpec] = {
-        d["path"]: {
+    specs: dict[str, SubjectSpec] = {}
+    for d in docs:
+        base_dir = d.get("base_doc_dir")
+        specs[d["path"]] = {
             "method": str(d.get("subject_method") or ""),
             "roots": [str(r) for r in d.get("subject_roots") or []],
+            "base_dir": str(base_dir) if base_dir is not None else None,
         }
-        for d in docs
-    }
     return resolve_subjects(code_paths, specs)
 
 

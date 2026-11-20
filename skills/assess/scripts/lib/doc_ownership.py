@@ -19,12 +19,17 @@ The rule, in precedence order (the PRD's ordered fallbacks):
 
 The rule is resolved in two steps. ``subject_spec`` decides, per doc, the method
 and its *roots* (the doc's directory, the matched code directories, or the
-linked files) as repo-relative POSIX strings, the same keys
-``complexity-stats.json`` uses. ``resolve_subjects`` then expands the specs over
+linked files), plus the directory the doc is the base doc of (``base_dir``), as
+repo-relative POSIX strings, the same keys ``complexity-stats.json`` uses. ``resolve_subjects`` then expands the specs over
 any set of repo-relative code paths: doc staleness expands them over every
 discovered code file, the complexity join over the scored files. The specs ride
-on each ``doc_staleness.docs`` row as ``subject_roots``, so the join applies the
-rule from the serialized block without a second copy of it.
+on each ``doc_staleness.docs`` row as ``subject_roots`` and ``base_doc_dir``, so
+the join applies the rule from the serialized block without a second copy of it.
+
+Every base doc stays an ancestor in the walk, including one that owns no
+discovered code (its method is then a fallback). The treemap scores languages
+the doc-staleness discovery does not list, so a scored file under such a doc's
+directory is still that doc's, never handed to a doc further up.
 """
 from __future__ import annotations
 
@@ -64,6 +69,7 @@ class SubjectSpec(TypedDict):
 
     method: str
     roots: list[str]
+    base_dir: str | None
 
 
 def rel_posix(path: Path, repo_root: Path) -> str:
@@ -175,24 +181,30 @@ def subject_spec(
     doc_rel: str,
     repo_root: Path,
     owning_docs: set[Path],
+    base_docs: set[Path],
     code_dirs: set[Path],
     explicit: dict[str, list[Path]],
 ) -> SubjectSpec:
-    """The method that derives `d`'s subject and its repo-relative roots.
+    """The method that derives `d`'s subject, its repo-relative roots, and the
+    directory it is the base doc of (None when it is not one).
 
     `owning_docs` is every base doc that owns at least one code file under the
-    nearest-ancestor walk (the values of ``code_ownership``).
+    nearest-ancestor walk (the values of ``code_ownership``); `base_docs` is
+    every directory's base doc (the values of ``build_base_doc_dirs``).
     """
+    base_dir = rel_posix(d.parent, repo_root) if d in base_docs else None
     if d in owning_docs:
-        return {"method": NEAREST_ANCESTOR, "roots": [rel_posix(d.parent, repo_root)]}
+        return {"method": NEAREST_ANCESTOR, "roots": [rel_posix(d.parent, repo_root)],
+                "base_dir": base_dir}
     par = parallel_docs_dirs(d, repo_root, code_dirs)
     if par is not None:
         return {"method": PARALLEL_DOCS_TREE,
-                "roots": [rel_posix(p, repo_root) for p in par]}
+                "roots": [rel_posix(p, repo_root) for p in par], "base_dir": base_dir}
     if explicit.get(doc_rel):
         return {"method": EXPLICIT_LINKS,
-                "roots": sorted({rel_posix(p, repo_root) for p in explicit[doc_rel]})}
-    return {"method": REPO_BASELINE, "roots": []}
+                "roots": sorted({rel_posix(p, repo_root) for p in explicit[doc_rel]}),
+                "base_dir": base_dir}
+    return {"method": REPO_BASELINE, "roots": [], "base_dir": base_dir}
 
 
 def _under(code: str, root: str) -> bool:
@@ -216,29 +228,36 @@ def resolve_subjects(
 ) -> dict[str, list[str]]:
     """Expand each doc's spec over `code_paths`: doc -> its sorted subject paths.
 
-    A nearest-ancestor doc owns the code below its directory down to the next
-    nearest-ancestor doc. One directory has one base doc, so there is no tie to
-    break; a doc whose spec is missing or unknown gets an empty subject.
+    Each code path belongs to its nearest base doc walking up (the code below a
+    base doc's directory down to the next base doc). One directory has one base
+    doc, so there is no tie to break. A parallel-docs or explicit-links doc adds
+    the code its roots select. Over the discovered code files a base doc that
+    owns code is a ``nearest-ancestor`` doc, so the two parts never mix there;
+    over scored files the doc-staleness discovery missed, a fallback-method base
+    doc still owns what sits under its directory. A doc whose spec is missing
+    or unknown gets an empty subject.
     """
     paths = sorted(set(code_paths))
-    ancestor_dirs = {
-        spec["roots"][0]: doc for doc, spec in specs.items()
-        if spec["method"] == NEAREST_ANCESTOR and spec["roots"]
-    }
-    subjects: dict[str, list[str]] = {doc: [] for doc in specs}
+    ancestor_dirs: dict[str, str] = {}
+    for doc, spec in specs.items():
+        base_dir = spec.get("base_dir")
+        if base_dir is None and spec["method"] == NEAREST_ANCESTOR and spec["roots"]:
+            base_dir = spec["roots"][0]  # a row written before base_doc_dir
+        if base_dir is not None:
+            ancestor_dirs[base_dir] = doc
+    subjects: dict[str, set[str]] = {doc: set() for doc in specs}
     if ancestor_dirs:
         for code in paths:
             owner = _nearest_owner(code, ancestor_dirs)
             if owner is not None:
-                subjects[owner].append(code)
+                subjects[owner].add(code)
     for doc, spec in specs.items():
         roots = spec["roots"]
         if spec["method"] == PARALLEL_DOCS_TREE:
-            subjects[doc] = [c for c in paths if any(_under(c, r) for r in roots)]
+            subjects[doc].update(c for c in paths if any(_under(c, r) for r in roots))
         elif spec["method"] == EXPLICIT_LINKS:
-            linked = set(roots)
-            subjects[doc] = [c for c in paths if c in linked]
-    return subjects
+            subjects[doc].update(set(paths) & set(roots))
+    return {doc: sorted(codes) for doc, codes in subjects.items()}
 
 
 def bounded_subject_paths(subject: list[str]) -> list[str]:

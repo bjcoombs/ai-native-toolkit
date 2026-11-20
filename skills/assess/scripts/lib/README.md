@@ -345,9 +345,11 @@ directory's code), then a parallel `docs/` tree, explicit code links, and the em
 repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
 `/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
 Staleness expands them over every discovered code file and exports each row's
-`subject_roots`, `subject_code_count` and up to `SUBJECT_PATHS_CAP` sorted
-`subject_paths`; the join expands the same roots over the scored files, so the cap never
-hides an owned file from it. Tests: `tests/test_doc_ownership.py`.
+`subject_roots`, `base_doc_dir`, `subject_code_count` and up to `SUBJECT_PATHS_CAP`
+sorted `subject_paths`; the join expands the same roots over the scored files, so the cap
+never hides an owned file from it. Every base doc stays an ancestor in the walk, even one
+that owns no discovered code, because the treemap scores languages the staleness
+discovery does not list. Tests: `tests/test_doc_ownership.py`.
 
 **`doc_staleness.py`**
 Doc-staleness metric for Layer 0. Associates each doc with the code it describes through
