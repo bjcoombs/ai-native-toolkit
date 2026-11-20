@@ -1339,7 +1339,7 @@ nested JSON, wrong top-level type, a missing or non-integer version, missing or 
 findings) is `None` with a fixed reason token, and unusable entries (non-object, no string
 name, non-list `paths`, non-string or unencodable paths) are skipped under
 `malformed_entries` (#668). A numeric-string version is read as its integer and a UTF-8
-BOM is accepted. A name or path that is not valid UTF-8 (a lone surrogate, from a hand edit or a non-UTF-8 filename) is escaped (`\\xff`, `\\ud800`) the same way on the write, read and compare paths, so it stays tracked and the gate can print it. Deep nesting reads as `too_deep` or `invalid_json` depending on the Python build. `load_snapshot` returns the snapshot alone and prints one stderr line
+BOM is accepted. A name or path that is not valid UTF-8 (a lone surrogate, from a hand edit or a non-UTF-8 filename) is escaped (`\xff`, `\ud800`) the same way on the write, read and compare paths, so it stays tracked and the gate can print it. Deep nesting reads as `too_deep` or `invalid_json` depending on the Python build. `load_snapshot` returns the snapshot alone and prints one stderr line
 naming any reason (an absent file is silent), and `run_publish` records it as
 `prior_findings_snapshot`. `committed_prior` picks the snapshot the gate compares
 against: the `findings.json` on disk when its method version differs from this run's
