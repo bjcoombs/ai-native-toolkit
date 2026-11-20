@@ -41,10 +41,17 @@
             "oneOf": [
               {
                 "required": [
-                  "value"
+                  "value",
+                  "reason"
                 ],
                 "properties": {
-                  "value": {}
+                  "value": {},
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
                 },
                 "additionalProperties": false
               },

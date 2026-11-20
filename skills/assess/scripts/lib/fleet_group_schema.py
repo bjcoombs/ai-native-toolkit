@@ -8,7 +8,7 @@ changing ``GroupRow`` or ``RubricRowLevel``:
     cd skills/assess && uv run --locked python scripts/lib/fleet_group_schema.py
 
 Objects are strict except ``settings``, whose keys are ghreport's setting
-names: each one is ``{value}`` or ``{available: false, reason}``.
+names: each one is ``{value, reason}`` or ``{available: false, reason}``.
 """
 from __future__ import annotations
 
@@ -33,7 +33,8 @@ _SCALARS: dict[Any, str] = {str: "string", int: "integer", float: "number", bool
 SETTING: JsonDict = {
     "type": "object",
     "oneOf": [
-        {"required": ["value"], "properties": {"value": {}}, "additionalProperties": False},
+        {"required": ["value", "reason"], "properties": {"value": {}, "reason": {"type": ["string", "null"]}},
+         "additionalProperties": False},
         {"required": ["available", "reason"],
          "properties": {"available": {"const": False}, "reason": {"type": "string"}},
          "additionalProperties": False},

@@ -91,20 +91,23 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `repos`, `scanned`, `failed` | Repository rows in the group, those with `status: ok`, and the rest. |
 | `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. |
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
-| `settings` | That fragment's settings, each `{value}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any other (ruleset or push-rule names) as `set`, with reasons reduced to `unknown`; `--full` keeps them. `null` without a match. |
+| `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any other (ruleset or push-rule names) as `set`, with reasons reduced to `unknown`; `--full` keeps them. `null` without a match. |
 | `rubric_version` | The rubric's `version`; `null` without `--rubric`. |
 | `rubric` | One entry per rubric row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
 
-Rubric signal paths, evaluated by `lib/rubric.py` with no second threshold config:
+Rubric signal paths are checked at load against `lib/rubric_signals.py` (an
+unknown path exits 2 before any scan) and evaluated by `lib/rubric.py`, with no
+second threshold config. The shipped `skills/assess/rubrics/default.toml` uses
+the same namespace.
 
-- `team` rows read each repository's signal blocks, written in run-context form
-  (`nested_instructions.budget.claude_code.lines`) or signals-document form
-  (`scans.nested_instructions.budget.claude_code.lines`). A failed repository
-  joins with no signals, so its level is unknown: a `min` row never reads better
-  than the evidence.
-- `org` rows read the joined settings as `<setting>.value`, for example
-  `two_factor.value` `eq "on"`. A setting ghreport reported `unknown`, or a
-  group with no settings, makes the row `unknown`, never a false 0.
+- `team` rows read each repository's signal blocks by block name, as in a
+  run-context (`nested_instructions.budget.claude_code.lines`). A failed
+  repository joins with no signals, so its level is unknown: a `min` row never
+  reads better than the evidence.
+- `org` rows read the joined ghreport fragment: `scope`, `provider` and
+  `<setting>.value` / `<setting>.reason`, for example `two_factor.value` `eq "on"`.
+  A setting ghreport reported `unknown`, or a group with no settings, makes the
+  row `unknown`, never a false 0.
 
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.

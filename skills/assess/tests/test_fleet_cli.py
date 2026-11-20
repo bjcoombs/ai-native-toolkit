@@ -29,7 +29,7 @@ scope = "org"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "two_factor_required", op = "eq", value = true }]
+  criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
 """
 
 

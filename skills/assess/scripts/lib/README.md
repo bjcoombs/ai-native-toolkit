@@ -624,9 +624,11 @@ no threshold config of its own. `load_settings` reads ghreport settings fragment
 `normalise_settings` turns each `{value, reason}` into `{value}` or, for `unknown`,
 `{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
 org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
-else `set`). `repo_signals` exposes a repository's blocks at the top level and under
-`scans`, so team paths work in run-context or signals-document form; a failed
-repository joins with none, so it is an unknown repository, never a passing one.
+else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a
+repository's `scans` map (a failed repository's is empty, so it is an unknown
+repository, never a passing one) and `settings_signals` the normalised settings plus
+the fragment's `scope` and `provider`. The CLI loads the rubric with
+`rubric_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
 
 **`fleet_group_schema.py`**

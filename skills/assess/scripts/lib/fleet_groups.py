@@ -12,16 +12,16 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
 
 Rubric inputs:
 
-- ``team`` rows run against each repository's signal blocks. A path may be
-  written in run-context form (``nested_instructions.available``) or
-  signals-document form (``scans.nested_instructions.available``). A failed
-  repository joins the roll-up with no signals, so its level is unknown and a
-  ``min`` team row never reads better than the evidence allows.
-- ``org`` rows run against the group's settings. Each ghreport setting
-  ``{value, reason}`` is read as ``<field>.value`` (``two_factor.value`` is
-  ``"on"`` or ``"off"``); a value of ``"unknown"`` becomes an unavailable block,
-  so the rubric reports the row unknown, never a false 0. A group with no
-  matching fragment has no settings: every org row is unknown.
+- ``team`` rows run against each repository's ``scans`` map, the namespace
+  ``lib/rubric_signals.py`` validates (``nested_instructions.available``). A
+  failed repository joins the roll-up with no signals, so its level is unknown
+  and a ``min`` team row never reads better than the evidence allows.
+- ``org`` rows run against the group's ghreport fragment (#565), the
+  ``rubric_signals.ORG_PATHS`` namespace: ``scope``, ``provider`` and
+  ``<setting>.value`` / ``.reason`` (``two_factor.value`` is ``"on"`` or
+  ``"off"``). A value of ``"unknown"`` becomes an unavailable block, so the
+  rubric reports the row unknown, never a false 0. A group with no matching
+  fragment has no settings: every org row is unknown.
 
 Settings join: a fragment's ``scope`` matches a group exactly or, failing
 that, the nearest ancestor (a GitLab top-level group's settings cover its
@@ -124,7 +124,7 @@ def normalise_settings(fragment: Mapping[str, Any]) -> JsonDict:
             reason = raw.get("reason") if isinstance(raw, dict) else None
             out[key] = {"available": False, "reason": str(reason) if reason else UNKNOWN}
         else:
-            out[key] = {"value": value}
+            out[key] = {"value": value, "reason": raw.get("reason")}
     return out
 
 
@@ -137,7 +137,7 @@ def reduce_settings(settings: JsonDict) -> JsonDict:
             continue
         value = block["value"]
         token = isinstance(value, (bool, int)) or (isinstance(value, str) and TOKEN_RE.match(value))
-        out[key] = {"value": value if token else SET}
+        out[key] = {"value": value if token else SET, "reason": None}
     return out
 
 
@@ -151,13 +151,20 @@ def settings_for(group: str, by_scope: Mapping[str, JsonDict]) -> tuple[str | No
     return None, None
 
 
+def settings_signals(fragment: Mapping[str, Any] | None, settings: JsonDict | None) -> JsonDict | None:
+    """The org-row data: the normalised settings plus the fragment's ``scope`` and ``provider``."""
+    if fragment is None or settings is None:
+        return None
+    meta = {key: fragment[key] for key in sorted(SETTINGS_META_KEYS) if key in fragment}
+    return {**settings, **meta}
+
+
 # --- roll-up ---------------------------------------------------------------
 
 
 def repo_signals(row: FleetRow) -> JsonDict:
-    """A repository's rubric data: its blocks at the top level and under ``scans``."""
-    scans = row["scans"] or {}
-    return {**scans, "scans": scans}
+    """A repository's rubric data: its ``scans`` map, empty for a failed row."""
+    return dict(row["scans"] or {})
 
 
 def _rubric_levels(rubric: Rubric, group: str, settings: JsonDict | None,
@@ -177,6 +184,7 @@ def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
               by_scope: Mapping[str, JsonDict], counts_only: bool = True) -> GroupRow:
     """One group's roll-up row."""
     scope, settings = settings_for(group, by_scope)
+    org_data = settings_signals(by_scope[scope] if scope else None, settings)
     ok = [row for row in rows if row["status"] == STATUS_OK]
     blocks = [row["scans"]["shared_tooling"] for row in ok
               if row["scans"] and isinstance(row["scans"].get("shared_tooling"), dict)]
@@ -193,7 +201,7 @@ def group_row(group: str, rows: Sequence[FleetRow], rubric: Rubric | None,
         "settings_scope": scope,
         "settings": shown,
         "rubric_version": rubric["version"] if rubric else None,
-        "rubric": _rubric_levels(rubric, group, settings, rows) if rubric else [],
+        "rubric": _rubric_levels(rubric, group, org_data, rows) if rubric else [],
     }
 
 

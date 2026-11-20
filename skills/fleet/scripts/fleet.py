@@ -58,6 +58,7 @@ from lib.fleet import (  # noqa: E402
 )
 from lib.fleet_groups import SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.rubric import Rubric, RubricError, load_rubric  # noqa: E402
+from lib.rubric_signals import signal_path_validator  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals import UnknownScanError, parse_window, select_scans  # noqa: E402
 
@@ -136,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     settings: dict[str, JsonDict] = {}
     try:
         if args.rubric is not None:
-            rubric = load_rubric(Path(args.rubric))
+            rubric = load_rubric(Path(args.rubric), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
         if args.scans is not None:

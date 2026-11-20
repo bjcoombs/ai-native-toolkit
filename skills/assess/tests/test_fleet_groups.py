@@ -37,7 +37,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 2
-  criteria = [{ signal = "scans.shared_tooling.available", op = "eq", value = true }]
+  criteria = [{ signal = "shared_tooling.available", op = "eq", value = true }]
 """
 
 
@@ -102,20 +102,20 @@ def test_unknown_settings_become_unavailable_and_counts_only_reduces_text():
     settings = fg.normalise_settings({**_fragment("g", "unknown", "denied: no access (HTTP 403)"),
                                       "malformed": "on"})
     assert settings == {
-        "default_branch_protection": {"value": "full"},
+        "default_branch_protection": {"value": "full", "reason": None},
         "malformed": {"available": False, "reason": "unknown"},
-        "push_rules": {"value": "deny_delete_tag, member_check"},
+        "push_rules": {"value": "deny_delete_tag, member_check", "reason": None},
         "rulesets": {"available": False, "reason": "endpoint missing: GitLab has no group rulesets"},
         "two_factor": {"available": False, "reason": "denied: no access (HTTP 403)"},
     }
     assert fg.reduce_settings(settings) == {
-        "default_branch_protection": {"value": "full"},
+        "default_branch_protection": {"value": "full", "reason": None},
         "malformed": {"available": False, "reason": "unknown"},
-        "push_rules": {"value": "set"},
+        "push_rules": {"value": "set", "reason": None},
         "rulesets": {"available": False, "reason": "unknown"},
         "two_factor": {"available": False, "reason": "unknown"},
     }
-    assert fg.reduce_settings({"limit": {"value": 5}}) == {"limit": {"value": 5}}
+    assert fg.reduce_settings({"limit": {"value": 5, "reason": None}}) == {"limit": {"value": 5, "reason": None}}
 
 
 def test_settings_join_exact_then_nearest_ancestor():
@@ -142,7 +142,7 @@ def test_group_rows_carry_levels_rules_settings_and_distinct_ids():
     assert (grpa["repos"], grpa["scanned"], grpa["failed"]) == (2, 2, 0)
     assert (grpa["distinct_marketplaces"], grpa["distinct_ci_sources"]) == (2, 1)
     assert (grpb["distinct_marketplaces"], grpb["distinct_ci_sources"]) == (1, 0)
-    assert grpa["settings_scope"] == "grpa" and grpa["settings"]["push_rules"] == {"value": "set"}
+    assert grpa["settings_scope"] == "grpa" and grpa["settings"]["push_rules"] == {"value": "set", "reason": None}
     levels = {r["id"]: r for r in grpa["rubric"]}
     assert levels["org2fa"]["level"] == 1 and levels["org2fa"]["aggregation"] is None
     assert levels["teamdocs"]["level"] == 2
@@ -172,14 +172,29 @@ def test_no_rubric_no_settings_and_full_output():
     assert bare["rubric"] == [] and bare["rubric_version"] is None
     assert bare["settings"] is None and bare["settings_scope"] is None
     (full,) = fg.roll_up(rows, None, {"g": _fragment("g", "on")}, counts_only=False)
-    assert full["settings"]["push_rules"] == {"value": "deny_delete_tag, member_check"}
+    assert full["settings"]["push_rules"] == {"value": "deny_delete_tag, member_check", "reason": None}
     jsonschema.validate(full, build_schema())
 
 
-def test_repo_signals_answers_both_path_forms():
-    data = fg.repo_signals(_row("g/r", {"a": {"n": 1}}))
-    assert data["a"] == {"n": 1} and data["scans"]["a"] == {"n": 1}
-    assert fg.repo_signals(_row("g/r", None)) == {"scans": {}}
+def test_repo_signals_is_the_scans_map():
+    assert fg.repo_signals(_row("g/r", {"a": {"n": 1}})) == {"a": {"n": 1}}
+    assert fg.repo_signals(_row("g/r", None)) == {}
+
+
+def test_org_rows_also_read_scope_and_provider():
+    rubric = parse_rubric(tomllib.loads("""\
+version = "p"
+[[rows]]
+id = "gl"
+title = "On GitLab"
+scope = "org"
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "provider", op = "eq", value = "gitlab" }, { signal = "scope", op = "eq", value = "top" }]
+"""))
+    (row,) = fg.roll_up([_row("top/sub/r", _scans(1, []))], rubric, {"top": _fragment("top", "off")})
+    assert row["settings_scope"] == "top" and row["rubric"][0]["level"] == 1
+    assert fg.settings_signals(None, None) is None
 
 
 def test_write_groups_is_sorted_compact_jsonl(tmp_path, monkeypatch):
@@ -227,7 +242,7 @@ def test_fleet_run_writes_group_rows_byte_identically(froot, tmp_path):  # noqa:
     assert groups["grpb"]["distinct_marketplaces"] == 1  # lib1's settings entry names mkt-a
     assert {r["id"]: r["level"] for r in groups["grpa"]["rubric"]} == {"org2fa": 1, "teamdocs": 0}
     assert {r["id"]: r["level"] for r in groups["grpb"]["rubric"]} == {"org2fa": 0, "teamdocs": 0}
-    assert groups["grpa"]["settings"]["two_factor"] == {"value": "on"}
+    assert groups["grpa"]["settings"]["two_factor"] == {"value": "on", "reason": None}
     for group in groups.values():
         jsonschema.validate(group, build_schema())
 
@@ -237,6 +252,14 @@ def test_bad_settings_exit_2(froot, tmp_path, capsys):  # noqa: F811
                            "--out", str(tmp_path / "o")]) == 2
     assert "settings" in capsys.readouterr().err
     assert not (tmp_path / "o").exists()
+
+
+def test_rubric_path_outside_the_namespace_exits_2(froot, tmp_path, capsys):  # noqa: F811
+    rubric = tmp_path / "bad.toml"
+    rubric.write_text(RUBRIC_TOML.replace("shared_tooling.available", "scans.shared_tooling.available"),
+                      encoding="utf-8")
+    assert fleet_cli.main([str(froot), "--rubric", str(rubric), "--out", str(tmp_path / "o")]) == 2
+    assert "scans.shared_tooling.available" in capsys.readouterr().err
 
 
 def test_union_of_groups_counts_distinct_marketplaces(froot, tmp_path):  # noqa: F811
