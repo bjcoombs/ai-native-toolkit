@@ -63,21 +63,25 @@ threshold (an approval is a review), else None. ``review_required`` reads the
 project's approval rules: a rule (other than a ``report_approver`` rule)
 requiring one or more approvals that covers the default branch - no branch
 scope, or a protected-branch name or wildcard matching it - is True; a rule
-scoped to "all protected branches" is unknown (protected-branch reads are
-not part of this scan); a refused read is None, never False. Any failed or
+scoped to "all protected branches" covers it when ``gitlab_cli.branch_protection``
+finds the default branch protected, does not when the complete list leaves
+it unprotected, and is unknown when that read is refused or incomplete
+(read at most once per scan); a refused read is None, never False. Any failed or
 refused merge-request or approvals read (403, 404 included) degrades the
 whole block, never reads as "no reviews".
 """
 from __future__ import annotations
 
-import re
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from lib.gh_cli import GhUnavailable, gh_api, gh_json, open_github, unavailable
-from lib.gitlab_cli import GitlabProject, glab_api, open_gitlab
+from lib.gitlab_cli import (
+    GitlabProject, branch_pattern, branch_protection, glab_api, open_gitlab,
+)
 
 # Merged pull requests sampled per run.
 DEFAULT_LIMIT = 30
@@ -302,15 +306,14 @@ def _username(actor: Any) -> str | None:
     return None
 
 
-def _branch_pattern(name: str) -> re.Pattern[str]:
-    """A GitLab protected-branch name as a regex: ``*`` is the only wildcard."""
-    return re.compile("^" + ".*".join(re.escape(p) for p in name.split("*")) + "$")
+def _rule_covers(rule: dict[str, Any], branch: str,
+                 protected: Callable[[], bool | None]) -> bool | None:
+    """Whether an approval rule applies to ``branch``; None when undecidable.
 
-
-def _rule_covers(rule: dict[str, Any], branch: str) -> bool | None:
-    """Whether an approval rule applies to ``branch``; None when undecidable."""
+    ``protected`` answers whether ``branch`` is protected, for a rule scoped to
+    all protected branches."""
     if rule.get("applies_to_all_protected_branches"):
-        return None
+        return protected()
     scopes = rule.get("protected_branches") or []
     if not isinstance(scopes, list):
         return None
@@ -319,7 +322,7 @@ def _rule_covers(rule: dict[str, Any], branch: str) -> bool | None:
     names = [b.get("name") for b in scopes if isinstance(b, dict)]
     if any(not isinstance(n, str) for n in names) or len(names) != len(scopes):
         return None
-    return any(_branch_pattern(n).match(branch) for n in names if isinstance(n, str))
+    return any(branch_pattern(n).match(branch) for n in names if isinstance(n, str))
 
 
 def gitlab_review_required(project: GitlabProject) -> bool | None:
@@ -335,6 +338,17 @@ def gitlab_review_required(project: GitlabProject) -> bool | None:
     branch = meta.get("default_branch") if isinstance(meta, dict) else None
     if not isinstance(branch, str) or not branch or not isinstance(rules, list):
         return None
+    cache: list[bool | None] = []
+
+    def protected() -> bool | None:
+        # One protected-branch read per scan, however many rules ask.
+        if not cache:
+            try:
+                cache.append(branch_protection(project, branch) is not None)
+            except GhUnavailable:
+                cache.append(None)
+        return cache[0]
+
     unknown = False
     for rule in rules:
         if not isinstance(rule, dict):
@@ -345,7 +359,7 @@ def gitlab_review_required(project: GitlabProject) -> bool | None:
         need = rule.get("approvals_required")
         if not isinstance(need, int) or need < 1:
             continue
-        covers = _rule_covers(rule, branch)
+        covers = _rule_covers(rule, branch, protected)
         if covers:
             return True
         if covers is None:
