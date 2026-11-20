@@ -33,15 +33,17 @@ door and no free skip door.
 **iii. Changes to the floor require the maintainer's out-of-band sign-off.** The
 retro, and any other automated learning step, may propose changes to this floor
 but may never self-apply them. A change to this file, to the floor tokens it
-declares, to `scripts/floor_check.py`, `scripts/floor_anchor.py`,
-`.github/workflows/floor.yml`, `scripts/contract/`, `scripts/canaries/`, or
-`tests/canaries/` takes effect only with the maintainer's explicit,
+declares, to `scripts/floor_check.py`, `scripts/floor_anchor.py`, or
+`.github/workflows/floor.yml` takes effect only with the maintainer's explicit,
 out-of-band approval, recorded as the maintainer's deployment review of the
-`floor-signoff` environment. The one exemption is a pull request authored
-and pushed by `dependabot[bot]` whose floor-core change is only like-for-like
-`uses:` action pin bumps, each with a new commit and a new version comment, in
-workflow files, as judged by the base ref's copy of `scripts/floor_check.py
-pin-bump-only`; any other change, author or pusher still needs the sign-off.
+`floor-signoff` environment. The gate code and the canaries the clauses above
+rely on (`scripts/contract/`, `scripts/canaries/` and `tests/canaries/`) are
+gated by the canary suite rather than by this sign-off. The one exemption is a
+pull request authored and pushed by `dependabot[bot]` whose floor-core change
+is only like-for-like `uses:` action pin bumps, each with a new commit and a
+new version comment, in workflow files, as judged by the base ref's copy of
+`scripts/floor_check.py pin-bump-only`; any other change, author or pusher
+still needs the sign-off.
 
 <!-- floor-clause:iv -->
 **iv. Immutability covers clauses iii and iv.** The immutability rule in clause
