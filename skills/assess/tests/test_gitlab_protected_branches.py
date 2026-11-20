@@ -153,40 +153,67 @@ def test_malformed_list_is_unavailable(world: World, doc: object) -> None:
     assert e.value.reason.startswith("glab_bad_json")
 
 
-def test_full_page_prefers_a_later_exact_rule_to_a_wildcard(world: World) -> None:
-    world.serve(LIST, [_rule("m*")] + [_rule(f"feature/{i}") for i in range(99)])
-    got = branch_protection(P, "main")  # single read 404: the wildcard stands
-    assert got is not None and got["name"] == "m*"
-    world.serve(f"projects/{ENC}/protected_branches/main", _rule("main", force=True))
-    got = branch_protection(P, "main")
-    assert got is not None and got["name"] == "main"
+def _page(n: int) -> str:
+    return f"{LIST}&page={n}"
 
 
-def test_full_page_exact_rule_from_the_single_read_combines_with_wildcards(
-        world: World) -> None:
-    world.serve(LIST, [_rule("m*", push=30)] + [_rule(f"feature/{i}") for i in range(99)])
-    world.serve(f"projects/{ENC}/protected_branches/main", _rule("main", push=40))
+def _filler(start: int, count: int) -> list[dict[str, object]]:
+    return [_rule(f"feature/{i}") for i in range(start, start + count)]
+
+
+def test_full_first_page_with_an_exact_rule_merges_a_later_wildcard(world: World) -> None:
+    # Issue #677: an exact rule on a full first page must still combine with a
+    # looser wildcard on a later page.
+    world.serve(LIST, [_rule("main", push=40)] + _filler(0, 99))
+    world.serve(_page(2), [_rule("m*", push=30, force=True)])
     got = branch_protection(P, "main")
     assert got is not None and got["name"] == "main"
     assert [lv["access_level"] for lv in got["push_access_levels"]] == [30]
+    assert got["allow_force_push"] is True
 
 
-def test_full_page_single_read_without_a_name_is_unavailable(world: World) -> None:
-    world.serve(LIST, [_rule("m*")] + [_rule(f"feature/{i}") for i in range(99)])
-    world.serve(f"projects/{ENC}/protected_branches/main", {"id": 1})
+def test_exact_rule_on_a_later_page_combines_with_first_page_wildcards(
+        world: World) -> None:
+    world.serve(LIST, [_rule("m*", push=30)] + _filler(0, 99))
+    world.serve(_page(2), _filler(99, 100))
+    world.serve(_page(3), [_rule("main", push=40, force=True)])
+    got = branch_protection(P, "main")
+    assert got is not None and got["name"] == "main"
+    assert [lv["access_level"] for lv in got["push_access_levels"]] == [30]
+    assert got["allow_force_push"] is True
+    assert [c for c in world.calls() if "protected_branches" in c and "page=4" in c] == []
+
+
+def test_full_pages_without_a_cover_end_on_an_empty_page_unprotected(world: World) -> None:
+    world.serve(LIST, _filler(0, 100))
+    world.serve(_page(2), [])
+    assert branch_protection(P, "main") is None
+
+
+def test_a_refused_later_page_is_unavailable_never_a_partial_merge(world: World) -> None:
+    world.serve(LIST, [_rule("main")] + _filler(0, 99))
+    world.fail(_page(2), "glab: 403 Forbidden (HTTP 403)")
+    with pytest.raises(GhUnavailable) as e:
+        branch_protection(P, "main")
+    assert e.value.reason.startswith("no_access")
+
+
+def test_a_malformed_later_page_is_unavailable(world: World) -> None:
+    world.serve(LIST, [_rule("main")] + _filler(0, 99))
+    world.serve(_page(2), [{"id": 1}])
     with pytest.raises(GhUnavailable) as e:
         branch_protection(P, "main")
     assert e.value.reason.startswith("glab_bad_json")
 
 
-def test_full_page_without_a_cover_falls_back_to_the_single_read(world: World) -> None:
-    world.serve(LIST, [_rule(f"feature/{i}") for i in range(100)])
+def test_a_list_still_full_after_the_page_cap_is_truncated(
+        world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lib.gitlab_cli.PROTECTED_MAX_PAGES", 2)
+    world.serve(LIST, [_rule("main")] + _filler(0, 99))
+    world.serve(_page(2), _filler(99, 100))
     with pytest.raises(GhUnavailable) as e:
-        branch_protection(P, "main")  # single read 404: still unknown
+        branch_protection(P, "main")
     assert e.value.reason.startswith("truncated")
-    world.serve(f"projects/{ENC}/protected_branches/main", _rule("main", force=True))
-    got = branch_protection(P, "main")
-    assert got is not None and got["allow_force_push"] is True
 
 
 # ---- config_drift on GitLab ------------------------------------------------
@@ -355,6 +382,20 @@ def test_deleted_wildcard_rule_is_drift_and_the_list_is_read_once(world: World) 
     assert block["entries"] == [{"file": ".gitlab/release.json", "key": "branch_protection",
                                  "tracked": "present", "live": "absent"}]
     assert sum("protected_branches" in c for c in world.calls()) == 1
+
+
+def test_drift_reads_every_page_once_and_sees_a_later_wildcard(world: World) -> None:
+    # Issue #677: the exact "main" rule fills the first page; the looser "m*"
+    # on page 2 changes what GitLab enforces, so the snapshot drifts.
+    world.remote(GITLAB_REMOTE)
+    _track(world, ".gitlab/main.json", _rule("main", push=40))
+    _track(world, ".gitlab/feature.json", _rule("feature/0"))
+    world.serve(LIST, [_rule("main", push=40)] + _filler(0, 99))
+    world.serve(_page(2), [_rule("m*", push=30)])
+    block = scan_config_drift(world.root)
+    assert [e["file"] for e in block["entries"]] and {
+        e["file"] for e in block["entries"]} == {".gitlab/main.json"}
+    assert sum("protected_branches" in c for c in world.calls()) == 2
 
 
 def test_no_snapshots_makes_no_platform_call(world: World) -> None:

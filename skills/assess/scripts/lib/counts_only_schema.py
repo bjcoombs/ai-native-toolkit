@@ -19,6 +19,7 @@ import typing
 from collections.abc import Iterator
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
+from lib.agent_building import AgentBuildingBlock
 from lib.agent_environment import AgentEnvironmentBlock
 from lib.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
@@ -104,6 +105,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
     ("ci_checks", CiChecksBlock),
+    ("agent_building", AgentBuildingBlock),
     ("layer_grades", LayerGradesBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
