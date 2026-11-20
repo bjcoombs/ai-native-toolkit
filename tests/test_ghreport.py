@@ -285,7 +285,7 @@ esac
 ORG_SETTINGS = ("two_factor", "push_rules", "default_branch_protection", "rulesets")
 
 
-def _run_with_org(tmp_path, responses, *extra):
+def _run_with_org(tmp_path, responses, *extra, path_first=None):
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
     gh = stub_dir / "gh"
@@ -297,12 +297,17 @@ def _run_with_org(tmp_path, responses, *extra):
         key = path.replace("/", "__")
         if isinstance(body, int):
             (data / f"{key}.err").write_text(str(body))
+        elif isinstance(body, str):  # a raw body, served as-is
+            (data / f"{key}.json").write_text(body)
         else:
             (data / f"{key}.json").write_text(json.dumps(body))
     root = tmp_path / "root"
     root.mkdir()
     env = dict(os.environ)
-    env.update(PATH=f"{stub_dir}:{env['PATH']}", GH_DATA=str(data),
+    path = f"{stub_dir}:{env['PATH']}"
+    if path_first is not None:
+        path = f"{path_first}:{path}"
+    env.update(PATH=path, GH_DATA=str(data),
                GH_LOG=str(tmp_path / "gh.log"))
     return subprocess.run(
         ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root), "--quiet", *extra],
@@ -434,3 +439,32 @@ def test_personal_account_names_the_reason(tmp_path, monkeypatch):
     assert set(settings) == set(ORG_SETTINGS)
     assert set(settings.values()) == {"unknown (personal account: no org settings)"}
     assert "rulesets" not in (tmp_path / "gh.log").read_text()
+
+
+@pytest.mark.parametrize("jq16", [False, True], ids=["installed-jq", "jq16-empty-input"])
+@pytest.mark.parametrize("body", ["", "\n", "not json"], ids=["empty", "blank", "non-json"])
+def test_empty_settings_body_is_unknown_and_table_renders(tmp_path, request, jq16, body):
+    """An org or ruleset endpoint that exits 0 with an empty or non-JSON body
+    reads unknown, on jq 1.6's empty-input `-e` behaviour as well as 1.7's,
+    and the repository table still renders (issue #603)."""
+    path_first = request.getfixturevalue("jq16_bin") if jq16 else None
+    res, _ = _run_with_org(tmp_path, {
+        "orgs/testorg": body,
+        "orgs/testorg/rulesets": [{"id": 7, "name": "guard", "target": "branch", "enforcement": "active"}],
+        "orgs/testorg/rulesets/7": body,
+    }, "--no-file", path_first=path_first)
+    assert res.returncode == 0, res.stderr
+    settings = _org_settings(res.stdout)
+    assert settings["two_factor"] == "unknown (unreadable response)"
+    assert settings["default_branch_protection"] == "unknown (ruleset 7 unreadable: unreadable response)"
+    assert settings["rulesets"] == "1: guard (active)"
+    assert "| openrepo | 0 | none | 0 | 0 | 0 | unprotected |" in res.stdout
+
+
+def test_jq16_shim_reproduces_empty_input_exit(jq16_bin):
+    """Guards the shim itself: `jq -e` over empty input exits 0 through it,
+    while `jq -en input` still fails, which is what the fix relies on."""
+    jq = str(jq16_bin / "jq")
+    assert subprocess.run([jq, "-e", "type==\"object\""], input="", text=True).returncode == 0
+    assert subprocess.run([jq, "-en", "input"], input="", text=True,
+                          capture_output=True).returncode != 0

@@ -173,4 +173,6 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghreport.sh" --provider gitlab --host gitlab.e
   authenticated. ghsync's preflight checks this first: an unauthenticated or
   unreachable host exits non-zero with one error line naming the host, before
   any API call.
+- `jq` 1.6 or later. An endpoint that answers with an empty or non-JSON body
+  reads as unreadable (`unknown` / `no-access`) on every jq version.
 - Very large orgs make many API calls (~5 per repo); use `--limit` to sample.
