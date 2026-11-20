@@ -131,6 +131,8 @@ _GRADLE_FILES = frozenset({"build.gradle", "build.gradle.kts"})
 _WRAPPER_NPM_PACKAGES = frozenset({"react-native", "@capacitor/android", "cordova-android"})
 # The package that marks a Cordova app root, whose wrapper is platforms/android/.
 _CORDOVA_NPM_PACKAGES = frozenset({"cordova-android"})
+# The XML namespace a Cordova config.xml declares; matched as the full URI.
+_CORDOVA_XML_NS = "http://cordova.apache.org/ns/1.0"
 
 
 def _package_json_names_wrapper(path: Path,
@@ -163,7 +165,7 @@ def _is_cordova_root(dirpath: Path, filenames: list[str]) -> bool:
     """True when ``dirpath`` is a Cordova app root, whose generated Android
     project sits at ``platforms/android/``: a ``config.xml`` in the Cordova
     namespace, or a ``package.json`` naming ``cordova-android``."""
-    if "config.xml" in filenames and "cordova.apache.org" in _read(dirpath / "config.xml"):
+    if "config.xml" in filenames and _CORDOVA_XML_NS in _read(dirpath / "config.xml"):
         return True
     return ("package.json" in filenames
             and _package_json_names_wrapper(dirpath / "package.json",
