@@ -264,3 +264,15 @@ def test_failed_clone_removes_only_its_own_directories(env: Env) -> None:
     assert _section(res.stdout, "Failed") == ["ns/nested"]
     assert not (env.root / "ns" / "nested").exists()
     assert (env.checkout("ns/alpha") / ".git").is_dir()
+
+
+def test_quiet_clone_passes_q_to_git(env: Env) -> None:
+    """Under --quiet, gh repo clone forwards -q so git prints no Cloning line,
+    and ghsync prints no Cloning / Cloned line of its own."""
+    res = env.run()
+    assert res.returncode == 0, res.stdout + res.stderr
+    clones = [ln for ln in env.gh_log.read_text().splitlines()
+              if ln.startswith("gh repo clone")]
+    assert clones and all(ln.endswith(" -- -q") for ln in clones), clones
+    assert "*** Cloning" not in res.stdout
+    assert "*** Cloned" not in res.stdout
