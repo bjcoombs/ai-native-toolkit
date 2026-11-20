@@ -33,7 +33,9 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
+from lib.fleet_compare import view_check  # noqa: E402
 from lib.fleet_heatmap import columns_for, render_heatmap  # noqa: E402
+from lib.fleet_groups import GroupRow  # noqa: E402
 from lib.fleet_view import (  # noqa: E402
     Comparison,
     FleetViewError,
@@ -80,6 +82,24 @@ def _write(path: Path, text: str) -> None:
         raise
 
 
+def _compare(run: Path, earlier: Path, groups: list[GroupRow]) -> Comparison:
+    """The level change per cell, gated by the fleet comparison rule (``lib/fleet_compare.py``).
+
+    Two stamped run directories are refused on any fleet_compare reason (window,
+    scans and the rest, not only the rubric version), and a note names the groups
+    whose measured set moved. A bare ``groups.jsonl`` compares levels only.
+    """
+    reasons, set_moved = view_check(run, earlier)  # before load_groups: a version refusal is a note
+    if reasons:
+        return {"comparable": False, "changes": {}, "removed_groups": [],
+                "note": "change not shown: " + "; ".join(reasons)}
+    comparison = compare_levels(groups, load_groups(earlier))
+    if set_moved and comparison["comparable"]:
+        return {**comparison, "note": "measured set changed in " + ", ".join(set_moved)
+                + ": a change there may not be a level change (fleet_compare.py names the cause)"}
+    return comparison
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     run = Path(args.run)
@@ -92,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             check_rubric(rubric, groups)
         columns = columns_for(groups, rubric)
         if args.compare is not None:
-            comparison = compare_levels(groups, load_groups(Path(args.compare)))
+            comparison = _compare(run, Path(args.compare), groups)
     except (FleetViewError, RubricError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
