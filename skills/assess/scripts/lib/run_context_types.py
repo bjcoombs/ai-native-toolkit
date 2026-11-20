@@ -613,18 +613,6 @@ class FileCcnRow(TypedDict):
     ccn: float
 
 
-class UnreliableCcnRow(TypedDict):
-    """One ``complexity_unreliable`` row: an scc-only file whose ccn is implausibly
-    low for its size (lib.scc_coverage, issue #590)."""
-
-    path: str
-    language: str
-    loc: int
-    ccn: float
-    density: float
-    language_median_density: float
-
-
 class ScoredHotspotRow(HotspotRow):
     """A row before ranking, carrying the private composite score."""
 

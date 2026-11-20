@@ -52,11 +52,11 @@ from lib.run_context_types import (
     TestPressureBlock,
     TestPressureUnavailable,
     UnderstandingBlock,
-    UnreliableCcnRow,
 )
 from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
+from lib.scc_coverage import UnreliableCcnRow
 from lib.shared_tooling import SharedToolingBlock
 from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock

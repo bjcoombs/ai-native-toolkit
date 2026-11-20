@@ -19,8 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from statistics import median
-
-from lib.run_context_types import UnreliableCcnRow
+from typing import TypedDict
 
 # scc language names counted as data, not code, for the `max_code` / `max_data`
 # split in the stats file. Data files stay in the treemap: a large hand-kept
@@ -40,6 +39,18 @@ MIN_MEDIAN_NLOC = 20
 MIN_LANGUAGE_FILES = 2
 
 ScoredFile = tuple[Path, int, float, str]
+
+
+class UnreliableCcnRow(TypedDict):
+    """One ``complexity_unreliable`` row: an scc-only file whose ccn is
+    implausibly low for its size."""
+
+    path: str
+    language: str
+    loc: int
+    ccn: float
+    density: float
+    language_median_density: float
 
 
 def backend_by_language(

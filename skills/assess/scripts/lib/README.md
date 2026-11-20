@@ -1029,7 +1029,7 @@ backend, or null when scc alone scored a file of it with decision points.
 `MIN_UNRELIABLE_NLOC` (200) in a language with at least two files of
 `MIN_MEDIAN_NLOC` (20) or more (issue #590): scc's keyword counter loses its place on
 some shell quoting and scores a 2,000-line script near zero. `complexity-treemap.py`
-writes the rows (`UnreliableCcnRow`) as `complexity_unreliable` in the stats sidecar
+writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
 (`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
 `anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
 scc-only CCN cells `~N` and flagged ones `(unreliable)`. Ranking is unchanged. Stdlib
