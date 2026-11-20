@@ -14,7 +14,8 @@ fleet roll-up can compare repositories by it.
   prefixes.
 - ``TOOL_LOOP_PATTERNS`` and ``MCP_SERVER_PATTERNS``: the code heuristic,
   matched per source file. Each is written with ``[.]`` and ``[(]`` rather than
-  ``\\.`` and ``\\(`` so this module's own source never matches its own patterns.
+  ``\\.`` and ``\\(``, and no comment quotes a matched form, so this module's own
+  source never matches its own patterns.
 - ``ENDPOINT_PATTERNS``: REST endpoints of an issue tracker or Git host called
   without a client library.
 - ``CI_AGENT_PATTERNS``: a CI job that runs an agent.
@@ -164,10 +165,10 @@ def lookup(name: str) -> tuple[str, PackageKind] | None:
 
 # A tool-call loop: the model asked for a tool and the code feeds a result back.
 TOOL_LOOP_PATTERNS = tuple(re.compile(p) for p in (
-    r"stop_reason\W{1,8}tool_use\b",                  # Anthropic: stop_reason == "tool_use"
-    r"StopReasonToolUse\b",                           # Anthropic Go SDK
-    r"finish_reason\W{1,8}tool_calls\b",              # OpenAI: finish_reason == "tool_calls"
-    r"[.]tool_calls\b",                               # OpenAI: message.tool_calls
+    r"stop_reason\W{1,8}tool_use\b",                  # Anthropic: the stop reason is tool use
+    r"StopReason[T]oolUse\b",                         # Anthropic Go SDK
+    r"finish_reason\W{1,8}tool_calls\b",              # OpenAI: the finish reason is tool calls
+    r"[.]tool_calls\b",                               # OpenAI: the message tool-calls attribute
     r"[\"']type[\"']\s*:\s*[\"']tool_result[\"']",    # Anthropic tool_result message
     r"[.]bind_tools[(]",                              # LangChain
     r"\bcreate_react_agent[(]",                       # LangGraph prebuilt agent

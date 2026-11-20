@@ -107,8 +107,8 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
     assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == [
-        "groups.jsonl", "report.md", "repos.jsonl", "run.json", "shared-tooling.svg"]
-    for name in ("report.md", "shared-tooling.svg"):  # diagrams are byte-identical across runs
+        "agent_clusters.json", "groups.jsonl", "report.md", "repos.jsonl", "run.json", "shared-tooling.svg"]
+    for name in ("report.md", "shared-tooling.svg", "agent_clusters.json"):  # diagrams are byte-identical across runs
         drawn = (tmp_path / "out1" / name).read_bytes()
         assert drawn == (tmp_path / "out2" / name).read_bytes()
         assert drawn == (tmp_path / "out3" / name).read_bytes()
@@ -221,7 +221,8 @@ def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, 
     assert (tmp_path / "out" / "report.md").is_file()
     assert "fleet: diagrams -> " in capsys.readouterr().err
     assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
-    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    assert sorted(p.name for p in (tmp_path / "out").iterdir()) == [
+        "agent_clusters.json", "groups.jsonl", "repos.jsonl", "run.json"]
 
 
 def _seed_earlier(entry: Path, dates: tuple[str, ...]) -> None:
@@ -350,3 +351,13 @@ def test_script_runs_standalone(froot, tmp_path):
                            "--scans", "agent_ops"], capture_output=True, text=True, env=env, check=False)
     assert done.returncode == 0, done.stderr
     assert len(_rows(tmp_path / "o")) == 3
+
+
+def test_agent_clusters_are_unnamed_unless_asked(froot, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
+    assert json.loads((tmp_path / "out" / "agent_clusters.json").read_text(encoding="utf-8"))["named"] is False
+    assert "fleet: agent clusters: " in capsys.readouterr().err
+    assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams",
+                           "--name-agent-clusters"]) == 0
+    assert json.loads((tmp_path / "out" / "agent_clusters.json").read_text(encoding="utf-8"))["named"] is True
