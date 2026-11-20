@@ -328,7 +328,7 @@ jq '.test_focus' "$REPO_ROOT/.assess/run-context.json"
 # regex mirrors sibling_tests.IS_TEST_RE; suffixes mirror test_focus.MUTABLE_SUFFIXES).
 # Tool by dominant focus-file language
 # (Python -> mutmut, TS/JS -> stryker); mutmut when mixed.
-FOCUS_FILES=$(jq -r '.test_focus.entries[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or ($p[-1] | endswith(".bats")) or any($p[:-1][]; . == "__tests__")) | not) | select(test("\\.(py|tsx?|jsx?|go|rs)$"))' "$REPO_ROOT/.assess/run-context.json" | head -5)
+FOCUS_FILES=$(jq -r '(.test_focus.entries // [])[] | select(.test_signal == "covered_but_hollow" or .test_signal == "sibling_test_only") | .path | select(split("/") as $p | (($p[-1] | sub("\\.[^.]*$"; "") | test("(^test_|_test$|\\.test$|\\.spec$|_spec$|Tests?$)")) or ($p[-1] | endswith(".bats")) or any($p[:-1][]; . == "__tests__")) | not) | select(test("\\.(py|tsx?|jsx?|go|rs)$"))' "$REPO_ROOT/.assess/run-context.json" | head -5)
 case "$FOCUS_FILES" in
   *.ts|*.tsx|*.js|*.jsx) MUT_TOOL=stryker ;;
   *) MUT_TOOL=mutmut ;;
