@@ -607,16 +607,40 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. The row shape is the `FleetRow`
+`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
+(`fleet_stamp.ActivityProbe`, `fleet_cleanup.CloneDeleter`). The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
-`if`/`then` tying `ok` to non-null `scans`. `tests/test_fleet.py` fails when the
-checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
-from `skills/assess`.
+`if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
+(`build_stamp_schema`, mapping the `scans` name list itself). `tests/test_fleet.py` and
+`tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
+`uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
+
+**`fleet_stamp.py`**
+The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
+commit, plugin version, UTC scan date, effective window, rubric version, output mode
+(`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
+`scanned` = ok rows, `failed`, `qualifying` = ok rows whose checkout `HEAD` date is on
+or after `window_start(window, scan_date)`, months and years by calendar).
+`ActivityProbe` is a `run_fleet` `after` hook reading each `HEAD` date in the worker,
+before `--delete-after` can remove the clone. No path, salt, timing or input mode, so a
+root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+writes atomically with sorted keys. Rows are untouched.
+
+**`fleet_cleanup.py`**
+`--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;
+`delete_clone` removes only the scanned `<repo>/<repo>-main` checkout, then `rmdir`s an
+empty `worktree/` and repository directory. `deletion_problem` fails closed with a
+keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
+checkout that is not a main clone at its work-tree root, one holding a protected path
+(`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
+output, a stash, a commit on `HEAD` or a local branch that no remote branch holds, a
+linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads

@@ -108,6 +108,9 @@ class ScanOptions:
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
+# Called in the worker with each target's row as soon as it is in hand
+# (``--delete-after``, lib/fleet_cleanup.py). It must not raise.
+AfterFn = Callable[[Target, FleetRow], None]
 
 
 def _read_only_env() -> dict[str, str]:
@@ -349,10 +352,22 @@ def _guarded(scan: ScanFn, target: Target, scratch: Path, options: ScanOptions) 
         return _row(target, reason=SCAN_ERROR)
 
 
+def _scan_then(scan: ScanFn, after: AfterFn | None, target: Target, scratch: Path,
+               options: ScanOptions) -> FleetRow:
+    row = _guarded(scan, target, scratch, options)
+    if after is not None:
+        after(target, row)
+    return row
+
+
 def run_fleet(
     targets: Sequence[Target], options: ScanOptions, jobs: int, scan: ScanFn = scan_target,
+    after: AfterFn | None = None,
 ) -> list[FleetRow]:
     """Scan every target with ``jobs`` workers; rows sorted by ``repo``.
+
+    ``after`` (when given) runs in the worker on each target's row right after
+    its scan, before the next target starts on that worker.
 
     The ``*.stderr`` logs a previous run left in ``options.log_dir`` are removed
     first, so it holds only this run's; nothing else there is touched.
@@ -361,7 +376,7 @@ def run_fleet(
         clear_stderr_logs(options.log_dir)
     with tempfile.TemporaryDirectory(prefix="fleet-") as scratch, \
             ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        rows = list(pool.map(lambda t: _guarded(scan, t, Path(scratch), options), targets))
+        rows = list(pool.map(lambda t: _scan_then(scan, after, t, Path(scratch), options), targets))
     return sorted(rows, key=lambda r: r["repo"])
 
 

@@ -1,9 +1,11 @@
-"""The published JSON schema of one fleet ``repos.jsonl`` row (issue #567).
+"""The published JSON schemas of a fleet ``repos.jsonl`` row (#567) and of ``run.json`` (#569).
 
 Generated from the ``FleetRow`` TypedDict in ``lib/fleet.py`` with the same
 mapping ``signals_schema`` uses, so the checked-in file cannot drift from the
 type mypy checks: ``tests/test_fleet.py`` fails when ``SCHEMA_PATH`` differs
-from ``render()``. Regenerate after changing ``FleetRow``:
+from ``render()`` (``tests/test_fleet_run_stamp.py`` likewise for
+``STAMP_SCHEMA_PATH``, built from ``FleetStamp`` in ``lib/fleet_stamp.py``).
+Regenerate both after changing either type:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_schema.py
 
@@ -16,17 +18,21 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import get_type_hints
 
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.fleet import FAILURE_REASONS, STATUS_FAILED, STATUS_OK, FleetRow  # noqa: E402
+from lib.fleet_stamp import FleetStamp  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals_schema import type_schema  # noqa: E402
 
 # skills/assess/scripts/lib -> skills/
 SCHEMA_PATH = Path(__file__).resolve().parents[3] / "fleet" / "references" / "repos.schema.json"
 SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json"
+STAMP_SCHEMA_PATH = SCHEMA_PATH.with_name("run.schema.json")
+STAMP_SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/run.schema.json"
 REASON_PATTERN = "^(" + "|".join(FAILURE_REASONS) + r"|scan_exit_-?[0-9]+)$"
 
 
@@ -58,11 +64,38 @@ def build_schema() -> JsonDict:
     }
 
 
+def build_stamp_schema() -> JsonDict:
+    """The ``run.json`` schema. ``scans`` (a name list) is mapped here; ``type_schema`` has no list mapping."""
+    hints = get_type_hints(FleetStamp)
+    props: JsonDict = {name: type_schema(hint) for name, hint in hints.items() if name != "scans"}
+    props["scans"] = {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]}
+    props["scan_date"] = {"type": "string", "pattern": r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+    props["window"] = {"type": "string", "pattern": r"^[1-9][0-9]*(d|w|mo|y)$"}
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": STAMP_SCHEMA_ID,
+        "title": "fleet run stamp",
+        "description": (
+            "run.json written by skills/fleet/scripts/fleet.py beside repos.jsonl: what produced "
+            "the run and its repository counts. Generated from lib/fleet_stamp.py by lib/fleet_schema.py."
+        ),
+        "type": "object",
+        "properties": {name: props[name] for name in hints},
+        "required": sorted(FleetStamp.__required_keys__),
+        "additionalProperties": False,
+    }
+
+
 def render() -> str:
     return json.dumps(build_schema(), indent=2) + "\n"
 
 
+def render_stamp() -> str:
+    return json.dumps(build_stamp_schema(), indent=2) + "\n"
+
+
 if __name__ == "__main__":
     SCHEMA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SCHEMA_PATH.write_text(render(), encoding="utf-8")
-    print(f"wrote {SCHEMA_PATH}")
+    for path, text in ((SCHEMA_PATH, render()), (STAMP_SCHEMA_PATH, render_stamp())):
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {path}")

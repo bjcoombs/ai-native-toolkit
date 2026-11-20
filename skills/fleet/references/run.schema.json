@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/run.schema.json",
+  "title": "fleet run stamp",
+  "description": "run.json written by skills/fleet/scripts/fleet.py beside repos.jsonl: what produced the run and its repository counts. Generated from lib/fleet_stamp.py by lib/fleet_schema.py.",
+  "type": "object",
+  "properties": {
+    "fleet_stamp_version": {
+      "type": "integer"
+    },
+    "toolkit_commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plugin_version": {
+      "type": "string"
+    },
+    "scan_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "window": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(d|w|mo|y)$"
+    },
+    "rubric_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "counts_only": {
+      "type": "boolean"
+    },
+    "paths_hashed": {
+      "type": "boolean"
+    },
+    "scans": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "repositories": {
+      "type": "object",
+      "properties": {
+        "selected": {
+          "type": "integer"
+        },
+        "scanned": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "qualifying": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "failed",
+        "qualifying",
+        "scanned",
+        "selected"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "counts_only",
+    "fleet_stamp_version",
+    "paths_hashed",
+    "plugin_version",
+    "repositories",
+    "rubric_version",
+    "scan_date",
+    "scans",
+    "toolkit_commit",
+    "window"
+  ],
+  "additionalProperties": false
+}
