@@ -149,19 +149,28 @@ def test_the_core_passes_exactly_the_provided_inputs():
     assert keys == set(reg.PROVIDED_INPUTS)
 
 
-def test_the_core_drives_every_stage():
-    """A spec at a stage the core never runs would validate and then vanish."""
+def test_the_core_runs_the_whole_table_in_one_call():
+    """One run_scans call with no stage: every stage runs, so a spec cannot
+    validate and then vanish (#558)."""
     core = ast.parse((SCRIPTS / "assess_core.py").read_text(encoding="utf-8"))
-    driven = {
-        getattr(reg, node.args[2].id)
-        for node in ast.walk(core)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
+    calls = [
+        node for node in ast.walk(core)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         and node.func.id == "run_scans"
-        and len(node.args) >= 3
-        and isinstance(node.args[2], ast.Name)
-    }
-    assert driven == set(reg.STAGES)
+    ]
+    assert len(calls) == 1
+    assert len(calls[0].args) == 2 and not calls[0].keywords
+
+
+def test_a_stageless_run_runs_every_stage_in_stage_order():
+    seen: list[str] = []
+    specs = tuple(
+        _spec(stage, lambda root, s=stage: seen.append(s), stage=stage)
+        for stage in reversed(reg.STAGES)
+    )
+    reg.validate(specs)
+    reg.run_scans({}, {"repo_root": "r"}, specs=specs)
+    assert seen == list(reg.STAGES)
 
 
 def test_every_scan_that_degraded_before_the_migration_still_does():
@@ -235,36 +244,39 @@ def test_a_private_spread_or_clashing_spread_key_is_rejected():
         reg.validate((_spec("g", lambda root: {}, private=True, spread=("a",)),))
     with pytest.raises(ScanRegistryError, match=r"\['a'\] written elsewhere"):
         reg.validate((_spec("a", lambda root: 1), _spec("g", lambda root: {}, spread=("a",))))
-    with pytest.raises(ScanRegistryError, match="written elsewhere"):
-        reg.validate((_spec("g", lambda root: {}, spread=("doc_staleness",)),))
     # A spread key may share a name with an input: the run header publishes
     # the relative `scope` while scans read the absolute one.
     reg.validate((_spec("g", lambda root: {}, spread=("repo_root",)),))
 
 
-def test_a_hand_wired_key_is_readable_only_from_its_stage():
-    reader = _spec("r", lambda v: v, reads=("doc_staleness",))
-    reg.validate((reader,))
-    with pytest.raises(ScanRegistryError, match="later stage"):
-        reg.validate((_spec("r", lambda v: v, reads=("doc_staleness",), stage=reg.STAGE_SETUP),))
-
-
-def test_the_core_assigns_exactly_the_hand_wired_keys():
+def test_the_core_assigns_no_run_context_key():
+    """Every block is a table entry (#558): build_run_context assigns nothing."""
     core = ast.parse((SCRIPTS / "assess_core.py").read_text(encoding="utf-8"))
     build = next(n for n in ast.walk(core)
-                 if isinstance(n, ast.FunctionDef) and n.name == "_attach_doc_staleness")
-    assigned = {
-        target.slice.value
-        for node in ast.walk(build) if isinstance(node, ast.Assign)
-        for target in node.targets
-        if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
-    }
-    assert assigned == set(reg.HAND_WIRED)
+                 if isinstance(n, ast.FunctionDef) and n.name == "build_run_context")
+    assigned = [
+        target for node in ast.walk(build) if isinstance(node, ast.Assign)
+        for target in node.targets if isinstance(target, ast.Subscript)
+    ]
+    assert assigned == []
+
+
+def test_the_doc_staleness_keys_are_table_entries_in_their_old_order():
+    """doc_staleness, stale_hubs and churn_degenerate follow doc_graph, as they
+    did when the core assigned them by hand; the doc join feeds the keyhole."""
+    keys = [spec.key for spec in reg.SCANS]
+    at = keys.index("doc_graph")
+    assert keys[at + 1:at + 4] == ["doc_staleness", "stale_hubs", "churn_degenerate"]
+    by_key = {spec.key: spec for spec in reg.SCANS}
+    assert by_key["doc_staleness"].degrade and not by_key["doc_staleness"].label
+    assert by_key["doc_join"].private and by_key["doc_join"].degrade
+    assert keys.index("doc_join") < keys.index("keyhole")
+    assert "doc_join" in by_key["keyhole"].reads
 
 
 def test_the_run_context_carries_only_declared_keys_in_table_order(tmp_path):
     """No private value leaks into run-context.json, and the key order is the
-    table's: stage by stage, the hand-wired keys after STAGE_SETUP."""
+    table's, stage by stage."""
     from assess_core import build_run_context
     from assess_core_helpers import _minimal_repo
 
@@ -275,8 +287,6 @@ def test_the_run_context_carries_only_declared_keys_in_table_order(tmp_path):
         for spec in reg.SCANS:
             if spec.stage == stage and not spec.private:
                 declared.extend(spec.spread or (spec.key,))
-        if stage == reg.STAGE_SETUP:
-            declared.extend(reg.HAND_WIRED)
     assert list(ctx) == [key for key in declared if key in ctx]
     spread_keys = {key for spec in reg.SCANS for key in spec.spread}
     unpublished = {spec.key for spec in reg.SCANS if spec.private or spec.spread} - spread_keys
@@ -294,3 +304,42 @@ def test_offline_fn_requires_a_network_scan_and_matching_reads():
     with pytest.raises(ScanRegistryError, match="offline_fn"):
         reg.validate((_spec("x", lambda root: 1, network=True, offline_fn=lambda: 2),))
     reg.validate((_spec("x", lambda root: 1, network=True, offline_fn=lambda root: 2),))
+
+
+def test_a_raising_doc_staleness_scan_degrades_its_keys_and_the_run_continues(
+    tmp_path, monkeypatch,
+):
+    """doc_staleness ran through ``safe`` when hand-wired; as a table entry it
+    still degrades under its own label, and its readers see the marker."""
+    from assess_core import build_run_context
+    from assess_core_helpers import _minimal_repo
+    from lib import core_scans
+
+    def boom(*_a, **_k):
+        raise RuntimeError("kaput")
+
+    monkeypatch.setattr(core_scans, "analyze_doc_staleness", boom)
+    ctx = build_run_context(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
+                            non_interactive=True)
+    assert ctx["doc_staleness"] == {"available": False,
+                                    "reason": "doc_staleness scan failed: kaput"}
+    assert ctx["stale_hubs"] == []
+    assert ctx["churn_degenerate"] is False
+
+
+def test_a_raising_doc_join_degrades_only_the_documentation_block(tmp_path, monkeypatch):
+    from assess_core import build_run_context
+    from assess_core_helpers import _minimal_repo
+    from lib import core_scans
+
+    def boom(*_a, **_k):
+        raise RuntimeError("kaput")
+
+    monkeypatch.setattr(core_scans, "analyze_doc_complexity_join", boom)
+    ctx = build_run_context(repo_root=_minimal_repo(tmp_path), run_date="2026-11-20",
+                            non_interactive=True)
+    documentation = ctx["documentation"]
+    assert documentation["available"] is False
+    assert documentation["reason"] == "documentation scan failed: kaput"
+    assert documentation["freshness_by_doc"] == {}
+    assert ctx["doc_staleness"]["available"] is True
