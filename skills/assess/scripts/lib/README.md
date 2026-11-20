@@ -1339,7 +1339,7 @@ nested JSON, wrong top-level type, a missing or non-integer version, missing or 
 findings) is `None` with a fixed reason token, and unusable entries (non-object, no string
 name, non-list `paths`, non-string or unencodable paths) are skipped under
 `malformed_entries` (#668). A numeric-string version is read as its integer and a UTF-8
-BOM is accepted. `load_snapshot` returns the snapshot alone and prints one stderr line
+BOM is accepted. A path that cannot be encoded as UTF-8 (a lone surrogate) is dropped on the write path and in `method_change` too, since the gate would raise printing it. `load_snapshot` returns the snapshot alone and prints one stderr line
 naming any reason (an absent file is silent), and `run_publish` records it as
 `prior_findings_snapshot`. `committed_prior` picks the snapshot the gate compares
 against: the `findings.json` on disk when its method version differs from this run's
@@ -1348,7 +1348,7 @@ the current findings: on a method-version mismatch it lists the paths that appea
 cleared per finding, the snapshot path and the re-freeze command (on a downgrade, when
 this run's method is older than the snapshot's, the toolkit pin to raise instead),
 which `assess_gate` prints as an explanation (it never fails the gate by itself). Tests:
-`tests/test_findings_snapshot.py`.
+`tests/test_findings_snapshot.py`, `tests/test_findings_snapshot_malformed.py`.
 
 **`counts_only.py`**
 The content-free run-context mode for scans of repositories you do not own (#546).

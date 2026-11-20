@@ -183,3 +183,17 @@ def test_gate_passes_on_a_hand_edited_committed_snapshot(
     ctx = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     # A prior with a sound version records its usable entries; the rest is None.
     assert ctx["prior_findings_snapshot"] == recorded
+
+
+def test_unencodable_paths_are_dropped_on_both_sides_of_a_method_change() -> None:
+    """A path that cannot be encoded as UTF-8 (a lone surrogate, as a
+    non-UTF-8 filename decodes) would raise when the gate prints it. The
+    written snapshot and the current findings both drop it, so it never
+    shows as a move."""
+    findings = [{"name": "lying_map", "paths": ["\udcff.py", "a.py"]}]
+    assert build_snapshot(findings, 2)["findings"] == [{"name": "lying_map", "paths": ["a.py"]}]
+    ctx = {"assess_method_version": 2, "derived_findings": findings,
+           "prior_findings_snapshot": build_snapshot(findings, 1)}
+    change = method_change(ctx)
+    assert change is not None
+    assert change["appeared"] == [] and change["cleared"] == []
