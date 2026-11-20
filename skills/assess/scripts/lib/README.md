@@ -665,6 +665,23 @@ Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 checked-in file differs; regenerate with `uv run --locked python scripts/lib/fleet_schema.py`
 from `skills/assess`.
 
+**`fleet_labels.py`**
+The deterministic half of the optional fleet label step (issue #572), driven by
+`skills/fleet/scripts/fleet_labels.py`. `digest` reduces a `FleetRow` to the facts a
+small model reads (identity plus short scalar leaves of available blocks; lists become
+lengths and kind tokens; never source), `batches` and `build_prompt` wrap them in the
+fixed instructions, `parse_answers` reads the reply tolerantly (fences and prose
+skipped), and `build_label_rows` joins it to `repos.jsonl`: one `LabelRow`
+(`path`, `label`, `confidence`, `model`) per repository, a label outside `LABELS`
+becoming `other`, a missing answer `other` at confidence 0, unknown paths dropped, the
+first duplicate kept, `model` from the caller. `write_labels` writes `labels.jsonl`
+atomically beside `repos.jsonl` (never touching it); `check_labels` validates a file
+against the repository ids; `labels_by_path` and `filter_rows` are the display and
+filter join. `build_schema` generates `skills/fleet/references/labels.schema.json`
+(regenerate with `uv run --locked python scripts/lib/fleet_labels.py` from
+`skills/assess`). No module in the gathering or scoring path imports it, and it
+imports no model, network or subprocess module: `tests/test_fleet_labels.py` pins both.
+
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
 (broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
