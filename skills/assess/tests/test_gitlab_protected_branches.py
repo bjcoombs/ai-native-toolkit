@@ -56,15 +56,38 @@ def test_exact_rule_reports_its_settings(world: World) -> None:
     assert got is not None and got["name"] == "main" and got["allow_force_push"] is True
 
 
-def test_wildcard_rule_covers_the_branch_first_in_name_order(world: World) -> None:
-    world.serve(LIST, [_rule("release/*"), _rule("m*", push=0), _rule("*", push=40)])
-    got = branch_protection(P, "main")
-    assert got is not None and got["name"] == "*"
-    got = branch_protection(P, "release/1.2")
-    assert got is not None and got["name"] == "*"
+def test_a_single_wildcard_rule_covers_the_branch(world: World) -> None:
     world.serve(LIST, [_rule("release/*"), _rule("ma*n")])
     got = branch_protection(P, "main")
     assert got is not None and got["name"] == "ma*n"
+
+
+def test_overlapping_wildcards_merge_most_permissive(world: World) -> None:
+    # "*" sorts first; picking it alone would report push 40 and no force push.
+    world.serve(LIST, [_rule("release/*"), _rule("m*", push=0, force=True),
+                       _rule("*", push=40, merge=40)])
+    got = branch_protection(P, "main")
+    assert got is not None and got["name"] == "*, m*"
+    assert [lv["access_level"] for lv in got["push_access_levels"]] == [40]  # 0 is "No one"
+    assert [lv["access_level"] for lv in got["merge_access_levels"]] == [30]
+    assert got["allow_force_push"] is True and got["code_owner_approval_required"] is False
+    got = branch_protection(P, "release/1.2")
+    assert got is not None and got["name"] == "*, release/*"
+
+
+def test_merged_levels_keep_every_user_and_group_grant(world: World) -> None:
+    user = {"access_level": 40, "user_id": 7, "group_id": None, "deploy_key_id": None}
+    group = {"access_level": 30, "user_id": None, "group_id": 9, "deploy_key_id": None}
+    a, b = _rule("release/*", push=0), _rule("*-stable", push=0)
+    a["push_access_levels"] = _levels(0) + [user]  # type: ignore[operator]
+    dup = {**user, "id": 5}  # the same grant on the other rule carries its own id
+    b["push_access_levels"] = _levels(0) + [group, dup]  # type: ignore[operator]
+    b["code_owner_approval_required"] = True
+    world.serve(LIST, [a, b])
+    got = branch_protection(P, "release/1-stable")
+    assert got is not None
+    assert got["push_access_levels"] == _levels(0) + [group, dup]  # name order, deduped
+    assert got["code_owner_approval_required"] is True
 
 
 def test_wildcard_metacharacters_are_literal(world: World) -> None:
@@ -200,6 +223,21 @@ def test_gitlab_snapshot_against_a_wildcard_rule(world: World) -> None:
     block = scan_config_drift(world.root)
     assert [(e["key"], e["tracked"], e["live"]) for e in block["entries"]] == [
         ("name", "main", "ma*"),
+    ]
+
+
+def test_overlapping_wildcards_are_not_false_drift(world: World) -> None:
+    world.remote(GITLAB_REMOTE)
+    # The effective protection of release/1-stable: developers push and merge.
+    _track(world, ".gitlab/stable.json", {"name": "release/1-stable",
+                                           "push_access_levels": [{"access_level": 30}],
+                                           "merge_access_levels": [{"access_level": 30}],
+                                           "allow_force_push": False})
+    world.serve(LIST, [_rule("release/*", push=40, merge=30), _rule("*-stable", push=30, merge=40)])
+    block = scan_config_drift(world.root)
+    assert block["available"] is True
+    assert [(e["key"], e["tracked"], e["live"]) for e in block["entries"]] == [
+        ("name", "release/1-stable", "*-stable, release/*"),
     ]
 
 
