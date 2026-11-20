@@ -17,7 +17,7 @@ import pytest
 import assess_core
 from assess_core import build_run_context
 from assess_core_helpers import _minimal_repo, _seed_assess, _write_min_stats
-from lib import artifact_schema
+from lib import artifact_schema, core_scans
 
 
 def test_archetype_block_emitted_for_software_repo(git_repo) -> None:
@@ -303,7 +303,7 @@ def test_keyhole_signal_failure_degrades_not_crashes(tmp_path: Path, monkeypatch
     def boom(*_a, **_k):
         raise RuntimeError("simulated structure failure")
 
-    monkeypatch.setattr(assess_core, "analyze_structure", boom)
+    monkeypatch.setattr(core_scans, "analyze_structure", boom)
     ctx = build_run_context(repo_root=repo, run_date="2026-05-29")
     assert ctx["structure"]["available"] is False
     assert "failed" in ctx["structure"]["reason"]
@@ -320,7 +320,7 @@ def test_readside_scan_failure_degrades_not_crashes(tmp_path: Path, monkeypatch)
     def boom(*_a, **_k):
         raise RuntimeError("simulated scan failure")
 
-    monkeypatch.setattr(assess_core, "build_doc_graph", boom)
+    monkeypatch.setattr(core_scans, "build_doc_graph", boom)
     ctx = build_run_context(repo_root=repo, run_date="2026-05-27")
     assert ctx["doc_graph"]["available"] is False
     assert "failed" in ctx["doc_graph"]["reason"]
@@ -423,7 +423,7 @@ def test_test_pressure_passes_hotspots_as_hot_files(tmp_path: Path, monkeypatch)
         captured["opt_in"] = opt_in
         return {"mutation_config_present": False, "cheap_heuristics": {}}
 
-    monkeypatch.setattr(assess_core, "scan_test_pressure", fake_scan)
+    monkeypatch.setattr(core_scans, "scan_test_pressure", fake_scan)
     build_run_context(repo_root=repo, run_date="2026-05-29")
     assert captured["hot_files"] == ["src/hot.py"]
     assert captured["opt_in"] is False  # read-only by default
@@ -601,7 +601,7 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
 def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
     ctx = build_run_context(repo_root=repo, run_date="2026-07-07")
-    assert ctx["artifact_schema_version"] == artifact_schema.ARTIFACT_SCHEMA_VERSION == "1.4.0"
+    assert ctx["artifact_schema_version"] == artifact_schema.ARTIFACT_SCHEMA_VERSION == "1.5.0"
     # run_id shape: YYYYMMDDHHMMSS-<8 hex>
     run_id = ctx["run_id"]
     stamp, _, suffix = run_id.partition("-")
@@ -610,7 +610,7 @@ def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     # The same id is persisted to run-context.json on disk.
     on_disk = json.loads((repo / ".assess" / "run-context.json").read_text())
     assert on_disk["run_id"] == run_id
-    assert on_disk["artifact_schema_version"] == "1.4.0"
+    assert on_disk["artifact_schema_version"] == "1.5.0"
 
 
 def test_run_context_run_id_is_unique_per_run(tmp_path: Path) -> None:
