@@ -445,6 +445,33 @@ def load_describes(repo_root: Path) -> DescribesConfig:
     return DescribesConfig(mappings, errors)
 
 
+class DeclaredMapping(TypedDict):
+    """``run-context.json`` ``doc_staleness.declared_cross_repo`` entry."""
+
+    path: str | None
+    repo: str | None
+    scope: list[str]
+    status: str  # "declared_not_measured" | "invalid"
+    reason: str | None  # "invalid_mapping" for a rejected entry
+
+
+def declared_block(repo_root: Path) -> list[DeclaredMapping]:
+    """Standalone ``/assess``: the ``[[describes]]`` mappings, listed and not measured.
+
+    Only ``/fleet`` holds the service checkouts (``lib/fleet_doc_freshness.py``);
+    a single-repo run says the mappings exist and guesses nothing.
+    """
+    cfg = load_describes(repo_root)
+    out: list[DeclaredMapping] = [
+        {"path": m["path"], "repo": m["repo"], "scope": m["scope"],
+         "status": "declared_not_measured", "reason": None}
+        for m in cfg.mappings
+    ]
+    out += [{"path": None, "repo": None, "scope": [], "status": "invalid",
+             "reason": "invalid_mapping"} for _ in cfg.errors]
+    return out
+
+
 def load_excludes(repo_root: Path) -> tuple[set[str], list[str]]:
     """Return `(extra_exclude_dirs, extra_exclude_patterns)` from the config.
 

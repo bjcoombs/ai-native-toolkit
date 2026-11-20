@@ -797,7 +797,7 @@ commits and bulk commits by `git_churn.bulk_commit_need` over the service's trac
 scope path is `broken`; a repository absent from the run, a shallow boundary newer than
 the doc edit, or a git failure is `unknown` with a reason token. Counts-only rows carry no
 subjects or shas (`--full` adds up to five); `--hash-paths` hashes doc and scope paths with
-`counts_only.hash_path`. `declared_block` gives standalone `/assess` the
+`counts_only.hash_path`. `assess_config.declared_block` gives standalone `/assess` the
 `doc_staleness.declared_cross_repo` list (declared, not measured); `fleet.py` calls the join
 before any scan so `--delete-after` cannot remove a checkout it needs. Tests:
 `tests/test_fleet_doc_freshness.py`.

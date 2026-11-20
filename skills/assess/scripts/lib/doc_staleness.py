@@ -81,7 +81,7 @@ from lib.git_churn import (
     tracked_files,
 )
 from lib.change_coupling import RenameMap
-from lib.fleet_doc_freshness import DeclaredMapping, declared_block
+from lib.assess_config import DeclaredMapping, declared_block
 from lib.run_context_types import BulkCommit, DocToCodeEdge
 
 

@@ -42,9 +42,9 @@ one content-clock pass per docs repository that declares mappings.
 
 Counts-only (the fleet default) rows carry no free text: commit subjects and
 shas appear only under ``--full``; with ``--hash-paths`` the doc and scope
-paths are hashed like the scans' paths. ``declared_block`` is the standalone
-``/assess`` view: the declared mappings listed as not measured outside fleet
-mode, nothing guessed.
+paths are hashed like the scans' paths. The standalone ``/assess`` view is
+``assess_config.declared_block``: the declared mappings listed as not measured
+outside fleet mode, nothing guessed.
 """
 from __future__ import annotations
 
@@ -83,7 +83,6 @@ BEHIND = "behind"
 UNKNOWN = "unknown"
 BROKEN = "broken"
 INVALID = "invalid"
-DECLARED = "declared_not_measured"
 
 # Reason tokens (rows hold no free text).
 REPO_NOT_IN_FLEET = "repo_not_in_fleet"
@@ -94,7 +93,7 @@ DOC_HISTORY_UNKNOWN = "doc_history_unknown"
 DOC_HISTORY_TRUNCATED = "doc_history_truncated"
 SERVICE_HISTORY_TRUNCATED = "service_history_truncated"
 SERVICE_HISTORY_UNKNOWN = "service_history_unknown"
-INVALID_MAPPING = "invalid_mapping"
+INVALID_MAPPING = "invalid_mapping"  # also assess_config.declared_block's token
 
 # Basenames of lockfiles and dependency manifests: a commit whose in-scope files
 # are all of these is a dependency bump, not a change to the documented surface.
@@ -132,16 +131,6 @@ class FreshnessRow(TypedDict):
     commits_since_doc_change: int | None  # counted service commits; None unmeasured
     doc_last_change: str | None  # YYYY-MM-DD of the doc's last content change
     commits: list[CommitRef] | None  # newest first, at most SUBJECTS_CAP; --full only
-
-
-class DeclaredMapping(TypedDict):
-    """``run-context.json`` ``doc_staleness.declared_cross_repo`` entry."""
-
-    path: str | None
-    repo: str | None
-    scope: list[str]
-    status: str  # "declared_not_measured" | "invalid"
-    reason: str | None  # "invalid_mapping" for a rejected entry
 
 
 class FreshnessResult(NamedTuple):
@@ -183,19 +172,6 @@ def is_dependency_file(rel: str) -> bool:
 
 def _in_scope(rel: str, scope: Sequence[str]) -> bool:
     return any(s == "." or rel == s or rel.startswith(s + "/") for s in scope)
-
-
-def declared_block(repo_root: Path) -> list[DeclaredMapping]:
-    """Standalone ``/assess``: the declared mappings, listed and not measured."""
-    cfg = load_describes(repo_root)
-    out: list[DeclaredMapping] = [
-        {"path": m["path"], "repo": m["repo"], "scope": m["scope"],
-         "status": DECLARED, "reason": None}
-        for m in cfg.mappings
-    ]
-    out += [{"path": None, "repo": None, "scope": [], "status": INVALID,
-             "reason": INVALID_MAPPING} for _ in cfg.errors]
-    return out
 
 
 def _git(checkout: Path, *args: str) -> str | None:
