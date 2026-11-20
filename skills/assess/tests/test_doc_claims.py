@@ -244,15 +244,29 @@ def test_a_pin_naming_no_tool_joins_the_one_tool_named(tmp_path: Path) -> None:
     assert scan_doc_claims(tmp_path, [])["contradictions_total"] == 1
 
 
-def test_a_pin_naming_no_tool_stays_apart_when_several_are_named(tmp_path: Path) -> None:
+def test_a_pin_naming_no_tool_is_not_compared_when_several_are_named(tmp_path: Path) -> None:
     _write(tmp_path, "docs/a.md", "Node 20.11.0 is pinned in `.tool-versions`.\n")
     _write(tmp_path, "docs/b.md", "Python 3.12.1 is pinned in `.tool-versions`.\n")
     _write(tmp_path, "docs/c.md", "Version 18.19.0 is pinned in `.tool-versions`.\n")
     _write(tmp_path, "docs/d.md", "Version 3.11.4 is pinned in `.tool-versions`.\n")
     block = scan_doc_claims(tmp_path, [])
-    assert block["contradictions_total"] == 1
-    assert _sites(block["contradictions"][0]) == [
-        ["docs/c.md", 1, "18.19.0"], ["docs/d.md", 1, "3.11.4"]]
+    # Unnamed pins are not compared with each other either: 18.19.0 and 3.11.4
+    # may be two tools. Each is still verified on its own.
+    assert block["contradictions_total"] == 0
+    assert block["failed"] == 4
+
+
+@pytest.mark.parametrize(("node", "python"), [
+    ("`node` 20.11.0", "`python` 3.11.4"),
+    ("**Node** 20.11.0", "**Python** 3.11.4"),
+    ("Node >= 20.11.0", "Python ~= 3.11.4"),
+])
+def test_markdown_and_operator_forms_still_split_by_tool(
+        tmp_path: Path, node: str, python: str) -> None:
+    _write(tmp_path, ".tool-versions", "nodejs 20.11.0\npython 3.12.1\n")
+    _write(tmp_path, "CLAUDE.md", f"{node} is pinned in `.tool-versions`.\n")
+    _write(tmp_path, "docs/setup.md", f"{python} is pinned in `.tool-versions`.\n")
+    assert scan_doc_claims(tmp_path, ["CLAUDE.md"])["contradictions_total"] == 0
 
 
 @pytest.mark.parametrize(("pin_file", "content", "a", "b"), [

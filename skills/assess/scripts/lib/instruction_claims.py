@@ -284,10 +284,13 @@ def _pin_claims(sentence: str, line: int) -> list[Claim]:
 def _pinned_tool(sentence: str, version: str) -> str | None:
     """The tool a pin sentence names just before its version, lowercased and
     with common aliases folded (``Node.js`` -> ``node``); None when that word
-    is a function word, or there is none."""
+    is a function word, or there is none. Markdown emphasis and code marks
+    (`` `node` ``, ``**Node**``) are dropped first, and a constraint operator
+    may sit between the name and the version (``Node >= 20.11.0``)."""
+    plain = re.sub(r"[`*_]", "", sentence)
     match = re.search(
-        rf"(?<![\w.+-])([A-Za-z][\w.+-]*?)\.?[\s:=@]+(?:version\s+)?v?{re.escape(version)}(?!\.?\d)",
-        sentence)
+        rf"(?<![\w.+-])([A-Za-z][\w.+-]*?)\.?[\s:=@<>~^]+(?:version\s+)?v?{re.escape(version)}(?!\.?\d)",
+        plain)
     if match is None:
         return None
     word = match.group(1).lower()

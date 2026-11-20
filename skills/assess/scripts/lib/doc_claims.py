@@ -23,8 +23,8 @@ pin never contradicts a Python pin, even when one of them is stale or the file
 is missing. A file in ``SINGLE_TOOL_PIN_FILES`` (``.nvmrc``, ``.python-version``)
 pins one tool, so its pins are never split. The tool is the claim's ``subject``
 (the word before the version);
-a pin naming no tool joins its file's one named tool, or, when the file's pins
-name several, the other unnamed pins only. A pin finding whose every version
+a pin naming no tool joins its file's one named tool, and when the file's pins
+name several it is compared with nothing (it is still verified on its own). A pin finding whose every version
 the file contains is still dropped (``_reconciled``), for two true pins whose
 tool could not be told apart. Two pins agree when one version's dotted
 components are a prefix of the other's (``3.11`` and ``3.11.9``, matching the lenient pin check;
@@ -287,8 +287,9 @@ def _by_subject(path: str, sites: list[tuple[str | None, _Site]]) -> list[list[_
     group whatever words name the tool ("Python 3.11", "CPython 3.12",
     "Node LTS 18"). Elsewhere a pin naming its tool is compared with the pins
     naming the same tool. A claim naming none (every count; a pin with no tool
-    word) joins the group's one named subject, or, when the group names several,
-    forms its own group: which tool it means is a guess.
+    word) joins the group's one named subject; when the group names several, it
+    is compared with nothing, since which tool it means is a guess (it is still
+    verified on its own through ``failures``).
     """
     if Path(path).name in SINGLE_TOOL_PIN_FILES:
         return [[site for _, site in sites]]
@@ -301,7 +302,7 @@ def _by_subject(path: str, sites: list[tuple[str | None, _Site]]) -> list[list[_
             named.setdefault(subject, []).append(site)
     if len(named) <= 1:
         return [[site for _, site in sites]]
-    return [named[subject] for subject in sorted(named)] + [unnamed]
+    return [named[subject] for subject in sorted(named)]
 
 
 def _reconciled(root: Path, contradiction: DocContradiction) -> bool:

@@ -471,6 +471,14 @@ def test_count_claim_is_extracted_with_its_number_and_pattern() -> None:
     ("Terraform is pinned in `.tool-versions` (currently 1.6.0).", None),
     ("Python is set to 3.12, pinned in `.tool-versions`.", None),
     ("Node uses 20.11.0, pinned in `.tool-versions`.", None),
+    ("`node` 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("**Node** 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("_Python_ 3.11.4 is pinned in `.tool-versions`.", "python"),
+    ("Node >= 20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("`python` ~= 3.11.4 is pinned in `.tool-versions`.", "python"),
+    ("Node ^20.11.0 is pinned in `.tool-versions`.", "node"),
+    ("Ruby ~> 3.2.2 is pinned in `.tool-versions`.", "ruby"),
+    ("Node=20.11.0 is pinned in `.tool-versions`.", "node"),
 ])
 def test_a_pin_keeps_the_tool_it_names_as_its_subject(sentence: str, subject: str | None) -> None:
     [claim] = extract_claims(sentence + "\n")
