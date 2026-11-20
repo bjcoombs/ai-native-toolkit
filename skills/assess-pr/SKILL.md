@@ -19,9 +19,9 @@ Each offer is independent (uninstall excepted - it's mutually exclusive with the
 
 These are the **write-back phase** of the consent lifecycle (Phase 2; Phase 1 was the tool installs, Phase 3 the mutation pass - see the assess SKILL.md). Do not serialise them into back-to-back modals. Present them as **one batched, multi-select AskUserQuestion**: "Now that the report is written, which of these should I do?" with the options (open a PR, track the Top 3 Actions, freeze a CI gate, file feedback, and - the mutually-exclusive escape hatch - uninstall `/assess` from this repo), pre-filtered by feasibility:
 
-- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible; on a read-only target, offer the fork variant instead. When the target states it takes no contributions (Step 5's no-contributions scan), offer the **no-contributions** variant instead on a read-only target (READ / TRIAGE) or in a clone of the user's own fork: a PR inside the user's fork, never one against upstream. A user who can push to the non-fork repo itself keeps the direct PR option, with the statement quoted.
+- Drop the **PR** option when the push-capability / remote check below (Step 5) shows no direct or fork PR is possible. On a read-only target (READ / TRIAGE) that takes contributions and has issues enabled, lead with the **upstream-issues** variant instead (it replaces the generic issue-tracking option below, so the batch lists it once and records it under `issue_tracking`): file the Top 3 Actions as issues upstream, each linking the full report hosted in the user's fork (Step 5's upstream-issues flow, then Step 6). Offer the fork snapshot PR against upstream only as a separate, explicit secondary option, noting that maintainers often decline committed generated output. When the target states it takes no contributions (Step 5's no-contributions scan), offer the **no-contributions** variant instead on a read-only target (READ / TRIAGE) or in a clone of the user's own fork: a PR inside the user's fork, never one against upstream. A user who can push to the non-fork repo itself keeps the direct PR option, with the statement quoted.
 - Drop the **CI gate** option when the workflow could never run (no GitHub remote).
-- Keep **issue tracking** and **feedback** always (feedback needs no repo write).
+- Keep **issue tracking** and **feedback** always (feedback needs no repo write). On a read-only target that takes contributions, issue tracking appears as the upstream-issues option above.
 - **Uninstall** (Step 8) always appears: it removes what this run wrote. It doesn't compose with the write-back offers (no point opening a PR *and* deleting the report), so treat selecting it as "skip the others and clean up".
 
 Then execute the accepted offers **in order** (PR → issues → gate → feedback), because the later ones cross-link to the PR the first may have opened. Uninstall, if chosen, runs instead of the others. The per-step detail below is the execution recipe for each accepted offer; the *asking* happens once, here.
@@ -45,7 +45,7 @@ After writing the files, first **check whether a direct PR is even possible** be
 # type has no `viewerCanPush` field, so don't request it (the CLI errors
 # and the whole call returns empty, silently degrading every write-
 # accessible repo to the "leave local" branch).
-PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner,isFork,owner 2>/dev/null || true)
+PUSH_INFO=$(gh repo view --json viewerPermission,viewerCanAdminister,nameWithOwner,isFork,owner,hasIssuesEnabled 2>/dev/null || true)
 PERM=$(echo "$PUSH_INFO" | jq -r '.viewerPermission // empty')
 case "$PERM" in
   ADMIN|MAINTAIN|WRITE) CAN_PUSH=1 ;;
@@ -54,6 +54,8 @@ esac
 # A clone of the user's own fork reports ADMIN, so CAN_PUSH alone cannot tell
 # the upstream's maintainer from an outsider working in their fork.
 IS_FORK=$(echo "$PUSH_INFO" | jq -r '.isFork // false')
+# Gates the read-only upstream-issues offer: no issues list, no upstream issues.
+HAS_ISSUES=$(echo "$PUSH_INFO" | jq -r '.hasIssuesEnabled // false')
 # isFork says the repo has a parent, not whose fork it is: a collaborator with
 # push access to someone else's fork also sees isFork=true and WRITE. The
 # current repo counts as the user's own fork only when the viewer owns it.
@@ -142,13 +144,13 @@ done
 Interpret the result:
 
 - `CAN_PUSH=1` (viewerPermission is `WRITE` / `MAINTAIN` / `ADMIN`, or the remote is a push-eligible fork): offer the direct PR flow below. Two cases when `NO_CONTRIBUTIONS=1`. With `IS_FORK=true` the user is working in a clone of a fork (their own reports `ADMIN`; a collaborator on someone else's fork sees `WRITE`); they are the outsider the statement addresses, and a bare `gh pr create` there targets the parent, so offer the no-contributions flow instead (below; its fork step reuses the current repo only when `IS_OWN_FORK=true`). With `IS_FORK=false` the user maintains the repo itself: the statement addresses outsiders, not them, and GitHub will not fork a repo into the account that owns it, so keep the direct flow. In both cases quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE` beside the offer so the user decides knowingly.
-- `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer the fork-based PR flow ("fork `<owner>/<repo>` and open the PR from your fork?") as an alternative to "leave local". Do not offer the direct flow.
+- `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=0`: name the constraint, then offer, in this order (with `HAS_ISSUES=false` drop option (1): the offers are the fork-based PR flow and "leave local", with issue tracking going to the fork or a personal tracker as in Step 6): (1) the upstream-issues flow, the default ("file the Top 3 Actions as issues on `<owner>/<repo>`, each linking the full report in your fork?"), which proposes no `.assess/` file for upstream; (2) the fork-based PR flow as an explicit opt-in ("also open a snapshot PR against `<owner>/<repo>` from your fork? Maintainers often decline committed generated output: the `.assess/` files are a dated snapshot that goes stale with the next commit."); (3) "leave local". Do not offer the direct flow. The findings are what a maintainer you do not work with acts on; issues carry them, a snapshot PR mostly does not.
 - `CAN_PUSH=0`, viewerPermission is `READ` / `TRIAGE`, and `NO_CONTRIBUTIONS=1`: the target says it takes no contributions, so never offer a PR against `<owner>/<repo>`. Quote `$NO_CONTRIBUTIONS_STATEMENT` and name `$NO_CONTRIBUTIONS_SOURCE`, then offer the no-contributions flow instead: "open the PR inside your fork, against the fork's default branch, and share the link?" Pair it with the Actions hint (see the flow below).
 - `gh` unavailable / not a GitHub remote / not authenticated (`$PUSH_INFO` empty), whatever `NO_CONTRIBUTIONS` says: skip every PR offer (direct, fork, and no-contributions) and surface only the "leave local" outcome, naming the reason ("no GitHub remote detected" / "`gh` not authenticated").
 
 If `$REDIRECT_NOTICE` is non-empty, output it verbatim on its own line before the batched Phase 2 question.
 
-The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "fork and open a PR from your fork" on a read-only target, "open a PR inside your fork and share the link" when `NO_CONTRIBUTIONS=1` on a read-only target or with `IS_FORK=true`, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
+The push-capability result decides **how the PR option appears in the batched Phase 2 question** (it is not a separate prompt): use "open a PR in this repo" on a push-capable target, "file the Top 3 Actions as upstream issues linking the report in your fork" first (when `HAS_ISSUES=true`) and "fork and open a snapshot PR from your fork" second (two separate options) on a read-only target, "open a PR inside your fork and share the link" when `NO_CONTRIBUTIONS=1` on a read-only target or with `IS_FORK=true`, and drop the PR option entirely when no GitHub remote is detected. Frame the batched question with the written artifacts, e.g. _"Wrote `.assess/assess-report.md`, `.assess/complexity-heatmap.svg`, and `.assess/doc-graph.svg` in `<repo-name>`. Which of these should I do?"_ followed by the feasible offers.
 
 If the user **selected the PR offer** (direct flow, `CAN_PUSH=1`):
 1. Create a branch in the target repo: `assess/snapshot-<YYYY-MM-DD>` (use the existing worktree workflow if `<repo>-main` + `worktree/` layout is present; otherwise branch in place).
@@ -160,13 +162,19 @@ If the user **selected the PR offer** (fork flow, `CAN_PUSH=0` on the upstream, 
 2. Create the branch as above, push to the **fork** (`git push -u <fork-remote> <branch>`), and open the PR via `gh pr create --repo <owner>/<repo>` (head defaults to the fork).
 3. Commit message, PR title, and body are unchanged from the direct flow.
 
+If the user **selected the upstream-issues offer** (read-only flow, `CAN_PUSH=0` on `READ` / `TRIAGE`, `NO_CONTRIBUTIONS=0`): host the report in the fork, then file the issues upstream. Nothing under `.assess/` is proposed for upstream.
+1. Resolve the fork and push the snapshot branch to it exactly as in step 1 of the no-contributions flow below (`FORK_SLUG` from the forks endpoint, the retry, the branch push), and stop there: open no PR, neither against upstream nor inside the fork.
+2. Build the report link from the pushed branch: `REPORT_URL="https://<host>/$FORK_SLUG/blob/<branch>/.assess/assess-report.md"` (`<host>` is the GitHub host the remote uses). Confirm it resolves with `gh api "repos/$FORK_SLUG/contents/.assess/assess-report.md?ref=<branch>"` before quoting it.
+3. Run Step 6 with the upstream repository (`$GH_SLUG`) as the tracker, using `$REPORT_URL` as each item's full-report link. If hosting was declined or failed, file the issues anyway: each body stands on its own without the link.
+4. Suggest disabling Actions on the fork, as in step 3 of the no-contributions flow.
+
 If the user **selected the PR offer** (no-contributions flow, `NO_CONTRIBUTIONS=1` with either `CAN_PUSH=0` on `READ` / `TRIAGE` or `IS_FORK=true`): the PR stays inside your fork; nothing is opened against upstream.
 1. Resolve the fork. With `IS_OWN_FORK=true` and `CAN_PUSH=1` the current repo is the user's own fork: `FORK_SLUG="$GH_SLUG"`, and push to `origin`. Otherwise (including any clone of someone else's fork, whatever the permission) fork as in step 1 of the fork flow, then read the fork's real name back (GitHub returns the existing fork for a repeat request, and appends a suffix when the account already owns a repo of that name, so never assemble it by hand): `FORK_SLUG=$(gh api -X POST repos/<owner>/<repo>/forks | jq -r '.full_name')`. Fork creation is asynchronous: if `gh repo view "$FORK_SLUG"` fails straight after, retry it a few times, a few seconds apart, before giving up. Create the branch and push it to the fork as in the first half of the fork flow's step 2; do **not** run that step's upstream `gh pr create`. Write the PR body template (below the flows) to a temp file and use it as `<body-file>`, with the direct flow's PR title as `<title>`. Open the PR against the fork's default branch instead: `FORK_BRANCH=$(gh repo view "$FORK_SLUG" --json defaultBranchRef | jq -r '.defaultBranchRef.name')`. A fork made earlier can sit behind or ahead of the checkout that was assessed, and a PR onto it would then carry every commit in between. So compare `BASE_SHA=$(git rev-parse "<branch>^")` (the commit the snapshot branch was cut from) with `gh api "repos/$FORK_SLUG/branches/$FORK_BRANCH" | jq -r '.commit.sha'`; if they differ, push the assessed commit to the fork as its own base (`git push <fork-remote> "$BASE_SHA:refs/heads/assess/base-<YYYY-MM-DD>"`, where `<fork-remote>` is the remote the branch went to), set `FORK_BRANCH=assess/base-<YYYY-MM-DD>`, and tell the user the PR is based on that branch because the fork's default branch does not match what was assessed. This leaves the fork's existing branches untouched. Then create the PR through the fork's own pulls endpoint, which cannot resolve to the parent repo: `gh api -X POST "repos/$FORK_SLUG/pulls" -f head=<branch> -f base="$FORK_BRANCH" -f title="<title>" -F body=@<body-file> | jq -r '.html_url'`.
 2. Share the link: print the fork PR's URL (the `html_url` above; its path must end with `/$FORK_SLUG/pull/<number>`, whatever the host, so a GitHub Enterprise URL passes) so the user can pass it on to whoever wants the assessment.
 3. Suggest disabling Actions on the fork: the fork carries the upstream's workflow files, so if the user ever enables Actions there, this PR and later pushes would start CI runs the fork's owner pays for on a private fork or self-hosted runners. Disabling them up front keeps the fork an inert place to share the report. Offer the command, never run it unasked: `gh api -X PUT "repos/$FORK_SLUG/actions/permissions" -F enabled=false`.
 4. Commit message, PR title, and body are unchanged from the direct flow.
 
-**Every flow (direct, fork, and no-contributions): the PR body must include the plugin reference at the bottom** so reviewers can install the tool that generated the report. Use this body template:
+**Every PR flow (direct, fork, and no-contributions): the PR body leads with the findings and ends with the plugin reference** so reviewers can install the tool that generated the report. Use this body template:
 
    ```markdown
    ## Summary
@@ -195,7 +203,7 @@ If the user **did not select the PR offer**: skip it. Files stay in `.assess/` f
 
 ## Step 6: Offer to Track the Top 3 Actions in the User's Issue Tracker
 
-This is the second item in the batched Phase 2 question (its wording there: _"track the Top 3 Actions in your issue tracker - each becomes a closeable, assignable work item rather than a bullet buried in a PR description"_). Execute this step only if the user **selected the issue-tracking offer**.
+This is the second item in the batched Phase 2 question (its wording there: _"track the Top 3 Actions in your issue tracker - each becomes a closeable, assignable work item rather than a bullet buried in a PR description"_). Execute this step only if the user **selected the issue-tracking offer**, or the upstream-issues offer (which is the issue-tracking offer on a read-only target, run after Step 5 hosts the report in the fork).
 
 If the user **did not select** it: skip. The Top 3 Actions table in the PR/report still lists everything inline.
 
@@ -215,7 +223,7 @@ if [ -n "$GIT_REMOTE" ]; then
 fi
 ```
 
-Treat a non-empty `GH_TRACKER` with `hasIssuesEnabled: true` as a **detected tracker** (subject to the same write-access check as Step 5 - read-only repos still get tracking items via the user's fork or their personal tracker, not the upstream issues list). Same logic for `glab repo view --output json` on GitLab remotes.
+Treat a non-empty `GH_TRACKER` with `hasIssuesEnabled: true` as a **detected tracker**, subject to the same write-access and no-contributions checks as Step 5. On a read-only target (READ / TRIAGE) with `NO_CONTRIBUTIONS=0`, the recommended path is the upstream issues list itself: file there, each item linking the fork-hosted report (Step 5's upstream-issues flow). That is the channel a maintainer you do not work with actually acts on. When `NO_CONTRIBUTIONS=1`, or upstream has issues disabled, use the user's fork or their personal tracker instead, never the upstream issues list. Same logic for `glab repo view --output json` on GitLab remotes.
 
 When the deterministic signal is clear and unambiguous, use it without asking. Only fall back to judgment / multiple-signal disambiguation when the remote check is empty, ambiguous, or contradicted by something the user has told you.
 
@@ -231,7 +239,7 @@ The user might track work in Omnifocus, Apple Notes, a Google Doc, a Notion data
 
 **Decision rules:**
 
-1. **Deterministic GitHub/GitLab remote with issues enabled** - use that tracker without asking (subject to write-access check). This is the common case for OSS work and most personal repos.
+1. **Deterministic GitHub/GitLab remote with issues enabled** - use that tracker without asking (subject to the write-access and no-contributions checks above; a read-only target that takes contributions files upstream). This is the common case for OSS work and most personal repos.
 2. **One clear soft signal** (e.g. only `.taskmaster/` present, or global CLAUDE.md says "use Linear") and no contradicting remote - use that tracker without asking.
 3. **Conflicting signals** (e.g. GitHub remote + `.taskmaster/` directory + global says "use Linear") - **ask the user**. List what you saw and let them pick:
    > I see signals for Task Master (`.taskmaster/`), GitHub Issues (remote points at `<owner/repo>` with issues enabled), and Linear (your global CLAUDE.md mentions it). Which should I create the tracking items in?
@@ -253,39 +261,49 @@ Once the tracker is known, use its native tooling. The skill doesn't enumerate e
 | Linear (via CLI) | `linear issue create ...` |
 | Anything else | follow the user's documented convention |
 
-For each Top 3 Action, the item should contain:
+**One concern per item.** Each item carries one change a maintainer can accept or decline on its own. Before filing, read each Top 3 row and any sub-items the report lists under it (`3a`, `3b`, ...): every sub-item becomes its own item. If a row still bundles independent changes (an instruction-file stub *and* a lockfile *and* a CI step), split it into one item per change rather than filing the bundle; the parts a maintainer would accept separately must be tracked separately, or the declined part takes the accepted ones down with it.
 
-- **Title**: the action title verbatim from the Top 3 table
-- **Body**: the action detail (Command / First Step, Hotspot files, the "Why these three" reasoning), a small metadata block (Layer, Effort, link to the assessment PR if one was opened), and a one-line footer linking back to the plugin
+For each item, the item should contain:
+
+- **Title**: the action title verbatim from the Top 3 table, or, for a split-off change, that change's one-line title
+- **Body**: the finding first (what was observed, the hotspot files), then the change (Command / First Step), the **Done when** criteria, a small metadata block (Layer, Effort, the full-report link), and last a one-line footer linking back to the plugin. Never open with the footer or the install instructions.
 - **Tag / Label / Category** that supports idempotency (see 6c)
+
+**Done when, in the repository's own terms.** List first what a maintainer without the plugin can check: a command that passes (`bats tests/`, `make lint` exits 0), a file state (`AGENTS.md` exists and names the check command), a CI result (the `lint` job runs `actionlint` and is green). The `/assess` re-run criterion (a finding clears, a layer field changes) comes after, marked optional. Rewrite the report's "Done when" cell into these terms when it names toolkit internals.
+
+**Full-report link.** Use the assessment PR when one was opened, `$REPORT_URL` from Step 5's upstream-issues flow when the report is hosted in the user's fork, and omit the line when neither exists.
 
 A ccn figure in the body follows the report's caveat (issue #590): an scc-only figure (`source` `scc`, `max_fn_ccn` null) is written `ccn ~N (approximate, file-level scc)`, a path in `stats_summary.complexity_unreliable` gets `ccn unreliable` instead, and neither is offered as the reason the item is prioritised.
 
 Example minimal body shape (adapt to the tracker's conventions):
 
 ```markdown
-<action one-line>
+<what was observed: the finding, with the hotspot files it names>
 
-<Command / First Step>
-
-<Hotspot files this addresses>
+<the one change: Command / First Step>
 
 <Why-this-action reasoning>
 
-### From /assess
+### Done when
+- <repository-native check: a command that passes, a file state, or a CI result>
+- Optional: <the /assess re-run criterion, e.g. the finding no longer lists this path>
+
+### Context
 - Layer: <N>: <name>
 - Effort: <small | medium | large>
-- Assessment PR: <PR link or omit if no PR>
+- Full report: <assessment PR or fork-hosted report link; omit if neither>
 
 ---
 Generated by /assess - https://github.com/bjcoombs/ai-native-toolkit
 ```
 
+**Filing upstream from a read-only account** (Step 5's upstream-issues flow): pass `--repo "$GH_SLUG"` on every create and search, since the fork step may have rearranged the remotes. Drop `--label`: an account without triage access cannot apply labels, and a label the repository lacks fails the create. Deduplicate by title instead (6c).
+
 ### 6c: Idempotency
 
 Re-running `/assess` on the same repo must not create duplicate tracking items. The dedup mechanism depends on the tracker:
 
-- **Tag/label-based** (GitHub, GitLab, Linear, Jira labels): apply a stable label like `assess-finding` and search by `label + title` before creating. Open OR closed match → reuse.
+- **Tag/label-based** (GitHub, GitLab, Linear, Jira labels): apply a stable label like `assess-finding` and search by `label + title` before creating. Open OR closed match → reuse. Where no label can be applied (filing upstream from a read-only account), search the user's own issues by title: `gh issue list --repo "$GH_SLUG" --author @me --state all --search "<title> in:title"`.
 - **Search-based** (Jira via JQL, Notion, Linear queries): search the tracker for items with the action title. Match → reuse.
 - **Hierarchical** (Task Master): list the current tag's tasks; compare titles. Match → reuse.
 - **Free-form** (Apple Notes, Google Docs, plain markdown files): no reliable structured dedup. In this case, list existing items the user can see, **show them, and ask before re-creating**: "I see 3 existing items that look like these. Re-create, skip, or update? "
@@ -298,10 +316,10 @@ In all cases, before creating: search first. If a match is found (open or closed
 
 How the link is recorded depends on the tracker, but the goal is the same: someone reading the assessment PR / report can click through to the items, and someone reading an item can click back to the assessment.
 
-- **GitHub PR + GitHub Issues** (the original flow): edit the PR body so the `Issue` column in the Top 3 Actions table replaces `—` with `#N` references. Update `.assess/assess-report.md` locally so the on-disk report stays in sync (commit the change if you're working in a worktree before pushing).
+- **GitHub PR + GitHub Issues** (the original flow): edit the PR body so the `Issue` column in the Top 3 Actions table replaces `—` with `#N` references (a row split into several items lists every reference, e.g. `#43, #44`). Update `.assess/assess-report.md` locally so the on-disk report stays in sync (commit the change if you're working in a worktree before pushing).
 - **GitHub PR + Task Master tasks**: include the task IDs in the `Issue` column (e.g. `TM #1.2`). Reference the assessment PR URL in each task's body.
 - **GitHub PR + Jira**: include the Jira keys (e.g. `PROJ-1234`) in the `Issue` column. Set the assessment PR URL as a Jira link.
-- **No PR was opened**: update only `.assess/assess-report.md` locally with the item references.
+- **No PR was opened**: update only `.assess/assess-report.md` locally with the item references. With the upstream-issues flow, upstream references read `<owner>/<repo>#N`; push the updated report to the fork branch so `$REPORT_URL` shows them.
 - **Other trackers**: do whatever makes the cross-link work; if the tracker doesn't support links back, include the assessment date + PR URL (if any) in each item's body so a human can trace it.
 
 ### 6e: Report back to the user
@@ -309,6 +327,8 @@ How the link is recorded depends on the tracker, but the goal is the same: someo
 End with a short, tracker-specific summary. Examples:
 
 > Created 3 GitHub issues: #42 (Action 1), #43 (Action 2), #44 (Action 3). Linked from the assessment PR. All labelled `assess-finding` so re-running `/assess` later won't duplicate them.
+
+> Filed 4 issues on `<owner>/<repo>`: #979 (Action 1), #980 (Action 2), #981 and #982 (Action 3, split into two independent changes). Each links the full report in your fork. Unlabelled (no triage access), so a re-run matches them by title.
 
 > Created 3 Task Master tasks under tag `assess-2026-05-22`: #1.1, #1.2, #1.3. Run `task-master next` to start.
 
@@ -405,4 +425,4 @@ jq -r '.uninstall_instructions_path' "$REPO_ROOT/.assess/run-context.json"
 # -> references/uninstall.md (relative to the assess skill directory)
 ```
 
-Read that `references/uninstall.md` and perform each step that applies (skip artifacts the run never created - no CI gate means no workflow to delete). Do each destructive action only after the user has confirmed uninstall, and **do not** close `assess-finding` tracker items - surface them so the user decides. Report back which artifacts were removed and which (if any) were left for the user to handle. If the user prefers to do it themselves, hand them the steps from `references/uninstall.md` rather than performing them.
+Read that `references/uninstall.md` and perform each step that applies (skip artifacts the run never created - no CI gate means no workflow to delete). Do each destructive action only after the user has confirmed uninstall, and **do not** close `assess-finding` tracker items (or the unlabelled upstream issues the upstream-issues flow filed) - surface them so the user decides. Report back which artifacts were removed and which (if any) were left for the user to handle. If the user prefers to do it themselves, hand them the steps from `references/uninstall.md` rather than performing them.
