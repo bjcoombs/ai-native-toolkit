@@ -56,6 +56,7 @@ from lib.run_context_types import (
 from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
+from lib.scc_coverage import UnreliableCcnRow
 from lib.shared_tooling import SharedToolingBlock
 from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock
@@ -87,6 +88,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.top_hotspots", HotspotRow),
     ("stats_summary.top_complex", HotspotRow),
     ("stats_summary.top_large", HotspotRow),
+    ("stats_summary.complexity_unreliable", UnreliableCcnRow),
     ("excluded_generated", GeneratedExclusion),
     ("nested_instructions", NestedInstructionsBlock),
     ("agent_harness", AgentHarnessBlock),
