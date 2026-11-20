@@ -17,6 +17,8 @@ dist/standalone-skills/
 !/action.yml
 !/.file-size-ratchet.toml
 !/Makefile
+!/evals/
+evals/**/results/
 
 # /assess output: we dogfood /assess on this repo, so its compounding wiki and
 # latest report ARE tracked (the report, both SVGs, the stats baseline for the
