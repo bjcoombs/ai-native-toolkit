@@ -11,7 +11,10 @@ instruction file on the same split (``analyse_file``, issue #560): always-on
 lines past the flag point and lines that belong elsewhere cost points.
 
 Precision over recall. An always-on signal keeps a section where it is, even
-when a skill restates it. Otherwise a section is relocatable only when the text
+when a skill restates it, unless a size signal (``command_reference`` or
+``long_section``) is among the fetch-on-need signals that make it relocatable:
+those count lines, so a rename or a few directive lines cannot flip the
+section and lower the file's penalty (#619). Otherwise a section is relocatable only when the text
 is already in a skill, or when at least ``MIN_FETCH_SIGNALS`` fetch-on-need
 signals fire. Anything else stays where it is, and a section that matches
 nothing clearly is ``unclassified`` and counted as always-on.
@@ -52,11 +55,12 @@ LOADED_IN_FULL_MIN_LINES = 200
 
 # --- fetch-on-need signals -------------------------------------------------------
 
-# command_reference: a section that is mostly fenced code is reference to look
-# up when running that tool, not guidance to hold in mind. A few lines of
+# command_reference: a section holding a block of fenced code is reference to
+# look up when running that tool, not guidance to hold in mind. A few lines of
 # exact commands are what earns a file its grade, so a floor keeps a short
-# "Commands" block always-on.
-FENCE_DENSITY_MIN = 0.5
+# "Commands" block always-on. An absolute count, not a share of the section:
+# with a share, prose padded around the fence diluted it under half, the
+# section turned always-on and the file's penalty fell (#619).
 FENCE_MIN_LINES = 20
 # long_section: a section of LONG_SECTION_MIN_LINES lines is a topic that
 # outgrew an always-loaded file (a third of the 200-line budget on its own).
@@ -86,6 +90,10 @@ vite storybook playwright cypress jest pytest junit
 """.split())
 # A section needs this many of the signals above (duplicates_skill excepted).
 MIN_FETCH_SIGNALS = 2
+# Size signals: they count the section's own lines, so a heading rename or a
+# few "Never" lines cannot take them away. A relocatable section with one of
+# them stays relocatable whatever always-on signal its wording adds (#619).
+SIZE_SIGNALS = frozenset({"command_reference", "long_section"})
 
 # --- always-on signals -------------------------------------------------------------
 
@@ -350,7 +358,7 @@ def fetch_signals(
         signals.append("scoped_paths")
     fenced, _prose = _fenced_and_prose(section.lines)
     size = len(section.lines)
-    if fenced >= FENCE_MIN_LINES and fenced / size >= FENCE_DENSITY_MIN:
+    if fenced >= FENCE_MIN_LINES:
         signals.append("command_reference")
     if headed_sections >= 2 and size >= LONG_SECTION_MIN_LINES:
         signals.append("long_section")
@@ -388,16 +396,20 @@ def classify(
 ) -> Classified:
     # Always-on signals win, even over a duplicate: a rules, identity or
     # pointer section a skill restates is still a guardrail every session needs,
-    # so it is never told to become a pointer.
+    # so it is never told to become a pointer. Except over a size signal: those
+    # read the section's line counts, which wording cannot shrink, so renaming
+    # "Kubernetes commands" to "Kubernetes conventions" or adding two "Never"
+    # lines no longer turns a fenced kubectl section always-on (#619).
+    fetch = fetch_signals(section, headed_sections, rel)
+    relocatable = len(fetch) >= MIN_FETCH_SIGNALS
     keep = always_on_signals(section)
-    if keep:
+    if keep and not (relocatable and SIZE_SIGNALS.intersection(fetch)):
         return Classified(section, "always_on", tuple(keep), None)
     duplicate = _duplicated_skill(section, skills, rel)
     if duplicate:
         return Classified(section, "fetch_on_need", ("duplicates_skill",),
                           {"kind": "existing_skill", "target": duplicate})
-    fetch = fetch_signals(section, headed_sections, rel)
-    if len(fetch) >= MIN_FETCH_SIGNALS:
+    if relocatable:
         return Classified(section, "fetch_on_need", tuple(fetch),
                           suggest_home(section, rel, kind, fetch, skills_dir))
     return Classified(section, "unclassified", tuple(fetch), None)

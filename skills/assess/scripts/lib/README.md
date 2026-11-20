@@ -1390,14 +1390,17 @@ section. `classify` labels each section `always_on`, `fetch_on_need` or
 `unclassified` (counted as always-on), precision over recall: any always-on signal
 (`identity_or_rules` heading, `hard_rules` directive density, `pointer_list` of links
 to documents) keeps a section, even one a skill restates, so a guardrail is never
-told to become a pointer; otherwise a section whose substantive lines overlap an
+told to become a pointer, unless the section is relocatable with a size signal
+(`SIZE_SIGNALS`: `command_reference` or `long_section`) among its fetch signals, so a
+heading rename or a few `Never` lines cannot flip it (#619); otherwise a section whose substantive lines overlap an
 existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
 `instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
 any other section moves only when
 `MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
 `scoped_paths` (backticked paths mostly under one top-level directory, unless the
 file already sits under it),
-`command_reference` (fence density) and `long_section` (60 lines or more, an absolute count so that
+`command_reference` (`FENCE_MIN_LINES` fenced lines or more, an absolute count so
+prose padding cannot dilute it, #619) and `long_section` (60 lines or more, an absolute count so that
 lines elsewhere cannot declassify a section, in a file with at least two headed
 sections) fire. Each threshold is a
 named constant with its rationale. Suggested homes: `existing_skill` (the
@@ -1447,9 +1450,15 @@ small capped floor. Size is scored on always-on size and share (#560, replacing 
 the file with `instruction_placement.analyse_file` (given `skills`, the
 `skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
 past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
-file over 400 always-on lines is capped at 59 (a B). Always-on lines are
-line-equivalents, the larger of the lines and the always-on words / 12, so a file of
-very long lines cannot dodge the term or the cap. Neither term reads the block's
+file over 400 loaded lines (always-on and fetch-on-need) is capped at 59 (a B). Lines
+are line-equivalents, the larger of the lines and the words / 12, so a file of very
+long lines cannot dodge the term or the cap. Wording and padding inside a section never
+lower the penalty (#619): the always-on count is the loaded line-equivalents minus the
+fetch-on-need lines the relocatable term charges (fetch lines past its cap stay
+always-on), both terms are summed in lines and rounded once, and the cap reads the
+whole loaded file, so a section reclassified to fetch-on-need never earns points; on the
+placement side `command_reference` is an absolute fenced-line count and a size signal
+beats always-on wording. Tests: `tests/test_instruction_grading_robustness.py`. Neither term reads the block's
 `flagged` (which also needs over half the file): gated on it, adding reference lines
 could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
 `always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
