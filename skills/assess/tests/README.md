@@ -62,6 +62,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
 | `test_doc_ownership.py` | `lib/doc_ownership.py` - the one doc-to-code ownership rule: spec expansion per method, the README-beside-design.md tie-break through both blocks, one `subject_code_count`, the export cap, scoped-run keys |
 | `test_rename_churn.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - churn counts that follow renames (issue #425): parity with `git log --follow`, twin histories with and without a rename giving the same finding, and low confidence when the rename map is incomplete |
+| `test_shallow_history.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - shallow clones (issue #544): a lower-bound age at the boundary, the exact age on a full clone, the boundary never counted as bulk, the truncation and boundary date in the block, the stale-hub copy and the report label |
 | `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
 | `test_doc_modularity.py` | `lib/doc_staleness.py` - the `modularity` block: size-weighted coverage, the large-repo flag, and a base-doc directory ratio that counts only code directories |
 | `test_structure_graph.py` | `lib/structure_graph.py` - A1 footprint additivity, A2 SCCs and Q range, A3 front-door vs burrow, A4 cut-lines, graceful degradation |
@@ -73,7 +74,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_stats_rows.py` | `lib/stats_rows.py` + `scripts/complexity-treemap.py` - the top-10 lists and the uncapped `files` key, that the doc-complexity join sees a complex file outside every top list, and the one-time diff disarm from the stats schema bump |
 | `test_wiki_writer.py` | `lib/wiki_writer.py` - wiki file rendering (index, log, hotspot pages) and HotspotEntry / LogEntry dataclass behaviour |
 | `test_git_commit_info.py` | `lib/git_churn.py` (`git_commit_info`) - commit snapshot with SHA/timestamp for staleness warnings |
-| `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - size-curve penalty from 200 lines, halved by skills delegation, B cap past 400 lines or 4800 words |
+| `test_instruction_bloat.py` | `lib/agent_instructions_grader.py` - score on always-on size and share (#560): always-on lines past 200, fetch-on-need lines, neither gated on the share flag, B cap past 400 always-on lines, and the grade matching its `instruction_placement` record |
+| `test_instruction_placement.py` | `lib/instruction_placement.py` - section splitting, the always-on and fetch-on-need signals (an absolute 60-line `long_section` in a file with two headed sections, `scoped_paths` never pointing a nested file at its own subtree), suggested homes and the `loaded_in_full` list (#559, #560) |
 | `test_command_resolver.py` | `lib/command_resolver.py` - command extraction and per-runner resolution (resolved / missing / external / unknown) |
 | `test_command_index.py` | `lib/command_index.py` - the per-repo target index: config parsing, tracked files, lenient families |
 | `test_instruction_content.py` | `lib/instruction_content.py` - stale path and symbol references, directory trees, overview headings, README overlap |

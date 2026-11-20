@@ -1,6 +1,6 @@
 ---
 name: fleet
-description: "Run the headless /assess signals across every repository under a ghsync root (or in a list file) and write one counts-only JSON line per repository, deterministically and without writing to any target. Each repository runs assess_signals.py in its own process from a worker pool; one that cannot be scanned is a failed row with a reason token and never stops the run. No model in the gathering path. TRIGGER when the user types /fleet, wants to measure a team, group or whole estate rather than one repository, asks to run /assess signals across all repos in a ghsync checkout or a list of repos, or wants per-repository signal JSONL for a fleet roll-up."
+description: "Run the headless /assess signals across every repository under a ghsync root (or in a list file) and write one counts-only JSON line per repository, deterministically and without writing to any target. Each repository runs assess_signals.py in its own process from a worker pool; one that cannot be scanned is a failed row with a reason token and never stops the run. No model in the gathering path; an optional post-gather step (--label) has a small model label each repository (service, library, infrastructure, mirror, docs, other) into a separate labels.jsonl for display and filtering only. TRIGGER when the user types /fleet, wants to measure a team, group or whole estate rather than one repository, asks to run /assess signals across all repos in a ghsync checkout or a list of repos, wants per-repository signal JSONL for a fleet roll-up, or wants the repositories in a fleet run labelled or grouped by kind."
 ---
 
 # fleet: headless signals across a ghsync root
@@ -10,7 +10,9 @@ them: it runs the headless signals entry point (`assess_signals.py`) on every
 repository and writes one JSON line per repository plus a run stamp, the same
 way every time, so two people measuring the same estate get the same numbers.
 
-It is a pure script: no subagent, no model, no network call.
+Gathering is a pure script: no subagent, no model, no network call. The only
+model step is the optional labelling below, which runs after gathering and
+writes its own file.
 
 ## How to run it
 
@@ -35,8 +37,9 @@ no third-party dependencies.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl` and `DIR/run.json`; a `DIR` inside any target is refused. |
-| `--rubric FILE` | A maturity rubric in the `lib/rubric.py` TOML format. Validated now (an invalid rubric exits 2) and its `version` stamped in `run.json`; the per-group roll-up that applies it is a later addition. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl` and `DIR/run.json`; a `DIR` inside any target is refused. |
+| `--rubric FILE` | A maturity rubric in the `lib/rubric.py` TOML format (an invalid rubric exits 2); its `version` is stamped in `run.json`. Each group row carries every rubric row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
+| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
 | `--scans a,b` | Only these scans (default: all). |
@@ -50,9 +53,9 @@ no third-party dependencies.
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--rubric`, an unknown scan, a bad window, or a `DIR` that cannot be
-created (checked before any scan, so `--delete-after` never removes a clone
-whose results could not be written).
+invalid `--rubric` or `--settings`, an unknown scan, a bad window, or a `DIR`
+that cannot be created (checked before any scan, so `--delete-after` never
+removes a clone whose results could not be written).
 
 ## Output: `repos.jsonl`
 
@@ -80,6 +83,41 @@ Rows carry no absolute path, timing, error text or per-repository stamp, so
 two runs over unchanged checkouts on the same day are byte-identical (except
 with `--hash-paths` and no salt). Repository ids are kept in clear text even
 with hashing on.
+
+## Output: `groups.jsonl`
+
+One line per group (a repository row's `group`), sorted by group, keys sorted.
+Schema: [`references/groups.schema.json`](references/groups.schema.json).
+Logic: `skills/assess/scripts/lib/fleet_groups.py`.
+
+| Key | Value |
+|-----|-------|
+| `fleet_group_version` | Row envelope version (1). |
+| `group` | The group id. |
+| `repos`, `scanned`, `failed` | Repository rows in the group, those with `status: ok`, and the rest. |
+| `shared_tooling_repos` | Repositories whose `shared_tooling` block is available: the evidence the two counts below rest on. |
+| `distinct_ci_sources`, `distinct_marketplaces` | Distinct shared CI sources and agent marketplaces the group's scanned repositories reference (`shared_tooling` ids, git-tracked files only). A marketplace manifest and a settings entry naming it count once. `null` when `shared_tooling_repos` is 0 (every scan failed or degraded, or `--scans` left the block out), never a false 0. |
+| `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
+| `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with reasons reduced to `unknown`; `--full` keeps them. `null` without a match. |
+| `rubric_version` | The rubric's `version`; `null` without `--rubric`. |
+| `rubric` | One entry per rubric row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
+
+Rubric signal paths are checked at load against `lib/rubric_signals.py` (an
+unknown path exits 2 before any scan) and evaluated by `lib/rubric.py`, with no
+second threshold config. The shipped `skills/assess/rubrics/default.toml` uses
+the same namespace.
+
+- `team` rows read each repository's signal blocks by block name, as in a
+  run-context (`nested_instructions.budget.claude_code.lines`). A failed
+  repository joins with no signals, so its level is unknown: a `min` row never
+  reads better than the evidence.
+- `org` rows read the joined ghreport fragment: `scope`, `provider` and
+  `<setting>.value` / `<setting>.reason`, for example `two_factor.value` `eq "on"`.
+  A setting ghreport reported `unknown`, or a group with no settings, makes the
+  row `unknown`, never a false 0.
+
+Group rows contain no timing or per-run stamp, so a rerun over unchanged
+inputs on the same day is byte-identical.
 
 ## Output: `run.json`
 
@@ -137,5 +175,78 @@ kept counts and each kept repository with its reason token (`scan_not_ok`,
   the runner, since `assess_signals.py` degrades it to unavailable blocks.
 - **Deterministic.** Rows are sorted by id, never by completion order.
 
-The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`
-and `lib/fleet_cleanup.py` (see that package's `lib/README.md`).
+## Optional: repository labels (`--label`)
+
+Off by default. When the user asks for `--label` (or for the fleet to be
+labelled or grouped by kind), run this step after `fleet.py` has written
+`repos.jsonl`. `fleet.py` itself takes no `--label` flag and never calls a
+model; the step is two deterministic commands around one model call.
+
+Each repository gets exactly one label from a closed set: `service`,
+`library`, `infrastructure`, `mirror`, `docs`, `other`. Anything else the model
+answers becomes `other`. The model is given a compact digest of each
+`repos.jsonl` row (its path, status and counts-only facts), never source.
+
+<!-- chat-skip:start -->
+1. Count the batches (25 repositories each), then print the prompt for every
+   batch, `0` to count minus one:
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" prompt fleet-out --count
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" prompt fleet-out --batch 0
+   ```
+
+2. For each batch, spawn one `general-purpose` subagent with the Agent tool,
+   `model: "haiku"`, giving it the printed prompt verbatim, preceded by one
+   line: "Answer from this prompt alone; do not use any tools." The subagent
+   has file tools, so that line, not the tool set, is what keeps it off the
+   repositories here; the headless form below removes the tools outright.
+   Batches are independent: spawn them in one message. Collect every reply,
+   unedited, into one answers file.
+
+3. Write and check `labels.jsonl` (`--model` is the model id that answered,
+   e.g. `claude-haiku-5-5`; it is recorded on every row):
+
+   ```bash
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" write fleet-out --model claude-haiku-5-5 --answers answers.txt
+   uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_labels.py" check fleet-out
+   ```
+
+Outside Claude Code the same model calls work headless, one per batch:
+
+```bash
+n=$(uv run fleet_labels.py prompt fleet-out --count)
+: > answers.txt
+for b in $(seq 0 $((n - 1))); do
+  uv run fleet_labels.py prompt fleet-out --batch "$b" | claude -p --model haiku --tools "" >> answers.txt
+done
+```
+<!-- chat-skip:end -->
+
+`write` prints how many repositories were answered, warns when any had no
+answer (a skipped batch shows up here), and lists the missing, coerced,
+unknown and duplicate paths. Report those to the user; a missing
+answer is written as `other` with confidence 0, not retried silently.
+
+**`labels.jsonl`** sits beside `repos.jsonl`, one row per repository, sorted by
+`path`, keys sorted. Schema:
+[`references/labels.schema.json`](references/labels.schema.json).
+
+| Key | Value |
+|-----|-------|
+| `path` | The `repos.jsonl` `repo` id: the join key. |
+| `label` | One of the six labels. |
+| `confidence` | The model's own confidence, 0 to 1; 0 when it gave none or a missing answer. |
+| `model` | The model id passed to `write`, never one the model reports. |
+
+**Display and filter only.** Labels may group or filter what is shown to the
+user. They never enter `repos.jsonl` or `groups.jsonl`, never change a rubric
+level or which repositories a group roll-up counts, and are never compared
+across runs. Both files are byte-identical with and without the label step. Labels are a
+model's guess: the counts-only signals say little about what a repository is,
+so a label leans mostly on the repository's name. Present them as such.
+
+The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`,
+`lib/fleet_activity.py`, `lib/fleet_cleanup.py` and
+`skills/assess/scripts/lib/fleet_labels.py` (see that package's
+`lib/README.md`).

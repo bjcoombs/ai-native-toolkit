@@ -90,7 +90,7 @@ def _mismatch(score: int, line_count: int, subscores: dict[str, int]) -> bool:
 
 
 def test_grade_mismatch_skips_an_f_the_penalties_explain() -> None:
-    """A long file that scored above the F cutoff before the size curve and
+    """A long file that scored above the F cutoff before the size penalty and
     content penalties is the grader working as designed."""
     assert not _mismatch(0, 400, {"score_before_penalties": 30, "bloat_penalty": 30})
     assert not _mismatch(15, 300, {"score_before_penalties": 25, "bloat_penalty": 10})

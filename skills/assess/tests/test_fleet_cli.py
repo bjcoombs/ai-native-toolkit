@@ -29,7 +29,7 @@ scope = "org"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "two_factor_required", op = "eq", value = true }]
+  criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
 """
 
 
@@ -106,7 +106,10 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     first = (tmp_path / "out1" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
-    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == ["repos.jsonl", "run.json"]
+    assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    groups = (tmp_path / "out1" / "groups.jsonl").read_bytes()
+    assert groups == (tmp_path / "out2" / "groups.jsonl").read_bytes()
+    assert groups == (tmp_path / "out3" / "groups.jsonl").read_bytes()
     stamp = (tmp_path / "out1" / "run.json").read_bytes()
     assert stamp == (tmp_path / "out2" / "run.json").read_bytes()
     assert stamp == (tmp_path / "out3" / "run.json").read_bytes()

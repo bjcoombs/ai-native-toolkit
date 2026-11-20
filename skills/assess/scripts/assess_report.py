@@ -124,16 +124,46 @@ def _fmt(value: Any) -> str:
     return str(value)
 
 
+def _ccn_cell(row: dict[str, Any], unreliable: set[str]) -> tuple[str, bool]:
+    """A hotspot's CCN cell, and whether it is an approximate scc figure.
+
+    A file scc scored at file level only (``source`` scc, no ``max_fn_ccn``)
+    carries a keyword count, not a parsed complexity: it reads ``~N``, and
+    ``~N (unreliable)`` when ``complexity_unreliable`` flagged it (issue #590).
+    """
+    cell = _fmt(row.get("ccn"))
+    if row.get("source") != "scc" or row.get("max_fn_ccn") is not None:
+        return cell, False
+    flag = " (unreliable)" if row.get("path") in unreliable else ""
+    return f"~{cell}{flag}", True
+
+
 def render_hotspots_table(ctx: dict[str, Any]) -> str:
-    """Render the top hotspots as a Markdown table (capped at MAX_HOTSPOT_ROWS)."""
-    hotspots = ctx.get("stats_summary", {}).get("top_hotspots", [])
+    """Render the top hotspots as a Markdown table (capped at MAX_HOTSPOT_ROWS).
+
+    A footnote follows only when a row's CCN is an approximate scc figure, so a
+    table of per-function-scored files renders as it always has.
+    """
+    stats = ctx.get("stats_summary", {})
+    hotspots = stats.get("top_hotspots", [])
     if not hotspots:
         return "_No hotspots identified._"
+    unreliable = {r.get("path") for r in stats.get("complexity_unreliable") or []}
     lines = ["| Path | LOC | CCN | Commits |", "|------|-----|-----|---------|"]
+    approximate = False
     for h in hotspots[:MAX_HOTSPOT_ROWS]:
+        cell, approx = _ccn_cell(h, unreliable)
+        approximate = approximate or approx
         lines.append(
             f"| `{h.get('path', '?')}` | {_fmt(h.get('loc'))} | "
-            f"{_fmt(h.get('ccn'))} | {_fmt(h.get('commits'))} |"
+            f"{cell} | {_fmt(h.get('commits'))} |"
+        )
+    if approximate:
+        lines.append("")
+        lines.append(
+            "_`~` marks an approximate CCN: scc's file-level keyword count, with no "
+            "per-function data. Rank those rows on churn and size, not on CCN; "
+            "`(unreliable)` means the count is implausibly low for the file's size._"
         )
     return "\n".join(lines)
 
@@ -471,6 +501,10 @@ def _render_churn_window(ctx: dict[str, Any]) -> str:
     label = window if window else "unavailable"
     if ctx.get("churn_degenerate"):
         return f"{label} - snapshot / no usable history, churn signal flat"
+    if doc_staleness.get("history_truncated"):
+        # Shallow clone (issue #544): ages at the boundary are lower bounds.
+        boundary = doc_staleness.get("history_boundary_date") or "unknown"
+        return f"{label} - shallow clone, history before {boundary} missing"
     return label
 
 

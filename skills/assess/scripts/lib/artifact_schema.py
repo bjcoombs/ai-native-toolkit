@@ -75,7 +75,24 @@ constant each.
 # lib.doc_ownership (issue #555). A repo-baseline row's subject_code_count is now
 # 0 (it owns no subject), the same value the documentation block reports.
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.10.0"
+# 1.11.0: complexity-stats.json gains complexity_unreliable, the scc-only files
+# whose ccn is an order of magnitude below their language's median density
+# (lib.scc_coverage, issue #590), and run-context.json copies it into
+# stats_summary and reports a COMPLEXITY_UNRELIABLE anomaly when it is non-empty.
+# Additive. STATS_SCHEMA_VERSION moves 6->7. No ranking or finding moves.
+# 1.11.0 (also): doc_staleness gains history_truncated and
+# history_boundary_date, and its rows (and stale_hubs) an optional
+# last_commit_days_bound: "lower" (issue #544). Additive; complexity-stats.json
+# is unchanged.
+# 1.12.0: instruction files are scored on always-on size and share (issue #560).
+# Each instruction_files and nested_instructions.files entry gains the
+# subscores always_on_lines, always_on_pct, fetch_on_need_lines,
+# always_on_flagged, always_on_penalty and relocatable_penalty, and
+# instruction_file_size gains always_on_lines (and the subscores and each
+# instruction_placement record always_on_words). bloat_penalty is now their
+# penalties' sum and size_grade_capped reads always-on lines. Additive: no key
+# moves or changes type, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.12.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -88,8 +105,21 @@ ARTIFACT_SCHEMA_VERSION = "1.10.0"
 # ranks for files renamed inside the churn window (issue #425).
 # 3: the doc-complexity join reads complexity-stats.json's uncapped `files` list,
 #    so a complex file outside every top-10 list can now produce lying_map,
-#    unexplained_complexity or good_contract (issue #556).
+#    unexplained_complexity or good_contract (issue #556). The same list reaches
+#    candidate_dead_weight (keyhole_signals._high_complexity_paths) and
+#    orphaned_understanding (understanding_analysis._extract_file_ccn), which
+#    now also see every scored file.
 # 4: the complexity join takes doc ownership from the doc-staleness rule
 #    (lib.doc_ownership, issue #555): a README beside a design doc owns the
 #    directory's code, and a non-base doc owns none by directory.
-ASSESS_METHOD_VERSION = 4
+# 5: a CLAUDE.md identical to its AGENTS.md below the header (H1 and leading
+#    HTML comments) is the informational mirrored_instruction_files, not the
+#    capping claude_shadows_agents (issue #589).
+# 6: on a shallow clone every doc-staleness row is confidence "low", which keeps
+#    it out of lying_map and halves its stale-hub priority (issue #544). A full
+#    clone's findings do not move.
+# 7: instruction files are graded on always-on size and share instead of the
+#    whole-file size curve (issue #560), which moves instruction grades.
+# 8: a bats suite is a test file and credits its shell script (issue #593), so a
+#    co-located ``<stem>.bats`` can now produce self_referential_tests (E2).
+ASSESS_METHOD_VERSION = 8

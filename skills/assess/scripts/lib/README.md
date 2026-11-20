@@ -37,16 +37,16 @@ The seam is narrowing. Every run-context block is declared once in `scan_registr
 (`SCANS`) and run by one loop, so adding a scan edits its own module, its test, that
 table and this file - not `assess_core.py`. The setup steps (scope, artifact directory,
 run id, stats and diff, instruction grading, first-flagged map) are entries too; their
-adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. Only the
-doc-staleness keys (`scan_registry.HAND_WIRED`) are still assigned by hand, held back
-for the 2.0.0 rewrite (#424, #425). The table only reads: `run_publish.py` writes the
-wiki, badge and `run-context.json` after the scans (#557).
+adapters live in `run_setup.py`, the read-side adapters in `core_scans.py`. The
+doc-staleness keys and the doc x complexity join joined the table last (#558), so the
+core assigns no key by hand. The table only reads: `run_publish.py` writes the wiki,
+badge and `run-context.json` after the scans (#557).
 
 Seeing these two files in the same commit as `assess_core.py` is expected, not a
 defect.
 
-The core keeps only the orchestration: `build_run_context` (the stage calls, the
-hand-wired doc-staleness keys and the publish call), `run_opt_in_mutation` and `main`.
+The core keeps only the orchestration: `build_run_context` (one `run_scans` call and
+the publish call), `run_opt_in_mutation` and `main`.
 Its helpers live in seven modules, one per seam: `instruction_files.py`
 (instruction-file grading), `diff_reliability.py` (cross-run diff trust),
 `wiki_state.py` (first-flagged dates and run supersession), `run_wiki.py` (the wiki
@@ -110,6 +110,13 @@ shares one map per HEAD between the churn reads and the content clock, and marks
 doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
 Git's own rename detection is off (`--no-renames`) in both walks, so `diff.renames`
 does not move a count. Tests: `tests/test_rename_churn.py`.
+Shallow history (issue #544): `content_commit_clock` reuses its
+`--is-shallow-repository` probe, and on a shallow clone reads the boundary commits
+from `git rev-parse --git-path shallow`. The clock's `truncated`, `boundary_epoch`
+(newest boundary, author time) and `lower_bound` (docs whose newest visible change is
+a boundary commit) feed `doc_staleness`. A boundary commit lists every file like a
+root commit, so it is never counted as bulk. A failed probe is unknown, not
+truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
@@ -381,7 +388,12 @@ source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshnes
 commits are reported as `bulk_commits_skipped` (newest first, capped) with
 `bulk_commits_skipped_total`. A doc dated by the creation fallback carries
 `last_change_basis: "creation"` and confidence `low`, which keeps it out of the stale-hub
-finding; `creation_date_fallback_count` counts them. The `modularity` block's `base_doc_dir_ratio`
+finding; `creation_date_fallback_count` counts them. On a shallow clone the block
+carries `history_truncated: true` and `history_boundary_date`, every row is confidence
+`low`, and a doc whose newest visible change is the boundary carries
+`last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
+floor. Its ratio still rests only on subject commits after the boundary, so the
+boundary listing every code file does not make it stale. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
 within 0-1 (tests: `tests/test_doc_modularity.py`).
@@ -405,7 +417,9 @@ comes from the source-vs-doc comparison (a direct, high-confidence signal that b
 the churn-ratio confidence guards) instead of the ratio. Which code a doc covers comes
 from the staleness rows through `doc_subjects` (the `doc_ownership.py` rule), and each
 unit's `subject_code_count` is the staleness row's value, so both blocks report one count
-per document. `_extract_file_ccn` is the single read of the stats' per-file CCN.
+per document. That count covers discovered code files only, while `complexity_summarised`
+sums the join subject over the scored files, so a base doc owning only files discovery
+skips (Lua, say) can report `subject_code_count` 0 with non-zero complexity. `_extract_file_ccn` is the single read of the stats' per-file CCN.
 
 ### Ownership and structure drift
 
@@ -488,8 +502,8 @@ Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 **`scan_registry.py`**
 The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
 the `key`, the callable, the names it `reads` (passed positionally: a core-provided
-input from `PROVIDED_INPUTS`, a `HAND_WIRED` key, or the key of an earlier spec), the
-`stage` of `build_run_context` it runs at, and whether it degrades. By default the
+input from `PROVIDED_INPUTS` or the key of an earlier spec), its `stage`, and whether it
+degrades. By default the
 value is published as `ctx[key]`; a `private` spec's value (the stats, the diff, a raw
 scan result) is kept in the inputs mapping for later specs and never reaches
 `run-context.json`; a `spread` spec returns a mapping whose keys, all declared, are
@@ -510,15 +524,16 @@ the scan degrades. The core provides the `build_run_context` arguments
 absolute `--scope` path, or None), `instruction_files`, `excludes` (the
 `(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
 sidecar's churn window via `git_churn.window_from_churn_label`, or None) are setup
-specs. Stages
-(`setup`, `read_side`, `post_offers`, `final`) keep `run-context.json` key order;
-they collapse once the `HAND_WIRED` doc-staleness keys move here.
+specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
+order (#558). Only `anomalies` relies on its stage, staying the last scan key while
+later entries append to the table.
 
 **`run_setup.py`**
 Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
 `new_run_id`, `current_stats` / `prior_stats`, `stats_diff` (dropping a graduation the
 generated-file filter caused), `instruction_grading`, `rename_map` and
-`measured_commit` (the git-churn call sites #424 and #425 rewrite), `config_excludes`,
+`measured_commit`, `config_excludes`,
 `first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
 `run_header`, which returns the first 27 run-context keys (`RUN_HEADER_KEYS`) with the
 four `WIKI_KEYS` and `prior_findings_snapshot` reserved as None for the publish step. Reads only. Tests:
@@ -529,7 +544,12 @@ Read-side adapters for the scan table (#557): one callable per registered block,
 taking its reads positionally and calling the scan module or `context_blocks`
 serialiser that owns the block's shape (doc graph, liveness, structure, coverage,
 test pressure and focus, promissory markers, accretion, the keyhole integration and
-its disclosures, decline markers, offers, anomalies). `anomalies` reads the run header
+its disclosures, decline markers, offers, anomalies), plus the doc-staleness entries
+(#558): `doc_staleness` (over the doc graph's doc->code edges, degrading under its own
+label), `stale_hubs`, `churn_degenerate` and the private `doc_join`
+(`analyze_doc_complexity_join`), which the keyhole integration reads for its
+`documentation` block; a failed join degrades that block with reason
+`documentation scan failed: ...`. `anomalies` reads the run header
 only, which holds every key `detect_anomalies` inspects. No logic of its own. Tests:
 `tests/test_run_setup.py`, and the run-context tests that patch a scan here.
 
@@ -578,7 +598,9 @@ the network.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
-`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, open per-scan
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
+whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
+custom table, and the namespace `rubric_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
@@ -614,6 +636,31 @@ hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
+**`fleet_groups.py`**
+The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
+`group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
+shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
+only; null with no available block, `shared_tooling_repos` counting the evidence), the joined settings, and each rubric row's level through `rubric.evaluate`, with
+no threshold config of its own. `load_settings` reads ghreport settings fragments
+(#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
+`scope`; `settings_for` joins a group to the exact scope or the nearest ancestor;
+`normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
+`{available: false, reason}` so `rubric.resolve_signal` reads it unavailable and the
+org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
+else `set`). Rubric data follows `rubric_signals`' namespaces: `repo_signals` is a
+repository's `scans` map (a failed repository's is empty, so it is an unknown
+repository, never a passing one) and `settings_signals` the normalised settings plus
+the fragment's `scope` and `provider`. The CLI loads the rubric with
+`rubric_signals.signal_path_validator()`.
+`write_groups` writes atomically with sorted keys.
+
+**`fleet_group_schema.py`**
+Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
+`RubricRowLevel` (lists and floats included, `settings` values as `{value}` or
+`{available: false, reason}`). `tests/test_fleet_groups.py` fails when the checked-in
+file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
+from `skills/assess`.
+
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
 `signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
@@ -648,6 +695,23 @@ checkout that is not a main clone at its work-tree root, one holding a protected
 (`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
 output, a stash, a commit on `HEAD` or a local branch that no remote branch holds, a
 linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
+
+**`fleet_labels.py`**
+The deterministic half of the optional fleet label step (issue #572), driven by
+`skills/fleet/scripts/fleet_labels.py`. `digest` reduces a `FleetRow` to the facts a
+small model reads (identity plus short scalar leaves of available blocks; lists become
+lengths and kind tokens; never source), `batches` and `build_prompt` wrap them in the
+fixed instructions, `parse_answers` reads the reply tolerantly (fences and prose
+skipped), and `build_label_rows` joins it to `repos.jsonl`: one `LabelRow`
+(`path`, `label`, `confidence`, `model`) per repository, a label outside `LABELS`
+becoming `other`, a missing answer `other` at confidence 0, unknown paths dropped, the
+first duplicate kept, `model` from the caller. `write_labels` writes `labels.jsonl`
+atomically beside `repos.jsonl` (never touching it); `check_labels` validates a file
+against the repository ids; `labels_by_path` and `filter_rows` are the display and
+filter join. `build_schema` generates `skills/fleet/references/labels.schema.json`
+(regenerate with `uv run --locked python scripts/lib/fleet_labels.py` from
+`skills/assess`). No module in the gathering or scoring path imports it, and it
+imports no model, network or subprocess module: `tests/test_fleet_labels.py` pins both.
 
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
@@ -1035,9 +1099,26 @@ The per-file row lists `complexity-treemap.py` writes into `complexity-stats.jso
 (ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
 `{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
 `_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
-list (issue #556). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+list (issue #556). Its other readers see every scored file too: `candidate_dead_weight`
+(through `keyhole_signals._high_complexity_paths`) and `orphaned_understanding`
+(through `understanding_analysis._extract_file_ccn`). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
 cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
 `tests/test_stats_rows.py`.
+
+**`scc_coverage.py`**
+What scc's file-level complexity covers. `DATA_LANGUAGES` (JSON, YAML, JSONL) splits
+code from data; `backend_by_language` maps each scc language to its per-function
+backend, or null when scc alone scored a file of it with decision points.
+`complexity_unreliable` flags scc-only code files whose density (ccn per NLOC) is under
+`UNRELIABLE_DENSITY_RATIO` (0.1) of their language's median, for files of at least
+`MIN_UNRELIABLE_NLOC` (200) in a language with at least two files of
+`MIN_MEDIAN_NLOC` (20) or more (issue #590): scc's keyword counter loses its place on
+some shell quoting and scores a 2,000-line script near zero. `complexity-treemap.py`
+writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
+(`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
+`anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
+scc-only CCN cells `~N` and flagged ones `(unreliable)`. Ranking is unchanged. Stdlib
+only. Tests: `tests/test_scc_coverage.py`.
 
 **`stats_diff.py`**
 Compares current complexity stats against a prior run and classifies hotspot
@@ -1086,8 +1167,24 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the rubric version; `dumps_result` is byte-identical on
-rerun. No default rubric ships here. Tests: `tests/test_rubric.py` with fixtures under
-`tests/fixtures/rubric/`.
+rerun. Tests: `tests/test_rubric.py` with fixtures under `tests/fixtures/rubric/`.
+
+**`rubric_signals.py`**
+The real `PathValidator` for `rubric.py`, and the default rubric. A `team` path's first
+segment must be a block name the published headless schema lists
+(`references/signals.schema.json`, `scans.propertyNames`, generated from
+`signals.known_scans`), so one rubric reads a headless document's `scans` or a full
+`run-context.json`; run-context keys outside the schema (`instructions_grade`) are
+rejected. Where `counts_only_schema.ROOTS` types the block, every further segment must
+name a field and end on a scalar (no list, no object); an untyped block is open. An
+`org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
+`<setting>.value` / `.reason`). `load_default_rubric` loads
+`skills/assess/rubrics/default.toml`: one team row per layer with a deterministic
+signal (0, 1, 5, 6, 7, 8), level 1 for Partial and 2 for Present. It can disagree with
+the `/assess` layer verdicts (the file header lists where); no instruction file reads
+level 0 through a never-null byte count, not `unknown`. Tests:
+`tests/test_rubric_signals.py`, on headless runs of the golden fixture repositories
+and the golden `run-context.json`.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
@@ -1098,14 +1195,18 @@ files, the skills-directory info and the redacted sensitive-content findings alo
 the best grade (`None` when no committed file exists, distinct from `F`).
 `broken_instruction_refs` adds doc links to a missing instruction file;
 `detect_ancestor_instructions` names the ancestor and global files a clone never sees
-(#57); `instruction_file_size` feeds the bloat signal. Each graded entry carries the
+(#57); `instruction_file_size` feeds the size signal (line and word counts, always-on
+lines, `bloat_penalty`). Files are graded against `instruction_placement.skill_texts`, so
+a grade rests on the same always-on split as the file's `instruction_placement` record. Each graded entry carries the
 grader's `findings` (unresolved commands, stale paths and symbols), graded against an
 `instruction_content.RepoContext`; `grade_instruction_files` and `nested_instruction_surface`
 each build one from the same tree. Tests:
 `tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
 `nested_instruction_surface(repo_root, excludes)` builds the `nested_instructions`
-block from `instruction_discovery` with the same tracked set, clock and skills
-detection, and runs from the `scan_registry` table.
+block from `instruction_discovery` with the same tracked set, clock and skill texts,
+and runs from the `scan_registry` table. A nested file is graded on its body after any
+frontmatter, so a rule file's always-on lines leave out the frontmatter lines its
+placement record counts.
 
 **`instruction_discovery.py`**
 Finds the instruction files agent tools load below the root or through path-scoped
@@ -1119,10 +1220,16 @@ Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
 Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
 matches a tracked file or names a directory on disk; a nested rule's patterns are
 also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
-(a directory's `CLAUDE.md` differs from its `AGENTS.md` and does not import it) and
-`repeats_parent` (at least half of a nested file's distinct lines, over five or
-more, copy the nearest ancestor's). Files and findings are capped with `_total`
-counts. Tests: `tests/test_instruction_discovery.py`.
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` below the header and does
+not import it; `diff_lines` counts the differing body lines, one changed line
+counting once) and `repeats_parent` (at least half of a nested file's distinct
+lines, over five or more, copy the nearest ancestor's). The two files are compared
+below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
+comments dropped, whitespace collapsed, blank lines dropped), so a pair that
+matches there is reported as the informational `mirrored_instruction_files`, a
+hand-maintained mirror, not as shadowing (#589); a symlink or an import is
+neither. Files and findings are capped with `_total` counts, informational
+mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
 
 **`instruction_budget.py`**
 The always-loaded instruction text per tool for the root context, in lines, words,
@@ -1135,8 +1242,9 @@ root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest
 root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
 
 **`instruction_placement.py`**
-Per-section placement of instruction text (#559, part of #419), no model, no grade
-effect. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
+Per-section placement of instruction text (#559, part of #419), no model. The
+grader scores each instruction file on the same split (`analyse_file`, #560); the
+block itself is advice. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
 frontmatter, at the shallowest level (the next one down when a single heading is a
 document title); deeper headings roll into their section, text before the first
 heading is a section with an empty heading, and a file with no headings is one
@@ -1149,8 +1257,11 @@ existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
 `instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
 any other section moves only when
 `MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
-`scoped_paths` (backticked paths mostly under one top-level directory),
-`command_reference` (fence density) and `long_section` fire. Each threshold is a
+`scoped_paths` (backticked paths mostly under one top-level directory, unless the
+file already sits under it),
+`command_reference` (fence density) and `long_section` (60 lines or more, an absolute count so that
+lines elsewhere cannot declassify a section, in a file with at least two headed
+sections) fire. Each threshold is a
 named constant with its rationale. Suggested homes: `existing_skill` (the
 duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
 `scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill
@@ -1158,9 +1269,11 @@ files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agen
 `existing_skill` when the text is already in another skill. Between two skills the
 pointer is one-way: a skill counts as the duplicate's home only when its path sorts
 before the file's, so the lexically first keeps the canonical copy.
+`detect_skills_dir` lists the skills directories and `SKILL.md` files (the
+`skills_present` evidence); `skill_texts(repo_root)` returns every `SKILL.md` text by
+path, the map the scan and the grader's callers both compare sections against.
 `scan_instruction_placement(repo_root, instruction_files, nested_instructions,
-scope, excludes)` runs from the `scan_registry` table. The block, which #560 reads
-to score on always-on size:
+scope, excludes)` runs from the `scan_registry` table. The block:
 `{available, thresholds {always_on_lines, always_on_share,
 loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
 loaded_in_full_considered}`. Each file record (`files`: the root instruction files
@@ -1168,7 +1281,8 @@ that are present and not aliases, plus `nested_instructions.files`, each real fi
 once; `loaded_in_full`: agent and `SKILL.md` files from
 `claude_config.loaded_config_files` over 200 lines, largest first) is `{path, kind
 (instruction | agent | skill), total_lines, always_on_lines, always_on_share,
-fetch_on_need_lines, unclassified_lines, sections_total, flagged, relocatable[],
+always_on_words, fetch_on_need_lines, unclassified_lines, sections_total, flagged,
+relocatable[],
 relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
 0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
 start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
@@ -1190,10 +1304,18 @@ Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
 credit (12 each, cap 40, resolved by `command_resolver.py`; a standard CLI such as `gh` earns
 4 each, cap 16, inside the same 40), backticked paths count only
 when they exist at HEAD, and directives, tradeoff phrases and verifiable outcomes are a
-small capped floor. A size curve subtracts one point per 10 lines past 200 (or per 120
-words past 2400), capped at 30, halved (never waived) when the repo delegates to skills,
-because the file still loads on every task; past 400 lines or 4800 words the score is
-capped at 59 (a B), skills or not. Directory-tree
+small capped floor. Size is scored on always-on size and share (#560, replacing the
+#517 whole-file curve, its skills halving and its word leg): `grade_instructions` splits
+the file with `instruction_placement.analyse_file` (given `skills`, the
+`skill_texts` map) and `placement_penalty` charges one point per 10 always-on lines
+past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
+file over 400 always-on lines is capped at 59 (a B). Always-on lines are
+line-equivalents, the larger of the lines and the always-on words / 12, so a file of
+very long lines cannot dodge the term or the cap. Neither term reads the block's
+`flagged` (which also needs over half the file): gated on it, adding reference lines
+could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
+`always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
+`relocatable_penalty` (and `always_on_words`) carry the split; `bloat_penalty` is their sum. Directory-tree
 blocks, repository-overview sections and lines repeated from the root README cost points
 too (`instruction_content.py`). The A-F scale and the subscore keys downstream code reads
 (`positive_directives`, `tradeoff_phrases`, `path_references`, `verifiable_outcomes`,
@@ -1840,6 +1962,8 @@ it is one reviewed edit (re-read the pages, change the sets, move the date).
 Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
 CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
 grades only, no paths or code) so they are safe to include in self-feedback issues.
+`COMPLEXITY_UNRELIABLE` fires when `stats_summary.complexity_unreliable` is non-empty
+(`scc_coverage.py`); its detail counts files and languages and gives the largest NLOC.
 
 **`coverage_report.py`**
 Parses an *existing* coverage report into the shape the `test_pressure` scan's
@@ -1907,7 +2031,10 @@ Tests: `tests/test_coverage_gate.py`.
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
 `.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
-hyphenated stem also matched as underscores), the adjacent test directories
+hyphenated stem also matched as underscores, plus the one cross-extension rule
+from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
+`*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
+key `run.bats`), the adjacent test directories
 (`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
 layered probe: `find_colocated_test` (beside the source or in an adjacent test
 directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
@@ -1952,7 +2079,12 @@ relative specifiers only (`import ... from`, `export ... from`, side-effect and
 dynamic `import`, `require`; `import type` and line-leading comments skipped;
 string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
 `foo.ts`); alias and package
-specifiers keep the name match, as do all other languages. Modules inside a test
+specifiers keep the name match. A bats suite with an `@test` line (issue #593)
+credits the files it `source`s / `.`s / `load`s by a suite-anchored path
+(`$BATS_TEST_DIRNAME/...`, or a relative `load`, `.bash` appended tried first); a
+cwd-relative `source`, another variable, a glob, a single-quoted (literal) anchor or a
+load after a `#` comment credits nothing. All other
+languages keep the name match. Modules inside a test
 directory are support, never credited. Every module a qualifying test imports
 directly is credited. Runs lazily, once per `TestIndex`, over the index's test
 and source lists (so the same excludes and tracked-files rule apply), capped at
@@ -1986,7 +2118,9 @@ the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
 entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
 order, minus any hot file that is itself a test (`sibling_tests.is_test_path`),
 so neither a file with no test nor a test file heads the mutation pass and comes
-back as an `untrusted_hotspot` for tests that do not exist; `assess_core --opt-in-mutation`
+back as an `untrusted_hotspot` for tests that do not exist, and limited to
+`MUTABLE_SUFFIXES` (the suffixes a mutation tool handles), so a credited `.sh`
+does not push a mutable file out of the capped pass; `assess_core --opt-in-mutation`
 and the SKILL.md Step 2d `jq` both apply it. Add cases in
 `tests/test_test_focus.py` alongside any change to a classification, ranking,
 or scope rule.

@@ -129,18 +129,12 @@ def graded_instruction_files(grading: tuple[Any, ...]) -> dict[str, Any]:
 
 
 def rename_map(repo_root: Path) -> RenameMap:
-    """Historical path -> current path, from git's rename detection.
-
-    One of the git-churn call sites issues #424 and #425 rewrite.
-    """
+    """Historical path -> current path, from git's rename detection."""
     return build_rename_map(repo_root)
 
 
 def measured_commit(repo_root: Path) -> dict[str, Any]:
-    """The commit the scan measured (HEAD, dirty state, upstream lag).
-
-    One of the git-churn call sites issues #424 and #425 rewrite.
-    """
+    """The commit the scan measured (HEAD, dirty state, upstream lag)."""
     return git_commit_info(repo_root)
 
 
@@ -213,6 +207,9 @@ by the same step just before it rewrites findings.json.
             "est_tokens": current.get("est_tokens", {}),
             "ccn": current.get("ccn", {}),
             "top_hotspots": current.get("top_hotspots", []),
+            # scc-only files with implausibly low ccn (issue #590); [] for an
+            # older sidecar that predates the check.
+            "complexity_unreliable": current.get("complexity_unreliable", []),
         },
         "instruction_files": grading[0],
         "instructions_grade": grading[1],
