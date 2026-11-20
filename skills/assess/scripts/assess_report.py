@@ -220,9 +220,13 @@ def render_generated_disclosure(ctx: dict[str, Any]) -> str:
     renders exactly as before. The first ``GENERATED_DISCLOSURE_VISIBLE`` rows
     sit on the report surface; the rest go in a ``<details>`` fold, so every
     path stays named without hundreds of bullets displacing the findings.
+    A failed scan (the unavailable marker) says so rather than reading as none.
     """
+    block = ctx.get("excluded_generated")
+    if isinstance(block, dict):
+        return f"_Files excluded from scoring as generated: not disclosed ({block.get('reason')})._"
     rows = [
-        r for r in (ctx.get("excluded_generated") or [])
+        r for r in (block or [])
         if isinstance(r, dict) and r.get("path") and r.get("reason")
     ]
     if not rows:
@@ -469,7 +473,8 @@ def _render_churn_window(ctx: dict[str, Any]) -> str:
     doc_staleness = ctx.get("doc_staleness") or {}
     window = doc_staleness.get("churn_window")
     label = window if window else "unavailable"
-    if ctx.get("churn_degenerate"):
+    # ``is True``: a failed churn_degenerate entry is a marker dict, which is truthy.
+    if ctx.get("churn_degenerate") is True:
         return f"{label} - snapshot / no usable history, churn signal flat"
     return label
 

@@ -67,11 +67,17 @@ def new_run_id() -> str:
 
 
 def read_plugin_version(plugin_json: Path = PLUGIN_JSON) -> str:
-    """The plugin version from ``.claude-plugin/plugin.json``, or ``unknown``."""
+    """The plugin version from ``.claude-plugin/plugin.json``, or ``unknown``.
+
+    Never raises: an unreadable, malformed or non-object manifest reads as
+    ``unknown``, the string every reader (decline markers, the wiki log, the
+    report) already treats as no version, so the scan table's entry needs no
+    degrade marker in place of a string.
+    """
     try:
         data = json.loads(plugin_json.read_text(encoding="utf-8"))
         return str(data.get("version", "unknown"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (OSError, ValueError, AttributeError):
         return "unknown"
 
 

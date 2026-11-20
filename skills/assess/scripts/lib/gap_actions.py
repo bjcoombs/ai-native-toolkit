@@ -55,7 +55,9 @@ def _coverage_gap(
     # proposed there; an unknown archetype is not assumed to be software.
     if archetype.get("archetype") != "software":
         return None
-    if coverage_report.get("available") is not False:
+    # Only the "none found" block proposes measuring: a failed scan degrades to
+    # available: false *with* a reason, and a failed read is not a missing report.
+    if coverage_report.get("available") is not False or coverage_report.get("reason"):
         return None
     paths = [
         h["path"] for h in top_hotspots

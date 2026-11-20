@@ -78,9 +78,18 @@ def field_names() -> frozenset[str]:
     return typed_field_names() | rule_segments | EXTRA_FIELD_NAMES
 
 
-def _key_kind(pattern: str, key: object) -> str | None:
-    """``"path"``, ``"identifier"``, ``"field"``, or None for a data key to drop."""
-    if pattern in PATH_KEYED_MAPS:
+def _is_marker(value: Mapping[str, Any]) -> bool:
+    """The scan table's unavailable marker: ``{"available": False, "reason": ...}``."""
+    return value.get("available") is False and "reason" in value and len(value) == 2
+
+
+def _key_kind(pattern: str, key: object, marker: bool = False) -> str | None:
+    """``"path"``, ``"identifier"``, ``"field"``, or None for a data key to drop.
+
+    A path-keyed block that degraded to the unavailable ``marker`` is a record:
+    its ``available`` and ``reason`` keys are fields, not paths (#623).
+    """
+    if pattern in PATH_KEYED_MAPS and not marker:
         return "path"
     if not isinstance(key, str):
         return None
@@ -145,7 +154,8 @@ class _Filter:
             out = self.string(classify(pattern), value)
             return out is not None, out
         if isinstance(value, Mapping):
-            if classify(pattern) == DROP:
+            # A dropped field that degraded keeps its marker's flag (#623).
+            if classify(pattern) == DROP and not _is_marker(value):
                 return False, None
             return True, self.mapping(pattern, value)
         if isinstance(value, list):
@@ -154,8 +164,9 @@ class _Filter:
 
     def mapping(self, pattern: str, value: Mapping[str, Any]) -> JsonDict:
         out: JsonDict = {}
+        marker = _is_marker(value)
         for key, item in value.items():
-            kind = _key_kind(pattern, key)
+            kind = _key_kind(pattern, key, marker)
             new_key: str | None
             if kind == "path":
                 new_key = self.path(str(key), allow_space=True)
@@ -212,10 +223,11 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
             if classify(pattern) is None:
                 found.add(pattern)
         elif isinstance(value, Mapping):
-            if classify(pattern) == DROP:
+            if classify(pattern) == DROP and not _is_marker(value):
                 return
+            marker = _is_marker(value)
             for key, item in value.items():
-                kind = _key_kind(pattern, key)
+                kind = _key_kind(pattern, key, marker)
                 if kind == "path":
                     walk(_child(pattern, "{}"), item)
                 elif kind is None:

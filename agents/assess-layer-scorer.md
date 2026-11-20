@@ -103,6 +103,8 @@ Read the agent instruction file grades and surface integrity from `run-context.j
 jq '.instruction_files, .instructions_grade, .untracked_instruction_files, .broken_instruction_refs, .sensitive_instruction_content, .ancestor_instruction_files, .skills_present, .skills_count, .skill_files, .instruction_file_size, .instruction_claims, .claude_config, .nested_instructions, .agent_harness, .instruction_placement' "$REPO_ROOT/.assess/run-context.json"
 ```
 
+Any of these blocks can instead be `{"available": false, "reason": ...}` when its scan failed: say that check did not run (no evidence either way), never read it as clean.
+
 `.instruction_files` is a dict keyed by filename (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`). Only **git-tracked** files are graded - a file present on disk but uncommitted is *not* credited (it isn't part of what the repo ships). The same heuristic grader scores each tracked file on what outcome studies say helps an agent, not on volume: **verified commands carry the most credit** (a command in a shell fence or inline code that resolves to a real `package.json` script, Makefile target, justfile recipe, pyproject tool, tox environment, nox session, go/cargo/maven/gradle build, script file or CI step: 12 points each, capped at 40; a standard CLI such as `gh`, `git`, `kubectl` or `aws` in a shell fence earns 4 each, capped at 16, inside the same 40); backticked paths count only when they exist at HEAD (3 each, cap 15); directives, tradeoff phrases and verifiable outcomes earn a small capped floor (10 each at most), because more instructions lower instruction-following accuracy. Since the verified-commands rescoring, a long directive-dense file no longer outgrades a short file of exact commands - a method change, not a regression in the repo. For each file:
 - `grade: "A" | "B+" | ...` - report verbatim per file
 - `subscores.verified_commands` / `subscores.external_commands` / `subscores.unresolved_commands` / `subscores.unknown_commands` - commands that resolve, that run a standard CLI defined outside the repo (partial credit, never a finding), that name a missing target, and whose program is not modelled (no evidence either way)
@@ -166,7 +168,7 @@ This replaces the prior subjective "is it generic?" check. The grader credits ve
 Navigability is a graph property, so the deterministic core measures it as one. Read the doc link-graph, staleness, and association signals from `run-context.json` - **do not re-scan for files by name**; the graph already identifies hubs by centrality without filename guessing:
 
 ```bash
-jq '(.doc_graph | del(.link_parents)), .doc_staleness.association, .doc_staleness.modularity, .stale_hubs[:5], .doc_claims' "$REPO_ROOT/.assess/run-context.json"
+jq '(.doc_graph | del(.link_parents)), .doc_staleness.association, .doc_staleness.modularity, (.stale_hubs | if type == "array" then .[:5] else . end), .doc_claims' "$REPO_ROOT/.assess/run-context.json"
 ```
 
 `link_parents` is left out on purpose: it holds one record per document, so on a well-linked doc-heavy repo it outweighs the rest of the block, and nothing in Layer 0 scores on it.
