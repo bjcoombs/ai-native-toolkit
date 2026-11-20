@@ -163,18 +163,43 @@ def _include_lines(text: str) -> list[tuple[int, str, bool]]:
     return _join_flow(out)
 
 
+def _flow_depth(line: str) -> int:
+    """Net ``{``/``[`` opened by ``line``, ignoring brackets inside quoted scalars."""
+    depth = 0
+    quote = ""
+    for ch in line:
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+    return depth
+
+
 def _join_flow(rows: list[tuple[int, str, bool]]) -> list[tuple[int, str, bool]]:
     """Join a flow collection that spans lines (``- {project: a,`` then ``ref: v1}``)
-    into its first row, so its keys stay one item."""
+    into its first row, so its keys stay one item.
+
+    Only a row that opens a flow collection (its value, after an optional ``- ``,
+    starts with ``{`` or ``[``) starts a join, and quoted brackets are not counted,
+    so a bracket in a ``rules: if:`` regex never swallows the items after it.
+    """
     joined: list[tuple[int, str, bool]] = []
     depth = 0
     for number, line, inline in rows:
         if depth > 0:
             first, text, flag = joined[-1]
             joined[-1] = (first, f"{text} {line.strip()}", flag)
-        else:
-            joined.append((number, line, inline))
-        depth = max(depth + sum(line.count(c) for c in "{[") - sum(line.count(c) for c in "}]"), 0)
+            depth = max(depth + _flow_depth(line), 0)
+            continue
+        joined.append((number, line, inline))
+        value = line.strip()
+        value = value[1:].lstrip() if value.startswith("-") else value
+        if value.startswith(("{", "[")):
+            depth = max(_flow_depth(value), 0)
     return joined
 
 

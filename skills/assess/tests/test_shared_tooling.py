@@ -367,3 +367,18 @@ def test_a_flow_mapping_across_lines_keeps_its_ref() -> None:
     inline = "include: [{project: grp/c,\n  ref: v3}, {project: grp/d}]\nstages: [x]\n"
     assert [(e["source"], e["ref"]) for e in gitlab_includes(inline, ".gitlab-ci.yml", True)] == [
         ("grp/c", "v3"), ("grp/d", None)]
+
+
+def test_a_bracket_in_a_rules_regex_never_swallows_later_items() -> None:
+    text = """\
+include:
+  - project: grp/a
+    rules:
+      - if: '$CI_COMMIT_TAG =~ /^v\\[/'
+  - project: grp/b
+    ref: v2
+  - {project: grp/c, file: "/x[1.yml"}
+  - project: grp/d
+"""
+    assert [(e["source"], e["ref"]) for e in gitlab_includes(text, ".gitlab-ci.yml", True)] == [
+        ("grp/a", None), ("grp/b", "v2"), ("grp/c", None), ("grp/d", None)]
