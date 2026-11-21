@@ -36,11 +36,15 @@ def _renamed_and_deleted_history(repo: Path, commit) -> None:
     """old/, other/ and gone/ co-change six times; then old/ -> new/ and gone/
     is deleted, so the history names two directories that no longer exist.
     Each directory is a Python package, so the static import graph measures it
-    (a repository with no package reports ``structure`` unavailable)."""
+    (a repository with no package reports ``structure`` unavailable). Each
+    package's ``__init__`` imports its own modules, so modularity is measured;
+    no import crosses a package, so the front-door ratio is null (#760)."""
     import subprocess
+    members = {"old": "x, y", "other": "z", "gone": "k"}
     for d in ("old", "other", "gone"):
         (repo / d).mkdir(parents=True, exist_ok=True)
-        (repo / d / "__init__.py").write_text("", encoding="utf-8")
+        (repo / d / "__init__.py").write_text(f"from . import {members[d]}\n",
+                                              encoding="utf-8")
     for i in range(1, 7):
         for d, stem in (("old", "x"), ("old", "y"), ("other", "z"), ("gone", "k")):
             f = repo / d / f"{stem}.py"

@@ -286,6 +286,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
     # A current run of this single-package capture reports no boundary crossed.
     single = copy.deepcopy(run_context)
     single["structure"]["cross_package_edges"] = 0
+    single["structure"]["front_door_ratio"] = None  # #760: no boundary, no ratio
     assert _row(_run({"toolkit": single}), "layer-2-design")["level"] == 1
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
 

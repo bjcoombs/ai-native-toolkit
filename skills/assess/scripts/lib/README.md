@@ -286,8 +286,9 @@ reason names the dominant source language (issues #707, #708):
 `no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
 packages found` for a Python repository, `no_source_files: ...` with no source in a
 recognised language. `cross_package_edges` counts the
-import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
-(no package boundary is crossed). A graph with packages but no import edges stays
+import edges `front_door_ratio` is measured over; at 0 no package boundary is crossed and
+`front_door_ratio` is null (unknown, not a vacuous 1.0; issue #760), as it is on an
+unavailable block. A graph with packages but no import edges stays
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
 was measured): modules that never import each other have no community structure, and a
 0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).

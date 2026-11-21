@@ -170,7 +170,12 @@ constant each.
 # reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
 # (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
 # and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.26.0"
+# 1.27.0: run-context.json structure.front_door_ratio is null when
+# cross_package_edges is 0 (issue #760), and on an unavailable structure block:
+# with no package boundary crossed there is no contract edge to measure, so the
+# former 1.0 was vacuous. A reader comparing front_door_ratio as a number must
+# skip null. complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.27.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -259,4 +264,8 @@ ARTIFACT_SCHEMA_VERSION = "1.26.0"
 #     window ratios, instruction ``freshness_days`` (and so the grader's freshness
 #     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
 #     whose HEAD is old, ages shrink and windows cover the history before HEAD.
-ASSESS_METHOD_VERSION = 21
+# 22: ``structure.front_door_ratio`` is null when no import crosses a package
+#     boundary (issue #760), so a single-package repository no longer reads as
+#     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
+#     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
+ASSESS_METHOD_VERSION = 22
