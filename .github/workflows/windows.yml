@@ -74,3 +74,74 @@ jobs:
           uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
           --ignore=tests/test_fleet_golden.py
         working-directory: skills/assess
+
+  # The bash skill scripts under Git Bash, the Git for Windows baseline (#749,
+  # #753): the ghsync and ghreport suites, the standalone ZIP build and the
+  # eval scaffolds. `shell: bash` on windows-latest is Git Bash. The checkout
+  # keeps the default core.autocrlf=true a Windows user gets, so this job also
+  # proves .gitattributes keeps every *.sh LF.
+  windows-git-bash:
+    name: windows ghsync + ghreport under Git Bash
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+
+      # Git Bash does not ship jq; the runner image usually does.
+      - name: Tools
+        run: |
+          command -v jq >/dev/null || choco install jq -y --no-progress
+          bash --version | head -1
+          git --version
+          jq --version
+          command -v timeout
+
+      - name: Shell scripts are LF in a CRLF checkout
+        run: |
+          git config --get core.autocrlf || true
+          bad=0
+          while IFS= read -r -d '' f; do
+            if grep -q $'\r' "$f"; then echo "CRLF: $f"; bad=1; fi
+          done < <(git ls-files -z '*.sh')
+          exit $bad
+
+      - name: ghsync and ghreport suites
+        run: >-
+          uv run --python 3.11 --with pytest --with pyyaml
+          pytest -ra -p no:cacheprovider
+          tests/test_ghsync*.py tests/test_ghreport*.py
+
+      - name: Standalone skill ZIPs
+        if: ${{ !cancelled() }}
+        run: |
+          dest=$(mktemp -d)
+          bash scripts/build-standalone-skills.sh --dest "$dest"
+          ls -l "$dest"
+          compgen -G "$dest/*.zip" >/dev/null
+
+      - name: Eval scaffolds build their fixtures
+        if: ${{ !cancelled() }}
+        run: |
+          git config --global user.email ci@example.invalid
+          git config --global user.name ci
+          while IFS= read -r -d '' s; do
+            ws=$(mktemp -d)
+            (cd "$ws" && bash "$GITHUB_WORKSPACE/$s")
+            git -C "$ws" log --oneline -1
+            test -n "$(git -C "$ws" ls-files)"
+            echo "ok: $s"
+          done < <(git ls-files -z 'evals/**/scaffold.sh')
