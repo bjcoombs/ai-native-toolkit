@@ -39,7 +39,7 @@ from collections.abc import Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
 
 from lib import check_manifest as cm
-from lib.level_signals import _LISTED_GRADES, INPUT_GRADES, load_default_levels
+from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.levels import Criterion, MaturityModel, Scalar
 from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
 
@@ -193,8 +193,8 @@ def grade_of(input_class: str) -> str:
 
 
 def counts(grade: str) -> bool:
-    """True when a condition at ``grade`` counts toward a level (#744, #789 decision)."""
-    return grade in GRADE_ORDER and grade not in _LISTED_GRADES
+    """True when a condition at ``grade`` counts toward a level (``level_signals.counts_toward_level``)."""
+    return counts_toward_level(grade)
 
 
 def _grades() -> list[GradeInfo]:
@@ -244,8 +244,12 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
 def _headless(name: str, collector: cm.CollectorEntry) -> Headless:
     if name in PLATFORM_ONLY_SCANS:
         return "platform_only"
-    status = collector.get("headless", {}).get(name, "unregistered")
-    return status if status in ("registered", "headless_variant") else "unregistered"  # type: ignore[return-value]
+    status = collector.get("headless", {}).get(name)
+    if status == "registered":
+        return "registered"
+    if status == "headless_variant":
+        return "headless_variant"
+    return "unregistered"
 
 
 def _reasons(name: str, collector: cm.CollectorEntry, headless: Headless) -> list[CatalogReason]:

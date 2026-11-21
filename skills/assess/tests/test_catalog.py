@@ -24,7 +24,7 @@ from lib.catalog import (CATALOG_VERSION, UNCLASSIFIED, build_catalog, counts, c
                          render_json)
 from lib.catalog_md import render_markdown
 from lib.keyhole_signals import FINDING_ORDER
-from lib.level_signals import load_default_levels
+from lib.level_signals import counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
 from lib.signals import known_scans
 
@@ -93,6 +93,8 @@ def test_grades_and_counting() -> None:
     assert {g["grade"]: g["counts"] for g in catalog["grades"]} == {
         "config_only": False, "declared": False, "measured": True, "verified": True}
     assert not counts(UNCLASSIFIED)
+    assert [counts_toward_level(g) for g in ("config_only", "declared", "measured", "verified", "x")] \
+        == [False, False, True, True, False]
     by_key = {c["key"]: c for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]}
     ci = by_key["layer-5-ci.1:ci_checks.test_or_lint_runs"]
     assert (ci["input_class"], ci["grade"], ci["counts"]) == ("head_text", "declared", False)

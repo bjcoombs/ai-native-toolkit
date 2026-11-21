@@ -40,6 +40,10 @@ def _skip_reason(name: str, codes: set[str], absent: str) -> str:
     return absent
 
 
+def _scans(n: int) -> str:
+    return "scan was" if n == 1 else "scans were"
+
+
 def _state(block: object) -> str | None:
     """None when the block was measured, else its reason code."""
     if isinstance(block, Mapping) and block.get("available") is False:
@@ -60,6 +64,7 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         return "\n".join([HEADING, "", f"No repository was scanned, so no scan ran. {link}"])
     ran: list[str] = []
     skipped: list[str] = []
+    unread = 0  # scans that ran but could not read their input in at least one repository
     for name in names:
         states = [_state(doc[name]) if name in doc else "absent" for doc in documents]
         run = [s for s in states if s not in SKIP_CODES and s != "absent"]
@@ -71,12 +76,17 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         missing = sum(1 for s in run if s is not None)
         line = f"- `{name}`"
         if missing:
+            unread += 1
             line += f": not measured in {missing} of {total} ({', '.join(unmeasured)})"
         if len(run) < total:
             line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total}"
         ran.append(line)
     scope = "1 repository" if total == 1 else f"{total} repositories"
-    lines = [HEADING, "", f"{len(ran)} {'scan' if len(ran) == 1 else 'scans'} ran over {scope} and {len(skipped)} {'was' if len(skipped) == 1 else 'were'} skipped. {link}",
+    measured = len(ran) - unread
+    headline = (f"Over {scope}, {measured} {_scans(measured)} measured everywhere, {unread} "
+                f"ran but could not read {'its' if unread == 1 else 'their'} input somewhere, and "
+                f"{len(skipped)} {'was' if len(skipped) == 1 else 'were'} skipped.")
+    lines = [HEADING, "", f"{headline} {link}",
              "", f"### Ran ({len(ran)})", "", *(ran or ["- none"]),
-              "", f"### Skipped ({len(skipped)})", "", *(skipped or ["- none"])]
+             "", f"### Skipped ({len(skipped)})", "", *(skipped or ["- none"])]
     return "\n".join(lines)

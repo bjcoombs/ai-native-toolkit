@@ -2263,7 +2263,8 @@ its producer input class (`InputClass`: `config_text`, `head_text`, `head_struct
 each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
 returns the signal's class grade whatever the operator (the #789 grades design: no
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
-conditions #744 lists without counting. The module doc records the rulings (platform
+conditions #744 lists without counting; `counts_toward_level(grade)` is the one definition of
+that rule for a grade (`measured` and `verified` count; `lib/catalog.py` reads it). The module doc records the rulings (platform
 reads are their own class; instruction files stay declared but still gate Steps). Nothing
 in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.

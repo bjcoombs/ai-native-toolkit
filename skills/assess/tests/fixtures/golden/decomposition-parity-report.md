@@ -34,7 +34,7 @@ _Deterministic portion of the assessment: metrics, hotspots, and cross-layer fin
 
 ## How this was measured
 
-40 scans ran over 1 repository and 1 was skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+Over 1 repository, 25 scans were measured everywhere, 15 ran but could not read their input somewhere, and 1 was skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
 ### Ran (40)
 

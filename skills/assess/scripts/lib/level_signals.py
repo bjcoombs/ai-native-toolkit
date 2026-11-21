@@ -239,6 +239,12 @@ def criterion_grade(criterion: Criterion) -> Grade:
     return INPUT_GRADES[input_class(criterion["signal"])]
 
 
+def counts_toward_level(grade: str) -> bool:
+    """True when a condition at ``grade`` counts toward a level (``measured``, ``verified``);
+    ``config_only`` and ``declared`` are listed, not counted, and any other value never counts."""
+    return grade in INPUT_GRADES.values() and grade not in _LISTED_GRADES
+
+
 def is_declared(criterion: Criterion) -> bool:
     """True when the criterion grades ``config_only`` or ``declared``: listed, not counted."""
-    return criterion_grade(criterion) in _LISTED_GRADES
+    return not counts_toward_level(criterion_grade(criterion))
