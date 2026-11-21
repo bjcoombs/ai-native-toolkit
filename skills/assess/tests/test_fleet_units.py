@@ -221,6 +221,12 @@ def test_load_units_reads_a_file_and_reports_faults(tmp_path: Path) -> None:
     ("file:///srv/repos/x.git", None),
     ("/srv/repos/x.git", None),
     ("C:/repos/x.git", None),
+    ("https://user:p@ss@github.com/a/b.git", "https://github.com/a/b"),
+    ("https://x-access-token:ghs_abc123@github.com/a/b", "https://github.com/a/b"),
+    ("https://oauth2:glpat-xyz@gitlab.example.com/grp/sub/p.git", "https://gitlab.example.com/grp/sub/p"),
+    ("ssh://git:p@ss@gitlab.example.com:22/grp/p.git", "https://gitlab.example.com/grp/p"),
+    ("deploy@github.com:a/b.git", "https://github.com/a/b"),
+    ("us@er@github.com:a/b.git", "https://github.com/a/b"),
     ("C:\\repos\\x", None),
     ("https://host/.git", None),
     ("", None),
@@ -228,6 +234,13 @@ def test_load_units_reads_a_file_and_reports_faults(tmp_path: Path) -> None:
 ])
 def test_web_url_normalises_remotes(remote: str | None, url: str | None) -> None:
     assert web_url(remote) == url
+
+
+def test_web_url_never_emits_userinfo() -> None:
+    for remote in ("https://user:p@ss@github.com/a/b.git", "https://tok:s3cr@t@host.example/g/r",
+                   "git:p@ss@host.example:g/r.git", "ssh://u:a@b@host.example/g/r"):
+        url = web_url(remote)
+        assert url is not None and "@" not in url and "ss" not in url.split("/")[2], (remote, url)
 
 
 def test_default_owners_take_the_last_catch_all_rule() -> None:

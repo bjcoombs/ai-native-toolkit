@@ -32,9 +32,11 @@ from lib.fleet import Target, _git
 CODEOWNERS_FILES = (".github/CODEOWNERS", ".gitlab/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 CATCH_ALL = frozenset({"*", "**", "/**"})
 
-# A one-character host is a Windows drive letter (C:/repos/x), never a remote.
-_SCP = re.compile(r"^(?:[^@/:\s]+@)?(?P<host>[^/:\s]{2,}):(?!//)(?P<path>.+)$")
-_URL = re.compile(r"^(?P<scheme>ssh|git|https?|git\+ssh|ssh\+git)://(?:[^@/\s]*@)?(?P<host>[^/:\s]+)"
+# Userinfo runs to the LAST "@" before the host (a password may hold "@") and is never
+# kept; a host never holds "@". A one-character host is a Windows drive letter
+# (C:/repos/x), never a remote.
+_SCP = re.compile(r"^(?:[^/\s]*@)?(?P<host>[^/:@\s]{2,}):(?!//)(?P<path>.+)$")
+_URL = re.compile(r"^(?P<scheme>ssh|git|https?|git\+ssh|ssh\+git)://(?:[^/\s]*@)?(?P<host>[^/:@\s]+)"
                   r"(?::(?P<port>\d*))?/(?P<path>.+)$", re.IGNORECASE)
 _OWNER = re.compile(r"^@\S+$|^[^@\s]+@[^@\s]+$")
 
@@ -51,6 +53,8 @@ def web_url(remote: str | None) -> str | None:
     remote = remote.strip()
     match = _URL.match(remote) or (None if "://" in remote else _SCP.match(remote))
     if match is None:
+        return None
+    if "@" in match.group("host"):  # pragma: no cover - the patterns exclude it; never emit userinfo
         return None
     segments = [s for s in match.group("path").split("/") if s not in ("", ".", "..")]
     if segments and segments[-1].endswith(".git"):
