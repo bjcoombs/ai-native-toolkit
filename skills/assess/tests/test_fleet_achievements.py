@@ -315,3 +315,23 @@ def test_earlier_runs_reads_comparable_entries_with_fleet_data(tmp_path: Path) -
     assert [r.run_id for r in runs] == ["2026-11-01", "2026-11-08", "2026-11-15"]
     doc = fa.build_achievements(fa.HistoryRun("2026-11-22", _data("2026-11-22", HISTORY[3][1])), runs, MODEL)
     assert doc == _build()
+
+
+@pytest.mark.parametrize("break_it", [
+    lambda d: d.__setitem__("run", "not an object"),
+    lambda d: d["repos"][0].pop("rows"),
+    lambda d: d["repos"][0]["rows"][0].__setitem__("level", "two"),
+    lambda d: d["views"][0]["units"][0].pop("overall"),
+    lambda d: d["repos"][0]["units"].append({"view": "ownership"}),
+])
+def test_a_malformed_history_entry_is_passed_over(tmp_path: Path, break_it: object) -> None:
+    org = tmp_path / "grp"
+    _entry(org, "2026-11-01", BASE)
+    bad = json.loads(dumps_fleet_data(_data("2026-11-08", BASE)))
+    break_it(bad)  # type: ignore[operator]
+    _entry(org, "2026-11-08", BASE)
+    (org / "2026-11-08" / FLEET_DATA_FILE).write_text(json.dumps(bad), encoding="utf-8")
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-15"}
+    runs = earlier_runs(org, current, frozenset(BASE))
+    assert [r.run_id for r in runs] == ["2026-11-01"]
+    fa.build_achievements(fa.HistoryRun("2026-11-15", _data("2026-11-15", BASE)), runs, MODEL)

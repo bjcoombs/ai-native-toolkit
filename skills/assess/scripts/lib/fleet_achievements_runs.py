@@ -8,7 +8,9 @@ directory (``lib/fleet_history.py``) and keeps each entry that:
   accepts against this run: same plugin major version, maturity-model version, window,
   output mode, scan selection, path hashing, ``--fleet-config`` and ``--platform``;
 - has a ``fleet-data.json`` at ``FLEET_DATA_VERSION`` (entries from before #703 have
-  none and are passed over) whose run date matches the entry's.
+  none and are passed over) whose run date matches the entry's, and which is
+  well formed (``well_formed``: every field the engine reads decodes, so one malformed
+  entry is passed over rather than costing every later run its achievements).
 
 One run per scan date (``fleet_history.one_per_date``); dates on or after this run's
 are dropped, since this run comes from memory, so a same-day rerun gives the same
@@ -18,10 +20,11 @@ bytes. An unreadable entry is passed over, never an error. An earlier
 from __future__ import annotations
 
 import json
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, cast
 
-from lib.fleet_achievements import HistoryRun
+from lib.fleet_achievements import HistoryRun, subjects
 from lib.fleet_compare import comparability
 from lib.fleet_data import FLEET_DATA_FILE, FLEET_DATA_VERSION, FleetData
 from lib.fleet_history import one_per_date
@@ -43,9 +46,37 @@ def _read(entry: Path, date: str, current: FleetStamp) -> HistoryRun | None:
     except (OSError, ValueError, KeyError, TypeError):
         return None
     if not isinstance(data, dict) or data.get("fleet_data_version") != FLEET_DATA_VERSION \
-            or not all(k in data for k in _TOP_KEYS) or data["run"].get("scan_date") != date:
+            or not all(k in data for k in _TOP_KEYS) or not well_formed(cast(FleetData, data)) \
+            or data["run"]["scan_date"] != date:
         return None
     return HistoryRun(date, cast(FleetData, data))
+
+
+def well_formed(data: FleetData) -> bool:
+    """Whether the engine can read ``data``: every field ``fleet_achievements.subjects`` and the
+    replay touch, decoded once here, so a malformed entry is passed over instead of costing
+    every later run its achievements."""
+    try:
+        if not isinstance(data["run"], dict) or not isinstance(data["run"]["scan_date"], str):
+            return False
+        tops: dict[str, int] = {}
+        for repo in data["repos"]:
+            if not isinstance(repo["key"], str) or not isinstance(repo["units"], list):
+                return False
+            for cell in repo["rows"]:
+                if type(cell["top_level"]) is not int or not isinstance(cell["row"], str) \
+                        or (cell["level"] is not None and type(cell["level"]) is not int) \
+                        or not isinstance(cell["status"], str) \
+                        or not (cell["signal"] is None or isinstance(cell["signal"], str)):
+                    return False
+                tops[cell["row"]] = cell["top_level"]
+        rules = {row: (Fraction(1), top) for row, top in tops.items()}
+        for sub in subjects(data, rules).values():
+            if sub.share is not None and not isinstance(sub.share, (int, float)):
+                return False
+    except (KeyError, TypeError, AttributeError, ValueError, IndexError):
+        return False
+    return True
 
 
 def earlier_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str]) -> list[HistoryRun]:
