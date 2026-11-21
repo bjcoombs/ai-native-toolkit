@@ -33,16 +33,16 @@ def test_every_default_signal_has_an_input_class(signal: str) -> None:
 
 
 def test_an_unclassified_signal_fails_the_classification_check(tmp_path: Path) -> None:
-    # coverage_gate is open above its typed gates list, so the path validator accepts it.
+    # A valid typed path that no default criterion reads, so it has no class.
     model = tmp_path / "levels.toml"
     model.write_text(
         'version = "t-1"\n[[rows]]\nid = "r"\ntitle = "R"\nscope = "team"\n'
         'aggregation = "min"\n[[rows.levels]]\nlevel = 1\n'
-        'criteria = [{ signal = "coverage_gate.gates_total", op = "gt", value = 0 }]\n',
+        'criteria = [{ signal = "review_reality.merged_count", op = "gt", value = 0 }]\n',
         encoding="utf-8")
     loaded = load_levels(model, signal_path_validator())
     signal = loaded["rows"][0]["levels"][0]["criteria"][0]["signal"]
-    with pytest.raises(UnclassifiedSignal, match="coverage_gate.gates_total"):
+    with pytest.raises(UnclassifiedSignal, match="review_reality.merged_count"):
         input_class(signal)
 
 

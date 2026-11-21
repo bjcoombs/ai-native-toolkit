@@ -1931,6 +1931,21 @@ walks them, so a typed shape that gains a
 string field fails `tests/test_counts_only.py` until the field is classified, even when
 no fixture run populates the block. `delivery.DeliveryBlock` is a root (#769), so counts-only output keeps
 every delivery figure (`tests/test_delivery.py` checks a full block on both providers).
+The blocks a default criterion reads are all roots since #793 (their shapes are in
+`block_shapes.py`), which added one field name to the counts-only keys:
+`promissory_markers.stale_by_file.{}.max_survived`, an integer, now survives reduction.
+The newly typed string field `promissory_markers.stale_by_file.{}.families` is classified
+`drop`, so it stays a count.
+
+**`block_shapes.py`**
+TypedDicts for the run-context blocks a default maturity-model criterion reads that are
+built as dict literals (#793): `AgentOpsBlock`, `CoverageGateBlock`,
+`InstructionClaimsBlock`, `PromissoryMarkersBlock`, `ReviewRealityBlock` and
+`StructureDriftBlock`, each a `counts_only_schema.ROOTS` entry and a `shapes` entry of
+its collector in `checks/core.toml`. The builders are unchanged; the shapes record what
+they write. Tests: `tests/test_block_shapes.py` runs each builder on a small repository
+and checks every key and leaf type against its shape, checks the fleet golden's blocks,
+and fails if a default criterion reads a block with no typed root.
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
@@ -2126,7 +2141,12 @@ segment must be a block name the published headless schema lists
 `run-context.json`; run-context keys outside the schema (`instructions_grade`) are
 rejected, and the deterministic layer grades are read through the `layer_grades` block
 instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
-name a field and end on a scalar (no list, no object); an untyped block is open. An
+name a field and end on a scalar (no list, no object); an untyped block is open.
+Every block a default criterion reads is typed (#793), so **a misspelt sub-path under
+`agent_ops`, `coverage_gate`, `instruction_claims`, `promissory_markers`,
+`review_reality` or `structure_drift` in a `--levels` file now fails at load**
+(`agent_ops.summary.permissions_encodd`, `coverage_gate.enforcd`) where it used to load
+and evaluate `unknown`; the default model loads unchanged and its results do not move. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
 `<setting>.value` / `.reason`). `load_default_levels` loads
 `skills/assess/levels/default.toml`: one team row per layer 0-8, level 1 for
