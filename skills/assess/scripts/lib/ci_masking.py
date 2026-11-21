@@ -64,7 +64,7 @@ _NOT_CAPTURED = re.compile(r"^(?:/dev/null|\$\{?GITHUB_STEP_SUMMARY\}?)$")
 
 
 @dataclass(frozen=True)
-class _Line:
+class YamlLine:
     """One YAML line: ``indent`` is the first non-space column, ``level`` its key column."""
 
     indent: int
@@ -75,18 +75,18 @@ class _Line:
     structural: bool
 
 
-def _parse(lines: list[str]) -> list[_Line]:
-    parsed: list[_Line] = []
+def parse_lines(lines: list[str]) -> list[YamlLine]:
+    parsed: list[YamlLine] = []
     owner_level = -1
     for raw in lines:
         stripped = raw.strip()
         indent = len(raw) - len(raw.lstrip(" "))
         if owner_level >= 0 and (not stripped or indent > owner_level):
-            parsed.append(_Line(indent, indent, False, "", stripped, False))
+            parsed.append(YamlLine(indent, indent, False, "", stripped, False))
             continue
         owner_level = -1
         if not stripped or stripped.startswith("#"):
-            parsed.append(_Line(indent, indent, False, "", "", False))
+            parsed.append(YamlLine(indent, indent, False, "", "", False))
             continue
         body = stripped
         dash = body == "-" or body.startswith("- ")
@@ -95,21 +95,21 @@ def _parse(lines: list[str]) -> list[_Line]:
             body = body[1:].lstrip(" ")
             level = indent + (len(stripped) - len(body))
         match = _KEY.match(body)
-        key, value = (match.group(1), _strip_comment(match.group(2) or "")) if match else ("", body)
+        key, value = (match.group(1), strip_comment(match.group(2) or "")) if match else ("", body)
         if _BLOCK_INDICATOR.match(value):
             owner_level = level
-        parsed.append(_Line(indent, level, dash, key, value, True))
+        parsed.append(YamlLine(indent, level, dash, key, value, True))
     return parsed
 
 
-def _strip_comment(value: str) -> str:
+def strip_comment(value: str) -> str:
     return re.sub(r"(?:^|\s+)#.*$", "", value).strip()
 
 
-class _Tree:
+class IndentTree:
     """Indentation scopes over one file's parsed lines, built in one pass."""
 
-    def __init__(self, parsed: list[_Line]) -> None:
+    def __init__(self, parsed: list[YamlLine]) -> None:
         self.lines = parsed
         self.owner: list[int | None] = []
         self.mapping_of: dict[int, int] = {}
@@ -143,6 +143,14 @@ class _Tree:
             inherited = parent is not None and self.masked[self.mapping_of[parent]]
             self.masked.append(inherited or any(
                 parsed[k].key in _MASK_KEYS and parsed[k].value.lower() == "true" for k in keys))
+
+    def children(self, i: int) -> list[int]:
+        """The key lines of the mappings directly under line ``i`` (each item of a sequence)."""
+        return [k for m, keys in enumerate(self.siblings) if self.parent[m] == i for k in keys]
+
+    def items(self, i: int) -> list[list[int]]:
+        """The mappings directly under line ``i``, one list of key lines each."""
+        return [keys for m, keys in enumerate(self.siblings) if self.parent[m] == i]
 
     def _node(self, i: int) -> int:
         owner = self.owner[i]
@@ -315,7 +323,7 @@ def _joined(lines: list[str], span: range) -> str:
 def unmasked_lines(text: str) -> list[str]:
     """``text``'s lines with every masked statement removed (an all-masked line is empty)."""
     lines = text.splitlines()
-    tree = _Tree(_parse(lines))
+    tree = IndentTree(parse_lines(lines))
     spans = _logical_lines(lines)
     parsed = {span[0]: split_statements(_joined(lines, span)) for span in spans}
     masked: dict[int, set[int]] = {}

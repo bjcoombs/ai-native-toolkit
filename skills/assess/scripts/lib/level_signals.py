@@ -43,10 +43,14 @@ new signal has to be classified on purpose; ``input_class`` raises
 - ``git_history`` and ``execution_artifact``: commit history, and the output of
   running something at the commit. Grade ``measured``.
 - ``ci_executed``: a CI line that CI runs on every change; the pipeline
-  enforces its result. Grade ``verified``. No default signal has it yet:
-  ``ci_checks.test_or_lint_runs`` finds a line naming a check, and
-  ``ci_checks.enforced_check_runs`` (#775) also leaves out masked ones, but
-  neither reads the triggers, so both are ``head_text``.
+  enforces its result. Grade ``verified``. ``ci_checks.enforced_check_runs``
+  (#775) has it: a check line counts only when its exit code can fail the job
+  (``lib/ci_masking.py``) and its workflow or job runs on ordinary changes
+  (``lib/ci_triggers.py``: a GitHub ``push`` / ``pull_request`` /
+  ``merge_group`` event, a GitLab job no ``when: manual``, ``only:`` or
+  ``rules:`` keeps off ordinary pipelines); triggers it cannot settle read
+  null. ``ci_checks.test_or_lint_runs`` reads neither and would be
+  ``head_text``.
 - ``platform``: read from the GitHub or GitLab API (``review_reality``,
   ``agent_environment.ci_duration``). Grade ``verified``.
 
@@ -206,7 +210,7 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "promissory_markers.aging_reliable": "git_history",
     "structure_drift.tier_0.matched_patterns": "config_text",
     "stats_summary.loc.p95": "head_structure",
-    "ci_checks.enforced_check_runs": "head_text",
+    "ci_checks.enforced_check_runs": "ci_executed",
     "coverage_gate.enforced": "config_text",
     "test_pressure.mutation_run": "execution_artifact",
     "review_evidence.present": "head_text",

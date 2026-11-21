@@ -179,11 +179,13 @@ constant each.
 # resolved_includes, unresolved_includes and includes[] (kind, id, status,
 # ref_basis, depth: GitLab includes resolved offline, issue #766), and each
 # review_automation match gains depth. Additive: no existing key moves.
-# 1.29.0: run-context.json ci_checks gains enforced_check_runs and
-# masked_check_commands (issue #775): the CI check test with masked checks
-# (|| true, continue-on-error: true, allow_failure: true, set +e) left out.
-# Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.29.0"
+# 1.30.0: run-context.json ci_checks gains enforced_check_runs,
+# enforced_basis, masked_check_commands and off_trigger_check_commands
+# (issue #775): the CI check test with masked checks (|| true,
+# continue-on-error: true, allow_failure: true, set +e) and checks off the
+# ordinary triggers left out. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.30.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -292,8 +294,10 @@ ARTIFACT_SCHEMA_VERSION = "1.29.0"
 #     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
 #     file names no check can now read level 2, and one with committed setup
 #     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
-# 26: a masked CI check (``|| true``, ``continue-on-error: true``,
-#     ``allow_failure: true``, ``set +e`` without a re-raise) no longer meets
-#     Layer 5 level 1 (issue #775): it reads ``ci_checks.enforced_check_runs``,
-#     so the Layer 5 row and the scorer's Layer 5 evidence can move.
-ASSESS_METHOD_VERSION = 26
+# 27: a masked CI check (``|| true``, ``continue-on-error: true``,
+#     ``allow_failure: true``, ``set +e`` without a re-raise) or one that does
+#     not run on ordinary changes (a ``workflow_dispatch``-only workflow, a
+#     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
+#     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
+#     Layer 5 evidence can move.
+ASSESS_METHOD_VERSION = 27

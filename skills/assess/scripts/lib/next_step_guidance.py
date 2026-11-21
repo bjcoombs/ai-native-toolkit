@@ -317,12 +317,12 @@ _WORDING: dict[str, Wording] = {
         "lint command."),
     "ci_checks.enforced_check_runs": _flag(
         "Run the test suite or linter in CI so a failure fails the job (`make test`, `pytest`, "
-        "`npm test`, `uv run ruff check`). Remove `|| true` / `continue-on-error` / "
-        "`allow_failure` from the step that runs the tests, or re-raise the status after "
-        "`set +e`.",
+        "`npm test`, `uv run ruff check`) on pull requests or pushes. Remove `|| true` / "
+        "`continue-on-error` / `allow_failure` from the step that runs the tests, or re-raise "
+        "the status after `set +e`.",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
-        "lint command and is not masked (`ci_checks.masked_check_commands` counts the masked "
-        "ones)."),
+        "lint command, is not masked and runs on ordinary changes "
+        "(`ci_checks.masked_check_commands` and `off_trigger_check_commands` count the others)."),
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,

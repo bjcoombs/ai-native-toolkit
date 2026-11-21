@@ -113,14 +113,19 @@
 #   continue-on-error: true, a GitLab job with allow_failure: true, or a
 #   set +e script body that never re-raises the status (lib/ci_masking.py).
 #   || echo, a pipe without pipefail and allow_failure inherited through
-#   default:/extends: are known limits and still count. A stored scan from
-#   before this signal has no enforced_check_runs and reads unknown. The
+#   default:/extends: are known limits and still count. The check must also
+#   run on ordinary changes (lib/ci_triggers.py): a workflow only on
+#   workflow_dispatch or schedule, or a GitLab job kept off ordinary
+#   pipelines by when: manual, only: or rules:, does not count, and triggers
+#   the reader cannot settle (no on: key, a custom rules: if:) read unknown.
+#   A stored scan from before this signal has no enforced_check_runs and
+#   reads unknown. The
 #   command test is the one ci_checks.test_or_lint_runs uses (pytest,
 #   make check, npm test, a ./scripts/test.sh, as
 #   check_command.is_check_command classifies an instruction file's
-#   commands, or a lint target or linter: make lint, ruff, eslint). Triggers
-#   are not read: a check in a push-only workflow counts the same as one on
-#   pull requests. Other CI systems (Jenkins, CircleCI) are not read, so a
+#   commands, or a lint target or linter: make lint, ruff, eslint). Branch and
+#   path filters are not read: a check in a push-only workflow counts the same
+#   as one on pull requests. Other CI systems (Jenkins, CircleCI) are not read, so a
 #   repository on them alone is level 0. A CI file with no check line that
 #   pulls its jobs from elsewhere (a GitLab include: or component, a GitHub
 #   job-level uses: of another repository's reusable workflow) is unknown,
@@ -140,7 +145,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.13"
+version = "default-2026.11.14"
 
 [[rows]]
 id = "layer-0-instructions"
