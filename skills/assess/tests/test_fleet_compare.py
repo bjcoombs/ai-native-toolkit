@@ -264,3 +264,19 @@ def test_write_and_clear_comparison_touch_only_this_tools_file(tmp_path, monkeyp
     with pytest.raises(OSError):
         fc.write_comparison(tmp_path / "fail", comparison)
     assert list((tmp_path / "fail").iterdir()) == []
+
+
+# --- the platform pass (#714) ----------------------------------------------
+
+
+def test_a_platform_run_does_not_compare_with_an_offline_run():
+    comparison = compare(_run(EARLIER), _run(LATER, platform=True))
+    assert not comparison["comparable"]
+    assert any(r.startswith("platform pass changed False->True") for r in comparison["reasons"])
+    assert compare(_run(EARLIER, platform=True), _run(LATER, platform=True))["comparable"]
+
+
+def test_a_stamp_from_before_714_reads_as_no_platform_pass():
+    old: Any = {k: v for k, v in _stamp(EARLIER).items() if k != "platform"}
+    assert fc.comparability(old, _stamp(LATER)) == ([], [])
+    assert fc.comparability(old, _stamp(LATER, platform=True))[0] != []

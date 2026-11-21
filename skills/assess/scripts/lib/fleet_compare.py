@@ -9,7 +9,8 @@ major version and the stamp version must match. A comparison is also refused
 (``comparable: false`` with every reason, and no deltas) when the runs differ
 in maturity-model version, window, output mode, scan selection, path hashing or
 ``--fleet-config`` (its ``fleet_config_sha256``; a stamp from before #706 reads as
-no fleet config), or when
+no fleet config) or ``--platform`` (``platform``; a stamp from before #714 reads
+as ``false``), or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -53,7 +54,7 @@ from typing import Any, TypedDict, cast
 from lib.diff_reliability import _diff_is_reliable
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow
-from lib.fleet_legacy import upgrade
+from lib.fleet_legacy import stamp_value, upgrade
 from lib.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
@@ -219,9 +220,11 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         reasons.append(note)
     for key, label in (("levels_version", "maturity-model version"), ("window", "window"),
                        ("counts_only", "counts-only mode"), ("scans", "scan selection"),
-                       ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config")):
-        if earlier.get(key) != later.get(key):
-            reasons.append(f"{label} changed {earlier.get(key)!r}->{later.get(key)!r}")
+                       ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config"),
+                       ("platform", "platform pass")):
+        then, now = stamp_value(earlier, key), stamp_value(later, key)
+        if then != now:
+            reasons.append(f"{label} changed {then!r}->{now!r}")
     notes = [HASH_NOTE] if earlier.get("paths_hashed") and later.get("paths_hashed") else []
     return reasons, notes
 
@@ -381,7 +384,7 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
 
     ``reasons`` says why the runs are not comparable (this module's rule: maturity model
-    version, window, output mode, scans, path hashing, fleet config, plugin major version,
+    version, window, output mode, scans, path hashing, fleet config, platform pass, plugin major version,
     file versions, a run with no ``run.json``); ``set_moved`` names the groups
     whose measured set moved, so a level change there is not read as a real
     one. Both are empty when either path is not a run directory (a bare

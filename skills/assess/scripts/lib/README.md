@@ -3,7 +3,8 @@
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
 data, with two bounded exceptions. Live platform reads are confined to `gh_cli.py`
-(GitHub) and `gitlab_cli.py` (GitLab); they are optional (they need a github.com or
+(GitHub) and `gitlab_cli.py` (GitLab), which run their CLI through `platform_cli.py`;
+the headless runner makes them only under `--platform`. They are optional (they need a github.com or
 GitLab remote and an authenticated `gh` or `glab`) and degrade to `available: False`
 with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
@@ -222,15 +223,23 @@ recorded as a graduated hotspot. Pure stdlib; an unreadable file is never exclud
 ### Static analysis
 
 **`structure_graph.py`**
-Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
+Import-graph analysis (Signals A1-A4) via `networkx`, over the graph a language builder
+returns (`import_graph.py`); nothing in it assumes a language:
 - A1 comprehension footprint: direct-dependency surface area for a unit.
 - A2 blob vs modular: strongly-connected components and Newman modularity Q.
-- A3 contracts: front-door vs burrow (internals-reaching) inbound edges.
+- A3 contracts: front-door vs burrow (internals-reaching) inbound edges, across the
+  builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Degrades to `available: False` when `grimp`/`networkx` are absent rather than
-blocking the run, and when no importable Python package exists (nothing measured,
-not an empty graph whose modularity 0 would read as tangled code). `cross_package_edges` counts the
+Every registered builder graphs its language; the largest graph is measured and its
+language is the block's `language` field (null when nothing was measured). Degrades to
+`available: False` when `networkx` is absent, when a builder's tool is missing or fails
+and no other language was graphed, and when nothing could be graphed (nothing measured,
+not an empty graph whose modularity 0 would read as tangled code). With no graph the
+reason names the dominant source language (issues #707, #708):
+`no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
+packages found` for a Python repository, `no_source_files: ...` with no source in a
+recognised language. `cross_package_edges` counts the
 import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
 (no package boundary is crossed). A graph with packages but no import edges stays
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
@@ -239,10 +248,87 @@ was measured): modules that never import each other have no community structure,
 `modularity_q` is therefore null in two cases: an edgeless graph (`modularity_reason`
 `no_import_edges`) and an unavailable block (`available` false; the cause is in
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
-opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`;
-`lib/headless_layers.py`), so `modularity_q` is absent there rather than null.
-Tests: `tests/test_structure_graph.py`, `tests/test_level_signals.py`,
-`tests/test_headless_layers.py` (a full signals run and a counts-only one).
+opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
+`no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
+`modularity_q` is absent there rather than null.
+`structure_drift.py` builds its module map and communities from the same selected graph
+(`import_graph.select_graph`, `import_digraph`).
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
+`tests/test_level_signals.py`, `tests/test_headless_layers.py` (a full signals run and a
+counts-only one).
+
+**`import_graph.py`**
+The language-neutral builder interface (issue #708). A builder is any object with a
+`language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
+(the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
+nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
+or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
+
+| Field | Meaning |
+|-------|---------|
+| `language` | the token the block reports and the `no_import_graph_<language>` suffix |
+| `modules` | sorted module ids; module ids are paths or path-like names, hashed by the counts-only PATH rule |
+| `edges` | importer -> the modules it imports directly; a target outside `modules` is ignored |
+| `front_doors` | the modules a package exposes as its public API (A3) |
+| `module_file` | module -> absolute source file; a module without one reads size 0 |
+| `package_of` | module -> package boundary id (A3 contract edges, A4 per-package splits) |
+| `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
+| `name_collisions` | packages sharing a name, disclosed rather than merged |
+
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder and
+keeps one graph per language; the largest (most modules, then most internal edges, then
+the language token) is returned. With no graph the reason is the first builder failure in
+registration order, else `no_graph_reason`, which counts source files per language
+(`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
+`scope`) and names the dominant one. Imports no graph tool.
+
+Worked example: a builder for a language whose package is a directory and whose front
+door is the directory's `index` file.
+
+```python
+from pathlib import Path
+
+from lib.import_graph import GraphUnavailable, ModuleGraph
+
+
+class IndexDirBuilder:
+    language = "typescript"
+
+    def build(self, repo_root: Path, extra_exclude_dirs: set[str],
+              scope: Path | None) -> ModuleGraph | None:
+        root = scope or repo_root
+        files = sorted(p for p in root.rglob("*.ts")
+                       if not set(p.relative_to(repo_root).parts) & extra_exclude_dirs)
+        if not files:
+            return None                        # nothing to graph: the dominant-language reason applies
+        try:
+            imports = read_imports(files)      # your scan: module id -> module ids it imports
+        except OSError as e:
+            raise GraphUnavailable(f"typescript import scan failed ({e})") from e
+        ids = {p: p.relative_to(repo_root).with_suffix("").as_posix() for p in files}
+        return ModuleGraph(
+            language=self.language,
+            modules=sorted(ids.values()),
+            edges=imports,
+            front_doors={m for m in ids.values() if m.rsplit("/", 1)[-1] == "index"},
+            module_file={m: p for p, m in ids.items()},
+            package_of={m: m.rsplit("/", 1)[0] if "/" in m else "." for m in ids.values()},
+        )
+```
+
+Register it by appending to `BUILDERS` in `import_graph_builders.py`. A new block field
+or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
+the maturity model header (`levels/default.toml`).
+Tests: `tests/test_import_graph.py`.
+
+**`import_graph_python.py`**
+The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
+holding an `__init__.py`, `grimp` reads their imports, and `module_graph` turns the result
+into a `ModuleGraph`. A package is the top dotted component, front doors are the package
+roots and every `__init__` module, and the public surface is the count of public top-level
+`def` / `class` definitions read with `ast`. With packages but no grimp it raises
+`GraphUnavailable` (`grimp not installed; ...`); a grimp failure raises `grimp failed to
+build import graph (...)`.
 
 Packages resolve by path, never by import name. grimp's default finder asks
 `importlib.util.find_spec`, which answers from `sys.modules` first, so a target
@@ -258,8 +344,12 @@ between builds is unresolved, not only an import of the colliding name, since
 which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
-`structure_drift.py` builds its module map and communities through the same
-`build_import_map` / `import_digraph`.
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
+
+**`import_graph_builders.py`**
+The registered builders (`BUILDERS`), one per language; `structure_graph` and
+`structure_drift` both read it. Order decides only which failure is reported when no
+graph is built.
 
 ### Document analysis
 
@@ -639,7 +729,13 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
-`{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
+`{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
+both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list, `review_reality`
+today), or a network spec one of them reads, runs its `fn`. Extension point for #715 and
+#716: append a new platform block's name to `PLATFORM_SCANS`; register a sample of merged
+changes several blocks share as a private `network=True` spec they `read`, and it runs
+once under `--platform` as their dependency. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
@@ -659,13 +755,13 @@ the network.
 **`headless_layers.py`**
 The headless runner's entries for the four blocks the default maturity model's layer 2-4
 rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
-`structure_scan`, needs grimp and networkx), `promissory_markers` (the private
+`structure_scan`, needs networkx and a language builder's tool, grimp for Python), `promissory_markers` (the private
 `promissory` scan, needs `rg`), `structure_drift` (tier 0 from the ownership map via
 `context_blocks.structure_drift_tier_0`; tier 1 needs the keyhole co-change pairs and is
 `not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
 `files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
-`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_rg`,
+`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
 and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
 map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
@@ -1013,7 +1109,9 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
 `scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
-without one, absent before #706 and read as null, so the stamp version stays 1). No path,
+without one, absent before #706 and read as null, so the stamp version stays 1), and
+`platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
+false through `fleet_legacy.stamp_value`). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
@@ -1021,7 +1119,8 @@ writes atomically with sorted keys.
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
 `[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
-#696 and #714). API:
+#696 and #714; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+--platform-jobs` and `--platform-timeout`). API:
 - `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
   and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
   value; both CLIs exit 2 on it.
@@ -1034,7 +1133,8 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
   ignored with a warning); an unset scalar takes the repository value. Repository input
   that does not validate is skipped with a stderr warning, never raised.
 - `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
-  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  count, list order does; `UNHASHED_KEYS`, settings of how a run goes such as `[platform]
+  jobs` and `timeout`, are left out so they never break comparability) and `section_entries` (a list counts its items, else 1) feed
   the run stamp.
 
 Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
@@ -1118,6 +1218,23 @@ directory renamed into place in one step, and a replaced same-day entry loses it
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
 leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
 
+**`fleet_platform.py`**
+The fleet platform pass, `fleet.py --platform` (issue #714). `run_platform(rows, targets,
+options, jobs=, timeout=, names=, after=)` runs after the offline scan: one more
+`assess_signals.py --platform --scans <names>` child per `ok` row (`fleet.run_signals`,
+the offline scan's output mode and salt, `--platform-jobs` workers, `--platform-timeout`
+each, stderr tails in `<logs>/<repo>.platform.stderr`) and `join`s its blocks into the
+row's `scans` by repository. It never changes `status` or `reason`, so a slow host cannot
+make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
+omits a block gives that block `available: false` with `platform_timeout`,
+`platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
+counts-only output). Failed rows are not read. `names` is `platform_scans(--scans)`:
+`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
+`--delete-after` hook) runs on each row after its platform read, so a clone outlives the
+read of its remote. A new platform block (#715, #716) needs no change here: see
+`signals.py`. Tests: `tests/test_fleet_platform.py`.
+
 **`fleet_legacy.py`**
 Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
 moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its new name
@@ -1127,7 +1244,10 @@ already under its new name wins, and the input is never mutated. `fleet_view._ch
 entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
 entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
 from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
-never as a malformed stamp. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714); every comparability
+check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
+reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
 `tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
 
@@ -1138,7 +1258,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
 adds maturity-model version, window, output mode, scan selection, path hashing and the
-`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
+`platform` (a pre-#714 stamp is false); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -2009,10 +2130,26 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
 `unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
-(HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
+(HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
+`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
 lives here and is shared with `gitlab_cli`.
+
+**`platform_cli.py`**
+How `gh_cli._run_gh` and `gitlab_cli._run_glab` run their binary (issue #714). `run_cli`
+closes stdin and sets `GH_PROMPT_DISABLED`, `NO_PROMPT` (glab) and `GIT_TERMINAL_PROMPT=0`
+over the inherited environment, so a prompt fails the call. A reply reporting a rate limit
+(`rate_limited`: HTTP 429 in gh's `(HTTP 429)` and glab's `glab: HTTP 429` or `429 Too Many
+Requests` forms, or GitHub's rate-limit 403 text "API rate limit exceeded" / "secondary
+rate limit") is retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
+CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) per wait;
+`SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
+directory, a successful call's stdout is stored under the sha256 of its argv and the same
+argv is answered from it for the rest of the run (any process); failures are never stored.
+Only the fleet platform pass sets it, to a temporary directory it removes. Callers keep
+their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
+`tests/test_platform_cli.py`.
 
 **`gitlab_cli.py`**
 The GitLab side of the platform seam, with `gh_cli`'s contract: the `glab` binary as a
@@ -2020,8 +2157,9 @@ subprocess with `--hostname` on every call, no token read, JSON parsed in Python
 call capped (`GLAB_TIMEOUT_SECONDS`, 20; the self-managed probe
 `GLAB_PROBE_TIMEOUT_SECONDS`, 8). Failures raise `gh_cli.GhUnavailable`: `glab_not_installed`,
 `not_authenticated`, `unreachable` (ghsync's network patterns, or a probe timeout),
-`no_access` (HTTP 401/403), `not_found` (HTTP 404), `glab_timeout`, `glab_error` (any
-other non-zero exit), `glab_bad_json`. `open_gitlab` detects the provider from the
+`no_access` (HTTP 401/403), `not_found` (HTTP 404), `rate_limited` (HTTP 429 after the
+backoff), `glab_timeout`, `glab_error` (any other non-zero exit), `glab_bad_json`. `glab`
+runs through `platform_cli.run_cli`. `open_gitlab` detects the provider from the
 remote: github.com or no remote returns None without invoking `glab`; a `gitlab.com`
 remote is GitLab and must pass `glab auth status --hostname gitlab.com` (else it
 raises); any other host is GitLab only when that probe passes for it, and any probe

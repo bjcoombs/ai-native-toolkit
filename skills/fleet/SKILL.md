@@ -10,7 +10,8 @@ them: it runs the headless signals entry point (`assess_signals.py`) on every
 repository and writes one JSON line per repository plus a run stamp, the same
 way every time, so two people measuring the same estate get the same numbers.
 
-Gathering is a pure script: no subagent, no model, no network call. The only
+Gathering is a pure script: no subagent, no model, and no network call unless you
+pass the opt-in [`--platform`](#platform-pass---platform). The only
 model step is the optional labelling below, which runs after gathering and
 writes its own file.
 
@@ -37,6 +38,10 @@ block (lint suppressions) needs ripgrep (`rg`) instead. lizard scores every
 tracked source file, so a very large repository can need a longer `--timeout`. `python3 fleet.py ...` without them still runs; those blocks then
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
+A repository with no import graph names its dominant
+language instead (`no_import_graph_typescript`, `no_import_graph_go`), so the
+fleet output says which language is missing; `no_python_packages` is a Python
+repository with no importable package and `no_source_files` one with no source.
 
 **Without uv.** Install the three dependencies into the interpreter you run
 the script with, then run it with that interpreter:
@@ -60,6 +65,9 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
 | `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
+| `--platform` | After the offline scan, run a separate platform pass that reads GitHub or GitLab through `gh` or `glab` and joins its blocks into each `ok` row. Off by default: without it no network call is made. See [Platform pass](#platform-pass---platform). |
+| `--platform-jobs N` | Repositories read in parallel by the platform pass (default: `[platform] jobs`, else 4). Needs `--platform`. |
+| `--platform-timeout S` | Seconds one repository's platform read may take before its platform blocks are unavailable (default: `[platform] timeout`, else 300). Needs `--platform`. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
 | `--scans a,b` | Only these scans (default: all). |
@@ -67,7 +75,7 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
 | `--hash-salt VALUE` | Hash paths under this salt; reruns stay byte-identical and join across runs. |
-| `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
+| `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. With `--platform` no clone is deleted until the whole offline scan is done, so peak disk use is the whole estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
 | `--compare [RUN_DIR]` | Compare this run with an earlier one and write `DIR/compare.json`. `RUN_DIR` is an `--out` directory or a history entry; a bare `--compare` takes the latest history entry whose stamp matches this run. See [Run history and comparison](#run-history-and-comparison). |
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
@@ -352,6 +360,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
 | `fleet_config_sha256` | sha256 of the `--fleet-config` file's canonical form; `null` without one. A comparability key. Absent in a run from before #706, which reads as `null`. |
 | `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
+| `platform` | `true` when `--platform` ran a platform read; `false` without it, and also when `--scans` selects no platform scan (nothing was read). A comparability key. Absent in a run from before #714, which reads as `false`. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
@@ -368,7 +377,18 @@ One TOML file of fleet-wide lists and settings, with one section per consumer:
 ```
 
 The sections are known and may be empty or left out. Each consumer adds its keys;
-until it does, any key in a section is unknown and exits 2. The loader and the key
+until it does, any key in a section is unknown and exits 2.
+
+| Key | Meaning |
+|-----|---------|
+| `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
+| `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
+
+Both are read from the `--fleet-config` file only: the pass is fleet-wide, so a
+repository's own `[platform]` values have no effect.
+
+`[platform] jobs` and `timeout` say how a run goes, not what it measures, so they
+are left out of `fleet_config_sha256`: changing them never breaks comparability. The loader and the key
 tables are `lib/fleet_config.py` (`SECTION_KEYS`).
 
 - **Validation.** `fleet.py` validates the file before any scan. A TOML error, an
@@ -426,10 +446,52 @@ Dependabot) are always `dependency_bot_commits`, whatever a rule says. Per-rule
 counts are by position in the merged list, so a fleet rule keeps its index in every
 repository; the block never carries a pattern or a matched identity.
 
+## Platform pass: `--platform`
+
+The offline scan never reaches the network. `--platform` adds a second, separate
+pass after it: for each repository whose row is `ok`, one more
+`assess_signals.py --platform` child reads the platform for the scans in
+`lib/signals.py` `PLATFORM_SCANS` (today `review_reality`; #715 and #716 add the
+`delivery` block), narrowed by `--scans` when given. Each needs `gh` (github.com
+remotes) or `glab` (GitLab remotes) logged in.
+
+- **Joined, never failing a row.** The pass's blocks replace the offline
+  `network` placeholders in the row's `scans`. It never changes a row's
+  `status` or `reason`: a slow or refusing host cannot turn an offline row into
+  `scan_timeout`. A read that runs past `--platform-timeout`, exits non-zero or
+  writes no valid document gives each platform block `available: false` with
+  `platform_timeout`, `platform_exit_<code>`, `platform_error` or
+  `platform_invalid_output`; its stderr tail goes to
+  `DIR/logs/<repo>.platform.stderr`. A refused read (`no_access`, `not_found`,
+  `rate_limited`) is an unavailable block with that reason, never zeros. A row
+  whose offline scan failed gets no platform read.
+- **Network hygiene.** `gh` and `glab` run with stdin closed and prompts disabled
+  (`GH_PROMPT_DISABLED`, `NO_PROMPT`, `GIT_TERMINAL_PROMPT=0`). A rate limit (HTTP 429, or GitHub's 403
+  "API rate limit exceeded" / "secondary rate limit") is retried up to 3 times, waiting the `Retry-After` seconds when the CLI prints
+  it, else 2, 4 and 8 seconds (at most 60 per wait); still limited, the block is
+  `rate_limited`. Plain `gh api` and `glab api` calls do not print response
+  headers, so in practice the 2, 4 and 8 second fallback applies. `--platform-jobs` caps the concurrent reads. One response
+  cache per run, in a temporary directory removed when the pass ends, answers a
+  repeated request (an auth probe, a bot-account lookup) once; it never lands in
+  `DIR`, the history or a target.
+- **Stamp.** `run.json` records `platform: true` only when the pass ran a
+  platform read (`--platform` with `--scans` selecting no platform scan reads
+  nothing and stamps `false`); runs with and without the pass
+  are not comparable (`platform pass changed ...`), and each gets its own
+  history entry and trend line.
+- **With `--delete-after`.** A clone is deleted after its platform read, not
+  after its offline scan, so the pass can still read its remote. The platform
+  pass starts only once the whole offline scan is done, so no clone is deleted
+  before then: peak disk use is the whole estate, not flat. On an estate too
+  large to hold at once, run without `--platform`, or in batches with
+  `--from-list`.
+- **Counts-only.** Every platform field is a count, share, flag or duration.
+
 ## `--delete-after`
 
 The fleet run did not create the clones, so it deletes only what nothing would
-miss. Right after a repository's row is in hand, its checkout
+miss. Right after a repository's row is in hand (with `--platform`, after its
+platform read), its checkout
 (`<repo>/<repo>-main`) is removed when all of these hold, and kept otherwise:
 
 - the row is `ok` (a failed scan keeps its clone for diagnosis and a retry);
@@ -487,7 +549,7 @@ unambiguous.
 `--compare RUN_DIR` reads the earlier run before scanning and writes
 `DIR/compare.json`, with a summary on stderr. A bare `--compare` picks the
 latest history entry (by date, then suffix) whose stamp matches this run's
-maturity-model version, window, output mode, scans, path hashing and `--fleet-config` hash, preferring one
+maturity-model version, window, output mode, scans, path hashing, `--fleet-config` hash and `--platform`, preferring one
 over the same repository set, so a partial rerun is not taken as the baseline;
 with none, stderr says so and nothing is compared. To compare two existing runs without
 rescanning:
@@ -505,7 +567,8 @@ malformed (a `run.json` missing a key the comparison reads).
 
 **Not comparable.** Runs that differ in maturity-model version, window, counts-only
 mode, scan selection, path hashing or `--fleet-config` (`fleet_config_sha256`; a run
-with no config and a run from before the key read alike), in the plugin's major version (the
+with no config and a run from before the key read alike) or `--platform` (`platform`; a run
+from before #714 reads as without it), in the plugin's major version (the
 `/assess` stats-diff rule), or in file versions (a run from before `run.json`)
 give `comparable: false` with every reason in `reasons` and no deltas.
 
@@ -634,7 +697,11 @@ invalid maturity model or settings, or inputs that disagree with the run.
   crashes, hangs past `--timeout` or writes an unreadable document becomes a
   `failed` row; the other repositories complete. A broken `.git` is checked by
   the runner, since `assess_signals.py` degrades it to unavailable blocks.
-- **Deterministic.** Rows are sorted by id, never by completion order.
+- **Deterministic.** Rows are sorted by id, never by completion order. A
+  `--platform` run reads live platform state, so its platform blocks can differ
+  between two runs on the same day.
+- **No network by default.** Only `--platform` makes `gh` or `glab` calls, in
+  its own pass; a platform failure never fails a row.
 
 ## Optional: repository labels (`--label`)
 

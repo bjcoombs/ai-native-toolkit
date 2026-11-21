@@ -83,6 +83,9 @@
         }
       ]
     },
+    "platform": {
+      "type": "boolean"
+    },
     "repositories": {
       "type": "object",
       "properties": {
@@ -115,6 +118,7 @@
     "fleet_stamp_version",
     "levels_version",
     "paths_hashed",
+    "platform",
     "plugin_version",
     "repositories",
     "scan_date",

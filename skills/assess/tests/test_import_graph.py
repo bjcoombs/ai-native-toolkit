@@ -1,0 +1,235 @@
+"""Tests for the language-neutral import-graph builder interface (#707, #708).
+
+The golden test pins the Python output: ``tests/fixtures/structure_golden/
+expected.json`` was written by the pre-#708 ``structure_graph`` (grimp read in
+place, no builder interface) over the fixture tree beside it, and the builder
+path must reproduce it byte for byte, the new ``language`` field aside.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from lib import structure_drift as sd
+from lib.headless_layers import structure
+from lib.import_graph import (
+    NO_PYTHON_PACKAGES,
+    NO_SOURCE_FILES,
+    GraphUnavailable,
+    ModuleGraph,
+    dominant_language,
+    language_counts,
+    select_graph,
+)
+from lib.import_graph_builders import BUILDERS
+from lib.import_graph_python import PYTHON_BUILDER
+from lib.structure_graph import analyze_structure
+
+GOLDEN = Path(__file__).resolve().parent / "fixtures" / "structure_golden"
+REPO = GOLDEN / "repo"
+
+
+def _dump(value: object) -> str:
+    return json.dumps(value, indent=2, sort_keys=True)
+
+
+def _without_language(block: dict) -> dict:
+    assert block.pop("language") == "python"
+    return block
+
+
+# --------------------------------------------------------------------------
+# Golden: the Python output does not move
+# --------------------------------------------------------------------------
+
+def test_python_output_is_byte_identical_to_the_pre_builder_golden() -> None:
+    expected = json.loads((GOLDEN / "expected.json").read_text(encoding="utf-8"))
+    actual = {
+        "structure": _without_language(analyze_structure(REPO).as_dict()),
+        "structure_budget_20": _without_language(
+            analyze_structure(REPO, keyhole_budget=20).as_dict()),
+        "structure_scoped_alpha": _without_language(
+            analyze_structure(REPO, scope=(REPO / "alpha").resolve()).as_dict()),
+        "headless_structure": _without_language(structure(analyze_structure(REPO).as_dict())),
+        "drift_communities": sorted(sorted(c) for c in sd._compute_communities(REPO)),
+        "drift_module_paths": {
+            k: v.as_posix() for k, v in sorted(sd._build_module_path_map(REPO).items())
+        },
+    }
+    for key in expected:
+        assert _dump(actual[key]) == _dump(expected[key]), key
+
+
+def test_the_golden_fixture_exercises_every_signal() -> None:
+    """A golden that measures nothing proves nothing: each A1-A4 path is hit."""
+    block = json.loads((GOLDEN / "expected.json").read_text(encoding="utf-8"))["structure"]
+    assert block["sccs"] and block["breakup_candidates"] and block["name_collisions"]
+    assert block["internal_burrow_edges"] and block["cross_package_edges"] > 0
+    assert 0 < block["front_door_ratio"] < 1
+    assert any(fp["exposed_surface"] for fp in block["footprints"])
+
+
+def test_python_is_the_registered_builder() -> None:
+    assert PYTHON_BUILDER in BUILDERS
+    assert PYTHON_BUILDER.language == "python"
+
+
+# --------------------------------------------------------------------------
+# Dominant-language reasons (#707)
+# --------------------------------------------------------------------------
+
+def _write(root: Path, rel: str, text: str = "x\n") -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_a_typescript_repo_names_its_language(tmp_path: Path) -> None:
+    for rel in ("src/a.ts", "src/b.tsx", "web/c.js", "tools/x.py"):
+        _write(tmp_path, rel)
+    result = analyze_structure(tmp_path)
+    assert result.available is False
+    assert result.language is None
+    assert result.reason.startswith("no_import_graph_typescript: ")
+
+
+def test_the_headless_marker_keeps_the_language_code(tmp_path: Path) -> None:
+    from lib.counts_only import reason_code
+
+    _write(tmp_path, "main.go", "package main\n")
+    marker = structure(analyze_structure(tmp_path).as_dict())
+    assert marker["available"] is False
+    assert reason_code(marker["reason"]) == "no_import_graph_go"
+
+
+def test_a_python_repo_without_packages_keeps_no_python_packages(tmp_path: Path) -> None:
+    _write(tmp_path, "loose.py")
+    _write(tmp_path, "run.sh")
+    result = analyze_structure(tmp_path)
+    assert result.reason == NO_PYTHON_PACKAGES
+    assert structure(result.as_dict())["reason"].startswith("no_python_packages:")
+
+
+def test_a_shell_heavy_repo_names_shell_not_python(tmp_path: Path) -> None:
+    """Shell is named on purpose: the reader learns what the code is (#700)."""
+    for rel in ("a.sh", "b.sh", "tool.py"):
+        _write(tmp_path, rel)
+    assert analyze_structure(tmp_path).reason.startswith("no_import_graph_shell: ")
+
+
+def test_a_header_is_not_counted_as_c(tmp_path: Path) -> None:
+    for rel in ("a.h", "b.h", "c.h", "main.cpp"):
+        _write(tmp_path, rel)
+    assert dominant_language(tmp_path) == "cpp"
+
+
+def test_a_repo_with_no_source_says_so(tmp_path: Path) -> None:
+    _write(tmp_path, "README.md")
+    result = analyze_structure(tmp_path)
+    assert result.reason == NO_SOURCE_FILES
+    assert structure(result.as_dict())["reason"].startswith("no_source_files:")
+
+
+def test_language_count_skips_excluded_and_out_of_scope_dirs(tmp_path: Path) -> None:
+    _write(tmp_path, "node_modules/dep/index.js")
+    _write(tmp_path, "vendored/a.go")
+    _write(tmp_path, "svc/b.go")
+    _write(tmp_path, "svc/c.rs")
+    _write(tmp_path, "web/d.ts")
+    assert language_counts(tmp_path, {"vendored"}) == {"go": 1, "rust": 1, "typescript": 1}
+    assert dominant_language(tmp_path, {"vendored"}) == "go"  # a tie goes by name
+    assert dominant_language(tmp_path, scope=tmp_path / "web") == "typescript"
+    assert dominant_language(tmp_path / "web" / "missing") is None
+
+
+# --------------------------------------------------------------------------
+# Dispatch: one graph per language, the largest reported (#708)
+# --------------------------------------------------------------------------
+
+class _StubBuilder:
+    """A builder that returns a fixed graph, or raises, whatever the tree."""
+
+    def __init__(self, language: str, modules: list[str] | None,
+                 edges: dict[str, set[str]] | None = None,
+                 fail: str | None = None) -> None:
+        self.language = language
+        self._modules = modules
+        self._edges = edges or {}
+        self._fail = fail
+        self.calls: list[tuple[set[str], Path | None]] = []
+
+    def build(self, repo_root: Path, extra_exclude_dirs: set[str],
+              scope: Path | None) -> ModuleGraph | None:
+        self.calls.append((extra_exclude_dirs, scope))
+        if self._fail is not None:
+            raise GraphUnavailable(self._fail)
+        if self._modules is None:
+            return None
+        return ModuleGraph(
+            language=self.language,
+            modules=sorted(self._modules),
+            edges=self._edges,
+            front_doors={m for m in self._modules if m.endswith("/index")},
+            module_file={},
+            package_of={m: m.split("/", 1)[0] for m in self._modules},
+        )
+
+
+def test_the_largest_graph_is_reported_with_its_language(tmp_path: Path) -> None:
+    small = _StubBuilder("go", ["a/x", "b/y"], {"a/x": {"b/y"}})
+    large = _StubBuilder("typescript", ["app/index", "app/main", "lib/index", "lib/util"],
+                         {"app/main": {"lib/index", "lib/util"}, "lib/index": {"lib/util"}})
+    block = analyze_structure(tmp_path, builders=(small, large)).as_dict()
+    assert block["available"] is True
+    assert block["language"] == "typescript"
+    assert block["module_count"] == 4
+    # A3 through the builder's package boundaries and front doors, no dotted names.
+    assert block["cross_package_edges"] == 2
+    assert block["front_door_ratio"] == 0.5
+    assert block["internal_burrow_edges"] == [{"importer": "app/main", "imported": "lib/util"}]
+    # A language with no public-surface measure reads 0, not a crash.
+    assert all(fp["exposed_surface"] == 0 for fp in block["footprints"])
+
+
+def test_a_tie_on_modules_goes_to_edges_then_language(tmp_path: Path) -> None:
+    edged = _StubBuilder("rust", ["a/x", "b/y"], {"a/x": {"b/y", "external"}})
+    bare = _StubBuilder("go", ["a/x", "b/y"])
+    assert select_graph(tmp_path, (bare, edged)).graph.language == "rust"
+    twin = _StubBuilder("dart", ["a/x", "b/y"], {"a/x": {"b/y"}})
+    assert select_graph(tmp_path, (edged, twin)).graph.language == "dart"
+
+
+def test_a_failing_builder_does_not_sink_another_language(tmp_path: Path) -> None:
+    broken = _StubBuilder("python", None, fail="grimp not installed; static structure not assessed")
+    working = _StubBuilder("go", ["a/x", "b/y"], {"a/x": {"b/y"}})
+    selection = select_graph(tmp_path, (broken, working))
+    assert selection.graph is not None and selection.graph.language == "go"
+
+
+def test_with_no_graph_the_first_failure_is_the_reason(tmp_path: Path) -> None:
+    _write(tmp_path, "a.go")
+    first = _StubBuilder("python", None, fail="grimp failed to build import graph (x)")
+    second = _StubBuilder("go", None, fail="second")
+    assert select_graph(tmp_path, (first, second)).reason.startswith("grimp failed")
+
+
+def test_an_empty_graph_counts_as_no_graph(tmp_path: Path) -> None:
+    _write(tmp_path, "a.go")
+    selection = select_graph(tmp_path, (_StubBuilder("go", []),))
+    assert selection.graph is None
+    assert selection.reason.startswith("no_import_graph_go: ")
+
+
+def test_builders_receive_the_excludes_and_scope(tmp_path: Path) -> None:
+    stub = _StubBuilder("go", None)
+    scope = tmp_path / "svc"
+    analyze_structure(tmp_path, extra_exclude_dirs={"gen"}, scope=scope, builders=(stub,))
+    assert stub.calls == [({"gen"}, scope)]
+
+
+@pytest.mark.parametrize("budget", [None, 5])
+def test_an_unavailable_block_carries_no_language(tmp_path: Path, budget: int | None) -> None:
+    block = analyze_structure(tmp_path, keyhole_budget=budget).as_dict()
+    assert block["available"] is False and block["language"] is None

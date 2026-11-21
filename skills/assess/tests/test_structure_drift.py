@@ -20,6 +20,7 @@ from pathlib import Path
 
 from lib import ownership_parser, structure_drift
 from lib import structure_graph as sg
+from lib.import_graph import ModuleGraph
 from lib.structure_drift import (
     SEAM_ALLOWLIST,
     apply_seam_allowlist,
@@ -836,8 +837,8 @@ def test_build_module_path_map_drops_unresolvable_and_out_of_tree(
 ) -> None:
     """Modules with no source file or one outside the repo root are dropped.
 
-    Stubs the import map with three modules: one that resolves to a tracked file
-    (kept), one ``_module_file`` cannot resolve (``src is None`` -> skipped), and
+    Stubs the module graph with three modules: one that resolves to a tracked file
+    (kept), one with no source file (``src is None`` -> skipped), and
     one whose source resolves outside ``repo_root`` (``relative_to`` ValueError
     -> skipped). The map keeps only the in-tree resolvable module - the two
     defensive guards drop the rest rather than crashing.
@@ -851,22 +852,12 @@ def test_build_module_path_map_drops_unresolvable_and_out_of_tree(
     inside = repo / "pkg" / "a.py"
     outside = (tmp_path.parent / "elsewhere" / "z.py")
 
-    def fake_discover(_root):
-        return [repo / "pkg"]
-
-    def fake_build(_dirs, _root):
-        return sg.ImportMap(modules=["pkg.a", "pkg.unresolved", "pkg.external"])
-
-    def fake_module_file(module, _roots):
-        if module == "pkg.a":
-            return inside
-        if module == "pkg.external":
-            return outside  # resolves, but outside repo_root
-        return None  # pkg.unresolved -> src is None
-
-    monkeypatch.setattr(sg, "discover_packages", fake_discover)
-    monkeypatch.setattr(sg, "build_import_map", fake_build)
-    monkeypatch.setattr(sg, "_module_file", fake_module_file)
+    graph = ModuleGraph(
+        language="python", modules=["pkg.a", "pkg.external", "pkg.unresolved"],
+        edges={}, front_doors=set(), package_of={},
+        module_file={"pkg.a": inside, "pkg.external": outside},
+    )
+    monkeypatch.setattr(structure_drift, "_module_graph", lambda _root: graph)
 
     mapping = structure_drift._build_module_path_map(repo)
     assert mapping == {"pkg.a": Path("pkg/a.py")}

@@ -141,7 +141,14 @@ constant each.
 # dependency_bot_commits, token_user_commits, agent_identity_rule_commits
 # (positional, per [ai_usage] config rule) and covered_author_agents; limits
 # reworded. Additive; the trailer fields are unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.21.0"
+# 1.22.0: run-context.json structure gains language (issues #707, #708), the
+# language of the measured import graph (the largest, one graph per language),
+# null when none was measured. An unavailable block's reason names the dominant
+# source language: no_import_graph_<language>, no_python_packages for a Python
+# repository, no_source_files with no source. Additive: no existing key moves, a
+# Python repository's values are unchanged, and complexity-stats.json is
+# unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.22.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

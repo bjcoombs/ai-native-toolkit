@@ -11,8 +11,9 @@ same contract:
 - Every failure raises :class:`lib.gh_cli.GhUnavailable` with a non-empty
   reason, which the caller turns into ``{"available": False, "reason": ...}``
   via :func:`lib.gh_cli.unavailable`. HTTP 403 gives ``no_access`` and 404
-  ``not_found``; any other non-zero exit is ``glab_error``. A refusal is never
-  read as a clean result.
+  ``not_found``; 429 still refused after the backoff gives ``rate_limited``;
+  any other non-zero exit is ``glab_error``. A refusal is never read as a
+  clean result. ``glab`` runs through ``lib.platform_cli.run_cli`` as ``gh`` does.
 
 Provider detection (:func:`open_gitlab`), from the same remote ``gh_cli``
 reads (``origin``, else the sole remote):
@@ -64,6 +65,7 @@ from typing import Any
 from urllib.parse import quote
 
 from lib.gh_cli import GhUnavailable, git_remote_url
+from lib.platform_cli import rate_limited, run_cli
 
 GITLAB_COM = "gitlab.com"
 
@@ -92,7 +94,8 @@ _SSH_REMOTE_RE = re.compile(
 _SCP_REMOTE_RE = re.compile(r"^(?:[^@/]+@)?(?P<host>[^/:@]+):(?P<path>[^/].*)$")
 
 _HTTP_STATUS_RE = re.compile(r"\(HTTP (\d{3})\)")
-_STATUS_TEXT_RE = re.compile(r"\b(401|403|404) (?:Unauthorized|Forbidden|[A-Za-z ]*Not Found)")
+_STATUS_TEXT_RE = re.compile(
+    r"\b(401|403|404|429) (?:Unauthorized|Forbidden|Too Many Requests|[A-Za-z ]*Not Found)")
 
 # ghsync's reachability patterns (ghsync.sh gitlab_preflight).
 _UNREACHABLE_RE = re.compile(
@@ -173,8 +176,7 @@ def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS) -> str:
     cmd = ["glab", *args]
     shown = " ".join(cmd)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=timeout)
+        proc = run_cli(cmd, timeout)
     except FileNotFoundError:
         raise GhUnavailable("glab_not_installed: the glab CLI is not on PATH") from None
     except subprocess.TimeoutExpired:
@@ -186,6 +188,8 @@ def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS) -> str:
     stderr = (proc.stderr or "").strip()
     detail = stderr.splitlines()[-1] if stderr else f"exit {proc.returncode}"
     status = _status(stderr)
+    if rate_limited(stderr):  # any 429 form glab prints, still limited after the backoff
+        raise GhUnavailable(f"rate_limited: `{shown}` was still rate limited after retries ({detail})")
     if status in ("401", "403"):
         raise GhUnavailable(f"no_access: `{shown}` was refused ({detail})")
     if status == "404":
