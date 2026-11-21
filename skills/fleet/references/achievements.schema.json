@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/achievements.schema.json",
+  "title": "fleet achievements",
+  "description": "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository earned over the comparable runs in the history (level-ups, firsts, streaks, personal bests, targets hit), each with its evidence and a credit line, plus each one's nearest level-up and target distances. Generated from lib/fleet_achievements.py by lib/fleet_achievements_schema.py.",
+  "type": "object",
+  "properties": {
+    "achievements_version": {
+      "const": 1
+    },
+    "fleet_data_version": {
+      "const": 1
+    },
+    "run": {
+      "type": "string"
+    },
+    "levels_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "note": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "achievements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "level_up",
+              "first",
+              "target_hit",
+              "personal_best",
+              "streak"
+            ]
+          },
+          "view": {
+            "enum": [
+              "ownership",
+              "system",
+              "repo"
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "unit_kind": {
+            "enum": [
+              "org",
+              "division",
+              "department",
+              "team",
+              "system",
+              "repo"
+            ]
+          },
+          "run": {
+            "type": "string"
+          },
+          "previous_run": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "row": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "from_level": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "to_level": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "level": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "share_from": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "share_to": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "runs": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "moves": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "repo": {
+                      "type": "string"
+                    },
+                    "row": {
+                      "type": "string"
+                    },
+                    "from_level": {
+                      "type": "integer"
+                    },
+                    "to_level": {
+                      "type": "integer"
+                    },
+                    "criterion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "criterion",
+                    "from_level",
+                    "repo",
+                    "row",
+                    "to_level"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "from_level",
+              "level",
+              "moves",
+              "row",
+              "runs",
+              "share_from",
+              "share_to",
+              "to_level"
+            ],
+            "additionalProperties": false
+          },
+          "credit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "credit",
+          "evidence",
+          "kind",
+          "previous_run",
+          "run",
+          "unit",
+          "unit_kind",
+          "view"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "nearest_level_ups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "nearest_level_up"
+          },
+          "view": {
+            "enum": [
+              "ownership",
+              "system",
+              "repo"
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "unit_kind": {
+            "enum": [
+              "org",
+              "division",
+              "department",
+              "team",
+              "system",
+              "repo"
+            ]
+          },
+          "row": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "top_level": {
+            "type": "integer"
+          },
+          "signal": {
+            "type": "string"
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "needed": {
+            "type": "integer"
+          },
+          "change": {
+            "type": "string"
+          },
+          "done_when": {
+            "type": "string"
+          },
+          "credit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "change",
+          "credit",
+          "done_when",
+          "kind",
+          "level",
+          "needed",
+          "repos",
+          "row",
+          "signal",
+          "top_level",
+          "unit",
+          "unit_kind",
+          "view"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "enum": [
+              "ownership",
+              "system",
+              "repo"
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "row": {
+            "type": "string"
+          },
+          "target": {
+            "type": "integer"
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "distance": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "distance",
+          "level",
+          "row",
+          "target",
+          "unit",
+          "view"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "achievements",
+    "achievements_version",
+    "fleet_data_version",
+    "levels_version",
+    "nearest_level_ups",
+    "note",
+    "run",
+    "runs",
+    "targets"
+  ],
+  "additionalProperties": false
+}

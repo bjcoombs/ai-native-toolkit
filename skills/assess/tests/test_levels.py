@@ -426,3 +426,12 @@ def test_unreadable_toml_fails_at_load(tmp_path: Path) -> None:
 def test_levels_may_be_listed_out_of_order() -> None:
     maturity_model = parse_levels(_maturity_model(_team_row([_lv(2), _lv(1)])))
     assert [lv["level"] for lv in maturity_model["rows"][0]["levels"]] == [1, 2]
+
+
+def test_share_level_is_the_public_roll_up_rule() -> None:
+    from fractions import Fraction
+
+    from lib.levels import share_level
+    assert share_level([2, 1, 2], Fraction(1), 2) == 1  # min
+    assert share_level([2, 1, 2], Fraction(2, 3), 2) == 2
+    assert share_level([], Fraction(1), 2) == 2  # vacuous: callers pass measured levels only

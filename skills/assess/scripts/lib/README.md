@@ -280,7 +280,9 @@ keeps one graph per language; the largest (most modules, then most internal edge
 the language token) is returned. With no graph the reason is the first builder failure in
 registration order, else `no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. Imports no graph tool.
+`scope`) and names the dominant one. `is_graph_source(rel_path, language)` says whether a
+file could be in that language's graph (extension, plus Go's skipped test files and
+directories). Imports no graph tool.
 
 Worked example: a builder for a language whose package is a directory and whose front
 door is the directory's `index` file.
@@ -316,10 +318,12 @@ class IndexDirBuilder:
         )
 ```
 
-Register it by appending to `BUILDERS` in `import_graph_builders.py`. A new block field
+Register it by appending to `BUILDERS` in `import_graph_builders.py` and add files in
+its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which checks every
+registered builder's graph shape (`package_of` covers `modules`). A new block field
 or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
 the maturity model header (`levels/default.toml`).
-Tests: `tests/test_import_graph.py`.
+Tests: `tests/test_import_graph.py`, `tests/test_import_graph_contract.py`.
 
 **`import_graph_python.py`**
 The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
@@ -345,6 +349,39 @@ which copy wins depends on a runtime `sys.path`. The finder implements both shap
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
+
+**`import_graph_go.py`**
+The Go builder (`GO_BUILDER`, issue #710). It reads `go.mod` and each file's `import`
+declarations as text and never runs a go tool (`go list` can reach the network). A
+graph module is a Go package, a directory holding a non-test `.go` file, with its
+repo-relative path as the id (`.` for the root). The go.mod module path
+(`example.com/org/svc`) only resolves an import to a directory and never reaches an id,
+so no module path appears in the block, hashed or not. A package belongs to the nearest
+`go.mod` at or above it; nested modules resolve each other's imports. Each package is
+its own boundary (`package_of[m] == m`) and a front door, since an importer reaches only
+exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
+construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
+public surface is the package's exported top-level `func` (not method) and `type`
+declarations. There is no `module_file` (a package is several files), so A1 size reads 0
+and structure-drift tier 1, whose static lens pairs files, empties its three
+static-derived lists with reason `no_static_file_map` rather than reading every declared
+pair as split; its three co-change metrics still report. The run-context `tier_1` block
+(`context_blocks.py`) carries those three counts as null with `static_lens_reason:
+no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, never 0. The behaviour
+block projects the static metrics only onto directories holding a file the graph's
+language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
+graph never vouches for a Python tree or a directory of `_test.go` files alone. Go's
+`front_door_ratio` is projected as null there (1.0 by construction is not evidence), so
+`hidden_coupling` on a Go directory rests on `modularity_q` alone. Skipped:
+`_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
+configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
+is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
+names. Build constraints are not evaluated. No `go.mod` returns `None`,
+so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
+raises `GraphUnavailable`. Graphs compare by module count, so a Go repository with a
+larger Python package tree reports the Python graph.
+Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
+`tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 
 **`import_graph_builders.py`**
 The registered builders (`BUILDERS`), one per language; `structure_graph` and
@@ -973,6 +1010,42 @@ with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.
 when the checked-in file differs; regenerate with
 `uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
 
+**`fleet_achievements.py`**
+The deterministic achievements engine (#704, `ACHIEVEMENTS_VERSION`; #705 and #744 build
+on its evidence model). `build_achievements` replays comparable runs' `fleet-data.json`
+oldest first: `subjects` gives every unit and repository its level per team row, the row's
+roll-up rule (`levels.share_level`) over measured members, with the measured set;
+`clean` is the one gate on a move (known both sides, same measured set), and
+`known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
+emits `level_up`, `first`, `target_hit`, `personal_best` and `streak`, each with
+`moves` evidence (repository, row, from and to level, the criterion that became met) and
+a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
+Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
+
+**`fleet_achievements_runs.py`**
+`earlier_runs` reads the history entries the engine replays: `run.json` passing
+`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+one per date before this run's (`fleet_history.one_per_date`). Unreadable entries are
+passed over.
+
+**`fleet_achievements_schema.py`**
+Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
+TypedDict with `fleet_group_schema.type_schema`. `tests/test_fleet_achievements.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_achievements_schema.py` from `skills/assess`.
+
+**`fleet_targets.py`**
+The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, `level`), the stand-in for
+the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming the entry;
+`resolve` keys each target as `fleet-data.json` does (hashed under the run's salt).
+
+**`fleet_credit.py`**
+`credit_section` renders `report.md`'s first section, "What changed and who earned it",
+from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
+nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
+distances. `fleet_diagrams.report_markdown` places it before the diagrams.
+
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
 heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
@@ -1092,7 +1165,8 @@ The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#
 team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
-`comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
@@ -1102,7 +1176,7 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
-reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+reads each `<date>[.<n>]` entry (`fleet_history.one_per_date`; `run.json`,
 `groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
 path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
@@ -1241,7 +1315,9 @@ repository set (`entry_repos`), so a partial rerun never replaces a full-fleet e
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
 repository set, the default for a bare `--compare`. `dated_entries` lists the
-`<date>[.<n>]` directories oldest first (also read by `fleet_trends`).
+`<date>[.<n>]` directories oldest first; `one_per_date` keeps one accepted entry per date
+before a run's (the entry over its repository set, else the highest suffix), shared by
+`fleet_trends` and `fleet_achievements_runs`.
 `persist` writes the three files to a hidden temp sibling first: a new entry is that
 directory renamed into place in one step, and a replaced same-day entry loses its
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
@@ -1788,6 +1864,7 @@ is the resolved value only when it is a finite scalar, null otherwise, and
 `dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
+`share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
@@ -2299,19 +2376,27 @@ The `delivery` platform block (#715, part of #702), reads `merged_sample`,
 `review_reality` and `fleet_config`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
-approved_share, self_merged_share}`. Hours rounded to 0.01; percentiles are
+approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
-`github-actions` and not a bot; an author-less event is skipped; an account of unknown
+`github-actions`, not a bot and not an `[[ai_usage.agent_identities]]` config match
+(a configured agent on a user login is AI review, never a human); an author-less event is skipped; an account of unknown
 type (a failed probe, or one left unprobed once the shared 20-login budget is spent)
 before the first known human on any change nulls the three comment figures. A
 person whose login equals a pinned AI App's name probes as that App (`gh` drops
 `[bot]` and gives comment authors no type). AI review (GitHub): a review or
-comment by an `[[ai_usage.agent_identities]]` config match (username, with and
-without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
-`agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,
-an unknown account that decides a change nulls the share. GitLab: time to merge and
+comment by an `[[ai_usage.agent_identities]]` config match (username as given), or by a bot account whose login is in
+`AI_REVIEWERS` or matches `agent_identity.AGENT_RULES` or a config rule with
+`[bot]` re-appended (the `[bot]` form is tried only for a bot, so a loose rule
+never makes a person an agent); status bots never count,
+an unknown account that decides a change nulls the share. Agent-authored share
+(#717): changes whose author `AuthorMatcher.classify_username` puts in the `agent`
+bucket - a config rule or a pinned `AGENT_RULES`
+entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
+the author `username`, so access-token users count only under
+`token_users_as_agents` and dependency bots never; a deleted author is not an
+agent. Read from the sample's own listing, no extra call. GitLab: time to merge and
 the copied shares; the notes-based figures are null until #716. An unavailable
 sample is returned as the block. Tests: `tests/test_delivery.py`.
 

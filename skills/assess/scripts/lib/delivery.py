@@ -18,7 +18,8 @@ Block (``delivery``)::
      "human_commented_share": float | None,     # changes with any human comment
      "ai_review_share": float | None,           # changes with an AI reviewer's review or comment
      "approved_share": float | None,            # copied from review_reality
-     "self_merged_share": float | None}         # copied from review_reality
+     "self_merged_share": float | None,         # copied from review_reality
+     "agent_authored_share": float | None}      # changes an agent identity authored
 
 Durations are hours, rounded to 0.01, over the sampled changes that have both
 timestamps; a percentile is the nearest-rank value (the ``ceil(p * n)``-th
@@ -27,7 +28,9 @@ nothing was sampled.
 
 First human comment (GitHub). The earliest comment (``createdAt``) or review
 (``submittedAt``) on the pull request by an account that is neither its author,
-nor ``github-actions``, nor a bot (the sample's shared ``BotClassifier``). Its
+nor ``github-actions``, nor a bot (the sample's shared ``BotClassifier``), nor an
+account an ``[[ai_usage.agent_identities]]`` rule matches (a configured agent on
+an ordinary user login is AI review, never also a human commenter). Its
 hours are counted from ``createdAt`` and only over the changes that have one;
 ``human_commented_share`` says how many do. An event with no author login (a
 deleted account) is skipped. When an account whose type could not be learned (a
@@ -38,12 +41,24 @@ first-comment figures are None: the answer depends on that account.
 AI review (GitHub). A change counts when a review or comment comes from an AI
 reviewer other than the change's author (an agent commenting on its own pull
 request is not review): an account an ``[[ai_usage.agent_identities]]`` config rule matches by
-username (the #695 list; ``[bot]`` is tried as well, since ``gh pr list`` drops
-it), or a bot account (``BotClassifier`` says so) whose login is in
-``AI_REVIEWERS`` or matches a pinned ``agent_identity.AGENT_RULES`` entry with
-``[bot]`` appended. Unlike ``review_reality``'s ``bot_review_share``, status and
+username (the #695 list), or a bot account (``BotClassifier`` says so) whose
+login is in ``AI_REVIEWERS`` or matches a pinned ``agent_identity.AGENT_RULES``
+entry or a config rule with ``[bot]`` appended (``gh pr list`` drops it). The
+``[bot]`` form is tried only for a bot, so a loose config rule such as ``bot``
+never makes a person an agent, here or in the first human comment. Unlike ``review_reality``'s ``bot_review_share``, status and
 deployment bots (codecov, vercel, sonar) do not count. When an account whose
 type is unknown decides a change, ``ai_review_share`` is None.
+
+Agent-authored share (#717). The share of sampled changes whose author an agent
+identity matches, by the #695 username form (``AuthorMatcher.classify_username``):
+a config rule or a pinned ``AGENT_RULES`` entry. On GitHub ``gh`` drops an App
+author's ``[bot]`` (and ``login`` drops ``app/``), so ``[bot]`` is re-appended only
+when the author object says ``is_bot``; a person whose login is ``claude`` is not
+the Claude App. On GitLab the merge request author's ``username`` is classified
+as it stands: an access-token user counts only under ``token_users_as_agents``,
+and a dependency bot never counts. A change with no author login (a deleted
+account) counts as not agent-authored. The author comes from the sample's own
+listing, so no further read is made.
 
 GitLab. The sample's merge requests give time to merge (``created_at`` ->
 ``merged_at``) and the copied shares; first human comment and AI review need
@@ -99,6 +114,7 @@ class DeliveryBlock(TypedDict):
     ai_review_share: float | None
     approved_share: float | None
     self_merged_share: float | None
+    agent_authored_share: float | None
 
 
 def percentile(values: Sequence[float], p: float) -> float | None:
@@ -136,13 +152,15 @@ def _events(pr: dict[str, Any]) -> list[tuple[datetime, Any]]:
 _UNDECIDED = "undecided"
 
 
-def first_human_comment(pr: dict[str, Any], bots: BotClassifier) -> float | None | str:
+def first_human_comment(pr: dict[str, Any], bots: BotClassifier,
+                        matcher: AuthorMatcher | None = None) -> float | None | str:
     """Hours to the first human comment, None for none, ``_UNDECIDED`` when an
     account of unknown type (probe failed or budget spent) comes first."""
     author = login(pr.get("author"))
     for when, actor in _events(pr):
         name = login(actor)
-        if name is None or name == author or name in STATUS_BOTS:
+        if (name is None or name == author or name in STATUS_BOTS
+                or (matcher is not None and _configured(matcher, name))):
             continue
         verdict = bots.is_bot(actor)
         if verdict is None:
@@ -153,7 +171,27 @@ def first_human_comment(pr: dict[str, Any], bots: BotClassifier) -> float | None
 
 
 def _configured(matcher: AuthorMatcher, name: str) -> bool:
-    return any(matcher.classify_username(n).rule_index is not None for n in (name, f"{name}[bot]"))
+    """A config rule matches the login as given. The ``[bot]`` form is tried only
+    for a known bot (``_pinned`` after ``BotClassifier``, or an ``is_bot`` author),
+    so a loose rule such as ``bot`` never turns a person into an agent."""
+    return matcher.classify_username(name).rule_index is not None
+
+
+def agent_authored(change: dict[str, Any], provider: str, matcher: AuthorMatcher) -> bool:
+    """True when an agent identity authored the change (see the module docstring)."""
+    actor = change.get("author")
+    if provider == "gitlab":
+        username = actor.get("username") if isinstance(actor, dict) else None
+        return isinstance(username, str) and matcher.classify_username(username).bucket == AGENT
+    name = login(actor)
+    if name is None:
+        return False
+    if _configured(matcher, name):
+        return True
+    forms = [name]
+    if isinstance(actor, dict) and actor.get("is_bot") is True and not name.endswith("[bot]"):
+        forms.append(f"{name}[bot]")
+    return any(matcher.classify_username(n).bucket == AGENT for n in forms)
 
 
 def _pinned(matcher: AuthorMatcher, name: str) -> bool:
@@ -200,13 +238,14 @@ def _block(total: int, merge: list[float], comment: list[float] | None, commente
         "ai_review_share": _share(ai, total) if ai is not None else None,
         "approved_share": _copied(review, "approved_share"),
         "self_merged_share": _copied(review, "self_merged_share"),
+        "agent_authored_share": None,  # filled by scan_delivery from the same sample
     }
 
 
 def github_delivery(sample: MergedSample, review: Any, matcher: AuthorMatcher) -> DeliveryBlock:
     prs = list(sample.changes)
     merge = [h for h in (_hours(pr.get("createdAt"), pr.get("mergedAt")) for pr in prs) if h is not None]
-    firsts = [first_human_comment(pr, sample.bots) for pr in prs]
+    firsts = [first_human_comment(pr, sample.bots, matcher) for pr in prs]
     decided = _UNDECIDED not in firsts
     comment = [f for f in firsts if isinstance(f, float)] if decided else None
     commented = sum(isinstance(f, float) for f in firsts) if decided else None
@@ -227,6 +266,11 @@ def scan_delivery(sample: SampleOrReason, review_reality: Any,
     sample is returned as the block, reason and all."""
     if not isinstance(sample, MergedSample):
         return sample
+    matcher = matcher_from_config(fleet_config)
     if sample.provider == "gitlab":
-        return gitlab_delivery(sample, review_reality)
-    return github_delivery(sample, review_reality, matcher_from_config(fleet_config))
+        block = gitlab_delivery(sample, review_reality)
+    else:
+        block = github_delivery(sample, review_reality, matcher)
+    authored = sum(agent_authored(c, sample.provider, matcher) for c in sample.changes)
+    block["agent_authored_share"] = _share(authored, len(sample.changes))
+    return block

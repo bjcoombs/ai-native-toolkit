@@ -519,6 +519,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "structure_drift.tier_0.empty_ownership_patterns.pattern": DROP,
         "structure_drift.tier_0.empty_ownership_patterns.declared_in": DROP,
         "structure_drift.tier_0.empty_ownership_patterns.owners": DROP,
+        "structure_drift.tier_1.static_lens_reason": TOKEN,
     },
     "behaviour": {
         "behaviour.reason": DROP,
