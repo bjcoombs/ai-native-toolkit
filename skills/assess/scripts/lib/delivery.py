@@ -62,13 +62,15 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from lib.agent_identity import AGENT, AuthorMatcher
 from lib.ai_usage import matcher_from_config
 from lib.fleet_config import FleetConfig
-from lib.gitlab_notes import NoteFactsOrReason
 from lib.merged_sample import STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, login, parse_time
+
+if TYPE_CHECKING:  # gitlab_notes reads AI_REVIEWERS from here
+    from lib.gitlab_notes import NoteFactsOrReason
 
 # AI code-review apps, by GitHub login with the ``[bot]`` suffix dropped. A login
 # counts only when ``BotClassifier`` reads the account as a bot. ``gh pr list``

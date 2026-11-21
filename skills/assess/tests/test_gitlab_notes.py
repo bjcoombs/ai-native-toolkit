@@ -66,6 +66,7 @@ def test_prose_mentioning_ai_review_is_a_human_comment() -> None:
     (TOKEN, {}, True),                      # a project access-token user, by its generated form
     ("group_7_bot_abc123", {}, True),       # a group access-token user
     ("claude[bot]", {}, True),              # a pinned agent identity
+    ("coderabbitai", {}, True),             # a pinned AI-review app (delivery.AI_REVIEWERS)
     ("service-account", {"bot": True}, False),  # a GitLab internal bot: bot review, not AI
 ])
 def test_bot_accounts_are_bot_review_never_human(user: str, extra: dict[str, object], ai: bool) -> None:

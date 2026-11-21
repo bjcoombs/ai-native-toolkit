@@ -28,7 +28,9 @@ skipped) is classified once, first rule that applies:
    ``token_user`` bucket of ``agent_identity.AuthorMatcher.classify_username``
    (the ``[ai_usage]`` rules, #695): a GitLab project or group access-token user
    (``project_<id>_bot_<hash>``) is recognised by its generated username form,
-   the token type, never by a display name. AI review is bot review too.
+   the token type, never by a display name. A username in ``delivery.AI_REVIEWERS``
+   (the pinned AI-review apps, ``[bot]`` dropped) is AI review too. AI review is
+   bot review too.
    An author object with ``bot: true`` (a GitLab internal bot) is bot review only.
 4. **Dependency bot** (Renovate, Dependabot): neither review nor a human comment.
 5. **Human comment**: anyone else. The first one's ``created_at`` is
@@ -49,6 +51,7 @@ from typing import Any, NamedTuple
 
 from lib.agent_identity import AGENT, DEPENDENCY_BOT, TOKEN_USER, AuthorMatcher
 from lib.ai_usage import matcher_from_config
+from lib.delivery import AI_REVIEWERS
 from lib.fleet_config import FleetConfig, review_section
 from lib.gh_cli import GhUnavailable, unavailable
 from lib.gitlab_cli import GitlabProject, glab_api
@@ -103,10 +106,13 @@ class NoteClassifier:
         return any(m in lowered for m in self.markers)
 
     def is_ai(self, author: Any) -> bool:
-        """An agent or a GitLab access-token user, by username."""
+        """An agent, a GitLab access-token user or a pinned AI-review app, by username."""
         name = author.get("username") if isinstance(author, dict) else None
-        return isinstance(name, str) and bool(name) \
-            and self.matcher.classify_username(name).bucket in (AGENT, TOKEN_USER)
+        if not isinstance(name, str) or not name:
+            return False
+        bare = name.lower().removesuffix("[bot]")
+        return bare in AI_REVIEWERS \
+            or self.matcher.classify_username(name).bucket in (AGENT, TOKEN_USER)
 
     @staticmethod
     def is_bot(author: Any) -> bool:
