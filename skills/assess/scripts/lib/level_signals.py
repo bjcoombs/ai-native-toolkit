@@ -47,14 +47,17 @@ new signal has to be classified on purpose; ``input_class`` raises
   ``ci_checks.test_or_lint_runs`` finds a line naming a check but does not read
   its triggers, so it is ``head_text`` until a signal that does lands (#775).
 - ``platform``: read from the GitHub or GitLab API (``review_reality``,
-  ``agent_environment.ci_duration``).
+  ``agent_environment.ci_duration``). Grade ``verified``.
 
-``criterion_grade`` grades one criterion. A text class (``config_text``,
-``head_text``) keeps its grade only for a presence test (``eq``/``ne`` on a
-boolean, ``ne 0``, ``gt 0``, ``gte 1``); a threshold on such a value (``observability.rung
-gte 3``) measures the text and grades ``measured``. ``is_declared`` is true when
-the grade is ``config_only`` or ``declared``: under #744 those conditions are
-listed, not counted. A signal one collector sets from two inputs takes the
+``criterion_grade`` grades one criterion: the grade of its signal's input
+class, whatever the operator. Per the #789 grades design, the grade comes from
+the evidence and is never derived per criterion, so no operator raises it: a
+threshold or an absence test on a text count (``observability.rung gte 3``,
+``agent_environment.check.named_total gte 2``, ``... lte 0``) is still text, and
+stays ``declared`` (or ``config_only``). This supersedes the presence-test rule
+in #783 requirement 2, under which text alone could reach a counted grade.
+``is_declared`` is true when the grade is ``config_only`` or ``declared``: under
+#744 those conditions are listed, not counted. A signal one collector sets from two inputs takes the
 weaker (``review_evidence.present`` is ``head_text``; #789 3.4 splits it).
 Nothing in ``lib.levels`` reads this yet; counting is #744's engine work.
 
@@ -184,7 +187,6 @@ INPUT_GRADES: dict[InputClass, Grade] = {
     "ci_executed": "verified",
     "platform": "verified",
 }
-_TEXT_CLASSES = frozenset({"config_text", "head_text"})
 _LISTED_GRADES = frozenset({"config_only", "declared"})
 
 # One entry per exact signal path; a new criterion signal needs its own line.
@@ -229,19 +231,9 @@ def input_class(signal: str) -> InputClass:
             f"{signal}: no producer input class in level_signals.SIGNAL_INPUTS") from None
 
 
-def _is_presence_test(criterion: Criterion) -> bool:
-    op, value = criterion["op"], criterion["value"]
-    if isinstance(value, bool):
-        return op in ("eq", "ne")
-    return type(value) is int and (op, value) in (("ne", 0), ("gt", 0), ("gte", 1))
-
-
 def criterion_grade(criterion: Criterion) -> Grade:
-    """The confidence grade of one criterion, from its signal's input class and its test."""
-    klass = input_class(criterion["signal"])
-    if klass in _TEXT_CLASSES and not _is_presence_test(criterion):
-        return "measured"
-    return INPUT_GRADES[klass]
+    """The confidence grade of one criterion: its signal's input-class grade, whatever the op."""
+    return INPUT_GRADES[input_class(criterion["signal"])]
 
 
 def is_declared(criterion: Criterion) -> bool:
