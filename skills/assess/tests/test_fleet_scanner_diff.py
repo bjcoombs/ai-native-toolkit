@@ -92,6 +92,7 @@ def test_a_diff_git_cannot_answer_is_unavailable_and_an_empty_one_is_same():
         return []
 
     earlier, later = _stamp([], toolkit_commit="a" * 40), _stamp([], toolkit_commit="b" * 40)
+    assert scanner_diff(earlier, later, diff=empty)["status"] == "same"
     assert scanner_diff(earlier, later, diff=fails)["status"] == "unavailable"
     assert scanner_diff(earlier, later, diff=empty)["status"] == "same"
 
@@ -249,3 +250,13 @@ def test_a_degraded_block_is_not_an_absent_signal():
     row = _row_move(comparison, "grpa", "teamdocs")
     assert row["then"]["status"] == "unknown"
     assert row["cause"] == fc.CAUSE_LEVEL and "absent_signals" not in row
+
+
+def test_a_toolkit_commit_that_is_not_a_hash_never_reaches_git(tmp_path):
+    target = tmp_path / "written"
+    for bad in (f"--output={target}", "HEAD", "abc", "a" * 41, "ABCDEF1"):
+        diff = scanner_diff(_stamp([], toolkit_commit=bad), _stamp([], toolkit_commit="b" * 40), diff=_no_git)
+        assert diff["status"] == "unavailable" and "not a commit hash" in (diff["reason"] or "")
+    # git_changed_files itself ends option parsing before the commits
+    assert sd.git_changed_files(sd.TOOLKIT_ROOT, f"--output={target}", "HEAD") is None
+    assert not target.exists()

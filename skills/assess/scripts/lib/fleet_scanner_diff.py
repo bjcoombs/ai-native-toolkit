@@ -17,6 +17,8 @@ backstop below catches a change that kept the name.
 - either commit is null (an install that is not a git checkout) and the
   ``plugin_version`` differs: ``unavailable``. A null commit at one plugin version
   reads as the same toolkit;
+- a commit that is not 7 to 40 hex characters: ``unavailable``, and git never
+  sees it;
 - two different commits: ``git diff --name-only A B -- skills/assess/scripts/lib``
   in the toolkit checkout running the comparison. When git cannot answer (no
   checkout, a commit missing from it, a shallow clone) the diff is ``unavailable``.
@@ -54,6 +56,7 @@ Org rows read the group's settings, not scans, and keep their cause.
 from __future__ import annotations
 
 import ast
+import re
 import functools
 import inspect
 import subprocess
@@ -66,6 +69,7 @@ from lib.fleet_stamp import FleetStamp
 CAUSE_SCANNER_CHANGED = "scanner_changed"
 CAUSE_UNKNOWN_SCOPE = "toolkit_changed_unknown_scope"
 LIB_PATH = "skills/assess/scripts/lib"
+_COMMIT = re.compile(r"[0-9a-f]{7,40}")  # a stamped toolkit_commit; anything else never reaches git
 TYPES_ONLY = frozenset({"run_context_types"})
 
 LIB_DIR = Path(__file__).resolve().parent
@@ -101,7 +105,8 @@ def git_changed_files(root: Path, earlier: str, later: str) -> list[str] | None:
     """Files under ``lib/`` that differ between two commits of ``root``; None when git cannot say."""
     try:
         out = subprocess.run(
-            ["git", "-C", str(root), "diff", "--name-only", earlier, later, "--", LIB_PATH],
+            ["git", "-C", str(root), "diff", "--name-only", "--end-of-options", earlier, later,
+             "--", LIB_PATH],
             capture_output=True, text=True, encoding="utf-8", errors="surrogateescape",
             check=True, timeout=60,
         )
@@ -123,6 +128,9 @@ def scanner_diff(earlier: FleetStamp, later: FleetStamp, root: Path = TOOLKIT_RO
         return {"status": "unavailable", "changed": [],
                 "reason": f"the {side} run recorded no toolkit_commit and plugin_version changed "
                           f"{earlier.get('plugin_version')!r}->{later.get('plugin_version')!r}"}
+    if not (_COMMIT.fullmatch(then) and _COMMIT.fullmatch(now)):
+        return {"status": "unavailable", "changed": [],
+                "reason": "a run's toolkit_commit is not a commit hash (7 to 40 hex characters)"}
     changed = diff(root, then, now)
     if changed is None:
         return {"status": "unavailable", "changed": [],
