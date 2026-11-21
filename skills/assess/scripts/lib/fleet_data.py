@@ -232,12 +232,12 @@ def repo_cells(rows: Sequence[Row], repo: FleetRow) -> list[Cell]:
 # --- roll-up -----------------------------------------------------------------
 
 
-Member = tuple[str, int | None, int]  # (repository key, level or None, top level)
+Member = tuple[int | None, int]  # (level or None, top level) of one repository below the unit
 
 
 def row_roll_up(row_id: str, members: Sequence[Member]) -> RowRollUp:
     """One team row over the repositories below a unit: measured of all, and the lowest level."""
-    known = [level for _key, level, top in members if level is not None and top > 0]
+    known = [level for level, top in members if level is not None and top > 0]
     return {"row": row_id, "measured": len(known), "repos": len(members),
             "lowest_level": min(known) if known else None}
 
@@ -265,9 +265,7 @@ def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Ce
     units: list[DataUnit] = []
     for unit in tree["units"]:
         repos = sorted(r for r in below[unit["id"]] if r in cells)  # placed but not a row: not counted
-        keys = {repo: privacy.key(repo) for repo in repos}
-        levels = [row_roll_up(row["id"], [(keys[r], cells[r][i]["level"], cells[r][i]["top_level"])
-                                          for r in repos])
+        levels = [row_roll_up(row["id"], [(cells[r][i]["level"], cells[r][i]["top_level"]) for r in repos])
                   for i, row in enumerate(team_rows)]
         parent = unit["parent"]
         units.append({
