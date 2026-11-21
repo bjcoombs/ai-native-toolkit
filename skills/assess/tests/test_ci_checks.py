@@ -28,6 +28,12 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
     "run: pytest \\\n  -q",
     "script:\n  - ruff check .",
     "script:\n  - pytest",
+    "test:\n  script:\n    - pytest -q",
+    "test:\n  script:\n    - echo hi\n\n    # unit tests\n    - tox",
+    "script:\n- pytest",
+    "test:\n  before_script: &setup\n    - nox",
+    "script:\n  - |\n    echo hi\n  - py.test",
+    "needs:\n  - pytest -q",
 ])
 def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     assert check_commands(text) >= 1
@@ -55,6 +61,11 @@ def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     "uv sync --extra lint",
     "strategy:\n  matrix:\n    tool:\n      - mypy\n      - ruff",
     "needs:\n  - ruff",
+    "needs:\n  - pytest",
+    "strategy:\n  matrix:\n    tool:\n      - tox",
+    "needs:\n- py.test\n- nox",
+    "- pytest",
+    "jobs:\n  pytest:\n    runs-on: ubuntu-latest",
 ])
 def test_a_ci_line_that_runs_no_check_does_not_count(text: str) -> None:
     assert check_commands(text) == 0
@@ -104,6 +115,32 @@ def test_a_local_check_beats_an_include(tmp_path: Path) -> None:
         ".gitlab-ci.yml": "include:\n  - component: gitlab.com/acme/c@1\nlint:\n  script:\n    - make lint\n",
     }))
     assert (block["test_or_lint_runs"], block["included_files"]) == (True, 1)
+
+
+_NEEDS = ("name: ci\non: [pull_request]\njobs:\n  pytest:\n    runs-on: ubuntu-latest\n"
+          "    steps:\n      - run: echo hi\n  deploy:\n    needs:\n      - pytest\n"
+          "    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n")
+_MATRIX = ("name: ci\non: [pull_request]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    strategy:\n"
+           "      matrix:\n        tool:\n          - tox\n    steps:\n      - run: echo x\n")
+
+
+@pytest.mark.parametrize("workflow", [_NEEDS, _MATRIX])
+def test_a_lone_always_check_value_is_not_a_ci_run(tmp_path: Path, workflow: str) -> None:
+    """Issue #725: ``needs: - pytest`` and ``matrix: ... - tox`` name a job or axis value."""
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": workflow}))
+    assert (block["check_commands"], block["test_or_lint_runs"], block["basis"]) == (
+        0, False, "no_check_command")
+
+
+def test_a_lone_always_check_value_with_an_include_is_unknown(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": (
+        "include: 'ci/jobs.yml'\ndeploy:\n  needs:\n    - pytest\n  script:\n    - make deploy\n")}))
+    assert (block["check_commands"], block["test_or_lint_runs"]) == (0, None)
+
+
+def test_a_gitlab_script_item_running_pytest_counts(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": "test:\n  script:\n    - pytest -q\n"}))
+    assert (block["check_commands"], block["test_or_lint_runs"]) == (1, True)
 
 
 def test_a_local_reusable_workflow_is_not_an_include() -> None:

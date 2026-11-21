@@ -23,6 +23,11 @@ evidence is static, read from the files at HEAD:
   linter (``npm install eslint``, ``uv sync --extra lint``) never counts, nor
   does a bare list item that only names a linter (``- mypy`` under
   ``matrix:``, ``needs:`` or ``stages:``); ``- ruff check .`` does.
+- A bare list item that only names an always-check program (``- pytest``,
+  ``- tox``, ``- py.test``, ``- nox``) counts only when its parent key is a
+  GitLab ``script:``, ``before_script:`` or ``after_script:``; under
+  ``needs:``, a ``matrix:`` axis or any other key it is a value, not a run
+  (issue #725). ``- pytest -q`` counts wherever it sits.
 - Known limit of the line-based scan (no YAML parser): every line is a
   candidate, so a command inside a non-script value, such as an ``env:`` block
   scalar holding ``pytest``, counts as a run.
@@ -42,10 +47,11 @@ the check may live there, so the signal is null (unknown), never false.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
-from lib.check_command import LINT_PROGRAMS, is_check_command, is_lint_command
+from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_check_command, is_lint_command
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
 from lib.shared_tooling import pulls_jobs_from_elsewhere
@@ -67,17 +73,23 @@ class CiChecksBlock(TypedDict):
 
 # A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
 _BARE_ITEM = re.compile(r"^\s*-\s+(?![\w.-]+:(?:\s|$))")
+# A GitLab key whose list items are shell lines (``script:``, ``  before_script: &s``).
+_SCRIPT_KEY = re.compile(r"^\s*(?:before_script|after_script|script):\s*(?:&\S+\s*)?(?:#.*)?$")
 
 
-def _line_runs_check(line: str) -> bool:
-    """One CI line, classified on its own so an open quote or a stray fence cannot carry over."""
+def _line_runs_check(line: str, *, script_item: bool = True) -> bool:
+    """One CI line, classified on its own so an open quote or a stray fence cannot carry over.
+
+    ``script_item`` is false for a bare list item whose parent key is not a script key
+    (``_script_items``): a lone ``- pytest`` there is a value, not a run.
+    """
     text = ci_line_text(line).removesuffix("\\").strip()
     if not text:
         return False
     commands = extract_commands(f"```bash\n{text}\n```\n")
     bare_item = _BARE_ITEM.match(line) is not None
     return any(
-        is_check_command(c.text)
+        (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
         or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text)))
         for c in commands
     )
@@ -89,9 +101,51 @@ def _lone_linter(text: str) -> bool:
     return len(words) == 1 and words[0] in LINT_PROGRAMS
 
 
+def _lone_check(text: str) -> bool:
+    """An always-check program with no argument (``pytest``, ``tox``): a value unless under ``script:``."""
+    words = command_words(text)
+    return len(words) == 1 and words[0] in ALWAYS_CHECK
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _script_items(lines: Sequence[str]) -> list[bool]:
+    """Per line: false for a bare list item whose parent key is not a GitLab script key.
+
+    The parent is the nearest line above at the item's indent or less that is not a
+    sibling item, skipping blank and comment lines and lines nested deeper (a sibling's
+    block scalar). An indentless list (``script:`` then ``- pytest`` at its indent) works.
+    """
+    flags = [True] * len(lines)
+    for i, line in enumerate(lines):
+        if _BARE_ITEM.match(line) is None:
+            continue
+        depth = _indent(line)
+        parent = ""
+        for above in reversed(lines[:i]):
+            stripped = above.strip()
+            if not stripped or stripped.startswith("#") or _indent(above) > depth:
+                continue
+            if _indent(above) == depth and _BARE_ITEM.match(above) is not None:
+                continue
+            parent = above
+            break
+        flags[i] = _SCRIPT_KEY.match(parent) is not None
+    return flags
+
+
+def count_check_lines(lines: Sequence[str]) -> int:
+    """How many of one CI file's lines run a test or lint check (a blanked line runs none)."""
+    flags = _script_items(lines)
+    return sum(1 for line, script_item in zip(lines, flags, strict=True)
+               if _line_runs_check(line, script_item=script_item))
+
+
 def check_commands(text: str) -> int:
     """How many lines of one CI file's text run a test or lint check."""
-    return sum(1 for line in text.splitlines() if _line_runs_check(line))
+    return count_check_lines(text.splitlines())
 
 
 def scan_ci_checks(repo_root: Path) -> CiChecksBlock:

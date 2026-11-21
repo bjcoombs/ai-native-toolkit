@@ -268,4 +268,9 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     boundary (issue #760), so a single-package repository no longer reads as
 #     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
 #     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
-ASSESS_METHOD_VERSION = 22
+# 23: ``ci_checks`` no longer counts a bare list item that only names an
+#     always-check program (``- pytest``, ``- tox``) unless its parent key is a
+#     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
+#     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
+#     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
+ASSESS_METHOD_VERSION = 23
