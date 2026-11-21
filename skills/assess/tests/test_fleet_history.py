@@ -290,8 +290,10 @@ def test_a_run_is_kept_and_a_rerun_compares_with_no_movement(froot2, tmp_path, c
     assert _run(froot2, tmp_path / "o1", hist) == 0
     (entry,) = _entries(hist)
     assert entry.parent.name == "acme"
-    assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    assert sorted(p.name for p in entry.iterdir()) == [
+        "fleet-data.json", "groups.jsonl", "repos.jsonl", "run.json"]
     assert (entry / "repos.jsonl").read_bytes() == (tmp_path / "o1" / "repos.jsonl").read_bytes()
+    assert (entry / "fleet-data.json").read_bytes() == (tmp_path / "o1" / "fleet-data.json").read_bytes()
     saved = tmp_path / "saved"
     saved.mkdir()
     for p in entry.iterdir():

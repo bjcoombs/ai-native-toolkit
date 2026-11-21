@@ -75,9 +75,10 @@ there.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
-| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
+| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
+| `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
 | `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
 | `--platform` | After the offline scan, run a separate platform pass that reads GitHub or GitLab through `gh` or `glab` and joins its blocks into each `ok` row. Off by default: without it no network call is made. See [Platform pass](#platform-pass---platform). |
 | `--platform-jobs N` | Repositories read in parallel by the platform pass (default: `[platform] jobs`, else 4). Needs `--platform`. |
@@ -101,8 +102,8 @@ there.
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--levels`, `--settings` or `--fleet-config` (a settings directory with no `*.json` fragment
-file included), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
+invalid `--levels`, `--settings`, `--fleet-config` or `--units` (a settings directory with no `*.json` fragment
+file included, or a units file naming a missing unit), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
 window, a `DIR` that cannot be created or written to (checked before any scan, so
 `--delete-after` never removes a clone whose results could not be written), an
 unusable run history location, or a `--compare` directory that is missing or
@@ -229,6 +230,89 @@ earlier history entries still load and match. `--compare` against a 1.x run from
 
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
+
+## Output: `fleet-data.json`
+
+One JSON document per run beside `groups.jsonl`: the versioned bundle the fleet
+artifact reads (#692). Keys sorted, compact, every list sorted; the same inputs give the
+same bytes. Schema: [`references/fleet-data.schema.json`](references/fleet-data.schema.json).
+Logic: `lib/fleet_units.py`, `lib/fleet_repo_facts.py`, `lib/fleet_data.py`. It is kept in
+the run history beside the other files.
+
+| Key | Value |
+|-----|-------|
+| `fleet_data_version` | Document version (1). |
+| `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
+| `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
+| `views` | One entry per view, `ownership` and `system`, each with its `units`. |
+| `repos` | One entry per repository row, sorted by `key`. |
+
+**Units.** A unit is an org, division, department, team or system. Each has a `key`
+(`<view>/<id>`), `view`, `parent` (the parent's key, `null` at a root), `kind`, `source`
+(`path`, `github_teams`, `codeowners` or `mapping`), `name`, `owners` and `owner_count`,
+`repos` (repositories below it at any depth), and its roll-ups. The ownership view is
+built from, in order:
+
+1. the repository path: GitLab nested groups (`grp/sub/proj` sits in `grp/sub`, under `grp`);
+2. GitHub teams from a `--settings` fragment's `teams` list (a repository in several teams takes the deepest, then the first slug);
+3. CODEOWNERS, as a fallback for a repository in a one-segment group no team placed: a
+   catch-all (`*`) owner that is a team under its group (`@acme/platform`) places it in
+   that team;
+4. the `--units` mapping, which always wins.
+
+An inferred unit's kind follows its place: a root is `org`, a unit that holds a
+repository is `team`, any other is `division` one level down and `department` deeper.
+An inferred unit the mapping left with no repository is dropped. The system view comes
+from the mapping alone. A repository sits in at most one unit per view, so it is counted
+once per view.
+
+The mapping file:
+
+```toml
+[[unit]]
+view = "ownership"        # or "system"; default "ownership"
+id = "acme/platform"      # unique within its view
+kind = "division"         # org, division, department, team, system
+parent = "acme"           # optional, a unit of the same view
+name = "Platform"         # optional
+owners = ["@acme/leads"]  # optional
+
+[[repo]]
+repo = "acme/svc1"        # a repos.jsonl id
+ownership = "acme/platform"
+system = "checkout"
+owners = ["@acme/payments"]  # optional; replaces the CODEOWNERS owners
+```
+
+A mapped repository not in the run is skipped and named on stderr.
+
+**Roll-ups.** Per unit, one entry in `levels` per `team` row: `mean_share`, the mean of
+each measured repository's level as a share of the row's top level (the quadrant's and
+trend lines' unit), `measured` of `repos` ("8 of 12 measured": an unknown or failed
+repository is counted, never read as 0), and `weakest`, the measured repository with the
+lowest share (then key) with its `share` and `level`. `overall` does the same over each
+repository's own mean share. `org` rows read a group's settings, not a repository, so
+they have no unit roll-up; their levels are in `groups.jsonl`.
+
+**Repositories.** Each has `key` (its id), `status`, `reason`, `active`, `web_url` (the
+`origin` remote as `https://<host>/<path>`, credentials, an ssh port and `.git` dropped; `null`
+for a local remote), `owners` and `owner_count` (the mapping's owners, else the
+CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), `mean_share`,
+and `rows`, one cell per `team` row: `status`, `level`, `top_level` and the criterion
+behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
+next level and its measured value; at the top level both are `null`; an unknown cell
+names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
+`not_scanned` for a failed repository).
+
+**Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
+the group and team paths (`ownership/acme/platform`) and repository ids unless
+`--hash-paths` or `--hash-salt` is given, and tokens and
+web URLs (so the host name of each remote appears, in `--out` and the run history), writes a string `value` that is not a short token as `set`, and drops unit
+names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, every unit
+and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no
+name, owner or web URL is written: the file names no repository, group or host. Hashes
+join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` in
+`lib/counts_only_rules.py`.
 
 ## Output: `agent_clusters.json`
 
@@ -447,7 +531,7 @@ kept counts and each kept repository with its reason token (`scan_not_ok`,
 
 Each counts-only run is also kept, so a programme can see what moved since the
 last sprint. The run's `repos.jsonl`, `groups.jsonl` and `run.json` (plus
-`doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
+`fleet-data.json`, and `doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`, and `<org>` is
 `--history-org` or the first segment every repository id shares (the distinct
 ones sorted and joined by `+` when they differ, e.g. `grpa+grpb`). A `--full`

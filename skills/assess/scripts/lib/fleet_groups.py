@@ -63,6 +63,9 @@ from lib.shared_tooling import distinct_ids
 FLEET_GROUP_VERSION = 1
 GROUPS_FILE = "groups.jsonl"
 SETTINGS_META_KEYS = frozenset({"scope", "provider"})
+# A fragment's GitHub team list (#703) places repositories in the units tree
+# (lib/fleet_units.py); it is not a setting.
+NOT_SETTINGS = SETTINGS_META_KEYS | {"teams"}
 UNKNOWN = "unknown"
 SET = "set"
 
@@ -135,7 +138,7 @@ def load_settings(path: Path) -> dict[str, JsonDict]:
 def normalise_settings(fragment: Mapping[str, Any]) -> JsonDict:
     """Each setting as ``{value, reason}``, or ``{available: false, reason}`` when unknown or malformed."""
     out: JsonDict = {}
-    for key in sorted(k for k in fragment if k not in SETTINGS_META_KEYS):
+    for key in sorted(k for k in fragment if k not in NOT_SETTINGS):
         raw = fragment[key]
         value = raw.get("value") if isinstance(raw, dict) else None
         if value is None or value == UNKNOWN:
