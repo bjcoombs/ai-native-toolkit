@@ -39,7 +39,6 @@ block into ``run-context.json`` is a separate task's job.
 """
 from __future__ import annotations
 
-import datetime as _dt
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
@@ -55,6 +54,7 @@ from lib.change_coupling import (
     GIT_TIMEOUT_SECONDS,
     repo_top,
 )
+from lib.commit_anchor import head_commit_epoch
 from lib.run_context_types import JsonDict
 
 
@@ -141,16 +141,21 @@ def _has_intent_source(code_path: str, doc_dirs: list[tuple[str, ...]]) -> bool:
     return any(code_parts[: len(d)] == d for d in doc_dirs)
 
 
-def _days_since_last_human_commit(repo_top: str, path: str) -> int | None:
-    """Velocity clock (D2): days since the last human-authored commit on ``path``.
+def _days_since_last_human_commit(repo_top: str, path: str, anchor_epoch: int | None) -> int | None:
+    """Velocity clock (D2): days from the last human-authored commit on ``path``
+    to ``anchor_epoch`` (HEAD's committer time, so the count is a function of the
+    commit, not of today - issue #773).
 
     A comprehension-event is a human-originated act demonstrating understanding;
     the deterministic, git-log-reachable instance is a commit whose *author* is a
     confirmed human (same human/agent test ``authorship_analysis`` uses). ``git
     log`` lists newest-first, so the first human-authored commit we hit is the
     most recent. Returns ``None`` when git is unavailable or no human-authored
-    commit exists (indeterminate - never silently treated as "fresh").
+    commit exists (indeterminate - never silently treated as "fresh"), and when
+    there is no anchor.
     """
+    if anchor_epoch is None:
+        return None
     fmt = "\x1e%ct\x1f%an\x1f%ae"
     try:
         raw = subprocess.run(
@@ -161,7 +166,6 @@ def _days_since_last_human_commit(repo_top: str, path: str) -> int | None:
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return None
 
-    now = _dt.datetime.now().timestamp()
     for chunk in raw.split("\x1e"):
         chunk = chunk.strip()
         if not chunk:
@@ -177,7 +181,7 @@ def _days_since_last_human_commit(repo_top: str, path: str) -> int | None:
             ts = int(ct)
         except ValueError:
             continue
-        return max(0, int((now - ts) // 86400))
+        return max(0, (anchor_epoch - ts) // 86400)
     return None
 
 
@@ -218,6 +222,7 @@ def analyze_understanding(
     """
     repo_root = Path(repo_root)
     top = repo_top(repo_root)
+    anchor = head_commit_epoch(repo_root) if top is not None else None
 
     file_ccn = _extract_file_ccn(complexity_stats)
     threshold = _high_ccn_threshold(complexity_stats)
@@ -234,7 +239,7 @@ def analyze_understanding(
         is_high_complexity = file_ccn.get(path, 0.0) >= threshold
 
         days_since = (
-            _days_since_last_human_commit(top, path)
+            _days_since_last_human_commit(top, path, anchor)
             if top is not None
             else None
         )

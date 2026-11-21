@@ -80,7 +80,8 @@ def test_shallow_clone_reports_lower_bound_age(tmp_path: Path) -> None:
     readme = _rows(block)["src/README.md"]
 
     assert readme["last_commit_days_bound"] == "lower"
-    assert 99 <= readme["last_commit_days"] <= 101  # the boundary age, a floor
+    # The boundary age (100 days ago) counted to HEAD (10 days ago, #773): a floor.
+    assert 89 <= readme["last_commit_days"] <= 91
     assert readme["confidence"] == "low"
     assert block["history_truncated"] is True
     boundary = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=100)).date()
@@ -109,7 +110,7 @@ def test_full_clone_reports_exact_age_unchanged(tmp_path: Path) -> None:
     block = analyze_doc_staleness(_history(tmp_path))
     readme = _rows(block)["src/README.md"]
 
-    assert 199 <= readme["last_commit_days"] <= 201
+    assert 189 <= readme["last_commit_days"] <= 191  # 200 days ago, to HEAD 10 days ago
     assert "last_commit_days_bound" not in readme
     assert readme["confidence"] == "high"
     assert block["history_truncated"] is False
@@ -130,7 +131,7 @@ def test_boundary_is_never_a_bulk_commit(tmp_path: Path) -> None:
     assert block["creation_date_fallback_count"] == 0
     assert block["bulk_commits_skipped_total"] == 0
     assert "last_commit_days_bound" not in rows["d0/README.md"]
-    assert 19 <= rows["d0/README.md"]["last_commit_days"] <= 21
+    assert rows["d0/README.md"]["last_commit_days"] == 0  # the edit is HEAD (#773)
     for i in range(1, 12):
         assert rows[f"d{i}/README.md"]["last_commit_days_bound"] == "lower"
         assert "last_change_basis" not in rows[f"d{i}/README.md"]

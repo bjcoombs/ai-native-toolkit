@@ -384,10 +384,11 @@ def _safe_rel(path: Path, repo_root: Path) -> str:
 
 
 def _window_since(churn_label: str | None) -> str | None:
-    """The `--since` expression behind a `pick_churn_window` label."""
-    for label, since in CHURN_WINDOWS:
+    """The window (``"12mo"``) behind a `pick_churn_window` label; None for all
+    history. Counted back from HEAD's commit time, like the churn map (#773)."""
+    for label, window in CHURN_WINDOWS:
         if churn_label == f"commits ({label})":
-            return since
+            return window
     return None
 
 

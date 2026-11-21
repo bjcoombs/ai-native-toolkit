@@ -379,13 +379,13 @@ def test_bulk_commit_does_not_reset_doc_staleness(git_repo) -> None:
     _bulk_fixture(repo, commit)
     r = analyze_doc_staleness(repo)
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    expected = {rel: 300 - 10 * i for i, rel in enumerate(_BULK_DOCS)}
-    expected["docs/caching.md"] = 3
-    # One day of slack: the fixture stamps naive local time, so a DST change
-    # between then and now moves a 300-day-old commit by an hour.
+    # Ages count to HEAD (3 days ago), not to today (issue #773).
+    expected = {rel: 300 - 10 * i - 3 for i, rel in enumerate(_BULK_DOCS)}
+    expected["docs/caching.md"] = 0
+    # One day of slack: naive local stamps, so a DST change can move one by an hour.
     assert set(days) == set(expected)
     assert all(abs(days[k] - v) <= 1 for k, v in expected.items()), days
-    assert days["docs/caching.md"] == 3
+    assert days["docs/caching.md"] == 0
 
 
 def test_bulk_commit_is_recorded_with_full_sha(git_repo) -> None:
@@ -422,7 +422,7 @@ def test_doc_created_in_bulk_commit_keeps_its_creation_date(git_repo) -> None:
         p.write_text("<!-- header -->\n" + p.read_text(), encoding="utf-8")
     commit("chore: headers", days_ago=5)
     r = analyze_doc_staleness(repo)
-    assert {d["last_commit_days"] for d in r["docs"]} == {100}
+    assert {d["last_commit_days"] for d in r["docs"]} == {95}  # to HEAD, 5 days ago
     assert [s["sha"] for s in r["bulk_commits_skipped"]] == [_head_sha(repo, "HEAD")]
 
 
@@ -436,7 +436,7 @@ def test_small_repo_all_docs_commit_is_not_bulk(git_repo) -> None:
         _write(repo, rel, "v2\n")
     commit("docs: rewrite", days_ago=4)
     r = analyze_doc_staleness(repo)
-    assert {d["last_commit_days"] for d in r["docs"]} == {4}
+    assert {d["last_commit_days"] for d in r["docs"]} == {0}  # the rewrite is HEAD
     assert r["bulk_commits_skipped"] == []
 
 
@@ -454,7 +454,7 @@ def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
     repo, commit = git_repo
     _bulk_fixture(repo, commit)
     files = grade_instruction_files(repo)[0]
-    assert files["CLAUDE.md"]["freshness_days"] in (299, 300)  # DST slack
+    assert files["CLAUDE.md"]["freshness_days"] in (296, 297)  # to HEAD 3 days ago; DST slack
 
 
 def _sweep(repo: Path, commit, tag: str, days_ago: int, extra=()) -> None:
@@ -511,8 +511,8 @@ def test_mass_rename_keeps_pre_rename_content_dates(git_repo) -> None:
     commit("chore: move docs to guide", days_ago=1)
     r = analyze_doc_staleness(repo)
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["guide/caching.md"] == 3
-    assert days["guide/security.md"] in (189, 190)  # DST slack
+    assert days["guide/caching.md"] == 2  # to HEAD, 1 day ago
+    assert days["guide/security.md"] in (188, 189)  # DST slack
 
 
 def test_scan_incomplete_when_git_log_times_out(git_repo, monkeypatch) -> None:
@@ -538,7 +538,7 @@ def test_scan_incomplete_when_git_log_times_out(git_repo, monkeypatch) -> None:
     assert r["bulk_commit_scan_complete"] is False
     assert r["bulk_commits_skipped"] == []
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["CLAUDE.md"] == 8  # plain newest-commit read
+    assert days["CLAUDE.md"] == 5  # plain newest-commit read: 8 days ago, HEAD 3
 
 
 def test_shallow_clone_marks_scan_incomplete(git_repo, tmp_path: Path) -> None:
@@ -569,7 +569,7 @@ def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
         p.write_text("<!-- again -->\n" + p.read_text(), encoding="utf-8")
     commit("chore: headers everywhere", days_ago=5)
     files = grade_instruction_files(repo)[0]
-    assert files[".cursorrules"]["freshness_days"] in (399, 400)  # DST slack
+    assert files[".cursorrules"]["freshness_days"] in (394, 395)  # to HEAD; DST slack
 
 
 def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> None:
@@ -593,7 +593,7 @@ def test_shallow_probe_timeout_marks_scan_incomplete(git_repo, monkeypatch) -> N
     gc.content_commit_clock.cache_clear()
     assert r["bulk_commit_scan_complete"] is False
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["docs/caching.md"] == 3
+    assert days["docs/caching.md"] == 0  # the caching edit is HEAD
 
 
 def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> None:
@@ -613,7 +613,7 @@ def test_rename_scan_failure_marks_scan_incomplete(git_repo, monkeypatch) -> Non
     ds._clock_at.cache_clear()
     assert r["bulk_commit_scan_complete"] is False
     days = {d["path"]: d["last_commit_days"] for d in r["docs"]}
-    assert days["docs/caching.md"] == 3
+    assert days["docs/caching.md"] == 0  # the caching edit is HEAD
 
 
 # --- Behind-the-subject cap: a lying map must be behind its subject now -----

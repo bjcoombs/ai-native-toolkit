@@ -13,7 +13,8 @@ Block (``ai_usage`` in run-context.json)::
 
     {"available": True,
      "window": str,                # the history window applied, e.g. "12mo", "90d", "all-time"
-     "since": str | None,          # the git --since expression behind it; None = full history
+     "since": str | None,          # the absolute git --since bound behind it ("@<epoch>",
+                                   # counted back from HEAD's commit time); None = full history
      "merge_rule": "excluded",     # merge commits are not counted (git log --no-merges)
      "total_commits": int,         # non-merge commits reachable from HEAD in the window
      "agent_trailer_commits": int, # of those, commits with at least one agent co-author trailer
@@ -52,7 +53,9 @@ Window. ``history_window`` is in the ``<n>d|w|mo|y`` grammar (``"12mo"``):
 treemap, normalised by ``git_churn.window_from_churn_label``, so the share
 covers the same history as the churn axis; the headless signals run passes
 ``--window``. None (all-time churn, no stats, no git) means full history,
-recorded as ``"all-time"``.
+recorded as ``"all-time"``. The window counts back from HEAD's committer time,
+not from today (issue #773), so the same commit gives the same counts on any
+date; ``since`` records the absolute ``@<epoch>`` bound.
 
 Scope: commits touching the ``--scope`` subtree when the core passes one
 (``git log -- <scope>``), otherwise every commit under ``repo_root``.
@@ -85,6 +88,7 @@ from lib.agent_identity import (
     coauthors_have_ai_assistant,
     compile_config_rules,
 )
+from lib.commit_anchor import since_args
 from lib.fleet_config import FleetConfig, ai_usage_section
 from lib.history_window import split_window
 
@@ -103,9 +107,6 @@ LIMITS = (
     "GitLab access-token users are counted apart and are agents only when a configured rule says so.",
     "Merge commits are excluded; each merged commit counts once.",
 )
-
-_UNIT = {"d": "days", "w": "weeks", "mo": "months", "y": "years"}
-
 
 class AiUsageBlock(TypedDict):
     """The ``ai_usage`` run-context block when history was read."""
@@ -135,19 +136,19 @@ class AiUsageUnavailable(TypedDict):
     reason: str
 
 
-def resolve_window(window: str | None) -> tuple[str, str | None]:
-    """``(label, since)`` for a ``<n>d|w|mo|y`` window, or all history for None.
+def resolve_window(window: str | None) -> str:
+    """The block's label for a ``<n>d|w|mo|y`` window, or ``"all-time"`` for None.
 
     Raises ``ValueError`` on anything else, so a malformed window never silently
     widens to full history.
     """
     if window is None:
-        return ALL_TIME, None
+        return ALL_TIME
     try:
-        count, unit = split_window(window)
+        split_window(window)
     except ValueError:
         raise ValueError(f"unrecognised history window {window!r}") from None
-    return window, f"{count} {_UNIT[unit]} ago"
+    return window
 
 
 REASON_NO_GIT = "git is not installed"
@@ -183,7 +184,7 @@ class _Commit(NamedTuple):
     coauthors: str  # the Co-authored-by values joined by GS
 
 
-def _commits(repo_root: Path, scope: Path | None, since: str | None) -> list[_Commit]:
+def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[_Commit]:
     """Author and co-author fields of each non-merge commit in the window.
 
     Raises ``_GitUnavailable`` when git cannot answer, or when the clone is
@@ -192,9 +193,7 @@ def _commits(repo_root: Path, scope: Path | None, since: str | None) -> list[_Co
     """
     args = ["log", "--no-merges",
             "--format=%x1e%ae%x1f%an%x1f%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
-    if since is not None:
-        args.append(f"--since={since}")
-    args += ["--", str(scope) if scope is not None else "."]
+    args += [*bound, "--", str(scope) if scope is not None else "."]
     out = _git(repo_root, *args)
     try:
         shallow = _git(repo_root, "rev-parse", "--is-shallow-repository").strip()
@@ -230,10 +229,15 @@ def scan_ai_usage(
 ) -> AiUsageBlock | AiUsageUnavailable:
     """Count the window's commits, those with an AI-assistant co-author trailer and
     those an agent identity authored (``fleet_config``: the merged ``[ai_usage]`` rules)."""
-    label, since = resolve_window(history_window)
+    label = resolve_window(history_window)
+    # Counted back from HEAD's commit time, never today (#773); no HEAD, no window.
+    bound = since_args(repo_root, history_window, None)
+    if bound is None:
+        return {"available": False, "reason": REASON_NOT_A_REPO}
+    since = bound[0].partition("=")[2] if bound else None
     matcher = matcher_from_config(fleet_config)
     try:
-        commits = _commits(repo_root, scope, since)
+        commits = _commits(repo_root, scope, bound)
     except _GitUnavailable as e:
         return {"available": False, "reason": str(e)}
     total = len(commits)
