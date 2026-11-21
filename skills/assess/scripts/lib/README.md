@@ -1714,6 +1714,90 @@ committer time, issue #773, rather than calendar age; None without a HEAD). Prim
 anchor and no externalised spec. Reuses `change_coupling.authorship_analysis` so the
 conservative agent/human classification is defined one way.
 
+### Check manifest
+
+**`check_manifest.py`** *(#789 step 1, #792)*
+The strict loader for the check manifest, `skills/assess/checks/core.toml` (owner
+`core`), which declares every check once. Its published contract is
+`skills/assess/references/check-manifest.schema.json` (JSON Schema 2020-12, one manifest
+per owner). `load_manifest(path=CORE_MANIFEST)` reads the TOML with stdlib `tomllib`,
+checks it with allowed-key sets per entry kind and the cross-reference rules below, and
+returns the document itself as a `CheckManifest` TypedDict (no defaults filled, nothing
+re-keyed, so `json.dumps` of it validates against the schema). Any error raises
+`CheckManifestError`, whose `errors` lists every structured finding
+(`check_validation.ValidationError`); `validate_manifest(data)` returns them without
+raising, and `parse_manifest(data)` validates an already-parsed document. Helpers:
+`collectors`, `signals`, `conditions`, `findings` (by `order`), `scan_key` (a collector
+id minus its owner), `block_collectors` (run-context block to publishing collector id)
+and `condition_key(row, level, signal)`.
+
+The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
+`[[entries]]` of four kinds:
+
+- `collector`: one `scan_registry.ScanSpec`, id `core.<scan key>`, in scan-table order.
+  `callable` (`module:function`), `offline_callable`, `publishes` (the run-context keys
+  written: `[key]`, the spread keys with `spread = true`, or `[]` with `private = true`),
+  `reads`, `stage`, `degrade`, `gate_reason` (a token for one of
+  `scan_registry.GATE_REASONS`: `setup`, `bad_scope`, `self_degrading`, `serialiser`),
+  `label`, `network`, `platform_pass` (`signals.PLATFORM_SCANS`), `platform_only`
+  (`signals.PLATFORM_ONLY_SCANS`), `headless` (published block to `registered`,
+  `headless_variant` or `unregistered`; an unlisted block is not reported headless),
+  `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
+  `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots
+  under its blocks), `privacy` (its `counts_only_rules.RULES` patterns and classes;
+  `archived_finding_paths` sits with the private `keyhole` collector that produces it),
+  `unknown_reasons` (`code`, `carried_in` `reason` or `basis`, `means`, `next_step`),
+  `revision` (1 for every collector; bumped when a published value changes meaning,
+  #774) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
+  signals carry it now.
+- `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
+  (`bool` or `number` here), `collector` (the collector publishing its first segment),
+  `evidence` (the producer input class, `level_signals.SIGNAL_INPUTS`, #783) and
+  `null_means`. No grade is authored: it follows from the class
+  (`level_signals.INPUT_GRADES`).
+- `condition`: display metadata for one default criterion, keyed
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`), id
+  `core.cond.<row>.<level>.<leaf>`, with a supportive `fix`. The criterion itself stays in
+  `levels/default.toml`; a custom `--levels` file needs no entries.
+- `finding`: a derived finding, id `core.finding.<name>`, with `order`, `action`,
+  `mode`, `concern` (in `assess_config.GATE_CONCERN_FINDINGS`), `inputs`, `derive`,
+  `thresholds`, `suppressed_when` (the churn suppression, a #789 rule expression in
+  source form) and `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`).
+
+Loader rules beyond types: an id has its kind's form; a private collector publishes
+nothing and is not spread; a plain collector publishes `[key]`; opting out of degrading
+names a `gate_reason`; `offline_callable` needs `network`, `platform_only` needs
+`platform_pass`; a `headless` block or `shapes` path is published by the collector, and a
+block is `headless_variant` exactly when a variant names it; every read is a core input
+or an earlier collector at the same or an earlier stage, and no key shadows a core
+input or publishes a block another collector publishes (the `scan_registry.validate`
+rules); a signal's collector exists and publishes its block; a condition names a declared
+signal; finding orders are distinct and every finding input names a block or collector.
+An unknown key or reference carries a "did you mean" `suggestion` and the `available`
+names. The module imports none of the tables it describes, because later steps make
+them load from it.
+
+Nothing reads the manifest at runtime yet. **Agreement test:**
+`tests/test_check_manifest.py` checks it in both directions against `scan_registry.SCANS`
+(`test_registry_matches_manifest`: one collector per scan key, equal `callable`, `reads`,
+`stage`, `publishes`, `private`, `spread`, `degrade`, `gate_reason`, `label`, `network`
+and `offline_callable`, in table order; a failure names the scan key), the headless
+tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the default
+model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
+against the schema. Until later steps generate those tables from the manifest, adding a
+scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+Loader tests: `tests/test_check_manifest_loader.py`.
+
+**`check_validation.py`**
+Structured validation findings ported from meridianhub/meridian
+`services/control-plane/internal/validator/manifest_validator.go` (`ValidationError`,
+`findClosestMatch`, `levenshteinDistance`): a `ValidationError` TypedDict (`severity`
+`error` or `warning`, `path`, `code`, `message`, optional `suggestion` and `available`),
+`finding(...)` to build one, `format_error` (`[severity] path: message (suggestion: x)`),
+`errors_only`, `levenshtein` and `closest` (the nearest candidate within half the
+target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
+Meridian's distance and closest-match tables.
+
 ### Configuration
 
 **`run_scope.py`**

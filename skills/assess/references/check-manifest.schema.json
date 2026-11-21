@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/check-manifest.schema.json",
+  "title": "Check manifest",
+  "description": "One owner's check manifest (#789): collectors, signals, conditions and findings. The core manifest is skills/assess/checks/core.toml; the runtime loader is lib/check_manifest.py, which applies the same rules plus cross-references (reads graph, signal collectors, condition signals, finding inputs).",
+  "type": "object",
+  "required": [
+    "manifest_version",
+    "owner",
+    "entries"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,39}$"
+    },
+    "owner_version": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:-]{0,127}$"
+    },
+    "privacy": {
+      "enum": [
+        "path",
+        "token",
+        "reason",
+        "id",
+        "drop"
+      ]
+    },
+    "evidence": {
+      "enum": [
+        "config_text",
+        "head_text",
+        "head_structure",
+        "ci_executed",
+        "git_history",
+        "execution_artifact",
+        "platform"
+      ],
+      "description": "The producer input class (level_signals.InputClass, #783). The confidence grade is derived from it, never authored."
+    },
+    "unknown_reason": {
+      "type": "object",
+      "required": [
+        "code",
+        "means",
+        "next_step"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,39}$"
+        },
+        "carried_in": {
+          "enum": [
+            "reason",
+            "basis"
+          ],
+          "description": "reason: the block's available-false reason code; basis: a token on a null leaf"
+        },
+        "means": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "next_step": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "collector",
+            "signal",
+            "condition",
+            "finding"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "since": {
+          "type": "string"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "collector"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/collector"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "signal"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/signal"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "condition"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "finding"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "collector": {
+      "description": "One scan_registry.ScanSpec; id is <owner>.<scan key>.",
+      "required": [
+        "callable",
+        "publishes",
+        "reads",
+        "stage",
+        "revision"
+      ],
+      "properties": {
+        "callable": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "offline_callable": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The headless runner's offline form of a network collector"
+        },
+        "publishes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Run-context keys written: [key] for a plain collector, the spread keys for a spread one, [] for a private one"
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stage": {
+          "enum": [
+            "setup",
+            "read_side",
+            "post_offers",
+            "final"
+          ]
+        },
+        "private": {
+          "type": "boolean",
+          "default": false
+        },
+        "spread": {
+          "type": "boolean",
+          "default": false
+        },
+        "degrade": {
+          "type": "boolean",
+          "default": true
+        },
+        "gate_reason": {
+          "enum": [
+            "setup",
+            "bad_scope",
+            "self_degrading",
+            "serialiser"
+          ],
+          "description": "Token for one of scan_registry.GATE_REASONS"
+        },
+        "label": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "network": {
+          "type": "boolean",
+          "default": false
+        },
+        "platform_pass": {
+          "type": "boolean",
+          "default": false,
+          "description": "Listed in signals.PLATFORM_SCANS: --platform runs it with its network reads"
+        },
+        "platform_only": {
+          "type": "boolean",
+          "default": false,
+          "description": "Listed in signals.PLATFORM_ONLY_SCANS: absent without --platform"
+        },
+        "headless": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "registered",
+              "headless_variant",
+              "unregistered"
+            ]
+          },
+          "description": "Published block -> how the headless runner reports it: from this spec, from a headless_variants spec, or as not_registered (signals.UNREGISTERED_SCANS). An unlisted block is not reported."
+        },
+        "headless_variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "block",
+              "callable",
+              "reads",
+              "stage"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "block": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "callable": {
+                "type": "string",
+                "pattern": "^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$"
+              },
+              "reads": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "stage": {
+                "enum": [
+                  "setup",
+                  "read_side",
+                  "post_offers",
+                  "final"
+                ]
+              }
+            }
+          },
+          "description": "The headless runner's own specs (signals.HEADLESS_SCANS) for blocks this collector publishes in a full run"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence"
+        },
+        "shapes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "type"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "pattern": "^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$"
+              }
+            }
+          },
+          "description": "Typed roots (counts_only_schema.ROOTS) under the blocks this collector publishes"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Bumped when the meaning of any published value changes (#774)"
+        },
+        "unknown_reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/unknown_reason"
+          }
+        },
+        "privacy": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/privacy"
+          },
+          "description": "Counts-only field pattern -> class (counts_only_rules.RULES)"
+        }
+      }
+    },
+    "signal": {
+      "description": "One leaf a maturity-model criterion reads; id is <owner>:<path>.",
+      "required": [
+        "path",
+        "type",
+        "collector",
+        "evidence"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "collector": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": [
+            "bool",
+            "number",
+            "string",
+            "enum"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "null_means": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence"
+        }
+      }
+    },
+    "condition": {
+      "description": "Display metadata for a criterion that lives in a maturity model; id is <owner>.cond.<row>.<level>.<leaf>.",
+      "required": [
+        "key",
+        "fix"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+\\.[0-9]+:[a-z0-9_.]+$",
+          "description": "<row id>.<level>:<signal path>, e.g. layer-5-ci.1:ci_checks.test_or_lint_runs"
+        },
+        "fix": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "The supportive next step shown when unmet"
+        }
+      }
+    },
+    "finding": {
+      "description": "A derived finding type; id is <owner>.finding.<name>.",
+      "required": [
+        "name",
+        "order",
+        "action",
+        "mode",
+        "concern",
+        "inputs"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "mode": {
+          "enum": [
+            "characterize_first",
+            "verify_then_retire",
+            "refactor_safe"
+          ]
+        },
+        "concern": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "derive": {
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "suppressed_when": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "prune_missing_paths": {
+          "type": "boolean",
+          "default": false
+        },
+        "headless": {
+          "enum": [
+            "registered",
+            "unregistered"
+          ]
+        }
+      }
+    }
+  }
+}
