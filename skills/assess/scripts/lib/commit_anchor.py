@@ -15,7 +15,9 @@ from pathlib import Path
 
 from lib.history_window import anchored_since
 
-# The same cap as ``git_churn.GIT_TIMEOUT_SECONDS`` (that module imports this one).
+# Cap every git call so a stuck invocation (huge repo, lock contention, a hung
+# credential prompt) degrades to "no churn data" rather than blocking the run.
+# The one definition: git_churn imports and re-exports it.
 GIT_TIMEOUT_SECONDS = 20
 
 

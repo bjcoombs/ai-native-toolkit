@@ -32,13 +32,12 @@ from lib.assess_config import (
 )
 from lib.change_coupling import build_rename_map
 from lib.content_paths import RAW_LOG_ARGS, content_paths
+# GIT_TIMEOUT_SECONDS is defined once, in commit_anchor; re-exported for this
+# module's importers.
+from lib.commit_anchor import GIT_TIMEOUT_SECONDS as GIT_TIMEOUT_SECONDS
 from lib.commit_anchor import head_commit_epoch, since_args
 from lib.history_window import WINDOW_PATTERN
 from lib.run_context_types import BulkCommit, JsonDict
-
-# Cap every git call so a stuck invocation (huge repo, lock contention, a hung
-# credential prompt) degrades to "no churn data" rather than blocking the run.
-GIT_TIMEOUT_SECONDS = 20
 
 # Git pathspec dropping that directory from a status call. Exclude-only
 # pathspecs are legal: git includes everything else.
