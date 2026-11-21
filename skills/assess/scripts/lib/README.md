@@ -1298,8 +1298,8 @@ rows with a known level in both runs (org rows are out of the mean, the counts a
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
 removed or with no row known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
-both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
-carries a `*` explained under the chart.
+both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
+`scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
 With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
@@ -1528,13 +1528,54 @@ gives `comparable: false` with no deltas. `compare` reports the measured-set mov
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
 a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
-team row's set moved) or `set_and_level` (a team row's set and evidence moved). An org
+team row's set moved) or `set_and_level` (a team row's set and evidence moved), plus the #774 causes below. An org
 row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
 `write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
 A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
+`compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
+passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
+
+**`fleet_scanner_diff.py`**
+Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
+
+Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
+signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
+earlier run then reads the new signal as absent (unknown), never as a false repository move.
+A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
+
+The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
+`toolkit_commit`. Equal commits are `same`, and git never runs (two null commits only at one
+`plugin_version`). One null commit, or two null commits at different `plugin_version`s, is
+`unavailable`. Two different commits run `git diff --name-only`
+over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
+result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
+producer modules:
+
+- the defining module of `fn` / `offline_fn` and its static `lib` import closure (a package
+  such as `lib/test_pressure/` included, with its relative imports);
+- for a dispatch module (one defining several specs), the modules its function body names;
+- the producers of every spec it `reads`;
+- `run_context_types` is left out.
+
+`changed_blocks` intersects the map with the diff. `attribute` orders a moved team row's cause:
+
+1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
+   stored scans lack while the other run holds it. This is measured-set movement, never level
+   movement; the achievements replay already treats an unknown side as neutral.
+2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
+   `notes` line saying the scanner diff was unavailable.
+3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
+   reads (`row_signals`, else any) changed producers and a repository in the group changed a
+   signal in it.
+
+A `set_and_level` row given one of these causes also carries `set_moved: true`, so the
+measured-set movement stays reported. Org rows keep their cause. Limits: the map comes from the running code, a change outside
+`lib/` is not seen, and the import closure over-attributes rather than misses.
+Tests: `tests/test_fleet_scanner_diff.py`.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
