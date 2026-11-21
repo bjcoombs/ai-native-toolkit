@@ -168,7 +168,7 @@ window, anchor_epoch)` gives `["--since=@<epoch>"]` through
 anchor so the caller degrades. Used by `git_churn`, `ai_usage` and
 `understanding_analysis`. Tests: `tests/test_commit_anchor.py` (anchored values on a
 dated fixture repository, and the same `scans` from two faked dates, Python's clock and
-git's), `tests/test_no_wall_clock.py` (an AST guard: no `now()`/`today()`/`time.time()`
+git's), `tests/test_no_wall_clock.py` (an AST guard: no wall-clock read
 outside an allowlist of run-metadata and network functions, no relative git date
 literal, and every date bound a headless run passes to git starts with `@`).
 Outside the guarantee: the network scans (`merged_sample`, `review_reality`,

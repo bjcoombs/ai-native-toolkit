@@ -79,12 +79,13 @@ def _functions(tree: ast.AST) -> Iterator[tuple[str, ast.AST]]:
 
 
 def _own_nodes(scope: ast.AST) -> Iterator[ast.AST]:
-    """Nodes of ``scope`` not inside a nested function (those are their own scope)."""
+    """Nodes of ``scope`` not inside a nested function (those are their own scope);
+    a lambda's body belongs to the function that holds it."""
     stack = list(ast.iter_child_nodes(scope))
     while stack:
         node = stack.pop()
         yield node
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             stack.extend(ast.iter_child_nodes(node))
 
 

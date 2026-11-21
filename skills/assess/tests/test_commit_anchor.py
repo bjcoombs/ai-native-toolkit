@@ -73,6 +73,7 @@ def test_windows_degrade_without_an_anchor(tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(empty), "init", "-q"], check=True)
     assert git_churn_scores(empty, window="12mo") == {}
     assert commit_epochs_by_file(empty, "12mo") is None
+    assert scan_ai_usage(empty, None, "6mo")["available"] is False
 
 
 def test_last_commit_days_counts_from_head(dated_git_repo: Path) -> None:
