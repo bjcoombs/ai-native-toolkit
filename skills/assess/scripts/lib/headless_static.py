@@ -14,7 +14,8 @@ per block here, outside the core, as ``lib.headless_layers`` does for the layer
 - ``doc_graph`` is the core's doc graph. Without networkx it reports
   ``no_networkx``.
 - ``doc_staleness`` reads the doc graph's doc->code edges, as the core does,
-  and needs git: a target that is not a git work tree reports ``not_git_root``.
+  and needs git: a target that is not the top of a git work tree reports
+  ``not_git_root``.
 - ``archetype`` is the core's software-or-knowledge-base verdict.
 
 Each block degrades to the bare ``{"available": false, "reason": ...}`` marker
@@ -23,6 +24,7 @@ counts-only keeps a named code and a maturity-model row reads unknown.
 """
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -79,8 +81,20 @@ def doc_graph(repo_root: Path, excludes: Excludes) -> JsonDict:
 
 
 def is_git_work_tree(repo_root: Path) -> bool:
-    """True when ``repo_root`` holds a ``.git`` directory or worktree file."""
-    return (repo_root / ".git").exists()
+    """True when ``repo_root`` is itself the top of a git work tree.
+
+    ``git -C`` walks up parent directories, so a target nested in another
+    checkout, or one with a broken ``.git`` file, is not a work tree here.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, encoding="utf-8", check=True, timeout=30,
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
+        return False
+    top = out.stdout.strip()
+    return bool(top) and Path(top).resolve() == repo_root.resolve()
 
 
 def doc_staleness(repo_root: Path, graph: Any, excludes: Excludes) -> JsonDict:

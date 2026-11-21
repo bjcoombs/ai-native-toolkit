@@ -139,7 +139,8 @@ class DocStalenessSummary(TypedDict):
     ``measured_docs`` counts the docs with a code subject of their own (every
     method but ``repo-baseline``: a baseline doc is measured against all of the
     repository's churn, so it reads stale on any active repository and says
-    nothing about the doc). ``stale_docs`` counts those that
+    nothing about the doc), plus any generated doc whose declared source gave a
+    ``source_newer`` verdict. ``stale_docs`` counts those that
     ``doc_complexity_join.is_stale`` marks (a ratio above
     ``STALENESS_RATIO_THRESHOLD``, or a newer declared source) and
     ``stale_pct`` is their share of ``measured_docs`` as a whole percent,
@@ -445,7 +446,8 @@ class _ChurnContext:
 def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalenessSummary:
     """The ``summary`` counts over the subject-mapped ``rows``; null counts when
     not ``reliable`` or no row is mapped."""
-    mapped = [row for row in rows if row["subject_method"] != REPO_BASELINE]
+    mapped = [row for row in rows if row["subject_method"] != REPO_BASELINE
+              or row.get("provenance", {}).get("source_newer") is not None]
     if not reliable or not mapped:
         return {"measured_docs": len(mapped), "stale_docs": None, "stale_pct": None}
     stale = sum(1 for row in mapped if is_stale({**row}))

@@ -267,8 +267,8 @@ def _stale_docs(op: str, value: Operand) -> Guidance | None:
     return {"change": "Update the docs whose code has moved on since they last changed, and "
                       "keep docs current in the same pull request as the code they describe.",
             "done_when": f"{bound[0].upper()}{bound[1:]} of the docs that describe a part of "
-                         "the code read stale: their code changed more than twice as often "
-                         "as the doc (the `/assess` staleness ratio above 2)."}
+                         "the code have had more than two changes to that code since the doc "
+                         "itself last changed (the `/assess` staleness ratio above 2)."}
 
 
 def _setting(name: str) -> Wording:

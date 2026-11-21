@@ -222,3 +222,18 @@ def test_a_shallow_clone_reads_doc_freshness_unknown(instrumented: Path, tmp_pat
 
 def test_doc_paths_are_posix(tmp_path: Path) -> None:
     assert _safe_rel(tmp_path / "a" / "b.md", tmp_path) == "a/b.md"
+
+
+def test_a_generated_doc_with_a_source_verdict_is_measured() -> None:
+    generated = _doc("repo-baseline", 0.0)
+    generated["provenance"] = {"method": "frontmatter", "sources": ["api.py"],
+                               "generated_by": None, "source_newer": True}
+    summary = staleness_summary([generated, _doc("repo-baseline", 50.0)], reliable=True)
+    assert summary == {"measured_docs": 1, "stale_docs": 1, "stale_pct": 100}
+
+
+def test_a_directory_nested_in_a_checkout_is_not_git_root(instrumented: Path) -> None:
+    assert hs.is_git_work_tree(instrumented)
+    nested = instrumented / "pkg"
+    assert not hs.is_git_work_tree(nested)
+    assert reason_code(hs.doc_staleness(nested, {}, (set(), []))["reason"]) == "not_git_root"
