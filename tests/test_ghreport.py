@@ -9,7 +9,9 @@ and assert the rendered output. No network, no `gh`, deterministic. Requires
 import json
 import os
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -521,6 +523,7 @@ def test_keep_fragments_capture_then_replay_is_identical(tmp_path):
     assert f"Fragments kept in: {keep}" in res.stderr
     assert sorted(p.relative_to(keep).as_posix() for p in keep.rglob("*.json")) == [
         "openrepo.json", "settings/org.json"]
+    assert (keep / "CAPTURE_COMPLETE").is_file()
     assert "Org settings" in res.stdout
 
     replay_root = tmp_path / "replay"
@@ -531,6 +534,7 @@ def test_keep_fragments_capture_then_replay_is_identical(tmp_path):
         capture_output=True, check=False, text=True, timeout=60,
     )
     assert rep.returncode == 0, rep.stderr
+    assert "CAPTURE_COMPLETE" not in rep.stderr, "a finished capture must not warn"
     assert _without_report_path(rep.stdout) == _without_report_path(res.stdout)
     live_file = next(root.glob("org-state-testorg-*.md")).read_text()
     replay_file = next(replay_root.glob("org-state-testorg-*.md")).read_text()
@@ -559,3 +563,42 @@ def test_help_names_the_capture_route():
                          capture_output=True, check=False, text=True, timeout=30)
     assert "--keep-fragments DIR" in res.stdout
     assert "--render-dir DIR" in res.stdout
+
+
+def test_interrupted_capture_has_no_marker_and_replay_warns(tmp_path):
+    """A capture stopped mid-query keeps a partial fragment set and no
+    CAPTURE_COMPLETE marker; replaying it warns that it may be partial."""
+    stub_dir = tmp_path / "bin"
+    stub_dir.mkdir()
+    gh = stub_dir / "gh"
+    # The per-repo query hangs, so the run is stopped after settings are kept.
+    gh.write_text(GH_STUB_SETTINGS.replace("*pulls*) echo '[]' ;;", "*pulls*) sleep 60 ;;"))
+    gh.chmod(0o755)
+    data = tmp_path / "gh-data"
+    data.mkdir()
+    (data / "orgs__testorg__rulesets.json").write_text("[]")
+    log = tmp_path / "gh.log"
+    keep = tmp_path / "capture"
+    env = dict(os.environ)
+    env.update(PATH=f"{stub_dir}:{env['PATH']}", GH_DATA=str(data), GH_LOG=str(log))
+    proc = subprocess.Popen(
+        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(tmp_path), "--quiet",
+         "--no-file", "--keep-fragments", str(keep)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while not (log.exists() and "pulls" in log.read_text()):
+            assert proc.poll() is None, "run ended before the per-repo query"
+            assert time.monotonic() < deadline, "per-repo query never started"
+            time.sleep(0.1)
+    finally:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=30)
+    assert (keep / "settings" / "org.json").is_file(), "settings are kept before repo queries"
+    assert not (keep / "CAPTURE_COMPLETE").exists()
+
+    rep = _render(keep, tmp_path, "--no-file")
+    assert rep.returncode == 0, rep.stderr
+    assert "no CAPTURE_COMPLETE marker" in rep.stderr
+    assert "may be partial" in rep.stderr

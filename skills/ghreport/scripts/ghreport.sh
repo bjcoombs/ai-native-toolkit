@@ -36,7 +36,9 @@ set -euo pipefail
 # Capture then replay: a live run with --keep-fragments DIR keeps its per-repo
 # fragments, and the settings/ subdirectory, in DIR in exactly the layout
 # --render-dir reads, so `--render-dir DIR` later renders the same report
-# without any API call.
+# without any API call. A finished capture ends with a CAPTURE_COMPLETE marker
+# file (not *.json, so no fragment reader takes it as a row); replaying a dir
+# without one warns that the fragment set may be partial.
 #
 # Usage: ./ghreport.sh [--provider github|gitlab] [--root DIR] [--limit N]
 #                      [--quiet] [--no-file] [--keep-fragments DIR]
@@ -788,6 +790,9 @@ if [ -n "$RENDER_DIR" ]; then
         echo "Error: --render-dir not a directory: $RENDER_DIR" >&2
         exit 1
     fi
+    if [ ! -f "$RENDER_DIR/CAPTURE_COMPLETE" ]; then
+        echo "Warning: $RENDER_DIR has no CAPTURE_COMPLETE marker: if it is an interrupted --keep-fragments capture, this report may be partial; delete it and capture again." >&2
+    fi
     assemble "$RENDER_DIR"
     exit 0
 fi
@@ -909,5 +914,8 @@ wait
 
 assemble "$TMP_DIR"
 if [ -n "$KEEP_DIR" ]; then
+    # Written last: a capture that stopped earlier has no marker, and a
+    # replay of it warns.
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$KEEP_DIR/CAPTURE_COMPLETE"
     echo "Fragments kept in: $KEEP_DIR (replay with --render-dir $KEEP_DIR)" >&2
 fi

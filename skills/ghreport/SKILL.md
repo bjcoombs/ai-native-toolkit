@@ -183,6 +183,13 @@ reads every `*.json` in it as a repository row; a stale fragment from an
 earlier run would otherwise appear in the report. `--keep-fragments` cannot be
 combined with `--render-dir`.
 
+A capture writes a `CAPTURE_COMPLETE` marker file (not `*.json`, so it is never
+read as a fragment) once every fragment is in place. A run that stops earlier
+leaves no marker, and `--render-dir` on that directory prints a warning on
+stderr that the report may be partial. Delete an interrupted capture and
+capture again. A hand-written fragment directory has no marker either, so
+replaying one shows the same warning; the report itself is unchanged.
+
 ## Output
 
 - **Terminal:** a one-line headline (counts that tripped a signal), a rollup
