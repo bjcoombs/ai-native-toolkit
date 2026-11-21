@@ -14,9 +14,11 @@ backstop below catches a change that kept the name.
 
 - the same ``toolkit_commit`` on both sides (or none on both at one
   ``plugin_version``): ``same``, and git is never run;
-- either commit is null (an install that is not a git checkout) and the
-  ``plugin_version`` differs: ``unavailable``. A null commit at one plugin version
-  reads as the same toolkit;
+- both commits null (installs that are not git checkouts) and the
+  ``plugin_version`` differs: ``unavailable``;
+- one commit null and the other set: ``unavailable`` at any ``plugin_version``,
+  since a git checkout and an install can hold different scanner code under one
+  version;
 - a commit that is not 7 to 40 hex characters: ``unavailable``, and git never
   sees it;
 - two different commits: ``git diff --name-only A B -- skills/assess/scripts/lib``
@@ -124,14 +126,15 @@ def scanner_diff(earlier: FleetStamp, later: FleetStamp, root: Path = TOOLKIT_RO
     then, now = earlier.get("toolkit_commit"), later.get("toolkit_commit")
     if then == now and (then is not None or earlier.get("plugin_version") == later.get("plugin_version")):
         return {"status": "same", "changed": [], "reason": None}
-    if then is None or now is None:
-        if earlier.get("plugin_version") == later.get("plugin_version"):
-            return {"status": "same", "changed": [], "reason": None}
-        side = ("neither run recorded a toolkit_commit" if then is None and now is None
-                else f"the {'earlier' if then is None else 'later'} run recorded no toolkit_commit")
+    if then is None and now is None:  # equal versions returned "same" above
         return {"status": "unavailable", "changed": [],
-                "reason": f"{side} and plugin_version changed "
+                "reason": "neither run recorded a toolkit_commit and plugin_version changed "
                           f"{earlier.get('plugin_version')!r}->{later.get('plugin_version')!r}"}
+    if then is None or now is None:
+        side = "earlier" if then is None else "later"
+        return {"status": "unavailable", "changed": [],
+                "reason": f"the {side} run recorded no toolkit_commit (plugin_version "
+                          f"{earlier.get('plugin_version')!r}->{later.get('plugin_version')!r})"}
     if not (_COMMIT.fullmatch(then) and _COMMIT.fullmatch(now)):
         return {"status": "unavailable", "changed": [],
                 "reason": "a run's toolkit_commit is not a commit hash (7 to 40 hex characters)"}

@@ -1540,8 +1540,9 @@ earlier run then reads the new signal as absent (unknown), never as a false repo
 A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
 
 The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
-`toolkit_commit`. Equal commits are `same`, and git never runs. A null commit with a
-different `plugin_version` is `unavailable`. Two different commits run `git diff --name-only`
+`toolkit_commit`. Equal commits are `same`, and git never runs (two null commits only at one
+`plugin_version`). One null commit, or two null commits at different `plugin_version`s, is
+`unavailable`. Two different commits run `git diff --name-only`
 over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
 result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
 producer modules:

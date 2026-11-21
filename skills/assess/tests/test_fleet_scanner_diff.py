@@ -61,7 +61,7 @@ def test_missing_toolkit_commit_degrades_to_unknown_scope():
     later = _run(LATER, toolkit_commit="bbb")
     diff = scanner_diff(earlier.stamp, later.stamp, diff=_no_git)
     assert diff["status"] == "unavailable"
-    assert diff["reason"] == "the earlier run recorded no toolkit_commit and plugin_version changed '1.1.0'->'1.2.0'"
+    assert diff["reason"] == "the earlier run recorded no toolkit_commit (plugin_version '1.1.0'->'1.2.0')"
 
     comparison = compare(earlier, later, diff, PRODUCERS)
     assert _row_move(comparison, "grpa", "teamdocs")["cause"] == sd.CAUSE_UNKNOWN_SCOPE
@@ -77,9 +77,14 @@ def _no_git(root: Path, a: str, b: str) -> list[str] | None:
     raise AssertionError("git must not run")
 
 
-def test_same_commit_never_runs_git_and_a_null_commit_at_one_version_is_the_same_toolkit():
+def test_same_commit_never_runs_git_and_one_null_commit_is_unavailable_at_any_version():
     assert scanner_diff(_stamp([], toolkit_commit="x"), _stamp([], toolkit_commit="x"), diff=_no_git)["status"] == "same"
-    assert scanner_diff(_stamp([], toolkit_commit=None), _stamp([], toolkit_commit="x"), diff=_no_git)["status"] == "same"
+    assert scanner_diff(_stamp([], toolkit_commit=None), _stamp([], toolkit_commit=None),
+                        diff=_no_git)["status"] == "same"
+    for then, now in ((None, "a" * 40), ("a" * 40, None)):
+        one_null = scanner_diff(_stamp([], toolkit_commit=then), _stamp([], toolkit_commit=now), diff=_no_git)
+        assert one_null["status"] == "unavailable"
+        assert one_null["reason"] is not None and "recorded no toolkit_commit" in one_null["reason"]
     both_null = scanner_diff(_stamp([], toolkit_commit=None, plugin_version="1.0.0"),
                              _stamp([], toolkit_commit=None, plugin_version="1.1.0"), diff=_no_git)
     assert both_null["status"] == "unavailable"

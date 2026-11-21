@@ -769,9 +769,9 @@ Three more causes keep a toolkit change from reading as the repository's own mov
   `skills/assess/scripts/lib/`): the runs carry different `toolkit_commit`s, git in this
   toolkit checkout shows a producer of a block the row reads changed, and a repository in the
   group changed a signal in that block.
-- `toolkit_changed_unknown_scope`: the scanner diff is unavailable (a run with a null
-  `toolkit_commit`, an install that is not a git checkout, at another `plugin_version`; or a
-  commit git cannot find here). `notes` carries one line saying the scanner diff was
+- `toolkit_changed_unknown_scope`: the scanner diff is unavailable (one run with a null
+  `toolkit_commit`, an install that is not a git checkout, and the other with one; both null
+  at different `plugin_version`s; or a commit git cannot find here). `notes` carries one line saying the scanner diff was
   unavailable. A marketplace install is not a git checkout, so across a plugin update this
   is the usual case there: expect every moved team row to carry it. Run from a git
   checkout of the toolkit holding both commits to get `scanner_changed` instead.
