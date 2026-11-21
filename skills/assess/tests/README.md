@@ -153,6 +153,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_counts_only_reason.py` | `lib/counts_only.py` `reason_token` + the `REASON` rule - a full counts-only run keeps `structure.reason` as its code (`no_import_graph_rust` on a Rust repository), never the sentence (#764) |
 | `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
 | `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
+| `test_signal_inputs.py` | `lib/level_signals.py` - the producer input class of every default criterion signal, its grade and the declared predicate (#783) |
 | `test_hollow_conditions.py` | `levels/default.toml` - hollow cases: the cheapest committed change that meets each condition must not be credited; a case the model still credits is `xfail(strict=True)` naming its fixing issue, and that fix removes the mark (#784) |
 | `test_layer_grades.py` | `lib/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
 | `test_history_window.py` | `lib/history_window.py` - the one history-window grammar shared by `lib/git_churn.py`, `lib/ai_usage.py`, `lib/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
