@@ -210,6 +210,9 @@ replaying one shows the same warning; the report itself is unchanged.
   authenticated. ghsync's preflight checks this first: an unauthenticated or
   unreachable host exits non-zero with one error line naming the host, before
   any API call.
+- **Windows:** the script is bash, so run it under Git Bash, which ships with
+  Git for Windows (Claude Code on Windows already needs it). Install `jq`
+  separately (`winget install jqlang.jq`); Git Bash does not include it.
 - `jq` 1.6 or later. An endpoint that answers with an empty or non-JSON body
   reads as unreadable (`unknown` / `no-access`) on every jq version.
 - Very large orgs make many API calls (~5 per repo); use `--limit` to sample.

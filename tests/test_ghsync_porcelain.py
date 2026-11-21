@@ -10,11 +10,13 @@ This runs the real script offline: `gh` is stubbed on PATH to return canned
 discovery data, and the script's own `jq` filtering does the rest (jq ships on
 the CI runner). No network, no auth, deterministic.
 """
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from gitbash import BASH, base_env
 
 REPO = Path(__file__).resolve().parent.parent
 GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
@@ -58,13 +60,13 @@ def _run(tmp_path, *args):
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir(exist_ok=True)
     gh = stub_dir / "gh"
-    gh.write_text(GH_STUB)
+    gh.write_text(GH_STUB, newline="\n")
     gh.chmod(0o755)
     root = tmp_path / "root"
     root.mkdir(exist_ok=True)
-    env = {"PATH": f"{stub_dir}:{shutil.os.environ['PATH']}"}
+    env = {**base_env(), "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}"}
     return subprocess.run(
-        ["bash", str(GHSYNC), "--org", "testorg", "--root", str(root), *args],
+        [BASH, str(GHSYNC), "--org", "testorg", "--root", str(root), *args],
         capture_output=True, text=True, env=env, timeout=60,
     )
 
