@@ -50,6 +50,39 @@
         }
       ]
     },
+    "fleet_config_sha256": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fleet_config_entries": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ai_usage": {
+              "type": "integer"
+            },
+            "review": {
+              "type": "integer"
+            },
+            "platform": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "ai_usage",
+            "platform",
+            "review"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "repositories": {
       "type": "object",
       "properties": {
@@ -77,6 +110,8 @@
   },
   "required": [
     "counts_only",
+    "fleet_config_entries",
+    "fleet_config_sha256",
     "fleet_stamp_version",
     "levels_version",
     "paths_hashed",

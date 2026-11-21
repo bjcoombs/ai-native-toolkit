@@ -597,19 +597,7 @@ jobs:
     outputs:
       floor_core_changed: ${{ steps.filter.outputs.floor_core_changed }}
     steps:
-      - name: Detect changes to protected paths
-        id: filter
-        run: |
-          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
-          git show "${BASE_SHA}:scripts/floor_check.py" \\
-            > "${BASE}/floor_check.py" 2> /dev/null || FAILED=true
-          if ! FLOOR_CORE="$(python "${BASE}"/floor_check.py protected \\
-              --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"; then
-            FAILED=true
-          fi
-          if [ "${FAILED}" = "true" ]; then FLOOR_CORE="$(cat "${CHANGED}")"; fi
-          echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
-"""
+""" + floor_anchor.FILTER_STEP
 
 
 def _floor_yml(tmp_path, body=FLOOR_YML_WIRED):

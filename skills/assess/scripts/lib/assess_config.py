@@ -27,6 +27,16 @@ working_notes_ignore = ["docs/chapters"]
 path = "notes"
 source = "data/jira.tsv"
 
+# Fleet settings sections (issue #706), read by `lib/fleet_config.py`, not here:
+# they extend a `--fleet-config` file for this repository (lists append, the
+# fleet's scalars win). Keys are defined by the consumers (#695, #696, #714).
+[ai_usage]
+token_users_as_agents = false   # GitLab access-token users count as agents
+[[ai_usage.agent_identities]]   # an in-house agent (regex; field: email|username|name)
+pattern = "^inhouse-agent"
+[review]
+[platform]
+
 # Cross-repo doc freshness (issue #664), measured by /fleet only: `path` (a doc
 # or folder here) describes `scope` (required, paths inside fleet repo `repo`).
 [[describes]]

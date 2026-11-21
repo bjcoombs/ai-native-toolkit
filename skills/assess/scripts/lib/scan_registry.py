@@ -42,6 +42,7 @@ from typing import Any
 
 from lib import core_scans as cs
 from lib import run_setup as rs
+from lib.agent_building import scan_agent_building
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
@@ -63,8 +64,8 @@ from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``: the arguments of
 # ``build_run_context``. A spec may read these, or the key of any spec declared
-# before it (``instruction_files``, ``scope``, ``excludes`` and ``history_window``
-# are setup specs).
+# before it (``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
+# ``fleet_config`` are setup specs).
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
 
 STAGE_SETUP = "setup"
@@ -307,6 +308,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # history. The headless signals run provides `--window` instead.
     ScanSpec("history_window", rs.history_window, ("current",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
+    # The fleet settings sections (#706): the repository's own `.assess/config.toml`
+    # sections here; the headless signals run provides them merged with `--fleet-config`.
+    ScanSpec("fleet_config", rs.fleet_config, ("repo_root",), STAGE_SETUP, private=True,
+             degrade=False, gate_reason=_SELF_DEGRADING),
     ScanSpec("measured_commit", rs.measured_commit, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
     ScanSpec("superseded", rs.superseded_run, ("assess_dir", "run_date", "measured_commit"),
@@ -521,6 +526,12 @@ SCANS: tuple[ScanSpec, ...] = (
     # check is found but a CI file pulls jobs from elsewhere (include:, a remote
     # reusable workflow). Layer 5 level 1 of the default maturity model. Offline.
     ScanSpec("ci_checks", scan_ci_checks, ("repo_root",), STAGE_POST_OFFERS),
+    # Agent building (issue #689): what the repository builds with agents, an
+    # inventory and not scored - agent SDKs and frameworks in manifests, agent
+    # configuration, a counts-only tool-call loop / MCP server heuristic and the
+    # issue-tracker plus Git-host API-client pairing, reduced to one class. The
+    # fleet roll-up counts classes per group and clusters similar builders.
+    ScanSpec("agent_building", scan_agent_building, ("repo_root",), STAGE_POST_OFFERS),
     # Deterministic layer grades (issue #620): instructions_grade republished as
     # a block, so a maturity model can name it in a headless or full run.
     ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),
@@ -538,9 +549,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # AI-assisted change share (issue #547): commits in the churn window with an
     # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
     # on agent use, never an estimate; merge commits and automation bots
-    # excluded. Matcher: lib.agent_identity.
+    # excluded. Since #695 also the commits an agent identity authored (pinned
+    # defaults plus the [ai_usage] rules of `fleet_config`). Matcher: lib.agent_identity.
     ScanSpec(
-        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window"), STAGE_POST_OFFERS,
+        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window", "fleet_config"),
+        STAGE_POST_OFFERS,
     ),
     # Checkable claims across the doc set (issue #491): the instruction_claims
     # kinds run over docs/ (minus the historical design records),

@@ -400,6 +400,18 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `layer_grades.reason` | dropped |
 | `layer_grades.instructions_grade` | token |
 
+## agent_building
+
+| Field | Kept as |
+|---|---|
+| `agent_building.reason` | dropped |
+| `agent_building.agent_class` | token |
+| `agent_building.sdks` | token |
+| `agent_building.config` | token |
+| `agent_building.ci_agents` | token |
+| `agent_building.issue_trackers` | token |
+| `agent_building.git_hosts` | token |
+
 ## ai_usage
 
 | Field | Kept as |
@@ -409,6 +421,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ai_usage.since` | dropped |
 | `ai_usage.merge_rule` | token |
 | `ai_usage.covered_agents` | dropped |
+| `ai_usage.covered_author_agents` | dropped |
 | `ai_usage.limits` | dropped |
 
 ## agent_harness

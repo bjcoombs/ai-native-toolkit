@@ -21,7 +21,8 @@ Writes are narrow and fail closed:
   existing directory on the way from the root to the entry may be a symlink;
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
-  maturity-model version, window, output mode, scan selection and path hashing, and
+  maturity-model version, window, output mode, scan selection, path hashing and
+  ``--fleet-config`` hash, and
   holds the same repository set (so a partial ``--from-list`` rerun never
   replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
   ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,
@@ -54,7 +55,7 @@ HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: ru
 # a same-day entry's stale copy is removed when the new run wrote none.
 OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE,)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
-_MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed")
+_MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256")
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
 MAX_SAME_DAY = 99
 

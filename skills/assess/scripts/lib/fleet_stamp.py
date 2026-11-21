@@ -15,6 +15,13 @@ Repository counts:
   ``scan_date`` (UTC, whole days, months by calendar), so the count is fixed
   for a day.
 
+With ``--fleet-config`` (#706) the stamp records ``fleet_config_sha256``, the
+sha256 of the validated file's canonical form (``lib/fleet_config.py``), and
+``fleet_config_entries``, the entry count per section; both are null without
+one. Never a pattern or a value. The hash is a comparability key. A stamp
+written before #706 lacks both keys and reads as "no fleet config", so the stamp
+version stays 1.
+
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
 write a byte-identical ``run.json``.
@@ -29,6 +36,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from lib.fleet import STATUS_OK, FleetRow
+from lib.fleet_config import FleetConfig, FleetConfigEntries, config_sha256, section_entries
 
 # Bumped when the stamp's keys change, except for the 2.0.0 maturity-model key renames
 # (#670): readers reject any other version, so lib/fleet_legacy.py maps the old keys
@@ -54,6 +62,8 @@ class FleetStamp(TypedDict):
     counts_only: bool
     paths_hashed: bool  # never the salt itself
     scans: list[str] | None  # requested scans, sorted; None for all
+    fleet_config_sha256: str | None  # None without --fleet-config; absent before #706
+    fleet_config_entries: FleetConfigEntries | None
     repositories: RepositoryCounts
 
 
@@ -70,7 +80,7 @@ def count_repositories(rows: list[FleetRow]) -> RepositoryCounts:
 def build_stamp(
     rows: list[FleetRow], *, toolkit_commit: str | None, plugin_version: str,
     today: date, window: str, levels_version: str | None, counts_only: bool, paths_hashed: bool,
-    scans: list[str] | None,
+    scans: list[str] | None, fleet_config: FleetConfig | None = None,
 ) -> FleetStamp:
     return {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
@@ -82,6 +92,8 @@ def build_stamp(
         "counts_only": counts_only,
         "paths_hashed": paths_hashed,
         "scans": sorted(scans) if scans is not None else None,
+        "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
+        "fleet_config_entries": section_entries(fleet_config) if fleet_config is not None else None,
         "repositories": count_repositories(rows),
     }
 
