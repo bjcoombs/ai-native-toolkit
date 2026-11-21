@@ -15,6 +15,7 @@ import floor_anchor
 from tests.test_floor_anchor import FLOOR_YML_WIRED, _floor_yml
 from tests import test_floor_pin_exempt as pin
 from tests.test_floor_pin_exempt import DEPENDABOT, _bump, _commit, _git, _run_filter
+from floor_check import main
 
 # The pin-exemption suite's `repo` fixture: a base holding the floor core.
 repo = pin.repo
@@ -63,9 +64,9 @@ def test_an_unprotected_change_requests_nothing(repo, tmp_path):
     assert "run_canaries=false" in out
 
 
-def test_a_base_without_the_protected_subcommand_fails_closed(repo, tmp_path):
-    _edit_script(repo, '"protected", help=', '"retired", help=')
-    base = _commit(repo, "base predates protected")
+def test_a_base_without_the_path_filter_subcommand_fails_closed(repo, tmp_path):
+    _edit_script(repo, '"path-filter",\n', '"retired",\n')
+    base = _commit(repo, "base predates path-filter")
     (repo / "notes.md").write_text("x\n", encoding="utf-8")
     _commit(repo, "unprotected")
     out = _run_filter(repo, base, "someone", tmp_path)
@@ -73,9 +74,13 @@ def test_a_base_without_the_protected_subcommand_fails_closed(repo, tmp_path):
     assert "run_canaries=true" in out
 
 
-def test_a_base_without_the_role_option_fails_closed(repo, tmp_path):
-    _edit_script(repo, '"--role",', '"--retired-role",')
-    base = _commit(repo, "base predates --role")
+def test_a_base_whose_path_filter_crashes_fails_closed(repo, tmp_path):
+    _edit_script(
+        repo,
+        "    roles = _diff_roles(args.base)\n    protected =",
+        "    raise RuntimeError('crash')\n    protected =",
+    )
+    base = _commit(repo, "base path-filter crashes")
     (repo / "notes.md").write_text("x\n", encoding="utf-8")
     _commit(repo, "unprotected")
     assert CORE_CHANGED in _run_filter(repo, base, "someone", tmp_path)
@@ -92,17 +97,68 @@ def test_a_base_without_the_script_fails_closed(repo, tmp_path):
 
 
 def test_a_failed_classification_exempts_no_dependabot_pin_bump(repo, tmp_path):
-    _edit_script(repo, '"protected", help=', '"retired", help=')
-    base = _commit(repo, "base predates protected")
+    _edit_script(repo, '"path-filter",\n', '"retired",\n')
+    base = _commit(repo, "base predates path-filter")
     _bump(repo)
     _commit(repo, "bump")
     assert CORE_CHANGED in _run_filter(repo, base, DEPENDABOT, tmp_path)
 
 
-# The self-anchor pins that floor.yml keeps asking the base copy (#645): each
-# rewrite of the repository's real classification step below must fail it.
+def test_path_filter_failure_leaves_stdout_empty(repo, tmp_path):
+    # The workflow fails closed on a non-zero exit, so a crash must never leave
+    # a partial answer on stdout for the step to forward.
+    result = subprocess.run(
+        [sys.executable, "scripts/floor_check.py", "path-filter", "--base", "no-such-ref"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert result.stdout == ""
+
+
+def test_path_filter_prints_both_outputs_last(repo):
+    base = _head(repo)
+    with (repo / "scripts" / "floor_check.py").open("a", encoding="utf-8") as fh:
+        fh.write("# a floor-core edit\n")
+    _commit(repo, "floor core edit")
+    result = subprocess.run(
+        [sys.executable, "scripts/floor_check.py", "path-filter", "--base", base],
+        cwd=repo, check=True, capture_output=True, text=True,
+    )
+    assert result.stdout == "run_canaries=true\nfloor_core_changed=true\n"
+    assert "floor-core: scripts/floor_check.py" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "author, extra, expected",
+    [
+        ("someone", "", "run_canaries=true\nfloor_core_changed=true\n"),
+        (DEPENDABOT, "", "run_canaries=true\nfloor_core_changed=false\n"),
+        (DEPENDABOT, "      - run: echo extra\n", "run_canaries=true\nfloor_core_changed=true\n"),
+    ],
+)
+def test_path_filter_stdout_is_exactly_the_two_outputs(repo, capsys, author, extra, expected):
+    base = _head(repo)
+    _bump(repo, extra=extra)
+    _commit(repo, "bump")
+    assert main(["path-filter", "--base", base, "--author", author, "--actor", author]) == 0
+    assert capsys.readouterr().out == expected
+
+
+def test_path_filter_on_an_unprotected_change_says_false_twice(repo, capsys):
+    base = _head(repo)
+    (repo / "notes.md").write_text("x\n", encoding="utf-8")
+    _commit(repo, "unprotected")
+    assert main(["path-filter", "--base", base]) == 0
+    assert capsys.readouterr().out == "run_canaries=false\nfloor_core_changed=false\n"
+
+
+# The self-anchor pins the filter step byte for byte (#645, #679): each rewrite
+# of the repository's real step below must fail it, and the bypass shapes from
+# #679 are the first four.
 FLOOR_YML = Path(floor_anchor.REPO_ROOT) / floor_anchor.FLOOR_PATH
-BASE_CALL = 'python "${BASE_SCRIPTS}"/floor_check.py protected'
+CALL = '! ANSWER="$(python "${BASE_COPY}" path-filter'
+STEP_START = "      - name: Detect changes to protected paths\n"
+WRITE = '          echo "${ANSWER}" >> "$GITHUB_OUTPUT"\n'
 
 
 def _anchor(tmp_path: Path, text: str) -> None:
@@ -116,93 +172,114 @@ def test_the_anchor_accepts_the_real_base_copy_classification(tmp_path):
     _anchor(tmp_path, FLOOR_YML.read_text(encoding="utf-8"))
 
 
+def test_the_anchor_accepts_a_clean_change_beside_the_step(tmp_path):
+    # A Dependabot bump of the filter job's checkout pin, a reworded comment
+    # above the step and a blank line after it leave the step itself intact.
+    text = FLOOR_YML.read_text(encoding="utf-8")
+    job = text.index("  canary-changes:\n")
+    pin = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1"
+    at = text.index(pin, job)
+    text = text[:at] + "actions/checkout@" + "a" * 40 + "  # v7.0.2" + text[at + len(pin):]
+    old = "      # The one path decision this workflow makes"
+    assert old in text
+    text = text.replace(old, "      # The single path decision this workflow makes")
+    text = text.replace(WRITE, WRITE + "\n")
+    _anchor(tmp_path, text)
+
+
 @pytest.mark.parametrize(
     "old, new",
     [
-        # the issue's case: the step calls the head copy directly
-        (BASE_CALL, "python scripts/floor_check.py protected"),
-        # the extract no longer fails closed
-        ('2> /dev/null || CLASSIFY_FAILED=true', "2> /dev/null"),
+        # #679: the path variable reassigned between the extract and the call
+        (
+            "          if ! git show",
+            '          BASE_COPY=scripts/floor_check.py\n          if ! git show',
+        ),
+        # #679: a glob copy over the extracted base copy
+        (
+            "              || " + CALL,
+            '              || cp scripts/floor_ch*.py "${BASE_COPY}"\n'
+            "              || " + CALL,
+        ),
+        # #679: code built at run time with eval
+        (
+            "          fi\n          echo \"${ANSWER}\"\n",
+            "          fi\n          eval \"$(printf 'ANSWER=floor_core_changed=fals%s' e)\"\n"
+            "          echo \"${ANSWER}\"\n",
+        ),
+        # #679: the answer overwritten after the fail-closed branch
+        (WRITE, WRITE + '          echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"\n'),
+        # ...behind a run-block line shaped like a new step
+        (
+            WRITE,
+            WRITE + "          - x: y || true\n"
+            '          echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"\n',
+        ),
+        # the step calls the head copy directly
+        ('python "${BASE_COPY}" path-filter', "python scripts/floor_check.py path-filter"),
         # the "base" is the head
-        ('echo "merge-base: ${BASE_SHA}"', 'BASE_SHA="$(git rev-parse HEAD)"'),
+        ('git merge-base "origin/${BASE_REF}" HEAD', "git rev-parse HEAD"),
+        # the base ref arrives from the head ref
+        ("BASE_REF: ${{ github.base_ref }}", "BASE_REF: ${{ github.head_ref }}"),
         # the extract reads the head commit
         ('git show "${BASE_SHA}:scripts', 'git show "HEAD:scripts'),
-        # the floor-core call goes through a variable holding the head copy
+        # an interpreter flag on the call
+        ('python "${BASE_COPY}"', 'python -I "${BASE_COPY}"'),
+        # the fail-closed answer no longer requests sign-off
+        ("floor_core_changed=true')", "floor_core_changed=false')"),
+        # an author forged in env, waiving sign-off for a pin-only diff
+        ("PR_AUTHOR: ${{ github.event.pull_request.user.login }}", "PR_AUTHOR: dependabot[bot]"),
+        # the step made non-fatal, or run by another shell
+        ("        id: filter\n", "        id: filter\n        continue-on-error: true\n"),
+        ("        id: filter\n", "        id: filter\n        shell: sh\n"),
+        # a comment in the run block, which bash reads after a continuation
         (
-            BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
-            'python "${HC}" protected \\\n              --base "${BASE_SHA}" --changed --role',
+            "          BASE_COPY=",
+            "          # the base copy\n          BASE_COPY=",
         ),
-        # the floor-core call adds an interpreter flag
-        (BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
-         'python -I "${BASE_SCRIPTS}"/floor_check.py protected \\\n'
-         '              --base "${BASE_SHA}" --changed --role'),
-        # the floor-core call uses another interpreter name
-        (BASE_CALL + " \\\n              --base \"${BASE_SHA}\" --changed --role",
-         'python3.12 "${BASE_SCRIPTS}"/floor_check.py protected \\\n'
-         '              --base "${BASE_SHA}" --changed --role'),
-        # the head copy overwrites the extract between extract and call
-        (
-            "          if ! PROTECTED=",
-            '          cp scripts/floor_check.py "${BASE_SCRIPTS}/floor_check.py"\n'
-            "          if ! PROTECTED=",
-        ),
-        # ...or through a glob that never spells the script's name
-        (
-            "          if ! PROTECTED=",
-            '          cp scripts/floor_ch*.py "${BASE_SCRIPTS}/floor_check.py"\n'
-            "          if ! PROTECTED=",
-        ),
-        # a command hidden in an echo message
-        (
-            "          if ! PROTECTED=",
-            '          echo "$(cp scripts/floor_check.py ${BASE_SCRIPTS}/)"\n'
-            "          if ! PROTECTED=",
-        ),
-        # a head-copy call appended after the base-copy one
-        (
-            '          if [ "${CLASSIFY_FAILED}" = "true" ]; then\n',
-            '          FLOOR_CORE="$(python scripts/floor_check.py protected --role floor-core)"\n'
-            '          if [ "${CLASSIFY_FAILED}" = "true" ]; then\n',
-        ),
-        # the base-copy extract survives only as a comment
-        ('          git show "${BASE_SHA}:scripts', '          # git show "${BASE_SHA}:scripts'),
-        # a failed classification no longer replaces the answer
-        ('            FLOOR_CORE="${PROTECTED}"\n', ""),
     ],
 )
 def test_the_anchor_fails_when_the_step_stops_running_the_base_copy(
     tmp_path, old, new
 ):
     text = FLOOR_YML.read_text(encoding="utf-8")
-    assert old in text
+    step = text.index(STEP_START)  # rewrite the filter step, not a namesake
+    assert old in text[step:]
     with pytest.raises(floor_anchor.AnchorError) as exc:
-        _anchor(tmp_path, text.replace(old, new))
+        _anchor(tmp_path, text[:step] + text[step:].replace(old, new, 1))
     assert "BASE ref's copy" in str(exc.value)
 
 
 @pytest.mark.parametrize(
-    "old, new",
+    "old, new, reason",
     [
-        # the producing step no longer runs the classifier
-        (
-            '          if ! FLOOR_CORE="$(python "${BASE}"/floor_check.py protected \\\n'
-            '              --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"; then\n',
-            "",
-        ),
-        # the classifier is asked for a different role
-        ("--role floor-core", "--role canary"),
         # the output forwards a step that does not exist
-        ("steps.filter.outputs.floor_core_changed", "steps.other.outputs.floor_core_changed"),
+        (
+            "steps.filter.outputs.floor_core_changed",
+            "steps.other.outputs.floor_core_changed",
+            "no such step",
+        ),
+        # a second step claims the producer's id
+        (
+            "    steps:\n      - name: Detect",
+            "    steps:\n      - name: Decoy\n        id: filter\n        run: true\n"
+            "      - name: Detect",
+            "2 steps carry that id",
+        ),
+        # ...even when the decoy quotes the id
+        (
+            "    steps:\n      - name: Detect",
+            "    steps:\n      - name: Decoy\n        id: 'filter'  # x\n        run: true\n"
+            "      - name: Detect",
+            "2 steps carry that id",
+        ),
     ],
 )
-def test_signoff_wiring_fails_closed_when_the_producer_skips_the_classifier(
-    tmp_path, old, new
+def test_signoff_wiring_fails_closed_when_the_producer_is_not_the_filter_step(
+    tmp_path, old, new, reason
 ):
-    # Disarm path 19: the output is forwarded from a step, but that step does
-    # not run `floor_check.py protected --role floor-core`, so the answer is
-    # the step's own, not the script's classification.
     assert old in FLOOR_YML_WIRED
     body = FLOOR_YML_WIRED.replace(old, new, 1)
     with pytest.raises(floor_anchor.AnchorError) as exc:
         floor_anchor.check_workflow_wiring(_floor_yml(tmp_path, body))
-    assert "floor_check.py protected" in str(exc.value)
+    assert reason in str(exc.value)

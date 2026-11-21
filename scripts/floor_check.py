@@ -52,9 +52,9 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
     rejected destination.
 
 ``protected``
-    Directory-*role* classification of a changed-path list -- the one path
-    decision the CI workflow makes, so the workflow itself carries no path
-    literals to keep in sync. A path is protected when it falls in one of four
+    Directory-*role* classification of a changed-path list -- the basis of
+    the one path decision the CI workflow makes (``path-filter``), so the
+    workflow itself carries no path literals to keep in sync. A path is protected when it falls in one of four
     roles: it lives under the component directory of a marked file (marked at
     the base ref *or* on the head side, so a component marked in the PR itself
     is protected from that PR on), it is gate code, it is canary code or
@@ -77,9 +77,18 @@ workflow (``.github/workflows/floor.yml``) and pytest both drive:
 
 ``pin-bump-only``
     Exits 0 only when every changed floor-core path is a workflow file whose
-    every changed line is a like-for-like ``uses:`` pin bump. CI runs the base
-    ref's copy for a Dependabot pull request to waive the sign-off (FLOOR.md
-    clause iii).
+    every changed line is a like-for-like ``uses:`` pin bump. CI applies the
+    same verdict through the base ref's copy of ``path-filter`` for a
+    Dependabot pull request to waive the sign-off (FLOOR.md clause iii).
+
+``path-filter``
+    The canary path filter's whole decision, so the workflow step is a fixed
+    text the self-anchor compares byte for byte (#679). It classifies the
+    ``--base``..HEAD diff, applies the Dependabot pin-bump exemption when both
+    ``--author`` and ``--actor`` are Dependabot, and prints the two step
+    outputs (``run_canaries=``, ``floor_core_changed=``) at the very end, so
+    a failure exits non-zero with nothing on stdout and the workflow fails
+    closed. CI runs the base ref's copy, never the pull request's own.
 
 ``clauses``
     Unconditional integrity check of ``FLOOR.md``: the file must exist, it must
@@ -947,25 +956,71 @@ def pin_bump_refusal(
     return None
 
 
-def cmd_pin_bump_only(args: argparse.Namespace) -> int:
-    """Exit 0 only when every floor-core change is a ``uses:`` pin bump in a
-    workflow file. CI asks this of the BASE ref's copy, for a Dependabot pull
-    request only, so a pull request never judges its own exemption."""
-    base = args.base
+def _diff_roles(base: str) -> dict[str, str | None]:
+    """Each path the ``base``..HEAD diff changes, with its protected role."""
     component_dirs = _protected_component_dirs(base)
     changed = _git_out("diff", "--name-only", base, "HEAD").splitlines()
-    floor_core = [
-        path for path in dict.fromkeys(changed)
-        if path and classify_path(path, component_dirs) == ROLE_FLOOR_CORE
-    ]
+    return {
+        path: classify_path(path, component_dirs)
+        for path in dict.fromkeys(changed) if path
+    }
+
+
+def _pin_bump_verdict(base: str, floor_core: list[str]) -> str | None:
+    """``pin_bump_refusal`` for the ``base``..HEAD change to ``floor_core``."""
     details = [(path, _path_detail(base, path)[1]) for path in floor_core]
     diff = _git_out("diff", "-U0", "--no-renames", base, "HEAD", "--", *floor_core) \
         if floor_core else ""
-    refusal = pin_bump_refusal(details, diff)
+    return pin_bump_refusal(details, diff)
+
+
+def cmd_pin_bump_only(args: argparse.Namespace) -> int:
+    """Exit 0 only when every floor-core change is a ``uses:`` pin bump in a
+    workflow file. CI reaches the same verdict through the BASE ref's copy of
+    ``path-filter``, so a pull request never judges its own exemption."""
+    roles = _diff_roles(args.base)
+    floor_core = [path for path, role in roles.items() if role == ROLE_FLOOR_CORE]
+    refusal = _pin_bump_verdict(args.base, floor_core)
     if refusal is not None:
         print(f"not pin-bump-only: {refusal}")
         return 1
     print("pin-bump-only: every floor-core change is a `uses:` pin bump")
+    return 0
+
+
+DEPENDABOT = "dependabot[bot]"
+
+
+def cmd_path_filter(args: argparse.Namespace) -> int:
+    """Print the canary path filter's two step outputs, and nothing else.
+
+    ``run_canaries`` is whether any changed path is protected;
+    ``floor_core_changed`` is whether any is floor core, unless the pull
+    request was opened AND pushed by Dependabot and its floor-core change is
+    pin bumps alone (FLOOR.md clause iii). The account of the decision goes to
+    stderr. stdout is written once, last: any failure before it raises, exits
+    non-zero and leaves stdout empty, and the workflow then fails closed.
+    """
+    roles = _diff_roles(args.base)
+    protected = [path for path, role in roles.items() if role is not None]
+    floor_core = [path for path, role in roles.items() if role == ROLE_FLOOR_CORE]
+    exempt = False
+    if floor_core and args.author == DEPENDABOT and args.actor == DEPENDABOT:
+        refusal = _pin_bump_verdict(args.base, floor_core)
+        exempt = refusal is None
+        print(f"pin-bump exemption: {refusal or 'granted'}", file=sys.stderr)
+    for path in protected:
+        print(f"{roles[path]}: {path}", file=sys.stderr)
+    core = bool(floor_core) and not exempt
+    print(
+        f"canary suite {'WILL' if protected else 'will not'} run; floor sign-off "
+        f"{'WILL' if core else 'will not'} be requested (base {args.base}).",
+        file=sys.stderr,
+    )
+    sys.stdout.write(
+        f"run_canaries={str(bool(protected)).lower()}\n"
+        f"floor_core_changed={str(core).lower()}\n"
+    )
     return 0
 
 
@@ -1052,6 +1107,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--base", required=True, help="git ref for the merge-base (e.g. origin/main)"
     )
     p_pins.set_defaults(func=cmd_pin_bump_only)
+
+    p_filter = sub.add_parser(
+        "path-filter",
+        help="the canary path filter's step outputs (run_canaries, floor_core_changed)",
+    )
+    p_filter.add_argument(
+        "--base", required=True, help="git ref for the merge-base (e.g. origin/main)"
+    )
+    p_filter.add_argument("--author", default="", help="login that opened the pull request")
+    p_filter.add_argument("--actor", default="", help="login that pushed the head under test")
+    p_filter.set_defaults(func=cmd_path_filter)
 
     p_clauses = sub.add_parser("clauses", help="FLOOR.md four-clause integrity")
     p_clauses.add_argument("--floor", default=FLOOR_FILE, help="path to FLOOR.md")

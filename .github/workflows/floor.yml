@@ -44,7 +44,8 @@
 #     One exemption: a pull request opened and pushed by dependabot[bot]
 #     whose floor-core change is workflow `uses:` pin bumps alone is not
 #     floor-core for the trigger, as judged by the base ref's copy of the
-#     script (`pin-bump-only`), so a pull request cannot exempt itself.
+#     script (`path-filter`, applying the `pin-bump-only` verdict), so a pull
+#     request cannot exempt itself.
 #
 #   floor self-anchor (E2, fail-closed on repo settings):
 #     Query the live GitHub API and FAIL (fail-closed) if either floor check
@@ -402,87 +403,38 @@ jobs:
       - name: Fetch the PR base branch
         run: git fetch --no-tags origin "${{ github.base_ref }}"
 
+      # The one path decision this workflow makes, and it delegates it: the
+      # BASE ref's copy of scripts/floor_check.py classifies each changed path
+      # by directory role, applies the Dependabot pin-bump exemption (FLOOR.md
+      # clause iii: both the opener and this run's actor, whoever pushed the
+      # head under test, must be Dependabot) and prints the two outputs. This
+      # file never learns a path. The script asked is never the pull request's
+      # own: a pull request that edits the classification is still classified
+      # by the logic it changes, so it cannot report itself clean and skip the
+      # sign-off. Any failure to answer with the base copy (no script at the
+      # base, a base that predates `path-filter`, a crash) fails closed: both
+      # outputs are true, so the canaries run and sign-off is requested.
+      # The self-anchor (scripts/floor_anchor.py FILTER_STEP) compares this
+      # step byte for byte, so it carries no comment of its own and any edit
+      # to it -- a reassigned path, a copy over the extract, an eval, a late
+      # overwrite of the answer -- turns `floor self-anchor` red (#679).
       - name: Detect changes to protected paths
         id: filter
         env:
+          BASE_REF: ${{ github.base_ref }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ACTOR: ${{ github.actor }}
         run: |
-          BASE_SHA="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
-          echo "merge-base: ${BASE_SHA}"
-          # The one path decision this workflow makes, and it delegates it: the
-          # script classifies each changed path by directory role and echoes back
-          # the protected subset. Whether that subset is empty is the only thing
-          # read here, so this file never learns a path. The script asked is the
-          # BASE ref's copy, never the pull request's own: a pull request that
-          # edits the classification is still classified by the logic it
-          # changes, so it cannot report itself clean and skip the sign-off
-          # (FLOOR.md clause iii). Any failure to classify with the base copy
-          # (no script at the base, a base that predates the subcommand or
-          # `--role`, a crash) fails closed: every changed path counts as
-          # protected and as floor core, so the canaries run and sign-off is
-          # requested.
-          CHANGED="${RUNNER_TEMP}/floor-changed-paths.txt"
-          git diff --name-only "${BASE_SHA}" HEAD > "${CHANGED}"
-          BASE_SCRIPTS="${RUNNER_TEMP}/floor-base-scripts"
-          mkdir -p "${BASE_SCRIPTS}"
-          CLASSIFY_FAILED=false
-          git show "${BASE_SHA}:scripts/floor_check.py" \
-            > "${BASE_SCRIPTS}/floor_check.py" 2> /dev/null || CLASSIFY_FAILED=true
-          if ! PROTECTED="$(python "${BASE_SCRIPTS}"/floor_check.py protected \
-              --base "${BASE_SHA}" --changed < "${CHANGED}")"; then
-            CLASSIFY_FAILED=true
-          fi
-          # The same delegated decision, asked for one role: a change to the
-          # floor's own core is what needs the maintainer's sign-off (clause
-          # iii). Same base copy, same base, so the two answers cannot drift.
-          if ! FLOOR_CORE="$(python "${BASE_SCRIPTS}"/floor_check.py protected \
-              --base "${BASE_SHA}" --changed --role floor-core < "${CHANGED}")"; then
-            CLASSIFY_FAILED=true
-          fi
-          if [ "${CLASSIFY_FAILED}" = "true" ]; then
+          BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
+          BASE_COPY="${RUNNER_TEMP}/floor_check_base.py"
+          if ! git show "${BASE_SHA}:scripts/floor_check.py" > "${BASE_COPY}" \
+              || ! ANSWER="$(python "${BASE_COPY}" path-filter --base "${BASE_SHA}" \
+                --author "${PR_AUTHOR}" --actor "${PR_ACTOR}")"; then
             echo "::warning::scripts/floor_check.py at the base ${BASE_SHA} could not classify the changed paths, so every changed path is treated as protected floor core."
-            PROTECTED="$(cat "${CHANGED}")"
-            FLOOR_CORE="${PROTECTED}"
+            ANSWER="$(printf 'run_canaries=true\nfloor_core_changed=true')"
           fi
-          if printf '%s\n' "${PROTECTED}" | grep -q .; then
-            echo "run_canaries=true" >> "$GITHUB_OUTPUT"
-            echo "Protected paths changed: canary suite WILL run."
-            printf '%s\n' "${PROTECTED}"
-          else
-            echo "run_canaries=false" >> "$GITHUB_OUTPUT"
-            echo "No protected paths changed: canary suite will be skipped."
-          fi
-          # The one exemption (FLOOR.md clause iii): a Dependabot pull request
-          # whose floor-core change is workflow `uses:` pin bumps alone. Both
-          # the opener and this run's actor (whoever pushed the head under
-          # test; a re-run keeps it) must be Dependabot, so a push onto a
-          # Dependabot branch is not exempt. The verdict is the BASE ref's
-          # copy of the script, never the pull request's own, so no pull
-          # request can exempt itself; a base that predates the subcommand,
-          # or a classification that failed closed, exempts nothing.
-          PIN_BUMP_ONLY=false
-          if [ "${CLASSIFY_FAILED}" = "false" ] \
-              && printf '%s\n' "${FLOOR_CORE}" | grep -q . \
-              && [ "${PR_AUTHOR}" = "dependabot[bot]" ] \
-              && [ "${PR_ACTOR}" = "dependabot[bot]" ]; then
-            if python "${BASE_SCRIPTS}"/floor_check.py pin-bump-only --help > /dev/null 2>&1 \
-                && python "${BASE_SCRIPTS}"/floor_check.py pin-bump-only --base "${BASE_SHA}"; then
-              PIN_BUMP_ONLY=true
-            fi
-          fi
-          if [ "${PIN_BUMP_ONLY}" = "true" ]; then
-            echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"
-            echo "Floor core changed by Dependabot action-pin bumps only: exempt from sign-off (FLOOR.md clause iii, judged by scripts/floor_check.py at the base ${BASE_SHA})."
-            printf '%s\n' "${FLOOR_CORE}"
-          elif printf '%s\n' "${FLOOR_CORE}" | grep -q .; then
-            echo "floor_core_changed=true" >> "$GITHUB_OUTPUT"
-            echo "Floor core changed: a maintainer sign-off WILL be requested."
-            printf '%s\n' "${FLOOR_CORE}"
-          else
-            echo "floor_core_changed=false" >> "$GITHUB_OUTPUT"
-            echo "Floor core untouched: no sign-off requested."
-          fi
+          echo "${ANSWER}"
+          echo "${ANSWER}" >> "$GITHUB_OUTPUT"
 
   canary-suite:
     name: canary suite (semantic layer)
