@@ -183,6 +183,7 @@ class StructureDriftTier0(TypedDict):
     empty_ownership_patterns: list[EmptyOwnershipPattern]
     total_patterns: int
     matched_patterns: int
+    boundary_patterns: int
 
 
 class StructureDriftTier1(TypedDict):
