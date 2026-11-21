@@ -32,7 +32,8 @@ from lib.fleet import Target, _git
 CODEOWNERS_FILES = (".github/CODEOWNERS", ".gitlab/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 CATCH_ALL = frozenset({"*", "**", "/**"})
 
-_SCP = re.compile(r"^(?:[^@/:\s]+@)?(?P<host>[^/:\s]+):(?!//)(?P<path>.+)$")
+# A one-character host is a Windows drive letter (C:/repos/x), never a remote.
+_SCP = re.compile(r"^(?:[^@/:\s]+@)?(?P<host>[^/:\s]{2,}):(?!//)(?P<path>.+)$")
 _URL = re.compile(r"^(?P<scheme>ssh|git|https?|git\+ssh|ssh\+git)://(?:[^@/\s]*@)?(?P<host>[^/:\s]+)"
                   r"(?::(?P<port>\d*))?/(?P<path>.+)$", re.IGNORECASE)
 _OWNER = re.compile(r"^@\S+$|^[^@\s]+@[^@\s]+$")

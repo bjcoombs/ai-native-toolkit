@@ -220,6 +220,8 @@ def test_load_units_reads_a_file_and_reports_faults(tmp_path: Path) -> None:
     ("gitlab.example.com:grp/proj", "https://gitlab.example.com/grp/proj"),
     ("file:///srv/repos/x.git", None),
     ("/srv/repos/x.git", None),
+    ("C:/repos/x.git", None),
+    ("C:\\repos\\x", None),
     ("https://host/.git", None),
     ("", None),
     (None, None),
