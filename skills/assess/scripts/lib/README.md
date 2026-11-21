@@ -165,8 +165,9 @@ The anchor of every history window (issue #773). `head_commit_epoch(root)` is HE
 committer time (`%ct`, the time `git log --since` filters on) or None; `since_args(root,
 window, anchor_epoch)` gives `["--since=@<epoch>"]` through
 `history_window.anchored_since`, `[]` for all history, and None when a window has no
-anchor so the caller degrades. Used by `git_churn`, `ai_usage` and
-`understanding_analysis`. Tests: `tests/test_commit_anchor.py` (anchored values on a
+anchor so the caller degrades. Used by `git_churn` and `understanding_analysis`;
+`ai_usage` reads HEAD through its own `_git` so a missing git or a timeout keeps its
+reason, then builds the bound with `anchored_since`. Tests: `tests/test_commit_anchor.py` (anchored values on a
 dated fixture repository, and the same `scans` from two faked dates, Python's clock and
 git's), `tests/test_no_wall_clock.py` (an AST guard: no wall-clock read
 outside an allowlist of run-metadata and network functions, no relative git date

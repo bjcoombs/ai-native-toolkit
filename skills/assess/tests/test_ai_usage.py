@@ -149,10 +149,12 @@ def test_missing_git_and_timeout_have_their_own_reasons(
     def slow(*_a: object, **_k: object) -> None:
         raise subprocess.TimeoutExpired("git", ai_usage.GIT_TIMEOUT_SECONDS)
 
-    monkeypatch.setattr(ai_usage.subprocess, "run", no_git)
-    assert scan_ai_usage(repo, None, None)["reason"] == ai_usage.REASON_NO_GIT  # type: ignore[typeddict-item]
-    monkeypatch.setattr(ai_usage.subprocess, "run", slow)
-    assert scan_ai_usage(repo, None, None)["reason"] == ai_usage.REASON_TIMEOUT  # type: ignore[typeddict-item]
+    # With a window too: the HEAD read behind the window bound keeps the reason (#773).
+    for window in (None, "6mo"):
+        monkeypatch.setattr(ai_usage.subprocess, "run", no_git)
+        assert scan_ai_usage(repo, None, window)["reason"] == ai_usage.REASON_NO_GIT  # type: ignore[typeddict-item]
+        monkeypatch.setattr(ai_usage.subprocess, "run", slow)
+        assert scan_ai_usage(repo, None, window)["reason"] == ai_usage.REASON_TIMEOUT  # type: ignore[typeddict-item]
 
 
 def test_unconfirmed_shallow_probe_degrades(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:

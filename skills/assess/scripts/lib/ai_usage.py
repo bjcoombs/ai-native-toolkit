@@ -88,9 +88,8 @@ from lib.agent_identity import (
     coauthors_have_ai_assistant,
     compile_config_rules,
 )
-from lib.commit_anchor import since_args
 from lib.fleet_config import FleetConfig, ai_usage_section
-from lib.history_window import split_window
+from lib.history_window import anchored_since, split_window
 
 GIT_TIMEOUT_SECONDS = 20
 
@@ -210,6 +209,20 @@ def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[_Com
     return commits
 
 
+def _window_bound(repo_root: Path, window: str | None) -> list[str]:
+    """The ``--since=@<epoch>`` arguments for ``window``, counted back from HEAD's
+    committer time, never today (#773). The HEAD read goes through ``_git``, so a
+    missing git or a timeout keeps its own reason; no HEAD is ``REASON_NOT_A_REPO``."""
+    if window is None:
+        return []
+    try:
+        anchor = int(_git(repo_root, "log", "-1", "--format=%ct", "HEAD").strip())
+    except ValueError as e:
+        raise _GitUnavailable(REASON_NOT_A_REPO) from e
+    since = anchored_since(window, anchor)
+    return [] if since is None else [f"--since={since}"]
+
+
 def _share(count: int, total: int) -> float | None:
     return round(count / total, 4) if total else None
 
@@ -230,16 +243,13 @@ def scan_ai_usage(
     """Count the window's commits, those with an AI-assistant co-author trailer and
     those an agent identity authored (``fleet_config``: the merged ``[ai_usage]`` rules)."""
     label = resolve_window(history_window)
-    # Counted back from HEAD's commit time, never today (#773); no HEAD, no window.
-    bound = since_args(repo_root, history_window, None)
-    if bound is None:
-        return {"available": False, "reason": REASON_NOT_A_REPO}
-    since = bound[0].partition("=")[2] if bound else None
     matcher = matcher_from_config(fleet_config)
     try:
+        bound = _window_bound(repo_root, history_window)
         commits = _commits(repo_root, scope, bound)
     except _GitUnavailable as e:
         return {"available": False, "reason": str(e)}
+    since = bound[0].partition("=")[2] if bound else None
     total = len(commits)
     agent = authored = either = dependency = token = 0
     per_rule = [0] * len(matcher.config_rules)
