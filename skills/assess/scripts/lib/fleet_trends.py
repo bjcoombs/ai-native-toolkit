@@ -327,6 +327,21 @@ def _versions_line(runs: Sequence[TrendRun]) -> str:
     return f"Maturity model {shown}; each line breaks where the version changes"
 
 
+def _bound_tip(run: TrendRun, group: str) -> str:
+    bound = run.get("floor_means", {}).get(group)
+    return "" if bound is None else f" (with floors, at least {bound:.2f})"
+
+
+def _bound_lines(run: TrendRun, groups: Sequence[str]) -> list[str]:
+    """The last run's floor-inclusive lower bounds as visible text; none without floors."""
+    bounds = run.get("floor_means", {})
+    floored = [f"{g}\u00a0{bounds[g]:.2f}" for g in groups if bounds.get(g) is not None]
+    if not floored:
+        return []
+    return textwrap.wrap(f"With floors, a lower bound (unknown rows counted at their confirmed floor), "
+                         f"at least, on {run['label']}: " + ", ".join(floored), WRAP)
+
+
 def _series_class(index: int) -> tuple[str, str]:
     """The colour role and any dash for the ``index``-th group."""
     dash = ' stroke-dasharray="6 3"' if index >= len(SERIES) else ""
@@ -373,9 +388,7 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
                             f'stroke-width="2"{dash}/>')
             for (px, py), i in zip(points, segment):
                 tip = f"{group}: {runs[i]['means'][group]:.2f} on {runs[i]['label']}"
-                bound = runs[i].get("floor_means", {}).get(group)
-                if bound is not None:
-                    tip += f" (with floors, at least {bound:.2f})"
+                tip += _bound_tip(runs[i], group)
                 body.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" class="f-{role}">'
                             f'<title>{svg.esc(tip)}</title></circle>')
     for label in plan.labels:
@@ -400,6 +413,9 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
     body.append(svg.text(PLOT_L, cursor, "End label: group, its mean in its last run, and the change "
                          "over its last unbroken stretch", size=11.5, cls="muted"))
     cursor += LINE_H
+    for line in _bound_lines(runs[-1], plan.groups):
+        body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))
+        cursor += LINE_H
     if hidden:
         for line in textwrap.wrap(hidden, WRAP):
             body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))

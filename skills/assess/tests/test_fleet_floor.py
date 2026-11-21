@@ -265,3 +265,38 @@ def test_slope_and_trend_carry_the_bound_without_moving_the_line():
     run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
                        [group_row("g", [_row("g/a", _scans())], _model(), {})])
     assert run is not None and run["means"]["g"] is None and run["floor_means"] == {"g": 0.5}
+
+
+def test_charts_print_the_lower_bound_as_visible_text():
+    from lib import fleet_slope as fs
+    from lib import fleet_trends as ft
+    floored: Any = {"status": "unknown", "level": None, "floor": 1}
+    known: Any = {"status": "level", "level": 1}
+    rows: Any = [{"id": "cov", "scope": "team", "then": known, "now": floored, "moved": True,
+                  "cause": "level"}]
+    view = fs.slope_view(_model(), {"groups": [  # type: ignore[typeddict-item]
+        {"group": "g", "rows": rows},
+        {"group": "h", "rows": [{**rows[0], "now": known, "moved": False, "cause": None}]}],
+        "earlier": None, "later": None})
+    slope = fs.render_slope(view)
+    assert "at least: g 0.50 → 0.50" in slope and "with floors at least 0.50 → 0.50" not in slope
+    run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
+                       [group_row("g", [_row("g/a", _scans())], _model(), {}),
+                        group_row("h", [_row("h/a", _scans(gate=False))], _model(), {})])
+    assert run is not None
+    assert "at least, on 2026-11-20: g 0.50" in " ".join(ft._bound_lines(run, ["g", "h"]))
+    repos = [_row("g/a", _scans(pressure={"available": True, "mutation_run": False})),
+             _row("g/b", _scans())]
+    points = fq.repo_points(_model(), repos)
+    for p in points:
+        p["commits"] = 3
+    quadrant = fq.render_quadrant(points, "6mo")
+    assert "At least, with floors (plotted repositories)" not in quadrant  # g/b is not plotted
+    assert "g/b (level unknown, at least 0.50 with floors, 3 commits)" in quadrant
+
+
+def test_rows_without_floors_render_no_floor_text():
+    from lib import fleet_trends as ft
+    run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
+                       [group_row("g", [_row("g/a", _scans(gate=False))], _model(), {})])
+    assert run is not None and "floor_means" not in run and ft._bound_lines(run, ["g"]) == []

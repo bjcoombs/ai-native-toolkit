@@ -213,7 +213,11 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
         body.append(svg.text(PLOT_L + 18, cursor, label, size=11.5, cls="muted"))
         cursor += LINE_H + 2
     if any(floor_text(p) for p in points):
-        for line in textwrap.wrap(FLOOR_NOTE, WRAP):
+        bounds = [f"{p['repo']}\u00a0{p.get('maturity_floor') or 0.0:.2f}" for p in plotted
+                  if floor_text(p)]
+        lines = textwrap.wrap(FLOOR_NOTE, WRAP) + (
+            _wrapped("At least, with floors (plotted repositories): ", bounds) if bounds else [])
+        for line in lines:
             body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))
             cursor += LINE_H
     if hidden:

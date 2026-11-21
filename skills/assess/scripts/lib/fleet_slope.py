@@ -180,11 +180,14 @@ def _why(group: GroupSlope) -> str:
     return f"{name}: {svg.truncate(mover['title'], room)}{tail}"
 
 
-def _floor_tip(group: GroupSlope) -> str:
+def _floor_span(group: GroupSlope) -> str:
     then, now = group.get("floor_then"), group.get("floor_now")
-    if then is None or now is None:
-        return ""
-    return f"; with floors at least {then:.2f} → {now:.2f}"
+    return "" if then is None or now is None else f"{then:.2f} → {now:.2f}"
+
+
+def _floor_tip(group: GroupSlope) -> str:
+    span = _floor_span(group)
+    return f"; with floors at least {span}" if span else ""
 
 
 def _unknown_text(group: GroupSlope) -> str:
@@ -245,6 +248,13 @@ def render_slope(view: SlopeView) -> str:
         body.append(svg.text(PAD, cursor, "* the group's measured set of repositories moved too, "
                              "so that change is not a level change alone", size=11.5, cls="muted"))
         cursor += LINE_H + 4
+    floored = [f"{g['group']}\u00a0{_floor_span(g)}" for g in view["groups"] if _floor_span(g)]
+    if floored:
+        for line in textwrap.wrap("With floors, a lower bound (unknown rows counted at their confirmed "
+                                  "floor), at least: " + ", ".join(floored), WRAP):
+            body.append(svg.text(PAD, cursor, line, size=11.5, cls="muted"))
+            cursor += LINE_H
+        cursor += 4
     # a no-break space keeps each group with its count when the note wraps
     partial = [f"{g['group']}\u00a0({g['rows'] - g['paired_rows']}/{g['rows']})" for g in groups
                if g["paired_rows"] < g["rows"]]
