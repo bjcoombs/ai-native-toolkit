@@ -39,7 +39,8 @@ the offline scan: one more ``assess_signals.py --platform`` child per ok reposit
 ``[platform]`` section of ``--fleet-config``) whose ``gh``/``glab`` blocks
 (``lib/signals.py`` ``PLATFORM_SCANS``) are joined into the row by repository. It
 never changes a row's status; a failed read is an unavailable block. ``run.json``
-records ``platform``, and runs with and without it do not compare. With
+records ``platform`` (true only when a platform read ran: ``--scans`` selecting no
+platform scan stamps false), and runs with and without it do not compare. With
 ``--delete-after`` a clone is deleted only after its platform read.
 
 A counts-only run is also kept in the run history,

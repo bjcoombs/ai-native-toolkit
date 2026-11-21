@@ -21,7 +21,12 @@
   CLI. Only successes are stored. ``fleet --platform`` sets it for its platform
   children only, to a temporary directory removed when the pass ends: cached
   responses hold titles and account names, so they never land in ``--out``, the
-  run history or a target. Without it nothing is cached.
+  run history or a target. Without it nothing is cached. The key is the argv
+  alone (no working directory, no environment), so every call made with the
+  cache on must name its repository or project in argv (``--repo owner/name``,
+  a ``repos/<slug>/...`` or ``projects/<id>/...`` path, ``--hostname``); a call
+  that relies on the working directory's git remote would be answered for
+  another repository.
 
 Callers keep their own ``FileNotFoundError`` and ``subprocess.TimeoutExpired``
 mapping; this module raises both unchanged. Pure subprocess + stdlib.
@@ -83,6 +88,7 @@ def cli_env() -> dict[str, str]:
 
 
 def _cache_path(cmd: list[str]) -> Path | None:
+    """The cache file for ``cmd``, keyed by argv only (see the module docstring)."""
     root = os.environ.get(CACHE_ENV)
     if not root:
         return None

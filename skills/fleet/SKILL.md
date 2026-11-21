@@ -272,7 +272,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
 | `fleet_config_sha256` | sha256 of the `--fleet-config` file's canonical form; `null` without one. A comparability key. Absent in a run from before #706, which reads as `null`. |
 | `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
-| `platform` | `true` with `--platform`. A comparability key. Absent in a run from before #714, which reads as `false`. |
+| `platform` | `true` when `--platform` ran a platform read; `false` without it, and also when `--scans` selects no platform scan (nothing was read). A comparability key. Absent in a run from before #714, which reads as `false`. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
@@ -386,7 +386,9 @@ remotes) or `glab` (GitLab remotes) logged in.
   cache per run, in a temporary directory removed when the pass ends, answers a
   repeated request (an auth probe, a bot-account lookup) once; it never lands in
   `DIR`, the history or a target.
-- **Stamp.** `run.json` records `platform: true`; runs with and without the pass
+- **Stamp.** `run.json` records `platform: true` only when the pass ran a
+  platform read (`--platform` with `--scans` selecting no platform scan reads
+  nothing and stamps `false`); runs with and without the pass
   are not comparable (`platform pass changed ...`), and each gets its own
   history entry and trend line.
 - **With `--delete-after`.** A clone is deleted after its platform read, not
