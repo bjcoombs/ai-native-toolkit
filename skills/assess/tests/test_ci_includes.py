@@ -64,11 +64,21 @@ INCLUDE_TEST = "include:\n  - project: grp/ci-templates\n    file: /templates/te
      [IncludeItem("component", "gl.test/g/c@1", (), None, 2)]),
 ])
 def test_include_items(text: str, items: list[IncludeItem]) -> None:
-    assert include_items(text) == (items, True)
+    assert include_items(text) == (items, True, 0)
 
 
 def test_a_file_without_an_include_section_has_none() -> None:
-    assert include_items("build:\n  script:\n    - make\n") == ([], False)
+    assert include_items("build:\n  script:\n    - make\n") == ([], False, 0)
+
+
+@pytest.mark.parametrize("text", [
+    "include:\n  - project: ''\n    file: /x.yml\n  - local: /a.yml\n",
+    "include:\n  - unknown_key: x\n  - local: /a.yml\n",
+    "include: [{project: ''}, /a.yml]\n",
+])
+def test_an_entry_naming_no_item_is_counted_not_lost(text: str) -> None:
+    items, has_section, dropped = include_items(text)
+    assert (len(items), has_section, dropped) == (1, True, 1)
 
 
 # --- resolution ---------------------------------------------------------------
@@ -140,8 +150,7 @@ def test_local_includes_resolve_in_the_checkout_and_in_a_template(tmp_path: Path
     root, app = _root_with_template(
         tmp_path, {"templates/test.yml": "include:\n  - local: /jobs/unit.yml\n", "jobs/unit.yml": TEST_TPL},
         ci="include:\n  - local: ci/own.yml\n" + INCLUDE_TEST.removeprefix("include:\n"))
-    (app / "ci").mkdir()
-    (app / "ci" / "own.yml").write_text("build:\n  script:\n    - make build\n", encoding="utf-8")
+    _commit(app, {"ci/own.yml": "build:\n  script:\n    - make build\n"})
     block = scan_ci_checks(app, root)
     assert block["test_or_lint_runs"] is True
     assert [(r["kind"], r["status"], r["ref_basis"], r["depth"]) for r in block["includes"]] == [
@@ -253,3 +262,46 @@ def test_fleet_passes_its_root_unless_delete_after(tmp_path: Path) -> None:
     command = signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions(ghsync_root=tmp_path))
     assert command[command.index("--ghsync-root") + 1] == str(tmp_path)
     assert "--ghsync-root" not in signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions())
+
+
+def test_an_untracked_local_fragment_is_not_read(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _commit(app, {".gitlab-ci.yml": "include:\n  - local: ci/unit.yml\n"})
+    (app / "ci").mkdir()
+    (app / "ci" / "unit.yml").write_text(TEST_TPL, encoding="utf-8")
+    block = scan_ci_checks(app)
+    assert block["test_or_lint_runs"] is None and block["includes"][0]["status"] == "file_missing"
+
+
+def test_a_symlinked_gitlab_ci_file_is_never_fully_read(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _commit(app, {"real.yml": "include:\n  - local: /none.yml\nbuild:\n  script:\n    - make\n"})
+    (app / ".gitlab-ci.yml").symlink_to(app / "real.yml")
+    _commit(app, {})
+    block = scan_ci_checks(app)
+    assert block["included_files"] == 1 and block["includes"] == []
+    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+
+
+def test_an_unreadable_entry_keeps_the_signal_unknown(tmp_path: Path) -> None:
+    root, app = _root_with_template(
+        tmp_path, {"templates/test.yml": "docs:\n  script:\n    - make docs\n"},
+        ci=INCLUDE_TEST + "  - project: ''\n")
+    block = scan_ci_checks(app, root)
+    assert [r["status"] for r in block["includes"]] == ["unparsed", "resolved"]
+    assert block["test_or_lint_runs"] is None
+
+
+def test_counts_only_keeps_review_depth_and_null_ids(tmp_path: Path) -> None:
+    ci = INCLUDE_TEST.replace("test.yml", "review.yml") + "  - local: ci/build.yml\n"
+    root, app = _root_with_template(
+        tmp_path, {"templates/review.yml": "include:\n  - component: gl.test/tools/ai-review@1.2.0\n"}, ci=ci)
+    _commit(app, {"ci/build.yml": "build:\n  script:\n    - make build\n"})
+    scans = {"ci_checks": scan_ci_checks(app, root),
+             "review_automation": scan_review_automation(app, ghsync_root=root)}
+    out = counts_only_scans(scans)
+    assert out["ci_checks"]["includes"] == scans["ci_checks"]["includes"]
+    assert any(r["id"] is None for r in out["ci_checks"]["includes"])
+    assert [m["depth"] for m in out["review_automation"]["matches"]] == [1]
+    assert out["review_automation"]["present"] is True
+    assert "ci/build.yml" not in json.dumps(out)

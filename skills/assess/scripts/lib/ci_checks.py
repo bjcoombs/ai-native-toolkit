@@ -123,7 +123,10 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None) -> CiChecks
         gitlab = rel in CI_CONFIG_FILES
         pulls = pulls_jobs_from_elsewhere(text, gitlab=gitlab)
         included += pulls
-        if pulls and not (gitlab and resolution is not None and resolution.unresolved == 0):
+        # Fully read only when the resolver saw the includes (a record each) and read them
+        # all: a symlinked .gitlab-ci.yml it refuses stays unknown, never false.
+        read_all = resolution is not None and bool(resolution.includes) and resolution.unresolved == 0
+        if pulls and not (gitlab and read_all):
             elsewhere += 1
     included_checks = sum(check_commands(f.text) for f in resolution.files) if resolution else 0
     records = list(resolution.includes) if resolution else []

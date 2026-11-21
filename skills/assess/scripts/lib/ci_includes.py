@@ -7,7 +7,8 @@ top-level ``include:`` of ``.gitlab-ci.yml`` and, where the included file is on
 disk, returns its text so those scans read the included jobs too:
 
 - ``local:`` (or a bare path item): a file of the same checkout. In the
-  repository itself it is read from the work tree, as ``.gitlab-ci.yml`` is; in
+  repository itself it is read from the work tree when git tracks it (an
+  uncommitted fragment is ``file_missing``), as ``.gitlab-ci.yml`` is; in
   a template it is read at the template's resolved commit. A glob is not
   expanded (``glob``).
 - ``project: <path>`` with ``file:`` (a scalar or a list) and ``ref:``: the
@@ -55,6 +56,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from lib.command_index import MAX_CONFIG_BYTES
+from lib.git_churn import tracked_files
 from lib.shared_tooling import component_source, include_lines, pin
 
 GITLAB_CI = ".gitlab-ci.yml"
@@ -180,9 +182,9 @@ def _item(keys: dict[str, list[str]], line: int) -> IncludeItem | None:
 
 
 def _scalar_item(value: str, line: int) -> IncludeItem | None:
-    value = _unquote(value)
-    if not value:
-        return None
+    raw, value = value.strip(), _unquote(value)
+    if not value or (raw == value and re.match(r"^[\w.-]+\s*:(?:\s|$)", value)):
+        return None  # empty, or an unquoted mapping with a key this reader does not know
     kind: IncludeKind = "remote" if re.match(r"^[a-z]+://", value, re.IGNORECASE) else "local"
     return IncludeItem(kind, value, (), None, line)
 
@@ -199,19 +201,21 @@ def _flow_item(text: str, line: int) -> IncludeItem | None:
     return _item(keys, line)
 
 
-def include_items(text: str) -> tuple[list[IncludeItem], bool]:
-    """The top-level ``include:`` items of a GitLab CI file, and whether it has an
-    ``include:`` section at all (so a section this reader cannot parse stays unknown)."""
+def include_items(text: str) -> tuple[list[IncludeItem], bool, int]:
+    """The top-level ``include:`` items of a GitLab CI file, whether it has an ``include:``
+    section at all, and how many entries named no item this reader parses (an empty
+    ``project:``, an unknown key), so neither a section nor an entry it cannot read is lost."""
     rows = include_lines(text)
     if not rows:
-        return [], False
+        return [], False, 0
     first, head, _inline = rows[0]
     if not head:
-        return _BlockReader().items(rows[1:]), True
-    if head.startswith("["):
-        return [i for v in _split_flow(head) if (i := _flow_item(v, first)) is not None], True
-    one = _flow_item(head, first)
-    return ([one] if one is not None else []), True
+        reader = _BlockReader()
+        items = reader.items(rows[1:])
+        return items, True, reader.dropped + (not items and not reader.dropped)
+    entries = _split_flow(head) if head.startswith("[") else [head]
+    items = [i for v in entries if (i := _flow_item(v, first)) is not None]
+    return items, True, max(len(entries) - len(items), 0) + (not entries)
 
 
 class _BlockReader:
@@ -224,11 +228,15 @@ class _BlockReader:
         self.list_col: int | None = None
         self.key_col: int | None = None
         self.pending_file = False
+        self.dropped = 0  # entries that named no parsable item
+        self.started = False  # an entry is open (a "- " item, or the single mapping)
 
     def flush(self) -> None:
         if (done := _item(self.keys, self.line)) is not None:
             self.out.append(done)
-        self.keys, self.pending_file = {}, False
+        elif self.started:
+            self.dropped += 1
+        self.keys, self.pending_file, self.started = {}, False, False
 
     def start_item(self, content: str, col: int, number: int) -> tuple[str, int] | None:
         """A new ``- `` item: its first key's text and column, or None when the item is
@@ -238,10 +246,13 @@ class _BlockReader:
         rest = content[1:].lstrip()
         self.key_col = col + len(content) - len(rest)
         if _KEY.match(rest):
+            self.started = True
             return rest, self.key_col
         whole = _flow_item(rest, number) if rest.startswith("{") else _scalar_item(rest, number)
         if whole is not None:
             self.out.append(whole)
+        else:
+            self.dropped += 1
         self.key_col = None
         return None
 
@@ -258,6 +269,7 @@ class _BlockReader:
                 content, col = started
             elif self.key_col is None and self.list_col is None:
                 self.key_col, self.line = col, number  # include: as a single mapping
+                self.started = True
             self.key(content, col)
         self.flush()
         return self.out
@@ -311,6 +323,7 @@ class _Source:
     checkout: Path
     commit: str | None  # None: the repository's own work tree
     basis: RefBasis
+    tracked: frozenset[Path] | None = None  # work tree: only git-tracked files are read
 
     def read(self, rel: str) -> str | None:
         if self.commit is None:
@@ -318,7 +331,10 @@ class _Source:
             try:
                 if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_CONFIG_BYTES:
                     return None
-                path.resolve().relative_to(self.checkout)
+                resolved = path.resolve()
+                resolved.relative_to(self.checkout)
+                if self.tracked is not None and resolved not in self.tracked:
+                    return None  # an uncommitted fragment reaches no clone
                 return path.read_text(encoding="utf-8", errors="replace")
             except (OSError, ValueError):
                 return None
@@ -385,8 +401,8 @@ class _Walk:
         return True
 
     def walk(self, text: str, here: _Source, depth: int, top_line: int | None) -> None:
-        items, has_section = include_items(text)
-        if has_section and not items:
+        items, _has_section, dropped = include_items(text)
+        for _ in range(dropped):
             self.records.append({"kind": "local", "id": None, "status": "unparsed",
                                  "ref_basis": None, "depth": depth})
         for item in items:
@@ -463,7 +479,7 @@ def resolve_includes(repo_root: Path, ghsync_root: Path | None = None) -> Resolu
     """Every include of ``repo_root``'s ``.gitlab-ci.yml``, resolved where the file is on
     disk (see the module docstring). Cached: ``ci_checks`` and ``review_automation`` share it."""
     repo_root = repo_root.resolve()
-    own = _Source(repo_root, None, "worktree")
+    own = _Source(repo_root, None, "worktree", tracked_files(repo_root))
     text = own.read(GITLAB_CI)
     if text is None:
         return EMPTY

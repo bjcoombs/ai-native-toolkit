@@ -401,3 +401,25 @@ def test_include_root_is_root_unless_delete_after(tmp_path: Path) -> None:
     assert fleet_cli.include_root(argparse.Namespace(root=str(tmp_path), delete_after=False)) == tmp_path.resolve()
     assert fleet_cli.include_root(argparse.Namespace(root=str(tmp_path), delete_after=True)) is None
     assert fleet_cli.include_root(argparse.Namespace(root=None, delete_after=False)) is None
+
+
+def test_a_root_run_resolves_gitlab_includes_from_sibling_clones(tmp_path, monkeypatch):
+    """#766: ROOT reaches every scan, so a template cloned in the root is read."""
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / "gi"
+    make_repo(root, "grp/ci-templates", files={
+        "templates/test.yml": "unit:\n  script:\n    - pytest -q\n",
+        "templates/review.yml": "include:\n  - component: gl.test/tools/ai-review@1.2.0\n"})
+
+    def ci(project: str, file: str) -> dict[str, str]:
+        return {".gitlab-ci.yml": f"include:\n  - project: {project}\n    file: {file}\n    ref: main\n",
+                "src/a.py": "x = 1\n"}
+    make_repo(root, "grp/app", files=ci("grp/ci-templates", "/templates/test.yml"))
+    make_repo(root, "grp/rev", files=ci("grp/ci-templates", "/templates/review.yml"))
+    make_repo(root, "grp/gone", files=ci("grp/not-cloned", "/t.yml"))
+    assert fleet_cli.main([str(root), "--out", "o", "--scans", "ci_checks,review_automation",
+                           "--no-diagrams", "--no-history"]) == 0
+    rows = {r["repo"]: r["scans"] for r in map(json.loads, (tmp_path / "o" / "repos.jsonl").read_text().splitlines())}
+    assert rows["grp/app"]["ci_checks"]["test_or_lint_runs"] is True
+    assert rows["grp/gone"]["ci_checks"]["test_or_lint_runs"] is None
+    assert rows["grp/rev"]["review_automation"]["present"] is True
