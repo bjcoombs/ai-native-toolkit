@@ -99,7 +99,7 @@ there.
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
-| `--targets FILE` | Level targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and a `level`. Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
+| `--targets FILE` | Targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the targets file format below). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
@@ -352,13 +352,13 @@ owners are never read.
 |------|-------------|
 | `level_up` | A row moves cleanly to a higher level. |
 | `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
-| `target_hit` | A row moves cleanly from below a `--targets` level to at or above it. |
+| `target_hit` | A row moves cleanly from below a `--targets` target to at or above it: a `level` target reads the row's level; a `share` target reads the unit's mean share of top level on the row over its measured repositories (the `fleet-data.json` row roll-up), so it can be hit while a `min` row's level stays put. |
 | `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up on some row. |
 | `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
 
 Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
 `unit_kind`, `run` and `previous_run` (run ids are scan dates), `evidence` (`row`,
-`from_level`, `to_level`, `level`, `share_from`, `share_to`, `runs`, and `moves`: each
+`from_level`, `to_level`, `level`, `share_from`, `share_to`, `target_share`, `runs`, and `moves`: each
 repository that moved up, from which level to which, and `criterion`, the next-level
 criterion that went from unmet to met) and `credit`, one Markdown line.
 
@@ -366,8 +366,11 @@ criterion that went from unmet to met) and `credit`, one Markdown line.
 top level: among the measured repositories one level below the next, the next-level
 criterion most of them share (`signal`), those `repos`, how many more must reach the next
 level for the subject to move (`needed`), and the `change` and `done_when` in the team
-next-steps pages' wording. `targets` gives each target's current `level` and `distance`
-in levels.
+next-steps pages' wording. `targets` gives each target's current `level` and `share`
+(the row's mean share of top level), and its distance: `distance` in levels for a level
+target, `share_distance` in share for a share target (0 when met; null when the row is not
+measured this run or the target is of the other kind). `target` holds a level target's
+level and `share_target` a share target's share; the other is null.
 
 **Targets file** (`--targets`):
 
@@ -377,8 +380,16 @@ view = "ownership"      # "ownership" (default), "system", or "repo"
 unit = "acme/payments"  # a unit id in that view, or a repository id for "repo"
 row = "layer-5-ci"      # a team row of the maturity model
 level = 2               # 1 to the row's top level
+
+[[target]]
+unit = "acme"           # a mean-share target: the unit's mean share of top level on the row
+row = "layer-5-ci"
+share = 0.5             # above 0 and at most 1
 ```
 
+Each target sets exactly one of `level` and `share`. A share target is hit on the run the
+unit's mean share on the row moves cleanly from below `share` to at or above it, and its
+distance is reported in share. Credit names units and repositories only, never people.
 With hashed paths the unit is hashed under the run's salt before it is matched.
 
 **Report.** `report.md` opens with "What changed and who earned it", before the

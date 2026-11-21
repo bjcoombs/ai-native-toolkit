@@ -1071,7 +1071,9 @@ oldest first: `subjects` gives every unit and repository its level per team row,
 roll-up rule (`levels.share_level`) over measured members, with the measured set;
 `clean` is the one gate on a move (known both sides, same measured set), and
 `known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
-emits `level_up`, `first`, `target_hit`, `personal_best` and `streak`, each with
+emits `level_up`, `first`, `target_hit` (a level target on the row's level, a share
+target on its mean share of top level, the `fleet-data.json` row roll-up, #780),
+`personal_best` and `streak`, each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
 a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
 criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
@@ -1080,8 +1082,9 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 **`fleet_achievements_runs.py`**
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
 `fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
-one per date before this run's (`fleet_history.one_per_date`). Unreadable entries are
-passed over.
+one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
+`run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
+the entry has no `run.json` (#780). Unreadable entries are passed over.
 
 **`fleet_achievements_schema.py`**
 Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
@@ -1090,7 +1093,8 @@ when the checked-in file differs; regenerate with
 `uv run --locked python scripts/lib/fleet_achievements_schema.py` from `skills/assess`.
 
 **`fleet_targets.py`**
-The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, `level`), the stand-in for
+The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, and exactly one of
+`level` or a mean `share` of top level, #780), the stand-in for
 the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming the entry;
 `resolve` keys each target as `fleet-data.json` does (hashed under the run's salt).
 
@@ -1098,7 +1102,7 @@ the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming th
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
 from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
 nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
-distances. `fleet_diagrams.report_markdown` places it before the diagrams.
+distances (in levels, or in share for a share target). `fleet_diagrams.report_markdown` places it before the diagrams.
 
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the

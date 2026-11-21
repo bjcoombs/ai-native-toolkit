@@ -10,7 +10,8 @@ model, before the diagrams, so the report opens on credit and the next step:
    ``achievements.json``.
 2. **Next level-ups**: each unit's (not repository's) nearest level-up: the row whose
    step needs the fewest repositories, then maturity-model order. At most ``MAX_STEPS``.
-3. **Targets**, when a targets file was given: met, or the distance in levels.
+3. **Targets**, when a targets file was given: met, or the distance (in levels for a
+   level target, in share of top level for a share target).
 
 Every line is phrased as credit or as a next step. Deterministic; no date.
 """
@@ -78,8 +79,20 @@ def _steps(doc: Achievements, order: Mapping[str, int]) -> list[str]:
     return lines
 
 
+def _pct(share: float) -> str:
+    return f"{share * 100:.0f}%"
+
+
 def _target(t: TargetProgress, titles: Mapping[str, str]) -> str:
-    where = f"{code(t['unit'])}, level {t['target']} on {text(titles.get(t['row'], t['row']))}"
+    title = text(titles.get(t["row"], t["row"]))
+    if t["share_target"] is not None:
+        where = f"{code(t['unit'])}, mean share {_pct(t['share_target'])} of top level on {title}"
+        if t["share"] is None or t["share_distance"] is None:
+            return f"- {where}: not measured this run; the next measured run shows the distance."
+        if t["share_distance"] == 0:
+            return f"- {where}: met ({_pct(t['share'])})."
+        return f"- {where}: at {_pct(t['share'])}, {_pct(t['share_distance'])} to go."
+    where = f"{code(t['unit'])}, level {t['target']} on {title}"
     if t["distance"] is None:
         return f"- {where}: not measured this run; the next measured run shows the distance."
     if t["distance"] == 0:

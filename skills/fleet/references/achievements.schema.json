@@ -6,7 +6,7 @@
   "type": "object",
   "properties": {
     "achievements_version": {
-      "const": 1
+      "const": 2
     },
     "fleet_data_version": {
       "const": 1
@@ -111,6 +111,12 @@
                   "null"
                 ]
               },
+              "target_share": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
               "runs": {
                 "type": [
                   "integer",
@@ -160,6 +166,7 @@
               "runs",
               "share_from",
               "share_to",
+              "target_share",
               "to_level"
             ],
             "additionalProperties": false
@@ -277,11 +284,26 @@
             "type": "string"
           },
           "target": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "share_target": {
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "level": {
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "share": {
+            "type": [
+              "number",
               "null"
             ]
           },
@@ -290,12 +312,21 @@
               "integer",
               "null"
             ]
+          },
+          "share_distance": {
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "required": [
           "distance",
           "level",
           "row",
+          "share",
+          "share_distance",
+          "share_target",
           "target",
           "unit",
           "view"

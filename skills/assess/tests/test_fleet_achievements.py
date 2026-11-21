@@ -164,9 +164,46 @@ def test_a_targets_file_produces_target_hit_and_distances() -> None:
     doc = _build(targets=resolve(specs, Privacy().key))
     assert _earned(doc, fa.TARGET_HIT) == [("2026-11-22", "target_hit", "ownership/grp/sub", "docs")]
     assert doc["targets"] == [
-        {"view": "ownership", "unit": "ownership/grp/sub", "row": "docs", "target": 2, "level": 2, "distance": 0},
-        {"view": "repo", "unit": "grp/c", "row": "docs", "target": 2, "level": 0, "distance": 2},
+        {"view": "ownership", "unit": "ownership/grp/sub", "row": "docs", "target": 2, "share_target": None,
+         "level": 2, "share": 1.0, "distance": 0, "share_distance": None},
+        {"view": "repo", "unit": "grp/c", "row": "docs", "target": 2, "share_target": None,
+         "level": 0, "share": 0.0, "distance": 2, "share_distance": None},
     ]
+
+
+def test_a_share_target_is_hit_on_its_mean_share_while_a_min_level_stays_put() -> None:
+    # the org's docs level stays 0 (min: c is at 0) while its mean share goes 3/8, 4/8, 4/8, 5/8
+    specs = parse_targets(tomllib.loads(
+        '[[target]]\nunit = "grp"\nrow = "docs"\nshare = 0.5\n'
+        '[[target]]\nunit = "grp"\nrow = "docs"\nshare = 0.75\n'), MODEL)
+    assert [(s.level, s.share) for s in specs] == [(None, 0.5), (None, 0.75)]
+    doc = _build(targets=resolve(specs, Privacy().key))
+    assert _earned(doc, fa.TARGET_HIT) == [("2026-11-08", "target_hit", "ownership/grp", "docs")]
+    (hit,) = [a for a in doc["achievements"] if a["kind"] == fa.TARGET_HIT]
+    ev = hit["evidence"]
+    assert (ev["from_level"], ev["to_level"], ev["level"]) == (0, 0, None)
+    assert (ev["share_from"], ev["share_to"], ev["target_share"]) == (0.375, 0.5, 0.5)
+    assert [m["repo"] for m in ev["moves"]] == ["grp/sub/a"]
+    assert hit["credit"] == ("`ownership/grp` hit its target of 50% of top level on Instruction docs: "
+                             "mean share 38% to 50%.")
+    assert doc["targets"] == [
+        {"view": "ownership", "unit": "ownership/grp", "row": "docs", "target": None, "share_target": 0.5,
+         "level": 0, "share": 0.625, "distance": None, "share_distance": 0.0},
+        {"view": "ownership", "unit": "ownership/grp", "row": "docs", "target": None, "share_target": 0.75,
+         "level": 0, "share": 0.625, "distance": None, "share_distance": 0.125},
+    ]
+    section = credit_section(doc, MODEL)
+    assert "- `ownership/grp`, mean share 50% of top level on Instruction docs: met (62%)." in section
+    assert "- `ownership/grp`, mean share 75% of top level on Instruction docs: at 62%, 12% to go." in section
+    jsonschema.validate(json.loads(fa.dumps_achievements(doc)), json.loads(render()))
+
+
+def test_level_and_share_targets_on_one_row_sort_and_both_count() -> None:
+    targets = resolve([TargetSpec("ownership", "grp", "docs", None, 0.5),
+                       TargetSpec("ownership", "grp", "docs", 1)], Privacy().key)
+    doc = _build(targets=targets)
+    assert [(t["target"], t["share_target"]) for t in doc["targets"]] == [(None, 0.5), (1, None)]
+    assert len(_earned(doc, fa.TARGET_HIT)) == 1  # the level target is never reached (c stays at 0)
 
 
 @pytest.mark.parametrize(("text", "message"), [
@@ -178,6 +215,12 @@ def test_a_targets_file_produces_target_hit_and_distances() -> None:
     ('[[target]]\nunit = "x"\nrow = "org2fa"\nlevel = 1\n', "'row' must name a team row"),
     ('[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\n[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\n',
      "duplicate target"),
+    ('[[target]]\nunit = "x"\nrow = "docs"\n', "set exactly one of 'level' and 'share'"),
+    ('[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\nshare = 0.5\n', "set exactly one of 'level' and 'share'"),
+    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = 0\n', "'share' must be a number above 0 and at most 1"),
+    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = 1.5\n', "'share' must be a number above 0 and at most 1"),
+    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = "half"\n', "'share' must be a number above 0 and at most 1"),
+    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = true\n', "'share' must be a number above 0 and at most 1"),
     ('goal = 1\n', "unknown top-level key"),
 ])
 def test_bad_targets_are_named(text: str, message: str) -> None:
@@ -317,11 +360,40 @@ def test_earlier_runs_reads_comparable_entries_with_fleet_data(tmp_path: Path) -
     assert doc == _build()
 
 
+def test_an_entry_is_dated_by_its_run_json_not_the_fleet_data_copy(tmp_path: Path) -> None:
+    # runs copied into the history with only run.json re-dated (fleet-data.json keeps the
+    # date the run was made on) replay on run.json's date
+    org = tmp_path / "grp"
+    for date, spec in HISTORY[:3]:
+        _entry(org, date, spec, data=_data("2026-12-31", spec))
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-22"}
+    runs = earlier_runs(org, current, frozenset(BASE))
+    assert [r.run_id for r in runs] == ["2026-11-01", "2026-11-08", "2026-11-15"]
+    doc = fa.build_achievements(fa.HistoryRun("2026-11-22", _data("2026-11-22", HISTORY[3][1])), runs, MODEL)
+    assert {a["kind"] for a in doc["achievements"]} >= {fa.LEVEL_UP, fa.FIRST, fa.PERSONAL_BEST}
+    assert _earned(doc) == _earned(_build())
+
+
+def test_only_an_entry_without_run_json_is_dated_by_the_fleet_data_copy(tmp_path: Path) -> None:
+    org = tmp_path / "grp"
+    _entry(org, "2026-11-01", BASE)
+    _entry(org, "2026-11-08", BASE)
+    (org / "2026-11-08" / RUN_FILE).unlink()  # fleet-data.json's copy of the stamp stands in
+    _entry(org, "2026-11-09", BASE, data=_data("2026-11-10", BASE))
+    (org / "2026-11-09" / RUN_FILE).unlink()  # and its date must match the entry's
+    _entry(org, "2026-11-10", BASE, stamp={"window": "3mo"})
+    (org / "2026-11-10" / RUN_FILE).write_text("not json", encoding="utf-8")  # unreadable: passed over
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-22"}
+    assert [r.run_id for r in earlier_runs(org, current, frozenset(BASE))] == ["2026-11-01", "2026-11-08"]
+
+
 @pytest.mark.parametrize("break_it", [
     lambda d: d.__setitem__("run", "not an object"),
     lambda d: d["repos"][0].pop("rows"),
     lambda d: d["repos"][0]["rows"][0].__setitem__("level", "two"),
     lambda d: d["views"][0]["units"][0].pop("overall"),
+    lambda d: d["views"][0]["units"][0]["levels"][0].__setitem__("mean_share", "half"),
+    lambda d: d["views"][0]["units"][0]["levels"][0].pop("row"),
     lambda d: d["repos"][0]["units"].append({"view": "ownership"}),
 ])
 def test_a_malformed_history_entry_is_passed_over(tmp_path: Path, break_it: object) -> None:

@@ -291,7 +291,6 @@ if [ -f "$REPO_ROOT/.assess/complexity-stats.json" ]; then
   cp "$REPO_ROOT/.assess/complexity-stats.json" "$REPO_ROOT/.assess/complexity-stats.prior.json" 2>/dev/null || true
 fi
 
-
 # Run the complexity treemap (produces fresh complexity-stats.json)
 # (single line: the standalone transform replaces the marker + one following line)
 <!-- chat-replace:uv-treemap -->
@@ -304,8 +303,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/doc-graph-svg.py" "$REPO_ROOT" -o "$REPO_ROO
 # Run the deterministic core (instruction grading, Claude Code config frontmatter,
 # doc link-graph, doc staleness, liveness/dead-code, observability rungs, stats
 # diff, wiki files, run-context.json)
-# On a headless/CI run (as in Phase 1), append `--non-interactive` so every consent
-# offer records as skipped; a normal interactive /assess omits the flag.
+# On a headless/CI run (as in Phase 1), append `--non-interactive` so every consent offer records as skipped; a normal interactive /assess omits the flag.
 <!-- chat-replace:uv-core -->
 uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 ```
@@ -313,7 +311,12 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs), record "could not be generated - <reason>" in the report and continue. The doc graph shares its data with the deterministic core's `doc_graph` / `doc_staleness` blocks, so even when the SVG can't render, Layer 0 still scores from `run-context.json`.
 
 <!-- chat-skip:start -->
-**Windows (PowerShell, no uv).** Install once with `python -m pip install --user networkx grimp lizard==1.23.0 squarify matplotlib numpy`, set `$AssessDir = "${CLAUDE_SKILL_DIR}"` and `$REPO_ROOT = git rev-parse --show-toplevel`, then run each `uv run` line in this skill as `python` with the same arguments. The full PowerShell sequence and the ripgrep lookup (`RG_PATH`, then `PATH`, then the WinGet package folder): `references/windows.md`.
+#### Windows (PowerShell, no uv)
+```powershell
+python -m pip install --user networkx grimp lizard==1.23.0 squarify matplotlib numpy  # once, no uv
+$REPO_ROOT = git rev-parse --show-toplevel; python "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
+```
+Run each other `uv run` line in this skill as `python` with the same arguments. The full PowerShell sequence and the ripgrep lookup (`RG_PATH`, then `PATH`, then the WinGet package folder): `references/windows.md`.
 <!-- chat-skip:end -->
 
 Interactivity is an explicit signal, never a stdin probe: pass `--non-interactive` only on a headless/CI run, otherwise the run is interactive by default. See `references/consent-lifecycle.md` for why (`isatty()` misreads a subprocess).
@@ -486,7 +489,6 @@ The `actions` array mirrors the report's Top 3 Actions table one-to-one and **mu
 Without this step, the `log.md` placeholders above carry forward forever. Hotspot pages you don't supply actions for keep a neutral pointer (`This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.`) rather than an unfinished-work placeholder - a flagged-but-not-Top-3 page reads as intentional.
 
 The hotspot_actions dict should include at minimum the files mentioned in your Top 3 Actions. You can include more if you have specific suggestions for them; any file you omit keeps the neutral pointer.
-
 
 ## Step 8: End-of-Run Offers
 
