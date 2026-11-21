@@ -175,7 +175,11 @@ constant each.
 # with no package boundary crossed there is no contract edge to measure, so the
 # former 1.0 was vacuous. A reader comparing front_door_ratio as a number must
 # skip null. complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.27.0"
+# 1.28.0: run-context.json ci_checks gains included_check_commands,
+# resolved_includes, unresolved_includes and includes[] (kind, id, status,
+# ref_basis, depth: GitLab includes resolved offline, issue #766), and each
+# review_automation match gains depth. Additive: no existing key moves.
+ARTIFACT_SCHEMA_VERSION = "1.28.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -273,4 +277,10 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
 #     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
 #     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
-ASSESS_METHOD_VERSION = 23
+# 24: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
+#     reads a check in an included local file or a template cloned in the fleet root
+#     (true), or false when every include resolved without one, where it was null;
+#     ``review_automation`` credits a review component inside a resolved template;
+#     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
+#     an issue_comment-only review action is no longer credited.
+ASSESS_METHOD_VERSION = 24
