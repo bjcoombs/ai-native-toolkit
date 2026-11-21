@@ -2841,7 +2841,8 @@ it count once. The two id lists credit git-tracked files only, as `agent_ops` do
 `distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
 `step_uses(text)` (#696) is the step-level reader the block itself does not use: (line,
-value) for each `uses:` inside a job's `steps:` list, skipping job-level `uses:` and the
+value) for each `uses:` that is a step's own key (on its `- ` line or at its key column)
+inside a job's `steps:` list, skipping job-level `uses:`, a `uses:` nested under `with:`, and the
 body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one into
 `owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
 sources, so they never enter `ci_includes` or `ci_source_ids`.
@@ -2858,7 +2859,7 @@ matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked}`. Kinds:
 `.gemini/config.yaml`, `.pr_agent.toml`, each mapped to its `delivery.AI_REVIEWERS`
 login). A CI action or include also matches (`rule: config`, `reviewer: configured`)
 when its source equals, or sits under, a `[review] ai_review_components` entry
-(lowercased, host and `@version` dropped). Copilot code review has no review-specific
+(lowercased, host, a leading CI variable such as `$CI_SERVER_FQDN`, and `@version` dropped). Copilot code review has no review-specific
 file and is not read. `present` and `kinds` credit git-tracked matches only; outside a
 git checkout the block is `available: false`. Counts-only keeps the booleans, kinds,
 rules and reviewer slugs, never a source or a config entry. `is_review_action` and
@@ -2867,7 +2868,9 @@ rules and reviewer slugs, never a source or a config entry. `is_review_action` a
 maturity model's Layer 7 level 1 reads: `{available, present, ai_review_in_ci,
 reviewed_changes}`; `present` is true when an AI review step is credited or
 `review_reality.reviewed_share > 0` (`approved_share > 0` where `reviewed_share` is
-null), false when neither block shows review, and otherwise the block is unavailable
+null), false when neither block shows review (a review config file alone does not count
+against a measured `reviewed_share` of 0; a CI step, or a measured `bot_review_share > 0`,
+does), and otherwise the block is unavailable
 with the reason of the block that could not say, `review_reality`'s first (so the
 offline `network` code gives the `fleet --platform` hint). It is in
 `signals.PLATFORM_SCANS`, so the platform pass rebuilds it from the measured

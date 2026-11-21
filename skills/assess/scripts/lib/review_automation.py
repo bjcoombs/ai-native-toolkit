@@ -36,7 +36,9 @@ source or a config entry.
 review on a sampled merged change (``review_reality.reviewed_share > 0``, or, where
 ``reviewed_share`` is null because only approvals are read, ``approved_share > 0``).
 ``present`` is true when either source is true, false when the automation scan
-found none and ``reviewed_share`` is 0, and otherwise the block is unavailable
+found none and ``reviewed_share`` is 0 (a review config file alone does not
+count against a measured 0: only a CI step, or a measured ``bot_review_share >
+0``, does), and otherwise the block is unavailable
 with the reason of the block that could not say (``review_reality``'s first,
 so a headless run's ``network`` reason reaches the ``fleet --platform`` hint).
 It is listed in ``signals.PLATFORM_SCANS`` so the platform pass rebuilds it from
@@ -132,10 +134,12 @@ def is_review_component(source: str) -> bool:
 
 
 def _normalise(entry: str) -> str:
-    """A config entry as a source: lowercased, version and host dropped."""
+    """A config entry as a source: lowercased, version and host dropped, as
+    ``shared_tooling`` drops them from an include (a host, or a CI variable such as
+    ``$CI_SERVER_FQDN``)."""
     path = entry.strip().split("@", 1)[0].strip("/").lower()
     first, _, rest = path.partition("/")
-    if rest and ("." in first or ":" in first):
+    if rest and ("." in first or ":" in first or first.startswith("$")):
         path = rest
     return path
 
@@ -276,9 +280,17 @@ def review_evidence(review_automation: Mapping[str, Any] | None,
         "ai_review_in_ci": automation,
         "reviewed_changes": reviewed,
     }
-    if automation or reviewed:
+    credited = automation
+    if automation and reviewed is False:
+        # Review measured as absent: a config file alone (a stale .coderabbit.yaml)
+        # contradicts it. A CI step still counts (claude-code-action posts comments,
+        # which reviewed_share does not read), and so does a measured bot review.
+        kinds = review_automation.get("kinds") if isinstance(review_automation, Mapping) else None
+        bot = review_reality.get("bot_review_share") if isinstance(review_reality, Mapping) else None
+        credited = bool(set(kinds or ()) & {"ci_action", "ci_component"}) or (_number(bot) and bot > 0)
+    if credited or reviewed:
         block["present"] = True
-    elif automation is False and reviewed is False:
+    elif automation is not None and reviewed is False:
         block["present"] = False
     else:
         block["available"] = False

@@ -85,6 +85,13 @@ def test_step_uses_reads_steps_only_and_skips_block_scalars() -> None:
     ]
 
 
+def test_step_uses_ignores_uses_nested_under_with() -> None:
+    text = ("jobs:\n  r:\n    steps:\n      - name: x\n        with:\n"
+            "          uses: anthropics/foo@v1\n        uses: actions/setup-node@v4\n"
+            "      - with:\n          uses: anthropics/bar@v1\n")
+    assert step_uses(text) == [(7, "actions/setup-node@v4")]
+
+
 def test_action_repo_names_the_repository() -> None:
     assert action_repo("anthropics/claude-code-action@v1") == "anthropics/claude-code-action"
     assert action_repo("Qodo-AI/pr-agent/sub@main") == "qodo-ai/pr-agent"
@@ -156,6 +163,8 @@ def test_a_config_project_path_covers_its_components(tmp_path: Path) -> None:
     _git(tmp_path, ".")
     config = parse_fleet_config('[review]\nai_review_components = ["acme/ci"]\n')
     assert scan_review_automation(tmp_path, config)["present"] is True
+    variable = parse_fleet_config('[review]\nai_review_components = ["$CI_SERVER_FQDN/acme/ci@1"]\n')
+    assert scan_review_automation(tmp_path, variable)["present"] is True
     assert scan_review_automation(tmp_path, empty_config())["present"] is False
 
 
@@ -201,7 +210,8 @@ def test_symlinked_config_is_skipped(tmp_path: Path) -> None:
 
 # --- review_evidence ---------------------------------------------------------------
 
-AUTO_YES: dict[str, Any] = {"available": True, "present": True}
+AUTO_YES: dict[str, Any] = {"available": True, "present": True, "kinds": ["ci_action"]}
+AUTO_CONFIG: dict[str, Any] = {"available": True, "present": True, "kinds": ["config_file"]}
 AUTO_NO: dict[str, Any] = {"available": True, "present": False}
 AUTO_UNKNOWN: dict[str, Any] = {"available": False, "present": False, "reason": "git_tracking_unknown: x"}
 OFFLINE: dict[str, Any] = {"available": False, "reason": NETWORK_REASON}
@@ -217,6 +227,9 @@ def _reality(share: float | None) -> dict[str, Any]:
     (AUTO_NO, _reality(0.5), True),
     (AUTO_UNKNOWN, _reality(0.5), True),
     (AUTO_NO, _reality(0.0), False),
+    (AUTO_CONFIG, OFFLINE, True),  # nothing measured: the config file counts
+    (AUTO_CONFIG, _reality(0.0), False),  # measured 0: a config file alone is contradicted
+    (AUTO_CONFIG, {"available": True, "reviewed_share": 0.0, "bot_review_share": 0.3}, True),
     (AUTO_NO, {"available": True, "reviewed_share": None, "approved_share": 0.4}, True),
 ])
 def test_review_evidence_known(automation: dict[str, Any], reality: dict[str, Any], present: bool) -> None:

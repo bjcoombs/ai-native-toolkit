@@ -376,10 +376,14 @@ def step_uses(text: str) -> list[tuple[int, str]]:
     inside a job's ``steps:`` list runs an action. Job-level ``uses:`` (a
     reusable workflow, ``_job_uses``) is not a step, and the body of a block
     scalar (``run: |``) is skipped, so a script that prints ``uses:`` runs nothing.
+    Only a step's own key counts: ``uses:`` on the step's ``- `` line or at its key
+    column, never one nested deeper (under ``with:``).
     """
     rows: list[tuple[int, str]] = []
     steps_col: int | None = None
     scalar_col: int | None = None
+    dash_col: int | None = None  # the column of the steps list's "- "
+    step_key_col: int | None = None  # the current step mapping's key column
     for number, raw in enumerate(text.splitlines(), start=1):
         line = _strip_comment(raw).rstrip()
         if not line.strip():
@@ -399,11 +403,16 @@ def step_uses(text: str) -> list[tuple[int, str]]:
         if _BLOCK_SCALAR.search(key):
             scalar_col = key_col
         if _STEPS_KEY.match(key):
-            steps_col = col
+            steps_col, dash_col, step_key_col = col, None, None
             continue
         if steps_col is None or col < steps_col:
             continue
-        match = _STEP_USES.match(content)
+        own_key = False
+        if content.startswith("-") and (dash_col is None or col == dash_col):
+            dash_col, step_key_col, own_key = col, key_col, True
+        elif not content.startswith("-") and col == step_key_col:
+            own_key = True
+        match = _STEP_USES.match(key) if own_key else None
         if match and (value := _unquote(match.group(1))):
             rows.append((number, value))
     return rows
