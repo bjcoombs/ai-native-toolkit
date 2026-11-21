@@ -218,8 +218,16 @@ def _empty_refs_in_doc(
     return rows
 
 
-# Whole-tree CODEOWNERS spellings: each names every tracked file and no module boundary.
-_CATCH_ALL = frozenset({"*", "/*", "**", "/**", "**/*", "/**/*"})
+_GLOB_CHARS = frozenset("*?[")
+
+
+def _names_a_path(pattern: str) -> bool:
+    """A CODEOWNERS glob names a module path when one segment has no glob character.
+
+    ``src/``, ``/docs/**`` and ``**/tests/`` do; ``*``, ``/**``, ``**/*`` and an
+    extension glob such as ``*.py`` cut across every directory and name no boundary.
+    """
+    return any(seg and not _GLOB_CHARS & set(seg) for seg in pattern.split("/"))
 
 
 def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
@@ -228,14 +236,14 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
     Counts both sides' declarations: every CODEOWNERS glob, and every distinct
     architecture-doc path reference (per declaring boundary). ``matched`` is the
     declarations whose resolution is non-empty. ``boundary`` is ``matched`` less
-    the catch-all CODEOWNERS globs (``_CATCH_ALL``), which name one owner for the
-    whole tree and no module boundary (#785). Reuses the same parse/resolve path
+    the CODEOWNERS globs that name no module path (``_names_a_path``): a catch-all
+    or an extension glob names one owner across the tree, not a boundary (#785). Reuses the same parse/resolve path
     as the empty-set detectors so the two never disagree on what "declared" means.
     """
     codeowners = parse_codeowners(repo_root)
     declared = len(codeowners)
     matched = sum(1 for files in codeowners.values() if files)
-    boundary = sum(1 for pat, files in codeowners.items() if files and pat not in _CATCH_ALL)
+    boundary = sum(1 for pat, files in codeowners.items() if files and _names_a_path(pat))
 
     docs = _discover_arch_docs(repo_root)
     if docs:

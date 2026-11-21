@@ -334,8 +334,11 @@ def test_github_sample_takes_the_newest_merges_in_two_reads(monkeypatch):
     light = _light(40)
     newest = sorted((c["mergedAt"] for c in light), reverse=True)
 
-    def fake(args: list[str], timeout: int = 20) -> Any:
+    cached: list[bool] = []
+
+    def fake(args: list[str], timeout: int = 20, cache: bool = True) -> Any:
         calls.append(args)
+        cached.append(cache)
         if args[-1] == "mergedAt":
             return light
         floor = args[args.index("--search") + 1].split()[0].removeprefix("merged:>=")
@@ -348,12 +351,14 @@ def test_github_sample_takes_the_newest_merges_in_two_reads(monkeypatch):
     assert calls[0][calls[0].index("--search") + 1] == "merged:>=2026-05-21 sort:updated-desc"
     assert calls[1][calls[1].index("--search") + 1] == f"merged:>={newest[ms.SAMPLE_CAP - 1]} sort:updated-desc"
     assert calls[1][-1] == ms.PR_FIELDS
+    # Only the timestamps-only read may be cached; reviews and comments never are (#778).
+    assert cached == [True, False]
     assert all(c[c.index("--repo") + 1] == "acme/widget" for c in calls)
 
 
 def test_github_sample_with_no_merges_reads_once(monkeypatch):
     calls: list[list[str]] = []
-    monkeypatch.setattr(ms, "gh_json", lambda args, timeout=20: calls.append(args) or [])
+    monkeypatch.setattr(ms, "gh_json", lambda args, timeout=20, cache=True: calls.append(args) or [])
     assert ms.github_changes(REPO, None) == []
     assert len(calls) == 1
     assert calls[0][calls[0].index("--search") + 1] == "sort:updated-desc"
@@ -364,7 +369,8 @@ def test_gitlab_sample_reads_one_page_and_orders_by_merge_time(monkeypatch):
     mrs = [{"iid": i, "merged_at": f"2026-10-{i:02d}T00:00:00Z"} for i in (3, 1, 2)]
     mrs.append({"iid": 9, "merged_at": "2026-01-01T00:00:00Z"})  # updated in, merged before
 
-    def fake(project: GitlabProject, path: str) -> Any:
+    def fake(project: GitlabProject, path: str, cache: bool = True) -> Any:
+        assert cache is False  # titles and descriptions stay out of the cache (#778)
         paths.append(path)
         return mrs
 
@@ -380,13 +386,13 @@ def test_gitlab_sample_reads_one_page_and_orders_by_merge_time(monkeypatch):
     ([{"number": 1}], "gh_bad_json"),  # a merged change with no merge time
 ])
 def test_a_malformed_github_listing_is_unavailable(monkeypatch, listing, reason):
-    monkeypatch.setattr(ms, "gh_json", lambda args, timeout=20: listing)
+    monkeypatch.setattr(ms, "gh_json", lambda args, timeout=20, cache=True: listing)
     with pytest.raises(GhUnavailable, match=reason):
         ms.github_changes(REPO, None)
 
 
 def test_a_refused_listing_is_an_unavailable_sample(monkeypatch, tmp_path):
-    def refuse(args: list[str], timeout: int = 20) -> Any:
+    def refuse(args: list[str], timeout: int = 20, cache: bool = True) -> Any:
         raise GhUnavailable("no_access: HTTP 403")
 
     monkeypatch.setattr(ms, "open_gitlab", lambda root: None)

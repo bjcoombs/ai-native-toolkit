@@ -253,9 +253,9 @@ def _boundary_map(op: str, value: Operand) -> Guidance | None:
         return None
     return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
                       "`ARCHITECTURE.md` that names module paths.",
-            "done_when": "A committed `CODEOWNERS` or `ARCHITECTURE.md` names at least one path, "
-                         "other than a catch-all such as `*` or `/**`, that matches a tracked "
-                         "file in the repository."}
+            "done_when": "A committed `CODEOWNERS` line or `ARCHITECTURE.md` reference names "
+                         "a module path (not a catch-all such as `*` or `/**`, or an extension "
+                         "glob such as `*.py`) that matches a tracked, non-excluded file."}
 
 
 def _file_size(op: str, value: Operand) -> Guidance | None:
@@ -392,9 +392,11 @@ _MEASURE_HINTS = {
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
-                 "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
-                 "`include:` or component, a reusable workflow from another repository): the "
-                 "check may live in the included file, which the scan does not read.",
+                 "but a CI file pulls jobs from a file the run could not read (`basis: "
+                 "included_jobs`: a GitLab `include:` whose template is not cloned in the "
+                 "fleet root, or a `template:` or `remote:` include, a reusable workflow from "
+                 "another repository): the check may live there. Cloning the template into "
+                 "the same ghsync root lets the fleet read it.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
 }

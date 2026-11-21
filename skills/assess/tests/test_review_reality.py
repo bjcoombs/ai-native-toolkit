@@ -20,6 +20,7 @@ from conftest import skip_without_posix_shell
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.counts_only import reason_code  # noqa: E402
+from lib.platform_cli import CACHE_ENV  # noqa: E402
 from lib.review_reality import scan_review_reality  # noqa: E402
 from lib.signals import collect  # noqa: E402
 
@@ -28,6 +29,7 @@ echo "$*" >> "$FAKE_GH/log"
 serve() { [ -f "$FAKE_GH/$1" ] && cat "$FAKE_GH/$1" && exit 0; }
 case "$1:$*" in
   auth:*) [ -f "$FAKE_GH/noauth" ] || exit 0 ;;
+  pr:*"--json mergedAt") serve prs-light.json; serve prs.json ;;
   pr:*) serve prs.json ;;
   api:*rules/branches*) serve branchrules.json ;;
   api:*/protection*) serve protection.json ;;
@@ -277,3 +279,36 @@ def test_review_reality_comment_without_author_is_skipped(world) -> None:
     assert scan_review_reality(world.root)["bot_review_share"] == 0.0
     world.serve("prs.json", [_pr(0, comments=[None, bot]), _pr(1)])
     assert scan_review_reality(world.root)["bot_review_share"] == 0.5
+
+
+def _keys(doc: object) -> set[str]:
+    if isinstance(doc, dict):
+        return set(doc) | {k for v in doc.values() for k in _keys(v)}
+    if isinstance(doc, list):
+        return {k for v in doc for k in _keys(v)}
+    return set()
+
+
+def test_no_cached_record_carries_a_body(world, tmp_path, monkeypatch) -> None:
+    """The response cache holds no review or comment body (#778), as on GitLab (#716)."""
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    monkeypatch.setenv(CACHE_ENV, str(cache))
+    _require_by_ruleset(world)
+    prs = [_pr(n, reviews=[REVIEWER], comments=[{"login": "dave"}]) for n in range(6)]
+    for pr in prs:
+        for review in pr["reviews"]:
+            review["body"] = "SECRET-BODY"
+    world.serve("prs.json", prs)
+    world.serve("prs-light.json", [{"mergedAt": pr["mergedAt"]} for pr in prs])
+    block = scan_review_reality(world.root)
+    assert block["available"] is True and block["merged_count"] == 6
+    cached = [f.read_text() for f in cache.iterdir() if f.is_file()]
+    assert cached, "other platform reads are cached"
+    assert not any("SECRET-BODY" in c for c in cached)
+    for text in cached:
+        try:
+            doc = json.loads(text)
+        except json.JSONDecodeError:
+            continue  # ``gh auth status`` prints text, not JSON
+        assert "body" not in _keys(doc)

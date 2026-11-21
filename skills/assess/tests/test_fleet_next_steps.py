@@ -336,7 +336,7 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
     ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
     ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
-    ("structure_drift.tier_0.boundary_patterns", "gt", 0, "catch-all such as `*` or `/**`"),
+    ("structure_drift.tier_0.boundary_patterns", "gt", 0, "tracked, non-excluded file"),
     ("structure_drift.tier_0.boundary_patterns", "gte", 1, "a `CODEOWNERS` line per module path"),
 ])
 def test_guidance_templates_on_the_criterion(signal, op, value, needle):

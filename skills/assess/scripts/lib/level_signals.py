@@ -203,7 +203,7 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "promissory_markers.families.suppression.total": "head_text",
     "promissory_markers.families.suppression.stale": "git_history",
     "promissory_markers.aging_reliable": "git_history",
-    "structure_drift.tier_0.matched_patterns": "config_text",
+    "structure_drift.tier_0.boundary_patterns": "config_text",
     "stats_summary.loc.p95": "head_structure",
     "ci_checks.test_or_lint_runs": "head_text",
     "coverage_gate.enforced": "config_text",

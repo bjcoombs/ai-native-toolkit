@@ -152,6 +152,16 @@ def _component_source(raw: str) -> str:
     return path
 
 
+def include_lines(text: str) -> list[tuple[int, str, bool]]:
+    """The top-level ``include:`` section rows (``_include_lines``), for ``lib/ci_includes.py``."""
+    return _include_lines(text)
+
+
+def component_source(raw: str) -> str:
+    """A component reference's ``group/project/name`` (``_component_source``)."""
+    return _component_source(raw)
+
+
 def _include_lines(text: str) -> list[tuple[int, str, bool]]:
     """The top-level ``include:`` section as (line number, text, inline) rows.
 
@@ -418,7 +428,10 @@ def step_uses(text: str) -> list[tuple[int, str]]:
     return rows
 
 
-_TOP_LEVEL_ON = re.compile(r"""^(?:on|"on"|'on')\s*:(.*)$""")
+# A workflow's top-level ``on:`` key. ``true:`` is how a YAML 1.1 loader (PyYAML)
+# reads and re-serialises the bare ``on`` key, so a workflow round-tripped through
+# one carries it. Shared with ``lib/agent_harness.py``.
+ON_KEY = re.compile(r"""^(?:on|"on"|'on'|true)\s*:(?P<rest>.*)$""")
 _EVENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -446,10 +459,11 @@ def workflow_events(text: str) -> frozenset[str] | None:
         if not line[0].isspace():
             if inside:
                 break
-            match = _TOP_LEVEL_ON.match(line)
+            match = ON_KEY.match(line)
             if match:
                 inside = True
-                events += _event_items(match.group(1)) if match.group(1).strip() else []
+                rest = match.group("rest")
+                events += _event_items(rest) if rest.strip() else []
             continue
         if not inside:
             continue
