@@ -314,6 +314,34 @@ tables are `lib/fleet_config.py` (`SECTION_KEYS`).
 - **Counts-only.** No config value reaches `repos.jsonl`, `run.json` or any
   other output: consumers report per-rule counts by position, never by pattern.
 
+### `[ai_usage]`: agent identities
+
+Read by the `ai_usage` scan (`lib/agent_identity.py`, `AuthorMatcher`) to count the
+commits an in-house agent authored, beside the pinned agent apps (Claude, the
+Copilot coding agent, Devin, Jules, Codex, the Cursor background agent, OpenHands,
+Amazon Q Developer).
+
+```toml
+[ai_usage]
+token_users_as_agents = false   # GitLab access-token users count as agents (default false)
+
+[[ai_usage.agent_identities]]
+pattern = "^inhouse-agent"      # a regular expression, case-insensitive, searched
+# field = "email"               # optional: "email", "username" or "name"
+```
+
+| Key | Kind | Meaning |
+|---|---|---|
+| `agent_identities` | list of tables | One rule per in-house agent. `pattern` (required) is a Python regular expression; a bad one exits 2 naming the key, never the pattern. Without `field` a rule reads the author e-mail and the username; `field = "name"` opts in to the display name, which no pinned default reads. A commit is credited to the first rule that matches, so `ai_usage.agent_identity_rule_commits[i]` counts rule `i` once per commit. |
+| `token_users_as_agents` | boolean | Count every GitLab project or group access-token user (`project_<id>_bot_<hex>`, `group_<id>_bot_<hex>`, their `@noreply.<host>` e-mail) as an agent. Without it they are counted apart in `token_user_commits`; a rule such as `pattern = "^project_42_bot_"` promotes one project's token users only. |
+
+The username is the platform login a noreply e-mail carries (GitHub
+`[<id>+]login@users.noreply.<host>`, GitLab `<id>-login@users.noreply.<host>`, a
+token user's own address). Dependency bots (Renovate, a plain `renovate-bot` user,
+Dependabot) are always `dependency_bot_commits`, whatever a rule says. Per-rule
+counts are by position in the merged list, so a fleet rule keeps its index in every
+repository; the block never carries a pattern or a matched identity.
+
 ## `--delete-after`
 
 The fleet run did not create the clones, so it deletes only what nothing would
