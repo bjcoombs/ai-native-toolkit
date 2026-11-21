@@ -315,10 +315,12 @@ class IndexDirBuilder:
         )
 ```
 
-Register it by appending to `BUILDERS` in `import_graph_builders.py`. A new block field
+Register it by appending to `BUILDERS` in `import_graph_builders.py` and add files in
+its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which checks every
+registered builder's graph shape (`package_of` covers `modules`). A new block field
 or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
 the maturity model header (`levels/default.toml`).
-Tests: `tests/test_import_graph.py`.
+Tests: `tests/test_import_graph.py`, `tests/test_import_graph_contract.py`.
 
 **`import_graph_python.py`**
 The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
@@ -344,6 +346,28 @@ which copy wins depends on a runtime `sys.path`. The finder implements both shap
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
+
+**`import_graph_go.py`**
+The Go builder (`GO_BUILDER`, issue #710). It reads `go.mod` and each file's `import`
+declarations as text and never runs a go tool (`go list` can reach the network). A
+graph module is a Go package, a directory holding a non-test `.go` file, with its
+repo-relative path as the id (`.` for the root). The go.mod module path
+(`example.com/org/svc`) only resolves an import to a directory and never reaches an id,
+so no module path appears in the block, hashed or not. A package belongs to the nearest
+`go.mod` at or above it; nested modules resolve each other's imports. Each package is
+its own boundary (`package_of[m] == m`) and a front door, since an importer reaches only
+exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
+construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
+public surface is the package's exported top-level `func` (not method) and `type`
+declarations. There is no `module_file` (a package is several files), so A1 size reads 0
+and the structure-drift static relation, which pairs files, is empty for Go. Skipped:
+`_test.go` files, `testdata`, `vendor` and the other `EXCLUDE_DIRS`, and directories
+starting with `.` or `_`. Build constraints are not evaluated. No `go.mod` returns `None`,
+so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
+raises `GraphUnavailable`. Graphs compare by module count, so a Go repository with a
+larger Python package tree reports the Python graph.
+Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
+`tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 
 **`import_graph_builders.py`**
 The registered builders (`BUILDERS`), one per language; `structure_graph` and

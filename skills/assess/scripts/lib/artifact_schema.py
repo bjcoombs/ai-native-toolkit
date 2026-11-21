@@ -213,4 +213,7 @@ ARTIFACT_SCHEMA_VERSION = "1.22.0"
 # 17: an import graph with no edges reports ``structure.modularity_q`` null with
 #     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
 #     scorer's Layer 2 evidence on such repositories can move.
-ASSESS_METHOD_VERSION = 17
+# 18: a Go module (a go.mod with packages) is graphed from its import blocks
+#     (issue #710) instead of reporting no_import_graph_go, so structure, the
+#     keyhole static metrics and the Layer 2 evidence can move on Go repositories.
+ASSESS_METHOD_VERSION = 18
