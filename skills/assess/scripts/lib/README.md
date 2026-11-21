@@ -1527,6 +1527,44 @@ only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is 
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
 A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
+`compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
+passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
+
+**`fleet_scanner_diff.py`**
+Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
+
+Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
+signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
+earlier run then reads the new signal as absent (unknown), never as a false repository move.
+A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
+
+The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
+`toolkit_commit`. Equal commits are `same`, and git never runs. A null commit with a
+different `plugin_version` is `unavailable`. Two different commits run `git diff --name-only`
+over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
+result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
+producer modules:
+
+- the defining module of `fn` / `offline_fn` and its static `lib` import closure;
+- for a dispatch module (one defining several specs), the modules its function body names;
+- the producers of every spec it `reads`;
+- `run_context_types` is left out.
+
+`changed_blocks` intersects the map with the diff. `attribute` orders a moved team row's cause:
+
+1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
+   stored scans lack while the other run holds it. This is measured-set movement, never level
+   movement; the achievements replay already treats an unknown side as neutral.
+2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
+   `notes` line saying the scanner diff was unavailable.
+3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
+   reads (`row_signals`, else any) changed producers and a repository in the group changed a
+   signal in it.
+
+Org rows keep their cause. Limits: the map comes from the running code, a change outside
+`lib/` is not seen, and the import closure over-attributes rather than misses.
+Tests: `tests/test_fleet_scanner_diff.py`.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by

@@ -48,18 +48,30 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
 from lib.diff_reliability import _diff_is_reliable
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
+from lib.fleet_data import FLEET_DATA_FILE
 from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet_legacy import stamp_value, upgrade
 from lib.levels import floor_of
 from lib.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
+from lib.fleet_scanner_diff import (
+    ScannerCause,
+    ScannerDiff,
+    absent_signals,
+    attribute,
+    changed_blocks,
+    producers,
+    row_signals,
+    unavailable_note,
+    UNAVAILABLE_PREFIX,
+)
 
 FLEET_COMPARE_VERSION = 2  # 2: levels_version replaced rubric_version (#670)
 COMPARE_FILE = "compare.json"
@@ -80,6 +92,8 @@ class FleetRun:
     stamp: FleetStamp
     repos: list[FleetRow]
     groups: list[GroupRow]
+    # row id -> the signals its fleet-data.json cells name (#774); None without that file
+    row_signals: Mapping[str, frozenset[str]] | None = None
 
 
 class LevelState(TypedDict):
@@ -95,6 +109,8 @@ class RowMove(TypedDict):
     now: LevelState | None
     moved: bool
     cause: str | None  # None when not moved
+    scanner: NotRequired[list[ScannerCause]]  # cause scanner_changed: the blocks and changed modules (#774)
+    absent_signals: NotRequired[list[str]]  # cause set: signals one run's scans lack (#774)
 
 
 class SetChanges(TypedDict):
@@ -208,7 +224,16 @@ def load_run(run_dir: Path) -> FleetRun:
         found = _first_version(run_dir / name, key)
         if found is not None and found != version:
             raise RunVersionError(f"{name} {key} {found!r}, this toolkit reads {version}")
-    return FleetRun(cast(FleetStamp, stamp), read_repos(run_dir), load_groups(run_dir))
+    return FleetRun(cast(FleetStamp, stamp), read_repos(run_dir), load_groups(run_dir),
+                    _row_signals(run_dir / FLEET_DATA_FILE))
+
+
+def _row_signals(path: Path) -> dict[str, frozenset[str]] | None:
+    """The row signals of a run's ``fleet-data.json``; None when it is absent or unreadable."""
+    try:
+        return row_signals(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return None
 
 
 # --- comparability ---------------------------------------------------------
@@ -367,8 +392,13 @@ def group_change(name: str, then_rows: dict[str, FleetRow], now_rows: dict[str, 
             "settings_changed": settings_moved, "rows": rows}
 
 
-def compare(earlier: FleetRun, later: FleetRun) -> Comparison:
-    """The comparison of two loaded runs; ``comparable: false`` with reasons and no deltas when refused."""
+def compare(earlier: FleetRun, later: FleetRun, scanner: ScannerDiff | None = None,
+            producer_map: Mapping[str, frozenset[str]] | None = None) -> Comparison:
+    """The comparison of two loaded runs; ``comparable: false`` with reasons and no deltas when refused.
+
+    ``scanner`` (``lib.fleet_scanner_diff.scanner_diff`` of the two stamps) turns on the
+    scanner attribution of #774; without it a move is never tagged ``scanner_changed``.
+    A signal one run's scans lack is measured-set movement either way."""
     reasons, notes = comparability(earlier.stamp, later.stamp)
     if reasons:
         return not_comparable(later.stamp, reasons, earlier.stamp)
@@ -389,11 +419,59 @@ def compare(earlier: FleetRun, later: FleetRun) -> Comparison:
                      now_groups.get(name), changed)
         for name in sorted(set(then_by) | set(now_by) | set(then_groups) | set(now_groups))
     ]
+    _attribute(groups, earlier, later, then_by, now_by, repos, scanner, producer_map)
+    if scanner is not None and scanner["status"] == "unavailable":
+        notes = [*notes, unavailable_note(scanner)]
     overall = set_changes(then_repos, now_repos)
     movement = _any(overall) or bool(repos) or any(row["moved"] for g in groups for row in g["rows"])
     return {"fleet_compare_version": FLEET_COMPARE_VERSION, "comparable": True, "reasons": [],
             "notes": notes, "earlier": _summary(earlier.stamp), "later": _summary(later.stamp),
             "movement": movement, "repositories": overall, "groups": groups, "repos": repos}
+
+
+def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
+               then_by: dict[str, dict[str, FleetRow]], now_by: dict[str, dict[str, FleetRow]],
+               repos: list[RepoSignals], scanner: ScannerDiff | None,
+               producer_map: Mapping[str, frozenset[str]] | None) -> None:
+    """Re-attribute moved team rows to an absent signal or a scanner change (``lib/fleet_scanner_diff.py``)."""
+    blocks: dict[str, list[str]] = {}
+    if scanner is not None and scanner["status"] == "changed":
+        blocks = changed_blocks(scanner, producers() if producer_map is None else producer_map)
+    moved_signals = {entry["repo"]: {c["path"].split(".")[0] for c in entry["signals"]} for entry in repos}
+    sides = {g["group"]: g for g in earlier.groups}, {g["group"]: g for g in later.groups}
+    for group in groups:
+        name = group["group"]
+        both = sorted(r for r in set(then_by.get(name, {})) & set(now_by.get(name, {}))
+                      if then_by[name][r]["status"] == STATUS_OK and now_by[name][r]["status"] == STATUS_OK)
+        then_scans = [then_by[name][r]["scans"] for r in both]
+        now_scans = [now_by[name][r]["scans"] for r in both]
+        moved_blocks = {b for r in both for b in moved_signals.get(r, set())}
+        for row in group["rows"]:
+            if not row["moved"] or row["scope"] == "org" or row["cause"] is None:
+                continue
+            absent: list[str] = []
+            for side, (mine, other) in ((0, (then_scans, now_scans)), (1, (now_scans, then_scans))):
+                state = row["then"] if side == 0 else row["now"]
+                stored = sides[side].get(name)
+                if state is not None and state["status"] == "unknown" and stored is not None:
+                    missing = [s for lv in stored["levels"] if lv["id"] == row["id"] for s in lv["missing_signals"]]
+                    absent += absent_signals(missing, mine, other)
+            reads = _row_blocks(row["id"], earlier, later)
+            result = attribute(row["cause"], absent=absent, diff=scanner, blocks_changed=blocks,
+                               row_blocks=reads, moved_blocks=moved_blocks)
+            row["cause"] = result["cause"]
+            if "scanner" in result:
+                row["scanner"] = result["scanner"]
+            if "absent_signals" in result:
+                row["absent_signals"] = result["absent_signals"]
+
+
+def _row_blocks(row_id: str, earlier: FleetRun, later: FleetRun) -> frozenset[str] | None:
+    """The blocks a row reads, from either run's cell signals; None when neither run has them."""
+    found = [run.row_signals.get(row_id, frozenset()) for run in (earlier, later) if run.row_signals is not None]
+    if not found or not any(found):
+        return None
+    return frozenset(signal.split(".")[0] for signals in found for signal in signals)
 
 
 def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
@@ -433,7 +511,7 @@ def summary_lines(comparison: Comparison) -> list[str]:
     if not comparison["comparable"]:
         return ["not comparable: " + "; ".join(comparison["reasons"])]
     if not comparison["movement"]:
-        return ["no movement"]
+        return ["no movement", *_scanner_notes(comparison)]
     sets = comparison["repositories"]
     named = (("added", sets["added"]), ("removed", sets["removed"]),
              ("no longer scanned", sets["no_longer_scanned"]), ("newly scanned", sets["newly_scanned"]),
@@ -445,8 +523,23 @@ def summary_lines(comparison: Comparison) -> list[str]:
         for row in group["rows"]:
             if row["moved"]:
                 lines.append(f"{group['group']} {row['id']}: {_show(row['then'])} -> {_show(row['now'])} "
-                             f"({row['cause']})")
-    return lines
+                             f"({row['cause']}){_why(row)}")
+    return [*lines, *_scanner_notes(comparison)]
+
+
+def _scanner_notes(comparison: Comparison) -> list[str]:
+    return [note for note in comparison["notes"] if note.startswith(UNAVAILABLE_PREFIX)]
+
+
+def _why(row: RowMove) -> str:
+    """What a #774 cause rests on: the changed producers, or the signals one run lacks."""
+    if "scanner" in row:
+        named = "; ".join(f"{c['block']} <- {', '.join(c['modules'])}" for c in row["scanner"])
+        return f": the scanner changed ({named}); not read as a repository move"
+    if "absent_signals" in row:
+        return (f": {', '.join(row['absent_signals'])} absent from one run's scans; "
+                "measured-set movement, not a level move")
+    return ""
 
 
 def _show(state: LevelState | None) -> str:

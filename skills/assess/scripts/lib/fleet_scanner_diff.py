@@ -1,0 +1,322 @@
+"""Attribute fleet comparison moves to a scanner change or to a signal one run lacks (issue #774).
+
+``lib/fleet_compare.py`` compares the stored scans of two runs. When the toolkit
+that wrote them changed between the runs, a move can come from the scanner code
+and not from the repository. This module gives such a move its own ``cause``, so
+it is never presented as a repository slip (or gain).
+
+**Convention first.** A scanner change that alters what a signal means ships
+under a new signal name or a ``signals_schema_version`` bump; an earlier run then
+reads the new signal as absent (unknown), not as a false repository move. The
+backstop below catches a change that kept the name.
+
+**Scanner diff** (``scanner_diff``), from the two run stamps:
+
+- the same ``toolkit_commit`` on both sides (or none on both at one
+  ``plugin_version``): ``same``, and git is never run;
+- either commit is null (an install that is not a git checkout) and the
+  ``plugin_version`` differs: ``unavailable``. A null commit at one plugin version
+  reads as the same toolkit;
+- two different commits: ``git diff --name-only A B -- skills/assess/scripts/lib``
+  in the toolkit checkout running the comparison. When git cannot answer (no
+  checkout, a commit missing from it, a shallow clone) the diff is ``unavailable``.
+
+**Producers** (``producers``): each block the headless runner publishes
+(``lib.signals.SIGNAL_SCANS``, spread keys included) maps to the module that
+defines its callable (``fn`` and ``offline_fn``, partials unwrapped) and that
+module's static ``lib`` import closure. A module defining more than one spec's
+callable (``core_scans``, ``run_setup``, the headless tables) is a dispatch
+module: its spec maps to the dispatch module plus the closure of the ``lib``
+modules the function body names (following the module's own functions and
+constants). A block also takes the producers of every spec it ``reads``, so a
+headless entry over the core's private ``structure_scan`` maps to the import
+graph modules. ``run_context_types`` (types only) is left out. The map is built from the code running the comparison; a change outside
+``lib/`` (``assess_signals.py``) is not seen.
+
+**Row attribution** (``attribute``), for a team row present in both runs that
+moved with cause ``level`` or ``set_and_level``:
+
+1. ``set`` with ``absent_signals`` (measured-set movement, never level movement):
+   the unknown side's ``missing_signals`` name a path absent from that side's
+   stored scans of a repository in the group while the other side holds it (a
+   scanner added, or dropped, the signal). It wins over the causes below.
+2. ``toolkit_changed_unknown_scope`` when the scanner diff is unavailable;
+   ``notes`` gets one line saying so.
+3. ``scanner_changed`` with ``scanner`` (each block and its changed producer
+   modules) when a changed producer's block is a block the row reads (the
+   ``signal`` of its ``fleet-data.json`` cells in either run; without that file,
+   any block) and a repository in the group changed a signal in it.
+
+Org rows read the group's settings, not scans, and keep their cause.
+"""
+from __future__ import annotations
+
+import ast
+import functools
+import inspect
+import subprocess
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from pathlib import Path
+from typing import Any, Literal, NotRequired, TypedDict
+
+from lib.fleet_stamp import FleetStamp
+
+CAUSE_SCANNER_CHANGED = "scanner_changed"
+CAUSE_UNKNOWN_SCOPE = "toolkit_changed_unknown_scope"
+LIB_PATH = "skills/assess/scripts/lib"
+TYPES_ONLY = frozenset({"run_context_types"})
+
+LIB_DIR = Path(__file__).resolve().parent
+TOOLKIT_ROOT = LIB_DIR.parents[3]
+
+DiffStatus = Literal["same", "changed", "unavailable"]
+
+
+class ScannerDiff(TypedDict):
+    status: DiffStatus
+    changed: list[str]  # changed files under lib/, toolkit-relative posix paths; empty unless "changed"
+    reason: str | None  # why the diff is unavailable; None otherwise
+
+
+class ScannerCause(TypedDict):
+    block: str  # the signal prefix, e.g. "ci_checks"
+    modules: list[str]  # its changed producer modules, toolkit-relative posix paths
+
+
+class Attribution(TypedDict):
+    cause: str
+    scanner: NotRequired[list[ScannerCause]]
+    absent_signals: NotRequired[list[str]]
+
+
+GitDiff = Callable[[Path, str, str], list[str] | None]
+
+
+# --- scanner diff ------------------------------------------------------------
+
+
+def git_changed_files(root: Path, earlier: str, later: str) -> list[str] | None:
+    """Files under ``lib/`` that differ between two commits of ``root``; None when git cannot say."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "diff", "--name-only", earlier, later, "--", LIB_PATH],
+            capture_output=True, text=True, encoding="utf-8", errors="surrogateescape",
+            check=True, timeout=60,
+        )
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
+        return None
+    return sorted(line.strip() for line in out.stdout.splitlines() if line.strip())
+
+
+def scanner_diff(earlier: FleetStamp, later: FleetStamp, root: Path = TOOLKIT_ROOT,
+                 diff: GitDiff = git_changed_files) -> ScannerDiff:
+    """How the scanner code moved between the toolkits that wrote two runs (see the module doc)."""
+    then, now = earlier.get("toolkit_commit"), later.get("toolkit_commit")
+    if then == now and (then is not None or earlier.get("plugin_version") == later.get("plugin_version")):
+        return {"status": "same", "changed": [], "reason": None}
+    if then is None or now is None:
+        if earlier.get("plugin_version") == later.get("plugin_version"):
+            return {"status": "same", "changed": [], "reason": None}
+        side = "earlier" if then is None else "later"
+        return {"status": "unavailable", "changed": [],
+                "reason": f"the {side} run recorded no toolkit_commit and plugin_version changed "
+                          f"{earlier.get('plugin_version')!r}->{later.get('plugin_version')!r}"}
+    changed = diff(root, then, now)
+    if changed is None:
+        return {"status": "unavailable", "changed": [],
+                "reason": f"git could not diff toolkit commits {then[:12]}..{now[:12]} in this checkout"}
+    return {"status": "changed" if changed else "same", "changed": changed, "reason": None}
+
+
+UNAVAILABLE_PREFIX = "scanner diff unavailable"
+
+
+def unavailable_note(diff: ScannerDiff) -> str:
+    return (f"{UNAVAILABLE_PREFIX}: {diff['reason']}; every moved team row is tagged "
+            f"{CAUSE_UNKNOWN_SCOPE}, not read as a repository move")
+
+
+# --- producers ---------------------------------------------------------------
+
+
+def _imports(tree: ast.Module) -> dict[str, str]:
+    """Each name bound by a ``lib`` import in a module to the lib module it comes from."""
+    names: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] == "lib":
+            for alias in node.names:
+                if node.module == "lib":
+                    names[alias.asname or alias.name] = alias.name
+                else:
+                    names[alias.asname or alias.name] = node.module.split(".")[1]
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                parts = alias.name.split(".")
+                if parts[0] == "lib" and len(parts) > 1:
+                    names[alias.asname or alias.name] = parts[1]
+    return names
+
+
+@functools.cache
+def _parsed(module: str) -> ast.Module | None:
+    path = LIB_DIR / f"{module}.py"
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return None
+
+
+def _closure(start: Iterable[str]) -> set[str]:
+    seen: set[str] = set()
+    todo = list(start)
+    while todo:
+        module = todo.pop()
+        if module in seen or module in TYPES_ONLY:
+            continue
+        tree = _parsed(module)
+        if tree is None:
+            continue
+        seen.add(module)
+        todo.extend(_imports(tree).values())
+    return seen
+
+
+def _body_modules(module: str, function: str) -> set[str]:
+    """The lib modules a dispatch module's function body names, following the module's own
+    functions and constants it names."""
+    tree = _parsed(module)
+    if tree is None:
+        return set()
+    bound = _imports(tree)
+    local: dict[str, ast.AST] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            local[node.name] = node
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                if isinstance(target, ast.Name):
+                    local[target.id] = node
+    found: set[str] = set()
+    seen: set[str] = set()
+    todo = [function]
+    while todo:
+        name = todo.pop()
+        if name in seen or name not in local:
+            continue
+        seen.add(name)
+        for sub in ast.walk(local[name]):
+            if isinstance(sub, ast.Name):
+                if sub.id in bound:
+                    found.add(bound[sub.id])
+                elif sub.id in local:
+                    todo.append(sub.id)
+    return found
+
+
+def _callable_module(fn: Callable[..., Any]) -> tuple[str, str] | None:
+    while isinstance(fn, functools.partial):
+        fn = fn.func
+    module = inspect.getmodule(fn)
+    name = module.__name__ if module is not None else ""
+    if not name.startswith("lib."):
+        return None
+    return name.split(".")[1], getattr(fn, "__name__", "")
+
+
+def producers(specs: Sequence[Any] | None = None) -> dict[str, frozenset[str]]:
+    """Each published block to its producer modules, toolkit-relative posix paths (module doc)."""
+    if specs is None:
+        from lib.signals import SIGNAL_SCANS  # the headless table; heavy, imported on use
+        specs = SIGNAL_SCANS
+    sources: list[tuple[Any, list[tuple[str, str]]]] = []
+    defined: dict[str, int] = {}
+    for spec in specs:
+        found = [m for fn in (spec.fn, spec.offline_fn) if fn is not None
+                 if (m := _callable_module(fn)) is not None]
+        sources.append((spec, found))
+        for module in {m for m, _ in found}:
+            defined[module] = defined.get(module, 0) + 1
+    own: dict[str, set[str]] = {}
+    reads: dict[str, tuple[str, ...]] = {}
+    for spec, found in sources:
+        modules: set[str] = set()
+        for module, function in found:
+            if defined[module] > 1:
+                modules |= {module} | _closure(_body_modules(module, function))
+            else:
+                modules |= _closure([module])
+        for block in (spec.key, *spec.spread):
+            own.setdefault(block, set()).update(modules)
+            reads[block] = tuple(spec.reads)
+
+    @functools.cache
+    def full(block: str) -> frozenset[str]:
+        modules = set(own.get(block, ()))
+        for name in reads.get(block, ()):
+            if name != block:
+                modules |= full(name)
+        return frozenset(modules)
+
+    return {block: frozenset(f"{LIB_PATH}/{m}.py" for m in full(block))
+            for spec, _ in sources if not spec.private for block in (spec.spread or (spec.key,))}
+
+
+def changed_blocks(diff: ScannerDiff, producer_map: Mapping[str, frozenset[str]]) -> dict[str, list[str]]:
+    """Each block whose producer modules changed, to those modules sorted."""
+    changed = set(diff["changed"])
+    return {block: sorted(paths & changed) for block, paths in sorted(producer_map.items())
+            if paths & changed}
+
+
+# --- row attribution ---------------------------------------------------------
+
+
+def _get(scans: Any, path: str) -> bool:
+    node = scans
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return False
+        node = node[part]
+    return True
+
+
+def absent_signals(missing: Sequence[str], unknown_side: Sequence[Any], other_side: Sequence[Any]) -> list[str]:
+    """The ``missing`` paths absent from a repository's scans on the unknown side, held on the other.
+
+    ``unknown_side`` and ``other_side`` are the same repositories' ``scans`` maps, paired by index."""
+    return sorted({path for path in missing for then, now in zip(unknown_side, other_side)
+                   if not _get(then, path) and _get(now, path)})
+
+
+def attribute(cause: str, *, absent: Sequence[str], diff: ScannerDiff | None,
+              blocks_changed: Mapping[str, list[str]], row_blocks: frozenset[str] | None,
+              moved_blocks: set[str]) -> Attribution:
+    """A moved team row's cause, present in both runs, from its compare cause (module doc order)."""
+    if cause not in ("level", "set_and_level"):
+        return {"cause": cause}
+    if absent:
+        return {"cause": "set", "absent_signals": sorted(absent)}
+    if diff is None or diff["status"] == "same":
+        return {"cause": cause}
+    if diff["status"] == "unavailable":
+        return {"cause": CAUSE_UNKNOWN_SCOPE}
+    reads = moved_blocks if row_blocks is None else row_blocks & moved_blocks
+    hit: list[ScannerCause] = [{"block": b, "modules": blocks_changed[b]}
+                               for b in sorted(reads) if b in blocks_changed]
+    if hit:
+        return {"cause": CAUSE_SCANNER_CHANGED, "scanner": hit}
+    return {"cause": cause}
+
+
+def row_signals(fleet_data: Any) -> dict[str, frozenset[str]] | None:
+    """Each row id to the signals its ``fleet-data.json`` cells name; None when there is no such data."""
+    if not isinstance(fleet_data, dict) or not isinstance(fleet_data.get("repos"), list):
+        return None
+    out: dict[str, set[str]] = {}
+    for repo in fleet_data["repos"]:
+        for cell in (repo.get("rows") or []) if isinstance(repo, dict) else []:
+            if isinstance(cell, dict) and isinstance(cell.get("row"), str):
+                bucket = out.setdefault(cell["row"], set())
+                if isinstance(cell.get("signal"), str):
+                    bucket.add(cell["signal"])
+    return {row: frozenset(signals) for row, signals in out.items()}
