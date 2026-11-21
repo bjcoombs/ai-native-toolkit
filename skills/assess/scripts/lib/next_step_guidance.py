@@ -256,6 +256,17 @@ def _ownership_map(op: str, value: Operand) -> Guidance | None:
                          "the repository."}
 
 
+def _boundary_map(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
+    return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
+                      "`ARCHITECTURE.md` that names module paths.",
+            "done_when": "A committed `CODEOWNERS` line or `ARCHITECTURE.md` reference names "
+                         "a module path that matches a tracked, non-excluded source file (not "
+                         "a catch-all such as `*` or `/**`, an extension glob such as `*.py`, "
+                         "`.github/`, or a docs-only path)."}
+
+
 def _file_size(op: str, value: Operand) -> Guidance | None:
     number = _number(value)
     if number is None or op not in ("lte", "lt"):
@@ -324,6 +335,7 @@ _WORDING: dict[str, Wording] = {
         "At least one module imports from a different top-level package of the repository."),
     "promissory_markers.families.suppression.total": _suppressions_present,
     "promissory_markers.families.suppression.stale": _suppressions_stale,
+    "structure_drift.tier_0.boundary_patterns": _boundary_map,
     "structure_drift.tier_0.matched_patterns": _ownership_map,
     "promissory_markers.aging_reliable": _flag(
         "Assess a full-history clone, not a shallow or squashed one, so lint suppressions can "

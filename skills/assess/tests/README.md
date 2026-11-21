@@ -153,6 +153,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_counts_only_reason.py` | `lib/counts_only.py` `reason_token` + the `REASON` rule - a full counts-only run keeps `structure.reason` as its code (`no_import_graph_rust` on a Rust repository), never the sentence (#764) |
 | `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
 | `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
+| `test_block_shapes.py` | `lib/block_shapes.py` - the typed shapes of the blocks a default criterion reads, against each builder's output and the fleet golden; a misspelt `--levels` sub-path under them fails at load (#793); their counts-only reduction |
 | `test_signal_inputs.py` | `lib/level_signals.py` - the producer input class of every default criterion signal, its grade and the declared predicate (#783) |
 | `test_check_manifest.py` | `checks/core.toml` against the scan registry, the headless tables, `ROOTS`, the counts-only `RULES`, the finding tables, the default maturity model and `level_signals.SIGNAL_INPUTS`, in both directions; the manifest against `references/check-manifest.schema.json`. The agreement test: each failure names the scan, signal, condition or finding that disagrees (`test_registry_matches_manifest` for a scan) |
 | `test_check_manifest_loader.py` | `lib/check_manifest.py` (the strict loader: allowed keys, types, ids, the registry rules and cross-references) and `lib/check_validation.py` (structured errors and the Levenshtein suggestion, with Meridian's test tables) |
@@ -180,6 +181,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_legacy.py` | `lib/fleet_legacy.py` - a run written before the 2.0.0 maturity-model rename (`fixtures/fleet_legacy/`) loads, compares and counts in the history and trend |
 | `test_fleet_history.py` | `lib/fleet_history.py` + `skills/fleet/scripts/fleet.py` + `skills/fleet/scripts/fleet_compare.py` - the dated run history, the `--compare` wiring and the compare CLI |
 | `test_fleet_compare.py` | `lib/fleet_compare.py` - comparing two fleet runs without rescanning: level movement apart from measured-set movement, and the not-comparable reasons |
+| `test_fleet_scanner_diff.py` | `lib/fleet_scanner_diff.py` - attributing a fleet comparison move to a scanner change (`scanner_changed`), an unavailable scanner diff (`toolkit_changed_unknown_scope`) or a signal one run lacks (`set`), and the CLI wiring (#774) |
 
 ### Infrastructure suites
 

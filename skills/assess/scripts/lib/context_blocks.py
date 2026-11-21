@@ -168,6 +168,7 @@ def _structure_drift_block(
             "empty_ownership_patterns": tier_0["empty_ownership_patterns"],
             "total_patterns": tier_0["total_patterns"],
             "matched_patterns": tier_0["matched_patterns"],
+            "boundary_patterns": tier_0["boundary_patterns"],
         },
     }
 
