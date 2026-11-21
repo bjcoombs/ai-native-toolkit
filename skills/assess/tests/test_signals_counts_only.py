@@ -84,7 +84,7 @@ def test_counts_only_document_is_content_free_and_validates(target: Path, tmp_pa
         assert classify(pattern) in (PATH, TOKEN, ID), f"{pattern} kept {value!r}"
         assert len(value) <= 40 or classify(pattern) in (PATH, ID), f"{pattern} kept {value!r}"
 
-    assert doc["scans"]["doc_graph"] == {"available": False, "reason": "not_registered"}
+    assert doc["scans"]["dead_code"] == {"available": False, "reason": "not_registered"}
     harness = doc["scans"]["agent_harness"]
     assert harness["executes"] and all("name" not in row for row in harness["executes"])
 

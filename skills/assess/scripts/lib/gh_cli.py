@@ -16,7 +16,11 @@ Contract (every caller relies on it):
 - Every failure raises :class:`GhUnavailable` carrying a non-empty reason, which
   the caller turns into ``{"available": False, "reason": ...}`` via
   :func:`unavailable`. An API refusal (HTTP 403) gives a reason starting
-  ``no_access`` - never a clean result.
+  ``no_access`` - never a clean result; a rate limit (HTTP 429, or a 403
+  saying "rate limit"), still refused after the backoff, gives ``rate_limited``.
+- ``gh`` runs through ``lib.platform_cli.run_cli``: stdin closed, prompts
+  disabled, a bounded 429 backoff, and the per-run response cache when
+  ``fleet --platform`` turns it on.
 
 Typical use::
 
@@ -36,6 +40,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from lib.platform_cli import rate_limited, run_cli
 
 # Cap every gh call so a hung network read or credential prompt degrades the
 # signal to unavailable instead of stalling the assessment.
@@ -126,10 +132,7 @@ def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> str:
     cmd = ["gh", *args]
     shown = " ".join(cmd)
     try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=timeout,
-        )
+        proc = run_cli(cmd, timeout)
     except FileNotFoundError:
         raise GhUnavailable("gh_not_installed: the gh CLI is not on PATH") from None
     except subprocess.TimeoutExpired:
@@ -141,6 +144,8 @@ def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> str:
     stderr = (proc.stderr or "").strip()
     detail = stderr.splitlines()[-1] if stderr else f"exit {proc.returncode}"
     status = _HTTP_STATUS_RE.findall(stderr)
+    if rate_limited(stderr):  # a 429, or GitHub's rate-limit 403, still limited after the backoff
+        raise GhUnavailable(f"rate_limited: `{shown}` was still rate limited after retries ({detail})")
     if status and status[-1] == "403":
         raise GhUnavailable(f"no_access: `{shown}` was refused ({detail})")
     if status and status[-1] == "404":

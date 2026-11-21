@@ -1,9 +1,10 @@
-"""The contract every registered import-graph builder must keep (#708 review, #709).
+"""The contract every registered import-graph builder keeps (issues #708, #709, #710).
 
 ``structure_graph`` measures any :class:`ModuleGraph` without asking which
 language built it, so each builder in ``BUILDERS`` is held to the same shape
-here. A new builder adds a fixture tree to ``CONTRACT_FIXTURES``: a registered
-builder that graphs none of them fails ``test_every_builder_is_exercised``.
+here, over one polyglot tree (``POLYGLOT``) and the fixture trees in
+``CONTRACT_FIXTURES``. A new language adds its files to ``POLYGLOT``: a
+registered builder that graphs nothing there fails.
 
 ``select_graph`` also guards the one invariant whose breach would crash the
 measure (a module with no package): such a graph degrades to a named reason.
@@ -20,6 +21,7 @@ from lib.import_graph import (
     LANGUAGE_BY_EXTENSION,
     ImportGraphBuilder,
     ModuleGraph,
+    builder_languages,
     select_graph,
 )
 from lib.import_graph_builders import BUILDERS
@@ -31,24 +33,61 @@ CONTRACT_FIXTURES = (
     FIXTURES / "ts_workspace",               # TypeScript / JavaScript
 )
 
+POLYGLOT: dict[str, str] = {
+    # Python
+    "pyapp/__init__.py": "",
+    "pyapp/core.py": "def run():\n    return 1\n",
+    "pyapp/api.py": "from pyapp import core\n",
+    "pylib/__init__.py": "from pyapp.core import run\n",
+    # Go
+    "go.mod": "module example.com/org/poly\n",
+    "gosvc/svc.go": 'package gosvc\nimport "example.com/org/poly/gosvc/util"\n',
+    "gosvc/util/util.go": "package util\nfunc Help() {}\n",
+    # TypeScript
+    "web/index.ts": "export { help } from './util';\n",
+    "web/util.ts": "export function help(): number { return 1; }\n",
+}
 
-def _graphs(builder: ImportGraphBuilder) -> list[ModuleGraph]:
-    built = (builder.build(root.resolve(), set(), None) for root in CONTRACT_FIXTURES)
+
+def _ids(builder: ImportGraphBuilder) -> str:
+    return builder.language
+
+
+@pytest.fixture(scope="module")
+def tree(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    root = tmp_path_factory.mktemp("polyglot")
+    for rel, text in POLYGLOT.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return root
+
+
+def _graphs(builder: ImportGraphBuilder, tree: Path) -> list[ModuleGraph]:
+    roots = (tree, *CONTRACT_FIXTURES)
+    built = (builder.build(root.resolve(), set(), None) for root in roots)
     return [g for g in built if g is not None and g.modules]
 
 
-@pytest.mark.parametrize("builder", BUILDERS, ids=lambda b: b.language)
-def test_every_builder_is_exercised(builder: ImportGraphBuilder) -> None:
-    assert _graphs(builder), f"add a {builder.language} tree to CONTRACT_FIXTURES"
+@pytest.mark.parametrize("builder", BUILDERS, ids=_ids)
+def test_every_builder_graphs_the_polyglot_tree(
+    builder: ImportGraphBuilder, tree: Path,
+) -> None:
+    graph = builder.build(tree, set(), None)
+    assert graph is not None and graph.modules, (
+        f"{builder.language} graphed nothing: add its files to POLYGLOT")
 
 
-@pytest.mark.parametrize("builder", BUILDERS, ids=lambda b: b.language)
-def test_every_builder_keeps_the_module_graph_contract(builder: ImportGraphBuilder) -> None:
-    for g in _graphs(builder):
+@pytest.mark.parametrize("builder", BUILDERS, ids=_ids)
+def test_every_builder_keeps_the_module_graph_contract(
+    builder: ImportGraphBuilder, tree: Path,
+) -> None:
+    assert builder.language in set(LANGUAGE_BY_EXTENSION.values())
+    for g in _graphs(builder, tree):
         modules = set(g.modules)
+        assert g.language in builder_languages(builder)
         assert g.modules == sorted(modules), "modules are sorted and unique"
-        assert g.language in set(LANGUAGE_BY_EXTENSION.values())
-        assert modules <= set(g.package_of), "package_of covers every module"
+        assert set(g.package_of) == modules, "package_of covers exactly the modules"
         assert set(g.edges) <= modules, "every importer is a module"
         assert g.front_doors <= modules
         assert set(g.module_file) <= modules
@@ -57,7 +96,7 @@ def test_every_builder_keeps_the_module_graph_contract(builder: ImportGraphBuild
         assert all(isinstance(n, int) and n >= 0 for n in g.surfaces.values())
 
 
-@pytest.mark.parametrize("builder", BUILDERS, ids=lambda b: b.language)
+@pytest.mark.parametrize("builder", BUILDERS, ids=_ids)
 def test_every_builder_returns_none_on_an_empty_tree(
     builder: ImportGraphBuilder, tmp_path: Path,
 ) -> None:

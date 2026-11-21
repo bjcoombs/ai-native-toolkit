@@ -51,6 +51,8 @@ apply alone.
 Canonical form. ``config_sha256`` hashes the validated config as sorted-key
 JSON with empty sections left out: comments, whitespace, key order and a newly
 defined empty section do not change it; list order does (it is meaningful).
+``UNHASHED_KEYS`` (how a run goes, not what it measures: ``[platform] jobs`` and
+``timeout``) are left out of it too.
 """
 from __future__ import annotations
 
@@ -149,8 +151,14 @@ SECTION_KEYS: Mapping[str, SectionKeys] = {
         "token_users_as_agents": boolean,
     },
     "review": {},  # #696
-    "platform": {},  # #714
+    "platform": {"jobs": positive_int, "timeout": positive_int},  # #714
 }
+
+# Keys that set how a run goes, never what it measures: left out of
+# ``config_sha256`` so a change to one never makes two runs incomparable.
+# ``[platform] jobs`` and ``timeout`` are the defaults of ``fleet.py
+# --platform-jobs`` and ``--platform-timeout`` (the flags win).
+UNHASHED_KEYS: Mapping[str, frozenset[str]] = {"platform": frozenset({"jobs", "timeout"})}
 
 
 class AgentIdentityEntry(TypedDict, total=False):
@@ -174,7 +182,10 @@ class ReviewSection(TypedDict, total=False):
 
 
 class PlatformSection(TypedDict, total=False):
-    """``[platform]``: keys added by #714."""
+    """``[platform]`` (#714): defaults for ``fleet.py --platform-jobs`` and ``--platform-timeout``."""
+
+    jobs: int
+    timeout: int
 
 
 class FleetConfig(TypedDict):
@@ -255,9 +266,12 @@ def load_fleet_config(path: Path, schema: Mapping[str, SectionKeys] | None = Non
 
 
 def canonical_json(config: FleetConfig) -> str:
-    """Sorted-key JSON with empty sections left out, so adding a section later leaves
-    every stored hash unchanged."""
-    present = {name: section for name, section in config.items() if section}
+    """Sorted-key JSON with empty sections and ``UNHASHED_KEYS`` left out, so adding a
+    section later leaves every stored hash unchanged."""
+    hashed = {name: {key: value for key, value in cast(Mapping[str, object], section).items()
+                     if key not in UNHASHED_KEYS.get(name, frozenset())}
+              for name, section in config.items()}
+    present = {name: section for name, section in hashed.items() if section}
     return json.dumps(present, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 

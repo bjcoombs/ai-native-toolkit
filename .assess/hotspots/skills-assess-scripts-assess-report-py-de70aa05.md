@@ -1,16 +1,16 @@
-<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
 # Hotspot: `skills/assess/scripts/assess_report.py`
 
-_First flagged: 2026-11-20. Last seen: 2026-11-20. Status: new._
+_First flagged: 2026-11-20. Last seen: 2026-11-20. Status: regressed._
 
 ## Current metrics
 
 | Metric | Value |
 |--------|-------|
-| LOC | 393 |
-| Cyclomatic complexity (file aggregate) | 118 |
+| LOC | 409 |
+| Cyclomatic complexity (file aggregate) | 128 |
 | Worst function | `render_exclusion_disclosure` (19) |
-| Commits in churn window | 17 |
+| Commits in churn window | 18 |
 | Has test file | yes |
 
 ## History across runs
@@ -19,12 +19,13 @@ _First flagged: 2026-11-20. Last seen: 2026-11-20. Status: new._
 |----------|-----|-----|-----|---------|--------|
 | 2026-11-20 | d8481c65 | 393 | 118 | 17 | new |
 | 2026-11-20 | 2e2af36e | 393 | 118 | 17 | new |
+| 2026-11-20 | d1e8fc2e | 409 | 128 | 18 | regressed |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/assess_report.py`:
 
-Hotspot (new). 393 LOC, aggregate cyclomatic complexity 118 (worst function `render_exclusion_disclosure` 19), 17 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+619 lines net over 17 commits to this file in 6 months, none a net reduction).
+Hotspot (regressed). 409 LOC, aggregate cyclomatic complexity 128 (worst function `render_exclusion_disclosure` 19), 18 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+641 lines net over 18 commits to this file in 6 months, none a net reduction).
 
 ## Suggested actions
 

@@ -20,6 +20,7 @@ from lib.import_graph import (
     GraphUnavailable,
     ModuleGraph,
     dominant_language,
+    is_graph_source,
     language_counts,
     select_graph,
 )
@@ -299,3 +300,30 @@ def test_files_a_builder_skips_do_not_make_their_language_dominant(tmp_path: Pat
     assert language_counts(tmp_path, builders=BUILDERS)["javascript"] == 0
     block = analyze_structure(tmp_path).as_dict()
     assert block["available"] is True and block["language"] == "python"
+
+
+def test_go_test_files_and_skipped_dirs_do_not_count_toward_go(tmp_path: Path) -> None:
+    """The Go builder's hook applies to dominance, as the TypeScript one does."""
+    _write(tmp_path, "app/__init__.py", "")
+    _write(tmp_path, "app/a.py", "")
+    for rel in ("svc/a_test.go", "svc/b_test.go", "vendor/x/x.go", "_tools/t.go"):
+        _write(tmp_path, rel, "package x\n")
+    assert dominant_language(tmp_path) == "go"
+    assert dominant_language(tmp_path, builders=BUILDERS) == "python"
+
+
+@pytest.mark.parametrize(("rel", "language", "graphed"), [
+    ("web/a.js", "typescript", True),       # the TypeScript builder covers .js
+    ("web/a.ts", "javascript", True),
+    ("web/a.min.js", "typescript", False),  # its skip rules apply
+    ("web/__tests__/a.ts", "typescript", False),
+    ("svc/a.go", "go", True),
+    ("svc/a_test.go", "go", False),
+    ("testdata/a.go", "go", False),
+    ("pkg/a.py", "python", True),           # no hook: extension only
+    ("pkg/a.py", "go", False),
+    ("src/a.rs", "rust", True),             # no builder: extension only
+])
+def test_is_graph_source_asks_the_covering_builder(rel: str, language: str,
+                                                   graphed: bool) -> None:
+    assert is_graph_source(Path(rel), language) is graphed

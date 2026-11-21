@@ -171,7 +171,7 @@ def select_graph(
     graphs: list[ModuleGraph] = []
     failures: list[str] = []
     for builder in builders:
-        covers = dominant is not None and dominant in _languages(builder)
+        covers = dominant is not None and dominant in builder_languages(builder)
         try:
             graph = builder.build(repo_root, extra, scope)
             defect = graph_defect(graph) if graph is not None and graph.modules else None
@@ -196,7 +196,7 @@ def select_graph(
     return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope, builders))
 
 
-def _languages(builder: ImportGraphBuilder) -> set[str]:
+def builder_languages(builder: ImportGraphBuilder) -> set[str]:
     """The language tokens a builder covers: ``language`` plus any ``languages``."""
     extra = getattr(builder, "languages", ())
     return {builder.language, *(t for t in extra if isinstance(t, str))}
@@ -235,7 +235,7 @@ def language_counts(
     for builder in builders:
         check = getattr(builder, "is_graph_source", None)
         if callable(check):
-            for token in _languages(builder):
+            for token in builder_languages(builder):
                 filters.setdefault(token, check)
     counts: Counter[str] = Counter()
     for dirpath, dirnames, filenames in os.walk(start):
@@ -278,3 +278,26 @@ def no_graph_reason(
         return NO_PYTHON_PACKAGES
     return (f"no_import_graph_{language}: no import graph was built for {language}, "
             "the repository's dominant source language")
+
+
+def is_graph_source(
+    rel_path: Path, language: str, builders: Sequence[ImportGraphBuilder] | None = None,
+) -> bool:
+    """True when a repo-relative file could be in ``language``'s graph.
+
+    The builder covering ``language`` (``builders``, default the registered
+    ones) decides: the file's extension must map to a language it covers (the
+    TypeScript builder graphs ``.js`` too), and its optional
+    ``is_graph_source(rel)`` hook must accept the file (Go skips ``_test.go``
+    and ``GO_SKIP_DIRS``; TypeScript skips bundles, declarations, tests and tool
+    configs). A language no builder covers keeps the extension check alone.
+    """
+    if builders is None:
+        from lib.import_graph_builders import BUILDERS  # lazy: builders import this module
+        builders = BUILDERS
+    covering = next((b for b in builders if language in builder_languages(b)), None)
+    covered = builder_languages(covering) if covering is not None else {language}
+    if LANGUAGE_BY_EXTENSION.get(rel_path.suffix.lower()) not in covered:
+        return False
+    check = getattr(covering, "is_graph_source", None)
+    return bool(check(rel_path)) if callable(check) else True

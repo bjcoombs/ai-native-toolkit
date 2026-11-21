@@ -18,6 +18,17 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
   levels, #684), so a history entry can be read as a share of top level without the
   maturity model file. There is no second threshold config. ``top_level`` is
   additive: rows written before #684 lack it, and readers fall back.
+- an ``unknown`` row's ``floor`` (#697): the level its confirmed criteria reach,
+  when at least 1, so "level 1 confirmed, level 2 not measured" is not read as
+  no data. Absent otherwise, never null; rows written before #697 lack it.
+- a team row's ``full_run_only`` (#697): the missing signals only a full
+  ``/assess`` run measures, each one unavailable in every repository missing it
+  because its block carries a ``lib.signals.FULL_RUN_ONLY_REASONS`` code
+  (``not_registered``, ``network``). A failed scan or a mistyped value is a
+  plain gap, so such a signal is not listed, and so is one in a
+  ``lib.signals.PLATFORM_SCANS`` block, which ``fleet --platform`` measures
+  (``platform_signals``). Only on an ``unknown`` row (a known
+  row's missing signals do not decide its level); absent when empty.
 
 Maturity model inputs:
 
@@ -47,22 +58,27 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_agent_building import AgentBuildingCounts, group_counts
-from lib.levels import Aggregation, MaturityModel, evaluate
+from lib.counts_only import reason_code
+from lib.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids
+from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_SCANS
 
 # Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other
 # version, so lib/fleet_legacy.py maps the old keys and earlier history lines still load.
 FLEET_GROUP_VERSION = 1
 GROUPS_FILE = "groups.jsonl"
 SETTINGS_META_KEYS = frozenset({"scope", "provider"})
+# A fragment's GitHub team list (#703) places repositories in the units tree
+# (lib/fleet_units.py); it is not a setting.
+NOT_SETTINGS = SETTINGS_META_KEYS | {"teams"}
 UNKNOWN = "unknown"
 SET = "set"
 
@@ -76,6 +92,8 @@ class RowLevel(TypedDict):
     scope: str  # "org" | "team"
     status: str  # "level" | "unknown"
     level: int | None  # whole level; None when unknown
+    floor: NotRequired[int]  # unknown rows: the confirmed low bound, when at least 1 (#697)
+    full_run_only: NotRequired[list[str]]  # missing signals only a full /assess measures (#697)
     top_level: NotRequired[int]  # the row's number of levels; absent in rows before #684
     aggregation: Aggregation | None  # the team rule used; None for org rows
     missing_signals: list[str]
@@ -135,7 +153,7 @@ def load_settings(path: Path) -> dict[str, JsonDict]:
 def normalise_settings(fragment: Mapping[str, Any]) -> JsonDict:
     """Each setting as ``{value, reason}``, or ``{available: false, reason}`` when unknown or malformed."""
     out: JsonDict = {}
-    for key in sorted(k for k in fragment if k not in SETTINGS_META_KEYS):
+    for key in sorted(k for k in fragment if k not in NOT_SETTINGS):
         raw = fragment[key]
         value = raw.get("value") if isinstance(raw, dict) else None
         if value is None or value == UNKNOWN:
@@ -188,18 +206,70 @@ def repo_signals(row: FleetRow) -> JsonDict:
     return dict(row["scans"] or {})
 
 
+def _unavailable_code(data: Mapping[str, Any], signal: str) -> str | None:
+    """The reason code of the signal's block when it is unavailable; None otherwise."""
+    block = data.get(signal.split(".", 1)[0])
+    if not isinstance(block, dict) or block.get("available") is not False:
+        return None
+    return reason_code(block.get("reason"))
+
+
+def full_run_only(data: Mapping[str, Any], signal: str) -> bool:
+    """The signal's block is unavailable for a reason only a full ``/assess`` run lifts.
+
+    A ``PLATFORM_SCANS`` block is never full-run-only: ``fleet --platform`` measures it."""
+    return (signal.split(".", 1)[0] not in PLATFORM_SCANS
+            and _unavailable_code(data, signal) in FULL_RUN_ONLY_REASONS)
+
+
+def platform_only(data: Mapping[str, Any], signal: str) -> bool:
+    """The signal's block is a ``PLATFORM_SCANS`` one left unmeasured for want of ``--platform``."""
+    return (signal.split(".", 1)[0] in PLATFORM_SCANS
+            and _unavailable_code(data, signal) == reason_code(NETWORK_REASON))
+
+
+def _missing_everywhere(evaluations: Mapping[str, Evaluation], signals: Mapping[str, Mapping[str, Any]],
+                        test: Callable[[Mapping[str, Any], str], bool]) -> list[str]:
+    missing: dict[str, list[str]] = {}
+    for name, evaluation in evaluations.items():
+        for signal in evaluation["missing_signals"]:
+            missing.setdefault(signal, []).append(name)
+    return sorted(signal for signal, names in missing.items()
+                  if all(test(signals.get(name, {}), signal) for name in names))
+
+
+def full_run_only_signals(evaluations: Mapping[str, Evaluation],
+                          signals: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """The missing signals that are full-run-only in every repository missing them."""
+    return _missing_everywhere(evaluations, signals, full_run_only)
+
+
+def platform_signals(evaluations: Mapping[str, Evaluation],
+                     signals: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """The missing signals ``fleet --platform`` would measure, in every repository missing them."""
+    return _missing_everywhere(evaluations, signals, platform_only)
+
+
+def _row_level(result: RowResult, top: int, signals: Mapping[str, JsonDict]) -> RowLevel:
+    entry: RowLevel = {
+        "id": result["id"], "scope": result["scope"], "status": result["status"],
+        "level": result["level"], "top_level": top, "aggregation": result.get("aggregation"),
+        "missing_signals": result["missing_signals"], "unknown_repos": result.get("unknown_repos", []),
+    }
+    if "floor" in result:
+        entry["floor"] = result["floor"]
+    only = full_run_only_signals(result.get("repos", {}), signals) if result["status"] != "level" else []
+    if only:
+        entry["full_run_only"] = only
+    return entry
+
+
 def _row_levels(maturity_model: MaturityModel, group: str, settings: JsonDict | None,
                    rows: Sequence[FleetRow]) -> list[RowLevel]:
-    result = evaluate(maturity_model, {
-        "name": group, "settings": settings,
-        "repos": {row["repo"]: repo_signals(row) for row in rows},
-    })
+    signals = {row["repo"]: repo_signals(row) for row in rows}
+    result = evaluate(maturity_model, {"name": group, "settings": settings, "repos": signals})
     tops = {row["id"]: len(row["levels"]) for row in maturity_model["rows"]}
-    return [{
-        "id": r["id"], "scope": r["scope"], "status": r["status"], "level": r["level"],
-        "top_level": tops[r["id"]], "aggregation": r.get("aggregation"), "missing_signals": r["missing_signals"],
-        "unknown_repos": r.get("unknown_repos", []),
-    } for r in result["rows"]]
+    return [_row_level(r, tops[r["id"]], signals) for r in result["rows"]]
 
 
 def group_row(group: str, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,

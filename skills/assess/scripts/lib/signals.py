@@ -7,17 +7,23 @@ module runs the scan table in ``scan_registry`` with inputs it builds itself,
 and returns one JSON-ready document: a run stamp plus one block per scan.
 
 It never writes, never reaches the network and never prompts. A scan declared
-``network`` runs its ``offline_fn`` when it has one and is otherwise reported
+``network`` (outside ``--platform``, below) runs its ``offline_fn`` when it has one and is otherwise reported
 ``{"available": false, "reason": ...}``; so is every block in
 ``UNREGISTERED_SCANS``. A scan that raises degrades through the registry's
 ``safe`` wrapper and the run completes.
+
+``--platform`` (``build_document(platform=True)``, #714) is the one opt-in
+exception: the scans in ``PLATFORM_SCANS`` (and the network specs they read)
+make their ``gh`` / ``glab`` reads. ``fleet --platform`` runs it in a separate
+pass after the offline scan.
 
 The scan list is every published registry key outside the core's own adapter
 modules (``CORE_MODULES``), plus ``UNREGISTERED_SCANS``, so a scan added to the
 table in its own module runs here without an edit. ``lib.headless_layers``
 supplies the blocks the core builds from setup state a headless run lacks
 (``structure``, ``stats_summary``, ``promissory_markers``, ``structure_drift``;
-#667), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
+#667) and ``lib.headless_static`` the static ones (``observability``,
+``doc_graph``, ``doc_staleness``, ``archetype``; #699), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
 state, the run header, the serialised blocks) run only when a reported scan
 reads one of them; the publish step that writes the wiki is never called.
 """
@@ -34,10 +40,12 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import load_excludes
+from lib.counts_only import reason_code
 from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
-from lib.headless_layers import HEADLESS_SCANS
+from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
+from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
 from lib.instruction_files import grade_instruction_files
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
@@ -54,11 +62,7 @@ SIGNALS_SCHEMA_VERSION = 1
 # a reported scan also holds is dropped at runtime.
 UNREGISTERED_SCANS: tuple[str, ...] = (
     "diff",
-    "doc_graph",
-    "doc_staleness",
     "dead_code",
-    "observability",
-    "archetype",
     "ancestor_instruction_files",
     "behaviour",
     "documentation",
@@ -76,6 +80,10 @@ UNREGISTERED_REASON = (
     "not_registered: assembled by assess_core.build_run_context; "
     "the headless runner covers registered scans only"
 )
+
+# The headless runner's own entries (``lib.headless_layers``, #667;
+# ``lib.headless_static``, #699).
+HEADLESS_SCANS: tuple[ScanSpec, ...] = (*LAYER_SCANS, *STATIC_SCANS)
 
 # The modules that hold the core's own table entries (#557).
 CORE_MODULES = frozenset({"lib.core_scans", "lib.run_setup"})
@@ -108,7 +116,28 @@ def signal_scans(
 
 
 SIGNAL_SCANS = signal_scans()
-NETWORK_REASON = "network: reads GitHub via gh; the headless runner makes no network calls"
+NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headless runner makes no "
+                  "network calls without --platform")
+
+# The reason codes of the blocks only a full /assess run measures (#697): the code
+# ``lib.counts_only.reason_code`` keeps of each reason the runner writes for a block it
+# cannot produce, so a counts-only row and a --full row read alike. Derived, never
+# listed, so a reason added here (or a scan moving out of UNREGISTERED_SCANS) carries.
+# A PLATFORM_SCANS block is the exception: ``fleet --platform`` measures it, so its
+# ``network`` gap is a scan option away, not a full run (``lib.fleet_groups``).
+FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
+    reason_code(reason) for reason in (UNREGISTERED_REASON, NETWORK_REASON))
+
+# The scans ``--platform`` runs with their network reads (#714), an explicit list:
+# every other network scan still reports ``NETWORK_REASON``. ``fleet --platform``
+# runs exactly these in its separate platform pass. Extension point (#715, #716):
+# append a new block's name here. Blocks that should share one sample of merged
+# changes read it as a registry input: register the sample as a private
+# ``network=True`` spec, list it in the blocks' ``reads``, and it runs (once) under
+# ``--platform`` because it is a dependency of a listed scan.
+# ``merged_sample`` (lib/merged_sample.py, #715) is that shared sample: ``review_reality``
+# and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
+PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery")
 
 DEFAULT_WINDOW = "6mo"
 
@@ -211,17 +240,22 @@ def _unavailable(reason: str) -> JsonDict:
 
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
-    window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None,
+    window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
 ) -> dict[str, JsonDict]:
-    """Run the selected scans (and what they read) offline; one block per name."""
+    """Run the selected scans (and what they read); one block per name.
+
+    Offline unless ``platform``: then a network scan in ``PLATFORM_SCANS``, or one
+    a listed scan reads, runs its network ``fn``.
+    """
     inputs = build_inputs(repo_root, window, fleet_config)
     needed = _with_dependencies(selected, specs, inputs)
+    online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
     runnable: list[ScanSpec] = []
     for spec in specs:
         if spec.key not in needed:
             continue
-        if not spec.network:
+        if not spec.network or spec.key in online:
             runnable.append(spec)
         elif spec.offline_fn is not None:
             runnable.append(replace(spec, fn=spec.offline_fn))
@@ -309,7 +343,7 @@ def read_only_git() -> Iterator[None]:
 def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
-    fleet_config: FleetConfig | None = None,
+    fleet_config: FleetConfig | None = None, platform: bool = False,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -324,5 +358,5 @@ def build_document(
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root),
-            "scans": collect(repo_root, selected, specs, window, fleet_config),
+            "scans": collect(repo_root, selected, specs, window, fleet_config, platform),
         }

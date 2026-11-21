@@ -290,8 +290,10 @@ def test_a_run_is_kept_and_a_rerun_compares_with_no_movement(froot2, tmp_path, c
     assert _run(froot2, tmp_path / "o1", hist) == 0
     (entry,) = _entries(hist)
     assert entry.parent.name == "acme"
-    assert sorted(p.name for p in entry.iterdir()) == ["groups.jsonl", "repos.jsonl", "run.json"]
+    assert sorted(p.name for p in entry.iterdir()) == [
+        "fleet-data.json", "groups.jsonl", "repos.jsonl", "run.json"]
     assert (entry / "repos.jsonl").read_bytes() == (tmp_path / "o1" / "repos.jsonl").read_bytes()
+    assert (entry / "fleet-data.json").read_bytes() == (tmp_path / "o1" / "fleet-data.json").read_bytes()
     saved = tmp_path / "saved"
     saved.mkdir()
     for p in entry.iterdir():
@@ -565,3 +567,10 @@ def test_view_check_reports_unreadable_runs(tmp_path):
     reasons, moved = view_check(tmp_path / "now", tmp_path / "then")
     assert "stamp version" in reasons[0] and moved == []
     assert view_check(tmp_path / "now", tmp_path / "absent") == ([], [])
+
+
+def test_a_same_day_entry_from_before_714_is_replaced_by_an_offline_run_only(tmp_path):
+    old = {k: v for k, v in STAMP.items() if k != "platform"}
+    entry = _entry_with(tmp_path, old)
+    assert entry_conflict(entry, {**STAMP, "platform": False}) is None
+    assert "different platform" in (entry_conflict(entry, {**STAMP, "platform": True}) or "")

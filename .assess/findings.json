@@ -1,5 +1,5 @@
 {
-  "assess_method_version": 17,
+  "assess_method_version": 18,
   "findings": [
     {
       "name": "hidden_coupling",
@@ -22,7 +22,9 @@
     },
     {
       "name": "lying_map",
-      "paths": []
+      "paths": [
+        "skills/assess/SKILL.md"
+      ]
     },
     {
       "name": "unexplained_complexity",
@@ -41,7 +43,9 @@
     },
     {
       "name": "unactioned_intent",
-      "paths": []
+      "paths": [
+        "skills/fleet/scripts/fleet.py"
+      ]
     },
     {
       "name": "accretion_ratchet",

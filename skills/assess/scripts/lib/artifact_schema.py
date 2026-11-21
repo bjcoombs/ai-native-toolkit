@@ -148,7 +148,24 @@ constant each.
 # repository, no_source_files with no source. Additive: no existing key moves, a
 # Python repository's values are unchanged, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.22.0"
+# 1.23.0: run-context.json doc_staleness gains summary (issue #699): integer
+# measured_docs, stale_docs and stale_pct (null on a truncated or degenerate
+# history), read by the default maturity model's doc-freshness row. Row paths
+# are repo-relative POSIX on every platform. Additive; no finding moves, and
+# complexity-stats.json is unchanged.
+# 1.24.0: /fleet groups.jsonl level rows gain optional floor and full_run_only
+# (issue #697): an unknown row's confirmed low bound when at least 1, and the
+# missing signals only a full /assess measures (block reason not_registered or
+# network). compare.json level states carry floor too. Additive: status stays
+# level or unknown, fleet_group_version is unchanged, readers tolerate both keys
+# being absent, and run-context.json and complexity-stats.json are unchanged.
+# 1.25.0: run-context.json structure_drift.tier_1 gains optional
+# static_lens_reason (issue #710), and its three static-derived counts
+# (human_grouped_static_splits_count, human_split_static_fuses_count,
+# human_static_agree_count) are null when set: an import graph that maps no
+# module to a file (a Go graph) has no file-pair static lens. The co-change
+# counts are unchanged. Readers treat a null count as unknown, never 0.
+ARTIFACT_SCHEMA_VERSION = "1.25.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -213,11 +230,19 @@ ARTIFACT_SCHEMA_VERSION = "1.22.0"
 # 17: an import graph with no edges reports ``structure.modularity_q`` null with
 #     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
 #     scorer's Layer 2 evidence on such repositories can move.
-# 18: TypeScript and JavaScript sources get an import graph (issue #709), and
+# 18: a Go module (a go.mod with packages) is graphed from its import blocks
+#     (issue #710) instead of reporting no_import_graph_go, so structure, the
+#     Layer 2 evidence, and hidden_coupling / refactor_boundary on Go directories
+#     can move on Go repositories; structure_drift tier 1 empties its static-derived
+#     lists for a graph that maps no module to a file, and the behaviour block projects the
+#     static metrics only onto directories in the graphed language.
+# 19: TypeScript and JavaScript sources get an import graph (issue #709), and
 #     ``select_graph`` measures the dominant source language's graph: a builder
 #     that covers it decides (its graph, or its failure reason), and another
-#     language's graph stands in only when no builder covers it. A TypeScript-
-#     or JavaScript-dominant repository now reports ``structure`` available
-#     instead of ``no_import_graph_typescript``, so keyhole static metrics,
-#     structure_drift tier 1 and the scorer's Layer 2 evidence can move there.
-ASSESS_METHOD_VERSION = 18
+#     language's graph stands in only when no builder covers it. Files a builder
+#     skips (minified bundles, declarations, tests) do not count toward the
+#     dominant language. A TypeScript- or JavaScript-dominant repository now
+#     reports ``structure`` available instead of ``no_import_graph_typescript``,
+#     so keyhole static metrics, structure_drift tier 1, hidden_coupling and the
+#     scorer's Layer 2 evidence can move there.
+ASSESS_METHOD_VERSION = 19

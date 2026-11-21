@@ -237,7 +237,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
     for name in golden_repos:
         assert _levels(_run({name: golden_repos[name]})) == {
             "layer-0-instructions": 0,   # no CLAUDE.md: level 0, not unknown
-            "layer-1-liveness": None,    # only a full /assess run measures the rung
+            "layer-1-liveness": 0,       # no telemetry committed: rung 0 (#699)
             "layer-2-design": None,      # no Python package: no_python_packages
             "layer-3-linters": None,     # no lint suppression: no suppression family
             "layer-4-architecture": None,  # no ownership map: no_ownership_map
@@ -245,14 +245,16 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-6-coverage": 0,
             "layer-7-review": None,      # needs GitHub
             "layer-8-agent-ops": 0,
+            "doc-freshness": 2,          # docs and code committed together: none stale
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
         assert scans["structure_drift"]["reason"].startswith("no_ownership_map:")
         assert scans["promissory_markers"]["available"] is True
     layer1 = _row(result, "layer-1-liveness")
-    assert (layer1["status"], layer1["missing_signals"]) == ("unknown", ["observability.rung"])
-    assert layer1["unknown_repos"] == sorted(golden_repos)
+    assert (layer1["status"], layer1["level"], layer1["missing_signals"]) == ("level", 0, [])
+    for scans in golden_repos.values():   # the rung is read headless from committed files
+        assert scans["observability"]["rung"] == 0
 
 
 def test_default_levels_on_the_golden_run_context() -> None:
@@ -272,6 +274,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "layer-6-coverage": None,
         "layer-7-review": None,
         "layer-8-agent-ops": None,
+        "doc-freshness": None,  # the capture predates doc_staleness.summary
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
@@ -298,7 +301,8 @@ def test_default_levels_covers_every_layer_on_the_golden_run_context() -> None:
     """Contract I564-2: one row per layer 0-8, each a whole level or a named unknown."""
     rows = load_default_levels()["rows"]
     assert len(rows) >= 9
-    assert [row["id"].split("-")[1] for row in rows] == [str(n) for n in range(9)]
+    layers = [row["id"].split("-")[1] for row in rows if row["id"].startswith("layer-")]
+    assert layers == [str(n) for n in range(9)]
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     for row in _run({"toolkit": run_context})["rows"]:
         if row["status"] == "level":

@@ -9,7 +9,8 @@ major version and the stamp version must match. A comparison is also refused
 (``comparable: false`` with every reason, and no deltas) when the runs differ
 in maturity-model version, window, output mode, scan selection, path hashing or
 ``--fleet-config`` (its ``fleet_config_sha256``; a stamp from before #706 reads as
-no fleet config), or when
+no fleet config) or ``--platform`` (``platform``; a stamp from before #714 reads
+as ``false``), or when
 the earlier run's files are at another envelope version (``RunVersionError``
 from ``load_run`` becomes such a reason in ``not_comparable``).
 
@@ -22,8 +23,10 @@ Measured-set movement is reported apart from level movement. Per group:
   true on one side and false on the other (#569's per-row flag).
 
 Each maturity model row of each group carries its level then and now
-(``{status, level}``, or null when the group or row is absent) and, when it
-moved, a ``cause``:
+(``{status, level}``, plus ``floor`` on an unknown row with a confirmed
+floor (#697), or null when the group or row is absent) and, when it moved, a
+``cause``. A row moves only when its status or level changes: a floor that
+appeared or changed (an entry written before #697 has none) is not a move.
 
 - ``level``: the measured set is identical, so the change is real; an org
   row present on both sides is always ``level``, because it reads the group's
@@ -48,12 +51,13 @@ import tempfile
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 from lib.diff_reliability import _diff_is_reliable
 from lib.fleet import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
-from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow
-from lib.fleet_legacy import upgrade
+from lib.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
+from lib.fleet_legacy import stamp_value, upgrade
+from lib.levels import floor_of
 from lib.fleet_view import FleetViewError, load_groups, read_repos
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
@@ -81,6 +85,7 @@ class FleetRun:
 class LevelState(TypedDict):
     status: str  # "level" | "unknown"
     level: int | None
+    floor: NotRequired[int]  # an unknown row's confirmed floor (#697); absent otherwise
 
 
 class RowMove(TypedDict):
@@ -219,9 +224,11 @@ def comparability(earlier: FleetStamp, later: FleetStamp) -> tuple[list[str], li
         reasons.append(note)
     for key, label in (("levels_version", "maturity-model version"), ("window", "window"),
                        ("counts_only", "counts-only mode"), ("scans", "scan selection"),
-                       ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config")):
-        if earlier.get(key) != later.get(key):
-            reasons.append(f"{label} changed {earlier.get(key)!r}->{later.get(key)!r}")
+                       ("paths_hashed", "path hashing"), ("fleet_config_sha256", "fleet config"),
+                       ("platform", "platform pass")):
+        then, now = stamp_value(earlier, key), stamp_value(later, key)
+        if then != now:
+            reasons.append(f"{label} changed {then!r}->{now!r}")
     notes = [HASH_NOTE] if earlier.get("paths_hashed") and later.get("paths_hashed") else []
     return reasons, notes
 
@@ -303,8 +310,19 @@ def _any(changes: SetChanges) -> bool:
 def _levels(group: GroupRow | None) -> dict[str, tuple[str, LevelState]]:
     if group is None:
         return {}
-    return {row["id"]: (row["scope"], {"status": row["status"], "level": row["level"]})
-            for row in group["levels"]}
+    return {row["id"]: (row["scope"], _state(row)) for row in group["levels"]}
+
+
+def _state(row: RowLevel) -> LevelState:
+    state: LevelState = {"status": row["status"], "level": row["level"]}
+    floor = floor_of(row)
+    if floor is not None:
+        state["floor"] = floor
+    return state
+
+
+def _bare(state: LevelState | None) -> tuple[str, int | None] | None:
+    return None if state is None else (state["status"], state["level"])
 
 
 def _cause(scope: str, present_both: bool, set_moved: bool, evidence_moved: bool) -> str:
@@ -340,7 +358,8 @@ def group_change(name: str, then_rows: dict[str, FleetRow], now_rows: dict[str, 
         scope = (now_levels.get(row_id) or then_levels[row_id])[0]
         then = then_levels[row_id][1] if row_id in then_levels else None
         now = now_levels[row_id][1] if row_id in now_levels else None
-        moved = then != now
+        # A floor appearing (an entry written before #697 has none) is not a move.
+        moved = _bare(then) != _bare(now)
         cause = _cause(scope, then is not None and now is not None, set_moved,
                        evidence_moved) if moved else None
         rows.append({"id": row_id, "scope": scope, "then": then, "now": now, "moved": moved, "cause": cause})
@@ -381,7 +400,7 @@ def view_check(now: Path, then: Path) -> tuple[list[str], list[str]]:
     """For a level-only view of two runs (``heatmap.py --compare``): ``(reasons, set_moved)``.
 
     ``reasons`` says why the runs are not comparable (this module's rule: maturity model
-    version, window, output mode, scans, path hashing, fleet config, plugin major version,
+    version, window, output mode, scans, path hashing, fleet config, platform pass, plugin major version,
     file versions, a run with no ``run.json``); ``set_moved`` names the groups
     whose measured set moved, so a level change there is not read as a real
     one. Both are empty when either path is not a run directory (a bare
@@ -433,7 +452,10 @@ def summary_lines(comparison: Comparison) -> list[str]:
 def _show(state: LevelState | None) -> str:
     if state is None:
         return "absent"
-    return "unknown" if state["level"] is None else str(state["level"])
+    if state["level"] is not None:
+        return str(state["level"])
+    floor = floor_of(state)
+    return "unknown" if floor is None else f"unknown, at least {floor}"
 
 
 def write_comparison(out_dir: Path, comparison: Comparison) -> Path:

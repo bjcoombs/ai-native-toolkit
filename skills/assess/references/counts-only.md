@@ -364,6 +364,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `config_drift.snapshots.doc` | dropped |
 | `config_drift.snapshots.branch` | dropped |
 | `review_reality.reason` | dropped |
+| `delivery.reason` | dropped |
 | `gate_cost_estimate.reason` | dropped |
 | `gate_cost_estimate.assumption` | dropped |
 | `capability_offers.build_system` | token |
@@ -500,6 +501,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `structure_drift.tier_0.empty_ownership_patterns.pattern` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.declared_in` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.owners` | dropped |
+| `structure_drift.tier_1.static_lens_reason` | token |
 
 ## behaviour
 
@@ -582,3 +584,36 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `anomalies.code` | token |
 | `anomalies.description` | dropped |
 | `anomalies.detail` | dropped |
+
+## fleet-data.json (the fleet skill)
+
+Patterns from the top of `fleet-data.json`, not of a run-context. A
+unit or repository key is always kept (hashed, spaces allowed, under
+path hashing); under hashing no name, owner or web URL is written.
+The run stamp (`run.*`) and maturity-model fields (`model.*`, the row ids,
+`repos.rows.signal`) come from the run and the `--levels` file and are
+kept as written. A string
+`repos.rows.value` that is not a token is written `set`.
+
+| Field | Kept as |
+|---|---|
+| `views.view` | token |
+| `views.units.key` | path (hashed when hashing is on) |
+| `views.units.parent` | path (hashed when hashing is on) |
+| `views.units.view` | token |
+| `views.units.kind` | token |
+| `views.units.source` | token |
+| `views.units.name` | dropped |
+| `views.units.owners` | dropped |
+| `views.units.levels.weakest.repo` | path (hashed when hashing is on) |
+| `views.units.overall.weakest.repo` | path (hashed when hashing is on) |
+| `repos.key` | path (hashed when hashing is on) |
+| `repos.status` | token |
+| `repos.reason` | token |
+| `repos.web_url` | external id (hashed when hashing is on) |
+| `repos.owners` | dropped |
+| `repos.units.view` | token |
+| `repos.units.unit` | path (hashed when hashing is on) |
+| `repos.rows.status` | token |
+| `repos.rows.value` | token |
+| `repos.rows.reason` | token |

@@ -12,6 +12,11 @@ collect) is a hatched "unknown" segment at the end of the bar, never drawn as
 level 0. ``org`` rows read the group's settings, not its repositories, so they
 have no per-repository level and are named under the bars instead.
 
+An unknown repository whose confirmed criteria reach a floor (#697,
+``lib.levels.floor_of``) is drawn first within the unknown part of the bar: the
+ramp colour of its floor under a hatch, so it reads as "at least N", apart from
+both a known level and plain unknown. The notes name it with its floor.
+
 Levels are coloured with the heat map's ramp (``fleet_svg.ORRD_9``) by their
 share of the row's top level, so a row's top level is always the darkest step
 whatever its number of levels; each segment prints its count in the ramp's
@@ -22,13 +27,13 @@ from __future__ import annotations
 
 import textwrap
 from collections.abc import Sequence
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from lib import fleet_svg as svg
 from lib.fleet import FleetRow
 from lib.fleet_groups import repo_signals
 from lib.fleet_svg import HATCH_FILL, ORRD_9, STEP_TEXT, THEMED_HATCH, LinearScale
-from lib.levels import MaturityModel, evaluate_row
+from lib.levels import MaturityModel, evaluate_row, floor_of
 
 TITLE = "Fleet maturity by layer"
 FILE = "layer-bars.svg"
@@ -51,6 +56,7 @@ class LayerBar(TypedDict):
     top: int  # the row's top level
     counts: list[int]  # repositories at level 0..top
     unknown: list[str]  # repositories whose level for this row is undetermined, sorted
+    floored: NotRequired[dict[str, int]]  # of those, each one with a confirmed floor (#697)
 
 
 def layer_bars(levels: MaturityModel, repos: Sequence[FleetRow]) -> list[LayerBar]:
@@ -64,21 +70,42 @@ def layer_bars(levels: MaturityModel, repos: Sequence[FleetRow]) -> list[LayerBa
         top = len(row["levels"])
         counts = [0] * (top + 1)
         unknown: list[str] = []
+        floored: dict[str, int] = {}
         for name, data in signals:
-            level = evaluate_row(row, data)["level"]
+            evaluation = evaluate_row(row, data)
+            level = evaluation["level"]
             if level is None:
                 unknown.append(name)
+                floor = floor_of(evaluation)
+                if floor is not None:
+                    floored[name] = floor
             else:
                 counts[level] += 1
-        bars.append({"id": row["id"], "title": row["title"], "top": top, "counts": counts,
-                     "unknown": unknown})
+        bar: LayerBar = {"id": row["id"], "title": row["title"], "top": top, "counts": counts,
+                         "unknown": unknown}
+        if floored:
+            bar["floored"] = floored
+        bars.append(bar)
     return bars
+
+
+FLOOR_ID = "fleet-bars-floor"
+FLOOR_FILL = f"url(#{FLOOR_ID})"
+# Hatch lines on a transparent ground, laid over a floor segment's ramp colour.
+FLOOR_HATCH = svg.hatch_pattern(FLOOR_ID, "none", "#8c8c8c", "1.4")
+
+
+def floor_counts(bar: LayerBar) -> list[tuple[int, int]]:
+    """(floor, repositories) for each floor level present in the bar, lowest first."""
+    floors = list(bar.get("floored", {}).values())
+    return [(level, floors.count(level)) for level in sorted(set(floors))]
 
 
 def unknown_names(bar: LayerBar, total: int) -> str:
     """The repositories with an unknown level for a bar, capped so a fleet-wide gap stays one line."""
-    names = bar["unknown"]
-    if len(names) == total:
+    floored = bar.get("floored", {})
+    names = [f"{n} (at least {floored[n]})" if n in floored else n for n in bar["unknown"]]
+    if len(names) == total and not floored:
         return f"all {total} repositories"
     if len(names) <= MAX_NAMED:
         return ", ".join(names)
@@ -120,6 +147,14 @@ def _legend(bars: Sequence[LayerBar], left: float, cursor: float) -> tuple[list[
               f'fill="{HATCH_FILL}" class="s-muted" stroke-width="0.6"/>')
     parts += [swatch, svg.text(left + 20, cursor, "Unknown: level undetermined, never counted as 0",
                                size=11.5, cls="fg")]
+    if any(b.get("floored") for b in bars):
+        cursor += LINE_H + 2
+        parts += [f'<rect x="{left:.1f}" y="{cursor - 11:.1f}" width="14.0" height="14.0" '
+                  f'fill="{ORRD_9[2]}"/>',
+                  f'<rect x="{left:.1f}" y="{cursor - 11:.1f}" width="14.0" height="14.0" '
+                  f'fill="{FLOOR_FILL}" class="s-muted" stroke-width="0.6"/>',
+                  svg.text(left + 20, cursor, "At least level N: confirmed up to N, a higher level not "
+                           "measured (a lower bound)", size=11.5, cls="fg")]
     return parts, cursor + LINE_H + 2
 
 
@@ -164,9 +199,20 @@ def render_layer_bars(bars: Sequence[LayerBar], org_rows: Sequence[str] = ()) ->
             tip = f"{bar['title']}: {count} at level {level} of {bar['top']}"
             body += _segment(x(acc), x(acc + count), y, ORRD_9[ramp], STEP_TEXT[ramp], count, tip)
             acc += count
-        if bar["unknown"]:
-            count = len(bar["unknown"])
-            tip = f"{bar['title']}: level unknown for {', '.join(bar['unknown'])}"
+        floored = bar.get("floored", {})
+        for floor, count in floor_counts(bar):
+            ramp = svg.ramp_step(floor, bar["top"])
+            names = ", ".join(n for n in bar["unknown"] if floored.get(n) == floor)
+            tip = f"{bar['title']}: at least level {floor} of {bar['top']} for {names}"
+            rect, *label = _segment(x(acc), x(acc + count), y, ORRD_9[ramp], STEP_TEXT[ramp], count, tip)
+            overlay = (f'<rect x="{x(acc):.1f}" y="{y:.1f}" width="{x(acc + count) - x(acc):.1f}" '
+                       f'height="{BAR_H:.1f}" fill="{FLOOR_FILL}" pointer-events="none"/>')
+            body += [rect, overlay, *label]
+            acc += count
+        plain = [n for n in bar["unknown"] if n not in floored]
+        if plain:
+            count = len(plain)
+            tip = f"{bar['title']}: level unknown for {', '.join(plain)}"
             body += _segment(x(acc), x(acc + count), y, HATCH_FILL, None, count, tip)
     body.append(svg.text((left + PLOT_R) / 2, bottom + 34, "Repositories", anchor="middle",
                          cls="muted"))
@@ -184,4 +230,6 @@ def render_layer_bars(bars: Sequence[LayerBar], org_rows: Sequence[str] = ()) ->
     desc = ("Stacked horizontal bars, one per team row of the maturity model: how many fleet "
             "repositories reach each level, pale to dark; repositories with an undetermined level "
             "are a hatched segment, not counted as level 0.")
-    return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, defs=THEMED_HATCH)
+    floors = any(b.get("floored") for b in bars)
+    return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body,
+                        defs=THEMED_HATCH + (FLOOR_HATCH if floors else ""))

@@ -406,7 +406,7 @@ def human_grouping_relation(ownership_map: dict[str, set[Path]]) -> set[Pair]:
 
 
 def static_grouping_relation(
-    repo_root: Path, communities: list[set[str]],
+    repo_root: Path, communities: list[set[str]], mg: ModuleGraph | None = None,
 ) -> set[Pair]:
     """The import-graph community grouping as a relation over file pairs.
 
@@ -419,7 +419,7 @@ def static_grouping_relation(
     resolvable module contributes nothing. Label-invariant by construction: the
     relation never records which community a pair came from.
     """
-    module_to_path = _build_module_path_map(repo_root)
+    module_to_path = _build_module_path_map(repo_root, mg)
     if not module_to_path:
         return set()
     relation: set[Pair] = set()
@@ -431,7 +431,7 @@ def static_grouping_relation(
     return relation
 
 
-def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
+def _build_module_path_map(repo_root: Path, mg: ModuleGraph | None = None) -> dict[str, Path]:
     """Map every graphed module name to its repo-relative source file.
 
     Reads the selected (dominant-language) graph from ``import_graph.select_graph``
@@ -442,7 +442,7 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
     static relation rather than crashing.
     """
     repo_root = repo_root.resolve()
-    mg = _module_graph(repo_root)
+    mg = mg or _module_graph(repo_root)
     if mg is None:
         return {}
     mapping: dict[str, Path] = {}
@@ -652,9 +652,14 @@ def detect_grouping_disagreement(
 
     human_rel = human_grouping_relation(ownership_map)
 
+    mg = _module_graph(repo_root)
+    # A graph whose modules map to no file (a Go package is a directory) has no
+    # file-pair lens: its empty relation would read every declared pair as split,
+    # so the static-derived lists are emptied below; co-change metrics stand.
+    no_file_map = mg is not None and bool(mg.modules) and not mg.module_file
     if communities is None:
-        communities = _compute_communities(repo_root)
-    static_rel = static_grouping_relation(repo_root, communities)
+        communities = [] if no_file_map else _compute_communities(repo_root, mg)
+    static_rel = static_grouping_relation(repo_root, communities, mg)
 
     if coupling_pairs is None:
         coupling_pairs = _compute_coupling_pairs(repo_root)
@@ -666,13 +671,25 @@ def detect_grouping_disagreement(
         human_rel, static_rel, cochange_rel,
     )
     filtered = apply_seam_allowlist(disagreement, allowlist)
+    reason = ""
+    if no_file_map and mg is not None:
+        for name in STATIC_METRICS:
+            filtered[name], filtered[f"{name}_count"] = [], 0
+        reason = f"{NO_STATIC_FILE_MAP}: the {mg.language} import graph maps no module to a file"
 
     return {
         "available": True,
-        "reason": "",
+        "reason": reason,
         "tier_1_available": True,
         **filtered,
     }
+
+
+# The Tier 1 metrics that read the static lens; unknown without a file map.
+STATIC_METRICS = (
+    "human_grouped_static_splits", "human_split_static_fuses", "human_static_agree",
+)
+NO_STATIC_FILE_MAP = "no_static_file_map"
 
 
 def _tier1_unavailable(reason: str) -> JsonDict:
@@ -711,7 +728,7 @@ def _human_ownership_map(repo_root: Path) -> dict[str, set[Path]]:
     return {k: v for k, v in combined.items() if v}
 
 
-def _compute_communities(repo_root: Path) -> list[set[str]]:
+def _compute_communities(repo_root: Path, mg: ModuleGraph | None = None) -> list[set[str]]:
     """Import-graph communities for the repo, or ``[]`` when unavailable.
 
     Builds the same digraph ``structure_graph.analyze_structure`` builds and
@@ -729,7 +746,7 @@ def _compute_communities(repo_root: Path) -> list[set[str]]:
         return []
     if not _NETWORKX_AVAILABLE:
         return []
-    mg = _module_graph(repo_root.resolve())
+    mg = mg or _module_graph(repo_root.resolve())
     if mg is None:
         return []
     return _detect_communities(import_digraph(mg).to_undirected())

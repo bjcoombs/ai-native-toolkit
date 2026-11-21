@@ -101,10 +101,10 @@ def test_network_scans_are_unavailable_and_agent_environment_runs_offline(fixtur
 
 def test_unregistered_scans_are_listed_unavailable(fixture_repo, tmp_path):
     out = tmp_path / "signals.json"
-    assert _run(fixture_repo, out, "--scans", "doc_graph,agent_ops") == 0
+    assert _run(fixture_repo, out, "--scans", "dead_code,agent_ops") == 0
     scans = json.loads(out.read_text(encoding="utf-8"))["scans"]
-    assert list(scans) == ["agent_ops", "doc_graph"]
-    assert scans["doc_graph"] == {"available": False, "reason": signals.UNREGISTERED_REASON}
+    assert list(scans) == ["agent_ops", "dead_code"]
+    assert scans["dead_code"] == {"available": False, "reason": signals.UNREGISTERED_REASON}
 
 
 def test_a_selected_scan_pulls_in_what_it_reads_but_reports_only_itself(fixture_repo, tmp_path):
@@ -166,6 +166,41 @@ def test_a_network_scan_never_calls_its_fn(fixture_repo):
     assert scans["reader"] == {"saw": scans["online"]}
 
 
+def test_platform_runs_only_the_listed_network_scans_and_what_they_read(fixture_repo, monkeypatch):
+    """``--platform`` (#714): a listed network scan and a network sample it reads run; any
+    other network scan still reports ``NETWORK_REASON``."""
+    calls: list[str] = []
+
+    def sample(_root):
+        calls.append("sample")
+        return {"merged": 3}
+
+    def listed(seen):
+        calls.append("listed")
+        return {"available": True, "saw": seen}
+
+    def other(_root):
+        raise AssertionError("an unlisted network scan was called")
+
+    specs = (
+        ScanSpec("sample", sample, ("repo_root",), reg.STAGE_READ_SIDE, network=True, private=True),
+        ScanSpec("listed", listed, ("sample",), reg.STAGE_READ_SIDE, network=True),
+        ScanSpec("other", other, ("repo_root",), reg.STAGE_READ_SIDE, network=True),
+    )
+    monkeypatch.setattr(signals, "PLATFORM_SCANS", ("listed",))
+    scans = signals.collect(fixture_repo, ["listed", "other"], specs, platform=True)
+    assert scans["listed"] == {"available": True, "saw": {"merged": 3}}
+    assert scans["other"] == {"available": False, "reason": signals.NETWORK_REASON}
+    assert calls == ["sample", "listed"]
+    offline = signals.collect(fixture_repo, ["listed"], specs)
+    assert offline["listed"] == {"available": False, "reason": signals.NETWORK_REASON}
+
+
+def test_network_reason_names_both_providers_and_keeps_its_code():
+    assert signals.NETWORK_REASON.startswith("network: ")
+    assert "gh" in signals.NETWORK_REASON and "glab" in signals.NETWORK_REASON
+
+
 def test_registry_migration_moves_a_name_from_unavailable_to_run(fixture_repo):
     """A hand-wired name that joins the registry runs without an edit to signals."""
     specs = (ScanSpec("doc_graph", lambda root: {"available": True}, ("repo_root",), reg.STAGE_READ_SIDE),)
@@ -184,7 +219,7 @@ def test_the_core_entries_are_not_reported_as_scans():
     and list keys never become scan names."""
     known = set(signals.known_scans())
     assert not {"run_id", "plugin_version", "anomalies", "current", "run_header"} & known
-    assert "doc_graph" in known and "doc_graph" in signals.UNREGISTERED_SCANS
+    assert "dead_code" in known and "dead_code" in signals.UNREGISTERED_SCANS
 
 
 def test_unregistered_names_are_run_context_keys_the_core_assigns():
