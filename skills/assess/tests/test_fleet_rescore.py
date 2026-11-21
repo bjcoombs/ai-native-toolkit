@@ -107,11 +107,10 @@ def test_rescore_with_same_criteria_reproduces_stored_cells() -> None:
     assert {**again, "run": stored["run"]} == stored
 
 
-def test_rescore_recomputes_mean_share_and_unit_overall() -> None:
+def test_rescore_recomputes_the_unit_roll_ups() -> None:
     again = fr.rescore(_data(DATES[0], BASE, V1), _rows(BASE), V2, KEY)
     fresh = _data(DATES[0], BASE, V2)
     assert again is not None
-    assert {r["key"]: r["mean_share"] for r in again["repos"]} == {r["key"]: r["mean_share"] for r in fresh["repos"]}
     assert again["views"] == fresh["views"] and again["repos"] == fresh["repos"]
     assert again["model"] == fresh["model"]
     # grp/sub/a dropped from docs 2 to 1 (grade B no longer meets level 2)

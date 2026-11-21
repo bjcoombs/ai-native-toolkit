@@ -623,8 +623,6 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "views.units.source": TOKEN,
     "views.units.name": DROP,
     "views.units.owners": DROP,
-    "views.units.levels.weakest.repo": PATH,
-    "views.units.overall.weakest.repo": PATH,
     "repos.key": PATH,
     "repos.status": TOKEN,
     "repos.reason": TOKEN,

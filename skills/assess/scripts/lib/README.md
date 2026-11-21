@@ -88,9 +88,9 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
 - **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
-  roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `overall_roll_up`, so a
+  roll-ups with `fleet_data`'s own `repo_cells` and `row_roll_up`, so a
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
-  `tests/test_fleet_rescore.py::test_rescore_recomputes_mean_share_and_unit_overall`
+  `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
@@ -1112,9 +1112,9 @@ read gives no URL and no owners.
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
-per team row, `fleet_maturity.mean_share` over the repositories below it, `measured` of
-`repos`, and the weakest measured repository (lowest share, then key); `overall_roll_up`
-does the same over each repository's own mean share. `org` rows stay in `groups.jsonl`.
+per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it
+(the lowest Step's stand-in until #744). Version 2 (#772) holds no average and names no
+repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
@@ -1133,9 +1133,10 @@ oldest first: `subjects` gives every unit and repository its level per team row,
 roll-up rule (`levels.share_level`) over measured members, with the measured set;
 `clean` is the one gate on a move (known both sides, same measured set), and
 `known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
-emits `level_up`, `first`, `target_hit` (a level target on the row's level, a share
-target on its mean share of top level, the `fleet-data.json` row roll-up, #780),
-`personal_best` and `streak`, each with
+emits `level_up`, `first` (only with `firsts=True`, `fleet.py --first-achievements`; off
+by default since #772), `target_hit` (a level target on the row's level, a share target
+on its mean share of top level, `RowState.share`, worked out from the cells, #780) and
+`streak` (#772 retired `personal_best`), each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
 a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
 repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
@@ -1147,7 +1148,8 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 
 **`fleet_achievements_runs.py`**
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
-`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+`fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
+`READABLE_FLEET_DATA_VERSIONS` (1 and 2: version 1's roll-up is not read, #772),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
@@ -1159,9 +1161,9 @@ version) and `stored` (its `fleet-data.json`) set (#771).
 **`fleet_rescore.py`**
 Re-scores a stored run under the current maturity model and builds the Recount (#771).
 `rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
-cells from `fleet_data.repo_cells` (values through `Privacy().value`), each repository's
-`mean_share`, and each unit's row and overall roll-ups (`row_roll_up`, `overall_roll_up`)
-over the stored placements; None when a stored key does not join under the run's key
+cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
+roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
+`overall` are dropped, #772); None when a stored key does not join under the run's key
 function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783) is
 applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
 stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
