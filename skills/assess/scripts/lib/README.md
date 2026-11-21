@@ -2032,6 +2032,62 @@ parser, hidden from `--help`: any use of it exits 2 with one line naming `--leve
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
 flag in `tests/test_fleet_legacy.py`.
 An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
+Two optional model keys feed `level_tally.py` and leave every row level unchanged (#744):
+`requires` on a level (condition ids, `<row id>.<level>` from `condition_id`, that must be
+met for this condition to count as met; an unknown id, a self-reference or a cycle fails
+the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`, and
+`gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
+later Step keeps every gate of the one below and never lowers the threshold, or the load
+fails. A model without them loads exactly as before.
+
+**`level_tally.py`**
+The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
+one repository's signals with no prior run and no model in the path (#744). Each row level
+of the model is one condition, `<row id>.<level>`, read on its own criteria (a level does
+not need the level below; `requires` states a real dependency). `level_result(model, data)`
+returns a `LevelResult` (shapes in `level_result_types.py`):
+
+- `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`),
+  `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
+  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+- `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
+  unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
+- `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
+  unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
+  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
+  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
+  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+
+Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
+`requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
+counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
+the `level` block, a `scan_registry` entry (`core_scans.level_scan`, which reads every block
+published before it) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
+`$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
+fixtures through `/fleet` and `/assess` on the same commit.
+
+**`level_result_types.py`**
+The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
+`NextStep`), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+import cycle. Tests: `tests/test_level_tally.py`.
+
+**`fleet_level.py`**
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
+over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
+stale file when the run has no model. Tests: `tests/test_level_tally.py`.
+
+**`fleet_level_schema.py`**
+Generates `skills/fleet/references/level.schema.json` from `FleetLevels` and `LevelResult`
+(`fleet_group_schema.type_schema`); `tests/test_level_tally.py` fails when the checked-in
+file drifts. Regenerate: `cd skills/assess && uv run --locked python scripts/lib/fleet_level_schema.py`.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
@@ -2064,8 +2120,11 @@ each class to a grade (`config_only < declared < measured < verified`); `criteri
 returns the signal's class grade whatever the operator (the #789 grades design: no
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
 conditions #744 lists without counting. The module doc records the rulings (platform
-reads are their own class; instruction files stay declared but still gate Steps). Nothing
-in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+reads are their own class; instruction files stay declared but still gate Steps).
+`level_tally.py` reads it to count conditions; `levels.py` does not. `UNMEASURED_VALUES`
+names the values that mean "could not be measured" with the tally's reason code
+(`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
+false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 **`instruction_files.py`**

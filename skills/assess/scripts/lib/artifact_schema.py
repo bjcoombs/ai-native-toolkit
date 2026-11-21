@@ -179,7 +179,12 @@ constant each.
 # resolved_includes, unresolved_includes and includes[] (kind, id, status,
 # ref_basis, depth: GitLab includes resolved offline, issue #766), and each
 # review_automation match gains depth. Additive: no existing key moves.
-ARTIFACT_SCHEMA_VERSION = "1.28.0"
+# 1.29.0: run-context.json gains the level block (issue #744): the default maturity
+# model's conditions with state, grade and reason, the verified tally (met, measured,
+# not_measured), the autonomy Step and the next Step's blockers
+# (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.29.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

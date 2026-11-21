@@ -159,6 +159,25 @@ PATH_KEYED_MAPS: Final = frozenset({
 # Block -> {field pattern: class}. Grouped by top-level block so the document
 # (``render_doc``) lists each block's fields together.
 RULES: Final[dict[str, dict[str, FieldClass]]] = {
+    # The verified tally and Step (lib/level_tally.py, #744): ids from the
+    # maturity model, states, grades and reason codes only, so all kept.
+    "level": {
+        "level.levels_version": TOKEN,
+        "level.counted": TOKEN,
+        "level.listed": TOKEN,
+        "level.not_measured.id": TOKEN,
+        "level.not_measured.reason": TOKEN,
+        "level.conditions.id": TOKEN,
+        "level.conditions.row": TOKEN,
+        "level.conditions.grade": TOKEN,
+        "level.conditions.state": TOKEN,
+        "level.conditions.reason": TOKEN,
+        "level.next_step.blockers.kind": TOKEN,
+        "level.next_step.blockers.gate": TOKEN,
+        "level.next_step.blockers.condition": TOKEN,
+        "level.next_step.blockers.state": TOKEN,
+        "level.next_step.blockers.reason": TOKEN,
+    },
     "run identity": {
         "run_id": TOKEN,
         "artifact_schema_version": TOKEN,

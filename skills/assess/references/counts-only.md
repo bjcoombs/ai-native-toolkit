@@ -77,6 +77,26 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `stats_summary.fn_ccn.backend_by_language`
 - `tool_versions`
 
+## level
+
+| Field | Kept as |
+|---|---|
+| `level.levels_version` | token |
+| `level.counted` | token |
+| `level.listed` | token |
+| `level.not_measured.id` | token |
+| `level.not_measured.reason` | token |
+| `level.conditions.id` | token |
+| `level.conditions.row` | token |
+| `level.conditions.grade` | token |
+| `level.conditions.state` | token |
+| `level.conditions.reason` | token |
+| `level.next_step.blockers.kind` | token |
+| `level.next_step.blockers.gate` | token |
+| `level.next_step.blockers.condition` | token |
+| `level.next_step.blockers.state` | token |
+| `level.next_step.blockers.reason` | token |
+
 ## run identity
 
 | Field | Kept as |

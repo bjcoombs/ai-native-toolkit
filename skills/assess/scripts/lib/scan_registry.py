@@ -599,4 +599,26 @@ SCANS: tuple[ScanSpec, ...] = (
     ),
 )
 
+
+def _run_context_level(ctx: dict[str, Any]) -> Any:
+    # imported here: lib.level_signals reaches this module through lib.signals_schema
+    from lib.level_tally import run_context_level
+
+    return run_context_level(ctx)
+
+
+def _level_spec(specs: tuple[ScanSpec, ...]) -> ScanSpec:
+    """The ``level`` block (#744): it reads every block published before it, so the
+    maturity model can name any of them, and runs last of the post-offers stage."""
+    order = {stage: i for i, stage in enumerate(STAGES)}
+    earlier = [s for s in specs if not s.private and order[s.stage] <= order[STAGE_POST_OFFERS]]
+    blocks = tuple((s.key, s.spread) for s in earlier)
+    return ScanSpec("level", cs.level_scan(blocks, _run_context_level), tuple(s.key for s in earlier), STAGE_POST_OFFERS)
+
+
+# The verified tally and the autonomy Step (lib/level_tally.py, #744): the
+# default maturity model over the finished run context. Core-only: the
+# headless runner never reports it; /fleet computes the same from each row.
+SCANS = (*SCANS, _level_spec(SCANS))
+
 validate(SCANS)

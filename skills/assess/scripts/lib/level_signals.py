@@ -59,7 +59,15 @@ in #783 requirement 2, under which text alone could reach a counted grade.
 ``is_declared`` is true when the grade is ``config_only`` or ``declared``: under
 #744 those conditions are listed, not counted. A signal one collector sets from two inputs takes the
 weaker (``review_evidence.present`` is ``head_text``; #789 3.4 splits it).
-Nothing in ``lib.levels`` reads this yet; counting is #744's engine work.
+``lib.level_tally`` (#744) reads it to count conditions; ``lib.levels`` does not.
+
+``UNMEASURED_VALUES`` names the signals whose value says the practice could not
+be measured, rather than that it is absent, with the reason code the tally
+gives: ``test_pressure.mutation_run`` is false until the opt-in mutation pass
+runs (``needs_full_run``, never unmet: #740 decision), and
+``promissory_markers.aging_reliable`` is false on a history too thin to age a
+suppression (``degenerate_history``; the huddle's "stale-suppression aging
+requires reliable history").
 
 Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 
@@ -215,6 +223,13 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "agent_ops.summary.hooks_present": "config_text",
     "agent_ops.summary.routines_present": "config_text",
     "doc_staleness.summary.stale_pct": "git_history",
+}
+
+
+# Signal -> (the value meaning "could not be measured", the tally's reason code).
+UNMEASURED_VALUES: dict[str, tuple[bool, str]] = {
+    "test_pressure.mutation_run": (False, "needs_full_run"),
+    "promissory_markers.aging_reliable": (False, "degenerate_history"),
 }
 
 

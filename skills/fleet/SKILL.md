@@ -78,7 +78,7 @@ there.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json`, with `--levels` `DIR/level.json`, and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
@@ -235,6 +235,32 @@ earlier history entries still load and match. `--compare` against a 1.x run from
 
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
+
+## Output: `level.json`
+
+Written with `--levels`, beside `groups.jsonl`: each scanned repository's level result,
+keyed by its repository id (a failed scan has no entry), in an envelope of
+`level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`. The
+result (`scripts/lib/level_tally.py` in the assess skill, #744) treats each row level of
+the maturity model as one condition, `<row id>.<level>`, and reports:
+
+- `conditions[]`: `id`, `row`, `level`, `grade`, `counted`, `state` (`met`, `unmet`,
+  `not_measured`; `not_applicable` and `declined` are reserved) and a `reason` code when
+  not measured (`needs_full_run`, `needs_platform`, a block's own code, `block_absent`,
+  `no_value`, `type_mismatch`, `degenerate_history`, or `requires:<id>`);
+- `tally`: `met` is the level, the count of counted conditions met (graded measured or
+  verified); `measured` counts the counted conditions met or unmet; `not_measured` counts
+  every condition not measured. An unknown never counts;
+- `counted` and `listed`: the met conditions that count, and the met ones that are only
+  listed (config-only, declared, or a signal with no producer class);
+- `not_measured[]`: `{id, reason}`;
+- `step` and `next_step` (`step`, `threshold`, `blockers[]`), from the model's `[[steps]]`
+  (null without them). A Step is held when `tally.met` reaches its threshold and its gates
+  hold; a gate reads the state of its row's conditions, not their grade.
+
+`/assess` writes the same result for the same commit as the `level` block of its
+run context, from the same function. The file has no date or path in it, so a rerun over
+the same commits writes identical bytes. Schema: `references/level.schema.json`.
 
 ## Output: `fleet-data.json`
 

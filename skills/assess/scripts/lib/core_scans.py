@@ -14,6 +14,7 @@ are declared gates in the table.
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from lib.accretion_ratchet import AccretionScan, scan_accretion_ratchet
@@ -330,3 +331,23 @@ def anomalies(header: dict[str, Any]) -> list[dict[str, Any]]:
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(header)
     ]
+
+
+def level_scan(blocks: tuple[tuple[str, tuple[str, ...]], ...],
+               compute: Callable[[dict[str, Any]], Any]) -> Callable[..., Any]:
+    """The run context's ``level`` block (#744): ``compute`` over the blocks published so far.
+
+    ``blocks`` pairs each read with the run-context keys it holds: ``()`` for a
+    published block (its own key), or a spread entry's keys, whose value is the
+    mapping it spread (or one degraded marker for all of them). ``compute`` is
+    ``lib.level_tally.run_context_level``, passed in by the registry.
+    """
+    def level(*values: Any) -> Any:
+        ctx: dict[str, Any] = {}
+        for (key, spread), value in zip(blocks, values):
+            if not spread:
+                ctx[key] = value
+            for name in spread:
+                ctx[name] = value.get(name) if isinstance(value, dict) and name in value else value
+        return compute(ctx)
+    return level

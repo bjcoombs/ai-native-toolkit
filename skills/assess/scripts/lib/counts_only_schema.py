@@ -60,6 +60,7 @@ from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
 from lib.layer_grades import LayerGradesBlock
+from lib.level_result_types import LevelResult
 from lib.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
@@ -120,6 +121,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),
     ("stats_summary.est_tokens.budget", KeyholeBudget),
+    ("level", LevelResult),
 )
 
 _UNIONS = (Union, types.UnionType)
