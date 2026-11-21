@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 from lib import gh_cli, gitlab_cli, platform_cli
 from lib.gh_cli import GhUnavailable
 from lib.gitlab_cli import GitlabProject
@@ -28,6 +30,7 @@ echo '{"ok": true}'
 
 @pytest.fixture
 def stub(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    skip_without_posix_shell()
     bindir, data = tmp_path / "bin", tmp_path / "data"
     bindir.mkdir()
     data.mkdir()

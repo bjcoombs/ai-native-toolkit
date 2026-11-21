@@ -13,6 +13,8 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+from conftest import skip_without_posix_shell
+
 from lib import fleet_platform
 from lib.fleet import SCAN_TIMEOUT, STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target
 from lib.fleet_platform import failure_reason, join, platform_scans, run_platform
@@ -146,6 +148,7 @@ echo "gh: Not Found (HTTP 404)" >&2; exit 1
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    skip_without_posix_shell()
     bindir, data = tmp_path / "bin", tmp_path / "gh"
     bindir.mkdir()
     data.mkdir()

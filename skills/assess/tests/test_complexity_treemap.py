@@ -1771,7 +1771,6 @@ def test_plural_takes_an_irregular_form(render_lib):
     assert render_lib.plural(1, "child", "children") == "child"
 
 
-@pytest.mark.windows_followup
 @pytest.mark.parametrize("tokens, text", [
     (1, "1 est. token · 100 loc"),
     (1200, "1,200 est. tokens · 100 loc"),
