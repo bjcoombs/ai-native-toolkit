@@ -9,6 +9,8 @@ A case the model still credits carries ``xfail(strict=True)``. Its reason names
 the issue whose fix makes it unmet, or ``hollow: no fixing issue filed``. When a
 fix lands, its case turns into an unexpected pass and fails the suite until the
 fixing PR removes the mark. Each fixing PR removes the marks on its own cases.
+Only an AssertionError counts as the expected failure, so a renamed row or a
+scan that raises fails the suite instead of hiding behind the mark.
 
 Conditions read from git history, execution or the platform API are not cheap
 to fake with one edit, so they have no case here.
@@ -54,7 +56,7 @@ _JACOCO_POM = (
 
 def _case(case_id: str, row: str, level: int, files: dict[str, str], fixed_by: str | None) -> Any:
     """One hollow case; ``fixed_by`` is the xfail reason, None once the model rejects it."""
-    marks = [pytest.mark.xfail(strict=True, reason=fixed_by)] if fixed_by else []
+    marks = [pytest.mark.xfail(strict=True, raises=AssertionError, reason=fixed_by)] if fixed_by else []
     return pytest.param(row, level, files, id=case_id, marks=marks)
 
 
@@ -110,7 +112,7 @@ def _committed(repo: Path, files: dict[str, str]) -> Path:
     for rel, text in files.items():
         path = repo / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8", newline="\n")
     _git(repo, "init", "-q")
     _git(repo, "add", "-A")
     _git(repo, "-c", "user.email=a@example.com", "-c", "user.name=A", "commit", "-qm", "init")
