@@ -155,9 +155,6 @@ def _match_glob(pattern: str, rel_paths: list[str]) -> set[Path]:
     return out
 
 
-_GLOB_CHARS = frozenset("*?[")
-
-
 def _names_a_path(pattern: str) -> bool:
     """A CODEOWNERS glob names a module path when one segment has no glob character.
 
