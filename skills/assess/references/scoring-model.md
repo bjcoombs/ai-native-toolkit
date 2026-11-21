@@ -66,7 +66,8 @@ agent_context 3 · agent_runtime 2 · behaviour 2 · structure 2 · docs 1 · go
 
 1. **Done:** https://github.com/bjcoombs/ai-native-toolkit/issues/771 (re-score stored scans under the current model).
 2. **Now:**
-   - condition fixes https://github.com/bjcoombs/ai-native-toolkit/issues/775, https://github.com/bjcoombs/ai-native-toolkit/issues/776 (children #781-#788) and https://github.com/bjcoombs/ai-native-toolkit/issues/783;
+   - condition fixes https://github.com/bjcoombs/ai-native-toolkit/issues/775 and https://github.com/bjcoombs/ai-native-toolkit/issues/776 (children #781-#788);
+   - the alias-map renames still open on https://github.com/bjcoombs/ai-native-toolkit/issues/783 (its signal classes already merged in https://github.com/bjcoombs/ai-native-toolkit/pull/802, so the engine does not wait on it);
    - the manifest skeleton https://github.com/bjcoombs/ai-native-toolkit/issues/792.
 3. **Then the engine:** https://github.com/bjcoombs/ai-native-toolkit/issues/744.
 4. **On the engine:**
