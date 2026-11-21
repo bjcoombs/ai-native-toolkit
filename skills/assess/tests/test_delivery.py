@@ -301,7 +301,7 @@ def test_unavailable_review_reality_copies_nothing():
     assert block["approved_share"] is None and block["self_merged_share"] is None
 
 
-def test_gitlab_gives_time_to_merge_and_leaves_the_notes_figures_to_716():
+def test_gitlab_without_note_facts_gives_time_to_merge_only():
     mrs = ({"iid": 1, "created_at": "2026-11-01T00:00:00Z", "merged_at": "2026-11-01T06:00:00Z"},
            {"iid": 2, "created_at": "2026-11-01T00:00:00Z", "merged_at": "2026-11-02T00:00:00Z"})
     project = GitlabProject("gitlab.com", "grp/app")

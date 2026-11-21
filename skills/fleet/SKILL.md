@@ -466,6 +466,7 @@ until it does, any key in a section is unknown and exits 2.
 
 | Key | Meaning |
 |-----|---------|
+| `[review] ai_review_markers` | Strings an AI reviewer prints in its GitLab merge-request notes (a list; case-insensitive substrings). With `--platform`, a note carrying one counts as AI review in `review_reality.bot_review_share`, on top of the pinned markers (an "AI Code Review" heading, an HTML marker comment) and agent accounts. An access-token user's unmarked note is not review unless `[ai_usage] token_users_as_agents` or an identity rule makes it an agent: coverage, Danger and release bots post through tokens too. |
 | `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
 | `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
 

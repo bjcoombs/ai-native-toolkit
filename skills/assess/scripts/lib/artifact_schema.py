@@ -246,4 +246,7 @@ ARTIFACT_SCHEMA_VERSION = "1.25.0"
 #     reports ``structure`` available instead of ``no_import_graph_typescript``,
 #     so keyhole static metrics, structure_drift tier 1, hidden_coupling and the
 #     scorer's Layer 2 evidence can move there.
-ASSESS_METHOD_VERSION = 19
+# 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
+#     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
+#     instead of null and the L7 "hollow required review" row can now fire there.
+ASSESS_METHOD_VERSION = 20
