@@ -23,6 +23,11 @@ evidence is static, read from the files at HEAD:
   linter (``npm install eslint``, ``uv sync --extra lint``) never counts, nor
   does a bare list item that only names a linter (``- mypy`` under
   ``matrix:``, ``needs:`` or ``stages:``); ``- ruff check .`` does.
+- A bare list item that only names an always-check program (``- pytest``,
+  ``- tox``, ``- py.test``, ``- nox``) counts only when its parent key is a
+  GitLab ``script:``, ``before_script:`` or ``after_script:``; under
+  ``needs:``, a ``matrix:`` axis or any other key it is a value, not a run
+  (issue #725). ``- pytest -q`` counts wherever it sits.
 - Known limit of the line-based scan (no YAML parser): every line is a
   candidate, so a command inside a non-script value, such as an ``env:`` block
   scalar holding ``pytest``, counts as a run.
@@ -32,31 +37,43 @@ evidence is static, read from the files at HEAD:
 - Triggers are not read: a check in a workflow that runs only on push counts
   the same as one on pull requests.
 
-``test_or_lint_runs`` is true when any CI line runs a check. With none it is
-false, except when a CI file pulls jobs from a file this checkout does not
-hold (GitLab ``include:`` of any kind, a GitHub job-level ``uses:`` calling
-another repository's reusable workflow; ``shared_tooling.pulls_jobs_from_elsewhere``):
-the check may live there, so the signal is null (unknown), never false.
-``basis`` names which case applied.
+GitLab includes are resolved offline where the included file is on disk
+(``lib/ci_includes.py``, #766): ``local:`` files of the checkout, and
+``project:`` / ``component:`` files of a clone in the ghsync root passed as
+``ghsync_root`` (``assess_signals --ghsync-root``; ``fleet.py`` passes its
+ROOT). Each resolved file's lines are classified the same way and counted in
+``included_check_commands``. ``includes`` lists one record per include item
+(kind, id, status, ref_basis, depth; never a file name or text), with the
+``resolved_includes`` / ``unresolved_includes`` counts.
+
+``test_or_lint_runs`` is true when any CI line, own or included, runs a check.
+With none it is false, except when a CI file pulls jobs from a file this run
+could not read (a GitLab include that did not resolve, a GitHub job-level
+``uses:`` calling another repository's reusable workflow;
+``shared_tooling.pulls_jobs_from_elsewhere``): the check may live there, so the
+signal is null (unknown), never false. A GitLab file whose every include
+resolved and holds no check reads false. ``basis`` names which case applied.
 
 ``enforced_check_runs`` (issue #775) is the same test with masked checks left
 out: a check that runs but cannot fail its job (``pytest || true``,
 ``continue-on-error: true``, ``allow_failure: true``, ``set +e``; the rules and
-their known limits are in ``lib.ci_masking``). True when any CI line runs an
-unmasked check; otherwise null under the same ``included_jobs`` rule, else
-false. ``masked_check_commands`` counts the check lines left out, so a reader
-sees why the two signals disagree. ``basis`` describes ``test_or_lint_runs``.
-Layer 5 level 1 reads ``enforced_check_runs``; a stored scan without the key
-reads unknown there.
+their known limits are in ``lib.ci_masking``). True when any CI line, own or
+included, runs an unmasked check; otherwise null under the same
+``included_jobs`` rule, else false. ``masked_check_commands`` counts the check
+lines left out, so a reader sees why the two signals disagree. ``basis``
+describes ``test_or_lint_runs``. Layer 5 level 1 reads ``enforced_check_runs``;
+a stored scan without the key reads unknown there.
 """
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
+from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_check_command, is_lint_command
+from lib.ci_includes import IncludeRecord, resolve_includes
 from lib.ci_masking import unmasked_lines
-from lib.check_command import LINT_PROGRAMS, is_check_command, is_lint_command
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
 from lib.shared_tooling import pulls_jobs_from_elsewhere
@@ -72,6 +89,10 @@ class CiChecksBlock(TypedDict):
     ci_files: int
     check_commands: int
     included_files: int
+    included_check_commands: int  # check lines in included files read offline (#766)
+    resolved_includes: int
+    unresolved_includes: int
+    includes: list[IncludeRecord]
     test_or_lint_runs: bool | None
     basis: CiChecksBasis
     enforced_check_runs: bool | None
@@ -80,17 +101,23 @@ class CiChecksBlock(TypedDict):
 
 # A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
 _BARE_ITEM = re.compile(r"^\s*-\s+(?![\w.-]+:(?:\s|$))")
+# A GitLab key whose list items are shell lines (``script:``, ``  before_script: &s``).
+_SCRIPT_KEY = re.compile(r"^\s*(?:before_script|after_script|script):\s*(?:&\S+\s*)?(?:#.*)?$")
 
 
-def _line_runs_check(line: str) -> bool:
-    """One CI line, classified on its own so an open quote or a stray fence cannot carry over."""
+def _line_runs_check(line: str, *, script_item: bool = True) -> bool:
+    """One CI line, classified on its own so an open quote or a stray fence cannot carry over.
+
+    ``script_item`` is false for a bare list item whose parent key is not a script key
+    (``_script_items``): a lone ``- pytest`` there is a value, not a run.
+    """
     text = ci_line_text(line).removesuffix("\\").strip()
     if not text:
         return False
     commands = extract_commands(f"```bash\n{text}\n```\n")
     bare_item = _BARE_ITEM.match(line) is not None
     return any(
-        is_check_command(c.text)
+        (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
         or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text)))
         for c in commands
     )
@@ -102,44 +129,104 @@ def _lone_linter(text: str) -> bool:
     return len(words) == 1 and words[0] in LINT_PROGRAMS
 
 
+def _lone_check(text: str) -> bool:
+    """An always-check program with no argument (``pytest``, ``tox``): a value unless under ``script:``."""
+    words = command_words(text)
+    return len(words) == 1 and words[0] in ALWAYS_CHECK
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _script_items(lines: Sequence[str]) -> list[bool]:
+    """Per line: false for a bare list item whose parent key is not a GitLab script key.
+
+    The parent is the nearest line above at the item's indent or less that is not a
+    sibling item, skipping blank and comment lines and lines nested deeper (a sibling's
+    block scalar). An indentless list (``script:`` then ``- pytest`` at its indent) works.
+    """
+    flags = [True] * len(lines)
+    for i, line in enumerate(lines):
+        if _BARE_ITEM.match(line) is None or not _lone_check(ci_line_text(line)):
+            continue   # only a lone always-check item needs its parent
+        depth = _indent(line)
+        parent = ""
+        for above in reversed(lines[:i]):
+            stripped = above.strip()
+            if not stripped or stripped.startswith("#") or _indent(above) > depth:
+                continue
+            if _indent(above) == depth and _BARE_ITEM.match(above) is not None:
+                continue
+            parent = above
+            break
+        flags[i] = _SCRIPT_KEY.match(parent) is not None
+    return flags
+
+
+def count_check_lines(lines: Sequence[str], *, context: Sequence[str] | None = None) -> int:
+    """How many of one CI file's lines run a test or lint check (a blanked line runs none).
+
+    ``context`` is the file's original lines when ``lines`` is a rewrite of them with
+    the same length (``ci_masking.unmasked_lines``): parent keys are read from it.
+    """
+    flags = _script_items(lines if context is None else context)
+    return sum(1 for line, script_item in zip(lines, flags, strict=True)
+               if _line_runs_check(line, script_item=script_item))
+
+
 def check_commands(text: str) -> int:
     """How many lines of one CI file's text run a test or lint check."""
-    return sum(1 for line in text.splitlines() if _line_runs_check(line))
+    return count_check_lines(text.splitlines())
 
 
 def enforced_check_commands(text: str) -> tuple[int, int]:
     """``(unmasked, masked)``: the check lines of one CI file that can fail their job, and the rest."""
-    total = check_commands(text)
-    enforced = sum(1 for line in unmasked_lines(text) if _line_runs_check(line))
+    lines = text.splitlines()
+    total = count_check_lines(lines)
+    enforced = count_check_lines(unmasked_lines(text), context=lines)
     return enforced, max(total - enforced, 0)
 
 
-def scan_ci_checks(repo_root: Path) -> CiChecksBlock:
+def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``."""
     root = repo_root.resolve()
     files = ci_config_files(repo_files(root))
     checks = 0
     included = 0
-    enforced = 0
-    masked = 0
+    elsewhere = 0  # files whose pulled jobs this run cannot read
+    resolution = resolve_includes(root, ghsync_root) if any(f in CI_CONFIG_FILES for f in files) else None
     for rel in files:
         text = read_config(root, rel)
         checks += check_commands(text)
-        unmasked, hidden = enforced_check_commands(text)
-        enforced += unmasked
-        masked += hidden
-        included += pulls_jobs_from_elsewhere(text, gitlab=rel in CI_CONFIG_FILES)
+        gitlab = rel in CI_CONFIG_FILES
+        pulls = pulls_jobs_from_elsewhere(text, gitlab=gitlab)
+        included += pulls
+        # Fully read only when the resolver saw the includes (a record each) and read them
+        # all: a symlinked .gitlab-ci.yml it refuses stays unknown, never false.
+        read_all = resolution is not None and bool(resolution.includes) and resolution.unresolved == 0
+        if pulls and not (gitlab and read_all):
+            elsewhere += 1
+    included_checks = sum(check_commands(f.text) for f in resolution.files) if resolution else 0
+    records = list(resolution.includes) if resolution else []
+    own = [enforced_check_commands(read_config(root, rel)) for rel in files]
+    pulled = [enforced_check_commands(f.text) for f in resolution.files] if resolution else []
+    enforced = sum(e for e, _ in own + pulled)
+    masked = sum(m for _, m in own + pulled)
     runs: bool | None
     basis: CiChecksBasis
-    if checks:
+    if checks or included_checks:
         runs, basis = True, "check_command"
-    elif included:
+    elif elsewhere:
         runs, basis = None, "included_jobs"
     elif files:
         runs, basis = False, "no_check_command"
     else:
         runs, basis = False, "no_ci"
-    enforced_runs: bool | None = True if enforced else (None if included else False)
+    enforced_runs: bool | None = True if enforced else (None if elsewhere else False)
     return {"available": True, "ci_files": len(files), "check_commands": checks,
-            "included_files": included, "test_or_lint_runs": runs, "basis": basis,
+            "included_files": included, "included_check_commands": included_checks,
+            "resolved_includes": sum(r["status"] == "resolved" for r in records),
+            "unresolved_includes": sum(r["status"] != "resolved" for r in records),
+            "includes": records, "test_or_lint_runs": runs, "basis": basis,
             "enforced_check_runs": enforced_runs, "masked_check_commands": masked}

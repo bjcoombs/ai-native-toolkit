@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 import pytest
+from gitbash import BASH, IS_WINDOWS
 
 REPO = Path(__file__).resolve().parent.parent
 GHREPORT = REPO / "skills" / "ghreport" / "scripts" / "ghreport.sh"
@@ -64,13 +65,13 @@ def fragments_dir(tmp_path):
     d = tmp_path / "frags"
     d.mkdir()
     for name, frag in FRAGMENTS.items():
-        (d / f"{name}.json").write_text(json.dumps(frag))
+        (d / f"{name}.json").write_text(json.dumps(frag), newline="\n")
     return d
 
 
 def _render(fragments_dir, root, *extra):
     return subprocess.run(
-        ["bash", str(GHREPORT), "--render-dir", str(fragments_dir),
+        [BASH, str(GHREPORT), "--render-dir", str(fragments_dir),
          "--org", "demo", "--root", str(root), *extra],
         capture_output=True, text=True, timeout=60,
     )
@@ -133,7 +134,7 @@ def test_no_file_writes_nothing(fragments_dir, tmp_path):
 
 
 def test_help_exits_zero():
-    res = subprocess.run(["bash", str(GHREPORT), "--help"],
+    res = subprocess.run([BASH, str(GHREPORT), "--help"],
                          capture_output=True, text=True, timeout=30)
     assert res.returncode == 0
     assert "--render-dir" in res.stdout
@@ -141,7 +142,7 @@ def test_help_exits_zero():
 
 
 def test_unknown_flag_exits_nonzero():
-    res = subprocess.run(["bash", str(GHREPORT), "--bogus"],
+    res = subprocess.run([BASH, str(GHREPORT), "--bogus"],
                          capture_output=True, text=True, timeout=30)
     assert res.returncode != 0
 
@@ -189,14 +190,14 @@ def test_protection_detection_end_to_end(tmp_path):
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
     gh = stub_dir / "gh"
-    gh.write_text(GH_STUB_INTEGRATION)
+    gh.write_text(GH_STUB_INTEGRATION, newline="\n")
     gh.chmod(0o755)
     root = tmp_path / "root"
     root.mkdir()
     env = dict(os.environ)
-    env["PATH"] = f"{stub_dir}:{env['PATH']}"
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root),
+        [BASH, str(GHREPORT), "--org", "testorg", "--root", str(root),
          "--quiet", "--no-file"],
         capture_output=True, text=True, timeout=90, env=env,
     )
@@ -214,14 +215,14 @@ def test_limit_truncates_before_querying(tmp_path):
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
     gh = stub_dir / "gh"
-    gh.write_text(GH_STUB_INTEGRATION)
+    gh.write_text(GH_STUB_INTEGRATION, newline="\n")
     gh.chmod(0o755)
     root = tmp_path / "root"
     root.mkdir()
     env = dict(os.environ)
-    env["PATH"] = f"{stub_dir}:{env['PATH']}"
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root),
+        [BASH, str(GHREPORT), "--org", "testorg", "--root", str(root),
          "--quiet", "--no-file", "--limit", "1"],
         capture_output=True, text=True, timeout=90, env=env,
     )
@@ -241,7 +242,7 @@ def test_missing_ghsync_exits_nonzero(tmp_path):
     env["HOME"] = str(tmp_path / "fakehome")  # no ~/.claude/skills/ghsync there
     env.pop("CLAUDE_PLUGIN_ROOT", None)
     res = subprocess.run(
-        ["bash", str(isolated / "ghreport.sh"), "--org", "demo", "--root", str(tmp_path)],
+        [BASH, str(isolated / "ghreport.sh"), "--org", "demo", "--root", str(tmp_path)],
         capture_output=True, text=True, timeout=30, env=env,
     )
     assert res.returncode != 0
@@ -291,28 +292,28 @@ def _run_with_org(tmp_path, responses, *extra, path_first=None):
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
     gh = stub_dir / "gh"
-    gh.write_text(GH_STUB_SETTINGS)
+    gh.write_text(GH_STUB_SETTINGS, newline="\n")
     gh.chmod(0o755)
     data = tmp_path / "gh-data"
     data.mkdir()
     for path, body in responses.items():
         key = path.replace("/", "__")
         if isinstance(body, int):
-            (data / f"{key}.err").write_text(str(body))
+            (data / f"{key}.err").write_text(str(body), newline="\n")
         elif isinstance(body, str):  # a raw body, served as-is
-            (data / f"{key}.json").write_text(body)
+            (data / f"{key}.json").write_text(body, newline="\n")
         else:
-            (data / f"{key}.json").write_text(json.dumps(body))
+            (data / f"{key}.json").write_text(json.dumps(body), newline="\n")
     root = tmp_path / "root"
     root.mkdir()
     env = dict(os.environ)
-    path = f"{stub_dir}:{env['PATH']}"
+    path = f"{stub_dir}{os.pathsep}{env['PATH']}"
     if path_first is not None:
-        path = f"{path_first}:{path}"
+        path = f"{path_first}{os.pathsep}{path}"
     env.update(PATH=path, GH_DATA=str(data),
                GH_LOG=str(tmp_path / "gh.log"))
     return subprocess.run(
-        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(root), "--quiet", *extra],
+        [BASH, str(GHREPORT), "--org", "testorg", "--root", str(root), "--quiet", *extra],
         capture_output=True, text=True, timeout=90, env=env,
     ), root
 
@@ -444,7 +445,7 @@ def test_render_dir_settings_subdir_is_not_a_repo_row(fragments_dir, tmp_path):
         "push_rules": {"value": "off", "reason": None},
         "default_branch_protection": {"value": "ruleset: guard", "reason": None},
         "rulesets": {"value": "1: guard (active)", "reason": None},
-    }))
+    }), newline="\n")
     res = _render(fragments_dir, tmp_path, "--no-file")
     assert res.returncode == 0, res.stderr
     assert "5 repo(s)" in res.stdout
@@ -497,9 +498,10 @@ def test_empty_settings_body_is_unknown_and_table_renders(tmp_path, request, jq1
 def test_jq16_shim_reproduces_empty_input_exit(jq16_bin):
     """Guards the shim itself: `jq -e` over empty input exits 0 through it,
     while `jq -en input` still fails, which is what the fix relies on."""
-    jq = str(jq16_bin / "jq")
-    assert subprocess.run([jq, "-e", "type==\"object\""], input="", text=True).returncode == 0
-    assert subprocess.run([jq, "-en", "input"], input="", text=True,
+    # Windows cannot exec a shebang script directly, so bash runs the shim there.
+    jq = [BASH, str(jq16_bin / "jq")] if IS_WINDOWS else [str(jq16_bin / "jq")]
+    assert subprocess.run([*jq, "-e", "type==\"object\""], input="", text=True).returncode == 0
+    assert subprocess.run([*jq, "-en", "input"], input="", text=True,
                           capture_output=True).returncode != 0
 
 
@@ -529,7 +531,7 @@ def test_keep_fragments_capture_then_replay_is_identical(tmp_path):
     replay_root = tmp_path / "replay"
     replay_root.mkdir()
     rep = subprocess.run(
-        ["bash", str(GHREPORT), "--render-dir", str(keep), "--org", "testorg",
+        [BASH, str(GHREPORT), "--render-dir", str(keep), "--org", "testorg",
          "--root", str(replay_root), "--quiet"],
         capture_output=True, check=False, text=True, timeout=60,
     )
@@ -545,7 +547,7 @@ def test_keep_fragments_refuses_a_non_empty_dir(tmp_path):
     """A stale fragment in the capture dir would become a replay row."""
     keep = tmp_path / "capture"
     keep.mkdir()
-    (keep / "stale.json").write_text("{}")
+    (keep / "stale.json").write_text("{}", newline="\n")
     res, _ = _run_with_org(tmp_path, {}, "--no-file", "--keep-fragments", str(keep))
     assert res.returncode != 0
     assert "not empty" in res.stderr
@@ -559,12 +561,13 @@ def test_keep_fragments_with_render_dir_is_rejected(fragments_dir, tmp_path):
 
 
 def test_help_names_the_capture_route():
-    res = subprocess.run(["bash", str(GHREPORT), "--help"],
+    res = subprocess.run([BASH, str(GHREPORT), "--help"],
                          capture_output=True, check=False, text=True, timeout=30)
     assert "--keep-fragments DIR" in res.stdout
     assert "--render-dir DIR" in res.stdout
 
 
+@pytest.mark.skipif(IS_WINDOWS, reason="stops the run with os.killpg, which needs POSIX process groups")
 def test_interrupted_capture_has_no_marker_and_replay_warns(tmp_path):
     """A capture stopped mid-query keeps a partial fragment set and no
     CAPTURE_COMPLETE marker; replaying it warns that it may be partial."""
@@ -572,17 +575,17 @@ def test_interrupted_capture_has_no_marker_and_replay_warns(tmp_path):
     stub_dir.mkdir()
     gh = stub_dir / "gh"
     # The per-repo query hangs, so the run is stopped after settings are kept.
-    gh.write_text(GH_STUB_SETTINGS.replace("*pulls*) echo '[]' ;;", "*pulls*) sleep 60 ;;"))
+    gh.write_text(GH_STUB_SETTINGS.replace("*pulls*) echo '[]' ;;", "*pulls*) sleep 60 ;;"), newline="\n")
     gh.chmod(0o755)
     data = tmp_path / "gh-data"
     data.mkdir()
-    (data / "orgs__testorg__rulesets.json").write_text("[]")
+    (data / "orgs__testorg__rulesets.json").write_text("[]", newline="\n")
     log = tmp_path / "gh.log"
     keep = tmp_path / "capture"
     env = dict(os.environ)
-    env.update(PATH=f"{stub_dir}:{env['PATH']}", GH_DATA=str(data), GH_LOG=str(log))
+    env.update(PATH=f"{stub_dir}{os.pathsep}{env['PATH']}", GH_DATA=str(data), GH_LOG=str(log))
     proc = subprocess.Popen(
-        ["bash", str(GHREPORT), "--org", "testorg", "--root", str(tmp_path), "--quiet",
+        [BASH, str(GHREPORT), "--org", "testorg", "--root", str(tmp_path), "--quiet",
          "--no-file", "--keep-fragments", str(keep)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True,
     )

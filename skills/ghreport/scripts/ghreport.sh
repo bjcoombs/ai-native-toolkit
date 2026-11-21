@@ -58,6 +58,16 @@ set -euo pipefail
 #                     in DIR (new or empty) for a later --render-dir DIR replay
 # ===================================================================
 
+# Under Git Bash on Windows a native jq.exe writes CRLF line endings, and every
+# name read back from it would end in a carriage return. --binary keeps LF
+# (jq 1.6 on Linux and macOS rejects the flag, so it is set only here).
+case "${OSTYPE:-}" in
+    msys* | cygwin*)
+        jq() { command jq --binary "$@"; }
+        export -f jq
+        ;;
+esac
+
 ORG=""
 ROOT=""
 LIMIT=0

@@ -19,7 +19,7 @@ from lib.command_resolver import RUNNERS, command_words
 CHECK_WORDS = frozenset({
     "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
 })
-_ALWAYS_CHECK = frozenset({"pytest", "py.test", "tox", "nox"})
+ALWAYS_CHECK = frozenset({"pytest", "py.test", "tox", "nox"})
 _PM_TEST = frozenset({"test", "t", "tst"})
 _PM_INSTALL = frozenset({
     "install", "i", "add", "remove", "rm", "update", "up", "upgrade", "dlx", "exec",
@@ -88,7 +88,7 @@ def _js_check(head: str, pos: list[str], names: frozenset[str]) -> bool:
 
 
 def _check_target(words: list[str], names: frozenset[str] = CHECK_WORDS,
-                  programs: frozenset[str] = _ALWAYS_CHECK) -> bool:
+                  programs: frozenset[str] = ALWAYS_CHECK) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
     head, pos = words[0], _positionals(words[1:])
     if head in programs:

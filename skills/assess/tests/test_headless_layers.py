@@ -223,8 +223,12 @@ def test_counts_only_run_gives_every_layer_signal_a_value(
     """The six signals of the layer 2-4 rows resolve; nothing long and copied survives.
 
     Runs from inside the target, so a cache written to the working directory
-    (grimp's, lizard's) would show in ``git status``.
+    (grimp's, lizard's) would show in ``git status``. A second package imports
+    the first, so the front-door ratio has a boundary to measure (#760).
     """
+    _write(target, "pkg2/__init__.py", "from pkg import api\n")
+    _git(target, "add", "-A")
+    _git(target, "commit", "-qm", "second package")
     monkeypatch.chdir(target)
     doc = _run(target, tmp_path / "co.json", "--counts-only")
     assert _git(target, "status", "--porcelain", "--untracked-files=all") == ""

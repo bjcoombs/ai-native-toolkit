@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from gitbash import BASH, base_env
 
 REPO = Path(__file__).resolve().parent.parent
 GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
@@ -63,7 +64,7 @@ case "$cmd" in
     key=${endpoint//\//__}
     f="$DATA/$key.json"
     [ -f "$f" ] || { echo "404 Not Found: $endpoint" >&2; exit 1; }
-    if [ -n "$jqexpr" ]; then jq -r "$jqexpr" "$f"; else cat "$f"; fi ;;
+    if [ -n "$jqexpr" ]; then (set -o pipefail; jq -r "$jqexpr" "$f" | tr -d '\r'); else cat "$f"; fi ;;
   *) exit 1 ;;
 esac
 """
@@ -170,15 +171,16 @@ class Env:
         stub_dir.mkdir()
         for name in ("gh", "glab"):
             stub = stub_dir / name
-            stub.write_text(STUB)
+            stub.write_text(STUB, newline="\n")
             stub.chmod(0o755)
         data = tmp_path / "data"
         data.mkdir()
         for key, body in (GITHUB_DATA if provider == "github" else GITLAB_DATA).items():
-            (data / f"{key}.json").write_text(json.dumps(body))
+            (data / f"{key}.json").write_text(json.dumps(body), newline="\n")
         self.log = tmp_path / "stub.log"
         self.env = {
-            "PATH": f"{stub_dir}:{os.environ['PATH']}",
+            **base_env(),
+            "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
             "HOME": str(tmp_path),
             "DATA": str(data),
             "STUB_LOG": str(self.log),
@@ -190,7 +192,7 @@ class Env:
         else:
             base = ["--provider", "gitlab", "--host", HOST]
         return subprocess.run(
-            ["bash", str(GHSYNC), *base, "--root", str(self.root), *args],
+            [BASH, str(GHSYNC), *base, "--root", str(self.root), *args],
             capture_output=True, text=True, env=self.env, cwd=self.tmp, timeout=120,
         )
 
@@ -364,7 +366,7 @@ def test_bad_duration_fails_before_any_api_call(tmp_path: Path, args: list[str])
 def test_from_list_rejects_metadata_flags(tmp_path: Path, flag: list[str]) -> None:
     env = Env(tmp_path, "gitlab")
     listing = tmp_path / "list.txt"
-    listing.write_text("grp/active\n")
+    listing.write_text("grp/active\n", newline="\n")
     res = env.run("--from-list", str(listing), *flag)
     assert res.returncode != 0
     assert "--from-list" in res.stderr

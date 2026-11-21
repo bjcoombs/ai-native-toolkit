@@ -161,6 +161,13 @@ def fleet_config(repo_root: Path) -> FleetConfig:
     return repo_fleet_config(repo_root)
 
 
+def ghsync_root(repo_root: Path) -> Path | None:
+    """The ghsync root GitLab ``project:`` includes resolve against (#766): none in an
+    interactive run (only ``local:`` includes resolve); the headless signals run provides
+    ``--ghsync-root``."""
+    return None
+
+
 def first_flagged(assess_dir: Path, rename_map: RenameMap) -> dict[str, str]:
     """The persisted first-flagged dates, with renamed files moved to their current path."""
     return rekey_first_flagged(load_first_flagged(assess_dir), rename_map.paths)

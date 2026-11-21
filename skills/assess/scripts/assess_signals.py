@@ -17,12 +17,17 @@ Blocks ``assess_core.py`` assembles through its own table entries are listed as
 Exit codes:
     0  document written
     2  usage error: unknown scan name, bad --window, --out inside the target,
-       a target that is not a directory, or an unreadable or invalid
+       a target or --ghsync-root that is not a directory, or an unreadable or invalid
        --fleet-config (the message names the key)
 
 Run:
     uv run assess_signals.py <repo> --out FILE.json [--scans a,b,c] [--window 6mo]
         [--counts-only [--hash-paths | --hash-salt VALUE]] [--fleet-config FILE] [--platform]
+        [--ghsync-root DIR]
+
+``--ghsync-root DIR`` names the ghsync root holding the target: GitLab
+``include: project:`` and ``component:`` files are then read from the clones
+under it (``lib/ci_includes.py``, #766). ``fleet.py`` passes its ROOT.
 """
 # /// script
 # requires-python = ">=3.11"
@@ -94,6 +99,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Make the platform reads (gh or glab) of the scans in lib/signals.py PLATFORM_SCANS "
              "instead of reporting them unavailable. Off by default: no network call.",
     )
+    parser.add_argument(
+        "--ghsync-root", metavar="DIR",
+        help="The ghsync root (<root>/<path>/<repo>-main) holding the target: GitLab include: "
+             "project: and component: files are read from the clones under it (lib/ci_includes.py). "
+             "Without it only local: includes resolve.",
+    )
     add_cli_arguments(parser)
     parsed = parser.parse_args(argv)
     validate_cli_args(parser, parsed)
@@ -122,6 +133,12 @@ def main(argv: list[str] | None = None) -> int:
         except FleetConfigError as e:
             print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
             return 2
+    ghsync_root: Path | None = None
+    if args.ghsync_root is not None:
+        ghsync_root = Path(args.ghsync_root).resolve()
+        if not ghsync_root.is_dir():
+            print(f"error: --ghsync-root {args.ghsync_root} is not a directory", file=sys.stderr)
+            return 2
     requested = None
     if args.scans is not None:
         requested = [name.strip() for name in args.scans.split(",") if name.strip()]
@@ -139,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     warn_missing_packages()  # a no-uv run: say how to install what the layer blocks need
     document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
-                              platform=args.platform)
+                              platform=args.platform, ghsync_root=ghsync_root)
     if args.counts_only:
         # Content-free mode: free text, identities and the target's commit
         # are dropped; references/counts-only.md lists what each block keeps.

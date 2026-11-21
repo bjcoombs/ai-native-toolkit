@@ -84,6 +84,34 @@ def test_a_graph_with_edges_measures_modularity_with_no_reason(tmp_path):
     assert block["modularity_reason"] is None
 
 
+def test_a_single_package_has_no_front_door_ratio_not_a_vacuous_one(tmp_path):
+    """No package boundary is crossed: the ratio is unknown, not 1.0 (issue #760)."""
+    _pkg(tmp_path, "pkga", {"x": "from pkga import y\n", "y": "def f():\n    return 1\n",
+                            "z": "from pkga.y import f\n"})
+    block = sg.analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["edge_count"] > 0
+    assert block["cross_package_edges"] == 0
+    assert "front_door_ratio" in block and block["front_door_ratio"] is None
+
+
+def test_a_crossed_boundary_still_measures_the_front_door_ratio(tmp_path):
+    _pkg(tmp_path, "pkga", {"x": "from pkgb import y\n", "z": "from pkga import x\n"})
+    pkgb = _pkg(tmp_path, "pkgb", {"y": "def f():\n    return 1\n",
+                                   "w": "from pkgb import y\n"})
+    (pkgb / "__init__.py").write_text("from pkgb.y import f\n")
+    block = sg.analyze_structure(tmp_path).as_dict()
+    # pkga.x reaches the pkgb.y submodule: a measured burrow, not a null.
+    assert block["cross_package_edges"] > 0
+    assert block["front_door_ratio"] == 0.0
+
+
+def test_an_unavailable_block_emits_null_front_door_ratio(tmp_path):
+    (tmp_path / "loose.py").write_text("x = 1\n")
+    block = sg.analyze_structure(tmp_path).as_dict()
+    assert block["available"] is False and block["cross_package_edges"] == 0
+    assert block["front_door_ratio"] is None
+
+
 # --------------------------------------------------------------------------
 # A1 -- comprehension footprint
 # --------------------------------------------------------------------------

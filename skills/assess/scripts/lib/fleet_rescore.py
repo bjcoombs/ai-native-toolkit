@@ -8,9 +8,9 @@ across a version bump instead of starting the history again. History files are n
 rewritten.
 
 **Re-score.** Each repository's cells come from ``fleet_data.repo_cells`` over its stored
-scans (values written as counts-only output writes them, ``Privacy().value``), its
-``mean_share`` is recomputed, and every unit's row and overall roll-ups are recomputed over
-its members, using the parents and placements the entry already stores. ``model`` and
+scans (values written as counts-only output writes them, ``Privacy().value``), and every
+unit's row roll-ups are recomputed over its members (a version 1 entry's ``mean_share`` and
+``overall``, which #772 removed, are dropped), using the parents and placements the entry already stores. ``model`` and
 ``run.levels_version`` become this run's. ``rescore`` returns None when a stored repository
 key does not join to a scanned row under this run's key function (another salt), or a
 stored row holds no scans while ok: the caller then passes the entry over.
@@ -50,7 +50,6 @@ from typing import Any, TypedDict, cast
 
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_data import (
-    PLACES,
     Cell,
     DataRepo,
     DataUnit,
@@ -58,11 +57,10 @@ from lib.fleet_data import (
     Privacy,
     View,
     model_rows,
-    overall_roll_up,
     repo_cells,
     row_roll_up,
 )
-from lib.fleet_maturity import SCOPE, mean_share
+from lib.fleet_maturity import SCOPE
 from lib.fleet_next_steps import code, text
 from lib.levels import MaturityModel
 
@@ -132,10 +130,6 @@ def _put(data: dict[str, Any], path: Sequence[str], value: Any) -> None:
 # --- re-score ----------------------------------------------------------------
 
 
-def _round(value: float | None) -> float | None:
-    return None if value is None else round(value, PLACES)
-
-
 def _members(view: View, repos: Sequence[DataRepo]) -> dict[str, list[str]]:
     """Each unit's repository keys at any depth, from the stored placements and parents."""
     parent = {u["key"]: u["parent"] for u in view["units"]}
@@ -162,8 +156,8 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
         scanned = cast(FleetRow, {**row, "scans": aliased(row["scans"], aliases)}) if row["scans"] else row
         cells[repo["key"]] = [{**cell, "value": Privacy().value(cell["value"])}
                               for cell in repo_cells(team_rows, scanned)]
-    shares = {k: _round(mean_share((c["level"], c["top_level"]) for c in cs)) for k, cs in cells.items()}
-    repos: list[DataRepo] = [{**repo, "rows": cells[repo["key"]], "mean_share": shares[repo["key"]]}
+    repos: list[DataRepo] = [cast(DataRepo, {**{k: v for k, v in repo.items() if k != "mean_share"},
+                                             "rows": cells[repo["key"]]})
                              for repo in data["repos"]]
     views: list[View] = []
     for view in data["views"]:
@@ -171,9 +165,9 @@ def rescore(data: FleetData, rows: Sequence[FleetRow], model: MaturityModel,
         units: list[DataUnit] = []
         for unit in view["units"]:
             mine = members[unit["key"]]
-            levels = [row_roll_up(row["id"], [(k, cells[k][i]["level"], cells[k][i]["top_level"]) for k in mine])
+            levels = [row_roll_up(row["id"], [(cells[k][i]["level"], cells[k][i]["top_level"]) for k in mine])
                       for i, row in enumerate(team_rows)]
-            units.append({**unit, "levels": levels, "overall": overall_roll_up([(k, shares[k]) for k in mine])})
+            units.append(cast(DataUnit, {**{k: v for k, v in unit.items() if k != "overall"}, "levels": levels}))
         views.append({"view": view["view"], "units": units})
     return {**data, "run": {**data["run"], "levels_version": model["version"]}, "model": model_rows(model),
             "views": views, "repos": repos}
