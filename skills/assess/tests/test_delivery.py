@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import merged_sample as ms  # noqa: E402
 from lib.delivery import (  # noqa: E402
-    AI_REVIEWERS, ai_reviewed, first_human_comment, percentile, scan_delivery,
+    AI_REVIEWERS, agent_authored, ai_reviewed, first_human_comment, percentile, scan_delivery,
 )
 from lib.fleet_config import parse_fleet_config  # noqa: E402
 from lib.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
@@ -90,6 +90,7 @@ def test_recorded_sample_gives_every_github_figure():
         "human_commented_share": 0.0,
         "ai_review_share": 1.0,
         "approved_share": 0.5, "self_merged_share": 1.0,
+        "agent_authored_share": 0.0,
     }
     assert "github-actions" not in bots.probed  # a status bot is never probed
     assert len(bots.probed) == len(set(bots.probed))  # one probe per login
@@ -193,9 +194,92 @@ def test_an_ai_login_of_unknown_type_withholds_the_ai_share():
     assert block["ai_review_share"] is None
 
 
+def test_a_configured_agent_on_a_user_login_is_never_also_the_first_human():
+    # acme-reviewer probes as a person; a config rule makes it an agent, so bob is
+    # the first human and the same comment still counts as AI review.
+    pr = _pr(comments=(("acme-reviewer", "2026-11-01T01:00:00Z"), ("bob", "2026-11-01T03:00:00Z")))
+    configured = scan_matcher('[[ai_usage.agent_identities]]\npattern = "^acme-reviewer$"\n')
+    assert first_human_comment(pr, StubBots(), configured) == 3.0
+    assert first_human_comment(pr, StubBots()) == 1.0  # without the rule it reads as a person
+    assert ai_reviewed(pr, StubBots(), configured) is True
+    toml = '[ai_usage]\n[[ai_usage.agent_identities]]\npattern = "^acme-reviewer$"\n'
+    block = scan_delivery(sample([pr]), REVIEW, parse_fleet_config(toml))
+    assert block["first_human_comment_hours_p50"] == 3.0
+    assert block["ai_review_share"] == 1.0
+
+
+LOOSE = '[[ai_usage.agent_identities]]\npattern = "bot"\n'
+
+
+def test_a_loose_config_rule_tries_the_bot_form_only_for_bots():
+    # "bot" would match every "<login>[bot]"; a person is still a person.
+    loose = scan_matcher(LOOSE)
+    pr = _pr(comments=(("bob", "2026-11-01T02:00:00Z"),))
+    assert first_human_comment(pr, StubBots(), loose) == 2.0
+    assert ai_reviewed(pr, StubBots(), loose) is False
+    bots = StubBots()
+    bots._known["acme-ai"] = True  # a bot App: its [bot] form matches the rule
+    assert ai_reviewed(_pr(comments=(("acme-ai", "2026-11-01T01:00:00Z"),)), bots, loose) is True
+    assert not agent_authored(_authored({"login": "alice", "is_bot": False}), "github", loose)
+    assert agent_authored(_authored({"login": "app/acme-ai", "is_bot": True}), "github", loose)
+
+
 def scan_matcher(toml: str = ""):
     from lib.ai_usage import matcher_from_config
     return matcher_from_config(parse_fleet_config(toml))
+
+
+# ---- agent-authored share ------------------------------------------------------
+
+def _authored(author: dict[str, Any] | None) -> dict[str, Any]:
+    pr = _pr()
+    pr["author"] = author
+    return pr
+
+
+def test_a_pinned_agent_app_author_counts_only_when_the_author_is_a_bot():
+    matcher = scan_matcher()
+    assert agent_authored(_authored({"login": "app/claude", "is_bot": True}), "github", matcher)
+    assert agent_authored(_authored({"login": "copilot-swe-agent", "is_bot": True}), "github", matcher)
+    # a person whose login is an agent App's name is not that App
+    assert not agent_authored(_authored({"login": "claude", "is_bot": False}), "github", matcher)
+    assert not agent_authored(_authored({"login": "alice", "is_bot": False}), "github", matcher)
+    # a dependency bot is never an agent
+    assert not agent_authored(_authored({"login": "app/dependabot", "is_bot": True}), "github", matcher)
+    assert not agent_authored(_authored(None), "github", matcher)  # deleted account
+
+
+def test_a_config_rule_matches_an_author_by_username():
+    configured = scan_matcher('[[ai_usage.agent_identities]]\npattern = "^inhouse-agent"\n')
+    pr = _authored({"login": "inhouse-agent-7", "is_bot": False})
+    assert not agent_authored(pr, "github", scan_matcher())
+    assert agent_authored(pr, "github", configured)
+
+
+def test_the_share_is_over_the_whole_sample():
+    toml = '[ai_usage]\n[[ai_usage.agent_identities]]\npattern = "^inhouse-agent$"\n'
+    prs = [_authored({"login": "app/devin-ai-integration", "is_bot": True}),
+           _authored({"login": "inhouse-agent", "is_bot": False}),
+           _pr(), _pr()]
+    block = scan_delivery(sample(prs), REVIEW, parse_fleet_config(toml))
+    assert block["agent_authored_share"] == 0.5
+    assert scan_delivery(sample(prs), REVIEW)["agent_authored_share"] == 0.25
+    text = json.dumps(block).lower()
+    assert "inhouse" not in text and "devin" not in text
+
+
+def test_gitlab_token_users_count_as_agents_only_when_promoted():
+    mrs = ({"iid": 1, "author": {"username": "project_12_bot_4ffc9a"}},
+           {"iid": 2, "author": {"username": "renovate-bot"}},
+           {"iid": 3, "author": {"username": "Inhouse-Agent"}},
+           {"iid": 4, "author": {"username": "alice"}})
+    project = GitlabProject("gitlab.com", "grp/app")
+    gl = MergedSample("gitlab", mrs, None, gitlab=project)
+    assert scan_delivery(gl, REVIEW)["agent_authored_share"] == 0.0
+    rules = '[[ai_usage.agent_identities]]\npattern = "^inhouse-agent$"\n'
+    assert scan_delivery(gl, REVIEW, parse_fleet_config("[ai_usage]\n" + rules))["agent_authored_share"] == 0.25
+    promoted = "[ai_usage]\ntoken_users_as_agents = true\n" + rules
+    assert scan_delivery(gl, REVIEW, parse_fleet_config(promoted))["agent_authored_share"] == 0.5
 
 
 # ---- unavailable and GitLab ----------------------------------------------------
