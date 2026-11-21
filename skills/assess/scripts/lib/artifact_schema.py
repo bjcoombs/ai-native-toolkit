@@ -272,10 +272,15 @@ ARTIFACT_SCHEMA_VERSION = "1.28.0"
 #     boundary (issue #760), so a single-package repository no longer reads as
 #     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
 #     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
-# 23: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
+# 23: ``ci_checks`` no longer counts a bare list item that only names an
+#     always-check program (``- pytest``, ``- tox``) unless its parent key is a
+#     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
+#     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
+#     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
+# 25: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
 #     reads a check in an included local file or a template cloned in the fleet root
 #     (true), or false when every include resolved without one, where it was null;
 #     ``review_automation`` credits a review component inside a resolved template;
 #     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
 #     an issue_comment-only review action is no longer credited.
-ASSESS_METHOD_VERSION = 23
+ASSESS_METHOD_VERSION = 25

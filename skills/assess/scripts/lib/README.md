@@ -2959,7 +2959,11 @@ with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
 cannot swallow the next); `check_commands` counts the lines with a segment that
 `check_command.is_check_command` or `is_lint_command` credits; a bare list item
-that only names a linter (`- mypy` under `matrix:`) does not count. Triggers are
+that only names a linter (`- mypy` under `matrix:`) does not count, and one that only
+names an always-check program (`- pytest`, `- tox`) counts only when its parent key is
+a GitLab `script:` / `before_script:` / `after_script:` (#725: under `needs:` or a
+`matrix:` axis it is a value). `count_check_lines(lines, context=)` is the same count over a
+line list, reading parent keys from `context` (the original lines) when given. Triggers are
 not read. Known limit: lines are read without a YAML parser, so a command inside a
 non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_runs` is true with any check
 line, own or included (`included_check_commands` counts the included ones); with none it
