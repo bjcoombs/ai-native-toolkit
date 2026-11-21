@@ -372,6 +372,8 @@ def _render_tier1_disagreement(tier_1: dict[str, Any], repo_name: str) -> list[s
     ]
     for key, label, interpretation in TIER1_METRICS:
         count = tier_1.get(f"{key}_count", 0)
+        if count is None:  # unknown, never a measured zero (issue #710)
+            count = f"n/a ({tier_1.get('static_lens_reason') or 'unavailable'})"
         lines.append(f"- **{count}** `{key}` - {label}: {interpretation}")
     lines.append("")
     if tier_1.get("seam_allowlist_applied"):

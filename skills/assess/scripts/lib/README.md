@@ -231,8 +231,8 @@ returns (`import_graph.py`); nothing in it assumes a language:
   builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Every registered builder graphs its language; the largest graph is measured and its
-language is the block's `language` field (null when nothing was measured). Degrades to
+Every registered builder graphs its language; the graph `select_graph` picks (the dominant
+source language's) is measured and its language is the block's `language` field (null when nothing was measured). Degrades to
 `available: False` when `networkx` is absent, when a builder's tool is missing or fails
 and no other language was graphed, and when nothing could be graphed (nothing measured,
 not an empty graph whose modularity 0 would read as tangled code). With no graph the
@@ -258,7 +258,7 @@ Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python
 counts-only one).
 
 **`import_graph.py`**
-The language-neutral builder interface (issue #708). A builder is any object with a
+The language-neutral builder interface (issues #708, #709). A builder is any object with a
 `language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
 (the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
 nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
@@ -275,12 +275,29 @@ or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
 | `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
 | `name_collisions` | packages sharing a name, disclosed rather than merged |
 
-`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder and
-keeps one graph per language; the largest (most modules, then most internal edges, then
-the language token) is returned. With no graph the reason is the first builder failure in
-registration order, else `no_graph_reason`, which counts source files per language
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
+dominant source language decides: when a builder covers it (its `language`, or a token in
+an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
+builder's graph is returned and its failure is final (the count honours a builder's
+optional `is_graph_source(rel)`, so files it skips, such as a Python app's
+`static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
+invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
+`no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
+the dominant language's graph, whose nodes can differ. When the dominant builder found
+nothing to graph (loose scripts, no package) or no builder covers the dominant language,
+the largest other graph stands in (most modules, then most internal edges, then the
+language token); with none the reason is the first builder failure in registration order, else
+`no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. Imports no graph tool.
+`scope`) and names the dominant one. A built graph that breaks the contract (a module
+missing from `package_of`, which A3 and A4 index) is treated as a builder failure
+(`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
+reported and the measure never raises `KeyError`. `is_graph_source(rel_path, language)`
+says whether a file could be in that language's graph: its extension must be one of the
+languages the covering builder graphs (the TypeScript builder covers `.js` too), and the
+builder's own optional `is_graph_source(rel)` hook must accept it (Go skips test files and
+`GO_SKIP_DIRS`; TypeScript skips bundles, declarations, tests and tool configs). Imports
+no graph tool; the registered builders are loaded lazily when none are passed.
 
 Worked example: a builder for a language whose package is a directory and whose front
 door is the directory's `index` file.
@@ -316,10 +333,39 @@ class IndexDirBuilder:
         )
 ```
 
-Register it by appending to `BUILDERS` in `import_graph_builders.py`. A new block field
+Register it by appending to `BUILDERS` in `import_graph_builders.py` and add files in
+its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which checks every
+registered builder's graph shape (`package_of` covers `modules`). A new block field
 or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
 the maturity model header (`levels/default.toml`).
-Tests: `tests/test_import_graph.py`.
+Tests: `tests/test_import_graph.py`, and `tests/test_import_graph_contract.py`, the
+contract every registered builder must keep (sorted unique modules, `package_of`
+covering them, front doors, files and surfaces within them, `None` on an empty tree).
+A new builder adds a fixture tree to its `CONTRACT_FIXTURES`.
+
+**`import_graph_typescript.py`**
+The TypeScript and JavaScript builder (`TYPESCRIPT_BUILDER`, issue #709): a deterministic
+regex scan, no Node. One builder graphs both languages, since they import each other; the
+graph's `language` is `typescript` when any scanned file is TypeScript, else `javascript`.
+Modules are repo-relative file paths with the extension kept. Imports are `import ... from`,
+side-effect `import`, `export ... from`, `import()`, `require()` and `import x = require()`,
+read after comments are stripped. A relative specifier resolves against the importer's
+directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`paths`, then
+`baseUrl`, following relative `extends`; JSONC is accepted), then the workspace packages
+(every `package.json` with a `name`, its entry from `source`, the `"."` export, `module` or
+`main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
+A specifier matches a file, the file plus a source extension, a `.js` name standing for its
+`.ts` source, or a directory's `index`; anything else is external. A package is the nearest
+directory holding an `index` file or a named `package.json`, else the module's top directory;
+front doors are the `index` modules and each workspace entry; the surface is the count of
+exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
+`EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
+build and test tool configs (`vite.config.ts`, `jest.config.js` and the other
+`TOOL_CONFIG_PREFIXES`; an app's own `app.config.ts` stays) and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
+`"."` only, and `node_modules` and package `extends` are not followed. Configs and
+workspaces are read from the whole repository; modules come from `scope`.
+Tests: `tests/test_import_graph_typescript.py` (fixture `tests/fixtures/ts_workspace`).
 
 **`import_graph_python.py`**
 The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
@@ -345,6 +391,42 @@ which copy wins depends on a runtime `sys.path`. The finder implements both shap
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
+
+**`import_graph_go.py`**
+The Go builder (`GO_BUILDER`, issue #710). It reads `go.mod` and each file's `import`
+declarations as text and never runs a go tool (`go list` can reach the network). A
+graph module is a Go package, a directory holding a non-test `.go` file, with its
+repo-relative path as the id (`.` for the root). The go.mod module path
+(`example.com/org/svc`) only resolves an import to a directory and never reaches an id,
+so no module path appears in the block, hashed or not. A package belongs to the nearest
+`go.mod` at or above it; nested modules resolve each other's imports. Each package is
+its own boundary (`package_of[m] == m`) and a front door, since an importer reaches only
+exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
+construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
+public surface is the package's exported top-level `func` (not method) and `type`
+declarations. There is no `module_file` (a package is several files), so A1 size reads 0
+and structure-drift tier 1, whose static lens pairs files, empties its three
+static-derived lists with reason `no_static_file_map` rather than reading every declared
+pair as split; its three co-change metrics still report. The run-context `tier_1` block
+(`context_blocks.py`) carries those three counts as null with `static_lens_reason:
+no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, never 0. The behaviour
+block projects the static metrics only onto directories holding a file the graph's
+language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
+graph never vouches for a Python tree or a directory of `_test.go` files alone. Go's
+`front_door_ratio` is projected as null there (1.0 by construction is not evidence), so
+`hidden_coupling` on a Go directory rests on `modularity_q` alone. Skipped:
+`_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
+configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
+is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
+names. The builder's `is_graph_source(rel)` hook applies the same skips to the
+dominant-language count and to `import_graph.is_graph_source`. Build constraints are not evaluated. No `go.mod` returns `None`,
+so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
+raises `GraphUnavailable`. Graphs are not compared by size against the dominant
+language's: a Go-dominant repository reports its Go graph even beside a larger Python
+package tree, and a Go module beside loose Python scripts (Python dominant, no package
+to graph) reports Go through the fallback.
+Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
+`tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 
 **`import_graph_builders.py`**
 The registered builders (`BUILDERS`), one per language; `structure_graph` and
@@ -972,6 +1054,42 @@ with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.
 when the checked-in file differs; regenerate with
 `uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
 
+**`fleet_achievements.py`**
+The deterministic achievements engine (#704, `ACHIEVEMENTS_VERSION`; #705 and #744 build
+on its evidence model). `build_achievements` replays comparable runs' `fleet-data.json`
+oldest first: `subjects` gives every unit and repository its level per team row, the row's
+roll-up rule (`levels.share_level`) over measured members, with the measured set;
+`clean` is the one gate on a move (known both sides, same measured set), and
+`known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
+emits `level_up`, `first`, `target_hit`, `personal_best` and `streak`, each with
+`moves` evidence (repository, row, from and to level, the criterion that became met) and
+a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
+Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
+
+**`fleet_achievements_runs.py`**
+`earlier_runs` reads the history entries the engine replays: `run.json` passing
+`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+one per date before this run's (`fleet_history.one_per_date`). Unreadable entries are
+passed over.
+
+**`fleet_achievements_schema.py`**
+Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
+TypedDict with `fleet_group_schema.type_schema`. `tests/test_fleet_achievements.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_achievements_schema.py` from `skills/assess`.
+
+**`fleet_targets.py`**
+The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, `level`), the stand-in for
+the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming the entry;
+`resolve` keys each target as `fleet-data.json` does (hashed under the run's salt).
+
+**`fleet_credit.py`**
+`credit_section` renders `report.md`'s first section, "What changed and who earned it",
+from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
+nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
+distances. `fleet_diagrams.report_markdown` places it before the diagrams.
+
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
 heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
@@ -1091,7 +1209,8 @@ The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#
 team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
-`comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
@@ -1101,7 +1220,7 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
-reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+reads each `<date>[.<n>]` entry (`fleet_history.one_per_date`; `run.json`,
 `groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
 path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
@@ -1241,7 +1360,9 @@ repository set (`entry_repos`), so a partial rerun never replaces a full-fleet e
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
 repository set, the default for a bare `--compare`. `dated_entries` lists the
-`<date>[.<n>]` directories oldest first (also read by `fleet_trends`).
+`<date>[.<n>]` directories oldest first; `one_per_date` keeps one accepted entry per date
+before a run's (the entry over its repository set, else the highest suffix), shared by
+`fleet_trends` and `fleet_achievements_runs`.
 `persist` writes the three files to a hidden temp sibling first: a new entry is that
 directory renamed into place in one step, and a replaced same-day entry loses its
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
@@ -1786,6 +1907,7 @@ is the resolved value only when it is a finite scalar, null otherwise, and
 `dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
+`share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)

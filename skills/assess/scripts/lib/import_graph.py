@@ -2,10 +2,11 @@
 
 ``structure_graph`` measures A1-A4 over one module graph and never asks which
 language produced it. A builder turns a repository's source in one language into
-a :class:`ModuleGraph`; :func:`select_graph` runs every registered builder,
-keeps one graph per language and returns the largest. A repository with no graph
+a :class:`ModuleGraph`; :func:`select_graph` runs every registered builder
+and returns the dominant source language's graph (or its failure), falling back
+to the largest other graph only when no builder covers that language. A repository with no graph
 gets a reason that names its dominant source language
-(``no_import_graph_typescript``), so a fleet reader can tell a tooling gap from a
+(``no_import_graph_rust``), so a fleet reader can tell a tooling gap from a
 repository with no code (``no_source_files``).
 
 A builder is any object with a ``language`` token and a ``build`` method (the
@@ -21,7 +22,7 @@ from __future__ import annotations
 
 import os
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TypedDict
@@ -72,6 +73,7 @@ LANGUAGE_BY_EXTENSION: dict[str, str] = {
 # Reason when the dominant language is Python and no importable package exists;
 # the headless runner maps it to ``no_python_packages``.
 NO_PYTHON_PACKAGES = "no importable Python packages found"
+INVALID_IMPORT_GRAPH = "invalid_import_graph"
 NO_SOURCE_FILES = "no_source_files: no source file in a language /assess recognises"
 
 
@@ -147,23 +149,42 @@ def select_graph(
     extra_exclude_dirs: set[str] | None = None,
     scope: Path | None = None,
 ) -> GraphSelection:
-    """Build one graph per language and keep the largest.
+    """Build one graph per language; the dominant language's graph wins.
 
-    Largest is the most modules, then the most edges, then the language token
-    for a stable tie-break. With no graph built, the reason is the first
-    builder failure (in registration order) or, when none failed, the
-    dominant-language reason from :func:`no_graph_reason`.
+    The dominant language (most graphable source files, :func:`dominant_language`)
+    decides first. When a registered builder covers it (its ``language``, or any
+    token in an optional ``languages`` attribute), its graph is returned, and its
+    failure is final: a missing tool or an invalid graph keeps its reason (and
+    install hint) rather than yielding to a minor language's graph. Graph sizes
+    are never compared with the dominant language's graph, whose nodes can differ
+    (files in one, packages in another).
+
+    When the dominant builder found nothing to graph (loose scripts with no
+    package), or no builder covers the dominant language, another language
+    stands in: the largest graph (most modules, then edges, then the language
+    token), else the first failure in registration order, else
+    :func:`no_graph_reason`. A graph that breaks the contract
+    (:func:`graph_defect`) counts as its builder's failure.
     """
     repo_root = Path(repo_root).resolve()
     extra = extra_exclude_dirs or set()
+    dominant = dominant_language(repo_root, extra, scope, builders)
     graphs: list[ModuleGraph] = []
     failures: list[str] = []
     for builder in builders:
+        covers = dominant is not None and dominant in builder_languages(builder)
         try:
             graph = builder.build(repo_root, extra, scope)
+            defect = graph_defect(graph) if graph is not None and graph.modules else None
+            if defect is not None:
+                raise GraphUnavailable(defect)
         except GraphUnavailable as e:
+            if covers:
+                return GraphSelection(graph=None, reason=str(e))
             failures.append(str(e))
             continue
+        if covers and graph is not None and graph.modules:
+            return GraphSelection(graph=graph)
         if graph is not None and graph.modules:
             graphs.append(graph)
     if graphs:
@@ -171,30 +192,74 @@ def select_graph(
         return GraphSelection(graph=best)
     if failures:
         return GraphSelection(graph=None, reason=failures[0])
-    return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope))
+    return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope, builders))
+
+
+def builder_languages(builder: ImportGraphBuilder) -> set[str]:
+    """The language tokens a builder covers: ``language`` plus any ``languages``."""
+    extra = getattr(builder, "languages", ())
+    return {builder.language, *(t for t in extra if isinstance(t, str))}
+
+
+def graph_defect(graph: ModuleGraph) -> str | None:
+    """Why ``graph`` breaks the :class:`ModuleGraph` contract, or None.
+
+    A3 and A4 index ``package_of`` by every module, so a module with no package
+    would raise ``KeyError`` mid-measure. ``select_graph`` treats such a graph as a
+    builder failure instead: another language can still be reported, and with
+    none the block degrades with this reason.
+    """
+    missing = [m for m in graph.modules if m not in graph.package_of]
+    if missing:
+        return (f"{INVALID_IMPORT_GRAPH}: the {graph.language} builder returned "
+                f"{len(missing)} module(s) with no package; structure not assessed")
+    return None
 
 
 def language_counts(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    builders: Sequence[ImportGraphBuilder] = (),
 ) -> Counter[str]:
-    """Source files per language under ``scope`` (default ``repo_root``)."""
+    """Source files per language under ``scope`` (default ``repo_root``).
+
+    A builder in ``builders`` covering a language may define
+    ``is_graph_source(rel: Path) -> bool`` (``rel`` relative to the walk's
+    start); a file of that language then counts only when it says True, so files
+    the builder skips (minified bundles, declarations, tests, tool configs) do
+    not make their language dominant.
+    """
     extra = extra_exclude_dirs or set()
     start = scope.resolve() if scope is not None else Path(repo_root).resolve()
+    filters: dict[str, Callable[[Path], bool]] = {}
+    for builder in builders:
+        check = getattr(builder, "is_graph_source", None)
+        if callable(check):
+            for token in builder_languages(builder):
+                filters.setdefault(token, check)
     counts: Counter[str] = Counter()
     for dirpath, dirnames, filenames in os.walk(start):
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS and d not in extra)
         for name in filenames:
             language = LANGUAGE_BY_EXTENSION.get(os.path.splitext(name)[1].lower())
-            if language is not None:
-                counts[language] += 1
+            if language is None:
+                continue
+            check = filters.get(language)
+            if check is not None and not check(Path(dirpath, name).relative_to(start)):
+                continue
+            counts[language] += 1
     return counts
 
 
 def dominant_language(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    builders: Sequence[ImportGraphBuilder] = (),
 ) -> str | None:
-    """The language with the most source files (ties by name), or None."""
-    counts = language_counts(repo_root, extra_exclude_dirs, scope)
+    """The language with the most source files (ties by name), or None.
+
+    ``builders`` narrows each covered language to the files its builder graphs
+    (:func:`language_counts`).
+    """
+    counts = language_counts(repo_root, extra_exclude_dirs, scope, builders)
     if not counts:
         return None
     return min(counts, key=lambda lang: (-counts[lang], lang))
@@ -202,12 +267,36 @@ def dominant_language(
 
 def no_graph_reason(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    builders: Sequence[ImportGraphBuilder] = (),
 ) -> str:
     """Why no import graph was built, naming the dominant source language."""
-    language = dominant_language(repo_root, extra_exclude_dirs, scope)
+    language = dominant_language(repo_root, extra_exclude_dirs, scope, builders)
     if language is None:
         return NO_SOURCE_FILES
     if language == "python":
         return NO_PYTHON_PACKAGES
     return (f"no_import_graph_{language}: no import graph was built for {language}, "
             "the repository's dominant source language")
+
+
+def is_graph_source(
+    rel_path: Path, language: str, builders: Sequence[ImportGraphBuilder] | None = None,
+) -> bool:
+    """True when a repo-relative file could be in ``language``'s graph.
+
+    The builder covering ``language`` (``builders``, default the registered
+    ones) decides: the file's extension must map to a language it covers (the
+    TypeScript builder graphs ``.js`` too), and its optional
+    ``is_graph_source(rel)`` hook must accept the file (Go skips ``_test.go``
+    and ``GO_SKIP_DIRS``; TypeScript skips bundles, declarations, tests and tool
+    configs). A language no builder covers keeps the extension check alone.
+    """
+    if builders is None:
+        from lib.import_graph_builders import BUILDERS  # lazy: builders import this module
+        builders = BUILDERS
+    covering = next((b for b in builders if language in builder_languages(b)), None)
+    covered = builder_languages(covering) if covering is not None else {language}
+    if LANGUAGE_BY_EXTENSION.get(rel_path.suffix.lower()) not in covered:
+        return False
+    check = getattr(covering, "is_graph_source", None)
+    return bool(check(rel_path)) if callable(check) else True

@@ -39,9 +39,9 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from lib.fleet import REPOS_FILE
 from lib.fleet_data import FLEET_DATA_FILE
@@ -174,6 +174,33 @@ def dated_entries(org_dir: Path) -> list[tuple[tuple[str, int], Path]]:
         return []
     return sorted((order, p) for p in org_dir.iterdir()
                   if (order := _entry_order(p)) is not None and p.is_dir() and not p.is_symlink())
+
+
+T = TypeVar("T")
+
+
+def one_per_date(org_dir: Path, before: str, repos: frozenset[str],
+                 read: Callable[[Path, str], T | None]) -> list[tuple[str, T]]:
+    """One entry per scan date before ``before``, oldest first, as ``(date, read(entry, date))``.
+
+    ``read`` returns None to pass an entry over. Between same-day entries ``read`` accepts,
+    the one over ``repos`` wins, then the highest suffix; ``repos.jsonl`` is read only to
+    choose between them. Shared by the trend lines and the achievements engine.
+    """
+    by_date: dict[str, list[tuple[int, Path, T]]] = {}
+    for (date, suffix), entry in dated_entries(org_dir):
+        if date >= before:
+            continue
+        value = read(entry, date)
+        if value is not None:
+            by_date.setdefault(date, []).append((suffix, entry, value))
+    chosen: list[tuple[str, T]] = []
+    for date in sorted(by_date):
+        options = by_date[date]
+        if len(options) > 1:
+            options = sorted(options, key=lambda o: (entry_repos(o[1]) == repos, o[0]))
+        chosen.append((date, options[-1][2]))
+    return chosen
 
 
 def latest_matching(org_dir: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None) -> Path | None:

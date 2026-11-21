@@ -16,7 +16,11 @@ slugs only, member repositories named only with ``--name-agent-clusters``.
 ``<out>/fleet-data.json`` (``lib/fleet_data.py``, schema
 ``skills/fleet/references/fleet-data.schema.json``) holds the org units tree per view
 (``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
-units, web URL and per-row level, value and reason.
+units, web URL and per-row level, value and reason. ``<out>/achievements.json``
+(``lib/fleet_achievements.py``, schema ``skills/fleet/references/achievements.schema.json``)
+replays the comparable runs in the history and credits each unit's level-ups, firsts,
+streaks, personal bests and ``--targets`` hit, with each unit's nearest level-up; the
+report opens with them ("What changed and who earned it", ``lib/fleet_credit.py``).
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -143,7 +147,17 @@ from lib.fleet_diagrams import (  # noqa: E402
     clear_diagrams,
     write_diagrams,
 )
-from lib.fleet_data import FLEET_DATA_FILE, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
+from lib.fleet_achievements import (  # noqa: E402
+    ACHIEVEMENTS_FILE,
+    HistoryRun,
+    build_achievements,
+    clear_achievements,
+    write_achievements,
+)
+from lib.fleet_achievements_runs import earlier_runs  # noqa: E402
+from lib.fleet_credit import credit_section  # noqa: E402
+from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
+from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
 from lib.fleet_repo_facts import collect_facts  # noqa: E402
@@ -273,6 +287,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--history-org", metavar="NAME",
                         help="The <org> directory name in the history (default: from the repository ids).")
     parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
+    parser.add_argument(
+        "--targets", metavar="FILE",
+        help=f"Level targets (TOML, lib/fleet_targets.py): each [[target]] names a view, a unit, a "
+             f"team row and a level. OUT/{ACHIEVEMENTS_FILE} credits a target when it is reached and "
+             "the report shows the distance to each. Needs --levels; not part of the run stamp.",
+    )
     parser.add_argument(
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
@@ -438,14 +458,14 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
 
 def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | None, rows: list[FleetRow],
               window: str, *, history: list[TrendRun] | None = None,
-              comparison: Comparison | None = None) -> None:
+              comparison: Comparison | None = None, credit: str | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
-        write_diagrams(out_dir, diagrams)
+        write_diagrams(out_dir, diagrams, credit)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -455,10 +475,38 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
     print(f"fleet: diagrams -> {out_dir / REPORT_FILE}", file=sys.stderr)
 
 
+def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_model: MaturityModel | None,
+                  org_dir: Path | None, entry: Path | None, repos: frozenset[str], specs: list[TargetSpec],
+                  privacy_key: Callable[[str], str]) -> str | None:
+    """``OUT/achievements.json`` (lib/fleet_achievements.py) and the report's credit section;
+    None when not written. Never raises: achievements never fail a completed run."""
+    try:
+        if org_dir is None or entry is None:
+            earlier, note = [], "this run is not kept in the run history (--no-history or --full)"
+        else:
+            earlier, note = earlier_runs(org_dir, stamp, repos), None
+        doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
+                                 targets=resolve(specs, privacy_key), note=note)
+        write_achievements(out_dir, doc)
+        section = credit_section(doc, maturity_model)
+    except Exception as e:  # noqa: BLE001 - achievements never fail a completed run
+        clear_achievements(out_dir)
+        print(f"fleet: achievements: not written ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    mine = sum(1 for a in doc["achievements"] if a["run"] == doc["run"])
+    print(f"fleet: achievements: {mine} earned this run over {len(doc['runs'])} comparable run(s) "
+          f"-> {ACHIEVEMENTS_FILE}", file=sys.stderr)
+    for t in doc["targets"]:
+        if t["level"] is None:
+            print(f"fleet: targets: {t['view']} {t['unit']} has no measured level on {t['row']}",
+                  file=sys.stderr)
+    return section
+
+
 def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
                       maturity_model: MaturityModel | None, trees: list[Tree], full: bool,
                       hash_salt: str | None, units: UnitsMap, codeowners: dict[str, list[str]],
-                      web_urls: dict[str, str | None]) -> None:
+                      web_urls: dict[str, str | None]) -> FleetData:
     """``OUT/fleet-data.json`` (lib/fleet_data.py), before the run is kept in the history."""
     data = build_fleet_data(stamp, rows, maturity_model, trees,
                             owners=repo_owners(units, codeowners, (row["repo"] for row in rows)),
@@ -466,6 +514,7 @@ def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
     write_fleet_data(out_dir, data)
     print(f"fleet: units: {sum(len(v['units']) for v in data['views'])} units -> {FLEET_DATA_FILE}",
           file=sys.stderr)
+    return data
 
 
 PlatformPass = Callable[[list[FleetRow], ScanOptions], list[FleetRow]]
@@ -529,7 +578,11 @@ def main(argv: list[str] | None = None) -> int:
             scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
         if args.window is not None:
             parse_window(args.window)
+        level_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
         targets = _targets(args)
+    except TargetsError as e:
+        print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
+        return 2
     except FleetConfigError as e:
         print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
         return 2
@@ -630,11 +683,15 @@ def main(argv: list[str] | None = None) -> int:
         fleet_config=fleet_config, platform=platform_ran,
     )
     write_stamp(out_dir, stamp)
-    _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
-                      {repo: f.web_url for repo, f in facts.items()})
+    data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
+                             {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
+    credit = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
+                           frozenset(row["repo"] for row in rows), level_targets,
+                           privacy_for(args.full, hash_salt).key)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
-    _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison)
+    _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
+              credit=credit)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

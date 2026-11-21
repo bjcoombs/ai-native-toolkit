@@ -8,6 +8,8 @@ graph is built.
 from __future__ import annotations
 
 from lib.import_graph import ImportGraphBuilder
+from lib.import_graph_go import GO_BUILDER
 from lib.import_graph_python import PYTHON_BUILDER
+from lib.import_graph_typescript import TYPESCRIPT_BUILDER
 
-BUILDERS: tuple[ImportGraphBuilder, ...] = (PYTHON_BUILDER,)
+BUILDERS: tuple[ImportGraphBuilder, ...] = (PYTHON_BUILDER, GO_BUILDER, TYPESCRIPT_BUILDER)

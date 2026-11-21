@@ -312,9 +312,9 @@ def test_default_levels_covers_every_layer_on_the_golden_run_context() -> None:
             assert row["missing_signals"], row
 
 
-def test_layer_two_is_unknown_on_a_repository_with_no_python_package(tmp_path: Path) -> None:
-    """The import graph is Python-only: no package is unmeasured, not modularity 0."""
-    (tmp_path / "index.js").write_text("module.exports = 1;\n", encoding="utf-8")
+def test_layer_two_is_unknown_on_a_repository_with_no_import_graph(tmp_path: Path) -> None:
+    """A language with no builder is unmeasured, not modularity 0."""
+    (tmp_path / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
     structure = analyze_structure(tmp_path).as_dict()
     assert structure["available"] is False
     row = _row(_run({"r": {"structure": structure}}), "layer-2-design")

@@ -39,7 +39,7 @@ tracked source file, so a very large repository can need a longer `--timeout`. `
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
 A repository with no import graph names its dominant
-language instead (`no_import_graph_typescript`, `no_import_graph_go`), so the
+language instead (`no_import_graph_go`, `no_import_graph_rust`), so the
 fleet output says which language is missing; `no_python_packages` is a Python
 repository with no importable package and `no_source_files` one with no source.
 
@@ -75,7 +75,7 @@ there.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
@@ -96,6 +96,7 @@ there.
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
+| `--targets FILE` | Level targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and a `level`. Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
@@ -313,6 +314,75 @@ and repository key, and every reference to one, is hashed (`h:` plus 16 hex digi
 name, owner or web URL is written: the file names no repository, group or host. Hashes
 join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` in
 `lib/counts_only_rules.py`.
+
+## Output: `achievements.json`
+
+What each unit and repository earned, and the next step for each (#704, parent #692).
+Written on every run beside `fleet-data.json`, from run data only: the engine replays
+this run and the earlier comparable runs' `fleet-data.json` copies in the run history,
+oldest first, every time. It never reads an earlier `achievements.json`, so editing
+output cannot change what is earned. Keys sorted, compact; the same history gives the
+same bytes. Schema: [`references/achievements.schema.json`](references/achievements.schema.json).
+Logic: `lib/fleet_achievements.py` (engine), `lib/fleet_achievements_runs.py` (history),
+`lib/fleet_targets.py` (`--targets`), `lib/fleet_credit.py` (report section).
+
+**Comparable runs.** A history entry is replayed when its `run.json` passes the
+`--compare` rule against this run (plugin major version, maturity-model version, window,
+output mode, scans, path hashing, `--fleet-config`, `--platform`) and it holds a
+`fleet-data.json` at this version. One run per date, dates before this run's. Without
+the history (`--no-history`, `--full`) only this run is read: no achievement, just next
+steps, with `note` saying why.
+
+**Subjects.** Every unit of every view (`view` `ownership` or `system`) and every
+repository (`view` and `unit_kind` `repo`). A unit's level on a team row is the row's
+roll-up rule (`min` or `share`) over its measured repositories, those with a known level.
+
+**Unknown never earns or loses.** A row counts only when it *moves cleanly*: known in
+both runs over the same measured set of repositories. A repository going unknown,
+failing its scan, joining or leaving a unit, or hashed under another salt makes that
+move neutral. Under counts-only, credit goes to units and repositories, never to people:
+owners are never read.
+
+**Kinds.** The oldest replayed run is the baseline and earns nothing.
+
+| Kind | Earned when |
+|------|-------------|
+| `level_up` | A row moves cleanly to a higher level. |
+| `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
+| `target_hit` | A row moves cleanly from below a `--targets` level to at or above it. |
+| `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up on some row. |
+| `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
+
+Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
+`unit_kind`, `run` and `previous_run` (run ids are scan dates), `evidence` (`row`,
+`from_level`, `to_level`, `level`, `share_from`, `share_to`, `runs`, and `moves`: each
+repository that moved up, from which level to which, and `criterion`, the next-level
+criterion that went from unmet to met) and `credit`, one Markdown line.
+
+**Next steps.** `nearest_level_ups` holds one entry per subject and team row below the
+top level: among the measured repositories one level below the next, the next-level
+criterion most of them share (`signal`), those `repos`, how many more must reach the next
+level for the subject to move (`needed`), and the `change` and `done_when` in the team
+next-steps pages' wording. `targets` gives each target's current `level` and `distance`
+in levels.
+
+**Targets file** (`--targets`):
+
+```toml
+[[target]]
+view = "ownership"      # "ownership" (default), "system", or "repo"
+unit = "acme/payments"  # a unit id in that view, or a repository id for "repo"
+row = "layer-5-ci"      # a team row of the maturity model
+level = 2               # 1 to the row's top level
+```
+
+With hashed paths the unit is hashed under the run's salt before it is matched.
+
+**Report.** `report.md` opens with "What changed and who earned it", before the
+diagrams: this run's achievements by kind (up to 20 lines each), then each unit's nearest
+level-up (the row needing the fewest repositories), then target distances. Every line is
+credit or a next step. With `--no-diagrams` there is no report; `achievements.json` is
+still written.
 
 ## Output: `agent_clusters.json`
 
@@ -630,6 +700,8 @@ Every run draws diagrams from its own rows, with no model call, and writes them 
 in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
+The report opens with "What changed and who earned it", before the diagrams (see
+[`achievements.json`](#output-achievementsjson)).
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows
