@@ -159,7 +159,13 @@ constant each.
 # network). compare.json level states carry floor too. Additive: status stays
 # level or unknown, fleet_group_version is unchanged, readers tolerate both keys
 # being absent, and run-context.json and complexity-stats.json are unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.24.0"
+# 1.25.0: run-context.json structure_drift.tier_1 gains optional
+# static_lens_reason (issue #710), and its three static-derived counts
+# (human_grouped_static_splits_count, human_split_static_fuses_count,
+# human_static_agree_count) are null when set: an import graph that maps no
+# module to a file (a Go graph) has no file-pair static lens. The co-change
+# counts are unchanged. Readers treat a null count as unknown, never 0.
+ARTIFACT_SCHEMA_VERSION = "1.25.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
