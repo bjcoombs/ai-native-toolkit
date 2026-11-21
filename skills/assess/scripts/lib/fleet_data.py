@@ -9,15 +9,15 @@ One JSON document per run, beside ``groups.jsonl``, holding:
 - ``repos``: per repository its status, web URL, owners, its unit in each view
   and, per ``team`` row, its level with the value and reason behind it.
 
-**Roll-up.** For each unit and each ``team`` row, over every repository below
-the unit: the mean share of top level (``lib.fleet_maturity.mean_share``) over
-the measured repositories, how many were measured of how many (``measured``,
-``repos``: "8 of 12 measured"), and the weakest measured repository (lowest
-share, then key) with its level. An unknown or failed repository counts in
-``repos`` only, never as 0. ``overall`` does the same over each repository's
-own mean share. ``org`` rows read a group's ghreport settings, not a
-repository, so they have no per-repository cell or unit roll-up; their
-levels stay in ``groups.jsonl``.
+**Roll-up** (#772, option A: no average and no repository singled out). For each
+unit and each ``team`` row, over every repository below the unit: how many were
+measured of how many (``measured``, ``repos``: "8 of 12 measured") and the lowest
+level a measured repository holds on the row (``lowest_level``; None when none was
+measured). Steps (#744) are not yet available, so the lowest row level stands in
+for the lowest Step. An unknown or failed repository counts in ``repos`` only,
+never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
+they have no per-repository cell or unit roll-up; their levels stay in
+``groups.jsonl``.
 
 **Per-repository cell** (one per ``team`` row): ``status`` and ``level`` as
 ``lib.levels.evaluate_row`` gives them, plus the criterion that explains it:
@@ -37,9 +37,8 @@ hashing every unit and repository key (and every reference to one) is hashed
 under the run's salt (``lib.counts_only.hash_value``), and no name, owner or
 web URL is written, so the file holds no repository, group or host name.
 
-Deterministic: every list sorted, keys sorted, shares rounded to 4 places, no
-timing. The same inputs (and, with hashing, the same ``--hash-salt``) give the
-same bytes.
+Deterministic: every list sorted, keys sorted, no timing. The same inputs (and,
+with hashing, the same ``--hash-salt``) give the same bytes.
 """
 from __future__ import annotations
 
@@ -54,17 +53,19 @@ from lib.counts_only import hash_value
 from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
-from lib.fleet_maturity import SCOPE, mean_share
+from lib.fleet_maturity import SCOPE
 from lib.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet_units import Tree
 from lib.levels import Evaluation, MaturityModel, Row, evaluate_row
 
-# 1 (#703): first version. Bump on any change to the shapes below; #704 and #705 read it.
-FLEET_DATA_VERSION = 1
+# 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
+# ``overall`` for ``lowest_level``; repositories drop ``mean_share``. Cells are unchanged.
+# Bump on any change to the shapes below; #704 and #705 read it.
+FLEET_DATA_VERSION = 2
 FLEET_DATA_FILE = "fleet-data.json"
 NOT_SCANNED = "not_scanned"
 SET = "set"
-PLACES = 4
+PLACES = 4  # share rounding for readers of the cells (the achievements engine)
 
 Value = int | float | bool | str | None
 
@@ -76,21 +77,11 @@ class ModelRow(TypedDict):
     top_level: int
 
 
-class Weakest(TypedDict):
-    repo: str  # repository key
-    share: float  # its share of top level (overall: its mean share)
-    level: int | None  # its level on the row; None in ``overall``
-
-
-class RollUp(TypedDict):
-    mean_share: float | None  # None when no repository below was measured
-    measured: int
-    repos: int
-    weakest: Weakest | None
-
-
-class RowRollUp(RollUp):
+class RowRollUp(TypedDict):
     row: str
+    measured: int  # repositories below with a known level on the row
+    repos: int  # every repository below, measured or not
+    lowest_level: int | None  # the lowest known level; None when none was measured
 
 
 class DataUnit(TypedDict):
@@ -104,7 +95,6 @@ class DataUnit(TypedDict):
     owner_count: int
     repos: int  # repositories below the unit, at any depth
     levels: list[RowRollUp]
-    overall: RollUp
 
 
 class View(TypedDict):
@@ -136,7 +126,6 @@ class DataRepo(TypedDict):
     owners: list[str] | None
     owner_count: int
     units: list[RepoUnit]
-    mean_share: float | None
     rows: list[Cell]
 
 
@@ -240,10 +229,6 @@ def repo_cells(rows: Sequence[Row], repo: FleetRow) -> list[Cell]:
     return cells
 
 
-def _round(value: float | None) -> float | None:
-    return None if value is None else round(value, PLACES)
-
-
 # --- roll-up -----------------------------------------------------------------
 
 
@@ -251,30 +236,10 @@ Member = tuple[str, int | None, int]  # (repository key, level or None, top leve
 
 
 def row_roll_up(row_id: str, members: Sequence[Member]) -> RowRollUp:
-    """One team row over the repositories below a unit: ``mean_share`` of their levels."""
-    known = [(key, level, top) for key, level, top in members if level is not None and top > 0]
-    weakest = min(known, key=lambda m: (m[1] / m[2], m[0])) if known else None
-    return {
-        "row": row_id,
-        "mean_share": _round(mean_share((level, top) for _, level, top in members)),
-        "measured": len(known),
-        "repos": len(members),
-        "weakest": ({"repo": weakest[0], "share": round(weakest[1] / weakest[2], PLACES), "level": weakest[1]}
-                    if weakest is not None else None),
-    }
-
-
-def overall_roll_up(members: Sequence[tuple[str, float | None]]) -> RollUp:
-    """Each repository's own mean share, averaged over those with one."""
-    known = [(key, share) for key, share in members if share is not None]
-    weakest = min(known, key=lambda m: (m[1], m[0])) if known else None
-    return {
-        "mean_share": _round(sum(s for _, s in known) / len(known)) if known else None,
-        "measured": len(known),
-        "repos": len(members),
-        "weakest": ({"repo": weakest[0], "share": round(weakest[1], PLACES), "level": None}
-                    if weakest is not None else None),
-    }
+    """One team row over the repositories below a unit: measured of all, and the lowest level."""
+    known = [level for _key, level, top in members if level is not None and top > 0]
+    return {"row": row_id, "measured": len(known), "repos": len(members),
+            "lowest_level": min(known) if known else None}
 
 
 def _below(tree: Tree) -> dict[str, list[str]]:
@@ -294,7 +259,7 @@ def unit_key(view: str, uid: str) -> str:
 
 
 def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Cell]],
-               shares: Mapping[str, float | None], privacy: Privacy) -> View:
+               privacy: Privacy) -> View:
     below = _below(tree)
     view = tree["view"]
     units: list[DataUnit] = []
@@ -316,7 +281,6 @@ def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Ce
             "owner_count": len(unit["owners"]),
             "repos": len(repos),
             "levels": levels,
-            "overall": overall_roll_up([(keys[r], shares[r]) for r in repos]),
         })
     return {"view": view, "units": sorted(units, key=lambda u: u["key"])}
 
@@ -349,8 +313,6 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
     """The whole document for one run."""
     team_rows = [row for row in (maturity_model["rows"] if maturity_model else []) if row["scope"] == SCOPE]
     cells = {repo["repo"]: repo_cells(team_rows, repo) for repo in rows}
-    shares = {name: _round(mean_share((c["level"], c["top_level"]) for c in repo_cells_))
-              for name, repo_cells_ in cells.items()}
     owners = owners or {}
     web_urls = web_urls or {}
     repos: list[DataRepo] = []
@@ -367,14 +329,13 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
             "owner_count": len(repo_owners),
             "units": [{"view": tree["view"], "unit": privacy.key(unit_key(tree["view"], tree["placement"][name]))}
                       for tree in trees if name in tree["placement"]],
-            "mean_share": shares[name],
             "rows": [{**cell, "value": privacy.value(cell["value"])} for cell in cells[name]],
         })
     return {
         "fleet_data_version": FLEET_DATA_VERSION,
         "run": run_details(stamp),
         "model": model_rows(maturity_model),
-        "views": [build_view(tree, team_rows, cells, shares, privacy) for tree in trees],
+        "views": [build_view(tree, team_rows, cells, privacy) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
     }
 

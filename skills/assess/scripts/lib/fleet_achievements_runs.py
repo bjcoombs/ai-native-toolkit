@@ -8,8 +8,9 @@ directory (``lib/fleet_history.py``) and keeps each entry that:
   the 2.0.0 rename is upgraded, ``lib/fleet_legacy.py``) that ``fleet_compare.comparability``
   accepts against this run: same plugin major version, maturity-model version, window,
   output mode, scan selection, path hashing, ``--fleet-config`` and ``--platform``;
-- has a ``fleet-data.json`` at ``FLEET_DATA_VERSION`` (entries from before #703 have
-  none and are passed over) which is well formed (``well_formed``: every field the
+- has a ``fleet-data.json`` at a version in ``READABLE_FLEET_DATA_VERSIONS`` (entries
+  from before #703 have none and are passed over; version 1 differs from 2 only in
+  roll-up fields the engine does not read, #772) which is well formed (``well_formed``: every field the
   engine reads decodes, so one malformed entry is passed over rather than costing
   every later run its achievements).
 
@@ -37,6 +38,9 @@ from lib.fleet_legacy import upgrade
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
 _TOP_KEYS = ("run", "model", "views", "repos")
+# The fleet-data.json versions whose cells and units the engine reads alike: 1 (#703) carried
+# the mean-share roll-up #772 removed, which the engine no longer reads.
+READABLE_FLEET_DATA_VERSIONS = frozenset({1, FLEET_DATA_VERSION})
 
 
 def _stamp(entry: Path, data: Mapping[str, Any]) -> Any:
@@ -67,7 +71,7 @@ def _read(entry: Path, date: str, current: FleetStamp) -> HistoryRun | None:
             return None
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    if data.get("fleet_data_version") != FLEET_DATA_VERSION \
+    if data.get("fleet_data_version") not in READABLE_FLEET_DATA_VERSIONS \
             or not all(k in data for k in _TOP_KEYS) or not well_formed(cast(FleetData, data)):
         return None
     return HistoryRun(date, cast(FleetData, data))
@@ -93,7 +97,7 @@ def well_formed(data: FleetData) -> bool:
                 tops[cell["row"]] = cell["top_level"]
         rules = {row: (Fraction(1), top) for row, top in tops.items()}
         for sub in subjects(data, rules).values():
-            shares = [sub.share, *(state.share for state in sub.rows.values())]
+            shares = [state.share for state in sub.rows.values()]
             if any(share is not None and not isinstance(share, (int, float)) for share in shares):
                 return False
     except (KeyError, TypeError, AttributeError, ValueError, IndexError):

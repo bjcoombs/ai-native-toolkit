@@ -107,5 +107,10 @@ def test_runs_copied_into_the_history_replay_on_their_run_json_date(tmp_path, mo
     doc = json.loads((tmp_path / "r3" / "achievements.json").read_text(encoding="utf-8"))
     assert doc["runs"][:2] == ["2000-01-01", "2000-01-02"]
     earned = {(a["run"], a["kind"], a["unit"]) for a in doc["achievements"]}
-    assert {("2000-01-02", "level_up", "grpa/svc1"), ("2000-01-02", "first", "grpa/svc1"),
-            ("2000-01-02", "personal_best", "grpa/svc1")} <= earned
+    assert ("2000-01-02", "level_up", "grpa/svc1") in earned
+    # #772: no personal best, and no first unless --first-achievements asks for it
+    assert not {kind for _run, kind, _unit in earned} & {"first", "personal_best"}
+    assert fleet_cli.main([str(after), "--levels", "levels.toml", "--history-dir", "hist", "--history-org", "org",
+                           "--no-diagrams", "--first-achievements", "--out", "r4"]) == 0
+    doc = json.loads((tmp_path / "r4" / "achievements.json").read_text(encoding="utf-8"))
+    assert ("2000-01-02", "first", "grpa/svc1") in {(a["run"], a["kind"], a["unit"]) for a in doc["achievements"]}

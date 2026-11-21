@@ -6,10 +6,10 @@
   "type": "object",
   "properties": {
     "achievements_version": {
-      "const": 2
+      "const": 3
     },
     "fleet_data_version": {
-      "const": 1
+      "const": 2
     },
     "run": {
       "type": "string"
@@ -42,7 +42,6 @@
               "level_up",
               "first",
               "target_hit",
-              "personal_best",
               "streak"
             ]
           },

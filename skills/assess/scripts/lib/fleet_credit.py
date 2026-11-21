@@ -3,8 +3,8 @@
 Rendered from ``achievements.json`` (``lib/fleet_achievements.py``) and the maturity
 model, before the diagrams, so the report opens on credit and the next step:
 
-1. **Earned this run**: this run's achievements, by kind (level-ups, firsts, targets
-   hit, personal bests, streaks), each its own credit line; within a kind, by view and
+1. **Earned this run**: this run's achievements, by kind (level-ups, firsts when turned
+   on, targets hit, streaks), each its own credit line; within a kind, by view and
    unit key. Nothing is ordered by score, and units are never compared with each other.
    At most ``PER_KIND`` lines per kind; the rest are counted and stay in
    ``achievements.json``.
@@ -26,8 +26,7 @@ from lib.levels import MaturityModel
 TITLE = "What changed and who earned it"
 PER_KIND = 20
 MAX_STEPS = 30
-KIND_LABELS = {"level_up": "Level-ups", "first": "Firsts", "target_hit": "Targets hit",
-               "personal_best": "Personal bests", "streak": "Streaks"}
+KIND_LABELS = {"level_up": "Level-ups", "first": "Firsts", "target_hit": "Targets hit", "streak": "Streaks"}
 
 
 def _intro(doc: Achievements) -> str:

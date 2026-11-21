@@ -622,8 +622,6 @@ kept as written. A string
 | `views.units.source` | token |
 | `views.units.name` | dropped |
 | `views.units.owners` | dropped |
-| `views.units.levels.weakest.repo` | path (hashed when hashing is on) |
-| `views.units.overall.weakest.repo` | path (hashed when hashing is on) |
 | `repos.key` | path (hashed when hashing is on) |
 | `repos.status` | token |
 | `repos.reason` | token |
