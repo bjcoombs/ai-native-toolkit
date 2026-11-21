@@ -44,11 +44,14 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# ruff: noqa: E402 - without uv the PEP 723 dependencies may be absent: print the
+# install line and exit 1 before the first third-party import, not a traceback (#752).
+from lib.tool_lookup import require_packages
+require_packages((("networkx", "networkx"), ("numpy", "numpy"), ("matplotlib", "matplotlib")))
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.doc_graph import DocGraphResult, build_doc_graph
 from lib.doc_graph_layout import classify_node, group_broken_links, radial_shells
 from lib.assess_config import load_working_notes_config, resolve_excludes

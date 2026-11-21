@@ -548,7 +548,7 @@ def _git_show(ref: str, path: str, cwd: str | Path | None = None) -> str | None:
     result = subprocess.run(
         ["git", "show", f"{ref}:{path}"],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
         cwd=cwd,
     )
     if result.returncode != 0:
@@ -579,7 +579,7 @@ def _get_renames(base_ref: str, cwd: str | Path | None = None) -> dict[str, str]
     result = subprocess.run(
         ["git", "diff", "-M50%", "--name-status", "--diff-filter=R", base_ref],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="surrogateescape",
         cwd=cwd,
     )
     renames: dict[str, str] = {}
@@ -607,7 +607,7 @@ def _discover_marked_files(
     result = subprocess.run(
         ["git", "grep", "-l", "-F", marker, base_ref, "--", f":!{FLOOR_FILE}"],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="surrogateescape",
         cwd=cwd,
     )
     prefix = f"{base_ref}:"
@@ -635,7 +635,7 @@ def _untracked_component_paths(cwd: str | Path | None = None) -> list[str]:
     result = subprocess.run(
         ["git", "ls-files", "--others"],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="surrogateescape",
         cwd=cwd,
     )
     return [
@@ -659,7 +659,7 @@ def _discover_marked_files_head(
     result = subprocess.run(
         ["git", "grep", "-l", "-F", marker, "--", f":!{FLOOR_FILE}"],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="surrogateescape",
         cwd=cwd,
     )
     candidates = [path for path in result.stdout.splitlines() if path]
@@ -791,7 +791,7 @@ def _changed_paths(args: argparse.Namespace) -> list[str]:
         paths = subprocess.run(
             ["git", "diff", "--name-only", args.base],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="surrogateescape",
         ).stdout.splitlines()
         paths += _untracked_component_paths()
     return list(dict.fromkeys(path.strip() for path in paths if path.strip()))
@@ -818,7 +818,7 @@ def cmd_protected(args: argparse.Namespace) -> int:
 
 def _git_out(*args: str) -> str:
     return subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=True
+        ["git", *args], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True
     ).stdout
 
 

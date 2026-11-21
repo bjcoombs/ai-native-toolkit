@@ -12,6 +12,9 @@ run covers the Windows branches:
   ``headless_layers.promissory_markers`` maps to the ``no_rg`` code.
 - ``missing_packages`` names the layer 2-4 Python packages that do not import,
   and ``pip_hint`` gives the no-uv install line for them.
+- ``require_packages`` is the hard form for a script that cannot run without
+  its packages (the SVG renderers, issue #752): it prints the install line and
+  exits 1 before the first third-party import, so no traceback reaches the user.
 
 Standard library only, so it imports in every entry point.
 """
@@ -114,3 +117,34 @@ def warn_missing_packages(
     if missing:
         print(pip_hint(missing), file=stream or sys.stderr)
     return bool(missing)
+
+
+def require_hint(missing: Iterable[str], in_venv: bool | None = None) -> str:
+    """One stderr line for a script that cannot run without ``missing``.
+
+    Inside a virtualenv pip refuses ``--user``, so the flag is dropped there.
+    """
+    reqs = list(missing)
+    names = ", ".join(r.split("==")[0] for r in reqs)
+    in_venv = sys.prefix != sys.base_prefix if in_venv is None else in_venv
+    user = "" if in_venv else " --user"
+    return (f"error: {names} not installed; this script needs them. "
+            f"Run it with uv run (it reads the script's dependencies), or install them with: "
+            f"python -m pip install{user} {' '.join(reqs)}")
+
+
+def require_packages(
+    packages: Iterable[tuple[str, str]],
+    stream: TextIO | None = None,
+    find_spec: FindSpec = importlib.util.find_spec,
+) -> None:
+    """Exit 1 with ``require_hint`` when any of ``packages`` does not import.
+
+    A module already in ``sys.modules`` counts as present: it imported, or a
+    caller (a test stubbing the heavy dependencies) put it there.
+    """
+    pending = [(m, r) for m, r in packages if m not in sys.modules]
+    missing = missing_packages(pending, find_spec=find_spec)
+    if missing:
+        print(require_hint(missing), file=stream or sys.stderr)
+        raise SystemExit(1)
