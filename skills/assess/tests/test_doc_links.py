@@ -25,10 +25,10 @@ def _harvest(root: Path, files: dict[str, str]):
     docs = sorted(p for rel, p in paths.items() if Path(rel).suffix in DOC_EXTS)
     texts = {d: d.read_text(encoding="utf-8") for d in docs}
     graph = nx.DiGraph()
-    graph.add_nodes_from(str(d.relative_to(root)) for d in docs)
+    graph.add_nodes_from(d.relative_to(root).as_posix() for d in docs)
 
     def rel(p: Path) -> str:
-        return str(p.relative_to(root))
+        return p.relative_to(root).as_posix()
 
     harvest = harvest_links(
         docs, texts, root, graph, rel, doc_exts=DOC_EXTS, code_exts=CODE_EXTS,

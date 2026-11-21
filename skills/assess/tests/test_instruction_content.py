@@ -124,6 +124,7 @@ def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
+@pytest.mark.windows_followup
 def test_git_repo_symbols_and_gitignored_paths(git_repo) -> None:
     repo, commit = git_repo
     _write(repo, {
@@ -155,6 +156,7 @@ def test_symbol_check_without_a_self_path(git_repo) -> None:
     assert [s["reference"] for s in stale] == ["gone_name"]
 
 
+@pytest.mark.windows_followup
 def test_gitignored_relative_to_a_nested_file(git_repo) -> None:
     repo, commit = git_repo
     _write(repo, {"packages/api/.gitignore": "coverage.xml\n", "packages/api/AGENTS.md": "x\n"})

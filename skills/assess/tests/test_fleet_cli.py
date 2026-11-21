@@ -283,6 +283,7 @@ def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):
     assert "fleet: diagrams: not written (ValueError: render bug)" in capsys.readouterr().err
 
 
+@pytest.mark.windows_followup
 def test_a_broken_checkout_is_a_failed_row_and_the_run_completes(froot, tmp_path, capsys):
     root = tmp_path / "froot"
     shutil.copytree(froot, root, symlinks=True)

@@ -22,8 +22,7 @@ from test_fleet import make_checkout
 from test_fleet_run_stamp import _pushed_repo, _row, _target
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-# Its separator and subprocess sites are owned by #699.
-EXEMPT = {"lib/doc_staleness.py"}
+EXEMPT: set[str] = set()
 
 
 def _sources() -> list[tuple[str, ast.Module]]:
@@ -113,6 +112,7 @@ print("fleet:" + ascii(fleet._git(Path(repo), "log", "-1", "--format=%s")))
 """
 
 
+@pytest.mark.windows_followup
 def test_git_output_decodes_as_utf8_under_an_ascii_locale(tmp_path):
     repo = make_checkout(tmp_path / "repo")
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "café ✓"],

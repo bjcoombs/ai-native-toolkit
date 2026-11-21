@@ -111,7 +111,7 @@ def test_git_churn_no_scope_sees_whole_repo(git_repo) -> None:
 def test_doc_graph_scope_excludes_sibling_docs(git_repo) -> None:
     repo, _ = _two_service_repo(git_repo)
     scoped = discover_doc_files(repo, scope=repo / "service-a")
-    names = {str(p.relative_to(repo)) for p in scoped}
+    names = {p.relative_to(repo).as_posix() for p in scoped}
     assert "service-a/README.md" in names
     assert "service-b/README.md" not in names
 

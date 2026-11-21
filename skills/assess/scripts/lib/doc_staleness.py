@@ -320,7 +320,7 @@ def _head(repo_root: Path) -> str | None:
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False, timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip() or None
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -353,7 +353,7 @@ def _safe_rel(path: Path, repo_root: Path) -> str:
     target lies outside the repo root (a provenance source can resolve via the
     doc's own directory to a sibling tree)."""
     try:
-        return str(path.relative_to(repo_root))
+        return path.relative_to(repo_root).as_posix()
     except ValueError:
         return str(path)
 
@@ -645,8 +645,8 @@ def analyze_doc_staleness(
     owning_docs = set(code_owner.values())
     base_docs = set(base_doc_dirs.values())
     specs = {
-        str(d.relative_to(repo_root)): subject_spec(
-            d, str(d.relative_to(repo_root)), repo_root, owning_docs, base_docs,
+        d.relative_to(repo_root).as_posix(): subject_spec(
+            d, d.relative_to(repo_root).as_posix(), repo_root, owning_docs, base_docs,
             code_dirs, explicit,
         )
         for d in docs
@@ -656,7 +656,7 @@ def analyze_doc_staleness(
     results: list[DocStaleness] = []
     method_counts: dict[str, int] = {}
     for d in docs:
-        doc_rel = str(d.relative_to(repo_root))
+        doc_rel = d.relative_to(repo_root).as_posix()
         spec = specs[doc_rel]
         method_counts[spec["method"]] = method_counts.get(spec["method"], 0) + 1
         results.append(_doc_row(d, doc_rel, spec, subjects[doc_rel], abs_of, ctx))

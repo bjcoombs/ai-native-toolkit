@@ -268,6 +268,7 @@ def test_history_and_trends_match_on_the_config_hash(tmp_path):
 # --- CLIs ------------------------------------------------------------------
 
 
+@pytest.mark.windows_followup
 def test_signals_command_passes_the_config_path():
     options = ScanOptions(fleet_config=Path("/abs/fleet.toml"))
     command = signals_command(Path("/repo"), Path("/out.json"), options)
