@@ -284,3 +284,18 @@ def test_builders_receive_the_excludes_and_scope(tmp_path: Path) -> None:
 def test_an_unavailable_block_carries_no_language(tmp_path: Path, budget: int | None) -> None:
     block = analyze_structure(tmp_path, keyhole_budget=budget).as_dict()
     assert block["available"] is False and block["language"] is None
+
+
+def test_files_a_builder_skips_do_not_make_their_language_dominant(tmp_path: Path) -> None:
+    """A Python app's minified assets keep the Python graph, as on main (#709 review)."""
+    _write(tmp_path, "app/__init__.py", "")
+    _write(tmp_path, "app/views.py", "from app import models\n")
+    _write(tmp_path, "app/models.py", "")
+    for rel in ("static/js/jquery.min.js", "static/js/vendor.min.js", "static/js/x.min.js",
+                "types/api.d.ts", "web/__tests__/a.js", "vite.config.js"):
+        _write(tmp_path, rel)
+    assert dominant_language(tmp_path) == "javascript"  # every file, no builder rules
+    assert dominant_language(tmp_path, builders=BUILDERS) == "python"
+    assert language_counts(tmp_path, builders=BUILDERS)["javascript"] == 0
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["language"] == "python"

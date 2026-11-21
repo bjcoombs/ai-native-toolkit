@@ -393,6 +393,14 @@ class TypeScriptBuilder:
     language = "typescript"
     languages = ("typescript", "javascript")
 
+    def is_graph_source(self, rel: Path) -> bool:
+        """True when the scan would graph ``rel`` (a path below the walk's start).
+
+        ``select_graph`` counts only such files toward the dominant language, so
+        a Python app's ``static/js/*.min.js`` does not make it JavaScript.
+        """
+        return _is_source(rel.name) and not SKIP_DIRS & set(rel.parts[:-1])
+
     def build(
         self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,
     ) -> ModuleGraph | None:

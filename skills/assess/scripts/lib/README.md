@@ -277,7 +277,9 @@ or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
 `select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
 dominant source language decides: when a builder covers it (its `language`, or a token in
 an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
-builder's outcome is returned, its graph, its failure (so a missing grimp on a Python
+builder's outcome is returned (the count honours a builder's optional
+`is_graph_source(rel)`, so files it skips, such as a Python app's `static/js/*.min.js`,
+never make their language dominant), its graph, its failure (so a missing grimp on a Python
 repository still reads `no_grimp` rather than yielding to a stray `.mjs` file), or
 `no_graph_reason` when it found nothing. Graph sizes are never compared across languages,
 whose nodes differ. Only when no builder covers the dominant language does the largest

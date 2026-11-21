@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TypedDict
@@ -167,7 +167,7 @@ def select_graph(
     """
     repo_root = Path(repo_root).resolve()
     extra = extra_exclude_dirs or set()
-    dominant = dominant_language(repo_root, extra, scope)
+    dominant = dominant_language(repo_root, extra, scope, builders)
     graphs: list[ModuleGraph] = []
     failures: list[str] = []
     for builder in builders:
@@ -185,7 +185,7 @@ def select_graph(
         if covers:
             if graph is not None and graph.modules:
                 return GraphSelection(graph=graph)
-            return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope))
+            return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope, builders))
         if graph is not None and graph.modules:
             graphs.append(graph)
     if graphs:
@@ -193,7 +193,7 @@ def select_graph(
         return GraphSelection(graph=best)
     if failures:
         return GraphSelection(graph=None, reason=failures[0])
-    return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope))
+    return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope, builders))
 
 
 def _languages(builder: ImportGraphBuilder) -> set[str]:
@@ -219,25 +219,48 @@ def graph_defect(graph: ModuleGraph) -> str | None:
 
 def language_counts(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    builders: Sequence[ImportGraphBuilder] = (),
 ) -> Counter[str]:
-    """Source files per language under ``scope`` (default ``repo_root``)."""
+    """Source files per language under ``scope`` (default ``repo_root``).
+
+    A builder in ``builders`` covering a language may define
+    ``is_graph_source(rel: Path) -> bool`` (``rel`` relative to the walk's
+    start); a file of that language then counts only when it says True, so files
+    the builder skips (minified bundles, declarations, tests, tool configs) do
+    not make their language dominant.
+    """
     extra = extra_exclude_dirs or set()
     start = scope.resolve() if scope is not None else Path(repo_root).resolve()
+    filters: dict[str, Callable[[Path], bool]] = {}
+    for builder in builders:
+        check = getattr(builder, "is_graph_source", None)
+        if callable(check):
+            for token in _languages(builder):
+                filters.setdefault(token, check)
     counts: Counter[str] = Counter()
     for dirpath, dirnames, filenames in os.walk(start):
         dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS and d not in extra)
         for name in filenames:
             language = LANGUAGE_BY_EXTENSION.get(os.path.splitext(name)[1].lower())
-            if language is not None:
-                counts[language] += 1
+            if language is None:
+                continue
+            check = filters.get(language)
+            if check is not None and not check(Path(dirpath, name).relative_to(start)):
+                continue
+            counts[language] += 1
     return counts
 
 
 def dominant_language(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    builders: Sequence[ImportGraphBuilder] = (),
 ) -> str | None:
-    """The language with the most source files (ties by name), or None."""
-    counts = language_counts(repo_root, extra_exclude_dirs, scope)
+    """The language with the most source files (ties by name), or None.
+
+    ``builders`` narrows each covered language to the files its builder graphs
+    (:func:`language_counts`).
+    """
+    counts = language_counts(repo_root, extra_exclude_dirs, scope, builders)
     if not counts:
         return None
     return min(counts, key=lambda lang: (-counts[lang], lang))
@@ -245,9 +268,10 @@ def dominant_language(
 
 def no_graph_reason(
     repo_root: Path, extra_exclude_dirs: set[str] | None = None, scope: Path | None = None,
+    builders: Sequence[ImportGraphBuilder] = (),
 ) -> str:
     """Why no import graph was built, naming the dominant source language."""
-    language = dominant_language(repo_root, extra_exclude_dirs, scope)
+    language = dominant_language(repo_root, extra_exclude_dirs, scope, builders)
     if language is None:
         return NO_SOURCE_FILES
     if language == "python":
