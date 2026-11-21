@@ -14,6 +14,14 @@ same way, here:
   has. The group charts use the same set so the three read on one scale, and the
   layer bars (``lib/fleet_layer_bars.py``) draw team rows too.
 
+- **Lower bound (#697).** ``floor_mean`` is the floor-inclusive figure shown beside
+  the known-only mean, never in its place: an unknown row with a confirmed floor
+  (``lib.levels.floor_of``) joins at that floor's share. It is a lower bound over a
+  larger row set, so it can sit below the known-only mean (a 1-of-4 floor row
+  joining rows at their top). Plotted positions stay on ``mean_share``: an entry
+  written before #697 has no floors, and a line drawn on this figure would move
+  only because floors appeared.
+
 Pure arithmetic: no I/O, no ordering dependence.
 """
 from __future__ import annotations
@@ -33,3 +41,22 @@ def mean_share(cells: Iterable[tuple[int | None, int | None]]) -> float | None:
     """The mean share of top level over the known ``(level, top)`` pairs; None when none is."""
     shares = known_shares(cells)
     return sum(shares) / len(shares) if shares else None
+
+
+Cell = tuple[int | None, int | None, int | None]  # (level, floor, top)
+
+
+def floor_shares(cells: Iterable[Cell]) -> list[float]:
+    """Each ``(level, floor, top)`` triple's known level, else its floor, as a share of top level."""
+    return known_shares((level if type(level) is int else floor, top) for level, floor, top in cells)
+
+
+def floor_mean(cells: Iterable[Cell]) -> float | None:
+    """The floor-inclusive mean share: a lower bound over rows with a level or a floor; None when none."""
+    shares = floor_shares(cells)
+    return sum(shares) / len(shares) if shares else None
+
+
+def has_floor(cells: Iterable[Cell]) -> bool:
+    """Some unknown row carries a floor, so ``floor_mean`` says more than ``mean_share``."""
+    return any(type(level) is not int and type(floor) is int for level, floor, _ in cells)

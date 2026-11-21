@@ -13,7 +13,10 @@ one page per group, with no rescan:
   back, each with its current value; an org row names the settings scope it
   applies to;
 - for an ``unknown`` row, the signals that could not be measured and why: a
-  measurement gap, never a failure.
+  measurement gap, never a failure. A row with a confirmed floor (#697) reads
+  "at least N", and a signal only a full ``/assess`` measures (its block
+  unavailable as ``not_registered`` or ``network`` in every repository missing
+  it, ``fleet_groups.full_run_only_signals``) says so instead of a scan hint.
 
 Levels come from re-running ``lib.levels.evaluate`` on the same inputs the
 roll-up (``lib/fleet_groups.py``) evaluated: each repository's ``scans`` and
@@ -44,10 +47,10 @@ from typing import Any
 
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
-from lib.fleet_groups import GroupRow, repo_signals, settings_for, settings_signals
+from lib.fleet_groups import GroupRow, full_run_only_signals, repo_signals, settings_for, settings_signals
 from lib.next_step_guidance import guidance, measure_hint
 from lib.next_step_guidance import parts as unmet_parts_of
-from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate
+from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
 from lib.run_context_types import JsonDict
 
 TEAMS_DIR = "teams"
@@ -55,6 +58,8 @@ INDEX_FILE = "teams.md"
 
 _OPS = {"eq": "=", "ne": "!=", "lt": "<", "lte": "<=", "gt": ">", "gte": ">=",
         "in": "in", "not_in": "not in"}
+FULL_RUN_HINT = ("Only a full `/assess` run measures it: the headless fleet run reports its block "
+                 "unavailable (`not_registered` or `network`), so this is not a gap a scan option closes.")
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>|#~])")
 
 
@@ -139,7 +144,8 @@ def _check_agrees(group: GroupRow, results: Sequence[RowResult]) -> None:
 
 def _level_cell(result: RowResult, top: int) -> str:
     if result["status"] != "level" or result["level"] is None:
-        return "unknown"
+        floor = floor_of(result)
+        return "unknown" if floor is None else f"at least {floor} of {top} (higher unknown)"
     return f"{result['level']} of {top}" + (" (top)" if result["level"] == top else "")
 
 
@@ -259,22 +265,28 @@ def _rolled(result: RowResult, top: int, bound: int) -> int:
 def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
                      failed: Mapping[str, str], signals: Mapping[str, JsonDict]) -> list[str]:
     gap = "This is a measurement gap, not a failure: the run could not measure every signal the level depends on."
+    floor = floor_of(result)
     if result["scope"] == "org":
+        head = "Level unknown" if floor is None else f"Level at least {floor}, higher levels unknown"
         if settings_scope is None:
-            return [f"Level unknown. {gap}", "",
+            return [f"{head}. {gap}", "",
                     "- No ghreport settings matched this group: pass ghreport's settings to the fleet "
                     "run with `--settings`."]
-        return [f"Level unknown. {gap}", ""] + [
+        return [f"{head}. {gap}", ""] + [
             f"- {code(signal)}: not measured. {measure_hint(signal)}" for signal in result["missing_signals"]]
     top = len(row["levels"])
     evaluations = result.get("repos", {})
     low, high = _rolled(result, top, 0), _rolled(result, top, 1)
     span = f" (between {low} and {high} of {top})" if evaluations else ""
-    lines = [f"Level unknown{span}. {gap}", ""]
+    head = (f"Level unknown{span}" if floor is None
+            else f"Level at least {floor} of {top}, unknown above it (up to {high})")
+    lines = [f"{head}. {gap}", ""]
+    only = set(full_run_only_signals(evaluations, signals))
     for signal in result["missing_signals"]:
         names = sorted(n for n, ev in evaluations.items() if signal in ev["missing_signals"])
         hint = ("The repository scan failed in each of them; the reason token is listed below."
-                if all(n in failed for n in names) else measure_hint(signal))
+                if all(n in failed for n in names) else FULL_RUN_HINT if signal in only
+                else measure_hint(signal))
         lines.append(f"- {code(signal)}: not measured in {len(names)} of {_repos(len(evaluations))}. {hint}")
     undetermined = result.get("unknown_repos", [])
     if undetermined:

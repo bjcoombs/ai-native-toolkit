@@ -13,7 +13,11 @@ over the rows that could be measured, the unit and row set the slope chart and
 trend lines use too. A repository
 with no measured row, or no commit count (a failed scan, an unavailable
 ``ai_usage`` block), is never drawn at zero: it is named on a hatched strip
-under the plot with what is unknown.
+under the plot with what is unknown. A repository whose unknown rows have a
+confirmed floor (#697, ``lib.levels.floor_of``) also carries ``maturity_floor``,
+the floor-inclusive mean (``fleet_maturity.floor_mean``), printed beside the
+known-only mean as "at least": in the dot's tooltip, and on the strip for a
+repository with no known row. The dot itself sits on the known-only mean.
 
 The vertical split is half the top level; the horizontal split is the median
 commit count of the plotted repositories. Labels are placed by
@@ -24,14 +28,14 @@ from __future__ import annotations
 
 import textwrap
 from collections.abc import Sequence
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from lib import fleet_svg as svg
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
-from lib.fleet_maturity import SCOPE, known_shares, mean_share
+from lib.fleet_maturity import SCOPE, floor_mean, has_floor, known_shares, mean_share
 from lib.fleet_svg import THEMED_HATCH, Box, LinearScale
-from lib.levels import MaturityModel, evaluate_row
+from lib.levels import MaturityModel, evaluate_row, floor_of
 
 TITLE = "Fleet activity and maturity"
 FILE = "quadrant.svg"
@@ -46,6 +50,8 @@ LINE_H = 16.0
 
 
 _BOTTOM = PLOT_T + PLOT_H
+FLOOR_NOTE = ("\"At least\" (in a tooltip or below) is a lower bound: unknown team rows counted at "
+              "their confirmed floor beside the known rows; the dot sits on the known-only mean.")
 # Quadrant captions: (x, y, text, anchor, theme role, weight); labels are placed around them.
 CAPTIONS: tuple[tuple[float, float, str, str, str, str | None], ...] = (
     (PLOT_R - 8, _BOTTOM - 10, "Invest here: busy and immature", "end", "bad", "600"),
@@ -61,6 +67,8 @@ class RepoPoint(TypedDict):
     maturity: float | None  # mean share of top level over measured team rows; None: none measured
     measured_rows: int
     team_rows: int
+    # floor-inclusive mean, a lower bound (#697); absent when no unknown row has a floor
+    maturity_floor: NotRequired[float | None]
 
 
 def _commits(row: FleetRow) -> int | None:
@@ -77,11 +85,16 @@ def repo_points(levels: MaturityModel, repos: Sequence[FleetRow]) -> list[RepoPo
     points: list[RepoPoint] = []
     for repo in sorted(repos, key=lambda r: r["repo"]):
         data = repo_signals(repo)
-        cells = [(evaluate_row(row, data)["level"], len(row["levels"])) for row in team]
-        points.append({
+        evaluations = [(evaluate_row(row, data), len(row["levels"])) for row in team]
+        cells = [(ev["level"], top) for ev, top in evaluations]
+        floors = [(ev["level"], floor_of(ev), top) for ev, top in evaluations]
+        point: RepoPoint = {
             "repo": repo["repo"], "commits": _commits(repo), "maturity": mean_share(cells),
             "measured_rows": len(known_shares(cells)), "team_rows": len(team),
-        })
+        }
+        if has_floor(floors):
+            point["maturity_floor"] = floor_mean(floors)
+        points.append(point)
     return points
 
 
@@ -98,12 +111,21 @@ def at_risk(point: RepoPoint, split: int) -> bool:
             and point["commits"] >= split and point["maturity"] < Y_SPLIT)
 
 
+def floor_text(point: RepoPoint) -> str:
+    """The floor-inclusive lower bound as text, or empty when the point has none."""
+    floor = point.get("maturity_floor")
+    return "" if floor is None else f"at least {floor:.2f} with floors"
+
+
 def _unknown_text(point: RepoPoint) -> str:
     commits, maturity = point["commits"], point["maturity"]
+    bound = floor_text(point)
+    level = f"level unknown, {bound}" if bound else "level unknown"
     if commits is None and maturity is None:
-        return f"{point['repo']} (level and activity unknown)"
+        return f"{point['repo']} ({level}, activity unknown)" if bound else \
+            f"{point['repo']} (level and activity unknown)"
     if maturity is None:
-        return f"{point['repo']} (level unknown, {commits} commits)"
+        return f"{point['repo']} ({level}, {commits} commits)"
     return f"{point['repo']} (activity unknown, level {maturity:.2f})"
 
 
@@ -175,7 +197,8 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
         cx, cy = x(point["commits"] or 0), y(point["maturity"] or 0.0)
         tone = "bad" if at_risk(point, split) else "accent"
         tip = (f"{point['repo']}: {point['commits']} commits, maturity {point['maturity']:.2f} "
-               f"({point['measured_rows']} of {point['team_rows']} team rows measured)")
+               f"({point['measured_rows']} of {point['team_rows']} team rows measured"
+               + (f"; {floor_text(point)})" if floor_text(point) else ")"))
         body.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="6.5" class="f-{tone} s-bg" '
                     f'stroke-width="1.5"><title>{svg.esc(tip)}</title></circle>')
         if placed is None:
@@ -189,6 +212,10 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
         body.append(f'<circle cx="{PLOT_L + 6:.1f}" cy="{cursor - 4:.1f}" r="5" class="f-{swatch}"/>')
         body.append(svg.text(PLOT_L + 18, cursor, label, size=11.5, cls="muted"))
         cursor += LINE_H + 2
+    if any(floor_text(p) for p in points):
+        for line in textwrap.wrap(FLOOR_NOTE, WRAP):
+            body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))
+            cursor += LINE_H
     if hidden:
         cursor += 4
         for line in _wrapped("Not labelled (crowded): ", sorted(hidden)):

@@ -16,6 +16,11 @@ evidence appeared or vanished. A group with no such row (added or removed
 since the earlier run, or unknown throughout) is never drawn at zero: it is
 named on a hatched strip under the chart.
 
+When an unknown row carries a confirmed floor (#697) on either side, the group
+also gets ``floor_then`` and ``floor_now``: ``fleet_maturity.floor_mean`` over
+the rows with a level or a floor in both runs, a lower bound printed in the
+line's tooltip as "at least". The line itself stays on the known-only mean.
+
 The label names the row with the largest change in share (ties to the lower
 row id) as ``title then→now``; when its move was not a pure level change
 (``cause`` ``set`` or ``set_and_level``: the measured set of repositories moved
@@ -28,13 +33,13 @@ number formatting.
 from __future__ import annotations
 
 import textwrap
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from lib import fleet_svg as svg
 from lib.fleet_compare import CAUSE_LEVEL, Comparison
-from lib.fleet_maturity import SCOPE, mean_share
+from lib.fleet_maturity import SCOPE, Cell, floor_mean, has_floor, mean_share
 from lib.fleet_svg import THEMED_HATCH, LinearScale
-from lib.levels import MaturityModel
+from lib.levels import MaturityModel, floor_of
 
 TITLE = "Fleet maturity, before and after"
 FILE = "slope.svg"
@@ -66,6 +71,8 @@ class GroupSlope(TypedDict):
     rows: int  # team rows of the maturity model the group carries on either side
     mover: Mover | None  # the row that moved most; None when no paired row moved
     absent: str | None  # "added" | "removed" when the group is in one run only
+    floor_then: NotRequired[float | None]  # floor-inclusive lower bound (#697); absent without floors
+    floor_now: NotRequired[float | None]
 
 
 class SlopeView(TypedDict):
@@ -92,6 +99,8 @@ def slope_view(levels: MaturityModel, comparison: Comparison) -> SlopeView:
         mover: Mover | None = None
         best = 0.0
         then_present = now_present = False
+        then_floors: list[Cell] = []
+        now_floors: list[Cell] = []
         rows = sorted((r for r in change["rows"] if r["scope"] == SCOPE), key=lambda r: r["id"])
         for row in rows:
             then_present = then_present or row["then"] is not None
@@ -99,6 +108,11 @@ def slope_view(levels: MaturityModel, comparison: Comparison) -> SlopeView:
             top = tops.get(row["id"])
             a = row["then"]["level"] if row["then"] is not None else None
             b = row["now"]["level"] if row["now"] is not None else None
+            fa = floor_of(row["then"]) if row["then"] is not None else None
+            fb = floor_of(row["now"]) if row["now"] is not None else None
+            if top and (a is not None or fa is not None) and (b is not None or fb is not None):
+                then_floors.append((a, fa, top))
+                now_floors.append((b, fb, top))
             if not top or a is None or b is None:
                 continue
             then_cells.append((a, top))
@@ -110,13 +124,17 @@ def slope_view(levels: MaturityModel, comparison: Comparison) -> SlopeView:
                          "then": a, "now": b, "cause": row["cause"]}
         absent = ("added" if not then_present and now_present
                   else "removed" if then_present and not now_present else None)
-        groups.append({
+        slope: GroupSlope = {
             "group": change["group"],
             "then": mean_share(then_cells),
             "now": mean_share(now_cells),
             "paired_rows": len(then_cells), "rows": len(rows),
             "mover": mover, "absent": absent,
-        })
+        }
+        if has_floor([*then_floors, *now_floors]):
+            slope["floor_then"] = floor_mean(then_floors)
+            slope["floor_now"] = floor_mean(now_floors)
+        groups.append(slope)
     earlier, later = comparison["earlier"], comparison["later"]
     return {"earlier": earlier["scan_date"] if earlier is not None else "earlier",
             "later": later["scan_date"] if later is not None else "later", "groups": groups}
@@ -162,6 +180,13 @@ def _why(group: GroupSlope) -> str:
     return f"{name}: {svg.truncate(mover['title'], room)}{tail}"
 
 
+def _floor_tip(group: GroupSlope) -> str:
+    then, now = group.get("floor_then"), group.get("floor_now")
+    if then is None or now is None:
+        return ""
+    return f"; with floors at least {then:.2f} → {now:.2f}"
+
+
 def _unknown_text(group: GroupSlope) -> str:
     if group["absent"] == "added":
         return f"{group['group']} (new since the earlier run)"
@@ -199,7 +224,8 @@ def render_slope(view: SlopeView) -> str:
         y0, y1, colour = Y(then), Y(now), tone(group)
         change = delta(group)
         tip = (f"{group['group']}: {then:.2f} → {now:.2f} ({change:+.2f}; "
-               f"{group['paired_rows']} of {group['rows']} rows known in both runs)")
+               f"{group['paired_rows']} of {group['rows']} rows known in both runs"
+               + _floor_tip(group) + ")")
         body.append(f'<line x1="{LX:.1f}" y1="{y0:.1f}" x2="{RX:.1f}" y2="{y1:.1f}" '
                     f'class="s-{colour}" stroke-width="2.4"><title>{svg.esc(tip)}</title></line>')
         for x, y in ((LX, y0), (RX, y1)):
