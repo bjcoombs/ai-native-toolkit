@@ -118,7 +118,9 @@ def _mutate(path: list[Any], value: Any = None, delete: bool = False) -> dict[st
     (["entries", 0, "id"], "core.Bad", "WRONG_TYPE"),
     (["entries", 0, "id"], "other.scan_a", "BAD_ID"),
     (["entries", 3, "id"], "core:scan_a.other", "BAD_ID"),
-    (["entries", 4, "id"], "core.cond.row-a.2.flag", "BAD_ID"),
+    (["entries", 4, "id"], "core.row-a.1.flag", "BAD_ID"),
+    (["entries", 4, "id"], "core.cond.row-a.1.any_name", None),
+    (["entries", 0, "id"], "scan_a", "BAD_ID"),
     (["entries", 5, "id"], "core.finding.other", "BAD_ID"),
     (["manifest_version"], 2, "WRONG_TYPE"),
     (["entries"], {}, "WRONG_TYPE"),
@@ -178,6 +180,9 @@ def test_duplicates_are_reported() -> None:
     data["entries"].append({**copy.deepcopy(data["entries"][5]), "id": "core.finding.two",
                             "name": "two"})
     assert _codes(data) == ["DUPLICATE_ORDER"]
+    data = _valid()
+    data["entries"].append({**copy.deepcopy(data["entries"][4]), "id": "core.cond.twin"})
+    assert _codes(data) == ["DUPLICATE_KEY"]
 
 
 def test_a_scan_key_may_not_shadow_a_core_input() -> None:

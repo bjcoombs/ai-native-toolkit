@@ -25,7 +25,8 @@ the tests.
 
 Ids: a collector is ``<owner>.<scan key>`` (``core.ci_checks``), a signal
 ``<owner>:<run-context path>`` (``core:ci_checks.test_or_lint_runs``), a condition
-``<owner>.cond.<row>.<level>.<leaf>``, keyed ``<row>.<level>:<signal path>``, and a
+``<owner>.cond.<name>`` (core uses ``<row>.<level>.<leaf>``), keyed by a unique
+``<row>.<level>:<signal path>``, and a
 finding ``<owner>.finding.<name>``. Grades are never authored: a signal carries its
 producer ``evidence`` class (``level_signals.SIGNAL_INPUTS``, #783), and its grade
 follows from that class.
@@ -322,23 +323,24 @@ def _entry_shape(i: int, raw: Any, owner: str, out: list[ValidationError]) -> bo
     if len(out) > before:
         return False
     expected = _expected_id(raw, owner)
-    if expected is not None and raw["id"] != expected:
+    if not (raw["id"].startswith(expected) if kind == "condition" else raw["id"] == expected):
         out.append(finding(f"{where}.id", "BAD_ID", f"a {kind} id must be {expected!r}"))
+        return False
     return True
 
 
-def _expected_id(raw: Mapping[str, Any], owner: str) -> str | None:
+def _expected_id(raw: Mapping[str, Any], owner: str) -> str:
+    """The id an entry must have (for a condition, the prefix its id must start with)."""
     kind = raw["kind"]
     if kind == "signal":
         return f"{owner}:{raw['path']}"
     if kind == "finding":
         return f"{owner}.finding.{raw['name']}"
-    if kind == "collector":
-        name = raw["id"].removeprefix(f"{owner}.")
-        return raw["id"] if raw["id"].startswith(f"{owner}.") and _NAME_RE.match(name) \
-            else f"{owner}.<scan key>"
-    m = _KEY_RE.match(raw["key"])
-    return f"{owner}.cond.{m.group(1)}.{m.group(2)}.{m.group(3).rsplit('.', 1)[-1]}" if m else None
+    if kind == "condition":
+        return f"{owner}.cond."
+    name = raw["id"].removeprefix(f"{owner}.")
+    return raw["id"] if raw["id"].startswith(f"{owner}.") and _NAME_RE.match(name) \
+        else f"{owner}.<scan key>"
 
 
 def scan_key(entry: CollectorEntry) -> str:
@@ -454,7 +456,12 @@ def _references(m: CheckManifest, where_of: Mapping[str, str], out: list[Validat
                                f"{s['collector']} does not publish {s['path'].split('.')[0]!r}"
                                f" (published by {blocks.get(s['path'].split('.')[0], 'nothing')})"))
     signal_paths = [s["path"] for s in signals(m)]
+    keys: set[str] = set()
     for c in conditions(m):
+        if c["key"] in keys:
+            out.append(finding(f"{where_of[c['id']]}.key", "DUPLICATE_KEY",
+                               f"condition key {c['key']!r} is declared twice"))
+        keys.add(c["key"])
         sig = c["key"].split(":", 1)[1]
         if sig not in signal_paths:
             out.append(finding(f"{where_of[c['id']]}.key", "UNKNOWN_SIGNAL",

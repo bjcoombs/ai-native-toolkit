@@ -1595,6 +1595,7 @@ collector = "core.keyhole_blocks"
 path = "structure.front_door_ratio"
 type = "number"
 evidence = "head_structure"
+null_means = "null when no import crosses a package boundary"
 
 [[entries]]
 id = "core:promissory_markers.families.suppression.total"
@@ -1802,7 +1803,7 @@ id = "core.cond.layer-2-design.2.cross_package_edges"
 kind = "condition"
 title = "Packages import one another"
 key = "layer-2-design.2:structure.cross_package_edges"
-fix = "This follows once a second package uses the first; nothing to change on its own."
+fix = "Nothing to change on its own: this is met once one package imports another."
 
 [[entries]]
 id = "core.cond.layer-2-design.2.front_door_ratio"

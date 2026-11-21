@@ -1756,8 +1756,9 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `null_means`. No grade is authored: it follows from the class
   (`level_signals.INPUT_GRADES`).
 - `condition`: display metadata for one default criterion, keyed
-  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`), id
-  `core.cond.<row>.<level>.<leaf>`, with a supportive `fix`. The criterion itself stays in
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
+  supportive `fix`. The criterion itself stays in
   `levels/default.toml`; a custom `--levels` file needs no entries.
 - `finding`: a derived finding, id `core.finding.<name>`, with `order`, `action`,
   `mode`, `concern` (in `assess_config.GATE_CONCERN_FINDINGS`), `inputs`, `derive`,
@@ -1771,8 +1772,8 @@ names a `gate_reason`; `offline_callable` needs `network`, `platform_only` needs
 block is `headless_variant` exactly when a variant names it; every read is a core input
 or an earlier collector at the same or an earlier stage, and no key shadows a core
 input or publishes a block another collector publishes (the `scan_registry.validate`
-rules); a signal's collector exists and publishes its block; a condition names a declared
-signal; finding orders are distinct and every finding input names a block or collector.
+rules); a signal's collector exists and publishes its block; a condition key is unique and names a
+declared signal; finding orders are distinct and every finding input names a block or collector.
 An unknown key or reference carries a "did you mean" `suggestion` and the `available`
 names. The module imports none of the tables it describes, because later steps make
 them load from it.
