@@ -263,14 +263,14 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
     issues: list[str] = []
     for md in sorted(target_root.rglob("*.md")):
         for problem in check_orphan_markers(md.read_text("utf-8")):
-            issues.append(f"{md.relative_to(staging)}: {problem}")
+            issues.append(f"{md.relative_to(staging).as_posix()}: {problem}")
 
     if not issues:
         out_zip.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in sorted(target_root.rglob("*")):
                 if f.is_file():
-                    zi = zipfile.ZipInfo(str(f.relative_to(staging)))
+                    zi = zipfile.ZipInfo(f.relative_to(staging).as_posix())
                     zi.date_time = (2026, 1, 1, 0, 0, 0)  # normalise mtime for determinism
                     zf.writestr(zi, f.read_bytes())
 

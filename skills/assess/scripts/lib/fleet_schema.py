@@ -163,5 +163,5 @@ if __name__ == "__main__":
     SCHEMA_PATH.parent.mkdir(parents=True, exist_ok=True)
     for path, text in ((SCHEMA_PATH, render()), (STAMP_SCHEMA_PATH, render_stamp()),
                        (FRESHNESS_SCHEMA_PATH, render_freshness())):
-        path.write_text(text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8", newline="\n")
         print(f"wrote {path}")

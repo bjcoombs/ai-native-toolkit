@@ -366,7 +366,7 @@ def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None,
         return None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text((stderr or "")[-STDERR_TAIL_CHARS:], encoding="utf-8")
+        path.write_text((stderr or "")[-STDERR_TAIL_CHARS:], encoding="utf-8", newline="\n")
     except OSError:
         return None
     return path
