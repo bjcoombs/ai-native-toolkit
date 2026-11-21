@@ -105,7 +105,6 @@ class BotClassifier:
     def __init__(self) -> None:
         self._known: dict[str, bool | None] = {}
         self._probes = 0
-        self._unprobed: set[str] = set()
 
     def is_bot(self, actor: Any) -> bool | None:
         name = login(actor)
@@ -123,14 +122,8 @@ class BotClassifier:
             self._known[name] = self._probe(name)
         return self._known[name]
 
-    def unprobed(self, actor: Any) -> bool:
-        """True when ``actor`` is unknown only because the probe budget ran out."""
-        name = login(actor)
-        return name is not None and name in self._unprobed
-
     def _probe(self, name: str) -> bool | None:
         if self._probes >= MAX_LOGIN_PROBES:
-            self._unprobed.add(name)
             return None
         self._probes += 1
         try:

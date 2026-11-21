@@ -30,10 +30,10 @@ First human comment (GitHub). The earliest comment (``createdAt``) or review
 nor ``github-actions``, nor a bot (the sample's shared ``BotClassifier``). Its
 hours are counted from ``createdAt`` and only over the changes that have one;
 ``human_commented_share`` says how many do. An event with no author login (a
-deleted account) is skipped, and so is an account left unprobed because the
-shared probe budget (``MAX_LOGIN_PROBES``) was spent. When a probed account whose
-type could not be learned comes before the first known human on any change, the
-three first-comment figures are None: the answer depends on that account.
+deleted account) is skipped. When an account whose type could not be learned (a
+failed probe, or one left unprobed because the shared ``MAX_LOGIN_PROBES`` budget
+was spent) comes before the first known human on any change, the three
+first-comment figures are None: the answer depends on that account.
 
 AI review (GitHub). A change counts when a review or comment comes from an AI
 reviewer other than the change's author (an agent commenting on its own pull
@@ -137,8 +137,8 @@ _UNDECIDED = "undecided"
 
 
 def first_human_comment(pr: dict[str, Any], bots: BotClassifier) -> float | None | str:
-    """Hours to the first human comment, None for none, ``_UNDECIDED`` when a
-    probed account of unknown type comes first."""
+    """Hours to the first human comment, None for none, ``_UNDECIDED`` when an
+    account of unknown type (probe failed or budget spent) comes first."""
     author = login(pr.get("author"))
     for when, actor in _events(pr):
         name = login(actor)
@@ -146,8 +146,6 @@ def first_human_comment(pr: dict[str, Any], bots: BotClassifier) -> float | None
             continue
         verdict = bots.is_bot(actor)
         if verdict is None:
-            if bots.unprobed(actor):
-                continue
             return _UNDECIDED
         if not verdict:
             return _hours(pr.get("createdAt"), when)

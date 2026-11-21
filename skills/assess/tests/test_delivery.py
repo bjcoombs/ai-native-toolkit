@@ -137,16 +137,16 @@ def test_an_authorless_event_is_skipped_not_undecided():
     assert block["human_commented_share"] == 1.0
 
 
-def test_a_spent_probe_budget_skips_the_unprobed_account(monkeypatch):
+def test_a_spent_probe_budget_withholds_the_comment_figures(monkeypatch):
     monkeypatch.setattr(ms, "MAX_LOGIN_PROBES", 0)
-
     pr = _pr(comments=(("mystery", "2026-11-01T01:00:00Z"),),
              reviews=(("carol", "2026-11-01T03:00:00Z"),))
     pr["reviews"][0]["author"]["is_bot"] = False  # typed: needs no probe
-    bots = BotClassifier()
-    block = scan_delivery(sample([pr], bots), REVIEW)
-    assert bots.unprobed({"login": "mystery"})
-    assert block["first_human_comment_hours_p50"] == 3.0
+    block = scan_delivery(sample([pr, _pr()], BotClassifier()), REVIEW)
+    assert block["first_human_comment_hours_p50"] is None
+    assert block["first_human_comment_hours_p90"] is None
+    assert block["human_commented_share"] is None
+    assert block["time_to_merge_hours_p50"] == 10.0
 
 
 def test_an_unknown_account_after_the_first_human_does_not_matter():
