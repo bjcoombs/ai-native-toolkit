@@ -135,11 +135,13 @@ CI_CHECKS: JsonDict = {
             "The CI test-or-lint signal: true, false, or null when included jobs may hold "
             "the check."),
         "basis": _field(
-            {"enum": ["check_command", "merged_config", "included_jobs", "no_check_command",
-                      "no_ci"]},
+            {"enum": ["check_command", "merged_config", "included_jobs", "merged_config_partial",
+                      "no_check_command", "no_ci"]},
             "The reason for test_or_lint_runs: check_command or merged_config (true; the second "
-            "when only the merged configuration ran a check), included_jobs (null), "
-            "no_check_command or no_ci (false)."),
+            "when only the merged configuration ran a check), included_jobs or "
+            "merged_config_partial (null; the second when the merged configuration was read "
+            "with no check but may lack jobs: an include under rules:, or a trigger: child "
+            "pipeline), no_check_command or no_ci (false)."),
     },
 }
 

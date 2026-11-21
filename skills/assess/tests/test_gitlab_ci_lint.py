@@ -196,9 +196,41 @@ def test_a_conditional_include_keeps_a_check_free_merge_unknown(tmp_path, ci):
     root = tmp_path / "gl"
     app = make_repo(root, "grp/app", files={".gitlab-ci.yml": ci})
     block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    assert (block["test_or_lint_runs"], block["basis"]) == (None, "merged_config_partial")
     block = scan_ci_checks(app, root, MergedCi("read", text=MERGED))
     assert (block["test_or_lint_runs"], block["basis"]) == (True, "merged_config")
+
+
+def test_a_rules_include_inside_a_template_read_offline_keeps_the_merge_unknown(tmp_path):
+    root = tmp_path / "gl"
+    make_repo(root, "grp/tpl", files={"templates/test.yml": (
+        "include:\n  - project: grp/missing\n    file: /x.yml\n    rules:\n      - if: $X\n")})
+    app = make_repo(root, "grp/app", files={".gitlab-ci.yml": INCLUDE.format(project="grp/tpl")})
+    block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
+    assert (block["test_or_lint_runs"], block["basis"]) == (None, "merged_config_partial")
+
+
+@pytest.mark.parametrize(("own", "merged"), [
+    # a trigger: job in the repository's own file
+    (INCLUDE.format(project="grp/missing") + "child:\n  trigger:\n    include: ci/child.yml\n",
+     "build:\n  script:\n    - make\n"),
+    # a trigger: job only the merge shows (it came from the uncloned template)
+    (INCLUDE.format(project="grp/missing"),
+     "build:\n  script:\n    - make\ndeploy:\n  trigger:\n    project: grp/deploy\n"),
+])
+def test_a_child_pipeline_keeps_a_check_free_merge_unknown(tmp_path, own, merged):
+    """A child or downstream pipeline is not expanded in the merge: no check is not false."""
+    root = tmp_path / "gl"
+    app = make_repo(root, "grp/app", files={".gitlab-ci.yml": own})
+    block = scan_ci_checks(app, root, MergedCi("read", text=merged))
+    assert (block["test_or_lint_runs"], block["basis"]) == (None, "merged_config_partial")
+    assert block["merged_config"] == "read"
+
+
+def test_child_pipeline_reads_a_job_key_only():
+    from lib.ci_checks import child_pipeline
+    assert child_pipeline("child:\n  trigger:\n    include: a.yml\n")
+    assert not child_pipeline("trigger: x\nbuild:\n  script:\n    - echo trigger: no\n")
 
 
 def test_conditional_include_reads_only_the_include_section():

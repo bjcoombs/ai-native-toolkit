@@ -355,10 +355,11 @@
                     "check_command",
                     "merged_config",
                     "included_jobs",
+                    "merged_config_partial",
                     "no_check_command",
                     "no_ci"
                   ],
-                  "description": "The reason for test_or_lint_runs: check_command or merged_config (true; the second when only the merged configuration ran a check), included_jobs (null), no_check_command or no_ci (false)."
+                  "description": "The reason for test_or_lint_runs: check_command or merged_config (true; the second when only the merged configuration ran a check), included_jobs or merged_config_partial (null; the second when the merged configuration was read with no check but may lack jobs: an include under rules:, or a trigger: child pipeline), no_check_command or no_ci (false)."
                 }
               }
             },

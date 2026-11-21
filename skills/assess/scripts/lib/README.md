@@ -3078,13 +3078,15 @@ offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API
 merged configuration, whose check lines are counted apart in `merged_check_commands`
 (the merged file repeats the own and resolved jobs). A check there makes the signal true
 (`basis: merged_config`, used only when no own or included line ran one: offline wins); a
-merged configuration read with none makes it false, unless the repository's own `include:`
-section has a `rules:` key (`conditional_include`): the lint API may leave that include out,
-so the signal stays null. `merged_config` is `not_read`
+merged configuration read with none makes it false, unless it may lack jobs
+(`merged_partial`): a `rules:` key in the `include:` section of the repository's file or of a
+template read offline (`conditional_include`; the lint API may leave that include out), or a
+`trigger:` job in any of those or in the merged file (`child_pipeline`; a child or downstream
+pipeline is not expanded). Then the signal stays null with `basis: merged_config_partial`:
+unknown beats wrong. `merged_config` is `not_read`
 (offline), `not_needed`, `read`, `invalid` or `unavailable` (reason code in
-`merged_config_reason`); the merged text is never in the block. Known limit: a child pipeline, and a
-`rules:` include nested inside a template, are not in the merged file, so a check only
-there reads false. With no GitLab CI file, or one with no `include:`, `merged_config` is
+`merged_config_reason`); the merged text is never in the block. Known limit: a `rules:` include inside a
+template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
 `not_read`. The module itself is
 offline: it imports the value type, never a platform client.
 Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
