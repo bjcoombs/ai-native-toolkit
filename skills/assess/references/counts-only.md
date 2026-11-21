@@ -36,7 +36,7 @@ keys come from the file tree, so a key like `docs/My Notes.md` is kept
 `file_a`, `file_b`, `test_file` or `source_file` is a path in every block,
 and a field named `reason` is dropped in every block without its own rule.
 A field kept as a reason code keeps only the code of a `code: sentence`
-reason when it is a lowercase snake_case code (`no_import_graph_rust`),
+reason when it is a known structure code (`no_import_graph_rust`),
 or the code a known sentence maps to (`no_grimp`), else `unavailable`,
 so a path or name before the colon is never kept; an empty reason is dropped.
 

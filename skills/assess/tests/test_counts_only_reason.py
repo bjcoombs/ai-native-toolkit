@@ -11,6 +11,15 @@ import pytest
 import assess_core
 from lib.counts_only import COUNTS_ONLY_FILE, counts_only, reason_token
 from lib.counts_only_rules import REASON, classify
+from lib.import_graph import (
+    INVALID_IMPORT_GRAPH,
+    LANGUAGE_BY_EXTENSION,
+    NO_PYTHON_PACKAGES,
+    NO_SOURCE_FILES,
+    STRUCTURE_REASON_CODES,
+    no_graph_reason,
+)
+from lib.import_graph_python import GRIMP_MISSING
 
 
 def test_structure_reason_is_a_reason_code_rule() -> None:
@@ -31,9 +40,35 @@ def test_structure_reason_is_a_reason_code_rule() -> None:
     ("alice: could not read the module", "unavailable"),
     ("alice@example.com: denied", "unavailable"),
     ("Alice_Smith: denied", "unavailable"),
+    ("alice_smith: denied", "unavailable"),
+    ("no_import_graph_alice: denied", "unavailable"),
 ])
 def test_reason_token_keeps_the_code_only(reason: str, code: str) -> None:
     assert reason_token(reason) == code
+
+
+@pytest.mark.parametrize("ext", sorted(LANGUAGE_BY_EXTENSION))
+def test_every_no_graph_reason_keeps_a_listed_code(tmp_path: Path, ext: str) -> None:
+    """The allow-list and the reasons the selector writes cannot drift (#764)."""
+    (tmp_path / f"a{ext}").write_text("x\n", encoding="utf-8")
+    code = reason_token(no_graph_reason(tmp_path))
+    assert code in STRUCTURE_REASON_CODES
+    assert code != "unavailable"
+
+
+@pytest.mark.parametrize("reason", [
+    NO_SOURCE_FILES, NO_PYTHON_PACKAGES, GRIMP_MISSING,
+    f"{INVALID_IMPORT_GRAPH}: the rust builder returned 1 module(s) with no package",
+    "grimp failed to build import graph (boom)",
+    "networkx not installed; static structure not assessed",
+])
+def test_every_builder_reason_keeps_a_listed_code(reason: str) -> None:
+    code = reason_token(reason)
+    assert code in STRUCTURE_REASON_CODES
+
+
+def test_allow_list_holds_only_structure_codes() -> None:
+    assert all(c.startswith(("no_", "grimp_", "invalid_")) for c in STRUCTURE_REASON_CODES)
 
 
 def test_counts_only_keeps_structure_reason_code_and_drops_empty() -> None:

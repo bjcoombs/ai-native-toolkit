@@ -44,7 +44,6 @@ from lib.counts_only_rules import (
     PATH,
     PATH_KEYED_MAPS,
     REASON,
-    REASON_CODE_RE,
     REASON_SENTENCE_CODES,
     RULES,
     TOKEN,
@@ -53,6 +52,7 @@ from lib.counts_only_rules import (
     classify,
 )
 from lib.counts_only_schema import typed_field_names
+from lib.import_graph import STRUCTURE_REASON_CODES
 from lib.run_context_types import JsonDict
 
 # The longest path kept; a longer "path" is more likely prose than a file.
@@ -311,7 +311,7 @@ def render_doc() -> str:
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
         "A field kept as a reason code keeps only the code of a `code: sentence`",
-        "reason when it is a lowercase snake_case code (`no_import_graph_rust`),",
+        "reason when it is a known structure code (`no_import_graph_rust`),",
         "or the code a known sentence maps to (`no_grimp`), else `unavailable`,",
         "so a path or name before the colon is never kept; an empty reason is dropped.",
         "",
@@ -422,12 +422,12 @@ def reason_code(reason: object) -> str:
 def reason_token(reason: str) -> str | None:
     """A ``REASON`` field's code: the leading code, a known sentence's code, or
     ``"unavailable"``; None (dropped) for an empty reason (#764). A leading
-    code is kept only when it matches ``REASON_CODE_RE``, so a path or a name
-    before the colon never leaks."""
+    code is kept only when ``STRUCTURE_REASON_CODES`` lists it, so a path or a
+    name before the colon never leaks."""
     if not reason.strip():
         return None
     code = reason.split(":", 1)[0].strip()
-    if REASON_CODE_RE.match(code):
+    if code in STRUCTURE_REASON_CODES:
         return code
     return next((c for needle, c in REASON_SENTENCE_CODES if needle in reason),
                 "unavailable")

@@ -15,9 +15,9 @@ Five classes:
 - ``TOKEN``: a kind, grade, band, status, date or version. Kept only while it
   is a short slug (``TOKEN_RE``); anything longer or with spaces is dropped.
 - ``REASON``: an unavailable block's reason, kept as its code only: the
-  ``code`` of a ``code: sentence`` reason when it is a snake_case code
-  (``REASON_CODE_RE``), or the code a known sentence maps to
-  (``REASON_SENTENCE_CODES``), else ``unavailable``. The sentence never
+  ``code`` of a ``code: sentence`` reason when it is a known structure code
+  (``import_graph.STRUCTURE_REASON_CODES``, a fixed allow-list), or the code a
+  known sentence maps to (``REASON_SENTENCE_CODES``), else ``unavailable``. The sentence never
   survives; an empty reason (an available block) is dropped.
 - ``ID``: a stable identifier of another repository or marketplace, the join
   key of a fleet roll-up (``kind:owner/repo``). Kept while it has no
@@ -50,12 +50,6 @@ DROP: Final = "drop"
 # A kept token: a slug of at most 40 characters with no spaces, slashes or "@"
 # (so no sentence, path or e-mail address passes as a kind).
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,39}$")
-
-# A kept reason code: a lowercase snake_case slug of at most 40 characters with
-# at least one underscore (``no_grimp``, ``no_import_graph_rust``), so a path,
-# a login or a single name before a colon (``/home/u/r: ...``, ``alice: ...``)
-# is never kept as a code.
-REASON_CODE_RE = re.compile(r"^(?=.{1,40}$)[a-z][a-z0-9]*(?:_[a-z0-9]+)+$")
 
 # Reason sentences written before the ``code: sentence`` convention, as
 # (substring, code). The headless structure marker and the REASON class both
