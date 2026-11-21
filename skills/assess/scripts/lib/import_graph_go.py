@@ -46,6 +46,7 @@ _LEXEME = re.compile(
 )
 _TOKEN = re.compile(r'"(?:\\.|[^"\\\n])*"|`[^`]*`|\w+|\S', re.UNICODE)
 _DECL = re.compile(r"^(func|type)[ \t]+(\(?)[ \t]*(\w*)", re.MULTILINE | re.UNICODE)
+_RAW_STRING = re.compile(r"`[^`]*`")
 _GROUP_MEMBER = re.compile(r"^\s+(\w+)", re.UNICODE)
 
 
@@ -106,8 +107,13 @@ def parse_imports(text: str) -> list[str]:
 
 
 def exported_surface(text: str) -> int:
-    """Exported top-level ``func`` (not method) and ``type`` declarations."""
-    stripped = strip_comments(text)
+    """Exported top-level ``func`` (not method) and ``type`` declarations.
+
+    Raw-string bodies are blanked (line breaks kept) first, so a backtick
+    literal holding ``func Fake() {}`` is not counted.
+    """
+    stripped = _RAW_STRING.sub(
+        lambda m: "`" + "\n" * m.group(0).count("\n") + "`", strip_comments(text))
     count = 0
     for match in _DECL.finditer(stripped):
         keyword, paren, name = match.groups()

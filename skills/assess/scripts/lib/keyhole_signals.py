@@ -352,8 +352,8 @@ def build_behaviour_block(
     pairs = all_pairs[:MAX_COUPLING_PAIRS]
     # Project the static metrics only onto directories in the graph's language;
     # a bleeding doc/config tree degrades to bleeding_module, not hidden_coupling.
-    python_dirs = _graphed_dirs(commit_sets, str((structure or {}).get("language") or "python"))
-    static_dirs = [d for d in containment if d in python_dirs]
+    graphed_dirs = _graphed_dirs(commit_sets, str((structure or {}).get("language") or "python"))
+    static_dirs = [d for d in containment if d in graphed_dirs]
     static_mod = project_static_modularity(structure, static_dirs)
     disagreement = detect_hidden_coupling(containment, static_modularity=static_mod)
     boundaries = find_refactor_boundaries(containment, static_modularity=static_mod)

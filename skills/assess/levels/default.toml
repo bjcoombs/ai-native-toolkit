@@ -38,8 +38,8 @@
 #   and Go have builders. A Go graph's node is a package (a directory) and
 #   each package is its own boundary: an import reaches only exported
 #   identifiers, so Go's front_door_ratio is 1.0 by construction and its
-#   level 2 reads modularity plus one cross-package import. A repository with no graph reports structure
-#   unavailable with a reason naming its dominant source language
+#   level 2 reads modularity plus one cross-package import. A repository
+#   with no graph reports structure unavailable with a reason naming its dominant source language
 #   (no_import_graph_<language>, no_python_packages for Python with no
 #   importable package, no_source_files with no source), so the row is
 #   unknown there, not 0. A graph with no import edges (modules that never

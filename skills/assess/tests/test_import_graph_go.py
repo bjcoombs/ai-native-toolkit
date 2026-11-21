@@ -97,6 +97,7 @@ def test_the_surface_counts_exported_funcs_and_types_not_methods() -> None:
         "type S struct {\n\tField int\n}\ntype hidden int\n"
         "type (\n\tA int\n\tb int\n\tC struct {\n\t\tInner int\n\t}\n)\n"
         "// func Commented() {}\n"
+        "var tmpl = `\nfunc Fake() {}\ntype Fake int\n`\n"
     )
     assert exported_surface(src) == 4  # Exported, S, A, C
 
