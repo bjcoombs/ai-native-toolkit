@@ -283,4 +283,9 @@ ARTIFACT_SCHEMA_VERSION = "1.28.0"
 #     ``review_automation`` credits a review component inside a resolved template;
 #     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
 #     an issue_comment-only review action is no longer credited.
-ASSESS_METHOD_VERSION = 24
+# 25: ``agent_environment`` adds ``setup_ready`` (the setup half of ``layer5_cap``)
+#     and ``pinning.unlocked_total`` (issue #786). Layer 5 level 2 reads
+#     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
+#     file names no check can now read level 2, and one with committed setup
+#     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
+ASSESS_METHOD_VERSION = 25

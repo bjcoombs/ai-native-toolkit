@@ -27,6 +27,7 @@ from lib.agent_environment import (  # noqa: E402
     is_check_command,
     scan_agent_environment,
 )
+from lib.counts_only import counts_only_scans  # noqa: E402
 from lib.scan_registry import SCANS  # noqa: E402
 
 CI = "name: Tests\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test\n"
@@ -332,9 +333,37 @@ def test_locked_bootstrap_satisfies_setup(tmp_path: Path) -> None:
 def test_no_manifest_means_nothing_to_install(tmp_path: Path) -> None:
     root = _repo(tmp_path, {"Makefile": "test:\n\tx\n", "CLAUDE.md": "`make test`\n"})
     block = _scan(root, ("CLAUDE.md",))
-    assert block["pinning"] == {"manifests": [], "all_locked": None}
+    assert block["pinning"] == {"manifests": [], "all_locked": None, "unlocked_total": 0}
     assert block["layer5_cap"]["applies"] is False
     assert "no dependency manifest to install" in block["layer5_cap"]["reason"]
+
+
+@pytest.mark.parametrize("files, ready", [
+    pytest.param({".github/copilot-setup-steps.yml": COPILOT_OK, "Makefile": MAKEFILE,
+                  "package.json": json.dumps({"dependencies": {"left-pad": "1.3.0"}})},
+                 True, id="setup-present"),
+    pytest.param({"package.json": json.dumps({"dependencies": {"left-pad": "1.3.0"}}),
+                  "package-lock.json": "{}"}, True, id="all-locked"),
+    pytest.param({"package.json": json.dumps({"dependencies": {"left-pad": "1.3.0"}})},
+                 False, id="unlocked-no-setup"),
+])
+def test_setup_ready_is_the_setup_half_of_layer5_cap(
+        tmp_path: Path, files: dict[str, str], ready: bool) -> None:
+    """#786: ``setup_ready`` is the cap's ``setup_or_lockfile`` half, with no named check read."""
+    block = _scan(_repo(tmp_path, files))
+    assert block["setup_ready"] is ready
+    assert block["setup_ready"] is ("setup_or_lockfile" not in block["layer5_cap"]["unmet"])
+    assert "check_named" in block["layer5_cap"]["unmet"]
+    # Setup stands in for a lockfile in the cap, never in the lock count (#786).
+    assert block["pinning"]["unlocked_total"] == (0 if "package-lock.json" in files else 1)
+
+
+def test_counts_only_keeps_setup_ready(tmp_path: Path) -> None:
+    """The Layer 5 level 2 signal survives the counts-only filter a fleet run applies."""
+    block = _scan(_repo(tmp_path, {"package.json": json.dumps({"dependencies": {"x": "1"}})}))
+    kept = counts_only_scans({"agent_environment": block})["agent_environment"]
+    assert kept["setup_ready"] is False
+    assert kept["pinning"]["unlocked_total"] == 1
 
 
 # --- CI duration (fake gh) --------------------------------------------------------
