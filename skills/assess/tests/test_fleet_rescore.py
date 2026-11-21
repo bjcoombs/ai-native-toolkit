@@ -384,4 +384,20 @@ def test_a_signal_absent_from_stored_scans_is_rule_caused_even_when_already_unkn
     assert fa.unknown_move({"grp/c": {"docs": _cell(None)}}, {"grp/c": {"docs": _cell(1)}}, "grp/c", "docs",
                            caused) is None
     # still unknown on the same signal: the repository's own unknown, not the rules'
-    assert ("grp/c", "docs") not in fr.rule_unknowns(stored, fr.rescore(stored, _rows(spec), SAME, KEY) or stored)
+    same = fr.rescore(stored, _rows(spec), SAME, KEY)
+    assert same is not None
+    assert ("grp/c", "docs") not in fr.rule_unknowns(stored, same)
+
+
+def test_a_bump_leaves_the_streaks_of_old_steps_unchanged(tmp_path: Path) -> None:
+    # a's docs go unknown between two v1 runs: neutral under v1, and still neutral once both are re-scored
+    specs = (BASE, {**BASE, "grp/sub/a": (None, None, True)}, BASE)
+    org = _history(tmp_path, specs)
+    native_runs = [fa.HistoryRun(d, _data(d, s, V1)) for d, s in zip(DATES, specs)]
+    native = fa.build_achievements(fa.HistoryRun(NOW, _data(NOW, BASE, V1)), native_runs, V1)
+    bumped = _doc(org, SAME)
+    assert [r.rescored_from for r in earlier_runs(org, _stamp(NOW, SAME), frozenset(BASE), model=SAME, key=KEY)] \
+        == ["fleet-data-1"] * 3
+    streaks = [a for a in native["achievements"] if a["kind"] == fa.STREAK]
+    assert streaks and streaks == [a for a in bumped["achievements"] if a["kind"] == fa.STREAK]
+    assert bumped["achievements"] == native["achievements"]

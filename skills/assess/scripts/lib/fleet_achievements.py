@@ -32,7 +32,8 @@ replays re-scored under this run's model (``lib/fleet_achievements_runs.py``,
 ``lib/fleet_rescore.py``), so every move the replay sees is the repositories' own. A move
 the rule change alone caused is never earned or lost: it is listed in ``recount``
 (``fleet_rescore.recount``, from the newest earlier entry when it was re-scored) and never
-feeds the replay. On a step from a re-scored entry a repository's own move to or from
+feeds the replay. On a step from a re-scored entry into a run at another version (this
+run, or one kept under a later version) a repository's own move to or from
 unknown counts (``unknown_move``): known to unknown is a slip for its streak, unknown to a
 level above 0 extends it; a cell the re-score made unknown, or a failed scan, stays neutral.
 
@@ -571,7 +572,10 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     replay.see(states[0][1])
     for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
         then_caused = caused[i]
-        rescored = then_caused | (caused[i + 1] or frozenset()) if then_caused is not None else None
+        # both runs re-scored from one earlier version: the step keeps its native-model credit
+        native = runs[i].rescored_from is not None and runs[i].rescored_from == runs[i + 1].rescored_from
+        rescored = (then_caused | (caused[i + 1] or frozenset())
+                    if then_caused is not None and not native else None)
         replay.step(run_id, prev_id, prev, now, prev_cells, now_cells, rescored)
     order = {run.run_id: i for i, run in enumerate(runs)}
     achievements = sorted(replay.out, key=lambda a: (order[a["run"]], *_sort_key(a)))

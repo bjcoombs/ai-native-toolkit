@@ -357,7 +357,9 @@ roll-up rule (`min` or `share`) over its measured repositories, those with a kno
 **Unknown is neutral, with one exception.** A row counts only when it *moves cleanly*: known in
 both runs over the same measured set of repositories. A repository going unknown,
 failing its scan, joining or leaving a unit, or hashed under another salt makes that
-move neutral. One exception, on a step from a re-scored entry: a repository's own move
+move neutral. One exception, on a step from a re-scored entry into a run at another
+maturity-model version (a step between two runs re-scored from the same version keeps the
+credit it had under that version): a repository's own move
 from a known level to unknown breaks its streak, and from unknown to a level above 0 extends
 it; a cell the re-score itself made unknown stays neutral. Under counts-only, credit goes to units and repositories, never to people:
 owners are never read.
