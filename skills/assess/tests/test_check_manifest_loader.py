@@ -120,6 +120,7 @@ def _mutate(path: list[Any], value: Any = None, delete: bool = False) -> dict[st
     (["entries", 3, "id"], "core:scan_a.other", "BAD_ID"),
     (["entries", 4, "id"], "core.row-a.1.flag", "BAD_ID"),
     (["entries", 4, "id"], "core.cond.row-a.1.any_name", None),
+    (["entries", 4, "id"], "core.cond.", "BAD_ID"),
     (["entries", 0, "id"], "scan_a", "BAD_ID"),
     (["entries", 5, "id"], "core.finding.other", "BAD_ID"),
     (["manifest_version"], 2, "WRONG_TYPE"),

@@ -323,7 +323,11 @@ def _entry_shape(i: int, raw: Any, owner: str, out: list[ValidationError]) -> bo
     if len(out) > before:
         return False
     expected = _expected_id(raw, owner)
-    if not (raw["id"].startswith(expected) if kind == "condition" else raw["id"] == expected):
+    if kind == "condition":
+        fits = raw["id"].startswith(expected) and len(raw["id"]) > len(expected)
+    else:
+        fits = raw["id"] == expected
+    if not fits:
         out.append(finding(f"{where}.id", "BAD_ID", f"a {kind} id must be {expected!r}"))
         return False
     return True
@@ -337,7 +341,7 @@ def _expected_id(raw: Mapping[str, Any], owner: str) -> str:
     if kind == "finding":
         return f"{owner}.finding.{raw['name']}"
     if kind == "condition":
-        return f"{owner}.cond."
+        return f"{owner}.cond."  # a prefix: at least one character must follow
     name = raw["id"].removeprefix(f"{owner}.")
     return raw["id"] if raw["id"].startswith(f"{owner}.") and _NAME_RE.match(name) \
         else f"{owner}.<scan key>"

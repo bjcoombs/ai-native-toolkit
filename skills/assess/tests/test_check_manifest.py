@@ -110,7 +110,7 @@ def test_callables_resolve_to_the_registered_functions(manifest: cm.CheckManifes
     specs = {spec.key: spec for spec in sr.SCANS}
     for c in cm.collectors(manifest):
         spec = specs[cm.scan_key(c)]
-        assert _resolve(c["callable"]) is spec.fn, cm.scan_key(c)
+        assert _resolve(c["callable"]) is _fn(spec.fn), cm.scan_key(c)
         if "offline_callable" in c:
             assert _resolve(c["offline_callable"]) is _fn(spec.offline_fn), cm.scan_key(c)
     for f in cm.findings(manifest):
@@ -132,7 +132,7 @@ def test_headless_tables_match_manifest(manifest: cm.CheckManifest) -> None:
                  for b in sorted(unregistered - set(sg.UNREGISTERED_SCANS))]
     # Compared by block: HEADLESS_SCANS order is the headless runner's, not the scan table's.
     got = {v["block"]: (v["callable"], v["reads"], v["stage"]) for _, v in variants}
-    want = {s.key: (f"{s.fn.__module__}:{s.fn.__name__}", list(s.reads), s.stage)
+    want = {s.key: (f"{_fn(s.fn).__module__}:{_fn(s.fn).__name__}", list(s.reads), s.stage)
             for s in sg.HEADLESS_SCANS}
     problems += [f"{b}: headless variant {got.get(b)} in the manifest, {want.get(b)} in "
                  f"signals.HEADLESS_SCANS" for b in sorted(got.keys() | want.keys())

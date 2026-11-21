@@ -391,6 +391,16 @@
         "key",
         "fix"
       ],
+      "allOf": [
+        {
+          "properties": {
+            "id": {
+              "pattern": "\\.cond\\.[a-z0-9_.:-]+$",
+              "description": "<owner>.cond.<name>, with a non-empty name"
+            }
+          }
+        }
+      ],
       "properties": {
         "key": {
           "type": "string",
