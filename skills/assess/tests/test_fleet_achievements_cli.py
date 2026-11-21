@@ -83,3 +83,29 @@ def test_an_achievements_failure_keeps_exit_0_and_clears_a_stale_file(tmp_path, 
     assert fleet_cli._achievements(tmp_path, {}, {"scan_date": "2026-11-21"}, None, None, None, frozenset(), [], str) is None  # type: ignore[arg-type]
     assert "fleet: achievements: not written (ValueError: engine bug)" in capsys.readouterr().err
     assert not (tmp_path / "achievements.json").exists()
+
+
+def test_runs_copied_into_the_history_replay_on_their_run_json_date(tmp_path, monkeypatch):
+    # as a run history assembled by hand: each run made with --no-history, copied in, and
+    # only run.json's scan_date set (fleet-data.json keeps the date the run was made on)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    before, after = tmp_path / "before", tmp_path / "after"
+    for root, files in ((before, {}), (after, {"CLAUDE.md": "rules\n"})):
+        make_repo(root, "grpa/svc1", files=files)
+        make_repo(root, "grpa/svc2")
+        make_repo(root, "grpb/lib1")
+    for root, out, date in ((before, "r1", "2000-01-01"), (after, "r2", "2000-01-02")):
+        assert fleet_cli.main([str(root), "--levels", "levels.toml", "--no-history", "--no-diagrams",
+                               "--out", out]) == 0
+        entry = tmp_path / "hist" / "org" / date
+        shutil.copytree(tmp_path / out, entry)
+        stamp = json.loads((entry / "run.json").read_text(encoding="utf-8"))
+        (entry / "run.json").write_text(json.dumps({**stamp, "scan_date": date}), encoding="utf-8")
+    assert fleet_cli.main([str(after), "--levels", "levels.toml", "--history-dir", "hist", "--history-org", "org",
+                           "--no-diagrams", "--out", "r3"]) == 0
+    doc = json.loads((tmp_path / "r3" / "achievements.json").read_text(encoding="utf-8"))
+    assert doc["runs"][:2] == ["2000-01-01", "2000-01-02"]
+    earned = {(a["run"], a["kind"], a["unit"]) for a in doc["achievements"]}
+    assert {("2000-01-02", "level_up", "grpa/svc1"), ("2000-01-02", "first", "grpa/svc1"),
+            ("2000-01-02", "personal_best", "grpa/svc1")} <= earned

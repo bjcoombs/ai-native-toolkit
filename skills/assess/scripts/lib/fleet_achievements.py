@@ -49,15 +49,19 @@ baseline and earns nothing:
   one repository moved up on a row. Known limit: the best share remembered includes
   runs whose share rose only because a repository went unknown, which can hold back a
   later personal best (never award a false one).
-- ``target_hit``: a clean move from below a target level to at or above it (targets
-  file, ``lib/fleet_targets.py``).
+- ``target_hit``: a clean move from below a target to at or above it (targets file,
+  ``lib/fleet_targets.py``). A level target reads the subject's level on the row; a
+  share target reads its mean share of top level on the row over the measured members
+  (``fleet-data.json``'s row roll-up), so a ``min`` row can hit a share target while its
+  level stays put.
 
 **Next steps** (this run only): ``nearest_level_up`` per subject and row below the top
 level: among the measured members one level below the next level, the next-level
 criterion (their cell ``signal``) shared by the most of them, the repositories it
 applies to, how many must reach the next level for the subject to move (``needed``)
 and the change and "done when" from ``lib.next_step_guidance`` (the team next-steps
-wording). ``targets`` gives each target's distance in levels.
+wording). ``targets`` gives each target's distance: in levels for a level target, in
+share of top level for a share target.
 
 **Privacy.** Keys, names and values come from ``fleet-data.json``, already reduced
 for counts-only (a unit's ``name`` is null there, so its key is shown). Owners are
@@ -78,14 +82,16 @@ from fractions import Fraction
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
-from lib.fleet_data import FLEET_DATA_VERSION, Cell, FleetData
+from lib.fleet_data import FLEET_DATA_VERSION, PLACES, Cell, FleetData
 from lib.fleet_maturity import SCOPE
 from lib.fleet_next_steps import code, expression, text
 from lib.levels import MaturityModel, Row, share_level
 from lib.next_step_guidance import guidance
 
-# 1 (#704): first version. Bump on any change to the shapes below; #705 and #744 read it.
-ACHIEVEMENTS_VERSION = 1
+# 1 (#704): first version. 2 (#780): share targets (``Evidence.target_share``,
+# ``TargetProgress.share_target``/``share``/``share_distance``, ``target`` nullable).
+# Bump on any change to the shapes below; #705 and #744 read it.
+ACHIEVEMENTS_VERSION = 2
 ACHIEVEMENTS_FILE = "achievements.json"
 REPO_VIEW = "repo"
 LEVEL_UP, FIRST, TARGET_HIT, PERSONAL_BEST, STREAK = "level_up", "first", "target_hit", "personal_best", "streak"
@@ -108,9 +114,10 @@ class Evidence(TypedDict):
     row: str | None  # None for streak and personal_best
     from_level: int | None
     to_level: int | None
-    level: int | None  # first: the level reached first; target_hit: the target level
-    share_from: float | None  # personal_best: the best earlier mean share
-    share_to: float | None  # personal_best: this run's
+    level: int | None  # first: the level reached first; target_hit: the target level (level targets)
+    share_from: float | None  # personal_best: the best earlier mean share; target_hit (share): the row's then
+    share_to: float | None  # personal_best: this run's; target_hit (share): the row's now
+    target_share: float | None  # target_hit (share targets): the target mean share on the row
     runs: int | None  # streak: runs since the last slip
     moves: list[Move]
 
@@ -146,9 +153,12 @@ class TargetProgress(TypedDict):
     view: str
     unit: str
     row: str
-    target: int
+    target: int | None  # the target level; None for a share target
+    share_target: float | None  # the target mean share on the row; None for a level target
     level: int | None  # None when unknown in this run
-    distance: int | None  # levels to go; 0 when met; None when unknown
+    share: float | None  # the row's mean share of top level this run; None when unknown
+    distance: int | None  # level targets: levels to go; 0 when met; None when unknown or a share target
+    share_distance: float | None  # share targets: share to go; 0 when met; None when unknown or a level target
 
 
 class Achievements(TypedDict):
@@ -169,16 +179,24 @@ class HistoryRun(NamedTuple):
 
 
 class Target(NamedTuple):
+    """One target: a ``level`` or a mean ``share`` of top level on ``row`` (exactly one is set)."""
+
     view: str
     unit: str  # key as fleet-data.json writes it (hashed under the run's salt when hashing)
     row: str
-    level: int
+    level: int | None
+    share: float | None = None
+
+
+def target_order(t: Target) -> tuple[str, str, str, int, float]:
+    return (t.view, t.unit, t.row, t.level or 0, t.share or 0.0)
 
 
 @dataclass(frozen=True)
 class RowState:
     level: int | None
     measured: frozenset[str]
+    share: float | None = None  # mean share of top level over ``measured`` (fleet-data.json's roll-up)
 
 
 @dataclass(frozen=True)
@@ -209,10 +227,15 @@ def _rules(model: MaturityModel) -> dict[str, tuple[Fraction, int]]:
     return out
 
 
-def _row_state(cells: Mapping[str, Cell], members: Sequence[str], rule: tuple[Fraction, int]) -> RowState:
+def _row_state(cells: Mapping[str, Cell], members: Sequence[str], rule: tuple[Fraction, int],
+               share: float | None = None) -> RowState:
+    """``share`` is the unit's row roll-up from ``fleet-data.json``; a repository's is its own
+    level as a share of the row's top level."""
     known = {m: lv for m in members if m in cells and (lv := known_level(cells[m])) is not None}
     level = share_level(list(known.values()), rule[0], rule[1]) if known else None
-    return RowState(level, frozenset(known))
+    if share is None and len(members) == 1 and known and cells[members[0]]["top_level"] > 0:
+        share = round(known[members[0]] / cells[members[0]]["top_level"], PLACES)
+    return RowState(level, frozenset(known), share if known else None)
 
 
 def subjects(data: FleetData, rules: Mapping[str, tuple[Fraction, int]]) -> dict[tuple[str, str], Subject]:
@@ -234,7 +257,9 @@ def subjects(data: FleetData, rules: Mapping[str, tuple[Fraction, int]]) -> dict
                     current = parent[current]
         for unit in view["units"]:
             mine = sorted(members[unit["key"]])
-            rows = {row: _row_state({m: cells[m][row] for m in mine if row in cells[m]}, mine, rule)
+            shares = {roll["row"]: roll["mean_share"] for roll in unit["levels"]}
+            rows = {row: _row_state({m: cells[m][row] for m in mine if row in cells[m]}, mine, rule,
+                                    shares.get(row))
                     for row, rule in rules.items()}
             out[(view["view"], unit["key"])] = Subject(view["view"], unit["key"], unit["kind"],
                                                       unit["name"] or unit["key"], rows,
@@ -270,9 +295,22 @@ def moves_up(row: str, state: RowState, then_cells: Mapping[str, Mapping[str, Ce
 
 def _evidence(row: str | None = None, from_level: int | None = None, to_level: int | None = None,
               moves: list[Move] | None = None, *, level: int | None = None, share_from: float | None = None,
-              share_to: float | None = None, runs: int | None = None) -> Evidence:
+              share_to: float | None = None, runs: int | None = None,
+              target_share: float | None = None) -> Evidence:
     return {"row": row, "from_level": from_level, "to_level": to_level, "level": level,
-            "share_from": share_from, "share_to": share_to, "runs": runs, "moves": moves or []}
+            "share_from": share_from, "share_to": share_to, "runs": runs, "moves": moves or [],
+            "target_share": target_share}
+
+
+def _crossed(target: Target, then: RowState, now: RowState) -> bool:
+    """Whether a clean move took the row from below ``target`` to at or above it."""
+    if target.share is not None:
+        if then.share is None or now.share is None:
+            return False
+        goal = Fraction(str(target.share))
+        return Fraction(str(then.share)) < goal <= Fraction(str(now.share))
+    assert then.level is not None and now.level is not None and target.level is not None
+    return then.level < target.level <= now.level
 
 
 # --- credit sentences ----------------------------------------------------------
@@ -304,6 +342,9 @@ def _credit(kind: str, subject: Subject, ev: Evidence, titles: Mapping[str, str]
         what = "repository" if subject.kind == "repo" else subject.kind
         return f"A first for this fleet: {_who(subject)} is the first {what} at level {ev['level']} on {title}."
     if kind == TARGET_HIT:
+        if ev["target_share"] is not None:
+            return (f"{_who(subject)} hit its target of {_pct(ev['target_share'])} of top level on {title}: "
+                    f"mean share {_pct(ev['share_from'] or 0.0)} to {_pct(ev['share_to'] or 0.0)}.")
         return f"{_who(subject)} hit its target of level {ev['level']} on {title}."
     if kind == PERSONAL_BEST:
         return (f"{_who(subject)} set a personal best: {_pct(ev['share_to'] or 0.0)} of top level, "
@@ -363,22 +404,26 @@ class _Replay:
             clean_rows = [row for row in sorted(sub.rows) if clean(old.rows.get(row), sub.rows[row])]
             slipped = False
             for row in clean_rows:
-                lv_then, lv_now = old.rows[row].level, sub.rows[row].level
+                then_row, now_row = old.rows[row], sub.rows[row]
+                lv_then, lv_now = then_row.level, now_row.level
                 assert lv_then is not None and lv_now is not None  # clean() guarantees both
                 if lv_now < lv_then:
                     slipped = True
-                if lv_now <= lv_then:
-                    continue
-                moves = moves_up(row, sub.rows[row], then_cells, now_cells)
-                self._earn(LEVEL_UP, sub, run, previous, _evidence(row, lv_then, lv_now, moves))
-                held = reached_before.get((sub.view, sub.kind, row))
-                if (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
-                    self._earn(FIRST, sub, run, previous, _evidence(row, lv_then, lv_now, moves, level=lv_now))
-                for target in self.targets:
+                moves = moves_up(row, now_row, then_cells, now_cells)
+                if lv_now > lv_then:
+                    self._earn(LEVEL_UP, sub, run, previous, _evidence(row, lv_then, lv_now, moves))
+                    held = reached_before.get((sub.view, sub.kind, row))
+                    if (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
+                        self._earn(FIRST, sub, run, previous, _evidence(row, lv_then, lv_now, moves, level=lv_now))
+                # a share target can be hit with no level-up: under ``min`` the share rises first
+                for target in sorted(self.targets, key=target_order):
                     if (target.view, target.unit, target.row) == (sub.view, sub.key, row) \
-                            and lv_then < target.level <= lv_now:
-                        self._earn(TARGET_HIT, sub, run, previous,
-                                   _evidence(row, lv_then, lv_now, moves, level=target.level))
+                            and _crossed(target, then_row, now_row):
+                        ev = (_evidence(row, lv_then, lv_now, moves, share_from=then_row.share,
+                                        share_to=now_row.share, target_share=target.share)
+                              if target.share is not None else
+                              _evidence(row, lv_then, lv_now, moves, level=target.level))
+                        self._earn(TARGET_HIT, sub, run, previous, ev)
             prior = self.best.get(key)
             same_sets = all(r in old.rows and old.rows[r].measured == s.measured for r, s in sub.rows.items())
             # under ``min`` a unit's share rises before its level does: the evidence is every
@@ -449,12 +494,15 @@ def nearest_level_up(sub: Subject, row: Row, rule: tuple[Fraction, int],
 
 def target_progress(subs: Mapping[SubjectKey, Subject], targets: Sequence[Target]) -> list[TargetProgress]:
     out: list[TargetProgress] = []
-    for t in sorted(targets):
+    for t in sorted(targets, key=target_order):
         sub = subs.get((t.view, t.unit))
         state = sub.rows.get(t.row) if sub is not None else None
         level = state.level if state is not None else None
-        out.append({"view": t.view, "unit": t.unit, "row": t.row, "target": t.level, "level": level,
-                    "distance": None if level is None else max(0, t.level - level)})
+        share = state.share if state is not None else None
+        distance = None if level is None or t.level is None else max(0, t.level - level)
+        share_distance = None if share is None or t.share is None else round(max(0.0, t.share - share), PLACES)
+        out.append({"view": t.view, "unit": t.unit, "row": t.row, "target": t.level, "share_target": t.share,
+                    "level": level, "share": share, "distance": distance, "share_distance": share_distance})
     return out
 
 
