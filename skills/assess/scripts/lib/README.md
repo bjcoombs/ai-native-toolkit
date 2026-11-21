@@ -1007,8 +1007,12 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
   count, list order does) and `section_entries` (a list counts its items, else 1) feed
   the run stamp.
 
+Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
+required) and `field` (`one_of("email", "username", "name")`)) and
+`token_users_as_agents` (`boolean`), read by `ai_usage` (#695).
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
-(`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`, or
+(`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
+`regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
 any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
 A scan reads the merged config through the registry input `fleet_config` (a private setup
 spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
@@ -2426,21 +2430,49 @@ assistants that counts, in words with no address, for a block's stated limits; k
 it in step with `AI_EMAIL_HINTS`.
 Consumers: `change_coupling.authorship_analysis`, `promissory_markers`,
 `understanding_analysis` and `ai_usage`. Widening the hints changes all four, so it is
-a change of its own. Tests: `tests/test_ai_usage.py`, `tests/test_change_coupling.py`.
+a change of its own.
+`ai_usage`'s author matcher (#695) is separate and moves no other block.
+`AuthorMatcher(config_rules, token_users_as_agents)` classifies an author into
+`agent`, `dependency_bot`, `token_user` or `other`, returning an `AuthorClass(bucket,
+rule_index)`. `classify(email, name, username=None)` takes a git author, deriving the
+username from a noreply e-mail (`username_from_email`); `classify_username(username)`
+takes a platform user (the `--platform` reads, #716/#717). Rules (`IdentityRule`:
+a case-insensitive regex searched, plus a field `email`, `username` or `name`; no field
+reads e-mail and username) come from `compile_config_rules` over the
+`[[ai_usage.agent_identities]]` tables. Pinned defaults (`AGENT_RULES`,
+`DEPENDENCY_BOT_RULES`) are written in the username form and never read a display
+name; `COVERED_AUTHOR_AGENTS` names them in words. Order: a dependency bot (always,
+whatever a rule says), then config rules in order (first match credited), then
+pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
+`project_<id>_bot_<hex>`, `group_<id>_bot_<hex>`, by username or its `@noreply.<host>` e-mail; never by display name, which is the
+token's owner-chosen name), which is `agent` under `token_users_as_agents` and
+`token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
+`--timeout` bounds a pathological repository pattern).
+Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
+`tests/test_change_coupling.py`.
 
 **`ai_usage.py`**
 AI-assisted change share (issue #547), a lower bound on agent use.
-`scan_ai_usage(repo_root, scope, history_window)` runs `git log --no-merges` over the
+`scan_ai_usage(repo_root, scope, history_window, fleet_config)` runs `git log --no-merges` over the
 `--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
-total_commits, agent_trailer_commits, agent_trailer_share, lower_bound,
-covered_agents[], limits[]}`. A commit counts when any `Co-authored-by` trailer names an
-AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded); the share is null at zero commits.
+total_commits, agent_trailer_commits, agent_trailer_share, agent_authored_commits,
+agent_authored_share, agent_either_commits, agent_either_share, dependency_bot_commits,
+token_user_commits, agent_identity_rule_commits[], lower_bound, covered_agents[],
+covered_author_agents[], limits[]}`. A commit is a trailer commit when any `Co-authored-by` trailer names an
+AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded),
+and an authored commit when `agent_identity.AuthorMatcher` (built by
+`matcher_from_config` from the merged `[ai_usage]` section of the `fleet_config`
+input) puts its author (`%ae`, `%an`) in the `agent` bucket; `agent_either_*` counts a
+commit with both once. `agent_identity_rule_commits[i]` counts the commits credited to
+config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
+Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
 the headless `--window`), or None for full history (`window: "all-time"`);
 `resolve_window` raises on anything else, which degrades the block. `limits` is the
-fixed `LIMITS` tuple (squash merges, stripped or missing trailers, agents outside
-`COVERED_AGENTS`, automation bots not counted). Counts, a share and fixed strings only: no name, e-mail or
+fixed `LIMITS` tuple (squash merges, stripped or missing trailers, unrecognised
+identities, an agent under a person's identity, automation bots not counted; dependency
+bots and token users counted apart). Counts, shares and fixed strings only: no name, e-mail, pattern or
 subject. A missing git, a timeout, a non-repository and a shallow clone (or one
 `rev-parse --is-shallow-repository` cannot confirm is full) each degrade to
 `available: false` with a fixed reason of their own: a truncated history can put the

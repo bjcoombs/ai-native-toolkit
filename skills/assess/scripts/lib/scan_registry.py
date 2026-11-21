@@ -549,9 +549,11 @@ SCANS: tuple[ScanSpec, ...] = (
     # AI-assisted change share (issue #547): commits in the churn window with an
     # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
     # on agent use, never an estimate; merge commits and automation bots
-    # excluded. Matcher: lib.agent_identity.
+    # excluded. Since #695 also the commits an agent identity authored (pinned
+    # defaults plus the [ai_usage] rules of `fleet_config`). Matcher: lib.agent_identity.
     ScanSpec(
-        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window"), STAGE_POST_OFFERS,
+        "ai_usage", scan_ai_usage, ("repo_root", "scope", "history_window", "fleet_config"),
+        STAGE_POST_OFFERS,
     ),
     # Checkable claims across the doc set (issue #491): the instruction_claims
     # kinds run over docs/ (minus the historical design records),

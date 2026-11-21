@@ -421,6 +421,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ai_usage.since` | dropped |
 | `ai_usage.merge_rule` | token |
 | `ai_usage.covered_agents` | dropped |
+| `ai_usage.covered_author_agents` | dropped |
 | `ai_usage.limits` | dropped |
 
 ## agent_harness
