@@ -402,7 +402,9 @@ the old criterion), `now_measured` (unknown to a level, "Now measured") or `not_
 Markdown line:
 `` `<repo>` <row title>: level <A> -> <B> under maturity model <new> (was <old>). <Cause>: `<signal>`. The repository did not change. ``
 Recount lines are display-only: they never earn an achievement, break a streak or change
-a level reached or a best share.
+a level reached or a best share. `rescored_runs` lists every replayed run that was
+re-scored from an earlier maturity-model version (empty when none was); the report's
+opening line states the unknown exception whenever it is non-empty, Recount or not.
 
 **Targets file** (`--targets`):
 

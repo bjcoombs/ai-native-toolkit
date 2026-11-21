@@ -349,9 +349,21 @@ aggregation = "min"
     assert fa.unknown_move(then, {"grp/c": {"lint": _cell(1)}}, "grp/c", "lint", caused) is None
 
 
-def test_report_keeps_the_unknown_rule_when_there_is_no_recount(tmp_path: Path) -> None:
-    org = _history(tmp_path)
+def test_report_keeps_the_unknown_rule_when_no_run_is_rescored(tmp_path: Path) -> None:
+    org = tmp_path / "org"
     _entry(org, NOW, BASE, V2)
-    plain = credit_section(_doc(org, V2, date="2026-11-29"), V2)
+    doc = _doc(org, V2, date="2026-11-29")
+    assert doc["rescored_runs"] == []
+    plain = credit_section(doc, V2)
     assert "An unknown level never earns or loses anything." in plain
     assert "An unknown level never earns" not in credit_section(_doc(_history(tmp_path / "b"), V2), V2)
+
+
+def test_report_drops_the_unknown_rule_while_rescored_runs_are_replayed(tmp_path: Path) -> None:
+    org = _history(tmp_path)
+    _entry(org, NOW, BASE, V2)
+    doc = _doc(org, V2, date="2026-11-29")  # second run under v2: no Recount, older runs still re-scored
+    assert doc["recount"] is None and doc["rescored_runs"] == list(DATES)
+    section = credit_section(doc, V2)
+    assert "An unknown level never earns or loses anything." not in section
+    assert "starts its streak again" in section and "### Recount" not in section

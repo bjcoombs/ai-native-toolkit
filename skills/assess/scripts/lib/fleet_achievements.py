@@ -183,6 +183,7 @@ class Achievements(TypedDict):
     nearest_level_ups: list[NextStep]
     targets: list[TargetProgress]
     recount: Recount | None  # set on the first run under a new maturity-model version
+    rescored_runs: list[str]  # the replayed runs re-scored from an earlier maturity-model version
 
 
 class HistoryRun(NamedTuple):
@@ -587,7 +588,8 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
             "run": current.run_id, "levels_version": model["version"] if model is not None else None,
             "runs": [run.run_id for run in runs], "note": note if not earlier else None,
             "achievements": achievements, "nearest_level_ups": steps,
-            "targets": target_progress(now_subs, targets), "recount": counted}
+            "targets": target_progress(now_subs, targets), "recount": counted,
+            "rescored_runs": [run.run_id for run in earlier if run.rescored_from is not None]}
 
 
 def dumps_achievements(doc: Achievements) -> str:

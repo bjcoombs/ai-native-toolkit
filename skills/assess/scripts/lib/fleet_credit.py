@@ -37,11 +37,14 @@ KIND_LABELS = {"level_up": "Level-ups", "first": "Firsts", "target_hit": "Target
 
 def _intro(doc: Achievements) -> str:
     rule = "Every line is computed from run data."
-    if doc["recount"] is None:
+    if not doc["rescored_runs"]:
         rule += " An unknown level never earns or loses anything."
     else:
-        rule += (" A move caused by a change to the maturity model's rules is listed under Recount, "
-                 "never as an achievement.")
+        rule += (" Runs kept under an earlier maturity model are re-scored under the current one; a move "
+                 "caused only by the rule change is never an achievement. After a re-scored run, a "
+                 "repository whose own level becomes unknown starts its streak again.")
+    if doc["recount"] is not None:
+        rule += " The Recount below lists the moves the rule change caused."
     if len(doc["runs"]) < 2:
         return f"This run is the starting line ({doc['note'] or 'no earlier comparable run'}). {rule}"
     return (f"Since {code(doc['runs'][-2])}, over {len(doc['runs'])} comparable runs in this fleet's "

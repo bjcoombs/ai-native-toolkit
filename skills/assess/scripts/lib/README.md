@@ -1098,7 +1098,8 @@ target on its mean share of top level, the `fleet-data.json` row roll-up, #780),
 a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
 repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
 step; `build_achievements` sets `recount` (`fleet_rescore.recount`) when the newest earlier
-run was re-scored. `nearest_level_up` picks per subject and row the next-level
+run was re-scored, and `rescored_runs` (every re-scored replayed run, which
+`fleet_credit` reads for the report's opening rule). `nearest_level_up` picks per subject and row the next-level
 criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
 Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
 

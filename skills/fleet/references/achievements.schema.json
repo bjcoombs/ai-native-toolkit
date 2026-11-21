@@ -430,6 +430,12 @@
           "type": "null"
         }
       ]
+    },
+    "rescored_runs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [
@@ -440,6 +446,7 @@
     "nearest_level_ups",
     "note",
     "recount",
+    "rescored_runs",
     "run",
     "runs",
     "targets"
