@@ -379,6 +379,7 @@ def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) 
     ci = _CI_WORKFLOW.replace("make check", "make test")
     bare = _ci_repo(tmp_path / "bare", ci, instructions=False)
     assert bare["ci_checks"]["test_or_lint_runs"] is True
+    assert bare["ci_checks"]["enforced_check_runs"] is True
     assert _row(_run({"r": bare}), "layer-5-ci")["level"] == 1
     named = _ci_repo(tmp_path / "named", ci, instructions=True)
     assert _row(_run({"r": named}), "layer-5-ci")["level"] == 2
@@ -391,6 +392,7 @@ def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_pa
         scans = _ci_repo(tmp_path / name, workflow, instructions=True)
         assert scans["agent_environment"]["layer5_cap"]["applies"] is False
         assert scans["ci_checks"]["test_or_lint_runs"] is False
+        assert scans["ci_checks"]["enforced_check_runs"] is False
         assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
 
 
@@ -403,7 +405,27 @@ def test_layer_five_is_unknown_when_ci_jobs_come_only_from_includes(tmp_path: Pa
     assert scans["ci_checks"]["basis"] == "included_jobs"
     row = _row(_run({"r": scans}), "layer-5-ci")
     assert (row["status"], row["level"]) == ("unknown", None)
-    assert "ci_checks.test_or_lint_runs" in row["missing_signals"]
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+
+
+def test_layer_five_level_one_needs_an_enforced_check(tmp_path: Path) -> None:
+    """Issue #775: a CI check that cannot fail its job does not meet Layer 5 level 1."""
+    masked = _ci_repo(tmp_path / "masked", _CI_WORKFLOW.replace("make check", "pytest || true"),
+                      instructions=False)
+    assert masked["ci_checks"]["test_or_lint_runs"] is True
+    assert masked["ci_checks"]["enforced_check_runs"] is False
+    assert _row(_run({"r": masked}), "layer-5-ci")["level"] == 0
+    plain = _ci_repo(tmp_path / "plain", _CI_WORKFLOW.replace("make check", "pytest"), instructions=False)
+    assert _row(_run({"r": plain}), "layer-5-ci")["level"] == 1
+
+
+def test_layer_five_is_unknown_on_a_scan_without_enforced_check_runs(tmp_path: Path) -> None:
+    """A stored scan from before #775 has no enforced_check_runs: unknown, never 0."""
+    scans = _ci_repo(tmp_path / "old", _CI_WORKFLOW.replace("make check", "make test"), instructions=False)
+    del scans["ci_checks"]["enforced_check_runs"]
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert row["status"] == "unknown"
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
 
 
 def test_no_instruction_file_is_zero_but_a_missing_block_is_unknown(

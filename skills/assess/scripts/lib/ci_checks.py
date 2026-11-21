@@ -38,6 +38,16 @@ hold (GitLab ``include:`` of any kind, a GitHub job-level ``uses:`` calling
 another repository's reusable workflow; ``shared_tooling.pulls_jobs_from_elsewhere``):
 the check may live there, so the signal is null (unknown), never false.
 ``basis`` names which case applied.
+
+``enforced_check_runs`` (issue #775) is the same test with masked checks left
+out: a check that runs but cannot fail its job (``pytest || true``,
+``continue-on-error: true``, ``allow_failure: true``, ``set +e``; the rules and
+their known limits are in ``lib.ci_masking``). True when any CI line runs an
+unmasked check; otherwise null under the same ``included_jobs`` rule, else
+false. ``masked_check_commands`` counts the check lines left out, so a reader
+sees why the two signals disagree. ``basis`` describes ``test_or_lint_runs``.
+Layer 5 level 1 reads ``enforced_check_runs``; a stored scan without the key
+reads unknown there.
 """
 from __future__ import annotations
 
@@ -45,6 +55,7 @@ import re
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
+from lib.ci_masking import unmasked_lines
 from lib.check_command import LINT_PROGRAMS, is_check_command, is_lint_command
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
@@ -63,6 +74,8 @@ class CiChecksBlock(TypedDict):
     included_files: int
     test_or_lint_runs: bool | None
     basis: CiChecksBasis
+    enforced_check_runs: bool | None
+    masked_check_commands: int
 
 
 # A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
@@ -94,15 +107,27 @@ def check_commands(text: str) -> int:
     return sum(1 for line in text.splitlines() if _line_runs_check(line))
 
 
+def enforced_check_commands(text: str) -> tuple[int, int]:
+    """``(unmasked, masked)``: the check lines of one CI file that can fail their job, and the rest."""
+    total = check_commands(text)
+    enforced = sum(1 for line in unmasked_lines(text) if _line_runs_check(line))
+    return enforced, max(total - enforced, 0)
+
+
 def scan_ci_checks(repo_root: Path) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``."""
     root = repo_root.resolve()
     files = ci_config_files(repo_files(root))
     checks = 0
     included = 0
+    enforced = 0
+    masked = 0
     for rel in files:
         text = read_config(root, rel)
         checks += check_commands(text)
+        unmasked, hidden = enforced_check_commands(text)
+        enforced += unmasked
+        masked += hidden
         included += pulls_jobs_from_elsewhere(text, gitlab=rel in CI_CONFIG_FILES)
     runs: bool | None
     basis: CiChecksBasis
@@ -114,5 +139,7 @@ def scan_ci_checks(repo_root: Path) -> CiChecksBlock:
         runs, basis = False, "no_check_command"
     else:
         runs, basis = False, "no_ci"
+    enforced_runs: bool | None = True if enforced else (None if included else False)
     return {"available": True, "ci_files": len(files), "check_commands": checks,
-            "included_files": included, "test_or_lint_runs": runs, "basis": basis}
+            "included_files": included, "test_or_lint_runs": runs, "basis": basis,
+            "enforced_check_runs": enforced_runs, "masked_check_commands": masked}

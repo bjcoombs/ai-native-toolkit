@@ -2922,11 +2922,12 @@ lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
 (`test_is_check_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
-maturity model reads it, so the CI row measures CI, not the instruction file.
+Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
 `scan_ci_checks(repo_root)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) and writes `{available,
-ci_files, check_commands, included_files, test_or_lint_runs, basis}`. Each line,
+ci_files, check_commands, included_files, test_or_lint_runs, basis,
+enforced_check_runs, masked_check_commands}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -2939,8 +2940,39 @@ line; with none it is null (`basis: included_jobs`) when a CI file pulls jobs
 from elsewhere (`shared_tooling.pulls_jobs_from_elsewhere`: any top-level GitLab
 `include:`, a job-level `uses:` of another repository's reusable workflow), else
 false (`no_check_command`, or `no_ci` with no CI file). Offline and headless.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line, else null under the
+same `included_jobs` rule, else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_runs`, which keeps its meaning.
 Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`ci_masking.py`**
+Which CI shell statements cannot fail their job (issue #775), with no YAML parser
+(an indentation model over the lines). `unmasked_lines(text) -> list[str]` is the
+result shape other CI classifiers build on: one entry per input line, same index,
+with every masked statement removed (`pytest || true; ruff check .` becomes
+`ruff check .`) and a line whose statements are all masked replaced by `""`. A
+classifier counts what can fail the job by running its line test over this list,
+and the masked count as its count over the original lines minus that.
+`split_statements(text)` splits one shell line into top-level `;` statements of
+`(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
+operator. Rules: a statement with a top-level `|| true` / `|| :` / `|| /bin/true` /
+`|| exit 0` is masked unless it sends output to a file (`>`, `&>`, `| tee`; not
+`/dev/null`) and a later line of the same job exits non-zero (a capture, the
+grafana `lint:circular` pattern); `continue-on-error: true` or `allow_failure:
+true` (literal, a trailing comment ignored) masks the mapping that holds it and
+everything under it (a step or a job); `set +e` masks the rest of its script body
+(a block scalar, or one `script:` list) until `set -e`, unless a later statement
+reads `$?` / `PIPESTATUS` or exits non-zero. `\` continuations are joined first.
+Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
+wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+`before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
+`tests/test_ci_checks.py`.
 
 **`agent_identity.py`**
 The one definition of an agent identity in a git history: `identity_is_agent(email,

@@ -83,7 +83,10 @@ CI_CHECKS: JsonDict = {
         "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI "
         "files. test_or_lint_runs is true when a CI line runs one, false when none does, and "
         "null (unknown) when a CI file pulls jobs from a file this checkout does not hold "
-        "(a GitLab include, a reusable workflow in another repository); basis says which."),
+        "(a GitLab include, a reusable workflow in another repository); basis says which. "
+        "enforced_check_runs (issue #775) is the same test with masked checks left out (|| true, "
+        "continue-on-error: true, allow_failure: true, set +e without a re-raise; "
+        "lib/ci_masking.py), and masked_check_commands counts the check lines left out."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -98,6 +101,12 @@ CI_CHECKS: JsonDict = {
             {"enum": ["check_command", "included_jobs", "no_check_command", "no_ci"]},
             "The reason for test_or_lint_runs: check_command (true), included_jobs (null), "
             "no_check_command or no_ci (false)."),
+        "enforced_check_runs": _field(
+            {"type": ["boolean", "null"]},
+            "Layer 5 level 1: true when a CI line runs a check that can fail its job, null when "
+            "none does but included jobs may hold one, else false."),
+        "masked_check_commands": _field(
+            _INT, "CI lines that run a check whose failure cannot fail the job."),
     },
 }
 

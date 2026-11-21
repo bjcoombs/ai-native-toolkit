@@ -106,8 +106,16 @@
 #   review_reality, which needs GitHub or GitLab through gh or glab: a headless
 #   run without --platform makes no network calls, so a repository with an AI
 #   review step reads "at least 1" there, and one without reads unknown.
-# - Layer 5 level 1 reads ci_checks.test_or_lint_runs: a line of a GitHub
-#   Actions workflow or .gitlab-ci.yml runs a test or lint command (pytest,
+# - Layer 5 level 1 reads ci_checks.enforced_check_runs (issue #775): a line
+#   of a GitHub Actions workflow or .gitlab-ci.yml runs a test or lint command
+#   whose exit code can fail the job. A masked check runs but does not count:
+#   pytest || true (or || exit 0, || :), a step or job with
+#   continue-on-error: true, a GitLab job with allow_failure: true, or a
+#   set +e script body that never re-raises the status (lib/ci_masking.py).
+#   || echo, a pipe without pipefail and allow_failure inherited through
+#   default:/extends: are known limits and still count. A stored scan from
+#   before this signal has no enforced_check_runs and reads unknown. The
+#   command test is the one ci_checks.test_or_lint_runs uses (pytest,
 #   make check, npm test, a ./scripts/test.sh, as
 #   check_command.is_check_command classifies an instruction file's
 #   commands, or a lint target or linter: make lint, ruff, eslint). Triggers
@@ -128,7 +136,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.11"
+version = "default-2026.11.21"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -220,7 +228,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "ci_checks.test_or_lint_runs", op = "eq", value = true }]
+  criteria = [{ signal = "ci_checks.enforced_check_runs", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2

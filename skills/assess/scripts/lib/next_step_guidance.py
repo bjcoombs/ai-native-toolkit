@@ -303,6 +303,14 @@ _WORDING: dict[str, Wording] = {
         "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
         "lint command."),
+    "ci_checks.enforced_check_runs": _flag(
+        "Run the test suite or linter in CI so a failure fails the job (`make test`, `pytest`, "
+        "`npm test`, `uv run ruff check`). Remove `|| true` / `continue-on-error` / "
+        "`allow_failure` from the step that runs the tests, or re-raise the status after "
+        "`set +e`.",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
+        "lint command and is not masked (`ci_checks.masked_check_commands` counts the masked "
+        "ones)."),
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,
@@ -381,7 +389,7 @@ _MEASURE_HINTS = {
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
-                 "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
+                 "that can fail its job but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
                  "`include:` or component, a reusable workflow from another repository): the "
                  "check may live in the included file, which the scan does not read.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
