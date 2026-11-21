@@ -394,7 +394,8 @@ def test_layer_four_rejects_a_catch_all_only_codeowners(tmp_path: Path) -> None:
             assert row["repos"]["r"]["levels"][0]["met"] is True
 
 
-def _ci_repo(root: Path, workflow: str | None, instructions: bool) -> dict[str, Any]:
+def _ci_repo(root: Path, workflow: str | None, instructions: bool,
+             extra: dict[str, str] | None = None) -> dict[str, Any]:
     root.mkdir()
     (root / "Makefile").write_text("test:\n\tpython -m pytest\n", encoding="utf-8")
     if workflow is not None:
@@ -402,17 +403,49 @@ def _ci_repo(root: Path, workflow: str | None, instructions: bool) -> dict[str, 
         (root / ".github" / "workflows" / "ci.yml").write_text(workflow, encoding="utf-8")
     if instructions:
         (root / "CLAUDE.md").write_text("# Guide\n\nRun `make test`.\n", encoding="utf-8")
+    for rel, text in (extra or {}).items():
+        (root / rel).write_text(text, encoding="utf-8")
     return _scans(_commit(root))
 
 
+_UNLOCKED = {"package.json": json.dumps({"name": "x", "dependencies": {"left-pad": "1.3.0"}})}
+
+
 def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) -> None:
-    """Issue #698: a CI test job is level 1 with no instruction file; naming the check is 2."""
+    """Issue #698: a CI test job is level 1 with no instruction file; level 2 is the setup."""
     ci = _CI_WORKFLOW.replace("make check", "make test")
-    bare = _ci_repo(tmp_path / "bare", ci, instructions=False)
-    assert bare["ci_checks"]["test_or_lint_runs"] is True
-    assert _row(_run({"r": bare}), "layer-5-ci")["level"] == 1
+    unlocked = _ci_repo(tmp_path / "unlocked", ci, instructions=True, extra=_UNLOCKED)
+    assert unlocked["ci_checks"]["test_or_lint_runs"] is True
+    assert unlocked["agent_environment"]["pinning"]["unlocked_total"] == 1
+    assert _row(_run({"r": unlocked}), "layer-5-ci")["level"] == 1
     named = _ci_repo(tmp_path / "named", ci, instructions=True)
     assert _row(_run({"r": named}), "layer-5-ci")["level"] == 2
+
+
+def test_layer_five_level_two_does_not_read_the_named_check(tmp_path: Path) -> None:
+    """Issue #786: naming a check is read once, by Layer 0 level 2, never by a Layer 5 level."""
+    layer5 = next(r for r in load_default_levels()["rows"] if r["id"].startswith("layer-5-"))
+    read = {c["signal"] for lv in layer5["levels"] for c in lv["criteria"]}
+    assert not read & {"agent_environment.check.named_total", "agent_environment.layer5_cap.applies"}
+    ci = _CI_WORKFLOW.replace("make check", "make test")
+    unnamed = _ci_repo(tmp_path / "unnamed", ci, instructions=False,
+                       extra={"CLAUDE.md": "# Project\n\nNotes.\n"})
+    assert unnamed["agent_environment"]["check"]["named_total"] == 0
+    levels = _levels(_run({"r": unnamed}))
+    assert levels["layer-0-instructions"] == 1   # the missing named check costs Layer 0 only
+    assert levels["layer-5-ci"] == 2
+
+
+def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -> None:
+    """Issue #786: committed setup does not stand in for a lockfile at Layer 5 level 2."""
+    ci = _CI_WORKFLOW.replace("make check", "make test")
+    setup = _ci_repo(tmp_path / "setup", ci, instructions=True,
+                     extra={**_UNLOCKED, "init.sh": "#!/bin/sh\nnpm install\n"})
+    env = setup["agent_environment"]
+    assert env["setup"]["present"] is True and env["setup_ready"] is True
+    assert env["pinning"]["unlocked_total"] == 1
+    row = _row(_run({"r": setup}), "layer-5-ci")
+    assert row["level"] == 1
 
 
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:

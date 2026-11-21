@@ -289,6 +289,11 @@ ARTIFACT_SCHEMA_VERSION = "1.29.0"
 #     ``review_automation`` credits a review component inside a resolved template;
 #     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
 #     an issue_comment-only review action is no longer credited.
+# 25: ``agent_environment`` adds ``setup_ready`` (the setup half of ``layer5_cap``)
+#     and ``pinning.unlocked_total`` (issue #786). Layer 5 level 2 reads
+#     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
+#     file names no check can now read level 2, and one with committed setup
+#     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
 # 26: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
 #     matched_patterns (issue #785), so a CODEOWNERS whose only matching patterns
 #     have no literal path segment (`*`, `/**`, `**/*`, `*.py`) no longer credits a

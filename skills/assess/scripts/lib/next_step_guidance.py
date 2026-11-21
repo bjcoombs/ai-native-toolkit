@@ -94,6 +94,14 @@ def _flag_count(change: str, done_when: str) -> Wording:
     return wording
 
 
+def _none_left(change: str, done_when: str) -> Wording:
+    """Wording for an ``eq 0`` / ``lt 1`` / ``lte 0`` count criterion."""
+    def wording(op: str, value: Operand) -> Guidance | None:
+        fits = op == "eq" and value == 0 or op == "lt" and value == 1 or op == "lte" and value == 0
+        return {"change": change, "done_when": done_when} if fits else None
+    return wording
+
+
 def _instructions_present(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
@@ -308,6 +316,10 @@ _WORDING: dict[str, Wording] = {
         "`git ls-files` lists a `CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`."),
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
+    "agent_environment.pinning.unlocked_total": _none_left(
+        "Commit a lockfile beside every dependency manifest (`uv.lock`, `package-lock.json`, "
+        "`go.sum`, `Cargo.lock` or similar), or pin every requirement with `==`.",
+        "Every dependency manifest has its lockfile committed in its directory or a parent."),
     "ci_checks.test_or_lint_runs": _flag(
         "Run the test suite or linter in CI: a GitHub Actions workflow or `.gitlab-ci.yml` job "
         "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",
