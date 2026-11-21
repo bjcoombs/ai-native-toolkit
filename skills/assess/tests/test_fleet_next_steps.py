@@ -335,7 +335,9 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("structure.front_door_ratio", "gte", 0.9, "At least 90% of imports"),
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
     ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
-    ("structure_drift.tier_0.boundary_patterns", "gt", 0, "CODEOWNERS"),
+    ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
+    ("structure_drift.tier_0.boundary_patterns", "gt", 0, "catch-all `*`"),
+    ("structure_drift.tier_0.boundary_patterns", "gte", 1, "a `CODEOWNERS` line per module path"),
 ])
 def test_guidance_templates_on_the_criterion(signal, op, value, needle):
     words = guidance(signal, op, value)
@@ -357,6 +359,7 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
     ("review_reality.approved_share", "lt", 0.5), ("structure.modularity_q", "lt", 0.3),
     ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc.p95", "gt", 5),
     ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.boundary_patterns", "eq", 0),
+    ("structure_drift.tier_0.matched_patterns", "eq", 0),
     ("promissory_markers.families.suppression.stale", "gt", 10),
 ])
 def test_guidance_declines_shapes_it_does_not_fit(signal, op, value):

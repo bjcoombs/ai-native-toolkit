@@ -242,6 +242,15 @@ def _suppressions_stale(op: str, value: Operand) -> Guidance | None:
 def _ownership_map(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
+    return {"change": "Declare module ownership and boundaries in a `CODEOWNERS` file or an "
+                      "`ARCHITECTURE.md`.",
+            "done_when": "A committed `CODEOWNERS` or `ARCHITECTURE.md` names paths that exist in "
+                         "the repository."}
+
+
+def _boundary_map(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
     return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
                       "`ARCHITECTURE.md` that names module paths.",
             "done_when": "A committed `CODEOWNERS` or `ARCHITECTURE.md` names at least one path "
@@ -312,7 +321,8 @@ _WORDING: dict[str, Wording] = {
         "At least one module imports from a different top-level package of the repository."),
     "promissory_markers.families.suppression.total": _suppressions_present,
     "promissory_markers.families.suppression.stale": _suppressions_stale,
-    "structure_drift.tier_0.boundary_patterns": _ownership_map,
+    "structure_drift.tier_0.boundary_patterns": _boundary_map,
+    "structure_drift.tier_0.matched_patterns": _ownership_map,
     "promissory_markers.aging_reliable": _flag(
         "Assess a full-history clone, not a shallow or squashed one, so lint suppressions can "
         "be aged.",

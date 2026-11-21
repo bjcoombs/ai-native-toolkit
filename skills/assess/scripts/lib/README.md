@@ -752,8 +752,8 @@ existing `hidden_coupling` finding - a recurring directory pair, not the version
 repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the
 `structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
 `structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
-`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its test
-`tests/test_structure_drift.py`.
+`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its tests
+`tests/test_structure_drift.py` and `tests/test_structure_drift_boundaries.py`.
 
 ### Signal integration
 
