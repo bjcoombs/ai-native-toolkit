@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from lib.ci_includes import STATUSES
+from lib.merged_ci import MERGED_STATUSES
 from lib.run_context_types import JsonDict
 
 _NUM_OR_NULL: JsonDict = {"type": ["number", "null"]}
@@ -87,7 +88,9 @@ CI_CHECKS: JsonDict = {
         "when an own or included CI line runs one, false when none does and every include "
         "resolved, and null (unknown) when a CI file pulls jobs from a file this run could not "
         "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
-        "says which."),
+        "says which. Under --platform, a repository with an unresolved GitLab include also gets "
+        "GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted "
+        "apart in merged_check_commands; a template resolved offline wins."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -117,13 +120,25 @@ CI_CHECKS: JsonDict = {
             }}},
             "One record per include item, nested includes after their parent; no file name "
             "or text."),
+        "merged_config": _field(
+            {"enum": list(MERGED_STATUSES)},
+            "The CI lint API read: not_read (offline), not_needed (every include resolved "
+            "offline), read, invalid (GitLab marked the configuration invalid) or unavailable."),
+        "merged_config_reason": _field(
+            {"type": ["string", "null"]},
+            "The reason code when merged_config is unavailable (no_access, not_found, "
+            "not_gitlab, ...); null otherwise."),
+        "merged_check_commands": _field(_INT, "Lines of the merged configuration that run a test "
+                                              "or lint check; the text is never published."),
         "test_or_lint_runs": _field(
             {"type": ["boolean", "null"]},
             "The CI test-or-lint signal: true, false, or null when included jobs may hold "
             "the check."),
         "basis": _field(
-            {"enum": ["check_command", "included_jobs", "no_check_command", "no_ci"]},
-            "The reason for test_or_lint_runs: check_command (true), included_jobs (null), "
+            {"enum": ["check_command", "merged_config", "included_jobs", "no_check_command",
+                      "no_ci"]},
+            "The reason for test_or_lint_runs: check_command or merged_config (true; the second "
+            "when only the merged configuration ran a check), included_jobs (null), "
             "no_check_command or no_ci (false)."),
     },
 }

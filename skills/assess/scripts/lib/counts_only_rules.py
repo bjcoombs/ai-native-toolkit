@@ -448,6 +448,10 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "ci_checks.includes.id": ID,
         "ci_checks.includes.status": TOKEN,
         "ci_checks.includes.ref_basis": TOKEN,
+        # The CI lint API read (#796): a status token and the reason code only; the
+        # merged configuration itself is never in the block.
+        "ci_checks.merged_config": TOKEN,
+        "ci_checks.merged_config_reason": TOKEN,
     },
     "layer_grades": {
         # A letter grade (A-F) or null; the presence flag is a boolean.

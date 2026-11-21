@@ -179,7 +179,12 @@ constant each.
 # resolved_includes, unresolved_includes and includes[] (kind, id, status,
 # ref_basis, depth: GitLab includes resolved offline, issue #766), and each
 # review_automation match gains depth. Additive: no existing key moves.
-ARTIFACT_SCHEMA_VERSION = "1.28.0"
+# 1.29.0: run-context.json ci_checks gains merged_config, merged_config_reason and
+# merged_check_commands (issue #796): GitLab's merged CI configuration, read through
+# the CI lint API where an include did not resolve offline, and basis gains
+# merged_config. A review_automation match read from that configuration has line
+# null and depth 1. Additive: no existing key moves.
+ARTIFACT_SCHEMA_VERSION = "1.29.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -288,4 +293,9 @@ ARTIFACT_SCHEMA_VERSION = "1.28.0"
 #     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
 #     file names no check can now read level 2, and one with committed setup
 #     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
-ASSESS_METHOD_VERSION = 25
+# 26: under --platform (and in a full /assess run) GitLab's CI lint API gives the
+#     merged CI configuration of a repository whose includes did not all resolve
+#     offline (issue #796): ``ci_checks.test_or_lint_runs`` reads true or false
+#     where it was null, and ``review_automation`` credits a review component the
+#     merge pulled in. Offline headless runs are unchanged.
+ASSESS_METHOD_VERSION = 26

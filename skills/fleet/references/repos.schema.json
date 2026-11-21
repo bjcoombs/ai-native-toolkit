@@ -232,7 +232,7 @@
                   "reason"
                 ]
               },
-              "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which.",
+              "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which. Under --platform, a repository with an unresolved GitLab include also gets GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted apart in merged_check_commands; a template resolved offline wins.",
               "properties": {
                 "available": {
                   "type": "boolean"
@@ -322,6 +322,27 @@
                   },
                   "description": "One record per include item, nested includes after their parent; no file name or text."
                 },
+                "merged_config": {
+                  "enum": [
+                    "not_read",
+                    "not_needed",
+                    "read",
+                    "invalid",
+                    "unavailable"
+                  ],
+                  "description": "The CI lint API read: not_read (offline), not_needed (every include resolved offline), read, invalid (GitLab marked the configuration invalid) or unavailable."
+                },
+                "merged_config_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The reason code when merged_config is unavailable (no_access, not_found, not_gitlab, ...); null otherwise."
+                },
+                "merged_check_commands": {
+                  "type": "integer",
+                  "description": "Lines of the merged configuration that run a test or lint check; the text is never published."
+                },
                 "test_or_lint_runs": {
                   "type": [
                     "boolean",
@@ -332,11 +353,12 @@
                 "basis": {
                   "enum": [
                     "check_command",
+                    "merged_config",
                     "included_jobs",
                     "no_check_command",
                     "no_ci"
                   ],
-                  "description": "The reason for test_or_lint_runs: check_command (true), included_jobs (null), no_check_command or no_ci (false)."
+                  "description": "The reason for test_or_lint_runs: check_command or merged_config (true; the second when only the merged configuration ran a check), included_jobs (null), no_check_command or no_ci (false)."
                 }
               }
             },

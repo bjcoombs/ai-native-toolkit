@@ -140,7 +140,11 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
 # ``review_evidence`` (lib/review_automation.py, #696) is offline itself but reads
 # ``review_reality``, so the platform pass rebuilds it from the measured block.
-PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence")
+# ``review_automation`` and ``ci_checks`` are offline too, but read the private network
+# spec ``gitlab_merged_ci`` (lib/gitlab_ci_lint.py, #796): GitLab's merged CI
+# configuration where an include did not resolve offline.
+PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence",
+                                   "review_automation", "ci_checks")
 
 # The PLATFORM_SCANS blocks that exist only on the platform (#779): without
 # ``--platform`` the document leaves them out (absent, never a ``network``
