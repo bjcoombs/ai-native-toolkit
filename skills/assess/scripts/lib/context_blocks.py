@@ -16,7 +16,9 @@ from typing import Any
 from lib.generated_files import matches_generated_name
 from lib.run_context_types import KeyholeIntegration
 from lib.degrade import safe as _safe
-from lib.structure_drift import SEAM_ALLOWLIST, detect_path_existence_drift
+from lib.structure_drift import (
+    NO_STATIC_FILE_MAP, SEAM_ALLOWLIST, STATIC_METRICS, detect_path_existence_drift,
+)
 
 
 # Cap on accretion files carried into run-context.json. The scanner measures
@@ -176,6 +178,12 @@ def _structure_drift_block(
     tier_1_block: dict[str, Any] = {"available": True}
     for key in _TIER1_DISAGREEMENT_KEYS:
         tier_1_block[f"{key}_count"] = tier_1.get(f"{key}_count", 0)
+    if str(tier_1.get("reason") or "").startswith(NO_STATIC_FILE_MAP):
+        # No file-pair static lens (a Go graph): its three counts are unknown,
+        # not zero; the co-change counts stand (issue #710).
+        for key in STATIC_METRICS:
+            tier_1_block[f"{key}_count"] = None
+        tier_1_block["static_lens_reason"] = NO_STATIC_FILE_MAP
     tier_1_block["seam_allowlist_applied"] = True
     tier_1_block["allowlist_pairs_count"] = len(SEAM_ALLOWLIST)
     block["tier_1"] = tier_1_block
