@@ -27,8 +27,9 @@ JavaScript with a deterministic regex scan; no Node, no ``tsc``, no install.
 
 Skipped: ``lib.import_graph.EXCLUDE_DIRS`` and the configured excludes,
 declaration files (``.d.ts``), minified bundles, test and story files
-(``*.test.*``, ``*.spec.*``, ``__tests__``, ``__mocks__``), tool config files
-(``*.config.*``, dotfiles) and files over 1 MB.
+(``*.test.*``, ``*.spec.*``, ``__tests__``, ``__mocks__``), build and test tool
+config files (``vite.config.ts`` and the like, ``TOOL_CONFIG_PREFIXES``; an
+app's own ``app.config.ts`` stays), dotfiles and files over 1 MB.
 
 Limits, all of a static text scan: a specifier built at run time
 (``require(name)``, template literals) is not seen; the comment stripper does not
@@ -60,6 +61,13 @@ _JS_TO_TS = {".js": (".ts", ".tsx"), ".jsx": (".tsx",), ".mjs": (".mts",), ".cjs
 SKIP_DIRS = frozenset({"__tests__", "__mocks__"})
 MAX_FILE_BYTES = 1_000_000
 CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
+# Build and test tools whose ``<tool>.config.*`` file is tooling, not source. An
+# application's own config module (Angular ``app.config.ts``, a NestJS
+# ``database.config.ts``) stays in the graph.
+TOOL_CONFIG_PREFIXES = frozenset({
+    "vite", "jest", "webpack", "eslint", "rollup", "babel", "tsconfig", "prettier",
+    "tailwind", "postcss", "next", "nuxt", "vitest", "playwright", "cypress", "karma",
+})
 _EXTENDS_DEPTH = 10
 
 _IMPORT_PATTERNS = (
@@ -83,7 +91,9 @@ def strip_comments(text: str) -> str:
 
     Quote tracking resets at a newline for ``'`` and ``"`` (they cannot span
     lines), so a quote the scan misreads, for example inside a regex literal,
-    affects one line at most.
+    affects one line at most. A backslash outside a string escapes the next
+    character, so a regex literal's escaped slash before ``*`` does not open a
+    comment.
     """
     out: list[str] = []
     i, n = 0, len(text)
@@ -100,7 +110,12 @@ def strip_comments(text: str) -> str:
                 quote = ""
             i += 1
             continue
-        if c in "'\"`":
+        if c == "\\":
+            # An escape outside a string (a regex literal's escaped slash): keep
+            # both characters, so an escaped slash before ``*`` opens no comment.
+            out.append(text[i:i + 2])
+            i += 2
+        elif c in "'\"`":
             quote = c
             out.append(c)
             i += 1
@@ -159,7 +174,9 @@ def _is_source(name: str) -> bool:
     if re.search(r"\.d\.[mc]?ts$", lower) or lower.endswith((".min.js", ".min.mjs")):
         return False
     parts = lower.split(".")
-    return not any(tag in parts[1:-1] for tag in ("test", "spec", "stories", "config"))
+    if "config" in parts[1:-1] and parts[0] in TOOL_CONFIG_PREFIXES:
+        return False
+    return not any(tag in parts[1:-1] for tag in ("test", "spec", "stories"))
 
 
 def _stem(path: str) -> str:

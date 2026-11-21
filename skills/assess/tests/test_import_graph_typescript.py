@@ -220,3 +220,17 @@ def test_read_jsonc_rejects_a_non_object(tmp_path: Path) -> None:
     assert read_jsonc(tmp_path / "a.json") is None
     assert read_jsonc(tmp_path / "missing.json") is None
 
+
+
+def test_a_regex_escape_does_not_open_a_block_comment() -> None:
+    text = "const re = /a\\/*/;\nimport b from './b';\n"
+    assert "import b from './b'" in strip_comments(text)
+    assert import_specifiers(text) == ["./b"]
+
+
+def test_only_tool_config_files_are_skipped(tmp_path: Path) -> None:
+    for rel in ("src/app.config.ts", "src/database.config.ts", "vite.config.ts",
+                "jest.config.js", "src/main.ts"):
+        _write(tmp_path, rel)
+    assert _build(tmp_path).modules == [
+        "src/app.config.ts", "src/database.config.ts", "src/main.ts"]

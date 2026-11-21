@@ -213,9 +213,11 @@ ARTIFACT_SCHEMA_VERSION = "1.22.0"
 # 17: an import graph with no edges reports ``structure.modularity_q`` null with
 #     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
 #     scorer's Layer 2 evidence on such repositories can move.
-# 18: TypeScript and JavaScript sources get an import graph (issue #709), so a
-#     repository whose largest graph is now TypeScript or JavaScript reports
-#     ``structure`` available with that language instead of
-#     ``no_import_graph_typescript``; keyhole static metrics, structure_drift
-#     tier 1 and the scorer's Layer 2 evidence can move on such repositories.
+# 18: TypeScript and JavaScript sources get an import graph (issue #709), and
+#     ``select_graph`` measures the dominant source language's graph: a builder
+#     that covers it decides (its graph, or its failure reason), and another
+#     language's graph stands in only when no builder covers it. A TypeScript-
+#     or JavaScript-dominant repository now reports ``structure`` available
+#     instead of ``no_import_graph_typescript``, so keyhole static metrics,
+#     structure_drift tier 1 and the scorer's Layer 2 evidence can move there.
 ASSESS_METHOD_VERSION = 18

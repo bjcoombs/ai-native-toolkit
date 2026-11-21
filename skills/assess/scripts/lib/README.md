@@ -349,7 +349,8 @@ directory holding an `index` file or a named `package.json`, else the module's t
 front doors are the `index` modules and each workspace entry; the surface is the count of
 exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
 `EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
-`*.config.*` and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+build and test tool configs (`vite.config.ts`, `jest.config.js` and the other
+`TOOL_CONFIG_PREFIXES`; an app's own `app.config.ts` stays) and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
 seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
 `"."` only, and `node_modules` and package `extends` are not followed. Configs and
 workspaces are read from the whole repository; modules come from `scope`.
