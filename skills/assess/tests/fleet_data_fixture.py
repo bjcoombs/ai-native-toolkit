@@ -104,6 +104,7 @@ STAMP: FleetStamp = {
     "fleet_stamp_version": 1, "toolkit_commit": None, "plugin_version": "0.0.0-fixture",
     "scan_date": "2026-11-20", "window": "6mo", "levels_version": "fleet-data-1", "counts_only": True,
     "paths_hashed": False, "scans": None, "fleet_config_sha256": None, "fleet_config_entries": None,
+    "platform": False,
     "repositories": {"selected": 4, "scanned_ok": 3, "failed": 1, "qualifying": 3},
 }
 WEB_URLS = {"grp/sub/proj1": "https://gitlab.example.com/grp/sub/proj1",

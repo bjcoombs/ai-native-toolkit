@@ -140,6 +140,12 @@ class DataRepo(TypedDict):
     rows: list[Cell]
 
 
+# The stamp fields RunDetails leaves out: the stamp's own envelope version, and the
+# --fleet-config section counts (the sha256 is the comparability key). A test fails when
+# FleetStamp gains a field that is neither copied below nor listed here.
+RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries"})
+
+
 class RunDetails(TypedDict):
     """The run stamp's fields, copied one by one so a new ``run.json`` field never
     changes this document without a ``FLEET_DATA_VERSION`` bump."""
@@ -153,6 +159,7 @@ class RunDetails(TypedDict):
     paths_hashed: bool
     scans: list[str] | None
     fleet_config_sha256: str | None  # the --fleet-config comparability key (#706)
+    platform: bool  # --platform ran the platform pass (#714); False for a stamp without it
     repositories: RepositoryCounts
 
 
@@ -322,6 +329,7 @@ def run_details(stamp: FleetStamp) -> RunDetails:
         "counts_only": stamp["counts_only"], "paths_hashed": stamp["paths_hashed"],
         "scans": list(stamp["scans"]) if stamp["scans"] is not None else None,
         "fleet_config_sha256": stamp.get("fleet_config_sha256"),
+        "platform": stamp.get("platform", False),
         "repositories": {"selected": counts["selected"], "scanned_ok": counts["scanned_ok"],
                          "failed": counts["failed"], "qualifying": counts["qualifying"]},
     }

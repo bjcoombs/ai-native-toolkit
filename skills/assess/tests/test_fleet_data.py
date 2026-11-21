@@ -125,6 +125,19 @@ def test_the_same_salt_gives_the_same_bytes_and_another_salt_does_not() -> None:
     assert first != fd.dumps_fleet_data(build(fd.Privacy(salt="other")))
 
 
+def test_run_details_copy_every_stamp_field_but_the_documented_exclusions() -> None:
+    from typing import get_type_hints
+
+    from lib.fleet_stamp import FleetStamp
+    stamp_keys = set(get_type_hints(FleetStamp))
+    assert fd.RUN_EXCLUDED <= stamp_keys
+    assert set(get_type_hints(fd.RunDetails)) == stamp_keys - fd.RUN_EXCLUDED
+    assert set(fd.run_details(STAMP)) == stamp_keys - fd.RUN_EXCLUDED
+    older = {k: v for k, v in STAMP.items() if k not in ("platform", "fleet_config_sha256")}
+    run = fd.run_details(older)  # type: ignore[arg-type]
+    assert (run["platform"], run["fleet_config_sha256"]) == (False, None)
+
+
 def test_privacy_for_full_ignores_any_salt() -> None:
     assert fd.privacy_for(True, "s") == fd.Privacy(full=True, salt=None)
     assert fd.privacy_for(False, "s") == fd.Privacy(full=False, salt="s")

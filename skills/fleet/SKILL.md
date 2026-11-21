@@ -227,7 +227,7 @@ the run history beside the other files.
 | Key | Value |
 |-----|-------|
 | `fleet_data_version` | Document version (1). |
-| `run` | The run stamp's fields from `run.json`, copied one by one (all but `fleet_stamp_version` and `fleet_config_entries`), so a new stamp field changes this file only with a version bump. |
+| `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
 | `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
 | `views` | One entry per view, `ownership` and `system`, each with its `units`. |
 | `repos` | One entry per repository row, sorted by `key`. |
