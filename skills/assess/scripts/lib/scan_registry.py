@@ -38,6 +38,7 @@ import inspect
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 from lib import core_scans as cs
@@ -600,6 +601,9 @@ SCANS: tuple[ScanSpec, ...] = (
 )
 
 
+DEFAULT_LEVELS_PATH = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
+
+
 def _run_context_level(ctx: dict[str, Any]) -> Any:
     # imported here: lib.level_signals reaches this module through lib.signals_schema
     from lib.level_tally import run_context_level
@@ -608,12 +612,18 @@ def _run_context_level(ctx: dict[str, Any]) -> Any:
 
 
 def _level_spec(specs: tuple[ScanSpec, ...]) -> ScanSpec:
-    """The ``level`` block (#744): it reads every block published before it, so the
-    maturity model can name any of them, and runs last of the post-offers stage."""
+    """The ``level`` block (#744): it reads the blocks the default maturity model names
+    (a spread block through the entry that spreads it), and runs last of post-offers."""
+    from lib.levels import load_levels
+
+    model = load_levels(DEFAULT_LEVELS_PATH)
+    named = {c["signal"].split(".")[0] for row in model["rows"] for lv in row["levels"] for c in lv["criteria"]}
     order = {stage: i for i, stage in enumerate(STAGES)}
-    earlier = [s for s in specs if not s.private and order[s.stage] <= order[STAGE_POST_OFFERS]]
+    earlier = [s for s in specs if not s.private and order[s.stage] <= order[STAGE_POST_OFFERS]
+               and named & (set(s.spread) if s.spread else {s.key})]
     blocks = tuple((s.key, s.spread) for s in earlier)
-    return ScanSpec("level", cs.level_scan(blocks, _run_context_level), tuple(s.key for s in earlier), STAGE_POST_OFFERS)
+    return ScanSpec("level", cs.level_scan(blocks, _run_context_level), tuple(s.key for s in earlier),
+                    STAGE_POST_OFFERS)
 
 
 # The verified tally and the autonomy Step (lib/level_tally.py, #744): the
