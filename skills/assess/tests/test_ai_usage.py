@@ -92,7 +92,8 @@ def test_all_time_counts_are_exact_and_merges_are_excluded(repo: Path) -> None:
 def test_window_filters_by_commit_date(repo: Path) -> None:
     block = scan_ai_usage(repo, None, "5y")
     assert block["available"] is True
-    assert block["window"] == "5y" and block["since"] == "5 years ago"
+    # Counted back from HEAD's commit time (#773), as an absolute git bound.
+    assert block["window"] == "5y" and str(block["since"]).startswith("@")
     assert block["total_commits"] == 7
     assert block["agent_trailer_commits"] == 4
 
@@ -103,11 +104,11 @@ def test_scope_counts_only_the_subtree(repo: Path) -> None:
     assert block["total_commits"] == 1 and block["agent_trailer_commits"] == 1
 
 
-@pytest.mark.parametrize(("label", "since"), CHURN_WINDOWS)
-def test_every_churn_window_resolves_to_its_since(label: str, since: str | None) -> None:
-    """assess_core's normalised churn window lands on the churn axis's --since."""
+@pytest.mark.parametrize(("label", "window"), CHURN_WINDOWS)
+def test_every_churn_window_resolves_to_its_window(label: str, window: str | None) -> None:
+    """assess_core's normalised churn window lands on the churn axis's window."""
     resolved = resolve_window(window_from_churn_label(f"commits ({label})"))
-    assert resolved[1] == since
+    assert resolved == (window or "all-time")
 
 
 def test_no_identity_string_reaches_the_block(repo: Path) -> None:
@@ -148,10 +149,12 @@ def test_missing_git_and_timeout_have_their_own_reasons(
     def slow(*_a: object, **_k: object) -> None:
         raise subprocess.TimeoutExpired("git", ai_usage.GIT_TIMEOUT_SECONDS)
 
-    monkeypatch.setattr(ai_usage.subprocess, "run", no_git)
-    assert scan_ai_usage(repo, None, None)["reason"] == ai_usage.REASON_NO_GIT  # type: ignore[typeddict-item]
-    monkeypatch.setattr(ai_usage.subprocess, "run", slow)
-    assert scan_ai_usage(repo, None, None)["reason"] == ai_usage.REASON_TIMEOUT  # type: ignore[typeddict-item]
+    # With a window too: the HEAD read behind the window bound keeps the reason (#773).
+    for window in (None, "6mo"):
+        monkeypatch.setattr(ai_usage.subprocess, "run", no_git)
+        assert scan_ai_usage(repo, None, window)["reason"] == ai_usage.REASON_NO_GIT  # type: ignore[typeddict-item]
+        monkeypatch.setattr(ai_usage.subprocess, "run", slow)
+        assert scan_ai_usage(repo, None, window)["reason"] == ai_usage.REASON_TIMEOUT  # type: ignore[typeddict-item]
 
 
 def test_unconfirmed_shallow_probe_degrades(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -169,13 +172,9 @@ def test_unconfirmed_shallow_probe_degrades(repo: Path, monkeypatch: pytest.Monk
 
 
 @pytest.mark.parametrize(("window", "expected"), [
-    (None, ("all-time", None)),
-    ("6mo", ("6mo", "6 months ago")),
-    ("90d", ("90d", "90 days ago")),
-    ("12w", ("12w", "12 weeks ago")),
-    ("1y", ("1y", "1 years ago")),
+    (None, "all-time"), ("6mo", "6mo"), ("90d", "90d"), ("12w", "12w"), ("1y", "1y"),
 ])
-def test_resolve_window(window: str | None, expected: tuple[str, str | None]) -> None:
+def test_resolve_window(window: str | None, expected: str) -> None:
     assert resolve_window(window) == expected
 
 

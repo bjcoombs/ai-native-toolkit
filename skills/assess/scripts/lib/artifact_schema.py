@@ -254,4 +254,9 @@ ARTIFACT_SCHEMA_VERSION = "1.26.0"
 # 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
 #     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
 #     instead of null and the L7 "hollow required review" row can now fire there.
-ASSESS_METHOD_VERSION = 20
+# 21: every git-history window and day count is counted back from HEAD's committer
+#     time instead of today (issue #773): churn windows, ``doc_staleness`` ages and
+#     window ratios, instruction ``freshness_days`` (and so the grader's freshness
+#     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
+#     whose HEAD is old, ages shrink and windows cover the history before HEAD.
+ASSESS_METHOD_VERSION = 21

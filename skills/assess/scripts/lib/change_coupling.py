@@ -75,8 +75,8 @@ def parse_commit_file_sets(
     the number of commits in the window - callers that need a commit count can
     use ``len(...)``. Returns ``[]`` when ``repo_root`` is not inside a git repo.
 
-    Pass ``since`` as a git date expression (e.g. ``"12 months ago"``) to window
-    the history; ``None`` (default) means full history reachable from HEAD.
+    Pass ``since`` as an absolute git date (``"@<epoch>"``, as
+    ``lib.history_window.anchored_since`` builds it) to window the history; ``None`` (default) means full history reachable from HEAD.
     Renames are not followed: a commit made before a rename lists the file under
     its old path. Pass the sets through :func:`fold_renames` with
     :func:`build_rename_map`'s paths to count that history under current paths.

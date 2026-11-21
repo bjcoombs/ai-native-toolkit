@@ -50,8 +50,9 @@ AI_USAGE: JsonDict = {
     "properties": {
         "available": {"type": "boolean"},
         "window": _field({"type": "string"}, "The history window read, for example 6mo."),
-        "since": _field({"type": ["string", "null"]}, "The window as git --since text; dropped "
-                                                      "in counts-only output."),
+        "since": _field({"type": ["string", "null"]},
+                        "The window as an absolute git --since bound (@<epoch>, counted back "
+                        "from HEAD's commit time); dropped in counts-only output."),
         "merge_rule": _field({"type": "string"}, "How merge commits are treated (excluded: not counted)."),
         "total_commits": _field(_INT, "Commits in the window."),
         "agent_trailer_commits": _field(_INT, "Commits carrying an agent trailer."),
