@@ -5,7 +5,8 @@ model it used) into a list of ``Diagram`` entries, each either an SVG or the
 one-line reason it was skipped. ``report_markdown`` renders ``report.md``: the
 "What changed and who earned it" section first when given (``lib/fleet_credit.py``), then one
 section per diagram, the SVG embedded with a relative, clickable image link,
-or the skip reason in its place. ``write_diagrams`` writes the SVGs and the
+or the skip reason in its place, then "How this was measured" (the scans that ran and
+were skipped, ``lib/measured_appendix.py``, #794). ``write_diagrams`` writes the SVGs and the
 report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
 ``clear_diagrams`` removes them all (``fleet.py --no-diagrams``).
@@ -177,9 +178,11 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     ]
 
 
-def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None) -> str:
+def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
+                    measured: str | None = None) -> str:
     """``report.md``: the credit section first when given (``lib/fleet_credit.py``), then each
-    diagram embedded with a relative link, or why it was skipped."""
+    diagram embedded with a relative link, or why it was skipped, then the "How this was
+    measured" section when given (``lib/measured_appendix.py``)."""
     lines = ["# Fleet diagrams", "",
              "Drawn from this run's output with no model call; unknown is hatched and named, "
              "never drawn as zero.", ""]
@@ -192,6 +195,8 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None) -> s
         else:
             lines.append(f"Not drawn: {diagram['skipped']}")
         lines.append("")
+    if measured is not None:
+        lines += [measured.rstrip("\n"), ""]
     return "\n".join(lines)
 
 
@@ -217,10 +222,11 @@ def _write(path: Path, content: str) -> Path:
     return path
 
 
-def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None) -> list[Path]:
-    """Write the drawn SVGs and ``report.md`` (with ``credit`` first) under ``out_dir``; returns
-    the paths written."""
+def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None,
+                   measured: str | None = None) -> list[Path]:
+    """Write the drawn SVGs and ``report.md`` (with ``credit`` first and ``measured`` last)
+    under ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
-    written.append(_write(out_dir / REPORT_FILE, report_markdown(diagrams, credit)))
+    written.append(_write(out_dir / REPORT_FILE, report_markdown(diagrams, credit, measured)))
     return written

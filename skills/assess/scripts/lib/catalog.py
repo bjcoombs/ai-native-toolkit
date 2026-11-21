@@ -1,0 +1,340 @@
+"""The measures catalog: what ``/assess`` and ``/fleet`` measure, generated from the check manifest (#794).
+
+``build_catalog`` joins the check manifest (``checks/core.toml``, ``lib.check_manifest``),
+the default maturity model (``levels/default.toml``) and the signal input classes
+(``lib.level_signals``, #783) into one ``Catalog`` document. ``lib.catalog_md`` renders it
+as ``docs/what-we-measure.md``; ``render_json`` writes it as
+``skills/assess/references/measures.json``. ``gen_catalog.py`` writes both, and
+``tests/test_catalog.py`` fails when either committed copy is stale. Pure and
+deterministic: no date, commit, version string or absolute path is read, so only a
+change to the manifest, the model or the signal classes changes the output.
+
+Shape (``CATALOG_VERSION`` 1). Every entry is an object and every relation sits under a
+named key, so a later field (the #843 truth tags, #870) is an added key, never a
+restructure:
+
+- ``grades``: each confidence grade, the input classes that give it, and whether a
+  condition at that grade counts toward a level (``measured`` and ``verified`` do;
+  ``config_only`` and ``declared`` are listed, not counted).
+- ``rows``: each maturity-model row with its levels, and each level's criteria with the
+  signal, the operator and value, the plain-words criterion, the condition's title and
+  next step from the manifest, its grade and whether it counts.
+- ``scans``: one entry per scan name the headless runner accepts
+  (``signals.known_scans()``, the ``assess_signals.py --scans`` list): the collector that
+  builds it, what it reads, whether it needs the network, how a headless or fleet run
+  reports it, its counts-only privacy class, the rows, conditions and findings that use
+  it, its unknown reasons, and the input class and grade of each signal it feeds. A scan
+  no criterion reads has the grade ``unclassified``: classifying every collector is
+  #789 step 6.
+- ``collectors``: every scan in the registry (``scan_registry.SCANS``), including the
+  private inputs other scans read.
+- ``signals``: each signal a criterion reads, with its type, collector, input class and
+  grade.
+- ``findings``: each derived finding, in report order, with its inputs and rules.
+"""
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping, Sequence
+from typing import Literal, NotRequired, TypedDict
+
+from lib import check_manifest as cm
+from lib.level_signals import _LISTED_GRADES, INPUT_GRADES, load_default_levels
+from lib.levels import Criterion, MaturityModel, Scalar
+from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
+
+CATALOG_VERSION = 1
+GRADE_ORDER = ("config_only", "declared", "measured", "verified")
+UNCLASSIFIED = "unclassified"
+# The sources the catalog is generated from, repo-relative.
+SOURCES = ("skills/assess/checks/core.toml", "skills/assess/levels/default.toml",
+           "skills/assess/scripts/lib/level_signals.py")
+
+Headless = Literal["registered", "headless_variant", "unregistered", "platform_only"]
+
+# Plain words for each maturity-model operator.
+OP_WORDS = {"eq": "is", "ne": "is not", "lt": "is below", "lte": "is at most",
+            "gt": "is above", "gte": "is at least", "in": "is one of", "not_in": "is not one of"}
+
+GENERIC_REASONS: dict[str, tuple[str, str]] = {
+    "not_registered": (
+        "Only a full /assess run builds this block; a headless or fleet run reports it "
+        "not measured.",
+        "Run /assess on the repository to measure it."),
+    "network_platform": (
+        "It reads GitHub or GitLab, and a run makes no network call without --platform.",
+        "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."),
+    "network_full": (
+        "It reads GitHub or GitLab, which only a full /assess run does.",
+        "Run /assess on the repository with gh or glab signed in."),
+    "platform_only": (
+        "The block exists only on the platform: without --platform it is left out.",
+        "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."),
+}
+
+
+class GradeInfo(TypedDict):
+    grade: str
+    input_classes: list[str]
+    counts: bool
+
+
+class CatalogReason(TypedDict):
+    code: str
+    means: str
+    next_step: str
+    carried_in: NotRequired[str]
+
+
+class Evidence(TypedDict):
+    signal: str
+    input_class: str
+    grade: str
+
+
+class Privacy(TypedDict):
+    written: bool  # False for a private collector: an input to other scans, never output
+    strings_kept: dict[str, str]  # field pattern -> class (path, token, reason, id, drop)
+
+
+class UsedBy(TypedDict):
+    rows: list[str]
+    conditions: list[str]
+    findings: list[str]
+
+
+class CatalogCriterion(TypedDict):
+    key: str
+    signal: str
+    op: str
+    value: Scalar | list[Scalar]
+    text: str
+    title: str
+    fix: str
+    input_class: str
+    grade: str
+    counts: bool
+
+
+class CatalogLevel(TypedDict):
+    level: int
+    criteria: list[CatalogCriterion]
+
+
+class CatalogRow(TypedDict):
+    id: str
+    title: str
+    scope: str
+    aggregation: str
+    levels: list[CatalogLevel]
+
+
+class CatalogScan(TypedDict):
+    name: str
+    title: str
+    summary: str
+    collector: str
+    reads: list[str]
+    network: bool
+    platform: bool
+    headless: Headless
+    privacy: Privacy
+    used_by: UsedBy
+    unknown_reasons: list[CatalogReason]
+    evidence: list[Evidence]
+    grades: list[str]
+
+
+class CatalogCollector(TypedDict):
+    name: str
+    title: str
+    publishes: list[str]
+    reads: list[str]
+    network: bool
+    private: bool
+
+
+class CatalogSignal(TypedDict):
+    path: str
+    title: str
+    type: str
+    collector: str
+    input_class: str
+    grade: str
+    null_means: str
+
+
+class CatalogFinding(TypedDict):
+    name: str
+    title: str
+    order: int
+    action: str
+    mode: str
+    concern: bool
+    inputs: list[str]
+    suppressed_when: str
+    prune_missing_paths: bool
+
+
+class Catalog(TypedDict):
+    catalog_version: int
+    sources: list[str]
+    grades: list[GradeInfo]
+    rows: list[CatalogRow]
+    scans: list[CatalogScan]
+    collectors: list[CatalogCollector]
+    signals: list[CatalogSignal]
+    findings: list[CatalogFinding]
+
+
+def counts(grade: str) -> bool:
+    """True when a condition at ``grade`` counts toward a level (#744, #789 decision)."""
+    return grade in GRADE_ORDER and grade not in _LISTED_GRADES
+
+
+def _grades() -> list[GradeInfo]:
+    return [GradeInfo(grade=g, input_classes=sorted(c for c, cg in INPUT_GRADES.items() if cg == g),
+                      counts=counts(g)) for g in GRADE_ORDER]
+
+
+def _value_words(value: Scalar | list[Scalar]) -> str:
+    if isinstance(value, list):
+        return ", ".join(_value_words(v) for v in value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def criterion_text(criterion: Criterion, title: str) -> str:
+    """The criterion in plain words: the signal's title, the operator, the value."""
+    return f"{title}: {OP_WORDS.get(criterion['op'], criterion['op'])} {_value_words(criterion['value'])}"
+
+
+def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
+          conditions: Mapping[str, cm.ConditionEntry]) -> list[CatalogRow]:
+    rows: list[CatalogRow] = []
+    for row in model["rows"]:
+        levels: list[CatalogLevel] = []
+        for level in row["levels"]:
+            criteria: list[CatalogCriterion] = []
+            for criterion in level["criteria"]:
+                key = cm.condition_key(row["id"], level["level"], criterion["signal"])
+                signal = signals.get(criterion["signal"])
+                cond = conditions.get(key)
+                input_class = signal["evidence"] if signal else UNCLASSIFIED
+                grade = INPUT_GRADES.get(input_class, UNCLASSIFIED)  # type: ignore[call-overload]
+                title = signal["title"] if signal else criterion["signal"]
+                criteria.append(CatalogCriterion(
+                    key=key, signal=criterion["signal"], op=criterion["op"], value=criterion["value"],
+                    text=criterion_text(criterion, title),
+                    title=cond["title"] if cond else title, fix=cond["fix"] if cond else "",
+                    input_class=input_class, grade=grade, counts=counts(grade)))
+            levels.append(CatalogLevel(level=level["level"], criteria=criteria))
+        agg = row["aggregation"]
+        rows.append(CatalogRow(id=row["id"], title=row["title"], scope=row["scope"],
+                               aggregation=agg["rule"] if agg else "min", levels=levels))
+    return rows
+
+
+def _headless(name: str, collector: cm.CollectorEntry) -> Headless:
+    if name in PLATFORM_ONLY_SCANS:
+        return "platform_only"
+    status = collector.get("headless", {}).get(name, "unregistered")
+    return status if status in ("registered", "headless_variant") else "unregistered"  # type: ignore[return-value]
+
+
+def _reasons(name: str, collector: cm.CollectorEntry, headless: Headless) -> list[CatalogReason]:
+    codes: list[tuple[str, str]] = []  # (generic key, reported code)
+    if headless == "unregistered":
+        codes.append(("not_registered", "not_registered"))
+    if headless == "platform_only":
+        codes.append(("platform_only", "platform_only"))
+    elif collector.get("network") and "offline_callable" not in collector:
+        codes.append(("network_platform" if name in PLATFORM_SCANS else "network_full",
+                      NETWORK_REASON.split(":", 1)[0]))
+    out = [CatalogReason(code=code, means=GENERIC_REASONS[key][0], next_step=GENERIC_REASONS[key][1])
+           for key, code in codes]
+    for declared in collector.get("unknown_reasons", []):
+        reason = CatalogReason(code=declared["code"], means=declared["means"],
+                               next_step=declared["next_step"])
+        if "carried_in" in declared:
+            reason["carried_in"] = declared["carried_in"]
+        out.append(reason)
+    return out
+
+
+def _privacy(name: str, collector: cm.CollectorEntry, spread: bool) -> Privacy:
+    table = collector.get("privacy", {})
+    if spread:
+        table = {k: v for k, v in table.items() if k == name or k.startswith(f"{name}.")}
+    return Privacy(written=not collector.get("private", False), strings_kept=dict(sorted(table.items())))
+
+
+def _first(path: str) -> str:
+    return path.split(".", 1)[0]
+
+
+def _used_by(names: set[str], rows: Sequence[CatalogRow],
+             findings: Sequence[cm.FindingEntry]) -> UsedBy:
+    crits = [(row["id"], c) for row in rows for lv in row["levels"] for c in lv["criteria"]
+             if _first(c["signal"]) in names]
+    return UsedBy(rows=sorted({r for r, _ in crits}), conditions=[c["key"] for _, c in crits],
+                  findings=[f["name"] for f in findings if any(_first(i) in names for i in f["inputs"])])
+
+
+def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
+           signals: Sequence[cm.SignalEntry]) -> list[CatalogScan]:
+    by_block = {block: c for c in cm.collectors(manifest) for block in c["publishes"]}
+    findings = cm.findings(manifest)
+    out: list[CatalogScan] = []
+    for name in known_scans():
+        collector = by_block[name]
+        spread = bool(collector.get("spread"))
+        headless = _headless(name, collector)
+        names = {name} if spread else {name, cm.scan_key(collector)}
+        evidence = [Evidence(signal=s["path"], input_class=s["evidence"],
+                             grade=INPUT_GRADES.get(s["evidence"], UNCLASSIFIED))  # type: ignore[call-overload]
+                    for s in signals if _first(s["path"]) == name]
+        grades = [g for g in GRADE_ORDER if any(e["grade"] == g for e in evidence)] or [UNCLASSIFIED]
+        out.append(CatalogScan(
+            name=name, title=collector["title"] if not spread else f"{collector['title']}: {name}",
+            summary=collector.get("summary", ""), collector=collector["id"],
+            reads=list(collector["reads"]), network=bool(collector.get("network")),
+            platform=bool(collector.get("platform_pass")), headless=headless,
+            privacy=_privacy(name, collector, spread), used_by=_used_by(names, rows, findings),
+            unknown_reasons=_reasons(name, collector, headless), evidence=evidence, grades=grades))
+    return out
+
+
+def build_catalog(manifest: cm.CheckManifest | None = None,
+                  model: MaturityModel | None = None) -> Catalog:
+    """The catalog of the core manifest and the default maturity model (or the given ones)."""
+    manifest = cm.load_manifest() if manifest is None else manifest
+    model = load_default_levels() if model is None else model
+    signals = cm.signals(manifest)
+    by_path = {s["path"]: s for s in signals}
+    rows = _rows(model, by_path, {c["key"]: c for c in cm.conditions(manifest)})
+    return Catalog(
+        catalog_version=CATALOG_VERSION,
+        sources=list(SOURCES),
+        grades=_grades(),
+        rows=rows,
+        scans=_scans(manifest, rows, signals),
+        collectors=[CatalogCollector(name=cm.scan_key(c), title=c["title"], publishes=list(c["publishes"]),
+                                     reads=list(c["reads"]), network=bool(c.get("network")),
+                                     private=bool(c.get("private"))) for c in cm.collectors(manifest)],
+        signals=[CatalogSignal(path=s["path"], title=s["title"], type=s["type"], collector=s["collector"],
+                               input_class=s["evidence"],
+                               grade=INPUT_GRADES.get(s["evidence"], UNCLASSIFIED),  # type: ignore[call-overload]
+                               null_means=s.get("null_means", "")) for s in signals],
+        findings=[CatalogFinding(name=f["name"], title=f["title"], order=f["order"], action=f["action"],
+                                 mode=f["mode"], concern=f["concern"], inputs=list(f["inputs"]),
+                                 suppressed_when=f.get("suppressed_when", ""),
+                                 prune_missing_paths=bool(f.get("prune_missing_paths")))
+                  for f in cm.findings(manifest)],
+    )
+
+
+def render_json(catalog: Catalog) -> str:
+    """``measures.json``: the catalog as indented JSON with a trailing newline."""
+    return json.dumps(catalog, indent=2, ensure_ascii=False) + "\n"

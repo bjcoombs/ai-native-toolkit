@@ -1,0 +1,3736 @@
+{
+  "catalog_version": 1,
+  "sources": [
+    "skills/assess/checks/core.toml",
+    "skills/assess/levels/default.toml",
+    "skills/assess/scripts/lib/level_signals.py"
+  ],
+  "grades": [
+    {
+      "grade": "config_only",
+      "input_classes": [
+        "config_text"
+      ],
+      "counts": false
+    },
+    {
+      "grade": "declared",
+      "input_classes": [
+        "head_text"
+      ],
+      "counts": false
+    },
+    {
+      "grade": "measured",
+      "input_classes": [
+        "execution_artifact",
+        "git_history",
+        "head_structure"
+      ],
+      "counts": true
+    },
+    {
+      "grade": "verified",
+      "input_classes": [
+        "ci_executed",
+        "platform"
+      ],
+      "counts": true
+    }
+  ],
+  "rows": [
+    {
+      "id": "layer-0-instructions",
+      "title": "Layer 0: agent instructions",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-0-instructions.1:layer_grades.instruction_file_present",
+              "signal": "layer_grades.instruction_file_present",
+              "op": "eq",
+              "value": true,
+              "text": "A committed instruction file exists: is true",
+              "title": "An instruction file is committed",
+              "fix": "Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-0-instructions.2:agent_environment.check.named_total",
+              "signal": "agent_environment.check.named_total",
+              "op": "gt",
+              "value": 0,
+              "text": "Instruction files name a check command: is above 0",
+              "title": "An instruction file names a check command",
+              "fix": "Name the command that checks a change (for example make check) in your instruction file.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            },
+            {
+              "key": "layer-0-instructions.2:instruction_claims.failed",
+              "signal": "instruction_claims.failed",
+              "op": "eq",
+              "value": 0,
+              "text": "Instruction claims that do not hold: is 0",
+              "title": "Every checkable instruction claim holds",
+              "fix": "Update the instruction lines whose claims no longer match the repository.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            },
+            {
+              "key": "layer-0-instructions.2:nested_instructions.budget.claude_code.lines",
+              "signal": "nested_instructions.budget.claude_code.lines",
+              "op": "lte",
+              "value": 200,
+              "text": "Always-loaded Claude Code instruction lines: is at most 200",
+              "title": "Always-loaded instructions fit in 200 lines",
+              "fix": "Move detail that is needed only sometimes into files the instructions point to.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-1-liveness",
+      "title": "Layer 1: runtime legibility",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-1-liveness.1:observability.rung",
+              "signal": "observability.rung",
+              "op": "gte",
+              "value": 1,
+              "text": "Observability rung: is at least 1",
+              "title": "Some runtime telemetry is committed",
+              "fix": "Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-1-liveness.2:observability.rung",
+              "signal": "observability.rung",
+              "op": "gte",
+              "value": 3,
+              "text": "Observability rung: is at least 3",
+              "title": "Runtime telemetry reaches rung 3",
+              "fix": "Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-2-design",
+      "title": "Layer 2: code design (module structure)",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-2-design.1:structure.modularity_q",
+              "signal": "structure.modularity_q",
+              "op": "gte",
+              "value": 0.3,
+              "text": "Import-graph modularity: is at least 0.3",
+              "title": "The import graph has module structure",
+              "fix": "Group related modules into packages that mostly import within themselves.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-2-design.2:structure.cross_package_edges",
+              "signal": "structure.cross_package_edges",
+              "op": "gt",
+              "value": 0,
+              "text": "Cross-package imports: is above 0",
+              "title": "Packages import one another",
+              "fix": "Nothing to change on its own: this is met once one package imports another.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            },
+            {
+              "key": "layer-2-design.2:structure.front_door_ratio",
+              "signal": "structure.front_door_ratio",
+              "op": "gte",
+              "value": 0.9,
+              "text": "Cross-package imports through a package's front door: is at least 0.9",
+              "title": "Cross-package imports use a package's front door",
+              "fix": "Import other packages through their public API rather than their submodules.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-3-linters",
+      "title": "Layer 3: linters (suppression footprint)",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-3-linters.1:promissory_markers.families.suppression.total",
+              "signal": "promissory_markers.families.suppression.total",
+              "op": "gt",
+              "value": 0,
+              "text": "Suppression comments: is above 0",
+              "title": "A linter or type checker leaves a footprint",
+              "fix": "Run a linter or type checker on the code; its suppression comments show it is in use.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-3-linters.2:promissory_markers.families.suppression.stale",
+              "signal": "promissory_markers.families.suppression.stale",
+              "op": "lte",
+              "value": 10,
+              "text": "Stale suppression comments: is at most 10",
+              "title": "Stale suppressions stay at 10 or fewer",
+              "fix": "Revisit the oldest suppression comments and fix or remove them.",
+              "input_class": "git_history",
+              "grade": "measured",
+              "counts": true
+            },
+            {
+              "key": "layer-3-linters.2:promissory_markers.aging_reliable",
+              "signal": "promissory_markers.aging_reliable",
+              "op": "eq",
+              "value": true,
+              "text": "Marker aging is reliable: is true",
+              "title": "Suppression ages can be read from history",
+              "fix": "Run on a full clone so suppression ages can be measured.",
+              "input_class": "git_history",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-4-architecture",
+      "title": "Layer 4: architecture boundaries and size",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-4-architecture.1:structure_drift.tier_0.matched_patterns",
+              "signal": "structure_drift.tier_0.matched_patterns",
+              "op": "gt",
+              "value": 0,
+              "text": "Ownership-map patterns matching a tracked file: is above 0",
+              "title": "A boundary or ownership map matches the code",
+              "fix": "Commit a CODEOWNERS or ARCHITECTURE.md whose patterns name real paths.",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-4-architecture.2:stats_summary.loc.p95",
+              "signal": "stats_summary.loc.p95",
+              "op": "lte",
+              "value": 500,
+              "text": "File size at the 95th percentile: is at most 500",
+              "title": "95% of files are 500 lines or fewer",
+              "fix": "Split the largest files along their natural seams.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-5-ci",
+      "title": "Layer 5: CI and the agent's local check",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-5-ci.1:ci_checks.test_or_lint_runs",
+              "signal": "ci_checks.test_or_lint_runs",
+              "op": "eq",
+              "value": true,
+              "text": "A CI line runs a test or lint command: is true",
+              "title": "CI runs your tests or linters",
+              "fix": "Add a CI step that runs your test or lint command on pull requests.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-5-ci.2:agent_environment.pinning.unlocked_total",
+              "signal": "agent_environment.pinning.unlocked_total",
+              "op": "eq",
+              "value": 0,
+              "text": "Dependency manifests without a committed lockfile: is 0",
+              "title": "Every dependency manifest has its lockfile",
+              "fix": "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-6-coverage",
+      "title": "Layer 6: coverage gates and truth pressure",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-6-coverage.1:coverage_gate.enforced",
+              "signal": "coverage_gate.enforced",
+              "op": "eq",
+              "value": true,
+              "text": "A coverage threshold is set: is true",
+              "title": "A coverage gate is configured",
+              "fix": "Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached.",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-6-coverage.2:test_pressure.mutation_run",
+              "signal": "test_pressure.mutation_run",
+              "op": "eq",
+              "value": true,
+              "text": "A mutation run completed: is true",
+              "title": "A mutation run has completed",
+              "fix": "Run the opt-in mutation pass to see which tests pin behaviour.",
+              "input_class": "execution_artifact",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-7-review",
+      "title": "Layer 7: review on merged pull requests",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-7-review.1:review_evidence.present",
+              "signal": "review_evidence.present",
+              "op": "eq",
+              "value": true,
+              "text": "Review evidence exists: is true",
+              "title": "Changes get reviewed",
+              "fix": "Commit an AI review step in CI, or review merged changes before they land.",
+              "input_class": "head_text",
+              "grade": "declared",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-7-review.2:review_reality.reviewed_share",
+              "signal": "review_reality.reviewed_share",
+              "op": "gte",
+              "value": 0.8,
+              "text": "Share of merged changes reviewed: is at least 0.8",
+              "title": "Most merged changes are reviewed",
+              "fix": "Aim for a review on at least four in five merged changes.",
+              "input_class": "platform",
+              "grade": "verified",
+              "counts": true
+            },
+            {
+              "key": "layer-7-review.2:review_reality.approved_share",
+              "signal": "review_reality.approved_share",
+              "op": "gte",
+              "value": 0.5,
+              "text": "Share of merged changes approved: is at least 0.5",
+              "title": "Half of merged changes are approved",
+              "fix": "Approve changes explicitly when you review them.",
+              "input_class": "platform",
+              "grade": "verified",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "layer-8-agent-ops",
+      "title": "Layer 8: AI project management",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
+              "signal": "agent_ops.summary.permissions_encoded",
+              "op": "eq",
+              "value": true,
+              "text": "Agent permissions are committed: is true",
+              "title": "Agent permissions are committed",
+              "fix": "Commit the agent permission allowlist your team uses, so every clone shares it.",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
+              "signal": "agent_ops.summary.hooks_present",
+              "op": "eq",
+              "value": true,
+              "text": "Agent hooks are committed: is true",
+              "title": "Agent hooks are committed",
+              "fix": "Commit the hooks that run checks around agent actions.",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            },
+            {
+              "key": "layer-8-agent-ops.2:agent_ops.summary.routines_present",
+              "signal": "agent_ops.summary.routines_present",
+              "op": "eq",
+              "value": true,
+              "text": "Agent routines are committed: is true",
+              "title": "Agent routines are committed",
+              "fix": "Commit the routines agents run on a schedule or trigger.",
+              "input_class": "config_text",
+              "grade": "config_only",
+              "counts": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "doc-freshness",
+      "title": "Documentation freshness",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "doc-freshness.1:doc_staleness.summary.stale_pct",
+              "signal": "doc_staleness.summary.stale_pct",
+              "op": "lte",
+              "value": 50,
+              "text": "Share of mapped docs outrun by their code: is at most 50",
+              "title": "Most mapped docs keep pace with their code",
+              "fix": "Refresh the docs the report lists under doc freshness.",
+              "input_class": "git_history",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "doc-freshness.2:doc_staleness.summary.stale_pct",
+              "signal": "doc_staleness.summary.stale_pct",
+              "op": "lte",
+              "value": 20,
+              "text": "Share of mapped docs outrun by their code: is at most 20",
+              "title": "Four in five mapped docs keep pace",
+              "fix": "Refresh the docs the report lists under doc freshness, oldest first.",
+              "input_class": "git_history",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scans": [
+    {
+      "name": "agent_ops",
+      "title": "Agent-operations guardrails",
+      "summary": "Committed permission allowlists, hooks, sandbox rules and routine definitions.",
+      "collector": "core.agent_ops",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {}
+      },
+      "used_by": {
+        "rows": [
+          "layer-8-agent-ops"
+        ],
+        "conditions": [
+          "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
+          "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
+          "layer-8-agent-ops.2:agent_ops.summary.routines_present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "agent_ops.summary.permissions_encoded",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "agent_ops.summary.hooks_present",
+          "input_class": "config_text",
+          "grade": "config_only"
+        },
+        {
+          "signal": "agent_ops.summary.routines_present",
+          "input_class": "config_text",
+          "grade": "config_only"
+        }
+      ],
+      "grades": [
+        "config_only"
+      ]
+    },
+    {
+      "name": "config_drift",
+      "title": "Configuration drift",
+      "summary": "",
+      "collector": "core.config_drift",
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "config_drift.entries.key": "token",
+          "config_drift.entries.live": "drop",
+          "config_drift.entries.tracked": "drop",
+          "config_drift.reason": "drop",
+          "config_drift.snapshots.branch": "drop",
+          "config_drift.snapshots.doc": "drop",
+          "config_drift.snapshots.kind": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "network",
+          "means": "It reads GitHub or GitLab, which only a full /assess run does.",
+          "next_step": "Run /assess on the repository with gh or glab signed in."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "review_reality",
+      "title": "Review on merged changes",
+      "summary": "Review and approval shares over the sampled merged changes, read through gh or glab.",
+      "collector": "core.review_reality",
+      "reads": [
+        "merged_sample",
+        "gitlab_note_facts"
+      ],
+      "network": true,
+      "platform": true,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "review_reality.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-7-review"
+        ],
+        "conditions": [
+          "layer-7-review.2:review_reality.reviewed_share",
+          "layer-7-review.2:review_reality.approved_share"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "network",
+          "means": "It reads GitHub or GitLab, and a run makes no network call without --platform.",
+          "next_step": "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "review_reality.reviewed_share",
+          "input_class": "platform",
+          "grade": "verified"
+        },
+        {
+          "signal": "review_reality.approved_share",
+          "input_class": "platform",
+          "grade": "verified"
+        }
+      ],
+      "grades": [
+        "verified"
+      ]
+    },
+    {
+      "name": "delivery",
+      "title": "Delivery figures",
+      "summary": "",
+      "collector": "core.delivery",
+      "reads": [
+        "merged_sample",
+        "review_reality",
+        "fleet_config",
+        "gitlab_note_facts"
+      ],
+      "network": true,
+      "platform": true,
+      "headless": "platform_only",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "delivery.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "platform_only",
+          "means": "The block exists only on the platform: without --platform it is left out.",
+          "next_step": "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "gate_cost_estimate",
+      "title": "Gate cost estimate",
+      "summary": "",
+      "collector": "core.gate_cost_estimate",
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "gate_cost_estimate.assumption": "drop",
+          "gate_cost_estimate.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "network",
+          "means": "It reads GitHub or GitLab, which only a full /assess run does.",
+          "next_step": "Run /assess on the repository with gh or glab signed in."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "coverage_gate",
+      "title": "Coverage gate",
+      "summary": "Finds coverage thresholds written in CI, task-runner and tool config, each with its file, line and threshold.",
+      "collector": "core.coverage_gate",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "coverage_gate.gates.form": "drop",
+          "coverage_gate.gates.metric": "token",
+          "coverage_gate.gates.tool": "token",
+          "coverage_gate.gates.unit": "token",
+          "coverage_gate.not_detected": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-6-coverage"
+        ],
+        "conditions": [
+          "layer-6-coverage.1:coverage_gate.enforced"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "coverage_gate.enforced",
+          "input_class": "config_text",
+          "grade": "config_only"
+        }
+      ],
+      "grades": [
+        "config_only"
+      ]
+    },
+    {
+      "name": "instruction_claims",
+      "title": "Instruction claims",
+      "summary": "",
+      "collector": "core.instruction_claims",
+      "reads": [
+        "repo_root",
+        "instruction_files"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "instruction_claims.failures.kind": "token",
+          "instruction_claims.failures.reason": "drop",
+          "instruction_claims.failures.version": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-0-instructions"
+        ],
+        "conditions": [
+          "layer-0-instructions.2:instruction_claims.failed"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "instruction_claims.failed",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
+      "name": "claude_config",
+      "title": "Claude Code configuration",
+      "summary": "",
+      "collector": "core.claude_config",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "claude_config.findings.fix": "drop",
+          "claude_config.findings.key": "drop",
+          "claude_config.findings.kind": "token",
+          "claude_config.findings.value": "drop",
+          "claude_config.manifest_error": "drop",
+          "claude_config.reason": "drop",
+          "claude_config.snapshot_date": "token",
+          "claude_config.source_urls": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "nested_instructions",
+      "title": "Nested instruction files",
+      "summary": "",
+      "collector": "core.nested_instructions",
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "nested_instructions.budget.claude_code.files": "path",
+          "nested_instructions.budget.claude_code.skipped_imports.reason": "drop",
+          "nested_instructions.budget.claude_code.skipped_imports.source": "path",
+          "nested_instructions.budget.claude_code.skipped_imports.target": "path",
+          "nested_instructions.budget.codex.deepest_chain.directory": "path",
+          "nested_instructions.budget.codex.deepest_chain.files": "path",
+          "nested_instructions.budget.codex.files": "path",
+          "nested_instructions.files.findings.kind": "token",
+          "nested_instructions.files.findings.reason": "drop",
+          "nested_instructions.files.findings.reference": "drop",
+          "nested_instructions.files.grade": "token",
+          "nested_instructions.files.kind": "token",
+          "nested_instructions.files.scope.directory": "path",
+          "nested_instructions.files.scope.globs": "path",
+          "nested_instructions.files.tool": "token",
+          "nested_instructions.findings.detail": "drop",
+          "nested_instructions.findings.kind": "token",
+          "nested_instructions.findings.parent": "path",
+          "nested_instructions.findings.pattern": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-0-instructions"
+        ],
+        "conditions": [
+          "layer-0-instructions.2:nested_instructions.budget.claude_code.lines"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "nested_instructions.budget.claude_code.lines",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
+      "name": "agent_harness",
+      "title": "Committed agent harness",
+      "summary": "",
+      "collector": "core.agent_harness",
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_harness.executes.detail": "drop",
+          "agent_harness.executes.kind": "token",
+          "agent_harness.executes.name": "drop",
+          "agent_harness.findings.detail": "drop",
+          "agent_harness.findings.fix": "drop",
+          "agent_harness.findings.kind": "token",
+          "agent_harness.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "agent_environment",
+      "title": "Agent working environment",
+      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs.",
+      "collector": "core.agent_environment",
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "agent_harness",
+        "excludes"
+      ],
+      "network": true,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_environment.check.entry_points.command": "drop",
+          "agent_environment.check.entry_points.source": "drop",
+          "agent_environment.check.named.command": "drop",
+          "agent_environment.check.named.reason": "drop",
+          "agent_environment.check.named.verdict": "token",
+          "agent_environment.check.unresolved.command": "drop",
+          "agent_environment.check.unresolved.reason": "drop",
+          "agent_environment.check.unresolved.verdict": "token",
+          "agent_environment.ci_duration.branch": "drop",
+          "agent_environment.ci_duration.reason": "drop",
+          "agent_environment.ci_duration.workflows.workflow": "drop",
+          "agent_environment.findings.detail": "drop",
+          "agent_environment.findings.fix": "drop",
+          "agent_environment.findings.kind": "token",
+          "agent_environment.layer5_cap.ceiling": "token",
+          "agent_environment.layer5_cap.reason": "drop",
+          "agent_environment.layer5_cap.unmet": "token",
+          "agent_environment.pinning.manifests.ecosystem": "token",
+          "agent_environment.pinning.manifests.lockfile": "path",
+          "agent_environment.pinning.manifests.manifest": "path",
+          "agent_environment.reason": "drop",
+          "agent_environment.setup.sources.detail": "drop",
+          "agent_environment.setup.sources.kind": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-0-instructions",
+          "layer-5-ci"
+        ],
+        "conditions": [
+          "layer-0-instructions.2:agent_environment.check.named_total",
+          "layer-5-ci.2:agent_environment.pinning.unlocked_total"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "agent_environment.check.named_total",
+          "input_class": "head_text",
+          "grade": "declared"
+        },
+        {
+          "signal": "agent_environment.pinning.unlocked_total",
+          "input_class": "head_text",
+          "grade": "declared"
+        }
+      ],
+      "grades": [
+        "declared"
+      ]
+    },
+    {
+      "name": "shared_tooling",
+      "title": "Shared tooling",
+      "summary": "",
+      "collector": "core.shared_tooling",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "shared_tooling.ci_includes.id": "id",
+          "shared_tooling.ci_includes.kind": "token",
+          "shared_tooling.ci_includes.ref": "token",
+          "shared_tooling.ci_includes.source": "drop",
+          "shared_tooling.ci_source_ids": "id",
+          "shared_tooling.marketplace_ids": "id",
+          "shared_tooling.marketplaces.id": "id",
+          "shared_tooling.marketplaces.kind": "token",
+          "shared_tooling.marketplaces.name": "drop",
+          "shared_tooling.marketplaces.source": "drop",
+          "shared_tooling.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "review_automation",
+      "title": "AI review committed in CI",
+      "summary": "",
+      "collector": "core.review_automation",
+      "reads": [
+        "repo_root",
+        "fleet_config",
+        "ghsync_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "review_automation.kinds": "token",
+          "review_automation.matches.kind": "token",
+          "review_automation.matches.path": "path",
+          "review_automation.matches.reviewer": "token",
+          "review_automation.matches.rule": "token",
+          "review_automation.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "review_evidence",
+      "title": "Review evidence",
+      "summary": "An AI review step committed in CI, or a reviewed merged change.",
+      "collector": "core.review_evidence",
+      "reads": [
+        "review_automation",
+        "review_reality"
+      ],
+      "network": false,
+      "platform": true,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "review_evidence.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-7-review"
+        ],
+        "conditions": [
+          "layer-7-review.1:review_evidence.present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "review_evidence.present",
+          "input_class": "head_text",
+          "grade": "declared"
+        }
+      ],
+      "grades": [
+        "declared"
+      ]
+    },
+    {
+      "name": "ci_checks",
+      "title": "CI runs a test or lint command",
+      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere.",
+      "collector": "core.ci_checks",
+      "reads": [
+        "repo_root",
+        "ghsync_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "ci_checks.basis": "token",
+          "ci_checks.includes.id": "id",
+          "ci_checks.includes.kind": "token",
+          "ci_checks.includes.ref_basis": "token",
+          "ci_checks.includes.status": "token",
+          "ci_checks.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-5-ci"
+        ],
+        "conditions": [
+          "layer-5-ci.1:ci_checks.test_or_lint_runs"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "included_jobs",
+          "means": "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.",
+          "next_step": "Nothing to change: this reads as not measured until the included file can be read.",
+          "carried_in": "basis"
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "ci_checks.test_or_lint_runs",
+          "input_class": "head_text",
+          "grade": "declared"
+        }
+      ],
+      "grades": [
+        "declared"
+      ]
+    },
+    {
+      "name": "agent_building",
+      "title": "Agent building",
+      "summary": "",
+      "collector": "core.agent_building",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_building.agent_class": "token",
+          "agent_building.ci_agents": "token",
+          "agent_building.config": "token",
+          "agent_building.git_hosts": "token",
+          "agent_building.issue_trackers": "token",
+          "agent_building.reason": "drop",
+          "agent_building.sdks": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "layer_grades",
+      "title": "Deterministic layer grades",
+      "summary": "The instruction-file grade republished as a block, so a maturity model can read it.",
+      "collector": "core.layer_grades",
+      "reads": [
+        "instruction_grading"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "layer_grades.instructions_grade": "token",
+          "layer_grades.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-0-instructions"
+        ],
+        "conditions": [
+          "layer-0-instructions.1:layer_grades.instruction_file_present"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "layer_grades.instruction_file_present",
+          "input_class": "head_text",
+          "grade": "declared"
+        }
+      ],
+      "grades": [
+        "declared"
+      ]
+    },
+    {
+      "name": "instruction_placement",
+      "title": "Instruction placement",
+      "summary": "",
+      "collector": "core.instruction_placement",
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "nested_instructions",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "instruction_placement.files.kind": "token",
+          "instruction_placement.files.relocatable.heading": "drop",
+          "instruction_placement.files.relocatable.home.kind": "token",
+          "instruction_placement.files.relocatable.home.target": "path",
+          "instruction_placement.files.relocatable.signals": "token",
+          "instruction_placement.flagged": "path",
+          "instruction_placement.loaded_in_full.kind": "token",
+          "instruction_placement.loaded_in_full.relocatable.heading": "drop",
+          "instruction_placement.loaded_in_full.relocatable.home.kind": "token",
+          "instruction_placement.loaded_in_full.relocatable.home.target": "path",
+          "instruction_placement.loaded_in_full.relocatable.signals": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "ai_usage",
+      "title": "AI-assisted change share",
+      "summary": "",
+      "collector": "core.ai_usage",
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "ai_usage.covered_agents": "drop",
+          "ai_usage.covered_author_agents": "drop",
+          "ai_usage.limits": "drop",
+          "ai_usage.merge_rule": "token",
+          "ai_usage.reason": "drop",
+          "ai_usage.since": "drop",
+          "ai_usage.window": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "doc_claims",
+      "title": "Doc claims",
+      "summary": "",
+      "collector": "core.doc_claims",
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "doc_claims.contradictions.conflict_pair.value": "drop",
+          "doc_claims.contradictions.kind": "token",
+          "doc_claims.contradictions.sites.value": "drop",
+          "doc_claims.excluded_trees": "path",
+          "doc_claims.failures.kind": "token",
+          "doc_claims.failures.reason": "drop",
+          "doc_claims.failures.version": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "structure",
+      "title": "Keyhole blocks: structure",
+      "summary": "",
+      "collector": "core.keyhole_blocks",
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "structure.breakup_candidates.clusters": "path",
+          "structure.breakup_candidates.package": "path",
+          "structure.footprints.module": "path",
+          "structure.internal_burrow_edges.imported": "path",
+          "structure.internal_burrow_edges.importer": "path",
+          "structure.language": "token",
+          "structure.modularity_reason": "token",
+          "structure.name_collisions.name": "path",
+          "structure.name_collisions.paths": "path",
+          "structure.reason": "reason",
+          "structure.sccs": "path"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-2-design"
+        ],
+        "conditions": [
+          "layer-2-design.1:structure.modularity_q",
+          "layer-2-design.2:structure.cross_package_edges",
+          "layer-2-design.2:structure.front_door_ratio"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "structure.modularity_q",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
+          "signal": "structure.cross_package_edges",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
+          "signal": "structure.front_door_ratio",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
+      "name": "stats_summary",
+      "title": "Run header: stats_summary",
+      "summary": "",
+      "collector": "core.run_header",
+      "reads": [
+        "run_id",
+        "run_date",
+        "run_scope",
+        "measured_commit",
+        "current",
+        "prior",
+        "instruction_grading",
+        "diff",
+        "unfinalized"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "stats_summary.ccn.basis": "token",
+          "stats_summary.complexity_unreliable.language": "token",
+          "stats_summary.complexity_unreliable.path": "path",
+          "stats_summary.est_tokens.budget.budget_basis": "drop",
+          "stats_summary.fn_ccn.backend_by_language.*": "token",
+          "stats_summary.fn_ccn.basis": "token",
+          "stats_summary.fn_ccn.source.name": "token",
+          "stats_summary.top_complex.ccn_basis": "token",
+          "stats_summary.top_complex.max_fn_name": "drop",
+          "stats_summary.top_complex.source": "token",
+          "stats_summary.top_hotspots.ccn_basis": "token",
+          "stats_summary.top_hotspots.max_fn_name": "drop",
+          "stats_summary.top_hotspots.source": "token",
+          "stats_summary.top_large.ccn_basis": "token",
+          "stats_summary.top_large.max_fn_name": "drop",
+          "stats_summary.top_large.source": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-4-architecture"
+        ],
+        "conditions": [
+          "layer-4-architecture.2:stats_summary.loc.p95"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "stats_summary.loc.p95",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
+      "name": "promissory_markers",
+      "title": "Promissory markers",
+      "summary": "",
+      "collector": "core.promissory_markers",
+      "reads": [
+        "promissory"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "promissory_markers.reason": "drop",
+          "promissory_markers.top_offenders.commit": "drop",
+          "promissory_markers.top_offenders.family": "token",
+          "promissory_markers.top_offenders.text": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-3-linters"
+        ],
+        "conditions": [
+          "layer-3-linters.1:promissory_markers.families.suppression.total",
+          "layer-3-linters.2:promissory_markers.families.suppression.stale",
+          "layer-3-linters.2:promissory_markers.aging_reliable"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "promissory_markers.families.suppression.total",
+          "input_class": "head_text",
+          "grade": "declared"
+        },
+        {
+          "signal": "promissory_markers.families.suppression.stale",
+          "input_class": "git_history",
+          "grade": "measured"
+        },
+        {
+          "signal": "promissory_markers.aging_reliable",
+          "input_class": "git_history",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "declared",
+        "measured"
+      ]
+    },
+    {
+      "name": "structure_drift",
+      "title": "Structure drift: structure_drift",
+      "summary": "",
+      "collector": "core.structure_drift_block",
+      "reads": [
+        "repo_root",
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "structure_drift.tier_0.empty_ownership_patterns.declared_in": "drop",
+          "structure_drift.tier_0.empty_ownership_patterns.owners": "drop",
+          "structure_drift.tier_0.empty_ownership_patterns.pattern": "drop",
+          "structure_drift.tier_1.static_lens_reason": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-4-architecture"
+        ],
+        "conditions": [
+          "layer-4-architecture.1:structure_drift.tier_0.matched_patterns"
+        ],
+        "findings": [
+          "hidden_coupling"
+        ]
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "structure_drift.tier_0.matched_patterns",
+          "input_class": "config_text",
+          "grade": "config_only"
+        }
+      ],
+      "grades": [
+        "config_only"
+      ]
+    },
+    {
+      "name": "observability",
+      "title": "Liveness blocks: observability",
+      "summary": "",
+      "collector": "core.liveness_blocks",
+      "reads": [
+        "liveness"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "observability.boundary": "drop",
+          "observability.discoverable.signals": "drop",
+          "observability.instrumented.signals": "drop",
+          "observability.reachable.signals": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-1-liveness"
+        ],
+        "conditions": [
+          "layer-1-liveness.1:observability.rung",
+          "layer-1-liveness.2:observability.rung"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "observability.rung",
+          "input_class": "head_text",
+          "grade": "declared"
+        }
+      ],
+      "grades": [
+        "declared"
+      ]
+    },
+    {
+      "name": "doc_graph",
+      "title": "Doc graph",
+      "summary": "",
+      "collector": "core.doc_graph",
+      "reads": [
+        "repo_root",
+        "excludes",
+        "scope",
+        "working_notes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "doc_graph.broken_links.from": "path",
+          "doc_graph.broken_links.kind": "token",
+          "doc_graph.broken_links.target": "path",
+          "doc_graph.doc_to_code_edges.code": "path",
+          "doc_graph.doc_to_code_edges.doc": "path",
+          "doc_graph.entry_points": "path",
+          "doc_graph.link_parents.link_entry": "path",
+          "doc_graph.link_parents.link_parent": "path",
+          "doc_graph.missing_xrefs.from": "path",
+          "doc_graph.missing_xrefs.to": "path",
+          "doc_graph.moc_named_but_not_wired": "path",
+          "doc_graph.orphans": "path",
+          "doc_graph.reason": "drop",
+          "doc_graph.unreachable": "path"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "doc_staleness",
+      "title": "Doc staleness",
+      "summary": "Each doc's last content change against its code subject's churn, following renames.",
+      "collector": "core.doc_staleness",
+      "reads": [
+        "repo_root",
+        "doc_graph",
+        "excludes",
+        "scope"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "doc_staleness.bulk_commits_skipped.date": "token",
+          "doc_staleness.bulk_commits_skipped.sha": "drop",
+          "doc_staleness.churn_window": "drop",
+          "doc_staleness.declared_cross_repo.path": "path",
+          "doc_staleness.declared_cross_repo.reason": "token",
+          "doc_staleness.declared_cross_repo.repo": "id",
+          "doc_staleness.declared_cross_repo.scope": "path",
+          "doc_staleness.declared_cross_repo.status": "token",
+          "doc_staleness.docs.base_doc_dir": "path",
+          "doc_staleness.docs.confidence": "token",
+          "doc_staleness.docs.last_change_basis": "token",
+          "doc_staleness.docs.last_commit_days_bound": "token",
+          "doc_staleness.docs.provenance.generated_by": "drop",
+          "doc_staleness.docs.provenance.method": "token",
+          "doc_staleness.docs.provenance.sources": "path",
+          "doc_staleness.docs.subject_method": "token",
+          "doc_staleness.docs.subject_paths": "path",
+          "doc_staleness.docs.subject_roots": "path",
+          "doc_staleness.history_boundary_date": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "doc-freshness"
+        ],
+        "conditions": [
+          "doc-freshness.1:doc_staleness.summary.stale_pct",
+          "doc-freshness.2:doc_staleness.summary.stale_pct"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "doc_staleness.summary.stale_pct",
+          "input_class": "git_history",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
+      "name": "archetype",
+      "title": "Repository archetype",
+      "summary": "",
+      "collector": "core.archetype",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "archetype.archetype": "token",
+          "archetype.detected_via": "token",
+          "archetype.kb_maintenance.gist": "drop",
+          "archetype.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": [
+          "override_contradicts_signals"
+        ]
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "diff",
+      "title": "Run header: diff",
+      "summary": "",
+      "collector": "core.run_header",
+      "reads": [
+        "run_id",
+        "run_date",
+        "run_scope",
+        "measured_commit",
+        "current",
+        "prior",
+        "instruction_grading",
+        "diff",
+        "unfinalized"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {}
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "dead_code",
+      "title": "Liveness blocks: dead_code",
+      "summary": "",
+      "collector": "core.liveness_blocks",
+      "reads": [
+        "liveness"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "dead_code.candidates.kind": "token",
+          "dead_code.candidates.symbol": "drop",
+          "dead_code.caveat": "drop",
+          "dead_code.tools.consent": "drop",
+          "dead_code.tools.language": "token",
+          "dead_code.tools.reason": "drop",
+          "dead_code.tools.status": "token",
+          "dead_code.tools.tool": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": [
+          "candidate_dead_weight"
+        ]
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "ancestor_instruction_files",
+      "title": "Ancestor instruction files",
+      "summary": "",
+      "collector": "core.ancestor_instruction_files",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "ancestor_instruction_files": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "behaviour",
+      "title": "Keyhole blocks: behaviour",
+      "summary": "",
+      "collector": "core.keyhole_blocks",
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "behaviour.hidden_coupling_findings.finding": "token",
+          "behaviour.hidden_coupling_findings.recommendation": "drop",
+          "behaviour.reason": "drop",
+          "behaviour.refactor_boundaries.finding": "token",
+          "behaviour.refactor_boundaries.recommendation": "drop",
+          "behaviour.static_history_disagreement.finding": "token",
+          "behaviour.static_history_disagreement.recommendation": "drop",
+          "behaviour.static_modularity_projection": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": [
+          "hidden_coupling",
+          "refactor_boundary"
+        ]
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "documentation",
+      "title": "Keyhole blocks: documentation",
+      "summary": "",
+      "collector": "core.keyhole_blocks",
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "documentation.good_contracts.confidence": "token",
+          "documentation.good_contracts.finding": "token",
+          "documentation.good_contracts.recommendation": "drop",
+          "documentation.reason": "drop",
+          "documentation.stale_doc_on_complexity.confidence": "token",
+          "documentation.stale_doc_on_complexity.finding": "token",
+          "documentation.stale_doc_on_complexity.recommendation": "drop",
+          "documentation.unexplained_complexity.confidence": "token",
+          "documentation.unexplained_complexity.finding": "token",
+          "documentation.unexplained_complexity.recommendation": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": [
+          "lying_map",
+          "unexplained_complexity"
+        ]
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "understanding",
+      "title": "Keyhole blocks: understanding",
+      "summary": "",
+      "collector": "core.keyhole_blocks",
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "understanding.authorship_class_by_path.{}": "token",
+          "understanding.modules.authorship_class": "token",
+          "understanding.modules.finding": "token",
+          "understanding.modules.recommendation": "drop",
+          "understanding.orphaned_understanding": "path",
+          "understanding.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": [
+          "orphaned_understanding"
+        ]
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "runtime",
+      "title": "Keyhole blocks: runtime",
+      "summary": "",
+      "collector": "core.keyhole_blocks",
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "runtime.reason": "drop",
+          "runtime.static_reachability.candidates.kind": "token",
+          "runtime.static_reachability.candidates.symbol": "drop",
+          "runtime.static_reachability.caveat": "drop",
+          "runtime.static_reachability.tools.consent": "drop",
+          "runtime.static_reachability.tools.language": "token",
+          "runtime.static_reachability.tools.reason": "drop",
+          "runtime.static_reachability.tools.status": "token",
+          "runtime.static_reachability.tools.tool": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "derived_findings",
+      "title": "Keyhole blocks: derived_findings",
+      "summary": "",
+      "collector": "core.keyhole_blocks",
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "derived_findings.action": "drop",
+          "derived_findings.name": "token",
+          "derived_findings.paths": "path"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "coverage_report",
+      "title": "Coverage report",
+      "summary": "",
+      "collector": "core.coverage_report",
+      "reads": [
+        "repo_root",
+        "coverage_data"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "coverage_report.format": "token",
+          "coverage_report.source": "path"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "test_pressure",
+      "title": "Test pressure",
+      "summary": "",
+      "collector": "core.test_pressure",
+      "reads": [
+        "test_pressure_scan"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "test_pressure.cheap_heuristics.assertion_on_internal.confidence": "token",
+          "test_pressure.cheap_heuristics.assertion_on_internal.internal_field": "drop",
+          "test_pressure.cheap_heuristics.assertion_on_internal.subject_function": "drop",
+          "test_pressure.cheap_heuristics.confidence_note": "drop",
+          "test_pressure.cheap_heuristics.duplicate_truth.confidence": "token",
+          "test_pressure.cheap_heuristics.duplicate_truth.derives_from": "drop",
+          "test_pressure.cheap_heuristics.duplicate_truth.field_name": "drop",
+          "test_pressure.cheap_heuristics.untested_boundaries.operator": "token",
+          "test_pressure.gap_signal": "token",
+          "test_pressure.mutation_groups.config": "token",
+          "test_pressure.mutation_groups.reason": "drop",
+          "test_pressure.mutation_groups.root": "path",
+          "test_pressure.mutation_groups.runner": "token",
+          "test_pressure.mutation_groups.scope": "path",
+          "test_pressure.mutation_groups.unmeasured": "path",
+          "test_pressure.mutation_note": "drop",
+          "test_pressure.mutation_scope": "path",
+          "test_pressure.mutation_tools_detected": "token",
+          "test_pressure.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "layer-6-coverage"
+        ],
+        "conditions": [
+          "layer-6-coverage.2:test_pressure.mutation_run"
+        ],
+        "findings": [
+          "untrusted_hotspot"
+        ]
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [
+        {
+          "signal": "test_pressure.mutation_run",
+          "input_class": "execution_artifact",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
+      "name": "test_focus",
+      "title": "Test focus",
+      "summary": "",
+      "collector": "core.test_focus",
+      "reads": [
+        "repo_root",
+        "current",
+        "coverage_data",
+        "test_pressure",
+        "hot_test_index"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "test_focus.entries.hollow_heuristic_kinds": "token",
+          "test_focus.entries.risk_band": "token",
+          "test_focus.entries.suggested_action": "token",
+          "test_focus.entries.test_signal": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "accretion_ratchet",
+      "title": "Accretion ratchet",
+      "summary": "",
+      "collector": "core.accretion_ratchet",
+      "reads": [
+        "accretion_scan",
+        "current"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "accretion_ratchet.reason": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": [
+          "accretion_ratchet"
+        ]
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "gap_actions",
+      "title": "Gap actions",
+      "summary": "",
+      "collector": "core.gap_actions",
+      "reads": [
+        "coverage_report",
+        "doc_graph",
+        "current",
+        "archetype"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "unregistered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "gap_actions.action": "drop",
+          "gap_actions.paths": "path",
+          "gap_actions.signal": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "not_registered",
+          "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
+          "next_step": "Run /assess on the repository to measure it."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    }
+  ],
+  "collectors": [
+    {
+      "name": "run_scope",
+      "title": "Run scope",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "requested_scope"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "scope",
+      "title": "Scope root",
+      "publishes": [],
+      "reads": [
+        "run_scope"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "assess_dir",
+      "title": "Artifact directory",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "run_scope"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "run_id",
+      "title": "Run id",
+      "publishes": [],
+      "reads": [],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "current",
+      "title": "Complexity stats (this run)",
+      "publishes": [],
+      "reads": [
+        "assess_dir"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "prior",
+      "title": "Complexity stats (prior run)",
+      "publishes": [],
+      "reads": [
+        "assess_dir"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "excluded_as_generated",
+      "title": "Generated-file paths",
+      "publishes": [],
+      "reads": [
+        "current"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "diff",
+      "title": "Stats diff against the prior run",
+      "publishes": [],
+      "reads": [
+        "prior",
+        "current",
+        "excluded_as_generated"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "instruction_grading",
+      "title": "Instruction-file grading",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "instruction_files",
+      "title": "Graded instruction files",
+      "publishes": [],
+      "reads": [
+        "instruction_grading"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "rename_map",
+      "title": "Git rename map",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "first_flagged",
+      "title": "First-flagged hotspot dates",
+      "publishes": [],
+      "reads": [
+        "assess_dir",
+        "rename_map"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "excludes",
+      "title": "Config excludes",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "history_window",
+      "title": "Git history window",
+      "publishes": [],
+      "reads": [
+        "current"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "fleet_config",
+      "title": "Fleet settings sections",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "ghsync_root",
+      "title": "ghsync root for GitLab includes",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "measured_commit",
+      "title": "Measured commit",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "superseded",
+      "title": "Superseded run",
+      "publishes": [],
+      "reads": [
+        "assess_dir",
+        "run_date",
+        "measured_commit"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "unfinalized",
+      "title": "Unfinalized exclusions",
+      "publishes": [],
+      "reads": [
+        "assess_dir",
+        "superseded",
+        "first_flagged",
+        "current",
+        "diff",
+        "excludes"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "promissory",
+      "title": "Promissory marker scan",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "excludes",
+        "scope"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "accretion_scan",
+      "title": "Accretion scan",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "accretion_by_file",
+      "title": "Accretion by file",
+      "publishes": [],
+      "reads": [
+        "accretion_scan"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "hot_test_index",
+      "title": "Repository test index",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "current"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "run_header",
+      "title": "Run header",
+      "publishes": [
+        "run_id",
+        "artifact_schema_version",
+        "assess_method_version",
+        "run_date",
+        "scope",
+        "scope_slug",
+        "measured_commit",
+        "prior_stats_exists",
+        "stats_summary",
+        "instruction_files",
+        "instructions_grade",
+        "diff",
+        "diff_reliable",
+        "diff_version_note",
+        "diff_trend_reset",
+        "prior_plugin_version",
+        "schema_version",
+        "prior_schema_version",
+        "tool_versions",
+        "prior_tool_versions",
+        "diff_detail",
+        "pruned_hotspots",
+        "retired_excluded_hotspots",
+        "dropped_first_flagged",
+        "provisional_first_flagged",
+        "log_integrity",
+        "prior_findings_snapshot"
+      ],
+      "reads": [
+        "run_id",
+        "run_date",
+        "run_scope",
+        "measured_commit",
+        "current",
+        "prior",
+        "instruction_grading",
+        "diff",
+        "unfinalized"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "working_notes",
+      "title": "Working notes",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "doc_graph",
+      "title": "Doc graph",
+      "publishes": [
+        "doc_graph"
+      ],
+      "reads": [
+        "repo_root",
+        "excludes",
+        "scope",
+        "working_notes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "doc_staleness",
+      "title": "Doc staleness",
+      "publishes": [
+        "doc_staleness"
+      ],
+      "reads": [
+        "repo_root",
+        "doc_graph",
+        "excludes",
+        "scope"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "stale_hubs",
+      "title": "Stale doc hubs",
+      "publishes": [
+        "stale_hubs"
+      ],
+      "reads": [
+        "doc_graph",
+        "doc_staleness"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "churn_degenerate",
+      "title": "Degenerate churn history",
+      "publishes": [
+        "churn_degenerate"
+      ],
+      "reads": [
+        "doc_staleness"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "doc_join",
+      "title": "Doc and complexity join",
+      "publishes": [],
+      "reads": [
+        "current",
+        "doc_staleness",
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "untracked_instruction_files",
+      "title": "Untracked instruction files",
+      "publishes": [
+        "untracked_instruction_files"
+      ],
+      "reads": [
+        "instruction_grading"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "broken_instruction_refs",
+      "title": "Broken instruction references",
+      "publishes": [
+        "broken_instruction_refs"
+      ],
+      "reads": [
+        "doc_graph",
+        "instruction_grading"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "sensitive_instruction_content",
+      "title": "Sensitive instruction content",
+      "publishes": [
+        "sensitive_instruction_content"
+      ],
+      "reads": [
+        "instruction_grading"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "archetype",
+      "title": "Repository archetype",
+      "publishes": [
+        "archetype"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "ancestor_instruction_files",
+      "title": "Ancestor instruction files",
+      "publishes": [
+        "ancestor_instruction_files"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "skills",
+      "title": "Skills factoring",
+      "publishes": [
+        "skills_present",
+        "skills_count",
+        "skill_files"
+      ],
+      "reads": [
+        "instruction_grading"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "instruction_file_size",
+      "title": "Instruction file size",
+      "publishes": [
+        "instruction_file_size"
+      ],
+      "reads": [
+        "instruction_files"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "liveness",
+      "title": "Liveness scan",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "excludes",
+        "scope"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "liveness_blocks",
+      "title": "Liveness blocks",
+      "publishes": [
+        "dead_code",
+        "observability",
+        "capability_offers",
+        "language_capabilities"
+      ],
+      "reads": [
+        "liveness"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "structure_scan",
+      "title": "Import graph scan",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "excludes",
+        "scope"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "coverage_data",
+      "title": "Coverage report data",
+      "publishes": [],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "coverage_report",
+      "title": "Coverage report",
+      "publishes": [
+        "coverage_report"
+      ],
+      "reads": [
+        "repo_root",
+        "coverage_data"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "test_pressure_scan",
+      "title": "Test pressure scan",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "current",
+        "coverage_data"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "test_pressure",
+      "title": "Test pressure",
+      "publishes": [
+        "test_pressure"
+      ],
+      "reads": [
+        "test_pressure_scan"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "mutation_not_run_cap",
+      "title": "Mutation-not-run cap",
+      "publishes": [
+        "mutation_not_run_cap"
+      ],
+      "reads": [
+        "test_pressure"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "test_focus",
+      "title": "Test focus",
+      "publishes": [
+        "test_focus"
+      ],
+      "reads": [
+        "repo_root",
+        "current",
+        "coverage_data",
+        "test_pressure",
+        "hot_test_index"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "promissory_markers",
+      "title": "Promissory markers",
+      "publishes": [
+        "promissory_markers"
+      ],
+      "reads": [
+        "promissory"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "agent_ops",
+      "title": "Agent-operations guardrails",
+      "publishes": [
+        "agent_ops"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "config_drift",
+      "title": "Configuration drift",
+      "publishes": [
+        "config_drift"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "merged_sample",
+      "title": "Merged-change sample",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "history_window",
+        "run_date"
+      ],
+      "network": true,
+      "private": true
+    },
+    {
+      "name": "gitlab_note_facts",
+      "title": "GitLab merge request notes",
+      "publishes": [],
+      "reads": [
+        "merged_sample",
+        "fleet_config"
+      ],
+      "network": true,
+      "private": true
+    },
+    {
+      "name": "review_reality",
+      "title": "Review on merged changes",
+      "publishes": [
+        "review_reality"
+      ],
+      "reads": [
+        "merged_sample",
+        "gitlab_note_facts"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "delivery",
+      "title": "Delivery figures",
+      "publishes": [
+        "delivery"
+      ],
+      "reads": [
+        "merged_sample",
+        "review_reality",
+        "fleet_config",
+        "gitlab_note_facts"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "gate_cost_estimate",
+      "title": "Gate cost estimate",
+      "publishes": [
+        "gate_cost_estimate"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "coverage_gate",
+      "title": "Coverage gate",
+      "publishes": [
+        "coverage_gate"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "accretion_ratchet",
+      "title": "Accretion ratchet",
+      "publishes": [
+        "accretion_ratchet"
+      ],
+      "reads": [
+        "accretion_scan",
+        "current"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "keyhole",
+      "title": "Keyhole integration",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "current",
+        "doc_staleness",
+        "liveness_blocks",
+        "structure_scan",
+        "test_pressure",
+        "promissory",
+        "accretion_ratchet",
+        "archetype",
+        "excludes",
+        "scope",
+        "rename_map",
+        "doc_join"
+      ],
+      "network": false,
+      "private": true
+    },
+    {
+      "name": "keyhole_blocks",
+      "title": "Keyhole blocks",
+      "publishes": [
+        "structure",
+        "behaviour",
+        "documentation",
+        "understanding",
+        "runtime",
+        "derived_findings",
+        "attention",
+        "attention_low_signal",
+        "findings_markdown",
+        "keyhole_summary",
+        "prescribed_actions"
+      ],
+      "reads": [
+        "keyhole"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "gap_actions",
+      "title": "Gap actions",
+      "publishes": [
+        "gap_actions"
+      ],
+      "reads": [
+        "coverage_report",
+        "doc_graph",
+        "current",
+        "archetype"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "exclusion_disclosures",
+      "title": "Exclusion disclosures",
+      "publishes": [
+        "excluded_by_config",
+        "excluded_as_archive",
+        "pruned_finding_paths"
+      ],
+      "reads": [
+        "keyhole",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "excluded_generated",
+      "title": "Excluded generated files",
+      "publishes": [
+        "excluded_generated"
+      ],
+      "reads": [
+        "current"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "structure_drift_block",
+      "title": "Structure drift",
+      "publishes": [
+        "structure_drift"
+      ],
+      "reads": [
+        "repo_root",
+        "keyhole"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "plugin_version",
+      "title": "Plugin version",
+      "publishes": [
+        "plugin_version"
+      ],
+      "reads": [],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "decline",
+      "title": "Declined optional tools",
+      "publishes": [
+        "decline_markers",
+        "reoffer_mutation",
+        "decline_disclosures"
+      ],
+      "reads": [
+        "assess_dir",
+        "plugin_version"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "offers_block",
+      "title": "End-of-run offers",
+      "publishes": [
+        "interactive",
+        "offers"
+      ],
+      "reads": [
+        "non_interactive"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "uninstall_instructions_path",
+      "title": "Uninstall instructions path",
+      "publishes": [
+        "uninstall_instructions_path"
+      ],
+      "reads": [],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "anomalies",
+      "title": "Anomalies",
+      "publishes": [
+        "anomalies"
+      ],
+      "reads": [
+        "run_header"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "instruction_claims",
+      "title": "Instruction claims",
+      "publishes": [
+        "instruction_claims"
+      ],
+      "reads": [
+        "repo_root",
+        "instruction_files"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "claude_config",
+      "title": "Claude Code configuration",
+      "publishes": [
+        "claude_config"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "nested_instructions",
+      "title": "Nested instruction files",
+      "publishes": [
+        "nested_instructions"
+      ],
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "agent_harness",
+      "title": "Committed agent harness",
+      "publishes": [
+        "agent_harness"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "agent_environment",
+      "title": "Agent working environment",
+      "publishes": [
+        "agent_environment"
+      ],
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "agent_harness",
+        "excludes"
+      ],
+      "network": true,
+      "private": false
+    },
+    {
+      "name": "shared_tooling",
+      "title": "Shared tooling",
+      "publishes": [
+        "shared_tooling"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "review_automation",
+      "title": "AI review committed in CI",
+      "publishes": [
+        "review_automation"
+      ],
+      "reads": [
+        "repo_root",
+        "fleet_config",
+        "ghsync_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "review_evidence",
+      "title": "Review evidence",
+      "publishes": [
+        "review_evidence"
+      ],
+      "reads": [
+        "review_automation",
+        "review_reality"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "ci_checks",
+      "title": "CI runs a test or lint command",
+      "publishes": [
+        "ci_checks"
+      ],
+      "reads": [
+        "repo_root",
+        "ghsync_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "agent_building",
+      "title": "Agent building",
+      "publishes": [
+        "agent_building"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "layer_grades",
+      "title": "Deterministic layer grades",
+      "publishes": [
+        "layer_grades"
+      ],
+      "reads": [
+        "instruction_grading"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "instruction_placement",
+      "title": "Instruction placement",
+      "publishes": [
+        "instruction_placement"
+      ],
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "nested_instructions",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "ai_usage",
+      "title": "AI-assisted change share",
+      "publishes": [
+        "ai_usage"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "doc_claims",
+      "title": "Doc claims",
+      "publishes": [
+        "doc_claims"
+      ],
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "scope",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    }
+  ],
+  "signals": [
+    {
+      "path": "layer_grades.instruction_file_present",
+      "title": "A committed instruction file exists",
+      "type": "bool",
+      "collector": "core.layer_grades",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": "never null; a missing layer_grades block is unknown"
+    },
+    {
+      "path": "agent_environment.check.named_total",
+      "title": "Instruction files name a check command",
+      "type": "number",
+      "collector": "core.agent_environment",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": ""
+    },
+    {
+      "path": "instruction_claims.failed",
+      "title": "Instruction claims that do not hold",
+      "type": "number",
+      "collector": "core.instruction_claims",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": ""
+    },
+    {
+      "path": "nested_instructions.budget.claude_code.lines",
+      "title": "Always-loaded Claude Code instruction lines",
+      "type": "number",
+      "collector": "core.nested_instructions",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": ""
+    },
+    {
+      "path": "observability.rung",
+      "title": "Observability rung",
+      "type": "number",
+      "collector": "core.liveness_blocks",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": ""
+    },
+    {
+      "path": "structure.modularity_q",
+      "title": "Import-graph modularity",
+      "type": "number",
+      "collector": "core.keyhole_blocks",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no_import_edges: modules that never import each other have no community structure to measure"
+    },
+    {
+      "path": "structure.cross_package_edges",
+      "title": "Cross-package imports",
+      "type": "number",
+      "collector": "core.keyhole_blocks",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": ""
+    },
+    {
+      "path": "structure.front_door_ratio",
+      "title": "Cross-package imports through a package's front door",
+      "type": "number",
+      "collector": "core.keyhole_blocks",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "null when no import crosses a package boundary"
+    },
+    {
+      "path": "promissory_markers.families.suppression.total",
+      "title": "Suppression comments",
+      "type": "number",
+      "collector": "core.promissory_markers",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": "absent when no suppression was found"
+    },
+    {
+      "path": "promissory_markers.families.suppression.stale",
+      "title": "Stale suppression comments",
+      "type": "number",
+      "collector": "core.promissory_markers",
+      "input_class": "git_history",
+      "grade": "measured",
+      "null_means": "absent when no suppression was found"
+    },
+    {
+      "path": "promissory_markers.aging_reliable",
+      "title": "Marker aging is reliable",
+      "type": "bool",
+      "collector": "core.promissory_markers",
+      "input_class": "git_history",
+      "grade": "measured",
+      "null_means": ""
+    },
+    {
+      "path": "structure_drift.tier_0.matched_patterns",
+      "title": "Ownership-map patterns matching a tracked file",
+      "type": "number",
+      "collector": "core.structure_drift_block",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": "the block is omitted with no ownership map"
+    },
+    {
+      "path": "stats_summary.loc.p95",
+      "title": "File size at the 95th percentile",
+      "type": "number",
+      "collector": "core.run_header",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": ""
+    },
+    {
+      "path": "ci_checks.test_or_lint_runs",
+      "title": "A CI line runs a test or lint command",
+      "type": "bool",
+      "collector": "core.ci_checks",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": "included_jobs: the check may live in an included file"
+    },
+    {
+      "path": "agent_environment.pinning.unlocked_total",
+      "title": "Dependency manifests without a committed lockfile",
+      "type": "number",
+      "collector": "core.agent_environment",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": ""
+    },
+    {
+      "path": "coverage_gate.enforced",
+      "title": "A coverage threshold is set",
+      "type": "bool",
+      "collector": "core.coverage_gate",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": "never null; a block that could not be read is available: false"
+    },
+    {
+      "path": "test_pressure.mutation_run",
+      "title": "A mutation run completed",
+      "type": "bool",
+      "collector": "core.test_pressure",
+      "input_class": "execution_artifact",
+      "grade": "measured",
+      "null_means": ""
+    },
+    {
+      "path": "review_evidence.present",
+      "title": "Review evidence exists",
+      "type": "bool",
+      "collector": "core.review_evidence",
+      "input_class": "head_text",
+      "grade": "declared",
+      "null_means": "no AI review step is committed and review_reality is unread"
+    },
+    {
+      "path": "review_reality.reviewed_share",
+      "title": "Share of merged changes reviewed",
+      "type": "number",
+      "collector": "core.review_reality",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": ""
+    },
+    {
+      "path": "review_reality.approved_share",
+      "title": "Share of merged changes approved",
+      "type": "number",
+      "collector": "core.review_reality",
+      "input_class": "platform",
+      "grade": "verified",
+      "null_means": ""
+    },
+    {
+      "path": "agent_ops.summary.permissions_encoded",
+      "title": "Agent permissions are committed",
+      "type": "bool",
+      "collector": "core.agent_ops",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": ""
+    },
+    {
+      "path": "agent_ops.summary.hooks_present",
+      "title": "Agent hooks are committed",
+      "type": "bool",
+      "collector": "core.agent_ops",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": ""
+    },
+    {
+      "path": "agent_ops.summary.routines_present",
+      "title": "Agent routines are committed",
+      "type": "bool",
+      "collector": "core.agent_ops",
+      "input_class": "config_text",
+      "grade": "config_only",
+      "null_means": ""
+    },
+    {
+      "path": "doc_staleness.summary.stale_pct",
+      "title": "Share of mapped docs outrun by their code",
+      "type": "number",
+      "collector": "core.doc_staleness",
+      "input_class": "git_history",
+      "grade": "measured",
+      "null_means": "a shallow or degenerate history, no git work tree or no mapped doc"
+    }
+  ],
+  "findings": [
+    {
+      "name": "hidden_coupling",
+      "title": "Hidden coupling",
+      "order": 0,
+      "action": "investigate the seam",
+      "mode": "characterize_first",
+      "concern": true,
+      "inputs": [
+        "behaviour.hidden_coupling_findings",
+        "structure_drift.tier_1"
+      ],
+      "suppressed_when": "doc_staleness.churn_degenerate == true",
+      "prune_missing_paths": true
+    },
+    {
+      "name": "lying_map",
+      "title": "Lying map",
+      "order": 1,
+      "action": "fix or delete the doc",
+      "mode": "verify_then_retire",
+      "concern": true,
+      "inputs": [
+        "documentation.stale_doc_on_complexity"
+      ],
+      "suppressed_when": "doc_staleness.churn_degenerate == true",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "unexplained_complexity",
+      "title": "Unexplained complexity",
+      "order": 2,
+      "action": "write the missing contract (do NOT auto-generate)",
+      "mode": "characterize_first",
+      "concern": true,
+      "inputs": [
+        "documentation.unexplained_complexity"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "untrusted_hotspot",
+      "title": "Untrusted hotspot",
+      "order": 3,
+      "action": "strengthen tests to pin observable behaviour (not internal state)",
+      "mode": "characterize_first",
+      "concern": true,
+      "inputs": [
+        "current",
+        "test_pressure"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "self_referential_tests",
+      "title": "Self-referential tests",
+      "order": 4,
+      "action": "request human review - tests verify internal consistency, not truth",
+      "mode": "verify_then_retire",
+      "concern": true,
+      "inputs": [
+        "current"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "unactioned_intent",
+      "title": "Unactioned intent",
+      "order": 5,
+      "action": "action the promise: fix it, ticket it, or delete the marker/skip",
+      "mode": "verify_then_retire",
+      "concern": true,
+      "inputs": [
+        "promissory"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "accretion_ratchet",
+      "title": "Accretion ratchet",
+      "order": 6,
+      "action": "refactor down: extract, delete dead code, or split the file",
+      "mode": "refactor_safe",
+      "concern": true,
+      "inputs": [
+        "accretion_ratchet"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "orphaned_understanding",
+      "title": "Orphaned understanding",
+      "order": 7,
+      "action": "assign a human anchor before further change",
+      "mode": "characterize_first",
+      "concern": true,
+      "inputs": [
+        "understanding.orphaned_understanding"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "candidate_dead_weight",
+      "title": "Candidate dead weight",
+      "order": 8,
+      "action": "verify liveness, then delete if dead",
+      "mode": "verify_then_retire",
+      "concern": true,
+      "inputs": [
+        "dead_code"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "override_contradicts_signals",
+      "title": "Archetype override contradicts the signals",
+      "order": 9,
+      "action": "Review archetype marker - deterministic signals suggest a different classification",
+      "mode": "characterize_first",
+      "concern": true,
+      "inputs": [
+        "archetype"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": false
+    },
+    {
+      "name": "refactor_boundary",
+      "title": "Refactor boundary",
+      "order": 10,
+      "action": "safe to hand an agent in isolation",
+      "mode": "refactor_safe",
+      "concern": false,
+      "inputs": [
+        "behaviour.refactor_boundaries"
+      ],
+      "suppressed_when": "",
+      "prune_missing_paths": true
+    }
+  ]
+}

@@ -774,7 +774,11 @@ in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipp
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
 The report opens with "What changed and who earned it", before the diagrams (see
-[`achievements.json`](#output-achievementsjson)).
+[`achievements.json`](#output-achievementsjson)). It closes with "How this was measured":
+a link to the catalog of every check (`docs/what-we-measure.md` in the toolkit repository),
+the scans that ran (with how many repositories could not measure each, and the reason codes)
+and the scans that were skipped, each with its reason (only a full `/assess` run builds it,
+it needs the network or `--platform`, or `--scans` left it out).
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows
