@@ -125,10 +125,17 @@ def _committed(repo: Path, files: dict[str, str]) -> Path:
 
 
 def _level_met(repo: Path, row_id: str, level: int) -> bool | None:
+    model = load_default_levels()
+    criteria = next(r for r in model["rows"] if r["id"] == row_id)["levels"][level - 1]["criteria"]
+    scan = scan_promissory_markers(repo)
+    # Without ripgrep the marker scan is unavailable, the level reads unknown and
+    # the case would XPASS as if its fix had landed: skip it instead.
+    if not scan.available and any(c["signal"].startswith("promissory_markers.") for c in criteria):
+        pytest.skip(scan.reason)
     scans = dict(build_document(repo)["scans"])
-    scans["promissory_markers"] = scan_promissory_markers(repo).summary()
+    scans["promissory_markers"] = scan.summary()
     group: Group = {"name": "g", "settings": None, "repos": {"r": scans}}
-    row = next(r for r in evaluate(load_default_levels(), group)["rows"] if r["id"] == row_id)
+    row = next(r for r in evaluate(model, group)["rows"] if r["id"] == row_id)
     met: bool | None = row["repos"]["r"]["levels"][level - 1]["met"]
     return met
 
