@@ -434,10 +434,10 @@ def static_grouping_relation(
 def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
     """Map every graphed module name to its repo-relative source file.
 
-    Reuses ``structure_graph``'s graph selection (the largest per-language
-    graph) and its module->file map, so a
-    community's module names map back to the exact tracked paths the human and
-    co-change relations are expressed in. Degrades to an empty map when no graph
+    Reads the largest per-language graph from ``import_graph.select_graph``
+    (through ``_module_graph``) and its module->file map, so a community's
+    module names map back to the exact tracked paths the human and co-change
+    relations are expressed in. Degrades to an empty map when no graph
     is built (a missing tool, no module) - the caller then yields an empty
     static relation rather than crashing.
     """
