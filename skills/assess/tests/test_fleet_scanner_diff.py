@@ -130,6 +130,9 @@ def test_producers_map_each_block_to_its_defining_module_and_what_it_reads():
     assert f"{sd.LIB_PATH}/import_graph.py" in producer_map["structure"]  # via the core's structure_scan
     assert all(f"{sd.LIB_PATH}/run_context_types.py" not in paths for paths in producer_map.values())
     assert "structure_scan" not in producer_map  # a private spec publishes no block
+    # a lib/ package and its relative imports (lib/test_pressure/)
+    assert f"{sd.LIB_PATH}/test_pressure/mutation.py" in producer_map["test_pressure"]
+    assert f"{sd.LIB_PATH}/test_pressure/__init__.py" in producer_map["test_pressure"]
     blocks = sd.changed_blocks(_changed(f"{sd.LIB_PATH}/ci_checks.py"), producer_map)
     assert blocks["ci_checks"] == [f"{sd.LIB_PATH}/ci_checks.py"]
 

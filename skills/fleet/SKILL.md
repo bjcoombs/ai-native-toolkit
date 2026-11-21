@@ -772,7 +772,9 @@ Three more causes keep a toolkit change from reading as the repository's own mov
 - `toolkit_changed_unknown_scope`: the scanner diff is unavailable (a run with a null
   `toolkit_commit`, an install that is not a git checkout, at another `plugin_version`; or a
   commit git cannot find here). `notes` carries one line saying the scanner diff was
-  unavailable.
+  unavailable. A marketplace install is not a git checkout, so across a plugin update this
+  is the usual case there: expect every moved team row to carry it. Run from a git
+  checkout of the toolkit holding both commits to get `scanner_changed` instead.
 
 A scanner change that alters a signal's meaning ships under a new signal name or a
 `signals_schema_version` bump, so an earlier run reads the new signal as absent; these causes

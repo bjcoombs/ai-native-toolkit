@@ -24,7 +24,8 @@ backstop below catches a change that kept the name.
 **Producers** (``producers``): each block the headless runner publishes
 (``lib.signals.SIGNAL_SCANS``, spread keys included) maps to the module that
 defines its callable (``fn`` and ``offline_fn``, partials unwrapped) and that
-module's static ``lib`` import closure. A module defining more than one spec's
+module's static ``lib`` import closure (a package such as ``lib/test_pressure/``
+included, with its relative imports). A module defining more than one spec's
 callable (``core_scans``, ``run_setup``, the headless tables) is a dispatch
 module: its spec maps to the dispatch module plus the closure of the ``lib``
 modules the function body names (following the module's own functions and
@@ -140,31 +141,63 @@ def unavailable_note(diff: ScannerDiff) -> str:
 # --- producers ---------------------------------------------------------------
 
 
-def _imports(tree: ast.Module) -> dict[str, str]:
-    """Each name bound by a ``lib`` import in a module to the lib module it comes from."""
+def _file(module: str) -> Path | None:
+    """The source file of a dotted module name under ``lib`` (a package is its ``__init__.py``)."""
+    base = LIB_DIR.joinpath(*module.split("."))
+    for path in (base.with_suffix(".py"), base / "__init__.py"):
+        if path.is_file():
+            return path
+    return None
+
+
+def _target(module: str, name: str) -> str:
+    """``from <module> import <name>``: the submodule when ``name`` is one, else ``module``."""
+    return f"{module}.{name}" if _file(f"{module}.{name}") is not None else module
+
+
+def _imports(tree: ast.Module, current: str) -> dict[str, str]:
+    """Each name bound by a ``lib`` import (absolute, or relative inside a package) in the
+    module ``current`` to the dotted lib module it comes from."""
+    path = _file(current)
+    package = current if path is not None and path.name == "__init__.py" else current.rpartition(".")[0]
     names: dict[str, str] = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] == "lib":
+        if isinstance(node, ast.ImportFrom):
+            if node.level:
+                parts = package.split(".") if package else []
+                parts = parts[:len(parts) - (node.level - 1)] if node.level > 1 else parts
+                base = ".".join([*parts, *([node.module] if node.module else [])])
+            elif node.module and node.module.split(".")[0] == "lib":
+                base = node.module.partition(".")[2]
+            else:
+                continue
             for alias in node.names:
-                if node.module == "lib":
-                    names[alias.asname or alias.name] = alias.name
-                else:
-                    names[alias.asname or alias.name] = node.module.split(".")[1]
+                target = _target(base, alias.name) if base else alias.name
+                names[alias.asname or alias.name] = target
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 parts = alias.name.split(".")
                 if parts[0] == "lib" and len(parts) > 1:
-                    names[alias.asname or alias.name] = parts[1]
-    return names
+                    names[alias.asname or alias.name] = ".".join(parts[1:])
+    return {name: module for name, module in names.items() if module and _file(module) is not None}
 
 
 @functools.cache
 def _parsed(module: str) -> ast.Module | None:
-    path = LIB_DIR / f"{module}.py"
+    path = _file(module)
+    if path is None:
+        return None
     try:
         return ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return None
+
+
+def _path(module: str) -> str:
+    """A dotted lib module as a toolkit-relative posix path."""
+    path = _file(module)
+    assert path is not None
+    return f"{LIB_PATH}/{path.relative_to(LIB_DIR).as_posix()}"
 
 
 def _closure(start: Iterable[str]) -> set[str]:
@@ -178,7 +211,7 @@ def _closure(start: Iterable[str]) -> set[str]:
         if tree is None:
             continue
         seen.add(module)
-        todo.extend(_imports(tree).values())
+        todo.extend(_imports(tree, module).values())
     return seen
 
 
@@ -188,7 +221,7 @@ def _body_modules(module: str, function: str) -> set[str]:
     tree = _parsed(module)
     if tree is None:
         return set()
-    bound = _imports(tree)
+    bound = _imports(tree, module)
     local: dict[str, ast.AST] = {}
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
@@ -221,7 +254,7 @@ def _callable_module(fn: Callable[..., Any]) -> tuple[str, str] | None:
     name = module.__name__ if module is not None else ""
     if not name.startswith("lib."):
         return None
-    return name.split(".")[1], getattr(fn, "__name__", "")
+    return name.partition(".")[2], getattr(fn, "__name__", "")
 
 
 def producers(specs: Sequence[Any] | None = None) -> dict[str, frozenset[str]]:
@@ -258,7 +291,7 @@ def producers(specs: Sequence[Any] | None = None) -> dict[str, frozenset[str]]:
                 modules |= full(name)
         return frozenset(modules)
 
-    return {block: frozenset(f"{LIB_PATH}/{m}.py" for m in full(block))
+    return {block: frozenset(_path(m) for m in full(block))
             for spec, _ in sources if not spec.private for block in (spec.spread or (spec.key,))}
 
 

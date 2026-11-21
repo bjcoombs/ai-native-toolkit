@@ -1546,7 +1546,8 @@ over `skills/assess/scripts/lib` in the running toolkit checkout; when git canno
 result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
 producer modules:
 
-- the defining module of `fn` / `offline_fn` and its static `lib` import closure;
+- the defining module of `fn` / `offline_fn` and its static `lib` import closure (a package
+  such as `lib/test_pressure/` included, with its relative imports);
 - for a dispatch module (one defining several specs), the modules its function body names;
 - the producers of every spec it `reads`;
 - `run_context_types` is left out.
