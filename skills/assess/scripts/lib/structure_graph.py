@@ -143,7 +143,7 @@ class StructureBlock(TypedDict):
 class StructureGraphResult:
     available: bool = True
     reason: str = ""
-    # The measured graph's language (the largest graph in a polyglot repo);
+    # The measured graph's language (the dominant language's in a polyglot repo);
     # None when no graph was measured.
     language: str | None = None
     keyhole_budget: int = DEFAULT_KEYHOLE_BUDGET
@@ -407,8 +407,9 @@ def analyze_structure(
 ) -> StructureGraphResult:
     """Run the A1-A4 static structure analysis over the repo's import graph.
 
-    Every builder in ``builders`` graphs its language; the largest graph is
-    measured and its language reported. Degrades gracefully
+    Every builder in ``builders`` graphs its language; the graph
+    ``import_graph.select_graph`` picks (the dominant language's) is measured and
+    its language reported. Degrades gracefully
     (``available=False``) when networkx is missing, when a builder's tool is
     missing or fails and no other graph was built, or when nothing could be
     graphed (the reason names the dominant language). The result is

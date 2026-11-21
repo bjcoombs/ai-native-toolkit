@@ -230,8 +230,8 @@ returns (`import_graph.py`); nothing in it assumes a language:
   builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Every registered builder graphs its language; the largest graph is measured and its
-language is the block's `language` field (null when nothing was measured). Degrades to
+Every registered builder graphs its language; the graph `select_graph` picks (the dominant
+source language's) is measured and its language is the block's `language` field (null when nothing was measured). Degrades to
 `available: False` when `networkx` is absent, when a builder's tool is missing or fails
 and no other language was graphed, and when nothing could be graphed (nothing measured,
 not an empty graph whose modularity 0 would read as tangled code). With no graph the
@@ -257,7 +257,7 @@ Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python
 counts-only one).
 
 **`import_graph.py`**
-The language-neutral builder interface (issue #708). A builder is any object with a
+The language-neutral builder interface (issues #708, #709). A builder is any object with a
 `language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
 (the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
 nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
@@ -274,10 +274,16 @@ or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
 | `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
 | `name_collisions` | packages sharing a name, disclosed rather than merged |
 
-`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder and
-keeps one graph per language; the largest (most modules, then most internal edges, then
-the language token) is returned. With no graph the reason is the first builder failure in
-registration order, else `no_graph_reason`, which counts source files per language
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
+dominant source language decides: when a builder covers it (its `language`, or a token in
+an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
+builder's outcome is returned, its graph, its failure (so a missing grimp on a Python
+repository still reads `no_grimp` rather than yielding to a stray `.mjs` file), or
+`no_graph_reason` when it found nothing. Graph sizes are never compared across languages,
+whose nodes differ. Only when no builder covers the dominant language does the largest
+other graph stand in (most modules, then most internal edges, then the language token);
+with none the reason is the first builder failure in registration order, else
+`no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
 `scope`) and names the dominant one. A built graph that breaks the contract (a module
 missing from `package_of`, which A3 and A4 index) is treated as a builder failure
@@ -339,7 +345,7 @@ directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`pa
 `main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
 A specifier matches a file, the file plus a source extension, a `.js` name standing for its
 `.ts` source, or a directory's `index`; anything else is external. A package is the nearest
-directory holding an `index` file or a `package.json`, else the module's top directory;
+directory holding an `index` file or a named `package.json`, else the module's top directory;
 front doors are the `index` modules and each workspace entry; the surface is the count of
 exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
 `EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,

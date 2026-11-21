@@ -25,6 +25,7 @@ from lib.import_graph import (
 )
 from lib.import_graph_builders import BUILDERS
 from lib.import_graph_python import PYTHON_BUILDER
+from lib.import_graph_typescript import TYPESCRIPT_BUILDER
 from lib.structure_graph import analyze_structure
 
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "structure_golden"
@@ -208,11 +209,61 @@ def test_a_failing_builder_does_not_sink_another_language(tmp_path: Path) -> Non
     assert selection.graph is not None and selection.graph.language == "go"
 
 
-def test_with_no_graph_the_first_failure_is_the_reason(tmp_path: Path) -> None:
-    _write(tmp_path, "a.go")
+def test_with_no_dominant_builder_the_first_failure_is_the_reason(tmp_path: Path) -> None:
+    _write(tmp_path, "a.rs")
     first = _StubBuilder("python", None, fail="grimp failed to build import graph (x)")
     second = _StubBuilder("go", None, fail="second")
     assert select_graph(tmp_path, (first, second)).reason.startswith("grimp failed")
+
+
+def test_the_dominant_builders_failure_is_the_reason(tmp_path: Path) -> None:
+    _write(tmp_path, "a.go")
+    first = _StubBuilder("python", None, fail="grimp failed to build import graph (x)")
+    second = _StubBuilder("go", None, fail="go list failed")
+    assert select_graph(tmp_path, (first, second)).reason == "go list failed"
+
+
+def test_a_failing_dominant_builder_is_not_masked_by_a_minor_graph(tmp_path: Path) -> None:
+    """A Python repo without grimp keeps no_grimp, not a stray .mjs graph (#709 review)."""
+    for rel in ("pkg/__init__.py", "pkg/a.py", "pkg/b.py", "scripts/tool.mjs"):
+        _write(tmp_path, rel)
+    broken = _StubBuilder("python", None, fail="grimp not installed; static structure not assessed")
+    selection = select_graph(tmp_path, (broken, TYPESCRIPT_BUILDER))
+    assert selection.graph is None
+    assert structure(analyze_structure(tmp_path, builders=(broken, TYPESCRIPT_BUILDER))
+                     .as_dict())["reason"].startswith("no_grimp:")
+
+
+def test_the_dominant_graph_wins_over_a_larger_minor_one(tmp_path: Path) -> None:
+    """Sizes are not compared across languages: Go nodes are packages, TS nodes files."""
+    for rel in ("a/x.go", "b/y.go", "c/z.go", "web/index.ts"):
+        _write(tmp_path, rel)
+    go = _StubBuilder("go", ["a", "b"], {"a": {"b"}})
+    ts = _StubBuilder("typescript", ["w/index", "w/1", "w/2", "w/3"])
+    assert select_graph(tmp_path, (ts, go)).graph.language == "go"
+
+
+def test_a_dominant_builder_with_nothing_to_graph_does_not_fall_back(tmp_path: Path) -> None:
+    for rel in ("loose.py", "other.py", "scripts/tool.mjs"):
+        _write(tmp_path, rel)
+    selection = select_graph(tmp_path, (PYTHON_BUILDER, TYPESCRIPT_BUILDER))
+    assert selection.graph is None and selection.reason == NO_PYTHON_PACKAGES
+
+
+def test_a_dominant_language_with_no_builder_falls_back(tmp_path: Path) -> None:
+    for rel in ("a.rs", "b.rs", "c.rs", "svc/main.go"):
+        _write(tmp_path, rel)
+    selection = select_graph(tmp_path, (_StubBuilder("go", ["svc"]),))
+    assert selection.graph is not None and selection.graph.language == "go"
+
+
+def test_a_builders_languages_attribute_covers_the_dominant_language(tmp_path: Path) -> None:
+    for rel in ("lib/a.js", "lib/b.js", "x.py"):
+        _write(tmp_path, rel)
+    _write(tmp_path, "lib/a.js", "require('./b');\n")
+    broken_python = _StubBuilder("python", None, fail="grimp failed to build import graph (x)")
+    selection = select_graph(tmp_path, (broken_python, TYPESCRIPT_BUILDER))
+    assert selection.graph is not None and selection.graph.language == "javascript"
 
 
 def test_an_empty_graph_counts_as_no_graph(tmp_path: Path) -> None:

@@ -2,8 +2,9 @@
 
 ``structure_graph`` measures A1-A4 over one module graph and never asks which
 language produced it. A builder turns a repository's source in one language into
-a :class:`ModuleGraph`; :func:`select_graph` runs every registered builder,
-keeps one graph per language and returns the largest. A repository with no graph
+a :class:`ModuleGraph`; :func:`select_graph` runs every registered builder
+and returns the dominant source language's graph (or its failure), falling back
+to the largest other graph only when no builder covers that language. A repository with no graph
 gets a reason that names its dominant source language
 (``no_import_graph_rust``), so a fleet reader can tell a tooling gap from a
 repository with no code (``no_source_files``).
@@ -148,28 +149,44 @@ def select_graph(
     extra_exclude_dirs: set[str] | None = None,
     scope: Path | None = None,
 ) -> GraphSelection:
-    """Build one graph per language and keep the largest.
+    """Build one graph per language; the dominant language's graph wins.
 
-    Largest is the most modules, then the most edges, then the language token
-    for a stable tie-break. With no graph built, the reason is the first
-    builder failure (in registration order) or, when none failed, the
-    dominant-language reason from :func:`no_graph_reason`.
+    The dominant language (most source files, :func:`dominant_language`) decides
+    first. When a registered builder covers it (its ``language``, or any token in
+    an optional ``languages`` attribute), that builder's outcome is the answer:
+    its graph, its failure reason (a missing tool keeps its install hint rather
+    than yielding to a minor language's graph), or, when it found nothing to
+    graph, :func:`no_graph_reason`. Graph sizes are never compared across
+    languages, whose nodes differ (files in one, packages in another).
+
+    Only when no builder covers the dominant language does another language
+    stand in: the largest graph (most modules, then edges, then the language
+    token), else the first failure in registration order, else
+    :func:`no_graph_reason`. A graph that breaks the contract
+    (:func:`graph_defect`) counts as its builder's failure.
     """
     repo_root = Path(repo_root).resolve()
     extra = extra_exclude_dirs or set()
+    dominant = dominant_language(repo_root, extra, scope)
     graphs: list[ModuleGraph] = []
     failures: list[str] = []
     for builder in builders:
+        covers = dominant is not None and dominant in _languages(builder)
         try:
             graph = builder.build(repo_root, extra, scope)
+            defect = graph_defect(graph) if graph is not None and graph.modules else None
+            if defect is not None:
+                raise GraphUnavailable(defect)
         except GraphUnavailable as e:
+            if covers:
+                return GraphSelection(graph=None, reason=str(e))
             failures.append(str(e))
             continue
+        if covers:
+            if graph is not None and graph.modules:
+                return GraphSelection(graph=graph)
+            return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope))
         if graph is not None and graph.modules:
-            defect = graph_defect(graph)
-            if defect is not None:
-                failures.append(defect)
-                continue
             graphs.append(graph)
     if graphs:
         best = min(graphs, key=lambda g: (-_size(g)[0], -_size(g)[1], g.language))
@@ -177,6 +194,12 @@ def select_graph(
     if failures:
         return GraphSelection(graph=None, reason=failures[0])
     return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope))
+
+
+def _languages(builder: ImportGraphBuilder) -> set[str]:
+    """The language tokens a builder covers: ``language`` plus any ``languages``."""
+    extra = getattr(builder, "languages", ())
+    return {builder.language, *(t for t in extra if isinstance(t, str))}
 
 
 def graph_defect(graph: ModuleGraph) -> str | None:

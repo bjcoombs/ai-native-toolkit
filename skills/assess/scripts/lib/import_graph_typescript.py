@@ -13,13 +13,13 @@ JavaScript with a deterministic regex scan; no Node, no ``tsc``, no install.
 - **Resolution**: a relative specifier against the importer's directory; a bare
   one through the nearest ``tsconfig.json`` / ``jsconfig.json`` (``paths``,
   then ``baseUrl``, following relative ``extends``), then through the workspace
-  packages (every ``package.json`` with a ``name``, resolved to its entry
-  file). A specifier names a file, the file with a source extension added, a
+  packages (every named ``package.json``, one with a ``name``, resolved to
+  its entry file). A specifier names a file, the file with a source extension added, a
   ``.js`` name standing for its ``.ts`` source, or a directory's ``index``.
   Anything else (``node_modules``, assets, Node built-ins) is external and
   dropped, as the Python builder drops third-party imports.
 - **Packages** (the A3/A4 boundary) are directories holding an ``index`` source
-  file or a ``package.json``: a module belongs to the nearest such directory at
+  file or a named ``package.json``: a module belongs to the nearest such directory at
   or above it, else to its top-level directory (``.`` for a root file).
 - **Front doors** are every ``index`` module and each workspace package's entry.
 - **Surface** (A1) is the count of exported declarations and ``export { ... }``
@@ -37,6 +37,9 @@ through; ``exports`` maps are read for their ``"."`` entry only; package names
 inside ``node_modules`` and ``extends`` from a package are not followed;
 ``pnpm-workspace.yaml`` globs are not read, since any named ``package.json``
 already counts as a workspace package.
+
+The builder covers both ``typescript`` and ``javascript`` (its ``languages``), so
+``select_graph`` picks it for a repository dominated by either.
 """
 from __future__ import annotations
 
@@ -371,6 +374,7 @@ class TypeScriptBuilder:
     """
 
     language = "typescript"
+    languages = ("typescript", "javascript")
 
     def build(
         self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,

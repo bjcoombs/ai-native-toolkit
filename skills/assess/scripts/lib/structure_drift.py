@@ -434,7 +434,7 @@ def static_grouping_relation(
 def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
     """Map every graphed module name to its repo-relative source file.
 
-    Reads the largest per-language graph from ``import_graph.select_graph``
+    Reads the selected (dominant-language) graph from ``import_graph.select_graph``
     (through ``_module_graph``) and its module->file map, so a community's
     module names map back to the exact tracked paths the human and co-change
     relations are expressed in. Degrades to an empty map when no graph
@@ -459,7 +459,7 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
 
 
 def _module_graph(repo_root: Path) -> ModuleGraph | None:
-    """The largest per-language import graph of the whole repo, or None.
+    """The selected (dominant-language) import graph of the whole repo, or None.
 
     Selected as ``structure_graph.analyze_structure`` selects, but over the whole
     repository with no configured excludes or scope, as drift always read it. With
