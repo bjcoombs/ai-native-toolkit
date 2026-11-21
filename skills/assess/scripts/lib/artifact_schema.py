@@ -268,8 +268,13 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     boundary (issue #760), so a single-package repository no longer reads as
 #     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
 #     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
-# 23: ``agent_environment.setup_ready`` reports the setup half of ``layer5_cap`` on
+# 23: ``ci_checks`` no longer counts a bare list item that only names an
+#     always-check program (``- pytest``, ``- tox``) unless its parent key is a
+#     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
+#     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
+#     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
+# 24: ``agent_environment.setup_ready`` reports the setup half of ``layer5_cap`` on
 #     its own (issue #786), and Layer 5 level 2 reads it instead of the cap, so a
 #     repository whose instruction file names no check can now read Layer 5
 #     level 2. ``layer5_cap`` itself is unchanged.
-ASSESS_METHOD_VERSION = 23
+ASSESS_METHOD_VERSION = 24

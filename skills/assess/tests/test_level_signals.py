@@ -416,6 +416,20 @@ def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_pa
         assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
 
 
+def test_layer_five_is_zero_when_ci_only_names_pytest_or_tox_as_a_value(tmp_path: Path) -> None:
+    """Issue #725: ``needs: - pytest`` and a ``matrix:`` axis ``- tox`` are values, not CI runs."""
+    head = "name: ci\non: [pull_request]\njobs:\n"
+    needs = (head + "  pytest:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+             "  deploy:\n    needs:\n      - pytest\n    runs-on: ubuntu-latest\n"
+             "    steps:\n      - run: echo deploy\n")
+    matrix = (head + "  t:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n"
+              "        tool:\n          - tox\n    steps:\n      - run: echo x\n")
+    for name, workflow in (("needs", needs), ("matrix", matrix)):
+        scans = _ci_repo(tmp_path / name, workflow, instructions=False)
+        assert scans["ci_checks"]["check_commands"] == 0
+        assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
+
+
 def test_layer_five_is_unknown_when_ci_jobs_come_only_from_includes(tmp_path: Path) -> None:
     root = tmp_path / "included"
     root.mkdir()
