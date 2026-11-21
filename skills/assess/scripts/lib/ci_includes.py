@@ -34,8 +34,8 @@ segment is ``bad_path``, a ref that could pass as a git option is not tried,
 and a clone that resolves outside the root (a symlink) is ``not_cloned``.
 
 Each include item gets one ``IncludeRecord``: ``kind``, ``id`` (the
-``shared_tooling`` id for a project or component, ``gitlab_project:<path>``;
-null for local, template and remote), ``status`` (``resolved`` or the token
+``shared_tooling`` id: ``gitlab_project:<path>`` for a project,
+``gitlab_component:<path>`` for a component; null for local, template and remote), ``status`` (``resolved`` or the token
 saying why not), ``ref_basis`` (``ref``, ``head``, ``worktree``; null when not
 resolved) and ``depth``. An item is resolved only when every file it names was
 read. ``ci_checks`` publishes the records as ``includes`` with the counts
@@ -383,7 +383,9 @@ class _Walk:
         self.records.append({"kind": item.kind, "id": ident, "status": status,
                              "ref_basis": basis if status == "resolved" else None, "depth": depth})
 
-    def read_all(self, source: _Source, paths: list[str], depth: int, line: int) -> bool:
+    def read_all(self, source: _Source, paths: list[str], depth: int,
+                 line: int) -> IncludeStatus:
+        """Read every file of one item: ``resolved``, or the reason it could not."""
         texts: list[str] = []
         keys: list[tuple[str, str | None, str]] = []
         for rel in paths:
@@ -391,17 +393,17 @@ class _Walk:
             if key in self.seen or key in keys:
                 continue
             if len(self.seen) + len(keys) >= MAX_FILES:
-                return False
+                return "file_limit"
             text = source.read(rel)
             if text is None:
-                return False  # nothing of this item is marked read: a later item reads it afresh
+                return "file_missing"  # nothing of this item is marked read: a later item reads it afresh
             keys.append(key)
             texts.append(text)
         self.seen.update(keys)  # only once the whole item has read
         for text in texts:
             self.files.append(IncludedFile(text, depth, line))
             self.walk(text, source, depth + 1, line)
-        return True
+        return "resolved"
 
     def walk(self, text: str, here: _Source, depth: int, top_line: int | None) -> None:
         items, _has_section, dropped = include_items(text)
@@ -472,8 +474,8 @@ class _Walk:
             return
         at = len(self.records)
         self.record(item, ident, "resolved", source.basis, depth)  # before its nested includes
-        if not self.read_all(source, paths, depth, line):
-            status: IncludeStatus = "file_missing" if len(self.seen) < MAX_FILES else "file_limit"
+        status = self.read_all(source, paths, depth, line)
+        if status != "resolved":
             self.records[at] = {**self.records[at], "status": status, "ref_basis": None}
 
 

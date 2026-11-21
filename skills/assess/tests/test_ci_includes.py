@@ -323,3 +323,12 @@ def test_a_file_from_a_failed_item_is_read_again_by_a_later_item(tmp_path: Path)
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["file_missing", "resolved"]
     assert block["included_check_commands"] == 1 and block["test_or_lint_runs"] is True
+
+
+def test_an_item_stopped_by_the_file_limit_says_so(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ci_includes, "MAX_FILES", 2)  # .gitlab-ci.yml is the first file read
+    ci = "include:\n  - project: grp/ci-templates\n    file: [/a.yml, /b.yml]\n"
+    root, app = _root_with_template(tmp_path, {"a.yml": TEST_TPL, "b.yml": TEST_TPL}, ci=ci)
+    block = scan_ci_checks(app, root)
+    assert [r["status"] for r in block["includes"]] == ["file_limit"]
+    assert block["test_or_lint_runs"] is None
