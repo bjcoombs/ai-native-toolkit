@@ -186,12 +186,12 @@ constant each.
 # `/.github/`, `README.md` or a docs-only path). Read by the default
 # maturity model's Layer 4 level 1. Additive: total_patterns and matched_patterns
 # keep their meaning, and complexity-stats.json is unchanged.
-# 1.30.0: run-context.json ci_checks gains merged_config, merged_config_reason and
+# 1.31.0: run-context.json ci_checks gains merged_config, merged_config_reason and
 # merged_check_commands (issue #796): GitLab's merged CI configuration, read through
 # the CI lint API where an include did not resolve offline, and basis gains
 # merged_config. A review_automation match read from that configuration has line
 # null and depth 1. Additive: no existing key moves.
-ARTIFACT_SCHEMA_VERSION = "1.30.0"
+ARTIFACT_SCHEMA_VERSION = "1.31.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -304,9 +304,9 @@ ARTIFACT_SCHEMA_VERSION = "1.30.0"
 #     matched_patterns (issue #785), so a CODEOWNERS whose lines own no module
 #     source (`*`, `*.py`, `/.github/`, `README.md`, `docs/`) no longer credits a
 #     declared boundary.
-# 27: under --platform (and in a full /assess run) GitLab's CI lint API gives the
+# 28: under --platform (and in a full /assess run) GitLab's CI lint API gives the
 #     merged CI configuration of a repository whose includes did not all resolve
 #     offline (issue #796): ``ci_checks.test_or_lint_runs`` reads true or false
 #     where it was null, and ``review_automation`` credits a review component the
 #     merge pulled in. Offline headless runs are unchanged.
-ASSESS_METHOD_VERSION = 27
+ASSESS_METHOD_VERSION = 28
