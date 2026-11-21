@@ -88,9 +88,9 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
 - **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
-  roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `overall_roll_up`, so a
+  roll-ups with `fleet_data`'s own `repo_cells` and `row_roll_up`, so a
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
-  `tests/test_fleet_rescore.py::test_rescore_recomputes_mean_share_and_unit_overall`
+  `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
@@ -286,8 +286,9 @@ reason names the dominant source language (issues #707, #708):
 `no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
 packages found` for a Python repository, `no_source_files: ...` with no source in a
 recognised language. `cross_package_edges` counts the
-import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
-(no package boundary is crossed). A graph with packages but no import edges stays
+import edges `front_door_ratio` is measured over; at 0 no package boundary is crossed and
+`front_door_ratio` is null (unknown, not a vacuous 1.0; issue #760), as it is on an
+unavailable block. A graph with packages but no import edges stays
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
 was measured): modules that never import each other have no community structure, and a
 0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
@@ -296,7 +297,10 @@ was measured): modules that never import each other have no community structure,
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
 opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
 `no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
-`modularity_q` is absent there rather than null.
+`modularity_q` is absent there rather than null. A full counts-only run keeps the same
+code as `structure.reason` (`REASON_SENTENCE_CODES`, #764). `STRUCTURE_REASON_CODES` is
+that run's allow-list, derived from `NO_SOURCE_FILES`, `INVALID_IMPORT_GRAPH`,
+`LANGUAGE_BY_EXTENSION` and `REASON_SENTENCE_CODES`.
 `structure_drift.py` builds its module map and communities from the same selected graph
 (`import_graph.select_graph`, `import_digraph`).
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
@@ -1060,7 +1064,8 @@ A row with a floor (#697) reads "at least N of top" in the levels table and "Lev
 Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
 the one change and a "done when" a maintainer checks without the plugin (a file
 state, a command, a platform setting), templated on the criterion's own operator and
-value. A compound check (`agent_environment.layer5_cap.applies`) is worded on the
+value. A compound check (`agent_environment.layer5_cap.applies`, no longer read by the
+default model since #786 but kept for models that still use it) is worded on the
 parts actually unmet: `parts` reads a repository's `layer5_cap.unmet` tokens, the page
 passes their union across the repositories a step lists and annotates each repository
 with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
@@ -1110,9 +1115,9 @@ read gives no URL and no owners.
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
-per team row, `fleet_maturity.mean_share` over the repositories below it, `measured` of
-`repos`, and the weakest measured repository (lowest share, then key); `overall_roll_up`
-does the same over each repository's own mean share. `org` rows stay in `groups.jsonl`.
+per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it
+(the lowest Step's stand-in until #744). Version 2 (#772) holds no average and names no
+repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
@@ -1131,9 +1136,10 @@ oldest first: `subjects` gives every unit and repository its level per team row,
 roll-up rule (`levels.share_level`) over measured members, with the measured set;
 `clean` is the one gate on a move (known both sides, same measured set), and
 `known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
-emits `level_up`, `first`, `target_hit` (a level target on the row's level, a share
-target on its mean share of top level, the `fleet-data.json` row roll-up, #780),
-`personal_best` and `streak`, each with
+emits `level_up`, `first` (only with `firsts=True`, `fleet.py --first-achievements`; off
+by default since #772), `target_hit` (a level target on the row's level, a share target
+on its mean share of top level, `RowState.share`, worked out from the cells, #780) and
+`streak` (#772 retired `personal_best`), each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
 a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
 repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
@@ -1145,7 +1151,8 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 
 **`fleet_achievements_runs.py`**
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
-`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+`fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
+`READABLE_FLEET_DATA_VERSIONS` (1 and 2: version 1's roll-up is not read, #772),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
@@ -1157,9 +1164,9 @@ version) and `stored` (its `fleet-data.json`) set (#771).
 **`fleet_rescore.py`**
 Re-scores a stored run under the current maturity model and builds the Recount (#771).
 `rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
-cells from `fleet_data.repo_cells` (values through `Privacy().value`), each repository's
-`mean_share`, and each unit's row and overall roll-ups (`row_roll_up`, `overall_roll_up`)
-over the stored placements; None when a stored key does not join under the run's key
+cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
+roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
+`overall` are dropped, #772); None when a stored key does not join under the run's key
 function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783) is
 applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
 stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
@@ -1709,6 +1716,91 @@ committer time, issue #773, rather than calendar age; None without a HEAD). Prim
 anchor and no externalised spec. Reuses `change_coupling.authorship_analysis` so the
 conservative agent/human classification is defined one way.
 
+### Check manifest
+
+**`check_manifest.py`** *(#789 step 1, #792)*
+The strict loader for the check manifest, `skills/assess/checks/core.toml` (owner
+`core`), which declares every check once. Its published contract is
+`skills/assess/references/check-manifest.schema.json` (JSON Schema 2020-12, one manifest
+per owner). `load_manifest(path=CORE_MANIFEST)` reads the TOML with stdlib `tomllib`,
+checks it with allowed-key sets per entry kind and the cross-reference rules below, and
+returns the document itself as a `CheckManifest` TypedDict (no defaults filled, nothing
+re-keyed, so `json.dumps` of it validates against the schema). Any error raises
+`CheckManifestError`, whose `errors` lists every structured finding
+(`check_validation.ValidationError`); `validate_manifest(data)` returns them without
+raising, and `parse_manifest(data)` validates an already-parsed document. Helpers:
+`collectors`, `signals`, `conditions`, `findings` (by `order`), `scan_key` (a collector
+id minus its owner), `block_collectors` (run-context block to publishing collector id)
+and `condition_key(row, level, signal)`.
+
+The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
+`[[entries]]` of four kinds:
+
+- `collector`: one `scan_registry.ScanSpec`, id `core.<scan key>`, in scan-table order.
+  `callable` (`module:function`), `offline_callable`, `publishes` (the run-context keys
+  written: `[key]`, the spread keys with `spread = true`, or `[]` with `private = true`),
+  `reads`, `stage`, `degrade`, `gate_reason` (a token for one of
+  `scan_registry.GATE_REASONS`: `setup`, `bad_scope`, `self_degrading`, `serialiser`),
+  `label`, `network`, `platform_pass` (`signals.PLATFORM_SCANS`), `platform_only`
+  (`signals.PLATFORM_ONLY_SCANS`), `headless` (published block to `registered`,
+  `headless_variant` or `unregistered`; an unlisted block is not reported headless),
+  `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
+  `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots
+  under its blocks), `privacy` (its `counts_only_rules.RULES` patterns and classes;
+  `archived_finding_paths` sits with the private `keyhole` collector that produces it),
+  `unknown_reasons` (`code`, `carried_in` `reason` or `basis`, `means`, `next_step`),
+  `revision` (1 for every collector; bumped when a published value changes meaning,
+  #774) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
+  signals carry it now.
+- `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
+  (`bool` or `number` here), `collector` (the collector publishing its first segment),
+  `evidence` (the producer input class, `level_signals.SIGNAL_INPUTS`, #783) and
+  `null_means`. No grade is authored: it follows from the class
+  (`level_signals.INPUT_GRADES`).
+- `condition`: display metadata for one default criterion, keyed
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
+  supportive `fix`. The criterion itself stays in
+  `levels/default.toml`; a custom `--levels` file needs no entries.
+- `finding`: a derived finding, id `core.finding.<name>`, with `order`, `action`,
+  `mode`, `concern` (in `assess_config.GATE_CONCERN_FINDINGS`), `inputs`, `derive`,
+  `thresholds`, `suppressed_when` (the churn suppression, a #789 rule expression in
+  source form) and `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`).
+
+Loader rules beyond types: an id has its kind's form; a private collector publishes
+nothing and is not spread; a plain collector publishes `[key]`; opting out of degrading
+names a `gate_reason`; `offline_callable` needs `network`, `platform_only` needs
+`platform_pass`; a `headless` block or `shapes` path is published by the collector, and a
+block is `headless_variant` exactly when a variant names it; every read is a core input
+or an earlier collector at the same or an earlier stage, and no key shadows a core
+input or publishes a block another collector publishes (the `scan_registry.validate`
+rules); a signal's collector exists and publishes its block; a condition key is unique and names a
+declared signal; finding orders are distinct and every finding input names a block or collector.
+An unknown key or reference carries a "did you mean" `suggestion` and the `available`
+names. The module imports none of the tables it describes, because later steps make
+them load from it.
+
+Nothing reads the manifest at runtime yet. **Agreement test:**
+`tests/test_check_manifest.py` checks it in both directions against `scan_registry.SCANS`
+(`test_registry_matches_manifest`: one collector per scan key, equal `callable`, `reads`,
+`stage`, `publishes`, `private`, `spread`, `degrade`, `gate_reason`, `label`, `network`
+and `offline_callable`, in table order; a failure names the scan key), the headless
+tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the default
+model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
+against the schema. Until later steps generate those tables from the manifest, adding a
+scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+Loader tests: `tests/test_check_manifest_loader.py`.
+
+**`check_validation.py`**
+Structured validation findings ported from meridianhub/meridian
+`services/control-plane/internal/validator/manifest_validator.go` (`ValidationError`,
+`findClosestMatch`, `levenshteinDistance`): a `ValidationError` TypedDict (`severity`
+`error` or `warning`, `path`, `code`, `message`, optional `suggestion` and `available`),
+`finding(...)` to build one, `format_error` (`[severity] path: message (suggestion: x)`),
+`errors_only`, `levenshtein` and `closest` (the nearest candidate within half the
+target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
+Meridian's distance and closest-match tables.
+
 ### Configuration
 
 **`run_scope.py`**
@@ -1804,7 +1896,12 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 `run-context.counts-only.json` beside `run-context.json`) and the headless entry point
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
-its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
+its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
+reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
+allow-list `import_graph.STRUCTURE_REASON_CODES` names it (so a path or a name never leaks), the code of
+a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
+so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
+Tests: `tests/test_counts_only_reason.py`. `render_doc`
 generates `references/counts-only.md`, the per-block field list (plus the
 `fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
 the fleet's unit and repository keys (#703). Tests:
@@ -1814,7 +1911,9 @@ the fleet's unit and repository keys (#703). Tests:
 The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
 an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
-with the paths), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+with the paths), a `REASON` class for an unavailable block's reason kept as its code
+only, `REASON_SENTENCE_CODES` (the structure reason sentences that predate the
+`code: sentence` form, shared with `headless_layers.structure`), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
 field names and `classify`. Every other object is a record whose keys survive only when
 they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
 fields and rule segments), so a map keyed by a login or a function name is dropped
@@ -2042,6 +2141,18 @@ where); no instruction file reads level 0 through the never-null
 `layer_grades.instruction_file_present`, not `unknown`. Tests:
 `tests/test_level_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
+
+Signal classification (#783): `SIGNAL_INPUTS` gives every signal a default criterion reads
+its producer input class (`InputClass`: `config_text`, `head_text`, `head_structure`,
+`ci_executed`, `git_history`, `execution_artifact`, `platform`), keyed by exact path;
+`input_class` raises `UnclassifiedSignal` naming an unclassified one. `INPUT_GRADES` maps
+each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
+returns the signal's class grade whatever the operator (the #789 grades design: no
+threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
+conditions #744 lists without counting. The module doc records the rulings (platform
+reads are their own class; instruction files stay declared but still gate Steps). Nothing
+in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
@@ -2405,7 +2516,11 @@ directory, a successful call's stdout is stored under the sha256 of its argv and
 argv is answered from it for the rest of the run (any process); failures are never stored.
 Only the fleet platform pass sets it, to a temporary directory it removes. A call made
 with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
-nor writes it: merge-request notes carry comment bodies, read in memory only (#716). Callers keep
+nor writes it. The cache never holds comment or review text on either provider: GitLab
+merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
+through `gitlab_cli.glab_api(..., cache=False)`, and the GitHub merged pull request read with
+reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
+in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
 `tests/test_platform_cli.py`.
 
@@ -2539,7 +2654,10 @@ recently updated), then the same search from the 30th newest `mergedAt` with
 for the heavy fields. GitLab, one read:
 `projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
 then filtered and ordered by `merged_at` client-side (works on GitLab versions
-without `order_by=merged_at`). A change with no readable merge time is
+without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
+with `cache=False`: reviews, comments, titles and descriptions are read in memory only and
+never reach the `--platform` response cache; only the light `--json mergedAt` read is
+cached (#778). A change with no readable merge time is
 `<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
 dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
 so an account is probed once); any refusal is `{"available": false, "reason"}`,
@@ -2888,8 +3006,8 @@ Can an agent set up the repository and check its own work (issue #514)?
 `scan_agent_environment(repo_root, instruction_files, agent_harness, excludes)` reads the
 files at HEAD through `command_index.build_index` and writes `{available,
 setup{present, sources[]}, check{entry_points[], named[], named_total,
-unresolved[]}, pinning{manifests[], all_locked}, ci_duration, findings[],
-layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
+unresolved[]}, pinning{manifests[], all_locked, unlocked_total}, ci_duration, findings[],
+setup_ready, layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
 `copilot-setup-steps.yml` (credited only when it passes the checks), a dev
 container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
 `.claude/settings.json` (from the `agent_harness` block), `script/setup`,
@@ -2901,7 +3019,13 @@ instruction file gives (root `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
 the built-in and `.assess/config.toml` excludes. Findings are `copilot-setup-steps.yml` breaches of GitHub's documented
 constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
-and committed setup or a lockfile per manifest exists. `ci_duration` is the one
+and committed setup or a lockfile per manifest exists. `setup_ready` is the
+setup half of that cap on its own (committed setup, or every manifest locked, or
+no manifest). `pinning.unlocked_total` counts manifests with no lock (0 with no
+manifest); Layer 5 level 2 of the maturity model reads it `eq 0`, so committed
+setup does not stand in for a lockfile and the named check is read once, by
+Layer 0 level 2 (issue #786). The cap itself is unchanged for
+the /assess scorer. `ci_duration` is the one
 network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
@@ -2925,23 +3049,70 @@ lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
 maturity model reads it, so the CI row measures CI, not the instruction file.
-`scan_ci_checks(repo_root)` reads the files `command_index.ci_config_files`
-selects (GitHub Actions workflows, `.gitlab-ci.yml`) and writes `{available,
-ci_files, check_commands, included_files, test_or_lint_runs, basis}`. Each line,
+`scan_ci_checks(repo_root, ghsync_root)` reads the files `command_index.ci_config_files`
+selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
+`ci_includes.resolve_includes` read (#766), and writes `{available,
+ci_files, check_commands, included_files, included_check_commands, resolved_includes,
+unresolved_includes, includes[], test_or_lint_runs, basis}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
 cannot swallow the next); `check_commands` counts the lines with a segment that
 `check_command.is_check_command` or `is_lint_command` credits; a bare list item
-that only names a linter (`- mypy` under `matrix:`) does not count. Triggers are
+that only names a linter (`- mypy` under `matrix:`) does not count, and one that only
+names an always-check program (`- pytest`, `- tox`) counts only when its parent key is
+a GitLab `script:` / `before_script:` / `after_script:` (#725: under `needs:` or a
+`matrix:` axis it is a value). `count_check_lines(lines, context=)` is the same count over a
+line list, reading parent keys from `context` (the original lines) when given. Triggers are
 not read. Known limit: lines are read without a YAML parser, so a command inside a
 non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_runs` is true with any check
-line; with none it is null (`basis: included_jobs`) when a CI file pulls jobs
-from elsewhere (`shared_tooling.pulls_jobs_from_elsewhere`: any top-level GitLab
-`include:`, a job-level `uses:` of another repository's reusable workflow), else
-false (`no_check_command`, or `no_ci` with no CI file). Offline and headless.
+line, own or included (`included_check_commands` counts the included ones); with none it
+is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
+(`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
+item, a job-level `uses:` of another repository's reusable workflow), else
+false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
+every include resolved and holds no check reads false. Offline and headless.
 Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`ci_includes.py`**
+GitLab CI includes resolved offline (issue #766), read by `ci_checks` and
+`review_automation`. `include_items(text)` parses the top-level `include:` of a GitLab CI
+file into `IncludeItem(kind, source, files, ref, line)` (block list, single mapping,
+flow list or mapping, bare strings; `file:` as a scalar, flow list or block list) and
+says whether a section exists. `resolve_includes(repo_root, ghsync_root)` (cached per
+argument pair) walks the repository's `.gitlab-ci.yml`: `local:` from the work tree
+(`ref_basis: worktree`) or, inside a template, from the template's commit; `project:`
+from the clone `<ghsync_root>/<path>/<last>-main` with `git show <commit>:<file>` at
+`ref:` when the clone holds it (`ref_basis: ref`), at HEAD only with no `ref:` (`head`); a pin
+the clone does not hold, or no plain ref name (a CI variable), is `ref_missing`; `component:
+<host>/<project>/<name>@<v>` from `templates/<name>.yml` or `templates/<name>/template.yml`
+of the clone of `<project>`; `template:` / `remote:` are `not_offline`. Nested includes are
+walked to `MAX_DEPTH` (5) and `MAX_FILES` (50); a file already read is not read again (a
+cycle). Reads stay inside the checkout or clone: `..` or empty segments are `bad_path`, a ref
+that is not a plain ref name is never passed to git (`ref_missing`), a clone resolving
+outside the root (a symlink) is `not_cloned`.
+
+Resolved-include data shape (read by #746 opportunity insights and #796, the
+`--platform` CI lint pass): `Resolution.files` holds `IncludedFile(text, depth, line)` for
+the scans (`line` is the repository's own include line that led there; the text is never
+published), and `Resolution.includes` one `IncludeRecord` per item, published as
+`ci_checks.includes`:
+
+| field | value |
+|-------|-------|
+| `kind` | `local`, `project`, `component`, `template`, `remote` |
+| `id` | `gitlab_project:<path>` / `gitlab_component:<path>` (lowercased, the `shared_tooling` id); null for the other kinds. Kept in counts-only output (ID rule) |
+| `status` | `resolved`, or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses), `ref_missing` |
+| `ref_basis` | `ref`, `head`, `worktree`; null unless resolved |
+| `depth` | 1 for the repository's own include; nested records follow their parent |
+
+An item is resolved only when every file it names was read. `ci_checks` adds the
+`resolved_includes` / `unresolved_includes` counts; a consumer that needs "jobs this run
+could not read" reads `unresolved_includes > 0`. The root reaches the scan as the registry
+input `ghsync_root` (`run_setup.ghsync_root`: None in an interactive run; the headless
+`assess_signals --ghsync-root`, which `fleet.py` passes as its ROOT unless
+`--delete-after`). Tests: `tests/test_ci_includes.py`.
 
 **`agent_identity.py`**
 The one definition of an agent identity in a git history: `identity_is_agent(email,
@@ -3038,12 +3209,17 @@ body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one i
 `owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
 sources, so they never enter `ci_includes` or `ci_source_ids`. `workflow_events(text)`
 reads the top-level `on:` (a scalar, a flow list or mapping, a block list or mapping of
-events); None when there is none it can read.
+events; `ON_KEY` also accepts the YAML 1.1 `true:` spelling, shared with
+`agent_harness`); None when there is none it can read. `include_lines` and
+`component_source` expose the include-section reader to `ci_includes`.
 
 **`review_automation.py`**
 AI review committed in CI and the Layer 7 level 1 signal (issue #696).
-`scan_review_automation(repo_root, fleet_config)` writes `{available, present, kinds[],
-matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked}`. Kinds:
+`scan_review_automation(repo_root, fleet_config, ghsync_root)` writes `{available, present, kinds[],
+matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked, on_changes, depth}`.
+The include entries of GitLab files `ci_includes.resolve_includes` read are matched as the
+repository's own are (#766), keeping the path and line of the repository's own include that
+led there, with `depth` the include level (0 for the repository's own file). Kinds:
 `ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
 `anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
 pipelines is not read), `ci_component` (a

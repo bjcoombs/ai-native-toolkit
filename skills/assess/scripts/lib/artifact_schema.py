@@ -170,13 +170,22 @@ constant each.
 # reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
 # (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
 # and complexity-stats.json is unchanged.
-# 1.27.0: run-context.json coverage_gate gains max_threshold_percent and
+# 1.27.0: run-context.json structure.front_door_ratio is null when
+# cross_package_edges is 0 (issue #760), and on an unavailable structure block:
+# with no package boundary crossed there is no contract edge to measure, so the
+# former 1.0 was vacuous. A reader comparing front_door_ratio as a number must
+# skip null. complexity-stats.json is unchanged.
+# 1.28.0: run-context.json ci_checks gains included_check_commands,
+# resolved_includes, unresolved_includes and includes[] (kind, id, status,
+# ref_basis, depth: GitLab includes resolved offline, issue #766), and each
+# review_automation match gains depth. Additive: no existing key moves.
+# 1.29.0: run-context.json coverage_gate gains max_threshold_percent and
 # threshold_meets_minimum, and each gate gains threshold_percent (issue #781): the
 # threshold as a percentage (a JaCoCo ratio 0.80 is 80) and the Layer 6 level 1
 # signal (true at 50 percent or more, null when a counted gate's percentage is not
 # read). Additive: threshold and unit stay as written, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.27.0"
+ARTIFACT_SCHEMA_VERSION = "1.29.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -265,4 +274,24 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     window ratios, instruction ``freshness_days`` (and so the grader's freshness
 #     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
 #     whose HEAD is old, ages shrink and windows cover the history before HEAD.
-ASSESS_METHOD_VERSION = 21
+# 22: ``structure.front_door_ratio`` is null when no import crosses a package
+#     boundary (issue #760), so a single-package repository no longer reads as
+#     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
+#     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
+# 23: ``ci_checks`` no longer counts a bare list item that only names an
+#     always-check program (``- pytest``, ``- tox``) unless its parent key is a
+#     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
+#     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
+#     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
+# 24: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
+#     reads a check in an included local file or a template cloned in the fleet root
+#     (true), or false when every include resolved without one, where it was null;
+#     ``review_automation`` credits a review component inside a resolved template;
+#     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
+#     an issue_comment-only review action is no longer credited.
+# 25: ``agent_environment`` adds ``setup_ready`` (the setup half of ``layer5_cap``)
+#     and ``pinning.unlocked_total`` (issue #786). Layer 5 level 2 reads
+#     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
+#     file names no check can now read level 2, and one with committed setup
+#     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
+ASSESS_METHOD_VERSION = 25

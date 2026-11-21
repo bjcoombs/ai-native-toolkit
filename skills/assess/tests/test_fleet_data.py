@@ -47,13 +47,11 @@ def test_three_level_gitlab_tree_and_roll_ups() -> None:
     }
     org = units["ownership/grp"]
     # docs: proj1 level 2 of 2, proj2 level 1 of 2; proj3 unknown and proj4 failed are excluded, not 0
-    assert _level(org, "docs") == {"row": "docs", "mean_share": 0.75, "measured": 2, "repos": 4,
-                                   "weakest": {"repo": "grp/sub/proj2", "share": 0.5, "level": 1}}
-    assert _level(org, "ci")["mean_share"] == 0.6667 and _level(org, "ci")["measured"] == 3
-    assert org["overall"] == {"mean_share": 0.75, "measured": 3, "repos": 4,
-                              "weakest": {"repo": "grp/sub/proj2", "share": 0.25, "level": None}}
+    assert _level(org, "docs") == {"row": "docs", "measured": 2, "repos": 4, "lowest_level": 1}
+    assert (_level(org, "ci")["measured"], _level(org, "ci")["lowest_level"]) == (3, 0)
+    assert "overall" not in org
     other = units["ownership/grp/other"]
-    assert _level(other, "docs") == {"row": "docs", "mean_share": None, "measured": 0, "repos": 1, "weakest": None}
+    assert _level(other, "docs") == {"row": "docs", "measured": 0, "repos": 1, "lowest_level": None}
     assert [m["id"] for m in data["model"]] == ["org2fa", "docs", "ci"]
     assert all(lv["row"] != "org2fa" for u in units.values() for lv in u["levels"])
 
@@ -84,7 +82,7 @@ def test_repo_cells_explain_the_level() -> None:
     assert (proj3["docs"]["status"], proj3["docs"]["signal"], proj3["docs"]["reason"]) == (
         "unknown", "docs.lines", "unavailable")
     proj4 = repos["grp/proj4"]
-    assert (proj4["status"], proj4["reason"], proj4["mean_share"]) == ("failed", "scan_timeout", None)
+    assert (proj4["status"], proj4["reason"]) == ("failed", "scan_timeout")
     assert {c["reason"] for c in proj4["rows"]} == {"not_scanned"}
     assert repos["grp/proj4"]["web_url"] == "https://gitlab.example.com/grp/proj4"
     assert repos["grp/sub/proj2"]["owners"] == ["@grp/sub/maintainers", "bob@example.com"]
@@ -114,9 +112,6 @@ def test_a_hashed_run_holds_no_names_urls_or_paths() -> None:
     unit_keys = {u["key"] for v in data["views"] for u in v["units"]}
     assert {u["unit"] for r in data["repos"] for u in r["units"]} <= unit_keys  # references still join
     assert {u["parent"] for v in data["views"] for u in v["units"]} - {None} <= unit_keys
-    weakest = {lv["weakest"]["repo"] for v in data["views"] for u in v["units"]
-               for lv in u["levels"] if lv["weakest"]}
-    assert weakest <= {r["key"] for r in data["repos"]}
 
 
 def test_the_same_salt_gives_the_same_bytes_and_another_salt_does_not() -> None:
@@ -182,9 +177,29 @@ def test_every_string_field_is_classified() -> None:
 def test_without_a_maturity_model_units_still_roll_up_counts() -> None:
     trees = build_trees([r["repo"] for r in ROWS], empty_map())
     data = fd.build_fleet_data(STAMP, ROWS, None, trees, web_urls=WEB_URLS)
-    assert data["model"] == [] and all(r["rows"] == [] and r["mean_share"] is None for r in data["repos"])
+    assert data["model"] == [] and all(r["rows"] == [] for r in data["repos"])
     units = _units(data, "ownership")  # unhashed counts-only: the key is the view and id
-    assert units["ownership/grp"]["overall"] == {"mean_share": None, "measured": 0, "repos": 4, "weakest": None}
+    assert (units["ownership/grp"]["repos"], units["ownership/grp"]["levels"]) == (4, [])
+
+
+def _keys(node: object) -> set[str]:
+    if isinstance(node, dict):
+        return set(node) | {k for v in node.values() for k in _keys(v)}
+    if isinstance(node, list):
+        return {k for v in node for k in _keys(v)}
+    return set()
+
+
+@pytest.mark.parametrize("privacy", [fd.Privacy(full=True), fd.Privacy(), fd.Privacy(salt="s")])
+def test_the_roll_up_names_no_average_and_no_weakest_repository(privacy: fd.Privacy) -> None:
+    """#772 option A: no mean share and no repository singled out at any depth; every unit's
+    row roll-up says how many of its repositories were measured, and the lowest level."""
+    data = build(privacy)
+    assert not _keys(data) & {"mean_share", "weakest", "overall", "share"}
+    rolls = [lv for v in data["views"] for u in v["units"] for lv in u["levels"]]
+    assert rolls and all(set(lv) == {"row", "measured", "repos", "lowest_level"} for lv in rolls)
+    assert all(lv["measured"] <= lv["repos"] for lv in rolls)
+    assert all((lv["lowest_level"] is None) == (lv["measured"] == 0) for lv in rolls)
 
 
 def test_a_type_mismatch_reads_as_unknown_with_its_reason() -> None:

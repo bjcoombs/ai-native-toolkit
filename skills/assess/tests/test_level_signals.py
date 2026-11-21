@@ -288,6 +288,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
     # A current run of this single-package capture reports no boundary crossed.
     single = copy.deepcopy(run_context)
     single["structure"]["cross_package_edges"] = 0
+    single["structure"]["front_door_ratio"] = None  # #760: no boundary, no ratio
     assert _row(_run({"toolkit": single}), "layer-2-design")["level"] == 1
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
 
@@ -365,7 +366,8 @@ def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any])
     assert levels["layer-8-agent-ops"] == 1
 
 
-def _ci_repo(root: Path, workflow: str | None, instructions: bool) -> dict[str, Any]:
+def _ci_repo(root: Path, workflow: str | None, instructions: bool,
+             extra: dict[str, str] | None = None) -> dict[str, Any]:
     root.mkdir()
     (root / "Makefile").write_text("test:\n\tpython -m pytest\n", encoding="utf-8")
     if workflow is not None:
@@ -373,17 +375,49 @@ def _ci_repo(root: Path, workflow: str | None, instructions: bool) -> dict[str, 
         (root / ".github" / "workflows" / "ci.yml").write_text(workflow, encoding="utf-8")
     if instructions:
         (root / "CLAUDE.md").write_text("# Guide\n\nRun `make test`.\n", encoding="utf-8")
+    for rel, text in (extra or {}).items():
+        (root / rel).write_text(text, encoding="utf-8")
     return _scans(_commit(root))
 
 
+_UNLOCKED = {"package.json": json.dumps({"name": "x", "dependencies": {"left-pad": "1.3.0"}})}
+
+
 def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) -> None:
-    """Issue #698: a CI test job is level 1 with no instruction file; naming the check is 2."""
+    """Issue #698: a CI test job is level 1 with no instruction file; level 2 is the setup."""
     ci = _CI_WORKFLOW.replace("make check", "make test")
-    bare = _ci_repo(tmp_path / "bare", ci, instructions=False)
-    assert bare["ci_checks"]["test_or_lint_runs"] is True
-    assert _row(_run({"r": bare}), "layer-5-ci")["level"] == 1
+    unlocked = _ci_repo(tmp_path / "unlocked", ci, instructions=True, extra=_UNLOCKED)
+    assert unlocked["ci_checks"]["test_or_lint_runs"] is True
+    assert unlocked["agent_environment"]["pinning"]["unlocked_total"] == 1
+    assert _row(_run({"r": unlocked}), "layer-5-ci")["level"] == 1
     named = _ci_repo(tmp_path / "named", ci, instructions=True)
     assert _row(_run({"r": named}), "layer-5-ci")["level"] == 2
+
+
+def test_layer_five_level_two_does_not_read_the_named_check(tmp_path: Path) -> None:
+    """Issue #786: naming a check is read once, by Layer 0 level 2, never by a Layer 5 level."""
+    layer5 = next(r for r in load_default_levels()["rows"] if r["id"].startswith("layer-5-"))
+    read = {c["signal"] for lv in layer5["levels"] for c in lv["criteria"]}
+    assert not read & {"agent_environment.check.named_total", "agent_environment.layer5_cap.applies"}
+    ci = _CI_WORKFLOW.replace("make check", "make test")
+    unnamed = _ci_repo(tmp_path / "unnamed", ci, instructions=False,
+                       extra={"CLAUDE.md": "# Project\n\nNotes.\n"})
+    assert unnamed["agent_environment"]["check"]["named_total"] == 0
+    levels = _levels(_run({"r": unnamed}))
+    assert levels["layer-0-instructions"] == 1   # the missing named check costs Layer 0 only
+    assert levels["layer-5-ci"] == 2
+
+
+def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -> None:
+    """Issue #786: committed setup does not stand in for a lockfile at Layer 5 level 2."""
+    ci = _CI_WORKFLOW.replace("make check", "make test")
+    setup = _ci_repo(tmp_path / "setup", ci, instructions=True,
+                     extra={**_UNLOCKED, "init.sh": "#!/bin/sh\nnpm install\n"})
+    env = setup["agent_environment"]
+    assert env["setup"]["present"] is True and env["setup_ready"] is True
+    assert env["pinning"]["unlocked_total"] == 1
+    row = _row(_run({"r": setup}), "layer-5-ci")
+    assert row["level"] == 1
 
 
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:
@@ -393,6 +427,20 @@ def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_pa
         scans = _ci_repo(tmp_path / name, workflow, instructions=True)
         assert scans["agent_environment"]["layer5_cap"]["applies"] is False
         assert scans["ci_checks"]["test_or_lint_runs"] is False
+        assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
+
+
+def test_layer_five_is_zero_when_ci_only_names_pytest_or_tox_as_a_value(tmp_path: Path) -> None:
+    """Issue #725: ``needs: - pytest`` and a ``matrix:`` axis ``- tox`` are values, not CI runs."""
+    head = "name: ci\non: [pull_request]\njobs:\n"
+    needs = (head + "  pytest:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+             "  deploy:\n    needs:\n      - pytest\n    runs-on: ubuntu-latest\n"
+             "    steps:\n      - run: echo deploy\n")
+    matrix = (head + "  t:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n"
+              "        tool:\n          - tox\n    steps:\n      - run: echo x\n")
+    for name, workflow in (("needs", needs), ("matrix", matrix)):
+        scans = _ci_repo(tmp_path / name, workflow, instructions=False)
+        assert scans["ci_checks"]["check_commands"] == 0
         assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
 
 

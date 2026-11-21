@@ -130,7 +130,7 @@ class StructureBlock(TypedDict):
     sccs: list[list[str]]
     modularity_q: float | None
     modularity_reason: str | None
-    front_door_ratio: float
+    front_door_ratio: float | None
     cross_package_edges: int
     internal_burrow_edges: list[BurrowEdge]
     breakup_candidates: list[BreakupCandidate]
@@ -156,9 +156,10 @@ class StructureGraphResult:
     modularity_q: float | None = None
     modularity_reason: str | None = None
     # A3: fraction of cross-package inbound edges landing on a front door.
-    front_door_ratio: float = 1.0
-    # A3: the edges front_door_ratio is measured over. 0 means the ratio's 1.0
-    # is vacuous (no package boundary is crossed), not evidence of contracts.
+    # None when no package boundary is crossed (cross_package_edges 0): there
+    # is no contract edge to measure, so the ratio is unknown, not 1.0 (#760).
+    front_door_ratio: float | None = None
+    # A3: the edges front_door_ratio is measured over.
     cross_package_edges: int = 0
     # A3: the burrowing edges (imports that reach into another package's
     # internals instead of its public API).
@@ -181,7 +182,8 @@ class StructureGraphResult:
             "sccs": self.sccs,
             "modularity_q": None if self.modularity_q is None else round(self.modularity_q, 4),
             "modularity_reason": self.modularity_reason,
-            "front_door_ratio": round(self.front_door_ratio, 4),
+            "front_door_ratio": (
+                None if self.front_door_ratio is None else round(self.front_door_ratio, 4)),
             "cross_package_edges": self.cross_package_edges,
             "internal_burrow_edges": self.internal_burrow_edges,
             "breakup_candidates": self.breakup_candidates,
@@ -304,8 +306,9 @@ def compute_front_door_ratio(
     ``front_doors`` (the package's public API, a Python ``__init__``) and a
     **burrow** when it reaches a plain submodule inside that package.
 
-    A vacuous graph (no cross-package edges) is treated as fully contracted
-    (ratio 1.0) -- there are no boundaries being violated.
+    A vacuous graph (no cross-package edges) returns 1.0 -- no boundary is
+    violated -- but that is no evidence of contracts, so ``analyze_structure``
+    reports the ratio as None there (issue #760).
     """
     front, burrow = 0, 0
     burrow_edges: list[BurrowEdge] = []
@@ -327,8 +330,9 @@ def count_cross_package_edges(graph: nx.DiGraph, package_of: Mapping[str, str]) 
     """A3: how many import edges cross a package boundary.
 
     The denominator of ``compute_front_door_ratio``. Zero means that ratio is
-    the vacuous 1.0, so a reader can tell "every boundary import uses the front
-    door" from "no boundary is crossed" (issue #663).
+    the vacuous 1.0, so the result reports it as None: a reader can tell "every
+    boundary import uses the front door" from "no boundary is crossed" (issues
+    #663, #760).
     """
     return sum(1 for a, b in graph.edges() if package_of[a] != package_of[b])
 
@@ -457,10 +461,11 @@ def analyze_structure(
     sccs, q = compute_modularity(graph)
     edgeless = graph.number_of_edges() == 0
 
-    # A3 front-door ratio.
+    # A3 front-door ratio. With no cross-package edge it is unknown (#760).
     front_door_ratio, burrow_edges = compute_front_door_ratio(
         graph, mg.front_doors, mg.package_of,
     )
+    cross_package_edges = count_cross_package_edges(graph, mg.package_of)
 
     return StructureGraphResult(
         available=True,
@@ -470,8 +475,8 @@ def analyze_structure(
         sccs=sccs[:MAX_SCCS],
         modularity_q=None if edgeless else q,
         modularity_reason=NO_IMPORT_EDGES if edgeless else None,
-        front_door_ratio=front_door_ratio,
-        cross_package_edges=count_cross_package_edges(graph, mg.package_of),
+        front_door_ratio=front_door_ratio if cross_package_edges else None,
+        cross_package_edges=cross_package_edges,
         internal_burrow_edges=burrow_edges[:MAX_BURROW_EDGES],
         breakup_candidates=_all_breakup_candidates(graph, mg),
         module_count=graph.number_of_nodes(),

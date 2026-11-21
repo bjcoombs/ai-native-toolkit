@@ -100,6 +100,7 @@ there.
 | `--no-history` | Do not keep this run in the history. |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
 | `--targets FILE` | Targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the targets file format below). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
+| `--first-achievements` | Also credit `first` achievements in [`achievements.json`](#output-achievementsjson) (a unit reaching a level no unit of its view and kind has held on that row in this fleet's history). Off by default (#772), since it compares a unit with its peers. Not part of the run stamp. |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
@@ -156,7 +157,7 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 | `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
 | `active` | `true` when the committer date of the checkout's `HEAD` falls inside the window (`--window`, default `6mo`, counting back from the run's UTC date in whole days, months and years by calendar), read locally from git; `null` when failed. Close to `ghsync --active-since` but not identical: ghsync counts 30-day months from the current time on platform dates, so cutoffs can differ by a few days. |
-| `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. `scans.review_automation.present` is the row's "AI review in CI: yes / no" (#696): an AI review step or review app config in a git-tracked file, with `kinds` saying which (`ci_action`, `ci_component`, `config_file`). A GitHub review action counts only when its workflow runs on pull requests (`pull_request`, `pull_request_target`, `merge_group`); one wired only to `issue_comment` or `issues` is listed with `on_changes: false`. A GitLab include counts as committed: whether its jobs run in merge-request pipelines is not read. |
+| `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. `scans.review_automation.present` is the row's "AI review in CI: yes / no" (#696): an AI review step or review app config in a git-tracked file, with `kinds` saying which (`ci_action`, `ci_component`, `config_file`). A GitHub review action counts only when its workflow runs on pull requests (`pull_request`, `pull_request_target`, `merge_group`); one wired only to `issue_comment` or `issues` is listed with `on_changes: false`. A GitLab include counts as committed: whether its jobs run in merge-request pipelines is not read. Includes inside a template resolved from the root (see GitLab includes below) are matched too, each such match carrying the `depth` it was found at. |
 
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
 characters of its stderr go to `DIR/logs/<repo>.stderr` (the id's segments as
@@ -290,20 +291,20 @@ owners = ["@acme/payments"]  # optional; replaces the CODEOWNERS owners
 
 A mapped repository not in the run is skipped and named on stderr.
 
-**Roll-ups.** Per unit, one entry in `levels` per `team` row: `mean_share`, the mean of
-each measured repository's level as a share of the row's top level (the quadrant's and
-trend lines' unit), `measured` of `repos` ("8 of 12 measured": an unknown or failed
-repository is counted, never read as 0), and `weakest`, the measured repository with the
-lowest share (then key) with its `share` and `level`. `overall` does the same over each
-repository's own mean share. `org` rows read a group's settings, not a repository, so
-they have no unit roll-up; their levels are in `groups.jsonl`.
+**Roll-ups.** Per unit, one entry in `levels` per `team` row: `measured` of `repos`
+("8 of 12 measured": an unknown or failed repository is counted in `repos`, never read
+as 0) and `lowest_level`, the lowest level a measured repository holds on the row
+(`null` when none was measured). Steps (#744) are not yet available, so the lowest row
+level stands in for the lowest Step. The roll-up holds no average and names no
+repository (#772: the no-comparison rule of #740), so `fleet-data.json` version 2 has no
+`mean_share`, `weakest` or `overall`. `org` rows read a group's settings, not a
+repository, so they have no unit roll-up; their levels are in `groups.jsonl`.
 
 **Repositories.** Each has `key` (its id), `status`, `reason`, `active`, `web_url` (the
 `origin` remote as `https://<host>/<path>`, credentials, an ssh port and `.git` dropped; `null`
 for a local remote), `owners` and `owner_count` (the mapping's owners, else the
-CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), `mean_share`,
-and `rows`, one cell per `team` row: `status`, `level`, `top_level` and the criterion
-behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
+CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), and `rows`,
+one cell per `team` row: `status`, `level`, `top_level` and the criterion behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
 next level and its measured value; at the top level both are `null`; an unknown cell
 names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
 `not_scanned` for a failed repository).
@@ -333,7 +334,8 @@ Logic: `lib/fleet_achievements.py` (engine), `lib/fleet_achievements_runs.py` (h
 **Comparable runs.** A history entry is replayed when its `run.json` passes the
 `--compare` rule against this run (plugin major version, maturity-model version, window,
 output mode, scans, path hashing, `--fleet-config`, `--platform`) and it holds a
-`fleet-data.json` at this version. One run per date, dates before this run's. Without
+`fleet-data.json` at version 1 or 2 (version 1 entries carry the old roll-up, which the
+engine does not read). One run per date, dates before this run's. Without
 the history (`--no-history`, `--full`) only this run is read: no achievement, just next
 steps, with `note` saying why.
 
@@ -364,14 +366,15 @@ from a known level to unknown breaks its streak, and from unknown to a level abo
 it; a cell the re-score itself made unknown stays neutral. Under counts-only, credit goes to units and repositories, never to people:
 owners are never read.
 
-**Kinds.** The oldest replayed run is the baseline and earns nothing.
+**Kinds.** The oldest replayed run is the baseline and earns nothing. `first` is off by
+default (#772): it compares a unit with its peers, so it is earned only with
+`--first-achievements`. There is no personal-best kind.
 
 | Kind | Earned when |
 |------|-------------|
 | `level_up` | A row moves cleanly to a higher level. |
-| `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
-| `target_hit` | A row moves cleanly from below a `--targets` target to at or above it: a `level` target reads the row's level; a `share` target reads the unit's mean share of top level on the row over its measured repositories (the `fleet-data.json` row roll-up), so it can be hit while a `min` row's level stays put. |
-| `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up on some row. |
+| `first` | Off by default; on with `--first-achievements`. A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
+| `target_hit` | A row moves cleanly from below a `--targets` target to at or above it: a `level` target reads the row's level; a `share` target reads the unit's mean share of top level on the row over its measured repositories (worked out by the engine from the repository cells), so it can be hit while a `min` row's level stays put. |
 | `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
 
 Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
@@ -639,7 +642,10 @@ remotes) logged in.
   headers, so in practice the 2, 4 and 8 second fallback applies. `--platform-jobs` caps the concurrent reads. One response
   cache per run, in a temporary directory removed when the pass ends, answers a
   repeated request (an auth probe, a bot-account lookup) once; it never lands in
-  `DIR`, the history or a target.
+  `DIR`, the history or a target. The response cache never holds comment or
+  review text on either provider: GitHub pull request reviews and comments, the
+  GitLab merged list and GitLab merge-request notes are read in memory only and
+  never written to disk.
 - **Stamp.** `run.json` records `platform: true` only when the pass ran a
   platform read (`--platform` with `--scans` selecting no platform scan reads
   nothing and stamps `false`); runs with and without the pass
@@ -652,6 +658,10 @@ remotes) logged in.
   large to hold at once, run without `--platform`, or in batches with
   `--from-list`.
 - **Counts-only.** Every platform field is a count, share, flag or duration.
+
+## GitLab includes
+
+Each scan of a ROOT run (and of a `--from-list` run given ROOT) gets `assess_signals.py --ghsync-root ROOT`. The top-level `include:` of a repository's `.gitlab-ci.yml` is then resolved offline (`skills/assess/scripts/lib/ci_includes.py`, #766): `local:` files of the same checkout, `project: <path>` / `file:` / `ref:` files from the clone `ROOT/<path>/<last segment>-main`, and `component: <host>/<project>/<name>@<version>` from `templates/<name>.yml` (or `templates/<name>/template.yml`) of the clone of `<project>`, each nested include in turn to a bounded depth. A pinned `ref:` is read at that ref when the clone holds it; a pin it does not hold (or a CI-variable ref) is `ref_missing`, never read at another version. No `ref:` reads the clone's HEAD (`ref_basis: head`). `scans.ci_checks` then counts the check lines of the resolved files (`included_check_commands`) and lists one record per include item in `includes` (`kind`, `id`, `status`, `ref_basis`, `depth`; no file name or text), with `resolved_includes` and `unresolved_includes`. `test_or_lint_runs` is true when an own or included line runs a check, false when every include resolved and none does, and null while any include is unresolved: a template that is not cloned (`status: not_cloned`), a `template:` or `remote:` include (`not_offline`), a pin the clone does not hold, a glob, or a depth or file-count limit. `scans.review_automation` matches the include entries of resolved files the same way it matches the repository's own. No `gh` or `glab` call is made. With `--delete-after` no root is passed, since a template clone could be deleted before a repository that includes it is scanned, so those includes stay unknown.
 
 ## `--delete-after`
 

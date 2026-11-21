@@ -232,7 +232,7 @@
                   "reason"
                 ]
               },
-              "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files. test_or_lint_runs is true when a CI line runs one, false when none does, and null (unknown) when a CI file pulls jobs from a file this checkout does not hold (a GitLab include, a reusable workflow in another repository); basis says which.",
+              "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which.",
               "properties": {
                 "available": {
                   "type": "boolean"
@@ -252,6 +252,75 @@
                 "included_files": {
                   "type": "integer",
                   "description": "CI files that pull jobs from elsewhere."
+                },
+                "included_check_commands": {
+                  "type": "integer",
+                  "description": "Lines of resolved included files that run a test or lint check."
+                },
+                "resolved_includes": {
+                  "type": "integer",
+                  "description": "Include items whose every file was read."
+                },
+                "unresolved_includes": {
+                  "type": "integer",
+                  "description": "Include items not read (status other than resolved)."
+                },
+                "includes": {
+                  "type": [
+                    "array",
+                    "integer"
+                  ],
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "local",
+                          "project",
+                          "component",
+                          "template",
+                          "remote"
+                        ]
+                      },
+                      "id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "gitlab_project:<path> or gitlab_component:<path>; null for local, template and remote."
+                      },
+                      "status": {
+                        "enum": [
+                          "resolved",
+                          "no_root",
+                          "not_cloned",
+                          "file_missing",
+                          "not_offline",
+                          "glob",
+                          "bad_path",
+                          "depth_limit",
+                          "file_limit",
+                          "unparsed",
+                          "ref_missing"
+                        ],
+                        "description": "resolved, or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
+                      },
+                      "ref_basis": {
+                        "enum": [
+                          "ref",
+                          "head",
+                          "worktree",
+                          null
+                        ],
+                        "description": "How the file was read: at the pinned ref, at the clone's HEAD (no pin), or from the work tree; null when not resolved."
+                      },
+                      "depth": {
+                        "type": "integer",
+                        "description": "Include level: 1 for the repository's own include."
+                      }
+                    }
+                  },
+                  "description": "One record per include item, nested includes after their parent; no file name or text."
                 },
                 "test_or_lint_runs": {
                   "type": [

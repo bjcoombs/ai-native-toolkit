@@ -27,6 +27,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from gitbash import BASH, IS_WINDOWS, base_env, rmtree, write_script
 
 REPO = Path(__file__).resolve().parent.parent
 GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
@@ -184,21 +185,21 @@ class Env:
         self.stub_dir.mkdir()
         for name, body in (("glab", GLAB_STUB), ("gh", GH_STUB)):
             stub = self.stub_dir / name
-            stub.write_text(body)
+            stub.write_text(body, newline="\n")
             stub.chmod(0o755)
         data = tmp_path / "glab-data"
         (data / "ids").mkdir(parents=True)
         for path, gid in GROUPS.items():
-            (data / "ids" / str(gid)).write_text(path)
+            (data / "ids" / str(gid)).write_text(path, newline="\n")
         for endpoint, pages in ENDPOINTS.items():
             key = endpoint.replace("/", "__")
             for n, page in enumerate(pages, start=1):
-                (data / f"{key}.{n}.json").write_text(json.dumps(page))
+                (data / f"{key}.{n}.json").write_text(json.dumps(page), newline="\n")
         self.data = data
         self.glab_log = tmp_path / "glab.log"
         self.gh_log = tmp_path / "gh.log"
         gitconfig = tmp_path / "gitconfig"
-        base = f"file://{self.bare}/"
+        base = f"{self.bare.as_uri()}/"
         gitconfig.write_text(
             "[user]\n\tname = Test\n\temail = test@example.com\n"
             "[init]\n\tdefaultBranch = main\n"
@@ -209,10 +210,12 @@ class Env:
             f"\tinsteadOf = https://{HOST}:8443/\n"
             f"\tinsteadOf = http://{HOST}/\n"
             f"\tinsteadOf = ssh://git@{HOST}/\n"
-            f"\tinsteadOf = git@{HOST}:\n"
+            f"\tinsteadOf = git@{HOST}:\n",
+            newline="\n",
         )
         self.env = {
-            "PATH": f"{self.stub_dir}:{os.environ['PATH']}",
+            **base_env(),
+            "PATH": f"{self.stub_dir}{os.pathsep}{os.environ['PATH']}",
             "HOME": str(tmp_path),
             "XDG_CONFIG_HOME": str(tmp_path / ".config"),
             "GLAB_CONFIG_DIR": str(tmp_path / ".glab"),
@@ -246,7 +249,7 @@ class Env:
         self.git("init", "-q", "--bare", "-b", "main", str(bare), cwd=self.tmp)
         work = self.tmp / "seed" / path
         self.git("clone", "-q", str(bare), str(work), cwd=self.tmp)
-        (work / "README").write_text(f"{path}\n")
+        (work / "README").write_text(f"{path}\n", newline="\n")
         self.git("add", "README", cwd=work)
         self.git("commit", "-q", "-m", "init", cwd=work)
         self.git("push", "-q", "origin", "main", cwd=work)
@@ -275,7 +278,7 @@ class Env:
     def run(
         self, *args: str, env: dict[str, str] | None = None, root: Path | None = None
     ) -> subprocess.CompletedProcess[str]:
-        cmd = ["bash", str(GHSYNC), "--provider", "gitlab", *args]
+        cmd = [BASH, str(GHSYNC), "--provider", "gitlab", *args]
         if root is not None:
             cmd += ["--root", str(root)]
         return subprocess.run(
@@ -317,7 +320,7 @@ def _section(output: str, heading: str) -> list[str]:
 
 
 def _checkouts(root: Path) -> set[str]:
-    return {str(p.parent.parent.relative_to(root)) for p in root.rglob("*-main/.git")}
+    return {p.parent.parent.relative_to(root).as_posix() for p in root.rglob("*-main/.git")}
 
 
 @pytest.fixture
@@ -370,7 +373,7 @@ def test_explicit_missing_root_fails(env: Env) -> None:
 def test_ssh_clone_url_drops_web_port(env: Env, tmp_path: Path) -> None:
     """--host host:8443 keeps the port for HTTPS but not in the scp-style SSH URL."""
     saved = tmp_path / "list.txt"
-    saved.write_text("grp/alpha\n")
+    saved.write_text("grp/alpha\n", newline="\n")
     res = env.run(
         "--host",
         f"{HOST}:8443",
@@ -424,7 +427,7 @@ def test_empty_group_finds_nothing(env: Env) -> None:
 def test_group_outside_membership_is_looked_up_directly(env: Env) -> None:
     """A group the user is not a member of is still reachable by path."""
     groups = Path(env.env["GLAB_DATA"]) / "groups.1.json"
-    groups.write_text("[]")
+    groups.write_text("[]", newline="\n")
     res = env.run("--host", HOST, "--group", "grp/sub", "--porcelain")
     assert res.returncode == 0, res.stderr
     assert res.stdout.splitlines() == SUB_TREE
@@ -473,7 +476,7 @@ def test_uncommitted_change_is_fetched_not_pulled(env: Env) -> None:
     checkout = env.checkout("grp/alpha")
     head = env.head("grp/alpha")
     new = env.advance("grp/alpha")
-    (checkout / "README").write_text("local edit\n")
+    (checkout / "README").write_text("local edit\n", newline="\n")
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
     assert env.head("grp/alpha") == head
@@ -487,7 +490,7 @@ def test_untracked_file_does_not_block_fast_forward(env: Env) -> None:
     assert env.sync().returncode == 0
     checkout = env.checkout("grp/sub/beta")
     new = env.advance("grp/sub/beta")
-    (checkout / "scratch.txt").write_text("untracked\n")
+    (checkout / "scratch.txt").write_text("untracked\n", newline="\n")
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
     assert env.head("grp/sub/beta") == new
@@ -533,14 +536,14 @@ def test_limit_applies_to_discovered_projects(env: Env) -> None:
 
 def test_group_on_second_membership_page_is_synced(env: Env) -> None:
     """A group returned only on page 2 of the groups call is still found."""
-    (env.data / "ids" / "5").write_text("solo")
-    (env.data / "groups.2.json").write_text(json.dumps([{"id": 5, "full_path": "solo", "path": "solo"}]))
+    (env.data / "ids" / "5").write_text("solo", newline="\n")
+    (env.data / "groups.2.json").write_text(json.dumps([{"id": 5, "full_path": "solo", "path": "solo"}]), newline="\n")
     for key, page in (
         ("groups__solo__descendant_groups", []),
         ("groups__solo__projects", [_project("solo/proj")]),
         ("groups__solo__projects__shared", []),
     ):
-        (env.data / f"{key}.1.json").write_text(json.dumps(page))
+        (env.data / f"{key}.1.json").write_text(json.dumps(page), newline="\n")
     env._make_bare("solo/proj")
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
@@ -549,7 +552,7 @@ def test_group_on_second_membership_page_is_synced(env: Env) -> None:
 
 def test_quiet_drops_clone_progress_lines(env: Env) -> None:
     """--quiet suppresses Cloning / Cloned; a failed clone is still named."""
-    shutil.rmtree(env.bare / "grp" / "sub" / "beta.git")
+    rmtree(env.bare / "grp" / "sub" / "beta.git")
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
     assert "*** Cloning" not in res.stdout
@@ -635,7 +638,8 @@ def test_from_list_reproduces_layout_without_api(env: Env) -> None:
         + "\n".join(f"  {ln}\r" if i == 0 else ln for i, ln in enumerate(lines))
         + "\n\n# trailing comment\n"
         + lines[0]
-        + "\n"
+        + "\n",
+        newline="\n",
     )
     env.glab_log.unlink()
     root2 = env.tmp / "root2"
@@ -656,7 +660,7 @@ def test_from_list_reproduces_layout_without_api(env: Env) -> None:
 
 def test_from_list_works_without_glab(env: Env, tmp_path: Path) -> None:
     saved = tmp_path / "list.txt"
-    saved.write_text("grp/alpha\nother/ns/shared\n")
+    saved.write_text("grp/alpha\nother/ns/shared\n", newline="\n")
     res = env.run(
         "--host",
         HOST,
@@ -672,7 +676,7 @@ def test_from_list_works_without_glab(env: Env, tmp_path: Path) -> None:
 
 def test_from_list_respects_limit(env: Env, tmp_path: Path) -> None:
     saved = tmp_path / "list.txt"
-    saved.write_text("\n".join(SYNCED) + "\n")
+    saved.write_text("\n".join(SYNCED) + "\n", newline="\n")
     res = env.run(
         "--host",
         HOST,
@@ -689,7 +693,7 @@ def test_from_list_respects_limit(env: Env, tmp_path: Path) -> None:
 
 def test_from_list_with_scheme_host(env: Env, tmp_path: Path) -> None:
     saved = tmp_path / "list.txt"
-    saved.write_text("grp/sub/beta\n")
+    saved.write_text("grp/sub/beta\n", newline="\n")
     res = env.run(
         "--host", f"https://{HOST}", "--from-list", str(saved), "--quiet", root=env.root
     )
@@ -702,16 +706,16 @@ def test_from_list_skips_reserved_root_entry(env: Env, tmp_path: Path) -> None:
     that entry or in the other checkouts is removed by a later sync."""
     legacy = env.root / ".gh_sync_tmp"
     legacy.mkdir()
-    (legacy / "keep").write_text("left by an older version\n")
+    (legacy / "keep").write_text("left by an older version\n", newline="\n")
     saved = tmp_path / "list.txt"
-    saved.write_text(".gh_sync_tmp/proj\ngrp/alpha\n")
+    saved.write_text(".gh_sync_tmp/proj\ngrp/alpha\n", newline="\n")
     res = env.run("--host", HOST, "--from-list", str(saved), "--quiet", root=env.root)
     assert res.returncode == 0, res.stdout + res.stderr
     assert "skipping unsafe repository path: .gh_sync_tmp/proj" in res.stderr
     assert _checkouts(env.root) == {"grp/alpha"}
     assert not (legacy / "proj").exists()
     sentinel = env.root / "grp" / "alpha" / "alpha-main" / "uncommitted.txt"
-    sentinel.write_text("work in progress\n")
+    sentinel.write_text("work in progress\n", newline="\n")
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
     assert (legacy / "keep").read_text() == "left by an older version\n"
@@ -729,7 +733,8 @@ def test_from_list_skips_unsafe_paths(env: Env, tmp_path: Path) -> None:
         "grp/../../escape\n"
         "/abs/path\n"
         "grp/./alpha\n"
-        "grp/has space\n"
+        "grp/has space\n",
+        newline="\n",
     )
     res = env.run("--host", HOST, "--from-list", str(saved), "--quiet", root=env.root)
     assert res.returncode == 0, res.stdout + res.stderr
@@ -754,6 +759,7 @@ def _path_without_glab(tmp_path: Path) -> str:
     """A PATH holding only the tools the script needs, and no glab."""
     bin_dir = tmp_path / "noglab"
     bin_dir.mkdir(exist_ok=True)
+    extra_dirs: list[str] = []
     for tool in (
         "bash",
         "git",
@@ -781,13 +787,24 @@ def _path_without_glab(tmp_path: Path) -> str:
         "ssh",
     ):
         found = shutil.which(tool)
-        if found and not (bin_dir / tool).exists():
+        if found is None:
+            continue
+        if IS_WINDOWS:
+            # A Git Bash tool cannot be symlinked out of its directory (it
+            # loads msys-2.0.dll from beside it), so its directory goes on
+            # PATH instead, unless that directory also holds a glab.
+            tool_dir = str(Path(found).parent)
+            if tool_dir not in extra_dirs:
+                extra_dirs.append(tool_dir)
+        elif not (bin_dir / tool).exists():
             (bin_dir / tool).symlink_to(found)
     gh = bin_dir / "gh"
     if not gh.exists():
-        gh.write_text(GH_STUB)
-        gh.chmod(0o755)
-    return str(bin_dir)
+        write_script(gh, GH_STUB)
+    glab = shutil.which("glab")
+    if glab is not None and str(Path(glab).parent) in extra_dirs:
+        pytest.skip("glab shares a directory with a tool the script needs")
+    return os.pathsep.join([str(bin_dir), *extra_dirs])
 
 
 def test_missing_glab_fails_fast(env: Env, tmp_path: Path) -> None:
@@ -844,7 +861,7 @@ def test_failed_membership_call_fails(env: Env) -> None:
 )
 def test_rejected_flag_combinations(env: Env, args: list[str], needle: str) -> None:
     res = subprocess.run(
-        ["bash", str(GHSYNC), *args, "--list-repos"],
+        [BASH, str(GHSYNC), *args, "--list-repos"],
         capture_output=True,
         text=True,
         env=env.env,
@@ -859,7 +876,7 @@ def test_rejected_flag_combinations(env: Env, args: list[str], needle: str) -> N
 
 def test_help_documents_gitlab_flags(env: Env) -> None:
     res = subprocess.run(
-        ["bash", str(GHSYNC), "--help"],
+        [BASH, str(GHSYNC), "--help"],
         capture_output=True,
         text=True,
         env=env.env,
@@ -933,7 +950,7 @@ def test_dot_leading_project_is_synced(env: Env) -> None:
 )
 def test_path_segment_rules(env: Env, tmp_path: Path, path: str, kept: bool) -> None:
     saved = tmp_path / "list.txt"
-    saved.write_text(f"{path}\n")
+    saved.write_text(f"{path}\n", newline="\n")
     res = env.run("--host", HOST, "--from-list", str(saved), "--porcelain")
     assert res.returncode == 0, res.stderr
     assert res.stdout.splitlines() == ([path] if kept else [])
@@ -1008,7 +1025,7 @@ def test_default_root_strips_port(env: Env) -> None:
 
 def _member_of_sub_only(env: Env) -> None:
     groups = Path(env.env["GLAB_DATA"]) / "groups.1.json"
-    groups.write_text(json.dumps([_group("grp/sub")]))
+    groups.write_text(json.dumps([_group("grp/sub")]), newline="\n")
 
 
 def test_group_above_membership_covers_accessible_projects(env: Env) -> None:

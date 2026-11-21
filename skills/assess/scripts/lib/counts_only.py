@@ -7,7 +7,8 @@ scan of someone else's repository is meant to leave the machine it ran on,
 
 - every number, boolean and null is kept;
 - a string is kept only when ``lib.counts_only_rules`` classifies its field
-  as a path or a short token (kind, grade, band, date, version);
+  as a path, a short token (kind, grade, band, date, version) or a reason
+  code (the code of an unavailable block's reason, never its sentence);
 - every other string is dropped, and a dropped list of strings becomes its
   length, so "6 signals" survives where the six sentences do not.
 
@@ -42,6 +43,8 @@ from lib.counts_only_rules import (
     KEY_RE,
     PATH,
     PATH_KEYED_MAPS,
+    REASON,
+    REASON_SENTENCE_CODES,
     RULES,
     TOKEN,
     TOKEN_RE,
@@ -49,6 +52,7 @@ from lib.counts_only_rules import (
     classify,
 )
 from lib.counts_only_schema import typed_field_names
+from lib.import_graph import STRUCTURE_REASON_CODES
 from lib.run_context_types import JsonDict
 
 # The longest path kept; a longer "path" is more likely prose than a file.
@@ -145,6 +149,8 @@ class _Filter:
             return self.identifier(value)
         if cls == TOKEN and TOKEN_RE.match(value):
             return value
+        if cls == REASON:
+            return reason_token(value)
         return None
 
     def value(self, pattern: str, value: Any) -> tuple[bool, Any]:
@@ -258,6 +264,7 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
 
 
 _CLASS_LABEL = {PATH: "path (hashed when hashing is on)", TOKEN: "token",
+                REASON: "reason code",
                 ID: "external id (hashed when hashing is on)", DROP: "dropped"}
 
 
@@ -303,6 +310,10 @@ def render_doc() -> str:
         "(hashed when hashing is on). A field named `path`, `file`,",
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
+        "A field kept as a reason code keeps only the code of a `code: sentence`",
+        "reason when it is a known structure code (`no_import_graph_rust`),",
+        "or the code a known sentence maps to (`no_grimp`), else `unavailable`,",
+        "so a path or name before the colon is never kept; an empty reason is dropped.",
         "",
         "Not filtered: the wiki pages, hotspot pages, badge and report the run",
         "also writes stay in the target repository's `.assess/` directory and",
@@ -406,6 +417,20 @@ def reason_code(reason: object) -> str:
     """
     code = str(reason).split(":", 1)[0].strip() if reason is not None else ""
     return code if TOKEN_RE.match(code) else "unavailable"
+
+
+def reason_token(reason: str) -> str | None:
+    """A ``REASON`` field's code: the leading code, a known sentence's code, or
+    ``"unavailable"``; None (dropped) for an empty reason (#764). A leading
+    code is kept only when ``STRUCTURE_REASON_CODES`` lists it, so a path or a
+    name before the colon never leaks."""
+    if not reason.strip():
+        return None
+    code = reason.split(":", 1)[0].strip()
+    if code in STRUCTURE_REASON_CODES:
+        return code
+    return next((c for needle, c in REASON_SENTENCE_CODES if needle in reason),
+                "unavailable")
 
 
 def counts_only_scans(

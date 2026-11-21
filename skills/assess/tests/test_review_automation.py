@@ -98,6 +98,9 @@ def test_step_uses_ignores_uses_nested_under_with() -> None:
     ("on: {issue_comment: {types: [created]}}\n", {"issue_comment"}),
     ("on:\n  - push\n  - merge_group\n", {"push", "merge_group"}),
     ("'on':\n  issues:\n    types: [opened]\n  issue_comment:\n", {"issues", "issue_comment"}),
+    # YAML 1.1 (PyYAML) round-trips the bare `on` key as `true` (#761 review, #766).
+    ("true:\n  issue_comment:\n    types: [created]\n", {"issue_comment"}),
+    ("true: [pull_request]\n", {"pull_request"}),
     ("name: x\n", None),
 ])
 def test_workflow_events(on: str, events: set[str] | None) -> None:
@@ -115,6 +118,15 @@ def test_a_mention_responder_is_listed_but_not_credited(tmp_path: Path) -> None:
     _git(tmp_path, ".")
     block = scan_review_automation(tmp_path)
     assert block["present"] is False and block["kinds"] == []
+    assert [(m["reviewer"], m["on_changes"]) for m in block["matches"]] == [("claude-code", False)]
+
+
+def test_a_yaml_true_key_mention_responder_gets_no_credit(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/review.yml",
+           "name: review\n" + _claude_workflow("true:\n  issue_comment:\n    types: [created]\n"))
+    _git(tmp_path, ".")
+    block = scan_review_automation(tmp_path)
+    assert block["present"] is False
     assert [(m["reviewer"], m["on_changes"]) for m in block["matches"]] == [("claude-code", False)]
 
 

@@ -18,8 +18,9 @@ slugs only, member repositories named only with ``--name-agent-clusters``.
 (``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
 units, web URL and per-row level, value and reason. ``<out>/achievements.json``
 (``lib/fleet_achievements.py``, schema ``skills/fleet/references/achievements.schema.json``)
-replays the comparable runs in the history and credits each unit's level-ups, firsts,
-streaks, personal bests and ``--targets`` hit, with each unit's nearest level-up; the
+replays the comparable runs in the history and credits each unit's level-ups, streaks
+and ``--targets`` hit (firsts only with ``--first-achievements``), with each unit's
+nearest level-up; the
 report opens with them ("What changed and who earned it", ``lib/fleet_credit.py``).
 
 Target repositories are never written to. With ``--delete-after`` a scanned
@@ -50,6 +51,14 @@ never changes a row's status; a failed read is an unavailable block. ``run.json`
 records ``platform`` (true only when a platform read ran: ``--scans`` selecting no
 platform scan stamps false), and runs with and without it do not compare. With
 ``--delete-after`` a clone is deleted only after its platform read.
+
+GitLab includes (#766): every scan of a ROOT run gets ``--ghsync-root ROOT``, so a
+repository's ``include: project:`` / ``component:`` files are read from the clones
+in the same root (``lib/ci_includes.py``) and ``ci_checks`` and ``review_automation``
+see the jobs in shared templates; a template that is not cloned stays unknown.
+A ``--from-list`` run passes ROOT when one is given. With ``--delete-after`` no root
+is passed (a template clone could be deleted before a repository including it is
+scanned), so those includes stay unknown.
 
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
@@ -295,6 +304,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "the report shows the distance to each. Needs --levels; not part of the run stamp.",
     )
     parser.add_argument(
+        "--first-achievements", action="store_true",
+        help=f"Also credit 'first' achievements in OUT/{ACHIEVEMENTS_FILE}: a unit reaching a level no "
+             "unit of its kind has held on that row in this fleet's history. Off by default, since it "
+             "compares a unit with its peers. Not part of the run stamp.",
+    )
+    parser.add_argument(
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
@@ -343,6 +358,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         if problem is not None:
             parser.error(problem)
     return args
+
+
+def include_root(args: argparse.Namespace) -> Path | None:
+    """The root GitLab includes resolve against (#766): ROOT, unless --delete-after, where a
+    template clone could be deleted before a repository that includes it is scanned, so a
+    row would depend on scan order. Then includes of other projects stay unknown."""
+    if args.root is None or args.delete_after:
+        return None
+    return Path(args.root).resolve()
 
 
 def _targets(args: argparse.Namespace) -> list[Target]:
@@ -482,7 +506,7 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
 
 def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_model: MaturityModel | None,
                   org_dir: Path | None, entry: Path | None, repos: frozenset[str], specs: list[TargetSpec],
-                  privacy_key: Callable[[str], str]) -> str | None:
+                  privacy_key: Callable[[str], str], firsts: bool = False) -> str | None:
     """``OUT/achievements.json`` (lib/fleet_achievements.py) and the report's credit section;
     None when not written. Never raises: achievements never fail a completed run."""
     try:
@@ -491,7 +515,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
         else:
             earlier, note = earlier_runs(org_dir, stamp, repos, model=maturity_model, key=privacy_key), None
         doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
-                                 targets=resolve(specs, privacy_key), note=note)
+                                 targets=resolve(specs, privacy_key), note=note, firsts=firsts)
         write_achievements(out_dir, doc)
         section = credit_section(doc, maturity_model)
     except Exception as e:  # noqa: BLE001 - achievements never fail a completed run
@@ -647,6 +671,7 @@ def main(argv: list[str] | None = None) -> int:
         hash_salt=hash_salt,
         window=args.window, scans=args.scans, timeout=args.timeout,
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
+        ghsync_root=include_root(args),
     )
     try:  # before any scan, so --delete-after never removes a clone whose results cannot land
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -693,7 +718,7 @@ def main(argv: list[str] | None = None) -> int:
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
     credit = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
                            frozenset(row["repo"] for row in rows), level_targets,
-                           privacy_for(args.full, hash_salt).key)
+                           privacy_for(args.full, hash_salt).key, args.first_achievements)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
               credit=credit)
