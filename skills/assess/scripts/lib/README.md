@@ -2207,7 +2207,7 @@ which each reader returns as its own block. `BotClassifier` (moved from
 `[bot]` login is a bot, any other login is probed once with `gh api
 users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
 person, anything else unknown. The value holds logins and text in memory only and
-never reaches a block. Tests: `tests/test_delivery.py`,
+never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an app author, so the author compares equal to the same app as a commenter. Tests: `tests/test_delivery.py`,
 `tests/test_platform_argv_contract.py`.
 
 **`delivery.py`**

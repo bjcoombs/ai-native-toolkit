@@ -158,6 +158,15 @@ def test_pinned_agent_apps_and_config_rules_are_ai_review():
     assert ai_reviewed(inhouse, StubBots(), configured) is True
 
 
+def test_an_agent_commenting_on_its_own_pull_request_is_not_ai_review():
+    # gh names an app author "app/<name>" and the same app as a commenter "<name>".
+    pr = _pr(comments=(("claude", "2026-11-01T01:00:00Z"),))
+    pr["author"] = {"login": "app/claude", "is_bot": True}
+    assert ai_reviewed(pr, StubBots(), scan_matcher()) is False
+    pr["reviews"] = [{"author": {"login": "coderabbitai"}, "submittedAt": "2026-11-01T02:00:00Z"}]
+    assert ai_reviewed(pr, StubBots(), scan_matcher()) is True
+
+
 def test_an_ai_login_of_unknown_type_withholds_the_ai_share():
     pr = _pr(comments=(("claude", "2026-11-01T01:00:00Z"),))
     block = scan_delivery(sample([pr], StubBots(frozenset({"claude"}))), REVIEW)

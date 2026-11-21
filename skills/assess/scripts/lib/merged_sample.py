@@ -78,11 +78,15 @@ Provider = Literal["github", "gitlab"]
 
 
 def login(actor: Any) -> str | None:
-    """A GitHub actor's ``login``, lower-cased; None when absent."""
+    """A GitHub actor's ``login``, lower-cased; None when absent.
+
+    ``gh`` names a GitHub App that authored a pull request ``app/<name>`` and the
+    same account as a commenter or reviewer ``<name>``; the prefix is dropped so
+    the two compare equal."""
     if isinstance(actor, dict):
         value = actor.get("login")
         if isinstance(value, str) and value:
-            return value.lower()
+            return value.lower().removeprefix("app/") or None
     return None
 
 

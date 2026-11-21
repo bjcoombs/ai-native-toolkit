@@ -34,7 +34,8 @@ could not be learned comes before the first known human on any change, the
 three first-comment figures are None: the answer depends on that account.
 
 AI review (GitHub). A change counts when a review or comment comes from an AI
-reviewer: an account an ``[[ai_usage.agent_identities]]`` config rule matches by
+reviewer other than the change's author (an agent commenting on its own pull
+request is not review): an account an ``[[ai_usage.agent_identities]]`` config rule matches by
 username (the #695 list; ``[bot]`` is tried as well, since ``gh pr list`` drops
 it), or a bot account (``BotClassifier`` says so) whose login is in
 ``AI_REVIEWERS`` or matches a pinned ``agent_identity.AGENT_RULES`` entry with
@@ -160,9 +161,10 @@ def ai_reviewed(pr: dict[str, Any], bots: BotClassifier, matcher: AuthorMatcher)
     """True on an AI reviewer's review or comment, False on none, None when an
     account of unknown type decides."""
     unknown = False
+    author = login(pr.get("author"))
     for _, actor in _events(pr):
         name = login(actor)
-        if name is None:
+        if name is None or name == author:
             continue
         if _configured(matcher, name):
             return True
