@@ -367,3 +367,21 @@ def test_report_drops_the_unknown_rule_while_rescored_runs_are_replayed(tmp_path
     section = credit_section(doc, V2)
     assert "An unknown level never earns or loses anything." not in section
     assert "starts its streak again" in section and "### Recount" not in section
+
+
+def test_a_signal_absent_from_stored_scans_is_rule_caused_even_when_already_unknown(tmp_path: Path) -> None:
+    # grp/c's docs block is unavailable: unknown on docs.lines under v1; v4 reads docs.coverage,
+    # which no stored scan holds, so the re-scored unknown is the rules' doing
+    v4 = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-4"')
+                .replace('{ signal = "docs.lines", op = "gt", value = 0 }',
+                         '{ signal = "docs.coverage", op = "gt", value = 0 }'))
+    spec = {**BASE, "grp/c": (None, None, True)}
+    stored = _data(DATES[0], spec, V1)
+    again = fr.rescore(stored, _rows(spec), v4, KEY)
+    assert again is not None
+    caused = fr.rule_unknowns(stored, again)
+    assert ("grp/c", "docs") in caused
+    assert fa.unknown_move({"grp/c": {"docs": _cell(None)}}, {"grp/c": {"docs": _cell(1)}}, "grp/c", "docs",
+                           caused) is None
+    # still unknown on the same signal: the repository's own unknown, not the rules'
+    assert ("grp/c", "docs") not in fr.rule_unknowns(stored, fr.rescore(stored, _rows(spec), SAME, KEY) or stored)

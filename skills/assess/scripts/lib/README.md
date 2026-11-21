@@ -1124,7 +1124,7 @@ function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783
 applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
 stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
 `now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
-`rule_unknowns` names the cells the re-score made unknown, which the replay keeps neutral
+`rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
 (`fleet_achievements.unknown_move`). Tests: `tests/test_fleet_rescore.py`.
 
 **`fleet_achievements_schema.py`**

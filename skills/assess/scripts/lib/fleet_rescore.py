@@ -227,9 +227,10 @@ def recount(stored: FleetData, rescored: FleetData, model: MaturityModel, run: s
 
 
 def rule_unknowns(stored: FleetData, rescored: FleetData) -> frozenset[tuple[str, str]]:
-    """``(repository key, row)`` cells the re-score made unknown: known when stored, or a row new to
-    the model (no stored cell), so the rules caused it."""
+    """``(repository key, row)`` cells the re-score made unknown, so the rules caused it: the stored
+    cell was known, the row is new to the model (no stored cell), or the stored cell was unknown
+    on another signal (the new rules read a signal the stored scans may not hold)."""
     before = {(repo["key"], c["row"]): c for repo in stored["repos"] for c in repo["rows"]}
     return frozenset((repo["key"], c["row"]) for repo in rescored["repos"] for c in repo["rows"]
                      if _level(c) is None and ((old := before.get((repo["key"], c["row"]))) is None
-                                               or _level(old) is not None))
+                                               or _level(old) is not None or old["signal"] != c["signal"]))
