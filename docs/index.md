@@ -43,6 +43,8 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 
 The deterministic core's per-module reference is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
+The [scoring model](../skills/assess/references/scoring-model.md) is the current, decided state of how `/assess` and `/fleet` will score a repository: truth tags, Steps and their gates, and the "N of M measured" headline. It is the page to read before changing the maturity model.
+
 The hotspot score's formula, and why a co-change breadth term was tested and left out, is recorded in the [co-change experiment note](../skills/assess/references/hotspot-cochange-experiment.md).
 
 ## User-invoked skills
