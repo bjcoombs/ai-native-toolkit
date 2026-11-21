@@ -265,13 +265,13 @@
           "level": 1,
           "criteria": [
             {
-              "key": "layer-4-architecture.1:structure_drift.tier_0.matched_patterns",
-              "signal": "structure_drift.tier_0.matched_patterns",
+              "key": "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns",
+              "signal": "structure_drift.tier_0.boundary_patterns",
               "op": "gt",
               "value": 0,
-              "text": "Ownership-map patterns matching a tracked file: is above 0",
-              "title": "A boundary or ownership map matches the code",
-              "fix": "Commit a CODEOWNERS or ARCHITECTURE.md whose patterns name real paths.",
+              "text": "Ownership-map patterns naming a module path: is above 0",
+              "title": "A boundary or ownership map names a module path",
+              "fix": "Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths.",
               "input_class": "config_text",
               "grade": "config_only",
               "counts": false
@@ -1517,6 +1517,7 @@
         "written": true,
         "strings_kept": {
           "promissory_markers.reason": "drop",
+          "promissory_markers.stale_by_file.{}.families": "drop",
           "promissory_markers.top_offenders.commit": "drop",
           "promissory_markers.top_offenders.family": "token",
           "promissory_markers.top_offenders.text": "drop"
@@ -1582,7 +1583,7 @@
           "layer-4-architecture"
         ],
         "conditions": [
-          "layer-4-architecture.1:structure_drift.tier_0.matched_patterns"
+          "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns"
         ],
         "findings": [
           "hidden_coupling"
@@ -1591,7 +1592,7 @@
       "unknown_reasons": [],
       "evidence": [
         {
-          "signal": "structure_drift.tier_0.matched_patterns",
+          "signal": "structure_drift.tier_0.boundary_patterns",
           "input_class": "config_text",
           "grade": "config_only"
         }
@@ -3469,8 +3470,8 @@
       "null_means": ""
     },
     {
-      "path": "structure_drift.tier_0.matched_patterns",
-      "title": "Ownership-map patterns matching a tracked file",
+      "path": "structure_drift.tier_0.boundary_patterns",
+      "title": "Ownership-map patterns naming a module path",
       "type": "number",
       "collector": "core.structure_drift_block",
       "input_class": "config_text",

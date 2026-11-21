@@ -76,7 +76,7 @@ Row `layer-4-architecture`, team scope, aggregated by `min`.
 
 | Condition | Criterion | Grade | Counts | Next step |
 |---|---|---|---|---|
-| `layer-4-architecture.1` A boundary or ownership map matches the code | Ownership-map patterns matching a tracked file: is above 0 (`structure_drift.tier_0.matched_patterns gt 0`) | `config_only` | no, listed | Commit a CODEOWNERS or ARCHITECTURE.md whose patterns name real paths. |
+| `layer-4-architecture.1` A boundary or ownership map names a module path | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
 | `layer-4-architecture.2` 95% of files are 500 lines or fewer | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | Split the largest files along their natural seams. |
 
 ### Layer 5: CI and the agent's local check
@@ -374,7 +374,7 @@ The instruction-file grade republished as a block, so a maturity model can read 
 - Collector: `core.promissory_markers`, reading `promissory`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `promissory_markers.reason` drop, `promissory_markers.top_offenders.commit` drop, `promissory_markers.top_offenders.family` token, `promissory_markers.top_offenders.text` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `promissory_markers.reason` drop, `promissory_markers.stale_by_file.{}.families` drop, `promissory_markers.top_offenders.commit` drop, `promissory_markers.top_offenders.family` token, `promissory_markers.top_offenders.text` drop.
 - Used by: row `layer-3-linters`.
 - Evidence: `promissory_markers.families.suppression.total` head_text (declared), `promissory_markers.families.suppression.stale` git_history (measured), `promissory_markers.aging_reliable` git_history (measured).
 - Not measured when: it cannot read its input; the block says why.
@@ -386,7 +386,7 @@ The instruction-file grade republished as a block, so a maturity model can read 
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `structure_drift.tier_0.empty_ownership_patterns.declared_in` drop, `structure_drift.tier_0.empty_ownership_patterns.owners` drop, `structure_drift.tier_0.empty_ownership_patterns.pattern` drop, `structure_drift.tier_1.static_lens_reason` token.
 - Used by: row `layer-4-architecture`, finding `hidden_coupling`.
-- Evidence: `structure_drift.tier_0.matched_patterns` config_text (config_only).
+- Evidence: `structure_drift.tier_0.boundary_patterns` config_text (config_only).
 - Not measured when: it cannot read its input; the block says why.
 
 ### `observability`: Liveness blocks: observability
