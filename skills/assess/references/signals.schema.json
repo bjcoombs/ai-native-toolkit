@@ -92,6 +92,7 @@
           "coverage_gate",
           "coverage_report",
           "dead_code",
+          "delivery",
           "derived_findings",
           "diff",
           "doc_claims",
