@@ -328,6 +328,12 @@ _WORDING: dict[str, Wording] = {
         "Run mutation testing against the test suite.",
         "A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a "
         "run of it completes."),
+    "review_evidence.present": _flag(
+        "Commit an AI review step to CI (a workflow step running `anthropics/claude-code-action`, "
+        "a GitLab AI review component, or an AI review app's config file such as "
+        "`.coderabbit.yaml`), or have merged changes reviewed by someone other than the author.",
+        "A tracked CI file or review config runs an AI review on each change, or the merged "
+        "changes show a review by a second account."),
     "review_reality.reviewed_share": _reviewed,
     "review_reality.approved_share": _approved,
     "agent_ops.summary.permissions_encoded": _flag(
@@ -372,6 +378,8 @@ _MEASURE_HINTS = {
                      "doc describes a part of the code of its own.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
                       "calls, so this is not measured there.",
+    "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
+                       "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
                  "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
                  "`include:` or component, a reusable workflow from another repository): the "

@@ -49,7 +49,7 @@ from lib.fleet import (
     run_signals,
 )
 from lib.run_context_types import JsonDict
-from lib.signals import PLATFORM_SCANS
+from lib.signals import PLATFORM_SCANS, with_companions
 
 DEFAULT_PLATFORM_JOBS = 4
 DEFAULT_PLATFORM_TIMEOUT = 300
@@ -62,8 +62,10 @@ _TOKENS = {SCAN_TIMEOUT: "platform_timeout", SCAN_ERROR: "platform_error",
 
 
 def platform_scans(scans: Sequence[str] | None) -> list[str]:
-    """``PLATFORM_SCANS``, restricted to ``scans`` (the ``--scans`` selection) when given."""
-    return [name for name in PLATFORM_SCANS if scans is None or name in scans]
+    """``PLATFORM_SCANS``, restricted to ``scans`` (the ``--scans`` selection, with its
+    ``signals.COMPANION_SCANS``) when given."""
+    wanted = None if scans is None else set(with_companions(scans))
+    return [name for name in PLATFORM_SCANS if wanted is None or name in wanted]
 
 
 def failure_reason(token: str) -> str:
@@ -79,10 +81,22 @@ def failed_blocks(names: Sequence[str], token: str, counts_only: bool) -> dict[s
 
 
 def join(row: FleetRow, blocks: dict[str, JsonDict]) -> FleetRow:
-    """``row`` with ``blocks`` in its ``scans``; ``status`` and ``reason`` are never touched."""
+    """``row`` with ``blocks`` in its ``scans``; ``status`` and ``reason`` are never touched.
+
+    A failed platform block (``platform_<token>``) never replaces an offline block that is
+    available: ``review_evidence`` credits an AI review step offline (#696), and a slow
+    host must not take that credit away.
+    """
     if row["status"] != STATUS_OK or row["scans"] is None:
         return row
-    return {**row, "scans": {**row["scans"], **blocks}}
+    offline = row["scans"]
+    kept = {name: block for name, block in blocks.items()
+            if not (_platform_failure(block) and offline.get(name, {}).get("available") is True)}
+    return {**row, "scans": {**offline, **kept}}
+
+
+def _platform_failure(block: JsonDict) -> bool:
+    return block.get("available") is False and reason_code(block.get("reason")).startswith("platform_")
 
 
 def _blocks(document: JsonDict | str, names: Sequence[str], counts_only: bool) -> dict[str, JsonDict]:

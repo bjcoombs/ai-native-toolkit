@@ -36,6 +36,7 @@ from lib.fleet_doc_freshness import (  # noqa: E402
 )
 from lib.fleet_stamp import FleetStamp  # noqa: E402
 from lib.history_window import WINDOW_PATTERN  # noqa: E402
+from lib.review_automation import KINDS  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 from lib.signals_schema import type_schema  # noqa: E402
 
@@ -56,6 +57,16 @@ def build_schema() -> JsonDict:
     props = schema["properties"]
     props["status"] = {"enum": [STATUS_OK, STATUS_FAILED]}
     props["reason"] = {"anyOf": [{"type": "string", "pattern": REASON_PATTERN}, {"type": "null"}]}
+    # The repository's "AI review in CI: yes / no" (#696), described where a reader looks first.
+    scans = next(branch for branch in props["scans"]["anyOf"] if branch.get("type") == "object")
+    scans["properties"] = {"review_automation": {
+        "type": "object",
+        "description": ("AI review in CI (lib/review_automation.py): present is true when a "
+                        "git-tracked CI step, GitLab component or include, or AI review app config "
+                        "runs an AI review; kinds names which (ci_action, ci_component, config_file)."),
+        "properties": {"present": {"type": "boolean"},
+                       "kinds": {"type": "array", "items": {"enum": list(KINDS)}}},
+    }}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,

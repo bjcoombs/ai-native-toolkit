@@ -363,6 +363,118 @@ def _job_uses(text: str) -> list[tuple[int, str]]:
     return rows
 
 
+_STEP_USES = re.compile(r"""^(?:-\s+)?(?:uses|"uses"|'uses')\s*:(.*)$""")
+_STEPS_KEY = re.compile(r"""^(?:steps|"steps"|'steps')\s*:\s*$""")
+_BLOCK_SCALAR = re.compile(r""":\s*[|>][-+0-9]*\s*$""")
+_ACTION_REF = re.compile(r"""^([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)(?:/[^\s"'#@]*)?(?:@[^\s"'#]+)?$""")
+
+
+def step_uses(text: str) -> list[tuple[int, str]]:
+    """(line, value) for each step-level ``uses:`` in a GitHub workflow (#696).
+
+    A step's ``- uses: owner/repo@ref`` (or ``uses:`` under a step's ``- name:``)
+    inside a job's ``steps:`` list runs an action. Job-level ``uses:`` (a
+    reusable workflow, ``_job_uses``) is not a step, and the body of a block
+    scalar (``run: |``) is skipped, so a script that prints ``uses:`` runs nothing.
+    Only a step's own key counts: ``uses:`` on the step's ``- `` line or at its key
+    column, never one nested deeper (under ``with:``).
+    """
+    rows: list[tuple[int, str]] = []
+    steps_col: int | None = None
+    scalar_col: int | None = None
+    dash_col: int | None = None  # the column of the steps list's "- "
+    step_key_col: int | None = None  # the current step mapping's key column
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        content = line.lstrip()
+        col = len(line) - len(content)
+        if scalar_col is not None:
+            if col > scalar_col:
+                continue
+            scalar_col = None
+        if steps_col is not None and col <= steps_col and not content.startswith("-"):
+            steps_col = None
+        if steps_col is not None and col < steps_col:
+            steps_col = None
+        key = content[1:].lstrip() if content.startswith("-") else content
+        key_col = col + len(content) - len(key)
+        if _BLOCK_SCALAR.search(key):
+            scalar_col = key_col
+        if _STEPS_KEY.match(key):
+            steps_col, dash_col, step_key_col = col, None, None
+            continue
+        if steps_col is None or col < steps_col:
+            continue
+        own_key = False
+        if content.startswith("-") and (dash_col is None or col == dash_col):
+            dash_col, step_key_col, own_key = col, key_col, True
+        elif not content.startswith("-") and col == step_key_col:
+            own_key = True
+        match = _STEP_USES.match(key) if own_key else None
+        if match and (value := _unquote(match.group(1))):
+            rows.append((number, value))
+    return rows
+
+
+_TOP_LEVEL_ON = re.compile(r"""^(?:on|"on"|'on')\s*:(.*)$""")
+_EVENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _event_items(value: str) -> list[str]:
+    value = value.strip()
+    if value.startswith(("[", "{")):
+        value = value.strip("[]{}")
+        items = [item.split(":", 1)[0] for item in value.split(",")]
+    else:
+        items = [value]
+    return [_unquote(item) for item in items if _unquote(item)]
+
+
+def workflow_events(text: str) -> frozenset[str] | None:
+    """The events a GitHub workflow's top-level ``on:`` names, or None when it has none
+    this line reader can read (#696): ``on: push``, ``on: [push, pull_request]``,
+    ``on: {pull_request: ...}``, a block list or a block mapping of events."""
+    events: list[str] = []
+    inside = False
+    key_col: int | None = None
+    for raw in text.splitlines():
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            if inside:
+                break
+            match = _TOP_LEVEL_ON.match(line)
+            if match:
+                inside = True
+                events += _event_items(match.group(1)) if match.group(1).strip() else []
+            continue
+        if not inside:
+            continue
+        content = line.lstrip()
+        col = len(line) - len(content)
+        if content.startswith("-"):
+            events += _event_items(content[1:])
+            continue
+        key_col = col if key_col is None else key_col
+        if col == key_col:
+            events.append(_unquote(content.split(":", 1)[0]))
+    names = frozenset(e for e in events if _EVENT_NAME.match(e))
+    return names or None
+
+
+def action_repo(value: str) -> str | None:
+    """``owner/repo[/path]@ref`` -> ``owner/repo`` lowercased; None for a local
+    (``./``) or ``docker://`` action, or a value that names no repository."""
+    value = _unquote(value)
+    if value.startswith(("./", "docker://")):
+        return None
+    match = _ACTION_REF.match(value)
+    return match.group(1).lower() if match else None
+
+
 def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInclude]:
     """Job-level ``uses: owner/repo/.github/workflows/<file>@ref`` references."""
     entries: list[CiInclude] = []

@@ -165,7 +165,12 @@ constant each.
 # human_static_agree_count) are null when set: an import graph that maps no
 # module to a file (a Go graph) has no file-pair static lens. The co-change
 # counts are unchanged. Readers treat a null count as unknown, never 0.
-ARTIFACT_SCHEMA_VERSION = "1.25.0"
+# 1.26.0: run-context.json gains review_automation and review_evidence (issue
+# #696): AI review committed in CI (present, kinds, matches with kind, rule,
+# reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
+# (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
+# and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.26.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

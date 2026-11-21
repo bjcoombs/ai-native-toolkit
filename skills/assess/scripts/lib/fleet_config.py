@@ -150,9 +150,10 @@ SECTION_KEYS: Mapping[str, SectionKeys] = {
                                        frozenset({"pattern"})),
         "token_users_as_agents": boolean,
     },
-    "review": {
+    "review": {  # #696, #716
         "ai_review_markers": string_list,  # #716
-    },  # #696
+        "ai_review_components": string_list,  # #696
+    },
     "platform": {"jobs": positive_int, "timeout": positive_int},  # #714
 }
 
@@ -182,9 +183,12 @@ class AiUsageSection(TypedDict, total=False):
 class ReviewSection(TypedDict, total=False):
     """``[review]``: AI review settings (#696, #716). ``ai_review_markers``: strings an
     AI reviewer prints in its GitLab merge-request notes, matched as case-insensitive
-    substrings on top of ``gitlab_notes.PINNED_MARKERS``."""
+    substrings on top of ``gitlab_notes.PINNED_MARKERS``. ``ai_review_components``: GitLab
+    project or component paths and GitHub ``owner/repo`` actions that run an AI review in
+    CI, read by ``review_automation``."""
 
     ai_review_markers: list[str]
+    ai_review_components: list[str]
 
 
 class PlatformSection(TypedDict, total=False):

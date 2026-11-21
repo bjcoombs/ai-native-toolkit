@@ -38,9 +38,10 @@ BLOCK: JsonDict = {"available": True, "merged_count": 3}
 
 
 def test_platform_scans_is_the_explicit_list_narrowed_by_scans():
-    assert PLATFORM_SCANS == ("review_reality", "delivery")
-    assert platform_scans(None) == ["review_reality", "delivery"]
-    assert platform_scans(["agent_ops", "review_reality"]) == ["review_reality"]
+    assert PLATFORM_SCANS == ("review_reality", "delivery", "review_evidence")
+    assert platform_scans(None) == ["review_reality", "delivery", "review_evidence"]
+    # review_reality brings its companion review_evidence (#696), rebuilt by the pass.
+    assert platform_scans(["agent_ops", "review_reality"]) == ["review_reality", "review_evidence"]
     assert platform_scans(["delivery"]) == ["delivery"]
     assert platform_scans(["agent_ops"]) == []
 
@@ -187,6 +188,10 @@ def test_platform_joins_the_read_and_stamps_the_run(world, tmp_path):
     block = rows[0]["scans"]["review_reality"]
     assert block["available"] is True and block["merged_count"] == 0
     assert rows[0]["scans"]["agent_ops"]["available"] is True
+    # --scans review_reality brings review_automation and review_evidence (#696), and the
+    # platform pass rebuilt review_evidence from the measured block, not the network gap.
+    assert rows[0]["scans"]["review_automation"]["present"] is False
+    assert rows[0]["scans"]["review_evidence"].get("reason") != "network"
     assert stamp["platform"] is True
     jsonschema.validate(stamp, build_stamp_schema())
     jsonschema.validate(rows[0], build_schema())

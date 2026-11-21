@@ -62,6 +62,7 @@ from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
 from lib.merged_sample import merged_sample
+from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 
@@ -538,6 +539,15 @@ SCANS: tuple[ScanSpec, ...] = (
     # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
+    # AI review committed in CI (issue #696): a GitHub workflow step running a
+    # pinned review action, a GitLab review component or include (pinned, or
+    # listed in [review] ai_review_components), or an AI review app's config
+    # file. Offline file reads; review_evidence (Layer 7 level 1) reads it with
+    # review_reality and is rebuilt by the --platform pass (PLATFORM_SCANS).
+    ScanSpec("review_automation", scan_review_automation, ("repo_root", "fleet_config"),
+             STAGE_POST_OFFERS),
+    ScanSpec("review_evidence", review_evidence, ("review_automation", "review_reality"),
+             STAGE_POST_OFFERS),
     # CI checks (issue #698): whether a GitHub Actions or GitLab CI line runs a
     # test or lint command (check_command.is_check_command); null when no
     # check is found but a CI file pulls jobs from elsewhere (include:, a remote
