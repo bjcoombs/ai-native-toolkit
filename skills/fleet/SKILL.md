@@ -39,7 +39,7 @@ tracked source file, so a very large repository can need a longer `--timeout`. `
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
 A repository with no import graph names its dominant
-language instead (`no_import_graph_typescript`, `no_import_graph_go`), so the
+language instead (`no_import_graph_go`, `no_import_graph_rust`), so the
 fleet output says which language is missing; `no_python_packages` is a Python
 repository with no importable package and `no_source_files` one with no source.
 
@@ -469,9 +469,10 @@ until it does, any key in a section is unknown and exits 2.
 
 | Key | Meaning |
 |-----|---------|
+| `[review] ai_review_markers` | Strings an AI reviewer prints in its GitLab merge-request notes (a list; case-insensitive substrings). With `--platform`, a note carrying one counts as AI review in `review_reality.bot_review_share`, on top of the pinned markers (an "AI Code Review" heading, an HTML marker comment) and agent accounts. An access-token user's unmarked note is not review unless `[ai_usage] token_users_as_agents` or an identity rule makes it an agent: coverage, Danger and release bots post through tokens too. |
+| `[review] ai_review_components` | GitLab CI component or project paths, and GitHub `owner/repo` actions, that run an AI review in CI, beside the pinned list in `lib/review_automation.py` (#696). Compared lowercased with the host and `@version` dropped; a project path covers the components under it. Read by `review_automation`; a match reports `rule: config` and never the entry itself. |
 | `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
 | `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
-| `[review] ai_review_components` | GitLab CI component or project paths, and GitHub `owner/repo` actions, that run an AI review in CI, beside the pinned list in `lib/review_automation.py` (#696). Compared lowercased with the host and `@version` dropped; a project path covers the components under it. Read by `review_automation`; a match reports `rule: config` and never the entry itself. |
 
 The `[platform]` keys are read from the `--fleet-config` file only: the pass is fleet-wide, so a
 repository's own `[platform]` values have no effect.

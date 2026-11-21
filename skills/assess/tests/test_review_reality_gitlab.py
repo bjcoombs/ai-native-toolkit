@@ -27,6 +27,8 @@ from lib.gh_cli import GhUnavailable  # noqa: E402
 from lib.gitlab_cli import (  # noqa: E402
     GitlabProject, glab_api, normalize_host, open_gitlab, parse_remote,
 )
+from lib.fleet_config import parse_fleet_config  # noqa: E402
+from lib.platform_cli import CACHE_ENV  # noqa: E402
 from lib.review_reality import scan_review_reality  # noqa: E402
 
 FAKE_GLAB = """#!/bin/sh
@@ -56,6 +58,10 @@ MRS = f"projects/{ENC}/merge_requests?state=merged&order_by=updated_at&sort=desc
 
 ALICE = {"username": "Alice"}
 BOB = {"username": "bob"}
+
+
+def notes_endpoint(iid: int) -> str:
+    return f"projects/{ENC}/merge_requests/{iid}/notes?sort=asc&order_by=created_at&per_page=100"
 
 
 def _key(endpoint: str) -> str:
@@ -100,10 +106,17 @@ class World:
         path = self.data / log
         return path.read_text().splitlines() if path.exists() else []
 
-    def merged(self, mrs: list[dict[str, object]], approvals: dict[int, object]) -> None:
+    def merged(self, mrs: list[dict[str, object]], approvals: dict[int, object],
+               notes: dict[int, object] | None = None) -> None:
+        """Serve the merged list, approvals and each listed merge request's notes
+        (an empty list unless ``notes`` gives one)."""
         self.serve(MRS, mrs)
         for iid, doc in approvals.items():
             self.serve(f"projects/{ENC}/merge_requests/{iid}/approvals", doc)
+        for mr in mrs:
+            iid = mr.get("iid")
+            if isinstance(iid, int):
+                self.serve(notes_endpoint(iid), (notes or {}).get(iid, []))
 
     def policy(self, rules: object, branch: str = "main") -> None:
         self.serve(f"projects/{ENC}", {"default_branch": branch})
@@ -257,8 +270,8 @@ def test_gitlab_review_reality_is_available(world: World) -> None:
     block = scan_review_reality(world.root)
     del block["oldest_merged_days_ago"]
     assert block == {
-        "available": True, "merged_count": 10, "reviewed_share": None,
-        "approved_share": 0.3, "bot_review_share": None, "self_merged_share": 0.7,
+        "available": True, "merged_count": 10, "reviewed_share": 0.3,
+        "approved_share": 0.3, "bot_review_share": 0.0, "self_merged_share": 0.7,
         "review_required": True, "hollow_required_review": False,
         "required_approval_bypassed": False,
     }
@@ -277,8 +290,8 @@ def test_gitlab_unapproved_required_review_is_bypassed(world: World) -> None:
     block = scan_review_reality(world.root)
     assert block["review_required"] is True
     assert block["required_approval_bypassed"] is True
-    # Approvals alone cannot show nobody reviewed: unknown, not True.
-    assert block["hollow_required_review"] is None
+    # No approval and no note by anyone: the notes show nobody reviewed.
+    assert block["hollow_required_review"] is True
 
 
 @pytest.mark.parametrize("rules,expected", [
@@ -345,6 +358,7 @@ def test_gitlab_malformed_reads_are_unavailable(world: World, mrs: object,
     world.serve(MRS, mrs)
     for iid, doc in approvals.items():
         world.serve(f"projects/{ENC}/merge_requests/{iid}/approvals", doc)
+        world.serve(notes_endpoint(iid), [])
     block = scan_review_reality(world.root)
     assert block["available"] is False
     assert block["reason"].startswith("glab_bad_json")
@@ -407,3 +421,167 @@ def test_github_remote_still_uses_gh_only(world: World) -> None:
     assert block["available"] is False
     assert world.calls() == []
     assert world.calls("ghlog")  # the gh path ran (the stub refuses everything)
+
+
+# ---- notes: AI review, human comment (#716) ---------------------------------
+
+TOKEN_USER = {"username": "project_42_bot_4ffc0de1a2b3", "name": "SECRET-TOKEN-NAME"}
+SENTINEL = "SECRET-NOTE-BODY"
+
+
+def _note(author: dict[str, str], body: str, system: bool = False) -> dict[str, object]:
+    return {"author": author, "body": body, "system": system,
+            "created_at": "2026-09-01T10:00:00Z"}
+
+
+def test_gitlab_token_user_ai_review_on_every_mr(world: World, tmp_path: Path,
+                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    monkeypatch.setenv(CACHE_ENV, str(cache))
+    world.remote(f"https://gitlab.example.com/{PROJECT}.git")
+    mrs = [_mr(i) for i in range(1, 6)]
+    notes: dict[int, object] = {
+        i: [_note(ALICE, "merged", system=True), _note(TOKEN_USER, f"## AI Code Review\n{SENTINEL} {i}")]
+        for i in range(1, 6)
+    }
+    notes[1] = [_note(TOKEN_USER, f"## AI Code Review\n{SENTINEL} 1"), _note(BOB, f"{SENTINEL} human")]
+    world.merged(mrs, {i: _approvals() for i in range(1, 6)}, notes)
+    world.policy([{"rule_type": "regular", "approvals_required": 1, "protected_branches": []}])
+    block = scan_review_reality(world.root)
+    assert block["bot_review_share"] == 1.0
+    assert block["reviewed_share"] == 1.0
+    assert block["approved_share"] == 0.0
+    assert block["hollow_required_review"] is False
+    assert block["required_approval_bypassed"] is True
+    text = json.dumps(block)
+    assert "SECRET" not in text and "project_42" not in text and "bob" not in text
+    # Notes are read in memory only: never written to the response cache.
+    cached = [f.read_text() for f in cache.iterdir()]
+    assert cached, "other platform reads are cached"
+    assert not any(SENTINEL in c for c in cached)
+    # Every notes call names its host and project (the cache key is argv alone).
+    note_calls = [c for c in world.calls() if "/notes" in c]
+    assert len(note_calls) == 5
+    assert all(c.startswith("api --hostname gitlab.example.com ") and f"projects/{ENC}/" in c
+               for c in note_calls)
+
+
+def test_gitlab_marker_from_config(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1), _mr(2)], {1: _approvals(), 2: _approvals()},
+                 {1: [_note({"username": "svc"}, "Reviewed by OurBot")], 2: []})
+    world.policy([])
+    config = parse_fleet_config('[review]\nai_review_markers = ["reviewed by ourbot"]\n')
+    assert scan_review_reality(world.root, fleet_config=config)["bot_review_share"] == 0.5
+    assert scan_review_reality(world.root)["bot_review_share"] == 0.0
+    assert scan_review_reality(world.root)["reviewed_share"] == 0.5  # svc's note is a human comment
+
+
+def _full_pages(world: World, iid: int, pages: int) -> None:
+    for page in range(2, pages + 1):
+        world.serve(f"{notes_endpoint(iid)}&page={page}", [_note(ALICE, "rebased")] * 100)
+
+
+def test_gitlab_full_notes_pages_without_a_decision_are_unknown(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals()}, {1: [_note(ALICE, "rebased")] * 100})
+    _full_pages(world, 1, 3)
+    world.policy([])
+    block = scan_review_reality(world.root)
+    assert block["available"] is True
+    assert block["bot_review_share"] is None
+    assert block["reviewed_share"] is None
+    assert len([c for c in world.calls() if "/notes" in c]) == 3  # NOTES_MAX_PAGES, no more
+
+
+def test_gitlab_second_notes_page_decides(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals()}, {1: [_note(TOKEN_USER, "## AI Code Review")] * 100})
+    world.serve(f"{notes_endpoint(1)}&page=2", [_note(BOB, "agreed")])
+    world.policy([])
+    block = scan_review_reality(world.root)
+    assert block["bot_review_share"] == 1.0 and block["reviewed_share"] == 1.0
+
+
+def test_gitlab_notes_stop_paging_once_decided(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals()},
+                 {1: [_note(TOKEN_USER, "## AI Code Review"), *[_note(BOB, "ok")] * 99]})
+    world.policy([])
+    assert scan_review_reality(world.root)["bot_review_share"] == 1.0
+    assert len([c for c in world.calls() if "/notes" in c]) == 1
+
+
+def test_gitlab_approval_decides_reviewed_despite_full_pages(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals(BOB)}, {1: [_note(ALICE, "rebased")] * 100})
+    _full_pages(world, 1, 3)
+    world.policy([])
+    assert scan_review_reality(world.root)["reviewed_share"] == 1.0
+
+
+@pytest.mark.parametrize("code,reason", [("403", "no_access"), ("404", "not_found")])
+def test_gitlab_refused_notes_read_is_unavailable(world: World, code: str, reason: str) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals(BOB)})
+    world.fail(notes_endpoint(1), f"glab: refused (HTTP {code})")
+    block = scan_review_reality(world.root)
+    assert block == {"available": False, "reason": block["reason"]}
+    assert block["reason"].startswith(reason)
+
+
+def test_gitlab_notes_not_a_list_is_unavailable(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals(BOB)}, {1: {"message": "x"}})
+    block = scan_review_reality(world.root)
+    assert block["reason"].startswith("glab_bad_json")
+
+
+def test_gitlab_delivery_and_review_reality_share_one_notes_read(world: World) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from lib.merged_sample import sample_since
+    from lib.signals import collect
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+
+    def stamp(t: datetime) -> str:
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    opened = now - timedelta(days=5)
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    mrs = [{**_mr(i, merger=BOB, merged_at=stamp(opened + timedelta(hours=10 + i))),
+            "created_at": stamp(opened)} for i in (1, 2)]
+    since = sample_since("6mo", now.date().isoformat())
+    assert since is not None
+    world.serve(f"projects/{ENC}/merge_requests?state=merged&updated_after={since.isoformat()}"
+                f"T00:00:00Z&order_by=updated_at&sort=desc&per_page=100", mrs)
+    for i in (1, 2):
+        world.serve(f"projects/{ENC}/merge_requests/{i}/approvals", _approvals())
+    world.policy([])
+
+    def note(author: dict[str, str], hours: int, body: str = "ok") -> dict[str, object]:
+        return {**_note(author, body), "created_at": stamp(opened + timedelta(hours=hours))}
+
+    world.serve(notes_endpoint(1), [note(TOKEN_USER, 1, "## AI Code Review findings"), note(BOB, 2)])
+    world.serve(notes_endpoint(2), [note(ALICE, 1), note(BOB, 4)])
+    scans = collect(world.root, ["review_reality", "delivery"], window="6mo", platform=True)
+    review, delivery = scans["review_reality"], scans["delivery"]
+    assert review["bot_review_share"] == 0.5 and review["reviewed_share"] == 1.0
+    assert delivery["first_human_comment_hours_p50"] == 2.0
+    assert delivery["first_human_comment_hours_p90"] == 4.0
+    assert delivery["human_commented_share"] == 1.0
+    assert delivery["ai_review_share"] == 0.5
+    assert len([c for c in world.calls() if "/notes" in c]) == 2  # once per MR, for both blocks
+
+
+def test_gitlab_coverage_bot_token_notes_are_not_review(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(i) for i in range(1, 6)], {i: _approvals() for i in range(1, 6)},
+                 {i: [_note(TOKEN_USER, "Coverage: 87.2% (+0.4%)")] for i in range(1, 6)})
+    world.policy([{"rule_type": "regular", "approvals_required": 1, "protected_branches": []}])
+    block = scan_review_reality(world.root)
+    assert block["bot_review_share"] == 0.0
+    assert block["reviewed_share"] == 0.0
+    assert block["hollow_required_review"] is True  # nobody looked

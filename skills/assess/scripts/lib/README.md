@@ -231,8 +231,8 @@ returns (`import_graph.py`); nothing in it assumes a language:
   builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Every registered builder graphs its language; the largest graph is measured and its
-language is the block's `language` field (null when nothing was measured). Degrades to
+Every registered builder graphs its language; the graph `select_graph` picks (the dominant
+source language's) is measured and its language is the block's `language` field (null when nothing was measured). Degrades to
 `available: False` when `networkx` is absent, when a builder's tool is missing or fails
 and no other language was graphed, and when nothing could be graphed (nothing measured,
 not an empty graph whose modularity 0 would read as tangled code). With no graph the
@@ -258,7 +258,7 @@ Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python
 counts-only one).
 
 **`import_graph.py`**
-The language-neutral builder interface (issue #708). A builder is any object with a
+The language-neutral builder interface (issues #708, #709). A builder is any object with a
 `language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
 (the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
 nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
@@ -275,14 +275,29 @@ or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
 | `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
 | `name_collisions` | packages sharing a name, disclosed rather than merged |
 
-`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder and
-keeps one graph per language; the largest (most modules, then most internal edges, then
-the language token) is returned. With no graph the reason is the first builder failure in
-registration order, else `no_graph_reason`, which counts source files per language
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
+dominant source language decides: when a builder covers it (its `language`, or a token in
+an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
+builder's graph is returned and its failure is final (the count honours a builder's
+optional `is_graph_source(rel)`, so files it skips, such as a Python app's
+`static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
+invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
+`no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
+the dominant language's graph, whose nodes can differ. When the dominant builder found
+nothing to graph (loose scripts, no package) or no builder covers the dominant language,
+the largest other graph stands in (most modules, then most internal edges, then the
+language token); with none the reason is the first builder failure in registration order, else
+`no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. `is_graph_source(rel_path, language)` says whether a
-file could be in that language's graph (extension, plus Go's skipped test files and
-directories). Imports no graph tool.
+`scope`) and names the dominant one. A built graph that breaks the contract (a module
+missing from `package_of`, which A3 and A4 index) is treated as a builder failure
+(`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
+reported and the measure never raises `KeyError`. `is_graph_source(rel_path, language)`
+says whether a file could be in that language's graph: its extension must be one of the
+languages the covering builder graphs (the TypeScript builder covers `.js` too), and the
+builder's own optional `is_graph_source(rel)` hook must accept it (Go skips test files and
+`GO_SKIP_DIRS`; TypeScript skips bundles, declarations, tests and tool configs). Imports
+no graph tool; the registered builders are loaded lazily when none are passed.
 
 Worked example: a builder for a language whose package is a directory and whose front
 door is the directory's `index` file.
@@ -323,7 +338,34 @@ its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which check
 registered builder's graph shape (`package_of` covers `modules`). A new block field
 or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
 the maturity model header (`levels/default.toml`).
-Tests: `tests/test_import_graph.py`, `tests/test_import_graph_contract.py`.
+Tests: `tests/test_import_graph.py`, and `tests/test_import_graph_contract.py`, the
+contract every registered builder must keep (sorted unique modules, `package_of`
+covering them, front doors, files and surfaces within them, `None` on an empty tree).
+A new builder adds a fixture tree to its `CONTRACT_FIXTURES`.
+
+**`import_graph_typescript.py`**
+The TypeScript and JavaScript builder (`TYPESCRIPT_BUILDER`, issue #709): a deterministic
+regex scan, no Node. One builder graphs both languages, since they import each other; the
+graph's `language` is `typescript` when any scanned file is TypeScript, else `javascript`.
+Modules are repo-relative file paths with the extension kept. Imports are `import ... from`,
+side-effect `import`, `export ... from`, `import()`, `require()` and `import x = require()`,
+read after comments are stripped. A relative specifier resolves against the importer's
+directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`paths`, then
+`baseUrl`, following relative `extends`; JSONC is accepted), then the workspace packages
+(every `package.json` with a `name`, its entry from `source`, the `"."` export, `module` or
+`main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
+A specifier matches a file, the file plus a source extension, a `.js` name standing for its
+`.ts` source, or a directory's `index`; anything else is external. A package is the nearest
+directory holding an `index` file or a named `package.json`, else the module's top directory;
+front doors are the `index` modules and each workspace entry; the surface is the count of
+exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
+`EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
+build and test tool configs (`vite.config.ts`, `jest.config.js` and the other
+`TOOL_CONFIG_PREFIXES`; an app's own `app.config.ts` stays) and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
+`"."` only, and `node_modules` and package `extends` are not followed. Configs and
+workspaces are read from the whole repository; modules come from `scope`.
+Tests: `tests/test_import_graph_typescript.py` (fixture `tests/fixtures/ts_workspace`).
 
 **`import_graph_python.py`**
 The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
@@ -376,10 +418,13 @@ graph never vouches for a Python tree or a directory of `_test.go` files alone. 
 `_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
 configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
 is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
-names. Build constraints are not evaluated. No `go.mod` returns `None`,
+names. The builder's `is_graph_source(rel)` hook applies the same skips to the
+dominant-language count and to `import_graph.is_graph_source`. Build constraints are not evaluated. No `go.mod` returns `None`,
 so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
-raises `GraphUnavailable`. Graphs compare by module count, so a Go repository with a
-larger Python package tree reports the Python graph.
+raises `GraphUnavailable`. Graphs are not compared by size against the dominant
+language's: a Go-dominant repository reports its Go graph even beside a larger Python
+package tree, and a Go module beside loose Python scripts (Python dominant, no package
+to graph) reports Go through the fallback.
 Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
 `tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 
@@ -1242,7 +1287,9 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
 
 Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
 required) and `field` (`one_of("email", "username", "name")`)) and
-`token_users_as_agents` (`boolean`), read by `ai_usage` (#695).
+`token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
+classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
+`gitlab_notes` (#716).
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
@@ -2257,7 +2304,9 @@ CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) pe
 `SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
 directory, a successful call's stdout is stored under the sha256 of its argv and the same
 argv is answered from it for the rest of the run (any process); failures are never stored.
-Only the fleet platform pass sets it, to a temporary directory it removes. Callers keep
+Only the fleet platform pass sets it, to a temporary directory it removes. A call made
+with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
+nor writes it: merge-request notes carry comment bodies, read in memory only (#716). Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
 `tests/test_platform_cli.py`.
 
@@ -2299,6 +2348,38 @@ merge, and a list still full after `PROTECTED_MAX_PAGES` (20) pages raises `trun
 None comes only from that complete list with no cover. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
+
+**`gitlab_notes.py`**
+GitLab merge-request notes as facts (#716), for `review_reality` and `delivery` (#715). `read_notes(project, iid)` reads
+`projects/<id>/merge_requests/<iid>/notes?sort=asc&order_by=created_at&per_page=100`
+(`&page=N` after the first; `--hostname` and the project in argv) with `cache=False`;
+`mr_note_facts` reads up to `NOTES_MAX_PAGES` (3) pages, stopping at a short page or once
+a human comment and AI review are both found, so no note body reaches
+the `--platform` response cache. `note_facts(notes, mr_author, classifier, complete)`
+returns `NoteFacts(human_comment, ai_review, first_human_comment_at)`; nothing
+else of a note leaves the module. System notes are skipped. A note is, first rule first:
+nothing when the merge request's author posted it (an agent on its own change is not
+review); AI review
+when its body (cut to `MAX_BODY`) carries a `PINNED_MARKERS` marker (a line-start "AI Code
+Review" / "AI Review" heading, plain or bold, emoji allowed, or an HTML comment naming AI
+review or CodeRabbit; prose mentioning AI review does not match) or a `[review]
+ai_review_markers` string (case-insensitive substring), whoever else posted it; AI review when
+its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username` or
+its username is in `delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for automation, a
+dependency bot or a `project_<id>_bot_<hash>` / `group_<id>_bot_<hash>` access-token user
+(recognised by that form, never a display name) that is not an agent: an unmarked token
+note is a coverage reporter, Danger or semantic-release as often as an AI reviewer, so it
+counts as AI review only with a marker, an `[ai_usage]` identity rule or `[ai_usage]
+token_users_as_agents`; else a human comment, the first giving `first_human_comment_at`.
+GitLab's note author is a basic user object with no bot flag, so none is read. With
+`complete` False (still a full last page) an undecided fact is None. `NoteFacts` is
+`(human_comment, ai_review, first_human_comment_at)`. `classifier_from_config(config)` builds the
+classifier from the merged `[ai_usage]` and `[review]` sections. `gitlab_note_facts(sample,
+fleet_config)` is the private registry spec (`network=True`, reads `merged_sample` and
+`fleet_config`): one `NoteFacts` per sampled merge request in sample order, None off GitLab,
+or an unavailable block on a refused read. `review_reality` and `delivery` both read it, so
+notes are read once per run; `delivery` fills `first_human_comment_hours_p50/p90`,
+`human_commented_share` and `ai_review_share` on GitLab from it. Tests: `tests/test_gitlab_notes.py`, `tests/test_review_reality_gitlab.py`.
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
@@ -2373,7 +2454,7 @@ never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an 
 
 **`delivery.py`**
 The `delivery` platform block (#715, part of #702), reads `merged_sample`,
-`review_reality` and `fleet_config`: `{available, merged_count,
+`review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
 approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
@@ -2396,8 +2477,10 @@ bucket - a config rule or a pinned `AGENT_RULES`
 entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
 the author `username`, so access-token users count only under
 `token_users_as_agents` and dependency bots never; a deleted author is not an
-agent. Read from the sample's own listing, no extra call. GitLab: time to merge and
-the copied shares; the notes-based figures are null until #716. An unavailable
+agent. Read from the sample's own listing, no extra call. GitLab: time to merge, the
+copied shares, and from the `gitlab_note_facts` spec (#716, `lib/gitlab_notes.py`) hours to
+the first human comment, `human_commented_share` and `ai_review_share` (null when the notes
+were undecided or refused, or no facts were passed). An unavailable
 sample is returned as the block. Tests: `tests/test_delivery.py`.
 
 **`review_reality.py`**
@@ -2426,12 +2509,18 @@ when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
 the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
-sample's merged merge requests (`scan_gitlab_review_reality(project, mrs)`) and one
-`approvals` read each: `approved_share` (approved by an account other than the author),
-`self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
-and `bot_review_share` are null (approvals are the only evidence read), and
-`hollow_required_review` is False only when approvals alone clear the threshold, else
-null. `review_required` reads the project's approval rules: a non-`report_approver`
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs, notes=...)`) and
+one `approvals` read each: `approved_share` (approved by an account other than the author),
+`self_merged_share` (`merge_user`, else `merged_by`, is the author), and the note facts of
+the private `gitlab_note_facts` spec (#716, one notes read per merge request, shared with
+`delivery`): `bot_review_share` is a note with an
+AI-review marker or by an agent or pinned AI-review app (an access-token user only when
+it is an agent); `reviewed_share` is an approval by another account, a human comment by
+someone other than the author, or AI review. A merge request whose notes still decide nothing after up to `NOTES_MAX_PAGES` (3)
+pages / 300 notes makes the share null.
+`hollow_required_review` follows `reviewed_share` and is False whenever approvals alone
+clear the threshold. A refused or malformed notes read degrades the whole block like an
+approvals read. `review_required` reads the project's approval rules: a non-`report_approver`
 rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
 wildcard matching the default branch, is True; a rule scoped to all protected branches
 covers it when `gitlab_cli.branch_protection` finds the default branch protected, does

@@ -50,10 +50,19 @@ GitLab. When ``gitlab_cli.open_gitlab`` resolves the remote to a GitLab
 project, the same block is built from the sample's merged merge requests through
 ``glab``: each one's ``approvals`` read. ``approved_share`` counts a merge request approved by
 an account other than its author and ``self_merged_share`` one whose
-``merge_user`` (else ``merged_by``) is its author. Approvals are the only
-review evidence read, so ``reviewed_share`` and ``bot_review_share`` are None,
-and ``hollow_required_review`` is False only where approvals alone clear the
-threshold (an approval is a review), else None. ``review_required`` reads the
+``merge_user`` (else ``merged_by``) is its author. The sample's notes
+(``gitlab_note_facts``, ``lib/gitlab_notes.py``, #716; read once, in memory, never
+cached, only facts kept) give ``bot_review_share``, a note carrying an AI-review
+marker or posted by an agent or a pinned AI-review app (a GitLab AI reviewer often
+posts as an access-token user, ``project_<id>_bot_<hash>``, so it is recognised by its
+output; a token user's unmarked note counts only under ``token_users_as_agents`` or an
+identity rule, since coverage and release bots post the same way), and
+``reviewed_share``, an approval by another account, a human comment by someone other
+than the author, or AI review. Notes that
+still decide nothing after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes leave that
+merge request unknown and the share None; so does a call made without note facts. ``hollow_required_review`` follows
+``reviewed_share`` and is False whenever approvals alone clear the threshold. A
+refused notes read degrades the whole block. ``review_required`` reads the
 project's approval rules: a rule (other than a ``report_approver`` rule)
 requiring one or more approvals that covers the default branch - no branch
 scope, or a protected-branch name or wildcard matching it - is True; a rule
@@ -72,12 +81,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from lib.fleet_config import FleetConfig
 from lib.gh_cli import GhUnavailable, gh_api, unavailable
 from lib.gitlab_cli import GitlabProject, branch_pattern, branch_protection, glab_api
 from lib.merged_sample import (
     PR_FIELDS as PR_FIELDS,  # re-exported: the fields the sample reads
     STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, merged_sample, parse_time,
 )
+from lib.gitlab_notes import NoteFacts, NoteFactsOrReason, gitlab_note_facts
 from lib.merged_sample import login as _login
 
 # Under this share of reviewed merges, a required-review rule is hollow.
@@ -300,6 +311,13 @@ def gitlab_review_required(project: GitlabProject) -> bool | None:
     return None if unknown else False
 
 
+def _any_of(*verdicts: bool | None) -> bool | None:
+    """True when any verdict is True, else None when any is unknown, else False."""
+    if any(v is True for v in verdicts):
+        return True
+    return None if None in verdicts else False
+
+
 def _approved_by_other(approvals: Any, author: str | None) -> bool:
     if not isinstance(approvals, dict):
         raise GhUnavailable("glab_bad_json: merge request approvals were not an object")
@@ -311,11 +329,18 @@ def _approved_by_other(approvals: Any, author: str | None) -> bool:
 
 
 def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, Any]],
-                               now: datetime | None = None) -> dict[str, Any]:
+                               now: datetime | None = None,
+                               notes: NoteFactsOrReason = None) -> dict[str, Any]:
     """The ``review_reality`` block for a GitLab project's sampled merge requests
-    (see module docstring)."""
+    (see module docstring). ``notes``: one ``NoteFacts`` per merge request, in order
+    (``gitlab_notes.gitlab_note_facts``); None reads no note evidence."""
     now = now or datetime.now(timezone.utc)
     enc = project.encoded
+    if isinstance(notes, dict):
+        return notes  # the notes read was refused: never "no reviews"
+    facts: Sequence[NoteFacts | None] = (
+        notes if notes is not None and len(notes) == len(mrs) else [None] * len(mrs))
+    reviewed: list[bool | None] = []
     try:
         approved = self_merged = 0
         ages: list[int] = []
@@ -326,7 +351,11 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
             author = _username(mr.get("author"))
             merger = _username(mr.get("merge_user")) or _username(mr.get("merged_by"))
             approvals = glab_api(project, f"projects/{enc}/merge_requests/{iid}/approvals")
-            approved += _approved_by_other(approvals, author)
+            by_other = _approved_by_other(approvals, author)
+            approved += by_other
+            fact = facts[len(reviewed)] if len(reviewed) < len(facts) else None
+            reviewed.append(_any_of(by_other, fact.human_comment, fact.ai_review)
+                            if fact is not None else (True if by_other else None))
             self_merged += author is not None and author == merger
             age = _days_ago(mr.get("merged_at"), now)
             if age is not None:
@@ -336,39 +365,47 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
     total = len(mrs)
     required = gitlab_review_required(project)
     approved_share = _share(approved, total)
+    reviewed_share = None if None in reviewed else _share(sum(map(bool, reviewed)), total)
+    bots = [f.ai_review if f is not None else None for f in facts]
     bypassed = _flag(required, approved_share, total)
+    hollow = _flag(required, reviewed_share, total)
+    if hollow is None and bypassed is False:
+        hollow = False  # reviewed >= approved, so approvals alone can clear the hollow flag
     return {
         "available": True,
         "merged_count": total,
         "oldest_merged_days_ago": max(ages) if ages else None,
-        "reviewed_share": None,
+        "reviewed_share": reviewed_share,
         "approved_share": approved_share,
-        "bot_review_share": None,
+        "bot_review_share": None if None in bots else _share(sum(map(bool, bots)), total),
         "self_merged_share": _share(self_merged, total),
         "review_required": required,
-        # reviewed >= approved, so approvals can only clear the hollow flag.
-        "hollow_required_review": False if bypassed is False else None,
+        "hollow_required_review": hollow,
         "required_approval_bypassed": bypassed,
     }
 
 
-def review_reality_from_sample(sample: SampleOrReason) -> dict[str, Any]:
-    """The ``review_reality`` registry entry: the block from the shared ``merged_sample``.
+def review_reality_from_sample(sample: SampleOrReason,
+                               notes: NoteFactsOrReason = None) -> dict[str, Any]:
+    """The ``review_reality`` registry entry: the block from the shared ``merged_sample``
+    and, on GitLab, the ``gitlab_note_facts`` read from it.
 
     An unavailable sample is returned as the block, reason and all."""
     if not isinstance(sample, MergedSample):
         return sample
     changes = list(sample.changes)
     if sample.gitlab is not None:
-        return scan_gitlab_review_reality(sample.gitlab, changes)
+        return scan_gitlab_review_reality(sample.gitlab, changes, notes=notes)
     if sample.github is None:
         return unavailable("no_remote: the sample names no repository")
     return summarize(changes, review_required(sample.github.slug), sample.bots)
 
 
 def scan_review_reality(repo_root: Path, history_window: str | None = None,
-                        run_date: str | None = None) -> dict[str, Any]:
+                        run_date: str | None = None,
+                        fleet_config: FleetConfig | None = None) -> dict[str, Any]:
     """Build the ``review_reality`` block for ``repo_root`` (see module docstring):
-    draws the sample, then :func:`review_reality_from_sample`."""
+    draws the sample and its GitLab note facts, then :func:`review_reality_from_sample`."""
     today = run_date or datetime.now(timezone.utc).date().isoformat()
-    return review_reality_from_sample(merged_sample(repo_root, history_window, today))
+    sample = merged_sample(repo_root, history_window, today)
+    return review_reality_from_sample(sample, gitlab_note_facts(sample, fleet_config))

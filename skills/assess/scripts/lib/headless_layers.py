@@ -14,7 +14,7 @@ modules, so the boundary from #557/#558 stays as it is:
   networkx, plus each language builder's tool, grimp for Python). A repository
   with no import graph reports unavailable with a reason naming its dominant
   language, as the full run does: ``no_import_graph_<language>`` (a Go or
-  JavaScript repository with no builder for its language reads unknown on
+  Rust repository with no builder for its language reads unknown on
   layer 2 rather than 0), ``no_python_packages`` for a Python repository with
   no importable package, ``no_source_files`` for a repository with no source.
 - ``promissory_markers`` reads the core's private ``promissory`` scan (needs
