@@ -287,9 +287,9 @@ def change_coupling_pairs(
     for files in commit_sets:
         if len(files) < 2 or len(files) > MAX_COMMIT_FILES_FOR_COUPLING:
             continue
-        # sorted() over Paths gives a deterministic, file_a<file_b ordering.
-        for a, b in combinations(sorted(files), 2):
-            key = (a.as_posix(), b.as_posix())
+        # Sorting the POSIX strings, not the Paths, gives the same file_a<file_b
+        # ordering on every OS (WindowsPath compares case-insensitively).
+        for key in combinations(sorted(f.as_posix() for f in files), 2):
             counts[key] = counts.get(key, 0) + 1
 
     pairs: list[CoChangePair] = [
