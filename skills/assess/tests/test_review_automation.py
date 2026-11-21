@@ -22,7 +22,7 @@ from lib.review_automation import (
     scan_review_automation,
 )
 from lib.scan_registry import SCANS
-from lib.shared_tooling import action_repo, step_uses
+from lib.shared_tooling import action_repo, step_uses, workflow_events
 from lib.signals import NETWORK_REASON, PLATFORM_SCANS, build_document
 
 WORKFLOW = """\
@@ -90,6 +90,39 @@ def test_step_uses_ignores_uses_nested_under_with() -> None:
             "          uses: anthropics/foo@v1\n        uses: actions/setup-node@v4\n"
             "      - with:\n          uses: anthropics/bar@v1\n")
     assert step_uses(text) == [(7, "actions/setup-node@v4")]
+
+
+@pytest.mark.parametrize(("on", "events"), [
+    ("on: pull_request\n", {"pull_request"}),
+    ("on: [push, 'pull_request_target']\n", {"push", "pull_request_target"}),
+    ("on: {issue_comment: {types: [created]}}\n", {"issue_comment"}),
+    ("on:\n  - push\n  - merge_group\n", {"push", "merge_group"}),
+    ("'on':\n  issues:\n    types: [opened]\n  issue_comment:\n", {"issues", "issue_comment"}),
+    ("name: x\n", None),
+])
+def test_workflow_events(on: str, events: set[str] | None) -> None:
+    text = on + "jobs:\n  a:\n    steps:\n      - uses: x/y@v1\n"
+    assert workflow_events(text) == (None if events is None else frozenset(events))
+
+
+def _claude_workflow(on: str) -> str:
+    return f"{on}jobs:\n  claude:\n    steps:\n      - uses: anthropics/claude-code-action@v1\n"
+
+
+def test_a_mention_responder_is_listed_but_not_credited(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/claude.yml",
+           _claude_workflow("on:\n  issue_comment:\n    types: [created]\n  issues:\n"))
+    _git(tmp_path, ".")
+    block = scan_review_automation(tmp_path)
+    assert block["present"] is False and block["kinds"] == []
+    assert [(m["reviewer"], m["on_changes"]) for m in block["matches"]] == [("claude-code", False)]
+
+
+def test_a_pull_request_workflow_is_credited(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/claude.yml", _claude_workflow("on: [issue_comment, pull_request]\n"))
+    _git(tmp_path, ".")
+    block = scan_review_automation(tmp_path)
+    assert block["present"] is True and block["matches"][0]["on_changes"] is True
 
 
 def test_action_repo_names_the_repository() -> None:
@@ -279,6 +312,15 @@ def test_headless_run_gives_layer7_a_floor_of_one(tmp_path: Path, rel: str, text
     assert scans["review_evidence"]["present"] is True
     evaluation = _layer7(scans)
     assert (evaluation["status"], evaluation.get("floor")) == ("unknown", 1)
+
+
+def test_selecting_review_reality_builds_the_level_one_evidence(tmp_path: Path) -> None:
+    _write(tmp_path, ".github/workflows/review.yml", WORKFLOW)
+    _git(tmp_path, ".")
+    scans = build_document(tmp_path, ["review_reality"])["scans"]
+    assert set(scans) == {"review_automation", "review_evidence", "review_reality"}
+    assert scans["review_evidence"]["present"] is True
+    assert _layer7(scans).get("floor") == 1
 
 
 def test_headless_run_without_review_step_stays_unknown(tmp_path: Path) -> None:

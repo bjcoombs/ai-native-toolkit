@@ -26,7 +26,14 @@ committed to the repository:
 and ``is_review_component`` expose it for other CI readers (#689).
 
 Only git-tracked files are credited, as in ``shared_tooling``: an untracked
-match is listed with ``tracked: false`` and does not set ``present``. When git
+match is listed with ``tracked: false`` and does not set ``present``. A
+``ci_action`` is credited only when its workflow's ``on:`` names a
+``REVIEW_EVENTS`` trigger (``pull_request``, ``pull_request_target``,
+``merge_group``); one wired only to ``issue_comment`` or ``issues`` is listed
+with ``on_changes: false``. A workflow whose ``on:`` the line reader cannot read
+is credited. A GitLab include is credited as committed: the jobs it brings live
+in the included file, so whether they run in merge-request pipelines is not read
+(a known limit). When git
 tracking is unknown the block is unavailable. Counts-only output keeps
 ``present``, the ``kinds`` and each match's ``kind``, ``rule`` (``pinned`` or
 ``config``) and ``reviewer`` slug (``configured`` for a config match), never a
@@ -53,7 +60,7 @@ from typing import Any, Literal, NotRequired, TypeGuard, TypedDict
 
 from lib.fleet_config import FleetConfig
 from lib.git_churn import is_tracked, tracked_files
-from lib.shared_tooling import action_repo, gitlab_includes, step_uses
+from lib.shared_tooling import action_repo, gitlab_includes, step_uses, workflow_events
 
 ReviewKind = Literal["ci_action", "ci_component", "config_file"]
 ReviewRule = Literal["pinned", "config"]
@@ -81,6 +88,10 @@ REVIEW_COMPONENT = re.compile(
     r"|(?:^|[-_.])(?:pr|mr)[-_]agent(?:$|[-_.])"
 )
 
+# The workflow events that run on a proposed change: a review action wired only to
+# ``issue_comment`` or ``issues`` (an @claude responder, issue triage) reviews nothing.
+REVIEW_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
+
 # Configuration files of AI review apps: path -> the app's ``delivery.AI_REVIEWERS`` login.
 REVIEW_CONFIG_FILES: Mapping[str, str] = {
     ".coderabbit.yaml": "coderabbitai",
@@ -99,6 +110,7 @@ class ReviewMatch(TypedDict):
     path: str
     line: int | None  # None for a config file
     tracked: bool
+    on_changes: bool  # runs on proposed changes (a ci_action's workflow triggers on pull requests)
 
 
 class ReviewAutomationBlock(TypedDict):
@@ -156,14 +168,21 @@ def _configured(source: str, configured: Sequence[str]) -> bool:
 
 
 def _match(kind: ReviewKind, source: str, pinned: str | None, configured: Sequence[str],
-           path: str, line: int | None, tracked: bool) -> ReviewMatch | None:
+           path: str, line: int | None, tracked: bool, on_changes: bool = True) -> ReviewMatch | None:
     if pinned is not None:
         return {"kind": kind, "rule": "pinned", "reviewer": pinned, "path": path, "line": line,
-                "tracked": tracked}
+                "tracked": tracked, "on_changes": on_changes}
     if _configured(source, configured):
         return {"kind": kind, "rule": "config", "reviewer": CONFIGURED, "path": path, "line": line,
-                "tracked": tracked}
+                "tracked": tracked, "on_changes": on_changes}
     return None
+
+
+def runs_on_changes(text: str) -> bool:
+    """A workflow that triggers on proposed changes (``REVIEW_EVENTS``); one whose ``on:``
+    cannot be read is credited, as a GitLab include is."""
+    events = workflow_events(text)
+    return events is None or bool(events & REVIEW_EVENTS)
 
 
 def _in_repo_file(repo_root: Path, path: Path) -> bool:
@@ -215,7 +234,7 @@ def _workflow_matches(repo_root: Path, tracked: frozenset[Path] | None,
             if repo is None:
                 continue
             match = _match("ci_action", repo, is_review_action(repo), configured, rel, line,
-                           is_tracked(workflow, tracked))
+                           is_tracked(workflow, tracked), runs_on_changes(text))
             if match is not None:
                 out.append(match)
     return out
@@ -227,7 +246,7 @@ def _config_file_matches(repo_root: Path, tracked: frozenset[Path] | None) -> li
         path = repo_root / rel
         if _in_repo_file(repo_root, path):
             out.append({"kind": "config_file", "rule": "pinned", "reviewer": reviewer, "path": rel,
-                        "line": None, "tracked": is_tracked(path, tracked)})
+                        "line": None, "tracked": is_tracked(path, tracked), "on_changes": True})
     return out
 
 
@@ -239,7 +258,7 @@ def scan_review_automation(repo_root: Path, fleet_config: FleetConfig | None = N
     matches = (_gitlab_matches(repo_root, tracked, configured)
                + _workflow_matches(repo_root, tracked, configured)
                + _config_file_matches(repo_root, tracked))
-    credited = {m["kind"] for m in matches if m["tracked"]}
+    credited = {m["kind"] for m in matches if m["tracked"] and m["on_changes"]}
     block: ReviewAutomationBlock = {
         "available": tracked is not None,
         "present": bool(credited),

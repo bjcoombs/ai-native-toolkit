@@ -418,6 +418,53 @@ def step_uses(text: str) -> list[tuple[int, str]]:
     return rows
 
 
+_TOP_LEVEL_ON = re.compile(r"""^(?:on|"on"|'on')\s*:(.*)$""")
+_EVENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _event_items(value: str) -> list[str]:
+    value = value.strip()
+    if value.startswith(("[", "{")):
+        value = value.strip("[]{}")
+        items = [item.split(":", 1)[0] for item in value.split(",")]
+    else:
+        items = [value]
+    return [_unquote(item) for item in items if _unquote(item)]
+
+
+def workflow_events(text: str) -> frozenset[str] | None:
+    """The events a GitHub workflow's top-level ``on:`` names, or None when it has none
+    this line reader can read (#696): ``on: push``, ``on: [push, pull_request]``,
+    ``on: {pull_request: ...}``, a block list or a block mapping of events."""
+    events: list[str] = []
+    inside = False
+    key_col: int | None = None
+    for raw in text.splitlines():
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            if inside:
+                break
+            match = _TOP_LEVEL_ON.match(line)
+            if match:
+                inside = True
+                events += _event_items(match.group(1)) if match.group(1).strip() else []
+            continue
+        if not inside:
+            continue
+        content = line.lstrip()
+        col = len(line) - len(content)
+        if content.startswith("-"):
+            events += _event_items(content[1:])
+            continue
+        key_col = col if key_col is None else key_col
+        if col == key_col:
+            events.append(_unquote(content.split(":", 1)[0]))
+    names = frozenset(e for e in events if _EVENT_NAME.match(e))
+    return names or None
+
+
 def action_repo(value: str) -> str | None:
     """``owner/repo[/path]@ref`` -> ``owner/repo`` lowercased; None for a local
     (``./``) or ``docker://`` action, or a value that names no repository."""

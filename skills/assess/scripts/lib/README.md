@@ -834,7 +834,10 @@ that reads a displaced one. Names in `UNREGISTERED_SCANS` (run-context blocks
 `assess_core` assembles, several of which report `available: false` without the
 `reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
 name a reported scan also holds is dropped at runtime. `select_scans` raises
-`UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
+`UnknownScanError` naming every name in neither set, and adds each requested name's
+`COMPANION_SCANS` (`with_companions`; #696: `review_reality` brings `review_automation`
+and `review_evidence`, the Layer 7 level 1 signal); `fleet_platform.platform_scans`
+expands a `--scans` selection the same way. `build_stamp` records the toolkit
 commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
 (each nullable outside git). The window is validated, stamped and passed to the scans
 that read `history_window` (`ai_usage`). Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
@@ -2934,14 +2937,17 @@ value) for each `uses:` that is a step's own key (on its `- ` line or at its key
 inside a job's `steps:` list, skipping job-level `uses:`, a `uses:` nested under `with:`, and the
 body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one into
 `owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
-sources, so they never enter `ci_includes` or `ci_source_ids`.
+sources, so they never enter `ci_includes` or `ci_source_ids`. `workflow_events(text)`
+reads the top-level `on:` (a scalar, a flow list or mapping, a block list or mapping of
+events); None when there is none it can read.
 
 **`review_automation.py`**
 AI review committed in CI and the Layer 7 level 1 signal (issue #696).
 `scan_review_automation(repo_root, fleet_config)` writes `{available, present, kinds[],
 matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked}`. Kinds:
 `ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
-`anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`), `ci_component` (a
+`anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
+pipelines is not read), `ci_component` (a
 `shared_tooling.gitlab_includes` component or project whose last path segment matches
 `REVIEW_COMPONENT`, a name heuristic: `ai-code-review`, `claude_review`, `llm-review`,
 `code-review-ai`, `pr-agent`), and `config_file` (`REVIEW_CONFIG_FILES`: `.coderabbit.yaml`/`.yml`,
@@ -2949,7 +2955,11 @@ matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked}`. Kinds:
 login). A CI action or include also matches (`rule: config`, `reviewer: configured`)
 when its source equals, or sits under, a `[review] ai_review_components` entry
 (lowercased, host, a leading CI variable such as `$CI_SERVER_FQDN`, and `@version` dropped). Copilot code review has no review-specific
-file and is not read. `present` and `kinds` credit git-tracked matches only; outside a
+file and is not read. A `ci_action` is credited only when its workflow's `on:` (`shared_tooling.workflow_events`)
+names `pull_request`, `pull_request_target` or `merge_group` (`REVIEW_EVENTS`): a step wired
+only to `issue_comment` or `issues` (an @claude responder) is listed with `on_changes:
+false`; an `on:` the line reader cannot read is credited. `present` and `kinds` credit
+git-tracked matches only; outside a
 git checkout the block is `available: false`. Counts-only keeps the booleans, kinds,
 rules and reviewer slugs, never a source or a config entry. `is_review_action` and
 `is_review_component` expose the pinned matcher to other CI readers (#689).

@@ -88,7 +88,7 @@ there.
 | `--platform-timeout S` | Seconds one repository's platform read may take before its platform blocks are unavailable (default: `[platform] timeout`, else 300). Needs `--platform`. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
-| `--scans a,b` | Only these scans (default: all). |
+| `--scans a,b` | Only these scans (default: all), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the Layer 7 level 1 signal. |
 | `--timeout S` | Seconds one repository may take before its row is marked failed (default 600). |
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
@@ -156,7 +156,7 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 | `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
 | `active` | `true` when the committer date of the checkout's `HEAD` falls inside the window (`--window`, default `6mo`, counting back from the run's UTC date in whole days, months and years by calendar), read locally from git; `null` when failed. Close to `ghsync --active-since` but not identical: ghsync counts 30-day months from the current time on platform dates, so cutoffs can differ by a few days. |
-| `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. `scans.review_automation.present` is the row's "AI review in CI: yes / no" (#696): an AI review step or review app config in a git-tracked file, with `kinds` saying which (`ci_action`, `ci_component`, `config_file`). |
+| `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. `scans.review_automation.present` is the row's "AI review in CI: yes / no" (#696): an AI review step or review app config in a git-tracked file, with `kinds` saying which (`ci_action`, `ci_component`, `config_file`). A GitHub review action counts only when its workflow runs on pull requests (`pull_request`, `pull_request_target`, `merge_group`); one wired only to `issue_comment` or `issues` is listed with `on_changes: false`. A GitLab include counts as committed: whether its jobs run in merge-request pipelines is not read. |
 
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
 characters of its stderr go to `DIR/logs/<repo>.stderr` (the id's segments as

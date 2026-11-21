@@ -49,7 +49,7 @@ from lib.fleet import (
     run_signals,
 )
 from lib.run_context_types import JsonDict
-from lib.signals import PLATFORM_SCANS
+from lib.signals import PLATFORM_SCANS, with_companions
 
 DEFAULT_PLATFORM_JOBS = 4
 DEFAULT_PLATFORM_TIMEOUT = 300
@@ -62,8 +62,10 @@ _TOKENS = {SCAN_TIMEOUT: "platform_timeout", SCAN_ERROR: "platform_error",
 
 
 def platform_scans(scans: Sequence[str] | None) -> list[str]:
-    """``PLATFORM_SCANS``, restricted to ``scans`` (the ``--scans`` selection) when given."""
-    return [name for name in PLATFORM_SCANS if scans is None or name in scans]
+    """``PLATFORM_SCANS``, restricted to ``scans`` (the ``--scans`` selection, with its
+    ``signals.COMPANION_SCANS``) when given."""
+    wanted = None if scans is None else set(with_companions(scans))
+    return [name for name in PLATFORM_SCANS if wanted is None or name in wanted]
 
 
 def failure_reason(token: str) -> str:

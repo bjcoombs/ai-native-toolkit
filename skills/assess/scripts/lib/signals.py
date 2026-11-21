@@ -166,6 +166,24 @@ def known_scans(specs: Iterable[ScanSpec] = SIGNAL_SCANS) -> list[str]:
     return registered + [name for name in UNREGISTERED_SCANS if name not in registered]
 
 
+# Scans a --scans selection brings along with a name (#696): Layer 7 level 1 reads
+# review_evidence, built from review_automation and review_reality, so selecting
+# review_reality alone still gives the row its level-1 evidence.
+COMPANION_SCANS: dict[str, tuple[str, ...]] = {
+    "review_reality": ("review_automation", "review_evidence"),
+}
+
+
+def with_companions(names: Iterable[str]) -> list[str]:
+    """``names`` plus each one's ``COMPANION_SCANS``, first appearance kept."""
+    out: list[str] = []
+    for name in names:
+        for item in (name, *COMPANION_SCANS.get(name, ())):
+            if item not in out:
+                out.append(item)
+    return out
+
+
 def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> list[str]:
     """The requested names in table order, or every known name when None.
 
@@ -177,7 +195,7 @@ def select_scans(requested: Sequence[str] | None, specs: Sequence[ScanSpec] = SI
     unknown = [name for name in requested if name not in known]
     if unknown:
         raise UnknownScanError(unknown)
-    wanted = set(requested)
+    wanted = set(with_companions(requested))
     return [name for name in known if name in wanted]
 
 
