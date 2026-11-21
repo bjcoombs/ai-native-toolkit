@@ -106,11 +106,12 @@ CI_CHECKS: JsonDict = {
                 "status": _field({"enum": list(STATUSES)},
                                  "resolved, or why not: no_root, not_cloned, file_missing, "
                                  "not_offline (template, remote), glob, bad_path, depth_limit, "
-                                 "file_limit, unparsed."),
+                                 "file_limit, unparsed, ref_missing (a pin the clone does not "
+                                 "hold)."),
                 "ref_basis": _field({"enum": ["ref", "head", "worktree", None]},
                                     "How the file was read: at the pinned ref, at the clone's "
-                                    "HEAD (no pin, or a pin the clone does not hold), or from the "
-                                    "work tree; null when not resolved."),
+                                    "HEAD (no pin), or from the work tree; null when not "
+                                    "resolved."),
                 "depth": _field(_INT, "Include level: 1 for the repository's own include."),
             }}},
             "One record per include item, nested includes after their parent; no file name "

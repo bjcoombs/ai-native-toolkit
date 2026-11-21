@@ -15,10 +15,11 @@ disk, returns its text so those scans read the included jobs too:
   clone ``<root>/<path>/<last segment>-main`` of the ghsync root passed as
   ``--ghsync-root`` (``fleet.py`` passes its ROOT). The file is read with
   ``git show`` at ``ref`` when the clone holds it (a branch, tag or
-  ``origin/<ref>``; ``ref_basis: ref``), else at the clone's ``HEAD``
-  (``ref_basis: head``, so a pin the clone does not hold is recorded as read
-  at HEAD). No ``ref:`` reads HEAD, the project's default branch in a ghsync
-  clone.
+  ``origin/<ref>``; ``ref_basis: ref``). A pin the clone does not hold, or one
+  that is not a plain ref name (a CI variable, an option-like value), is
+  ``ref_missing``: reading HEAD instead could credit, or deny, the wrong
+  version. No ``ref:`` reads HEAD (``ref_basis: head``), the project's default
+  branch in a ghsync clone.
 - ``component: <host>/<project path>/<name>@<version>``: the project
   ``<project path>`` resolved as above, file ``templates/<name>.yml`` or
   ``templates/<name>/template.yml``, at ``<version>`` when the clone holds it.
@@ -67,11 +68,11 @@ IncludeKind = Literal["local", "project", "component", "template", "remote"]
 RefBasis = Literal["ref", "head", "worktree"]
 IncludeStatus = Literal[
     "resolved", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
-    "depth_limit", "file_limit", "unparsed",
+    "depth_limit", "file_limit", "unparsed", "ref_missing",
 ]
 STATUSES: tuple[IncludeStatus, ...] = (
     "resolved", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
-    "depth_limit", "file_limit", "unparsed",
+    "depth_limit", "file_limit", "unparsed", "ref_missing",
 )
 
 
@@ -280,6 +281,8 @@ class _BlockReader:
                 and content.startswith("-"):
             self.keys.setdefault("file", []).extend(_values(content[1:]))
             return
+        if self.key_col is not None and col <= self.key_col and not content.startswith("-"):
+            self.pending_file = False  # any mapping key (rules:, inputs:) ends the file list
         match = _KEY.match(content)
         if match and col == self.key_col:
             name, value = match.group(1), match.group(2).strip()
@@ -357,17 +360,20 @@ def _clone(root: Path, project: str) -> Path | None:
     return resolved
 
 
-def _project_source(root: Path, project: str, ref: str | None) -> _Source | None:
+def _project_source(root: Path, project: str, ref: str | None) -> _Source | IncludeStatus:
+    """The clone and commit an item reads, or why it cannot: ``not_cloned``, or
+    ``ref_missing`` for a named ref the clone does not hold or that is no plain ref name."""
     clone = _clone(root, project)
     if clone is None:
-        return None
-    pinned = pin(ref)
-    candidates = (pinned, f"refs/remotes/origin/{pinned}") if pinned else ()
-    for candidate in candidates:
-        if (commit := _commit(clone, candidate)) is not None:
-            return _Source(clone, commit, "ref")
+        return "not_cloned"
+    if ref is not None and ref.strip():
+        pinned = pin(ref)  # None for a CI variable: a version the file does not say
+        for candidate in ((pinned, f"refs/remotes/origin/{pinned}") if pinned else ()):
+            if (commit := _commit(clone, candidate)) is not None:
+                return _Source(clone, commit, "ref")
+        return "ref_missing"
     head = _commit(clone, "HEAD")
-    return _Source(clone, head, "head") if head is not None else None
+    return _Source(clone, head, "head") if head is not None else "not_cloned"
 
 
 class _Walk:
@@ -455,8 +461,8 @@ class _Walk:
                 return
             paths = []
         source = _project_source(self.root, project, ref)
-        if source is None:
-            self.record(item, ident, "not_cloned", None, depth)
+        if isinstance(source, str):
+            self.record(item, ident, source, None, depth)
             return
         if item.kind == "component":
             found = next((p for p in (f"templates/{name}.yml", f"templates/{name}/template.yml")

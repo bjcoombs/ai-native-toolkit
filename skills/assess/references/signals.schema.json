@@ -336,9 +336,10 @@
                       "bad_path",
                       "depth_limit",
                       "file_limit",
-                      "unparsed"
+                      "unparsed",
+                      "ref_missing"
                     ],
-                    "description": "resolved, or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed."
+                    "description": "resolved, or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
                   },
                   "ref_basis": {
                     "enum": [
@@ -347,7 +348,7 @@
                       "worktree",
                       null
                     ],
-                    "description": "How the file was read: at the pinned ref, at the clone's HEAD (no pin, or a pin the clone does not hold), or from the work tree; null when not resolved."
+                    "description": "How the file was read: at the pinned ref, at the clone's HEAD (no pin), or from the work tree; null when not resolved."
                   },
                   "depth": {
                     "type": "integer",

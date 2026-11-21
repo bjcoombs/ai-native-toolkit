@@ -128,8 +128,18 @@ def test_a_missing_file_stays_unknown(tmp_path: Path) -> None:
     assert block["test_or_lint_runs"] is None and block["includes"][0]["status"] == "file_missing"
 
 
-def test_a_pin_the_clone_lacks_is_read_at_head_and_recorded(tmp_path: Path) -> None:
-    ci = "include:\n  - project: grp/ci-templates\n    file: /templates/test.yml\n    ref: v9\n"
+@pytest.mark.parametrize("ref", ["v9", "$TPL_REF", "--output=/x"])
+def test_a_pin_the_clone_cannot_read_is_unresolved_never_false(tmp_path: Path, ref: str) -> None:
+    """HEAD is a different version than the pin: neither true nor false is read from it."""
+    ci = f"include:\n  - project: grp/ci-templates\n    file: /templates/test.yml\n    ref: '{ref}'\n"
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": "docs:\n  script:\n    - make docs\n"}, ci=ci)
+    block = scan_ci_checks(app, root)
+    assert [(r["status"], r["ref_basis"]) for r in block["includes"]] == [("ref_missing", None)]
+    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+
+
+def test_no_ref_reads_head_and_records_it(tmp_path: Path) -> None:
+    ci = "include:\n  - project: grp/ci-templates\n    file: /templates/test.yml\n"
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
     record = scan_ci_checks(app, root)["includes"][0]
     assert (record["status"], record["ref_basis"]) == ("resolved", "head")
@@ -166,15 +176,11 @@ def test_local_includes_resolve_in_the_checkout_and_in_a_template(tmp_path: Path
     ("include:\n  - project: grp/../etc\n    file: /t.yml\n", "bad_path"),
     ("include:\n  - project: grp/ci-templates\n    file: /../t.yml\n", "bad_path"),
     ("include:\n  - project: grp/ci-templates\n", "bad_path"),
-    ("include:\n  - project: grp/ci-templates\n    file: /templates/test.yml\n    ref: --output=/x\n",
-     "resolved"),
 ])
 def test_unresolvable_includes_are_named(tmp_path: Path, ci: str, status: str) -> None:
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
     record = scan_ci_checks(app, root)["includes"][0]
     assert record["status"] == status
-    if status == "resolved":  # an option-like ref is never passed to git: HEAD is read
-        assert record["ref_basis"] == "head"
 
 
 def test_a_component_resolves_from_its_project_clone(tmp_path: Path) -> None:
@@ -332,3 +338,13 @@ def test_an_item_stopped_by_the_file_limit_says_so(tmp_path: Path, monkeypatch: 
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["file_limit"]
     assert block["test_or_lint_runs"] is None
+
+
+@pytest.mark.parametrize("text", [
+    "include:\n  - project: a/b\n    file:\n      - /x.yml\n    rules:\n      - if: $X\n",
+    "include:\n  - project: a/b\n    file:\n    - /x.yml\n    rules:\n    - if: $X\n",
+    "include:\n  - project: a/b\n    file:\n      - /x.yml\n    inputs:\n      - stage: test\n",
+])
+def test_a_key_after_a_file_list_ends_it(text: str) -> None:
+    items, _, dropped = include_items(text)
+    assert (items[0].files, dropped) == (("/x.yml",), 0)

@@ -407,9 +407,10 @@ def test_a_root_run_resolves_gitlab_includes_from_sibling_clones(tmp_path, monke
     """#766: ROOT reaches every scan, so a template cloned in the root is read."""
     monkeypatch.chdir(tmp_path)
     root = tmp_path / "gi"
-    make_repo(root, "grp/ci-templates", files={
+    tpl = make_repo(root, "grp/ci-templates", files={
         "templates/test.yml": "unit:\n  script:\n    - pytest -q\n",
         "templates/review.yml": "include:\n  - component: gl.test/tools/ai-review@1.2.0\n"})
+    subprocess.run(["git", "-C", str(tpl), "branch", "-M", "main"], check=True)  # the pinned ref
 
     def ci(project: str, file: str) -> dict[str, str]:
         return {".gitlab-ci.yml": f"include:\n  - project: {project}\n    file: {file}\n    ref: main\n",
