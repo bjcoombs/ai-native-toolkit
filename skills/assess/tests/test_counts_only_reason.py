@@ -25,6 +25,12 @@ def test_structure_reason_is_a_reason_code_rule() -> None:
     ("grimp failed to build import graph (boom)", "grimp_failed"),
     ("no importable Python packages found", "no_python_packages"),
     ("something else went wrong", "unavailable"),
+    # privacy: a path-like or name-like prefix never survives as a code
+    ("/home/user/repo: permission denied", "unavailable"),
+    ("src/app.py: syntax error", "unavailable"),
+    ("alice: could not read the module", "unavailable"),
+    ("alice@example.com: denied", "unavailable"),
+    ("Alice_Smith: denied", "unavailable"),
 ])
 def test_reason_token_keeps_the_code_only(reason: str, code: str) -> None:
     assert reason_token(reason) == code

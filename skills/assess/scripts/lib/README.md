@@ -1777,7 +1777,8 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
-reduces a `REASON` field (`structure.reason`) to its code: the leading code, the code of
+reduces a `REASON` field (`structure.reason`) to its code: the leading code when it is a
+lowercase snake_case code (`REASON_CODE_RE`, so a path or a name never leaks), the code of
 a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
 so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
 Tests: `tests/test_counts_only_reason.py`. `render_doc`

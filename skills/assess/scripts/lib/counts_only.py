@@ -44,6 +44,7 @@ from lib.counts_only_rules import (
     PATH,
     PATH_KEYED_MAPS,
     REASON,
+    REASON_CODE_RE,
     REASON_SENTENCE_CODES,
     RULES,
     TOKEN,
@@ -310,8 +311,9 @@ def render_doc() -> str:
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
         "A field kept as a reason code keeps only the code of a `code: sentence`",
-        "reason (`no_import_graph_rust`), or the code a known sentence maps to",
-        "(`no_grimp`), else `unavailable`; an empty reason is dropped.",
+        "reason when it is a lowercase snake_case code (`no_import_graph_rust`),",
+        "or the code a known sentence maps to (`no_grimp`), else `unavailable`,",
+        "so a path or name before the colon is never kept; an empty reason is dropped.",
         "",
         "Not filtered: the wiki pages, hotspot pages, badge and report the run",
         "also writes stay in the target repository's `.assess/` directory and",
@@ -419,13 +421,16 @@ def reason_code(reason: object) -> str:
 
 def reason_token(reason: str) -> str | None:
     """A ``REASON`` field's code: the leading code, a known sentence's code, or
-    ``"unavailable"``; None (dropped) for an empty reason (#764)."""
+    ``"unavailable"``; None (dropped) for an empty reason (#764). A leading
+    code is kept only when it matches ``REASON_CODE_RE``, so a path or a name
+    before the colon never leaks."""
     if not reason.strip():
         return None
-    code = reason_code(reason)
-    if code != "unavailable":
+    code = reason.split(":", 1)[0].strip()
+    if REASON_CODE_RE.match(code):
         return code
-    return next((c for needle, c in REASON_SENTENCE_CODES if needle in reason), code)
+    return next((c for needle, c in REASON_SENTENCE_CODES if needle in reason),
+                "unavailable")
 
 
 def counts_only_scans(
