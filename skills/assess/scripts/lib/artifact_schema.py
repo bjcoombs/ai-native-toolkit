@@ -136,14 +136,19 @@ constant each.
 # groups.jsonl lines gain agent_building class counts and the run writes
 # agent_clusters.json. Additive: no existing key moves, and complexity-stats.json
 # is unchanged.
-# 1.21.0: run-context.json structure gains language (issues #707, #708), the
+# 1.21.0: run-context.json ai_usage gains author counts (issue #695):
+# agent_authored_commits/share, agent_either_commits/share,
+# dependency_bot_commits, token_user_commits, agent_identity_rule_commits
+# (positional, per [ai_usage] config rule) and covered_author_agents; limits
+# reworded. Additive; the trailer fields are unchanged.
+# 1.22.0: run-context.json structure gains language (issues #707, #708), the
 # language of the measured import graph (the largest, one graph per language),
 # null when none was measured. An unavailable block's reason names the dominant
 # source language: no_import_graph_<language>, no_python_packages for a Python
 # repository, no_source_files with no source. Additive: no existing key moves, a
 # Python repository's values are unchanged, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.21.0"
+ARTIFACT_SCHEMA_VERSION = "1.22.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
