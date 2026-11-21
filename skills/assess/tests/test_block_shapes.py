@@ -233,3 +233,14 @@ def test_counts_only_keeps_the_newly_typed_integer_and_counts_the_families(repo:
         assert rows and all(set(r) == {"count", "families", "max_survived"} for r in rows.values())
         assert all(isinstance(r["families"], int) and r["max_survived"] >= 1 for r in rows.values())
         assert all(k.startswith(HASH_PREFIX) for k in rows) is hashed
+
+
+def test_hashed_counts_only_promissory_block_carries_no_path(repo: Path) -> None:
+    """``stale_by_file`` is path-keyed (``PATH_KEYED_MAPS``): under ``--hash-paths`` no
+    repository path survives, as a key or a value, with ``max_survived`` now kept."""
+    block = scan_promissory_markers(repo, stale_touches=1).summary()
+    assert block["stale_by_file"] and block["top_offenders"]
+    text = json.dumps(counts_only({"promissory_markers": block}, hash_paths=True, salt="s"))
+    paths = {"src/app.py", "src", "app.py"} | set(block["stale_by_file"])
+    assert [p for p in paths if p in text] == []
+    assert "max_survived" in text
