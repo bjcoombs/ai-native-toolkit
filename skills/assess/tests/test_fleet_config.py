@@ -104,9 +104,19 @@ def test_validation_errors_name_the_key(text, named):
     assert named in str(exc.value)
 
 
-def test_a_key_in_the_real_sections_is_unknown_until_a_consumer_adds_it():
-    with pytest.raises(fcfg.FleetConfigError, match=r"ai_usage.agent_identities: unknown key \(known: none yet\)"):
-        fcfg.parse_fleet_config(f'[ai_usage]\nagent_identities = ["{SENTINEL}"]\n')
+def test_a_key_a_real_section_does_not_define_is_unknown():
+    with pytest.raises(fcfg.FleetConfigError,
+                       match=r"ai_usage.agents: unknown key \(known: agent_identities, token_users_as_agents\)"):
+        fcfg.parse_fleet_config(f'[ai_usage]\nagents = ["{SENTINEL}"]\n')
+
+
+def test_ai_usage_keys_validate():
+    config = fcfg.parse_fleet_config(
+        '[ai_usage]\ntoken_users_as_agents = true\n'
+        '[[ai_usage.agent_identities]]\npattern = "^a"\nfield = "name"\n')
+    assert fcfg.ai_usage_section(config) == {
+        "token_users_as_agents": True, "agent_identities": [{"pattern": "^a", "field": "name"}]}
+    assert fcfg.section_entries(config)["ai_usage"] == 2
 
 
 def test_an_error_message_never_carries_the_value():
