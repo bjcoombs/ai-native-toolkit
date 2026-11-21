@@ -120,8 +120,8 @@ def _script_items(lines: Sequence[str]) -> list[bool]:
     """
     flags = [True] * len(lines)
     for i, line in enumerate(lines):
-        if _BARE_ITEM.match(line) is None:
-            continue
+        if _BARE_ITEM.match(line) is None or not _lone_check(ci_line_text(line)):
+            continue   # only a lone always-check item needs its parent
         depth = _indent(line)
         parent = ""
         for above in reversed(lines[:i]):
@@ -136,9 +136,13 @@ def _script_items(lines: Sequence[str]) -> list[bool]:
     return flags
 
 
-def count_check_lines(lines: Sequence[str]) -> int:
-    """How many of one CI file's lines run a test or lint check (a blanked line runs none)."""
-    flags = _script_items(lines)
+def count_check_lines(lines: Sequence[str], *, context: Sequence[str] | None = None) -> int:
+    """How many of one CI file's lines run a test or lint check (a blanked line runs none).
+
+    ``context`` is the file's original lines when ``lines`` is a rewrite of them with
+    the same length (``ci_masking.unmasked_lines``): parent keys are read from it.
+    """
+    flags = _script_items(lines if context is None else context)
     return sum(1 for line, script_item in zip(lines, flags, strict=True)
                if _line_runs_check(line, script_item=script_item))
 

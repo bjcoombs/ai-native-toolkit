@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import check_commands, scan_ci_checks
+from lib.ci_checks import check_commands, count_check_lines, scan_ci_checks
 from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 
@@ -33,7 +33,6 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
     "script:\n- pytest",
     "test:\n  before_script: &setup\n    - nox",
     "script:\n  - |\n    echo hi\n  - py.test",
-    "needs:\n  - pytest -q",
 ])
 def test_a_ci_line_that_runs_a_check_counts(text: str) -> None:
     assert check_commands(text) >= 1
@@ -141,6 +140,13 @@ def test_a_lone_always_check_value_with_an_include_is_unknown(tmp_path: Path) ->
 def test_a_gitlab_script_item_running_pytest_counts(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": "test:\n  script:\n    - pytest -q\n"}))
     assert (block["check_commands"], block["test_or_lint_runs"]) == (1, True)
+
+
+def test_parent_keys_come_from_the_context_lines() -> None:
+    """A rewrite that blanks the ``script:`` line still reads its items' parent from the original."""
+    original = ["test:", "  script:", "    - pytest"]
+    assert count_check_lines(["test:", "", "    - pytest"], context=original) == 1
+    assert count_check_lines(["needs:", "  - pytest"], context=["needs:", "  - pytest"]) == 0
 
 
 def test_a_local_reusable_workflow_is_not_an_include() -> None:
