@@ -731,11 +731,11 @@ completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
 both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
-one exception: a network scan in `PLATFORM_SCANS` (an explicit list, `review_reality`
-today), or a network spec one of them reads, runs its `fn`. Extension point for #715 and
-#716: append a new platform block's name to `PLATFORM_SCANS`; register a sample of merged
-changes several blocks share as a private `network=True` spec they `read`, and it runs
-once under `--platform` as their dependency. Only published, single-key scans
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`
+and `delivery`), or a network spec one of them reads, runs its `fn`. Extension point:
+append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
+changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
+which runs once under `--platform` as their dependency. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
@@ -2183,22 +2183,65 @@ failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
 alongside any change to discovery or the diff.
 
+**`merged_sample.py`**
+The shared sample of merged changes (#715), registered as the private
+`network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
+`run_date`; `review_reality` and `delivery` read it, so one listing serves both
+blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+on or after `fleet_activity.window_start(history_window, run_date)`, newest
+`merged_at` first; `history_window` None (interactive `/assess` with no churn
+window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
+--search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
+(an update is never before its merge, so the newest merges are among the most
+recently updated), then the same search from the 30th newest `mergedAt` with
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
+for the heavy fields. GitLab, one read:
+`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
+then filtered and ordered by `merged_at` client-side (works on GitLab versions
+without `order_by=merged_at`). A change with no readable merge time is
+`<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
+dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
+so an account is probed once); any refusal is `{"available": false, "reason"}`,
+which each reader returns as its own block. `BotClassifier` (moved from
+`review_reality`): an author object with `is_bot`/`type` is classified from it, a
+`[bot]` login is a bot, any other login is probed once with `gh api
+users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
+person, anything else unknown. The value holds logins and text in memory only and
+never reaches a block. Tests: `tests/test_delivery.py`,
+`tests/test_platform_argv_contract.py`.
+
+**`delivery.py`**
+The `delivery` platform block (#715, part of #702), reads `merged_sample`,
+`review_reality` and `fleet_config`: `{available, merged_count,
+time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
+first_human_comment_hours_p90, human_commented_share, ai_review_share,
+approved_share, self_merged_share}`. Hours rounded to 0.01; percentiles are
+nearest-rank. `approved_share` and `self_merged_share` are copied from
+`review_reality` (null when it is unavailable). First human comment (GitHub): the
+earliest comment or review by an account that is not the author, not
+`github-actions` and not a bot; an unknown account before the first known human
+on any change nulls the three comment figures. AI review (GitHub): a review or
+comment by an `[[ai_usage.agent_identities]]` config match (username, with and
+without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
+`agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,
+an unknown account that decides a change nulls the share. GitLab: time to merge and
+the copied shares; the notes-based figures are null until #716. An unavailable
+sample is returned as the block. Tests: `tests/test_delivery.py`.
+
 **`review_reality.py`**
-Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
-`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
-requests (`gh pr list` orders by creation, not merge) with
-`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
-and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed. The
+registry entry `review_reality_from_sample` reads the shared `merged_sample`
+(above; before #715 it was the 30 most recently opened merged pull requests,
+unwindowed, so figures shift with the window); `scan_review_reality(repo_root,
+history_window=None, run_date=None)` draws the sample itself. It
+emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
 review_required, hollow_required_review, required_approval_bypassed}`.
 `reviewed_share` counts a review in any state by any account other than the
 author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
-in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
-object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
-probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
-404 is a person, anything else is unknown, as is a comment with no author
-login. An unknown author withholds the share (null) only when it decides a pull
+in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
+author withholds the share (null) only when it decides a pull
 request: one with a confirmed bot comment counts regardless.
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
@@ -2209,10 +2252,10 @@ null when neither says yes and one was refused. `hollow_required_review` is
 where an AI reviewer comments on every change but nobody approves. Both are null
 when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
-the block. A failed pull-request read degrades the whole block to `available:
+the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
-`DEFAULT_LIMIT` most recently created merged merge requests and one `approvals` read
-each: `approved_share` (approved by an account other than the author),
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs)`) and one
+`approvals` read each: `approved_share` (approved by an account other than the author),
 `self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
 and `bot_review_share` are null (approvals are the only evidence read), and
 `hollow_required_review` is False only when approvals alone clear the threshold, else

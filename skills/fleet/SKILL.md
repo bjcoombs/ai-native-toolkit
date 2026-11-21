@@ -367,9 +367,23 @@ repository; the block never carries a pattern or a matched identity.
 The offline scan never reaches the network. `--platform` adds a second, separate
 pass after it: for each repository whose row is `ok`, one more
 `assess_signals.py --platform` child reads the platform for the scans in
-`lib/signals.py` `PLATFORM_SCANS` (today `review_reality`; #715 and #716 add the
-`delivery` block), narrowed by `--scans` when given. Each needs `gh` (github.com
-remotes) or `glab` (GitLab remotes) logged in.
+`lib/signals.py` `PLATFORM_SCANS` (`review_reality` and `delivery`), narrowed by
+`--scans` when given. Each needs `gh` (github.com remotes) or `glab` (GitLab
+remotes) logged in.
+
+- **One shared sample.** Both blocks read the same sample: up to 30 changes merged
+  inside `--window` (counted back from the scan date), the most recently merged
+  first. `review_reality` used to read the 30 most recently *opened* merged
+  changes with no window, so its shares move between a pre-#715 run and a later
+  one, and a narrow window can sample fewer than 30.
+- **`delivery`.** `merged_count`, `time_to_merge_hours_p50` / `_p90` (opened to
+  merged), `first_human_comment_hours_p50` / `_p90` and `human_commented_share`
+  (the first comment or review by a person other than the author), `ai_review_share`
+  (a review or comment by a known AI review app, a pinned agent app, or an
+  `[[ai_usage.agent_identities]]` rule), and `approved_share` / `self_merged_share`
+  copied from `review_reality`. Durations are hours, percentiles nearest-rank. On
+  GitLab only time to merge and the copied shares are filled so far; the comment
+  and AI-review figures are null.
 
 - **Joined, never failing a row.** The pass's blocks replace the offline
   `network` placeholders in the row's `scans`. It never changes a row's
