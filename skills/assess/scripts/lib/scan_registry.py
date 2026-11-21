@@ -53,13 +53,15 @@ from lib.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
 from lib.coverage_gate import detect_coverage_gate
+from lib.delivery import scan_delivery
 from lib.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
-from lib.review_reality import scan_review_reality
+from lib.merged_sample import merged_sample
+from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 
 # Names the core passes to ``run_scans``: the arguments of
@@ -421,7 +423,17 @@ SCANS: tuple[ScanSpec, ...] = (
     # `gh`. Optional: no remote, no `gh`, no auth or a refused read degrades to
     # available: false with the reason, never a clean result.
     ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
-    ScanSpec("review_reality", scan_review_reality, ("repo_root",), STAGE_READ_SIDE, network=True),
+    # The shared sample of merged changes (#715): up to 30 merged in the run
+    # window, newest merge first. Private; review_reality and delivery read it,
+    # so one listing serves both and they describe the same changes.
+    ScanSpec("merged_sample", merged_sample, ("repo_root", "history_window", "run_date"),
+             STAGE_READ_SIDE, private=True, network=True),
+    ScanSpec("review_reality", review_reality_from_sample, ("merged_sample",), STAGE_READ_SIDE,
+             network=True),
+    # Delivery figures (#715): time to merge, first human comment, AI review;
+    # review_reality's approved and self-merged shares are copied, not recomputed.
+    ScanSpec("delivery", scan_delivery, ("merged_sample", "review_reality", "fleet_config"),
+             STAGE_READ_SIDE, network=True),
     ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
     # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
     # names its file, line and threshold as written; none found reads

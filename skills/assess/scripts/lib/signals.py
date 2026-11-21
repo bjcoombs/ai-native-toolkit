@@ -125,7 +125,9 @@ NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headl
 # changes read it as a registry input: register the sample as a private
 # ``network=True`` spec, list it in the blocks' ``reads``, and it runs (once) under
 # ``--platform`` because it is a dependency of a listed scan.
-PLATFORM_SCANS: tuple[str, ...] = ("review_reality",)
+# ``merged_sample`` (lib/merged_sample.py, #715) is that shared sample: ``review_reality``
+# and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
+PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery")
 
 DEFAULT_WINDOW = "6mo"
 

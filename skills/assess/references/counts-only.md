@@ -364,6 +364,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `config_drift.snapshots.doc` | dropped |
 | `config_drift.snapshots.branch` | dropped |
 | `review_reality.reason` | dropped |
+| `delivery.reason` | dropped |
 | `gate_cost_estimate.reason` | dropped |
 | `gate_cost_estimate.assumption` | dropped |
 | `capability_offers.build_system` | token |

@@ -380,6 +380,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "config_drift.snapshots.doc": DROP,
         "config_drift.snapshots.branch": DROP,
         "review_reality.reason": DROP,
+        "delivery.reason": DROP,
         "gate_cost_estimate.reason": DROP,
         "gate_cost_estimate.assumption": DROP,
         "capability_offers.build_system": TOKEN,

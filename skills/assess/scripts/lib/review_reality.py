@@ -1,10 +1,11 @@
 """Review reality: whether merged pull requests were actually reviewed.
 
 Layer 7 asks whether every change gets design-level feedback. A required-review
-rule that every merge bypasses reads as Present and is hollow. This scan samples
-the ``DEFAULT_LIMIT`` most recently opened merged pull requests through ``gh``
-(``gh pr list`` orders by creation, not merge) and reports, as
-counts and shares only, how many carried a review from someone other than the
+rule that every merge bypasses reads as Present and is hollow. This scan reads
+the shared ``merged_sample`` (``lib/merged_sample.py``, #715): up to 30 changes
+merged inside the run window, the most recently merged first (before #715 it
+was the 30 most recently *opened* merged pull requests, unwindowed). It
+reports, as counts and shares only, how many carried a review from someone other than the
 author, a comment from a review bot, and an author who merged their own change,
 next to whether the default branch requires an approving review.
 
@@ -36,25 +37,18 @@ no ruleset covers), and ``hollow_required_review`` follows it. ``bot_review_shar
 is None when a commenter's account type could not be learned and that decides
 whether a sampled pull request counts.
 
-Bot classification. ``gh pr list`` gives a comment author a ``login`` only, with
-a bot's ``[bot]`` suffix dropped. An author object that carries ``is_bot`` or
-``type`` is classified from it; a login ending ``[bot]`` is a bot; any other
-login is probed once with ``gh api users/<login>[bot]`` (a GitHub App's bot
-account; ``[`` cannot appear in a person's login): an answer of type ``Bot``
-is a bot, a 404 is a person, anything else leaves it unknown, as does a
-comment with no author login. At most
-``MAX_LOGIN_PROBES`` distinct logins are probed. ``github-actions`` comments are
-status comments and never count; neither does anything in ``reviews``.
+Bot classification is the sample's ``merged_sample.BotClassifier`` (shared with
+``delivery``, so an account is probed once per run). ``github-actions`` comments
+are status comments and never count; neither does anything in ``reviews``.
 
 Privacy: no title, login or user name is written to the block - only counts,
-shares and booleans. A failed pull-request read degrades the whole block to
-``{"available": False, "reason"}`` (``no_access`` on HTTP 403). GitHub access
+shares and booleans. A failed sample read degrades the whole block to the
+sample's ``{"available": False, "reason"}`` (``no_access`` on HTTP 403). GitHub access
 goes through ``gh_cli``.
 
 GitLab. When ``gitlab_cli.open_gitlab`` resolves the remote to a GitLab
-project, the same block is built from merged merge requests through ``glab``:
-the ``DEFAULT_LIMIT`` most recently created merged merge requests, then each
-one's ``approvals`` read. ``approved_share`` counts a merge request approved by
+project, the same block is built from the sample's merged merge requests through
+``glab``: each one's ``approvals`` read. ``approved_share`` counts a merge request approved by
 an account other than its author and ``self_merged_share`` one whose
 ``merge_user`` (else ``merged_by``) is its author. Approvals are the only
 review evidence read, so ``reviewed_share`` and ``bot_review_share`` are None,
@@ -72,19 +66,19 @@ whole block, never reads as "no reviews".
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from lib.gh_cli import GhUnavailable, gh_api, gh_json, open_github, unavailable
-from lib.gitlab_cli import (
-    GitlabProject, branch_pattern, branch_protection, glab_api, open_gitlab,
+from lib.gh_cli import GhUnavailable, gh_api, unavailable
+from lib.gitlab_cli import GitlabProject, branch_pattern, branch_protection, glab_api
+from lib.merged_sample import (
+    PR_FIELDS as PR_FIELDS,  # re-exported: the fields the sample reads
+    STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, merged_sample, parse_time,
 )
-
-# Merged pull requests sampled per run.
-DEFAULT_LIMIT = 30
+from lib.merged_sample import login as _login
 
 # Under this share of reviewed merges, a required-review rule is hollow.
 HOLLOW_THRESHOLD = 0.2
@@ -93,71 +87,17 @@ HOLLOW_THRESHOLD = 0.2
 # both flags are null below it.
 MIN_SAMPLE = 5
 
-# Distinct unmarked comment logins probed for a bot account per run.
-MAX_LOGIN_PROBES = 20
-
-# Status-comment bot; its comments are not review.
-_STATUS_BOTS = frozenset({"github-actions", "github-actions[bot]"})
-
-# The issue's field list plus mergedAt (for the sample's age). reviewDecision is
-# fetched because the issue names it but is not scored: it reflects the current
-# rule, not whether anyone other than the author reviewed.
-PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments"
-
-
-def _login(actor: Any) -> str | None:
-    if isinstance(actor, dict):
-        login = actor.get("login")
-        if isinstance(login, str) and login:
-            return login.lower()
-    return None
-
 
 def _share(count: int, total: int) -> float | None:
     return round(count / total, 3) if total else None
 
 
-class _BotClassifier:
-    """Decides whether a comment author is a bot; caches one probe per login."""
-
-    def __init__(self) -> None:
-        self._known: dict[str, bool | None] = {}
-        self._probes = 0
-
-    def is_bot(self, actor: Any) -> bool | None:
-        login = _login(actor)
-        if login is None:
-            # No author login (a deleted account, a malformed entry): unknown.
-            return None
-        flag = actor.get("is_bot")
-        if isinstance(flag, bool):
-            return flag
-        kind = actor.get("type")
-        if isinstance(kind, str):
-            return kind == "Bot"
-        if login.endswith("[bot]"):
-            return True
-        if login not in self._known:
-            self._known[login] = self._probe(login)
-        return self._known[login]
-
-    def _probe(self, login: str) -> bool | None:
-        if self._probes >= MAX_LOGIN_PROBES:
-            return None
-        self._probes += 1
-        try:
-            user = gh_api(f"users/{quote(login + '[bot]', safe='')}")
-        except GhUnavailable as e:
-            return False if e.reason.startswith("not_found") else None
-        return isinstance(user, dict) and user.get("type") == "Bot"
-
-
-def _has_bot_comment(pr: dict[str, Any], bots: _BotClassifier) -> bool | None:
+def _has_bot_comment(pr: dict[str, Any], bots: BotClassifier) -> bool | None:
     """True on a bot comment, False on none, None when an unknown author decides."""
     unknown = False
     for comment in pr.get("comments") or []:
         actor = comment.get("author") if isinstance(comment, dict) else None
-        if _login(actor) in _STATUS_BOTS:
+        if _login(actor) in STATUS_BOTS:
             continue
         verdict = bots.is_bot(actor)
         if verdict:
@@ -258,22 +198,15 @@ def _flag(required: bool | None, share: float | None, total: int) -> bool | None
 
 
 def _days_ago(stamp: Any, now: datetime) -> int | None:
-    if not isinstance(stamp, str) or not stamp:
-        return None
-    try:
-        when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return max(0, (now - when).days)
+    when = parse_time(stamp)
+    return None if when is None else max(0, (now - when).days)
 
 
 def summarize(prs: list[dict[str, Any]], required: bool | None,
-              bots: _BotClassifier | None = None,
+              bots: BotClassifier | None = None,
               now: datetime | None = None) -> dict[str, Any]:
     """The available block from sampled pull requests (pure except bot probes)."""
-    bots = bots or _BotClassifier()
+    bots = bots or BotClassifier()
     now = now or datetime.now(timezone.utc)
     total = len(prs)
     reviewed = sum(_reviewed_by_other(pr) for pr in prs)
@@ -377,18 +310,13 @@ def _approved_by_other(approvals: Any, author: str | None) -> bool:
     return False
 
 
-def scan_gitlab_review_reality(project: GitlabProject,
-                               limit: int = DEFAULT_LIMIT,
+def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, Any]],
                                now: datetime | None = None) -> dict[str, Any]:
-    """The ``review_reality`` block for a GitLab project (see module docstring)."""
+    """The ``review_reality`` block for a GitLab project's sampled merge requests
+    (see module docstring)."""
     now = now or datetime.now(timezone.utc)
     enc = project.encoded
     try:
-        got = glab_api(project, f"projects/{enc}/merge_requests?state=merged"
-                                f"&order_by=created_at&sort=desc&per_page={limit}")
-        if not isinstance(got, list):
-            return unavailable("glab_bad_json: the merged merge request list was not a list")
-        mrs = [mr for mr in got if isinstance(mr, dict)][:limit]
         approved = self_merged = 0
         ages: list[int] = []
         for mr in mrs:
@@ -424,21 +352,23 @@ def scan_gitlab_review_reality(project: GitlabProject,
     }
 
 
-def scan_review_reality(repo_root: Path, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
-    """Build the ``review_reality`` run-context block (see module docstring)."""
-    try:
-        project = open_gitlab(repo_root)
-    except GhUnavailable as e:
-        return unavailable(e.reason)
-    if project is not None:
-        return scan_gitlab_review_reality(project, limit)
-    try:
-        repo = open_github(repo_root)
-        got = gh_json(["pr", "list", "--repo", repo.slug, "--state", "merged",
-                       "--limit", str(limit), "--json", PR_FIELDS])
-    except GhUnavailable as e:
-        return unavailable(e.reason)
-    if not isinstance(got, list):
-        return unavailable("gh_bad_json: `gh pr list` did not return a list")
-    prs = [pr for pr in got if isinstance(pr, dict)][:limit]
-    return summarize(prs, review_required(repo.slug))
+def review_reality_from_sample(sample: SampleOrReason) -> dict[str, Any]:
+    """The ``review_reality`` registry entry: the block from the shared ``merged_sample``.
+
+    An unavailable sample is returned as the block, reason and all."""
+    if not isinstance(sample, MergedSample):
+        return sample
+    changes = list(sample.changes)
+    if sample.gitlab is not None:
+        return scan_gitlab_review_reality(sample.gitlab, changes)
+    if sample.github is None:
+        return unavailable("no_remote: the sample names no repository")
+    return summarize(changes, review_required(sample.github.slug), sample.bots)
+
+
+def scan_review_reality(repo_root: Path, history_window: str | None = None,
+                        run_date: str | None = None) -> dict[str, Any]:
+    """Build the ``review_reality`` block for ``repo_root`` (see module docstring):
+    draws the sample, then :func:`review_reality_from_sample`."""
+    today = run_date or datetime.now(timezone.utc).date().isoformat()
+    return review_reality_from_sample(merged_sample(repo_root, history_window, today))
