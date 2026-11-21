@@ -354,7 +354,7 @@ maturity-model change.
 repository (`view` and `unit_kind` `repo`). A unit's level on a team row is the row's
 roll-up rule (`min` or `share`) over its measured repositories, those with a known level.
 
-**Unknown never earns or loses.** A row counts only when it *moves cleanly*: known in
+**Unknown is neutral, with one exception.** A row counts only when it *moves cleanly*: known in
 both runs over the same measured set of repositories. A repository going unknown,
 failing its scan, joining or leaving a unit, or hashed under another salt makes that
 move neutral. One exception, on a step from a re-scored entry: a repository's own move

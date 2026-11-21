@@ -325,3 +325,33 @@ def test_achievements_schema_accepts_recount(tmp_path: Path) -> None:
     bad = {**with_recount["recount"]["lines"][0], "direction": "lapse"}
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**with_recount, "recount": {**with_recount["recount"], "lines": [bad]}}, schema)
+
+
+def test_a_row_new_to_the_model_that_rescores_unknown_is_rule_caused(tmp_path: Path) -> None:
+    added = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-2"') + """
+[[rows]]
+id = "lint"
+title = "Lint gate"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "lint.present", op = "eq", value = true }]
+""")
+    stored = _data(DATES[0], BASE, V1)
+    again = fr.rescore(stored, _rows(BASE), added, KEY)
+    assert again is not None
+    caused = fr.rule_unknowns(stored, again)
+    assert {(repo, "lint") for repo in BASE} <= caused
+    # this run measures lint: the move from the rule-caused unknown earns no streak step
+    then = {"grp/c": {"lint": _cell(None)}}
+    assert fa.unknown_move(then, {"grp/c": {"lint": _cell(1)}}, "grp/c", "lint", caused) is None
+
+
+def test_report_keeps_the_unknown_rule_when_there_is_no_recount(tmp_path: Path) -> None:
+    org = _history(tmp_path)
+    _entry(org, NOW, BASE, V2)
+    plain = credit_section(_doc(org, V2, date="2026-11-29"), V2)
+    assert "An unknown level never earns or loses anything." in plain
+    assert "An unknown level never earns" not in credit_section(_doc(_history(tmp_path / "b"), V2), V2)

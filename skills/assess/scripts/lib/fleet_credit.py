@@ -37,7 +37,9 @@ KIND_LABELS = {"level_up": "Level-ups", "first": "Firsts", "target_hit": "Target
 
 def _intro(doc: Achievements) -> str:
     rule = "Every line is computed from run data."
-    if doc["recount"] is not None:
+    if doc["recount"] is None:
+        rule += " An unknown level never earns or loses anything."
+    else:
         rule += (" A move caused by a change to the maturity model's rules is listed under Recount, "
                  "never as an achievement.")
     if len(doc["runs"]) < 2:
