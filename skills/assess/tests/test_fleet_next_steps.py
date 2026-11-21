@@ -364,7 +364,9 @@ def test_guidance_declines_shapes_it_does_not_fit(signal, op, value):
 
 
 def test_measure_hints():
-    assert "full `/assess` run" in measure_hint("observability.rung")
+    assert "`scan_failed`" in measure_hint("observability.rung")   # headless since #699
+    assert "`not_git_root`" in measure_hint("doc_staleness.summary.stale_pct")
+    assert "shallow clone" in measure_hint("doc_staleness.summary.stale_pct")
     assert "ghreport" in measure_hint("two_factor.value")
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")

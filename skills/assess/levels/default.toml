@@ -77,8 +77,19 @@
 #   CLAUDE.md or, without one, AGENTS.md, its imports, unscoped
 #   .claude/rules); a repository whose only instruction file is for another
 #   tool (.cursorrules, Copilot) reaches level 1 with that size 0.
-# - Layer 1 reads the observability rung, which only a full /assess run
-#   produces: a headless run reports it unavailable, so the row is unknown.
+# - Layer 1 reads the observability rung from committed files (telemetry
+#   dependencies, a runbook or OBSERVABILITY.md, a logs or metrics MCP server
+#   or skill). A headless run builds it too (lib/headless_static.py, #699), so
+#   an uninstrumented repository reads level 0 there, not unknown.
+# - Documentation freshness reads doc_staleness.summary.stale_pct: the share
+#   of docs with a code subject of their own whose subject outran them (a
+#   staleness ratio above STALENESS_RATIO_THRESHOLD = 2.0, or a newer declared
+#   source; lib/doc_complexity_join.py). Level 1 holds that share to 50% or
+#   less (most mapped docs keep pace), level 2 to 20% or less (one in five).
+#   Repo-baseline docs (no subject of their own) are not counted. A truncated
+#   (shallow) or degenerate history, a target that is not a git work tree, or
+#   no mapped doc leaves the share null, so the row is unknown, never a false
+#   fresh or a false 0.
 # - Layer 7 reads review_reality, which needs GitHub: a headless run makes
 #   no network calls, so the row is unknown there.
 # - Layer 5 level 1 reads ci_checks.test_or_lint_runs: a line of a GitHub
@@ -103,7 +114,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.7"
+version = "default-2026.11.8"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -248,3 +259,17 @@ aggregation = "min"
     { signal = "agent_ops.summary.hooks_present", op = "eq", value = true },
     { signal = "agent_ops.summary.routines_present", op = "eq", value = true },
   ]
+
+[[rows]]
+id = "doc-freshness"
+title = "Documentation freshness"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 50 }]
+
+  [[rows.levels]]
+  level = 2
+  criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 20 }]

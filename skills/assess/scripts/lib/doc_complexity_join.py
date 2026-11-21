@@ -178,6 +178,16 @@ def _signed_freshness(doc: JsonDict) -> float:
                         -1.0, 1.0), 3)
 
 
+def is_stale(doc: JsonDict) -> bool:
+    """True when the doc's signed freshness is below zero: its subject has outrun it.
+
+    A hand-written doc is stale once its ``ratio`` exceeds
+    ``STALENESS_RATIO_THRESHOLD``; a generated doc once its declared source is
+    newer. ``doc_staleness.summary`` (#699) counts the docs this holds for.
+    """
+    return _signed_freshness(doc) < 0
+
+
 def doc_subjects(
     code_paths: list[str], docs: list[JsonDict],
 ) -> dict[str, list[str]]:

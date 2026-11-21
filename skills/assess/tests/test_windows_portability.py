@@ -22,8 +22,7 @@ from test_fleet import make_checkout
 from test_fleet_run_stamp import _pushed_repo, _row, _target
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-# Its separator and subprocess sites are owned by #699.
-EXEMPT = {"lib/doc_staleness.py"}
+EXEMPT: set[str] = set()
 
 
 def _sources() -> list[tuple[str, ast.Module]]:
