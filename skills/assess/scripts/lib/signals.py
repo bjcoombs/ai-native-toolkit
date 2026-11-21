@@ -235,16 +235,18 @@ def parse_window(window: str) -> str:
 
 
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
-                 fleet_config: FleetConfig | None = None) -> dict[str, Any]:
+                 fleet_config: FleetConfig | None = None,
+                 ghsync_root: Path | None = None) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is None: a headless run measures the whole checkout.
     ``history_window`` carries ``--window`` for history-reading scans
     (``ai_usage``, #547). ``fleet_config`` is the ``--fleet-config`` file merged
     with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
+    ``ghsync_root`` is ``--ghsync-root``, the root GitLab includes resolve against (#766).
     Besides the ``build_run_context`` arguments, it supplies the setup values
-    ``instruction_files``, ``scope``, ``excludes``, ``history_window`` and
-    ``fleet_config`` itself; the table never recomputes a name the runner provides.
+    ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
+    ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
     """
     instruction_files = grade_instruction_files(repo_root)[0]
     return {
@@ -257,6 +259,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "excludes": load_excludes(repo_root),
         "history_window": window,
         "fleet_config": repo_fleet_config(repo_root, fleet_config),
+        "ghsync_root": ghsync_root,
     }
 
 
@@ -287,6 +290,7 @@ def _unavailable(reason: str) -> JsonDict:
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
+    ghsync_root: Path | None = None,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
@@ -294,7 +298,7 @@ def collect(
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
     name gets no block at all.
     """
-    inputs = build_inputs(repo_root, window, fleet_config)
+    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root)
     needed = _with_dependencies(selected, specs, inputs)
     online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
@@ -392,6 +396,7 @@ def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
+    ghsync_root: Path | None = None,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -406,5 +411,6 @@ def build_document(
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root),
-            "scans": collect(repo_root, selected, specs, window, fleet_config, platform),
+            "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
+                             ghsync_root),
         }

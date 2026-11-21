@@ -316,6 +316,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # sections here; the headless signals run provides them merged with `--fleet-config`.
     ScanSpec("fleet_config", rs.fleet_config, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SELF_DEGRADING),
+    # The ghsync root GitLab includes resolve against (#766, lib/ci_includes.py):
+    # None here; the headless signals run provides `--ghsync-root`.
+    ScanSpec("ghsync_root", rs.ghsync_root, ("repo_root",), STAGE_SETUP, private=True,
+             degrade=False, gate_reason=_SETUP),
     ScanSpec("measured_commit", rs.measured_commit, ("repo_root",), STAGE_SETUP, private=True,
              degrade=False, gate_reason=_SETUP),
     ScanSpec("superseded", rs.superseded_run, ("assess_dir", "run_date", "measured_commit"),
@@ -544,15 +548,17 @@ SCANS: tuple[ScanSpec, ...] = (
     # listed in [review] ai_review_components), or an AI review app's config
     # file. Offline file reads; review_evidence (Layer 7 level 1) reads it with
     # review_reality and is rebuilt by the --platform pass (PLATFORM_SCANS).
-    ScanSpec("review_automation", scan_review_automation, ("repo_root", "fleet_config"),
+    ScanSpec("review_automation", scan_review_automation,
+             ("repo_root", "fleet_config", "ghsync_root"),
              STAGE_POST_OFFERS),
     ScanSpec("review_evidence", review_evidence, ("review_automation", "review_reality"),
              STAGE_POST_OFFERS),
     # CI checks (issue #698): whether a GitHub Actions or GitLab CI line runs a
     # test or lint command (check_command.is_check_command); null when no
-    # check is found but a CI file pulls jobs from elsewhere (include:, a remote
-    # reusable workflow). Layer 5 level 1 of the default maturity model. Offline.
-    ScanSpec("ci_checks", scan_ci_checks, ("repo_root",), STAGE_POST_OFFERS),
+    # check is found but a CI file pulls jobs this run cannot read (an unresolved
+    # include:, a remote reusable workflow; GitLab includes resolve offline against
+    # `ghsync_root`, #766). Layer 5 level 1 of the default maturity model. Offline.
+    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root"), STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
     # configuration, a counts-only tool-call loop / MCP server heuristic and the

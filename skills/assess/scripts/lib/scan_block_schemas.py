@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.ci_includes import STATUSES
 from lib.run_context_types import JsonDict
 
 _NUM_OR_NULL: JsonDict = {"type": ["number", "null"]}
@@ -81,15 +82,41 @@ AI_USAGE: JsonDict = {
 CI_CHECKS: JsonDict = {
     "description": (
         "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI "
-        "files. test_or_lint_runs is true when a CI line runs one, false when none does, and "
-        "null (unknown) when a CI file pulls jobs from a file this checkout does not hold "
-        "(a GitLab include, a reusable workflow in another repository); basis says which."),
+        "files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and "
+        "project or component files of clones in the --ghsync-root). test_or_lint_runs is true "
+        "when an own or included CI line runs one, false when none does and every include "
+        "resolved, and null (unknown) when a CI file pulls jobs from a file this run could not "
+        "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
+        "says which."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
         "ci_files": _field(_INT, "CI configuration files read."),
         "check_commands": _field(_INT, "CI lines that run a test or lint check."),
         "included_files": _field(_INT, "CI files that pull jobs from elsewhere."),
+        "included_check_commands": _field(_INT, "Lines of resolved included files that run a "
+                                                "test or lint check."),
+        "resolved_includes": _field(_INT, "Include items whose every file was read."),
+        "unresolved_includes": _field(_INT, "Include items not read (status other than resolved)."),
+        "includes": _field(
+            {"type": ["array", "integer"], "items": {"type": "object", "properties": {
+                "kind": {"enum": ["local", "project", "component", "template", "remote"]},
+                "id": _field({"type": ["string", "null"]},
+                             "gitlab_project:<path> or gitlab_component:<path>; null for local, "
+                             "template and remote."),
+                "status": _field({"enum": list(STATUSES)},
+                                 "resolved, or why not: no_root, not_cloned, file_missing, "
+                                 "not_offline (template, remote), glob, bad_path, depth_limit, "
+                                 "file_limit, unparsed, ref_missing (a pin the clone does not "
+                                 "hold)."),
+                "ref_basis": _field({"enum": ["ref", "head", "worktree", None]},
+                                    "How the file was read: at the pinned ref, at the clone's "
+                                    "HEAD (no pin), or from the work tree; null when not "
+                                    "resolved."),
+                "depth": _field(_INT, "Include level: 1 for the repository's own include."),
+            }}},
+            "One record per include item, nested includes after their parent; no file name "
+            "or text."),
         "test_or_lint_runs": _field(
             {"type": ["boolean", "null"]},
             "The CI test-or-lint signal: true, false, or null when included jobs may hold "

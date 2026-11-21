@@ -193,7 +193,7 @@ _LISTED_GRADES = frozenset({"config_only", "declared"})
 SIGNAL_INPUTS: dict[str, InputClass] = {
     "layer_grades.instruction_file_present": "head_text",
     "agent_environment.check.named_total": "head_text",
-    "agent_environment.layer5_cap.applies": "head_text",
+    "agent_environment.pinning.unlocked_total": "head_text",
     "instruction_claims.failed": "head_structure",
     "nested_instructions.budget.claude_code.lines": "head_structure",
     "observability.rung": "head_text",

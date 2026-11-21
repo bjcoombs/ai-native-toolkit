@@ -71,6 +71,7 @@ from urllib.parse import urlsplit, urlunsplit
 from lib.assess_config import is_user_excluded
 from lib.claude_config import parse_frontmatter
 from lib.git_churn import tracked_files
+from lib.shared_tooling import ON_KEY
 from lib.instruction_files import INSTRUCTION_FILE_PATHS
 
 ItemKind = Literal[
@@ -149,8 +150,8 @@ _CRED_MOUNT = re.compile(_HOME_REF + r"[/\\](?P<dir>" + _CRED_DIRS + r")(?![\w-]
 _RISKY_TRIGGERS = ("issue_comment", "pull_request_target")
 _TRIGGER_RE = re.compile(r"\b(issue_comment|pull_request_target)\b")
 # `true:` is how a YAML 1.1 loader (PyYAML) reads and re-serialises the bare
-# `on` key, so a workflow round-tripped through one carries it.
-_ON_KEY = re.compile(r"""^(?:on|"on"|'on'|true)\s*:(?P<rest>.*)$""")
+# `on` key; one pattern shared with lib/shared_tooling.py's workflow_events.
+_ON_KEY = ON_KEY
 _PRIVILEGED = re.compile(
     r"\b(?:terraform|tofu)\s+(?:apply|destroy)\b"
     r"|\bpulumi\s+(?:up|destroy)\b"

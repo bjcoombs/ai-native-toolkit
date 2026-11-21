@@ -441,6 +441,13 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         # Counts, a tri-state boolean and the basis token (issue #698).
         "ci_checks.reason": DROP,
         "ci_checks.basis": TOKEN,
+        # Resolved GitLab includes (#766): the kind, status and ref-basis tokens and
+        # the shared_tooling-style id (kept readable, as shared_tooling ids are);
+        # never a file name, ref or template text.
+        "ci_checks.includes.kind": TOKEN,
+        "ci_checks.includes.id": ID,
+        "ci_checks.includes.status": TOKEN,
+        "ci_checks.includes.ref_basis": TOKEN,
     },
     "layer_grades": {
         # A letter grade (A-F) or null; the presence flag is a boolean.

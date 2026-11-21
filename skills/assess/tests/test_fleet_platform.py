@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import jsonschema
@@ -27,6 +29,7 @@ from lib.fleet import (
 )
 from lib.fleet_platform import failure_reason, join, platform_scans, run_platform
 from lib.fleet_schema import build_schema, build_stamp_schema
+from lib.merged_sample import PR_FIELDS
 from lib.run_context_types import JsonDict
 from lib.signals import NETWORK_REASON, PLATFORM_SCANS
 from test_fleet import make_repo
@@ -306,3 +309,75 @@ def test_platform_with_no_platform_scan_selected_is_not_stamped(world, tmp_path)
     stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
     assert stamp["platform"] is False
     assert _calls(world) == []
+
+
+# --- no review or comment body reaches the response cache (#778) -------------
+
+# Answers ``--json`` with that read's fields only, as gh does. Before every call it
+# records each file under the watched directories that holds a body, so a body
+# cached mid-pass (the cache directory is gone once the pass ends) is caught.
+LEAK_STUB = """#!/bin/sh
+grep -rl SECRET-BODY $LEAK_DIRS >> "$GH_STUB_DIR/leak.log" 2>/dev/null
+echo "$*" >> "$GH_STUB_DIR/log"
+case "$1" in auth) exit 0 ;; esac
+case "$*" in
+  "pr list --repo "*"--json mergedAt") cat "$GH_STUB_DIR/light-$4.json"; exit 0 ;;
+  "pr list --repo "*) cat "$GH_STUB_DIR/heavy-$4.json"; exit 0 ;;
+esac
+echo "gh: Not Found (HTTP 404)" >&2; exit 1
+"""
+
+
+def _merged_prs(name: str) -> list[JsonDict]:
+    now = datetime.now(timezone.utc)
+    prs: list[JsonDict] = []
+    for k in (3, 5, 9):
+        created = now - timedelta(days=k)
+        stamp = (created + timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        prs.append({
+            "number": k, "author": {"login": "alice"}, "mergedBy": {"login": "carol"},
+            "createdAt": created.strftime("%Y-%m-%dT%H:%M:%SZ"), "mergedAt": stamp,
+            "reviewDecision": "APPROVED",
+            "comments": [{"author": {"login": "dave"}, "body": f"SECRET-BODY-c-{name}-{k}",
+                          "createdAt": stamp}],
+            "reviews": [{"author": {"login": "bob"}, "state": "APPROVED",
+                         "body": f"SECRET-BODY-r-{name}-{k}", "submittedAt": stamp}],
+        })
+    return prs
+
+
+def test_no_github_review_or_comment_body_is_written_to_disk(tmp_path, monkeypatch):
+    skip_without_posix_shell()
+    bindir, data, scratch, out = tmp_path / "bin", tmp_path / "gh", tmp_path / "tmp", tmp_path / "p1"
+    for d in (bindir, data, scratch):
+        d.mkdir()
+    (bindir / "gh").write_text(LEAK_STUB, encoding="utf-8")
+    (bindir / "gh").chmod(0o755)
+    for name in ("gha", "ghb"):
+        make_repo(tmp_path / "gp", f"org/{name}", remote=f"https://github.com/org/{name}.git")
+        heavy = _merged_prs(name)
+        (data / f"heavy-org/{name}.json").parent.mkdir(exist_ok=True)
+        (data / f"heavy-org/{name}.json").write_text(json.dumps(heavy), encoding="utf-8")
+        (data / f"light-org/{name}.json").parent.mkdir(exist_ok=True)
+        (data / f"light-org/{name}.json").write_text(
+            json.dumps([{"mergedAt": pr["mergedAt"]} for pr in heavy]), encoding="utf-8")
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("GH_STUB_DIR", str(data))
+    monkeypatch.setenv("LEAK_DIRS", f"{scratch} {out}")
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))  # the pass's cache directory
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(tmp_path / "gp"), "--out", str(out), "--no-history", "--no-diagrams",
+                           "--scans", "agent_ops,review_reality,delivery", "--platform",
+                           "--platform-jobs", "1"]) == 0
+    calls = _calls(data)
+    for name in ("gha", "ghb"):
+        assert any(c.startswith(f"pr list --repo org/{name} ") and c.endswith(PR_FIELDS)
+                   for c in calls), name
+    rows = [json.loads(line) for line in (out / "repos.jsonl").read_text().splitlines()]
+    assert len(rows) == 2
+    assert all(r["scans"]["delivery"]["available"] is True for r in rows)
+    assert all(r["scans"]["delivery"]["merged_count"] == 3 for r in rows)
+    assert _calls(data, "leak.log") == []
+    for root in (scratch, out):
+        assert not [p for p in root.rglob("*") if p.is_file() and b"SECRET-BODY" in p.read_bytes()]
