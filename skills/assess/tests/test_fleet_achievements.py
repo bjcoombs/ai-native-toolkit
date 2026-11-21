@@ -413,6 +413,18 @@ def test_a_version_1_entry_with_the_old_roll_up_is_still_replayed(tmp_path: Path
     assert _earned(doc) == _earned(_build())
 
 
+@pytest.mark.parametrize("version", [[1], {"v": 1}, True, "1", 1.0, None])
+def test_a_history_entry_with_a_malformed_version_is_passed_over(tmp_path: Path, version: object) -> None:
+    org = tmp_path / "grp"
+    _entry(org, "2026-11-01", BASE)
+    bad = json.loads(dumps_fleet_data(_data("2026-11-08", BASE)))
+    bad["fleet_data_version"] = version
+    _entry(org, "2026-11-08", BASE)
+    (org / "2026-11-08" / FLEET_DATA_FILE).write_text(json.dumps(bad), encoding="utf-8")
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-15"}
+    assert [r.run_id for r in earlier_runs(org, current, frozenset(BASE))] == ["2026-11-01"]
+
+
 @pytest.mark.parametrize("break_it", [
     lambda d: d.__setitem__("run", "not an object"),
     lambda d: d["repos"][0].pop("rows"),

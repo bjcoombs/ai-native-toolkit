@@ -71,7 +71,8 @@ def _read(entry: Path, date: str, current: FleetStamp) -> HistoryRun | None:
             return None
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    if data.get("fleet_data_version") not in READABLE_FLEET_DATA_VERSIONS \
+    version = data.get("fleet_data_version")  # an int only: a list or dict is unhashable, True == 1
+    if type(version) is not int or version not in READABLE_FLEET_DATA_VERSIONS \
             or not all(k in data for k in _TOP_KEYS) or not well_formed(cast(FleetData, data)):
         return None
     return HistoryRun(date, cast(FleetData, data))
