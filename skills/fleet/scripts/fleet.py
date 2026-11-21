@@ -196,6 +196,7 @@ from lib.fleet_platform import (  # noqa: E402
     platform_scans,
     run_platform,
 )
+from lib.fleet_scanner_diff import row_signals, scanner_diff  # noqa: E402
 from lib.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
 from lib.fleet_view import FleetViewError  # noqa: E402
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp, build_stamp, write_stamp  # noqa: E402
@@ -461,7 +462,8 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
     if earlier is None:  # nothing to compare: a compare.json left by an earlier run would mislead
         clear_stale_comparison(out_dir)
         return None
-    comparison = (compare(earlier, later) if isinstance(earlier, FleetRun)
+    comparison = (compare(earlier, later, scanner_diff(earlier.stamp, later.stamp))
+                  if isinstance(earlier, FleetRun)
                   else not_comparable(later.stamp, [earlier]))
     write_comparison(out_dir, comparison)
     for line in summary_lines(comparison):
@@ -715,7 +717,7 @@ def main(argv: list[str] | None = None) -> int:
     write_stamp(out_dir, stamp)
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
-    comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
+    comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups, row_signals(data)), earlier)
     credit = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
                            frozenset(row["repo"] for row in rows), level_targets,
                            privacy_for(args.full, hash_salt).key, args.first_achievements)

@@ -784,12 +784,16 @@ headless = { promissory_markers = "headless_variant" }
 headless_variants = [
   { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
 ]
+shapes = [
+  { path = "promissory_markers", type = "lib.block_shapes:PromissoryMarkersBlock" },
+]
 revision = 1
   [entries.privacy]
   "promissory_markers.reason" = "drop"
   "promissory_markers.top_offenders.family" = "token"
   "promissory_markers.top_offenders.text" = "drop"
   "promissory_markers.top_offenders.commit" = "drop"
+  "promissory_markers.stale_by_file.{}.families" = "drop"
 
 [[entries]]
 id = "core.agent_ops"
@@ -801,6 +805,9 @@ publishes = ["agent_ops"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { agent_ops = "registered" }
+shapes = [
+  { path = "agent_ops", type = "lib.block_shapes:AgentOpsBlock" },
+]
 revision = 1
 
 [[entries]]
@@ -861,6 +868,9 @@ stage = "read_side"
 network = true
 platform_pass = true
 headless = { review_reality = "registered" }
+shapes = [
+  { path = "review_reality", type = "lib.block_shapes:ReviewRealityBlock" },
+]
 revision = 1
   [entries.privacy]
   "review_reality.reason" = "drop"
@@ -912,7 +922,7 @@ reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
 headless = { coverage_gate = "registered" }
 shapes = [
-  { path = "coverage_gate.gates", type = "lib.coverage_gate:CoverageGate" },
+  { path = "coverage_gate", type = "lib.block_shapes:CoverageGateBlock" },
 ]
 revision = 1
   [entries.privacy]
@@ -1104,7 +1114,7 @@ headless_variants = [
   { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
 ]
 shapes = [
-  { path = "structure_drift.tier_0.empty_ownership_patterns", type = "lib.structure_drift:EmptyOwnershipPattern" },
+  { path = "structure_drift", type = "lib.block_shapes:StructureDriftBlock" },
 ]
 revision = 1
   [entries.privacy]
@@ -1200,6 +1210,9 @@ publishes = ["instruction_claims"]
 reads = ["repo_root", "instruction_files"]
 stage = "post_offers"
 headless = { instruction_claims = "registered" }
+shapes = [
+  { path = "instruction_claims", type = "lib.block_shapes:InstructionClaimsBlock" },
+]
 revision = 1
   [entries.privacy]
   "instruction_claims.failures.kind" = "token"
@@ -1647,11 +1660,11 @@ type = "bool"
 evidence = "git_history"
 
 [[entries]]
-id = "core:structure_drift.tier_0.matched_patterns"
+id = "core:structure_drift.tier_0.boundary_patterns"
 kind = "signal"
-title = "Ownership-map patterns matching a tracked file"
+title = "Ownership-map patterns naming a module path"
 collector = "core.structure_drift_block"
-path = "structure_drift.tier_0.matched_patterns"
+path = "structure_drift.tier_0.boundary_patterns"
 type = "number"
 evidence = "config_text"
 null_means = "the block is omitted with no ownership map"
@@ -1854,11 +1867,11 @@ key = "layer-3-linters.2:promissory_markers.aging_reliable"
 fix = "Run on a full clone so suppression ages can be measured."
 
 [[entries]]
-id = "core.cond.layer-4-architecture.1.matched_patterns"
+id = "core.cond.layer-4-architecture.1.boundary_patterns"
 kind = "condition"
-title = "A boundary or ownership map matches the code"
-key = "layer-4-architecture.1:structure_drift.tier_0.matched_patterns"
-fix = "Commit a CODEOWNERS or ARCHITECTURE.md whose patterns name real paths."
+title = "A boundary or ownership map names a module path"
+key = "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns"
+fix = "Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths."
 
 [[entries]]
 id = "core.cond.layer-4-architecture.2.p95"

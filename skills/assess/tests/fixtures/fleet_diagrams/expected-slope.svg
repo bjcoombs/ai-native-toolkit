@@ -45,7 +45,7 @@
 <text x="472.0" y="373.0" font-size="12.5" text-anchor="start" class="t-fg" font-weight="600">0.00</text>
 <text x="510.0" y="373.0" font-size="11.5" text-anchor="start" class="t-bad">-0.58</text>
 <text x="556.0" y="373.0" font-size="11.5" text-anchor="start" class="t-muted">web: Agent use 2→0 *</text>
-<text x="16.0" y="397.0" font-size="11.5" text-anchor="start" class="t-muted">* the group's measured set of repositories moved too, so that change is not a level change alone</text>
+<text x="16.0" y="397.0" font-size="11.5" text-anchor="start" class="t-muted">* not a level change alone: the group's measured set of repositories moved too, or the scanner changed</text>
 <text x="16.0" y="417.0" font-size="11.5" text-anchor="start" class="t-muted">Rows left out of a mean, not known in both runs (left out/rows): data (1/2)</text>
 <rect x="16.0" y="426.0" width="14.0" height="14.0" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1"/>
 <text x="38.0" y="437.0" font-size="11.5" text-anchor="start" class="t-fg">Not plotted, unknown is not zero: mobile (new since the earlier run)</text>

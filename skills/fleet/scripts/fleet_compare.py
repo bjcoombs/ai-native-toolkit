@@ -7,6 +7,16 @@ history entry (``<history>/<org>/<date>/``), holding ``repos.jsonl``,
 ``--write FILE``, and a short summary to stderr. The logic lives in
 ``skills/assess/scripts/lib/fleet_compare.py``.
 
+When the two runs were written by different toolkit commits, a moved team row whose
+signals come from a changed scanner module carries ``cause`` ``scanner_changed`` and
+``scanner`` (each block and its changed modules under ``skills/assess/scripts/lib/``),
+diffed with git in this toolkit checkout. When the diff is unavailable (a run with no
+``toolkit_commit`` at another ``plugin_version``, or a commit git cannot find) every
+moved team row carries ``toolkit_changed_unknown_scope`` and ``notes`` says the scanner
+diff was unavailable. A row whose unknown side lacks a signal the other run's scans hold
+is ``cause`` ``set`` with ``absent_signals``: measured-set movement, not a level move
+(``lib/fleet_scanner_diff.py``, #774).
+
 Exit codes:
     0  compared
     2  a run directory is missing or malformed (a stamp missing a key, a bad
@@ -43,6 +53,7 @@ from lib.fleet_compare import (  # noqa: E402
     summary_lines,
     write_comparison_file,
 )
+from lib.fleet_scanner_diff import scanner_diff  # noqa: E402
 from lib.fleet_view import FleetViewError  # noqa: E402
 
 EXIT_NOT_COMPARABLE = 3
@@ -69,7 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         comparison = not_comparable(runs["later"].stamp if "later" in runs else None, problems,
                                     runs["earlier"].stamp if "earlier" in runs else None)
     else:
-        comparison = compare(runs["earlier"], runs["later"])
+        comparison = compare(runs["earlier"], runs["later"],
+                             scanner_diff(runs["earlier"].stamp, runs["later"].stamp))
     text = dumps_comparison(comparison)
     if args.write:
         try:

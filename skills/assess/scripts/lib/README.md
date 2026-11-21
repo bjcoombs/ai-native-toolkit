@@ -713,7 +713,11 @@ names, keyed `<doc>::<header>` so two docs declaring the same section don't coll
 keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
 patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
 left behind - and `parse_ownership` runs both with the module-shape degradation contract
-(`available: False`, reason `"no ownership map"` when neither map exists). It mirrors
+(`available: False`, reason `"no ownership map"` when neither map exists).
+`is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line declares a module
+boundary: a literal path segment and at least one matched file with a `CODE_EXTENSIONS`
+suffix under a non-dot directory, so `*`, `*.py`, `/.github/`, root files and docs-only
+paths do not (#785; tests in `tests/test_structure_drift_boundaries.py`). It mirrors
 `doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
 `tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
 sorted at the boundary for byte-identical output. The one inversion is that it *reads*
@@ -733,8 +737,11 @@ references) and side B the tracked, non-excluded file set, and the finding is th
 declarations whose match set is empty. Binary, no statistics; a pattern matching only
 excluded files counts as empty (the excludes are not part of the navigable repo). It emits
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
-coverage ratio, and legacy-shape `empty_globs` mirrors for the orchestrator's
-enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
+coverage ratio, `boundary_patterns` - the matched architecture-doc references plus the
+CODEOWNERS lines `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at
+least one matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`,
+`README.md` and `docs/` are left out); Layer 4 level 1 reads it (#785) - and
+legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a
 boundary groups still belong together?". Three lenses each induce a grouping - the declared
@@ -755,8 +762,8 @@ existing `hidden_coupling` finding - a recurring directory pair, not the version
 repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the
 `structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
 `structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
-`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its test
-`tests/test_structure_drift.py`.
+`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its tests
+`tests/test_structure_drift.py` and `tests/test_structure_drift_boundaries.py`.
 
 ### Signal integration
 
@@ -1291,8 +1298,8 @@ rows with a known level in both runs (org rows are out of the mean, the counts a
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
 removed or with no row known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
-both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
-carries a `*` explained under the chart.
+both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
+`scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
 With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
@@ -1521,13 +1528,54 @@ gives `comparable: false` with no deltas. `compare` reports the measured-set mov
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
 a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
-team row's set moved) or `set_and_level` (a team row's set and evidence moved). An org
+team row's set moved) or `set_and_level` (a team row's set and evidence moved), plus the #774 causes below. An org
 row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
 `write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
 A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
+`compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
+passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
+
+**`fleet_scanner_diff.py`**
+Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
+
+Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
+signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
+earlier run then reads the new signal as absent (unknown), never as a false repository move.
+A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
+
+The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
+`toolkit_commit`. Equal commits are `same`, and git never runs (two null commits only at one
+`plugin_version`). One null commit, or two null commits at different `plugin_version`s, is
+`unavailable`. Two different commits run `git diff --name-only`
+over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
+result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
+producer modules:
+
+- the defining module of `fn` / `offline_fn` and its static `lib` import closure (a package
+  such as `lib/test_pressure/` included, with its relative imports);
+- for a dispatch module (one defining several specs), the modules its function body names;
+- the producers of every spec it `reads`;
+- `run_context_types` is left out.
+
+`changed_blocks` intersects the map with the diff. `attribute` orders a moved team row's cause:
+
+1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
+   stored scans lack while the other run holds it. This is measured-set movement, never level
+   movement; the achievements replay already treats an unknown side as neutral.
+2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
+   `notes` line saying the scanner diff was unavailable.
+3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
+   reads (`row_signals`, else any) changed producers and a repository in the group changed a
+   signal in it.
+
+A `set_and_level` row given one of these causes also carries `set_moved: true`, so the
+measured-set movement stays reported. Org rows keep their cause. Limits: the map comes from the running code, a change outside
+`lib/` is not seen, and the import closure over-attributes rather than misses.
+Tests: `tests/test_fleet_scanner_diff.py`.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -1788,6 +1836,10 @@ tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the de
 model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
 against the schema. Until later steps generate those tables from the manifest, adding a
 scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+A finding `inputs` path under a typed root must name fields of its shape
+(`test_finding_inputs_under_a_typed_root_name_its_fields`, #793); one under an untyped
+block or a collector is checked on its first segment only. `derive` is checked as a
+callable only: it stays documentary until a later step generates the findings from it.
 Loader tests: `tests/test_check_manifest_loader.py`.
 
 **`check_validation.py`**
@@ -1931,6 +1983,21 @@ walks them, so a typed shape that gains a
 string field fails `tests/test_counts_only.py` until the field is classified, even when
 no fixture run populates the block. `delivery.DeliveryBlock` is a root (#769), so counts-only output keeps
 every delivery figure (`tests/test_delivery.py` checks a full block on both providers).
+The blocks a default criterion reads are all roots since #793 (their shapes are in
+`block_shapes.py`), which added one field name to the counts-only keys:
+`promissory_markers.stale_by_file.{}.max_survived`, an integer, now survives reduction.
+The newly typed string field `promissory_markers.stale_by_file.{}.families` is classified
+`drop`, so it stays a count.
+
+**`block_shapes.py`**
+TypedDicts for the run-context blocks a default maturity-model criterion reads that are
+built as dict literals (#793): `AgentOpsBlock`, `CoverageGateBlock`,
+`InstructionClaimsBlock`, `PromissoryMarkersBlock`, `ReviewRealityBlock` and
+`StructureDriftBlock`, each a `counts_only_schema.ROOTS` entry and a `shapes` entry of
+its collector in `checks/core.toml`. The builders are unchanged; the shapes record what
+they write. Tests: `tests/test_block_shapes.py` runs each builder on a small repository
+and checks every key and leaf type against its shape, checks the fleet golden's blocks,
+and fails if a default criterion reads a block with no typed root.
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
@@ -2126,7 +2193,12 @@ segment must be a block name the published headless schema lists
 `run-context.json`; run-context keys outside the schema (`instructions_grade`) are
 rejected, and the deterministic layer grades are read through the `layer_grades` block
 instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
-name a field and end on a scalar (no list, no object); an untyped block is open. An
+name a field and end on a scalar (no list, no object); an untyped block is open.
+Every block a default criterion reads is typed (#793), so **a misspelt sub-path under
+`agent_ops`, `coverage_gate`, `instruction_claims`, `promissory_markers`,
+`review_reality` or `structure_drift` in a `--levels` file now fails at load**
+(`agent_ops.summary.permissions_encodd`, `coverage_gate.enforcd`) where it used to load
+and evaluate `unknown`; the default model loads unchanged and its results do not move. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
 `<setting>.value` / `.reason`). `load_default_levels` loads
 `skills/assess/levels/default.toml`: one team row per layer 0-8, level 1 for

@@ -179,6 +179,13 @@ constant each.
 # resolved_includes, unresolved_includes and includes[] (kind, id, status,
 # ref_basis, depth: GitLab includes resolved offline, issue #766), and each
 # review_automation match gains depth. Additive: no existing key moves.
+# 1.29.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
+# #785): the matched declarations that name a module path - every matched
+# architecture-doc reference, and every CODEOWNERS glob with a literal path
+# segment that owns source code under a non-dot directory (not `*`, `*.py`,
+# `/.github/`, `README.md` or a docs-only path). Read by the default
+# maturity model's Layer 4 level 1. Additive: total_patterns and matched_patterns
+# keep their meaning, and complexity-stats.json is unchanged.
 # 1.30.0: run-context.json ci_checks gains enforced_check_runs,
 # enforced_basis, masked_check_commands and off_trigger_check_commands
 # (issue #775): the CI check test with masked checks (|| true,
@@ -294,6 +301,10 @@ ARTIFACT_SCHEMA_VERSION = "1.30.0"
 #     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
 #     file names no check can now read level 2, and one with committed setup
 #     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
+# 26: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
+#     matched_patterns (issue #785), so a CODEOWNERS whose lines own no module
+#     source (`*`, `*.py`, `/.github/`, `README.md`, `docs/`) no longer credits a
+#     declared boundary.
 # 27: a masked CI check (``|| true``, ``continue-on-error: true``,
 #     ``allow_failure: true``, ``set +e`` without a re-raise) or one that does
 #     not run on ordinary changes (a ``workflow_dispatch``-only workflow, a

@@ -336,6 +336,8 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
     ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
     ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
+    ("structure_drift.tier_0.boundary_patterns", "gt", 0, "tracked, non-excluded source file"),
+    ("structure_drift.tier_0.boundary_patterns", "gte", 1, "a `CODEOWNERS` line per module path"),
 ])
 def test_guidance_templates_on_the_criterion(signal, op, value, needle):
     words = guidance(signal, op, value)
@@ -356,7 +358,8 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
     ("nested_instructions.budget.claude_code.bytes", "lt", 5), ("unknown.signal", "eq", 1),
     ("review_reality.approved_share", "lt", 0.5), ("structure.modularity_q", "lt", 0.3),
     ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc.p95", "gt", 5),
-    ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.matched_patterns", "eq", 0),
+    ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.boundary_patterns", "eq", 0),
+    ("structure_drift.tier_0.matched_patterns", "eq", 0),
     ("promissory_markers.families.suppression.stale", "gt", 10),
 ])
 def test_guidance_declines_shapes_it_does_not_fit(signal, op, value):
@@ -372,9 +375,9 @@ def test_measure_hints():
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
     assert "no_import_edges" in measure_hint("structure.modularity_q")
     assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")
-    assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.matched_patterns")
+    assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.boundary_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
-    assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.matched_patterns")
+    assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.boundary_patterns")
 
 
 def test_default_levels_toml_parses():

@@ -88,6 +88,17 @@ def suppressed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="module")
+def owned_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """A headless run of a repository whose CODEOWNERS declares one module path."""
+    repo = tmp_path_factory.mktemp("owned") / "repo"
+    (repo / ".github").mkdir(parents=True)
+    (repo / ".github" / "CODEOWNERS").write_text("src/ @team\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    return _scans(_commit(repo))
+
+
+@pytest.fixture(scope="module")
 def two_package_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     """A full run's structure block for two packages, one importing the other's front door."""
     root = tmp_path_factory.mktemp("two_package")
@@ -131,8 +142,13 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "agent_environment.ci_duration.over_target",   # NotRequired field
     "test_pressure.reason",                        # a union arm (unavailable shape)
     "stats_summary.loc.p95",                       # typed field under an untyped block
-    "coverage_gate.enforced",                      # untyped block: open
-    "review_reality.anything.deeper",              # untyped block: open
+    "coverage_gate.enforced",                      # typed since #793
+    "agent_ops.summary.permissions_encoded",       # typed since #793
+    "promissory_markers.families.suppression.total",  # through an identifier-keyed map
+    "structure_drift.tier_0.matched_patterns",     # typed since #793
+    "review_reality.reviewed_share",               # typed since #793
+    "instruction_claims.failed",                   # typed since #793
+    "config_drift.anything.deeper",                # untyped block: open
     "agent_ops.available",                         # every block may report status
     "layer_grades.instructions_grade",             # deterministic layer grade (#620)
     "layer_grades.instruction_file_present",
@@ -153,6 +169,16 @@ def test_team_paths_accepted(path: str) -> None:
     "stats_summary.loc.no_such",
     "layer_grades.layer_3_grade",              # no such layer grade
     "layer_grades",                            # ends on an object
+    # #793: the blocks a default criterion reads are typed, so a misspelt
+    # sub-path fails at load instead of evaluating unknown.
+    "coverage_gate.enforcd",
+    "agent_ops.summary.permissions_encodd",
+    "agent_ops.summary",                       # ends on an object
+    "promissory_markers.families.suppression.totl",
+    "structure_drift.tier_0.matched",
+    "structure_drift.tier_1.human_static_agree",
+    "review_reality.anything.deeper",
+    "instruction_claims.failures.kind",        # steps into a list
 ])
 def test_team_paths_rejected(path: str) -> None:
     assert not team_path_ok(path)
@@ -215,12 +241,12 @@ def test_default_levels_loads_against_the_schema() -> None:
 
 def test_every_default_signal_is_emitted_by_some_real_output(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
-    suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any],
+    suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any], owned_repo: dict[str, Any],
 ) -> None:
     """Catches a typo in an open block, which the validator cannot."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     documents = [*golden_repos.values(), instructed_repo, suppressed_repo, two_package_repo,
-                 run_context]
+                 owned_repo, run_context]
     # review_reality needs GitHub; its fields are named in its module doc. review_evidence
     # is unavailable without it unless an AI review step is committed (test_review_automation).
     offline = {"review_reality.reviewed_share", "review_reality.approved_share",
@@ -260,7 +286,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
 
 
 def test_default_levels_on_the_golden_run_context() -> None:
-    """The captured full run predates most headless scans: Layers 1 and 4 are read."""
+    """The captured full run predates most headless scans: only Layer 1 is read."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     result = _run({"toolkit": run_context})
     assert _levels(result) == {
@@ -271,7 +297,8 @@ def test_default_levels_on_the_golden_run_context() -> None:
         # evidence: level 1 or 2, unknown.
         "layer-2-design": None,
         "layer-3-linters": None,  # no promissory_markers block in the capture
-        "layer-4-architecture": 2,  # 115 matched ownership patterns, loc p95 483.65
+        # 115 matched ownership patterns, but the capture predates boundary_patterns (#785)
+        "layer-4-architecture": None,
         "layer-5-ci": None,
         "layer-6-coverage": None,
         "layer-7-review": None,
@@ -288,6 +315,9 @@ def test_default_levels_on_the_golden_run_context() -> None:
     single["structure"]["cross_package_edges"] = 0
     single["structure"]["front_door_ratio"] = None  # #760: no boundary, no ratio
     assert _row(_run({"toolkit": single}), "layer-2-design")["level"] == 1
+    # A current run counts its non-catch-all boundaries; with loc p95 483.65 that is level 2.
+    single["structure_drift"]["tier_0"]["boundary_patterns"] = 115
+    assert _row(_run({"toolkit": single}), "layer-4-architecture")["level"] == 2
     assert dumps_result(result) == dumps_result(_run({"toolkit": copy.deepcopy(run_context)}))
 
 
@@ -362,6 +392,21 @@ def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any])
     assert levels["layer-0-instructions"] == 2
     assert levels["layer-5-ci"] == 2
     assert levels["layer-8-agent-ops"] == 1
+
+
+def test_layer_four_rejects_a_catch_all_only_codeowners(tmp_path: Path) -> None:
+    """Issue #785: `* @x` declares no module boundary; `src/ @team` does."""
+    for name, codeowners, low in (("star", "* @x\n", 0), ("src", "src/ @team\n", 1)):
+        root = tmp_path / name
+        (root / ".github").mkdir(parents=True)
+        (root / ".github" / "CODEOWNERS").write_text(codeowners, encoding="utf-8")
+        (root / "src").mkdir()
+        (root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+        row = _row(_run({"r": _scans(_commit(root))}), "layer-4-architecture")
+        if low == 0:
+            assert row["level"] == 0
+        else:  # level 2 reads lizard's loc p95, which may be unavailable: check level 1 alone
+            assert row["repos"]["r"]["levels"][0]["met"] is True
 
 
 def _ci_repo(root: Path, workflow: str | None, instructions: bool,
@@ -528,16 +573,19 @@ def test_a_maturity_model_row_on_a_layer_grade_loads_and_evaluates(
 
 def test_counts_only_output_reaches_the_same_levels(
     golden_repos: dict[str, dict[str, Any]], instructed_repo: dict[str, Any],
-    suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any],
+    suppressed_repo: dict[str, Any], two_package_repo: dict[str, Any], owned_repo: dict[str, Any],
 ) -> None:
     """A fleet run is counts-only by default; the maturity model reads only kept fields."""
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     full = {**golden_repos, "instructed": instructed_repo, "suppressed": suppressed_repo,
-            "two_package": two_package_repo,
+            "two_package": two_package_repo, "owned": owned_repo,
             "run_context": {k: v for k, v in run_context.items() if k in scan_names()}}
     counts = {name: counts_only_scans(scans) for name, scans in full.items()}
     for name in full:
         assert _levels(_run({name: counts[name]})) == _levels(_run({name: full[name]}))
+    assert counts["owned"]["structure_drift"]["tier_0"]["boundary_patterns"] == 1
+    owned_row = _row(_run({"owned": counts["owned"]}), "layer-4-architecture")
+    assert owned_row["repos"]["owned"]["levels"][0]["met"] is True
 
 
 def test_rerun_is_byte_identical(golden_repos: dict[str, dict[str, Any]]) -> None:

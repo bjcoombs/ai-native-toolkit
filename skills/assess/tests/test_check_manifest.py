@@ -14,10 +14,11 @@ from __future__ import annotations
 import importlib
 import json
 import tomllib
+import types
 from collections.abc import Iterable
 from functools import partial
 from pathlib import Path
-from typing import Any, cast, get_args
+from typing import Any, Union, cast, get_args, get_origin, get_type_hints, is_typeddict
 
 import jsonschema
 import pytest
@@ -159,6 +160,38 @@ def test_shapes_match_typed_roots(manifest: cm.CheckManifest) -> None:
            + [f"{path}: manifest shape {tp} is not in ROOTS" for path, tp in sorted(got - want)])
     for path, tp in got:
         assert (path, _resolve(tp)) in ROOTS, path
+
+
+def _names_a_field(path: str) -> bool:
+    """True when ``path`` walks a typed root field by field (an object or list may end it)."""
+    parts = path.split(".")
+    for cut in range(1, len(parts) + 1):
+        shapes = [tp for root, tp in ROOTS if root == ".".join(parts[:cut])]
+        if shapes:
+            return any(_walks(tp, parts[cut:]) for tp in shapes)
+    return True  # not under a typed root: only the first segment is checked
+
+
+def _walks(tp: Any, rest: list[str]) -> bool:
+    if not rest:
+        return True
+    origin = get_origin(tp)
+    if origin is list or origin in (Union, types.UnionType):
+        return any(_walks(arg, rest) for arg in get_args(tp))
+    if origin is dict:
+        return _walks(get_args(tp)[1], rest[1:])
+    if is_typeddict(tp):
+        hints = get_type_hints(tp)
+        return rest[0] in hints and _walks(hints[rest[0]], rest[1:])
+    return False
+
+
+def test_finding_inputs_under_a_typed_root_name_its_fields(manifest: cm.CheckManifest) -> None:
+    """A finding input under a typed root (``structure_drift.tier_1`` since #793) names a
+    real field of its shape, not only a known first segment."""
+    _clean([f"{f['name']}: input {read!r} is no field of its typed root"
+            for f in cm.findings(manifest) for read in f["inputs"] if not _names_a_field(read)])
+    assert not _names_a_field("structure_drift.tier_2")
 
 
 def test_privacy_matches_counts_only_rules(manifest: cm.CheckManifest) -> None:
