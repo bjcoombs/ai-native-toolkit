@@ -268,4 +268,8 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     boundary (issue #760), so a single-package repository no longer reads as
 #     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
 #     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
-ASSESS_METHOD_VERSION = 22
+# 23: ``agent_environment.setup_ready`` reports the setup half of ``layer5_cap`` on
+#     its own (issue #786), and Layer 5 level 2 reads it instead of the cap, so a
+#     repository whose instruction file names no check can now read Layer 5
+#     level 2. ``layer5_cap`` itself is unchanged.
+ASSESS_METHOD_VERSION = 23

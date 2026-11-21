@@ -41,6 +41,10 @@ at HEAD (``lib.command_index.repo_files``):
   ``permissions``, ``runs-on``, ``services``, ``snapshot`` and
   ``timeout-minutes`` set on it (others are ignored), ``timeout-minutes`` at most
   59; and a file saved as ``.yaml``, which Copilot never reads.
+- ``setup_ready``: committed setup, or every dependency manifest locked (or no
+  manifest to install). It is the setup half of ``layer5_cap`` on its own, so
+  the maturity model reads it without re-reading the named check, which Layer 0
+  level 2 reads (#786).
 - ``layer5_cap``: Present needs a check command an instruction file names, plus
   committed setup or a lockfile-backed bootstrap (every manifest locked, or no
   manifest to install). When either is missing the ceiling is Partial, with the
@@ -206,6 +210,7 @@ class AgentEnvironmentBlock(TypedDict):
     pinning: PinningBlock
     ci_duration: CiDuration
     findings: list[EnvFinding]
+    setup_ready: bool
     layer5_cap: Layer5Cap
 
 
@@ -570,14 +575,18 @@ def ci_duration(repo_root: Path) -> CiDuration:
 # --- assembly ------------------------------------------------------------------
 
 
+def setup_ready(setup: list[SetupSource], pins: list[PinRow]) -> bool:
+    """Setup is committed, or every manifest is locked (no manifest counts as locked)."""
+    return bool(setup) or all(p["locked"] for p in pins)
+
+
 def layer5_cap(named: list[NamedCheck], setup: list[SetupSource], pins: list[PinRow]) -> Layer5Cap:
     """Partial ceiling unless a named check resolves and setup or a locked bootstrap exists."""
     unmet: list[str] = []
     resolved = [n for n in named if n["verdict"] == "resolved"]
     if not resolved:
         unmet.append("check_named")
-    locked_bootstrap = all(p["locked"] for p in pins)
-    if not setup and not locked_bootstrap:
+    if not setup_ready(setup, pins):
         unmet.append("setup_or_lockfile")
     parts: list[str] = []
     if "check_named" in unmet:
@@ -616,5 +625,6 @@ def scan_agent_environment(
         "ci_duration": ci_duration(repo_root) if probe_ci else {
             "available": False, "reason": "not_probed: the CI-duration probe was turned off"},
         "findings": findings,
+        "setup_ready": setup_ready(setup, pins),
         "layer5_cap": layer5_cap(named, setup, pins),
     }

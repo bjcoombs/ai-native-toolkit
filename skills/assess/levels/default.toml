@@ -117,9 +117,11 @@
 #   pulls its jobs from elsewhere (a GitLab include: or component, a GitHub
 #   job-level uses: of another repository's reusable workflow) is unknown,
 #   never 0: the check may live in the included file. Level 2 is the agent's
-#   local check: layer5_cap does not apply, so an instruction file names a
-#   check command that resolves and setup or a locked bootstrap is committed.
-#   A repository that names a check but has no CI check line is 0.
+#   local setup: agent_environment.setup_ready, so setup is committed or every
+#   dependency manifest is locked (no manifest counts as locked). Naming a
+#   check command that resolves is read once, by Layer 0 level 2, so a missing
+#   named check costs Layer 0 only (#786). A repository with setup but no CI
+#   check line is 0.
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
 #   a run, a known limit.
@@ -128,7 +130,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.11"
+version = "default-2026.11.12"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -224,7 +226,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 2
-  criteria = [{ signal = "agent_environment.layer5_cap.applies", op = "eq", value = false }]
+  criteria = [{ signal = "agent_environment.setup_ready", op = "eq", value = true }]
 
 [[rows]]
 id = "layer-6-coverage"

@@ -298,6 +298,9 @@ _WORDING: dict[str, Wording] = {
         "`git ls-files` lists a `CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`."),
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
+    "agent_environment.setup_ready": _flag(
+        _LAYER5_PARTS[_SETUP][0][0].upper() + _LAYER5_PARTS[_SETUP][0][1:] + ".",
+        _LAYER5_PARTS[_SETUP][1][0].upper() + _LAYER5_PARTS[_SETUP][1][1:] + "."),
     "ci_checks.test_or_lint_runs": _flag(
         "Run the test suite or linter in CI: a GitHub Actions workflow or `.gitlab-ci.yml` job "
         "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",

@@ -1063,7 +1063,8 @@ A row with a floor (#697) reads "at least N of top" in the levels table and "Lev
 Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
 the one change and a "done when" a maintainer checks without the plugin (a file
 state, a command, a platform setting), templated on the criterion's own operator and
-value. A compound check (`agent_environment.layer5_cap.applies`) is worded on the
+value. A compound check (`agent_environment.layer5_cap.applies`, no longer read by the
+default model since #786 but kept for models that still use it) is worded on the
 parts actually unmet: `parts` reads a repository's `layer5_cap.unmet` tokens, the page
 passes their union across the repositories a step lists and annotates each repository
 with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
@@ -2913,7 +2914,7 @@ Can an agent set up the repository and check its own work (issue #514)?
 files at HEAD through `command_index.build_index` and writes `{available,
 setup{present, sources[]}, check{entry_points[], named[], named_total,
 unresolved[]}, pinning{manifests[], all_locked}, ci_duration, findings[],
-layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
+setup_ready, layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
 `copilot-setup-steps.yml` (credited only when it passes the checks), a dev
 container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
 `.claude/settings.json` (from the `agent_harness` block), `script/setup`,
@@ -2925,7 +2926,11 @@ instruction file gives (root `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
 the built-in and `.assess/config.toml` excludes. Findings are `copilot-setup-steps.yml` breaches of GitHub's documented
 constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
-and committed setup or a lockfile per manifest exists. `ci_duration` is the one
+and committed setup or a lockfile per manifest exists. `setup_ready` is the
+setup half of that cap on its own (committed setup, or every manifest locked, or
+no manifest): Layer 5 level 2 of the maturity model reads it, so the named check
+is read once, by Layer 0 level 2 (issue #786). The cap itself is unchanged for
+the /assess scorer. `ci_duration` is the one
 network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
