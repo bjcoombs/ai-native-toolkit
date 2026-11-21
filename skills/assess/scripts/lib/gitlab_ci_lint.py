@@ -19,7 +19,8 @@ Rules, in order:
 
 - **A template already resolved offline wins.** The API is asked only when
   ``resolve_includes`` left at least one include unresolved
-  (``not_needed`` otherwise). ``ci_checks`` adds what the merged configuration
+  (``not_needed`` otherwise; ``not_read`` when there is no GitLab CI file or it
+  has no ``include:``). ``ci_checks`` adds what the merged configuration
   says to its offline reading; it never takes away what the offline reading found.
 - **Only a GitLab remote.** ``gitlab_cli.open_gitlab`` decides; a repository
   without one is ``unavailable`` with reason ``not_gitlab``.
@@ -95,7 +96,10 @@ def include_sources(includes: object) -> tuple[str, ...]:
 def read_merged_ci(repo_root: Path, ghsync_root: Path | None = None) -> MergedCi:
     """The merged configuration of ``repo_root`` when an include did not resolve offline."""
     root = repo_root.resolve()
-    if resolve_includes(root, ghsync_root).unresolved == 0:
+    resolution = resolve_includes(root, ghsync_root)
+    if not resolution.includes:
+        return NOT_READ  # no GitLab CI file, or one with no include: nothing to merge
+    if resolution.unresolved == 0:
         return NOT_NEEDED
     try:
         project = open_gitlab(root)

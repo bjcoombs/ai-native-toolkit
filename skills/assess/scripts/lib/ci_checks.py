@@ -54,9 +54,12 @@ file repeats the own and resolved jobs). ``merged_config`` says what happened:
 ``not_read`` (offline), ``not_needed`` (every include resolved offline: the
 offline reading wins), ``read``, ``invalid`` or ``unavailable``, with the
 reason code in ``merged_config_reason``. The merged text is never published.
-Known limit: the lint API merges in its own context, so an include behind
-``rules:`` that does not match there, and a child pipeline (``trigger:``), are
-not in the merged file; a check that lives only there reads false.
+The lint API merges in its own context, so an include behind ``rules:`` that
+does not match there is not in the merged file. A merged configuration with no
+check therefore reads false only when the repository's own ``include:``
+section holds no ``rules:`` key; otherwise the signal stays null. Known limit:
+a child pipeline (``trigger:``) and a ``rules:`` include nested in a template
+are not seen, so a check that lives only there reads false.
 
 ``test_or_lint_runs`` is true when any CI line, own or included, runs a check.
 With none it is false, except when a CI file pulls jobs from a file this run
@@ -65,7 +68,7 @@ could not read (a GitLab include that did not resolve, a GitHub job-level
 ``shared_tooling.pulls_jobs_from_elsewhere``): the check may live there, so the
 signal is null (unknown), never false. A GitLab file whose every include
 resolved and holds no check reads false, and so does one whose merged
-configuration was read and holds none. ``basis`` names which case applied:
+configuration was read and holds none (with no conditional include). ``basis`` names which case applied:
 ``merged_config`` when only the merged configuration found the check.
 """
 from __future__ import annotations
@@ -80,7 +83,17 @@ from lib.ci_includes import IncludeRecord, resolve_includes
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
 from lib.merged_ci import MergedStatus, as_merged
-from lib.shared_tooling import pulls_jobs_from_elsewhere
+from lib.shared_tooling import include_lines, pulls_jobs_from_elsewhere
+
+# A ``rules:`` key inside the include section, block (``rules:``) or flow (``{..., rules: [..]}``).
+_INCLUDE_RULES = re.compile(r"""(?:^|[\s{,-])["']?rules["']?\s*:""")
+
+
+def conditional_include(text: str) -> bool:
+    """True when the top-level ``include:`` section of a GitLab CI file has a ``rules:`` key:
+    the lint API merges in its own context and may leave that include out (#796)."""
+    return any(_INCLUDE_RULES.search(line.split("#", 1)[0]) for _, line, _ in include_lines(text))
+
 
 CiChecksBasis = Literal["check_command", "merged_config", "included_jobs", "no_check_command",
                         "no_ci"]
@@ -206,7 +219,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
         # Fully read only when the resolver saw the includes (a record each) and read them
         # all: a symlinked .gitlab-ci.yml it refuses stays unknown, never false.
         read_all = resolution is not None and bool(resolution.includes) and resolution.unresolved == 0
-        if pulls and not (gitlab and (read_all or merged.read)):
+        merged_all = merged.read and not conditional_include(text)
+        if pulls and not (gitlab and (read_all or merged_all)):
             elsewhere += 1
     included_checks = sum(check_commands(f.text) for f in resolution.files) if resolution else 0
     merged_checks = check_commands(merged.text) if merged.read and merged.text is not None else 0

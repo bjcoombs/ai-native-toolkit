@@ -187,6 +187,37 @@ def test_ci_checks_reads_false_when_the_merged_config_holds_no_check(tmp_path):
     assert (block["test_or_lint_runs"], block["basis"]) == (False, "no_check_command")
 
 
+@pytest.mark.parametrize("ci", [
+    "include:\n  - project: grp/missing\n    file: /templates/test.yml\n    rules:\n      - if: $X\n",
+    "include:\n  - {project: grp/missing, file: /t.yml, rules: [{if: $X}]}\n",
+])
+def test_a_conditional_include_keeps_a_check_free_merge_unknown(tmp_path, ci):
+    """The lint API may leave a ``rules:`` include out of the merge: no check is not false."""
+    root = tmp_path / "gl"
+    app = make_repo(root, "grp/app", files={".gitlab-ci.yml": ci})
+    block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
+    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    block = scan_ci_checks(app, root, MergedCi("read", text=MERGED))
+    assert (block["test_or_lint_runs"], block["basis"]) == (True, "merged_config")
+
+
+def test_conditional_include_reads_only_the_include_section():
+    from lib.ci_checks import conditional_include
+    assert not conditional_include(INCLUDE.format(project="a/b") + "t:\n  rules:\n    - if: $X\n")
+    assert not conditional_include("include:\n  - local: /a.yml  # rules: none\n")
+
+
+def test_no_gitlab_ci_file_or_no_include_is_not_read(glab, tmp_path):
+    root = tmp_path / "gl"
+    plain = make_repo(root, "grp/plain", files={"src/a.py": "x = 1\n"},
+                      remote="https://gitlab.com/grp/plain.git")
+    bare = make_repo(root, "grp/bare", files={".gitlab-ci.yml": "t:\n  script:\n    - make\n"},
+                     remote="https://gitlab.com/grp/bare.git")
+    assert gitlab_ci_lint.read_merged_ci(plain, root) == NOT_READ
+    assert gitlab_ci_lint.read_merged_ci(bare, root) == NOT_READ
+    assert calls(glab) == []
+
+
 @pytest.mark.parametrize("merged", [MergedCi("unavailable", "no_access"), MergedCi("invalid"),
                                     NOT_READ, {"available": False, "reason": "x"}])
 def test_ci_checks_stays_unknown_without_a_merged_read(tmp_path, merged):

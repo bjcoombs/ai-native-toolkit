@@ -627,7 +627,8 @@ remotes) logged in.
   GET per such repository. A repository whose every include resolved offline is not
   asked: the template read from `ROOT` wins. `ci_checks.test_or_lint_runs` then reads
   true when a merged job runs a test or lint check (`basis: merged_config`) and false
-  when none does, where offline it was null; `ci_checks.merged_config` says whether the
+  when none does, where offline it was null (it stays null when the repository's own
+  `include:` has a `rules:` key, since GitLab may merge without that include); `ci_checks.merged_config` says whether the
   read ran (`read`, `not_needed`, `invalid`, `unavailable` with `merged_config_reason`,
   or `not_read` offline). `review_automation` credits a review component the merge
   pulled in. A refused or invalid read leaves the offline reading unchanged. The merged
