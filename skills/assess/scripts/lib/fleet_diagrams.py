@@ -176,11 +176,14 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     ]
 
 
-def report_markdown(diagrams: Sequence[Diagram]) -> str:
-    """``report.md``: each diagram embedded with a relative link, or why it was skipped."""
+def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None) -> str:
+    """``report.md``: the credit section first when given (``lib/fleet_credit.py``), then each
+    diagram embedded with a relative link, or why it was skipped."""
     lines = ["# Fleet diagrams", "",
              "Drawn from this run's output with no model call; unknown is hatched and named, "
              "never drawn as zero.", ""]
+    if credit is not None:
+        lines += [credit.rstrip("\n"), ""]
     for diagram in diagrams:
         lines += [f"## {diagram['title']}", "", diagram["question"], ""]
         if diagram["svg"] is not None:
@@ -213,9 +216,10 @@ def _write(path: Path, content: str) -> Path:
     return path
 
 
-def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram]) -> list[Path]:
-    """Write the drawn SVGs and ``report.md`` under ``out_dir``; returns the paths written."""
+def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None) -> list[Path]:
+    """Write the drawn SVGs and ``report.md`` (with ``credit`` first) under ``out_dir``; returns
+    the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
-    written.append(_write(out_dir / REPORT_FILE, report_markdown(diagrams)))
+    written.append(_write(out_dir / REPORT_FILE, report_markdown(diagrams, credit)))
     return written

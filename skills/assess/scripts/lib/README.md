@@ -969,6 +969,42 @@ with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.
 when the checked-in file differs; regenerate with
 `uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
 
+**`fleet_achievements.py`**
+The deterministic achievements engine (#704, `ACHIEVEMENTS_VERSION`; #705 and #744 build
+on its evidence model). `build_achievements` replays comparable runs' `fleet-data.json`
+oldest first: `subjects` gives every unit and repository its level per team row, the row's
+roll-up rule (`levels.share_level`) over measured members, with the measured set;
+`clean` is the one gate on a move (known both sides, same measured set), and
+`known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
+emits `level_up`, `first`, `target_hit`, `personal_best` and `streak`, each with
+`moves` evidence (repository, row, from and to level, the criterion that became met) and
+a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
+Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
+
+**`fleet_achievements_runs.py`**
+`earlier_runs` reads the history entries the engine replays: `run.json` passing
+`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+one per date before this run's (`fleet_history.one_per_date`). Unreadable entries are
+passed over.
+
+**`fleet_achievements_schema.py`**
+Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
+TypedDict with `fleet_group_schema.type_schema`. `tests/test_fleet_achievements.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_achievements_schema.py` from `skills/assess`.
+
+**`fleet_targets.py`**
+The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, `level`), the stand-in for
+the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming the entry;
+`resolve` keys each target as `fleet-data.json` does (hashed under the run's salt).
+
+**`fleet_credit.py`**
+`credit_section` renders `report.md`'s first section, "What changed and who earned it",
+from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
+nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
+distances. `fleet_diagrams.report_markdown` places it before the diagrams.
+
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
 heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
@@ -1082,7 +1118,8 @@ The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#
 team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
-`comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
@@ -1092,7 +1129,7 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
-reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+reads each `<date>[.<n>]` entry (`fleet_history.one_per_date`; `run.json`,
 `groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
 path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
@@ -1229,7 +1266,9 @@ repository set (`entry_repos`), so a partial rerun never replaces a full-fleet e
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
 repository set, the default for a bare `--compare`. `dated_entries` lists the
-`<date>[.<n>]` directories oldest first (also read by `fleet_trends`).
+`<date>[.<n>]` directories oldest first; `one_per_date` keeps one accepted entry per date
+before a run's (the entry over its repository set, else the highest suffix), shared by
+`fleet_trends` and `fleet_achievements_runs`.
 `persist` writes the three files to a hidden temp sibling first: a new entry is that
 directory renamed into place in one step, and a replaced same-day entry loses its
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
@@ -1773,6 +1812,7 @@ is the resolved value only when it is a finite scalar, null otherwise, and
 `dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
+`share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)

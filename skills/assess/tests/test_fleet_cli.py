@@ -107,9 +107,9 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
     assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == [
-        "agent_clusters.json", "fleet-data.json", "groups.jsonl", "report.md", "repos.jsonl", "run.json",
+        "achievements.json", "agent_clusters.json", "fleet-data.json", "groups.jsonl", "report.md", "repos.jsonl", "run.json",
         "shared-tooling.svg"]
-    for name in ("report.md", "shared-tooling.svg", "agent_clusters.json", "fleet-data.json"):  # byte-identical across runs
+    for name in ("report.md", "shared-tooling.svg", "agent_clusters.json", "fleet-data.json", "achievements.json"):  # byte-identical across runs
         drawn = (tmp_path / "out1" / name).read_bytes()
         assert drawn == (tmp_path / "out2" / name).read_bytes()
         assert drawn == (tmp_path / "out3" / name).read_bytes()
@@ -224,7 +224,7 @@ def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, 
     assert "fleet: diagrams -> " in capsys.readouterr().err
     assert fleet_cli.main([str(froot), "--out", "out", "--no-history", "--no-diagrams"]) == 0
     assert sorted(p.name for p in (tmp_path / "out").iterdir()) == [
-        "agent_clusters.json", "fleet-data.json", "groups.jsonl", "repos.jsonl", "run.json"]
+        "achievements.json", "agent_clusters.json", "fleet-data.json", "groups.jsonl", "repos.jsonl", "run.json"]
 
 
 def _seed_earlier(entry: Path, dates: tuple[str, ...]) -> None:

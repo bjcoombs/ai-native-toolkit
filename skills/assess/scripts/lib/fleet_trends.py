@@ -48,7 +48,7 @@ from typing import Any, TypedDict
 from lib import fleet_svg as svg
 from lib.fleet_groups import GROUPS_FILE, GroupRow, RowLevel
 from lib.fleet_legacy import stamp_value, upgrade
-from lib.fleet_history import dated_entries, entry_repos
+from lib.fleet_history import one_per_date
 from lib.fleet_maturity import SCOPE, mean_share
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet_svg import THEMED_HATCH, LinearScale
@@ -179,20 +179,11 @@ def history_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str],
                  levels: MaturityModel | None = None) -> list[TrendRun]:
     """Earlier comparable runs under ``org_dir``, one per scan date before this run's, oldest
     first; ``levels`` is this run's maturity model (``trend_run``)."""
-    by_date: dict[str, list[tuple[int, Path, TrendRun]]] = {}
-    for (date, suffix), entry in dated_entries(org_dir):
-        if date >= current["scan_date"]:
-            continue
+    def read(entry: Path, date: str) -> TrendRun | None:
         run = _read_entry(entry, current, levels)
-        if run is not None and run["label"] == date:
-            by_date.setdefault(date, []).append((suffix, entry, run))
-    chosen = []
-    for date in sorted(by_date):
-        options = by_date[date]  # by suffix; repos.jsonl is read only to choose between same-day runs
-        if len(options) > 1:
-            options = sorted(options, key=lambda o: (entry_repos(o[1]) == repos, o[0]))
-        chosen.append(options[-1][2])
-    return chosen
+        return run if run is not None and run["label"] == date else None
+
+    return [run for _date, run in one_per_date(org_dir, current["scan_date"], repos, read)]
 
 
 def series_runs(earlier: Sequence[TrendRun], current: TrendRun) -> list[TrendRun]:

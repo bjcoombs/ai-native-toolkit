@@ -488,7 +488,7 @@ def evaluate_row(row: Row, data: JsonDict | None) -> Evaluation:
     }
 
 
-def _share_level(levels: list[int], share: Fraction, top: int) -> int:
+def share_level(levels: list[int], share: Fraction, top: int) -> int:
     """Highest level at least ``share`` of ``levels`` reach (0 always qualifies)."""
     best = 0
     for candidate in range(1, top + 1):
@@ -505,8 +505,8 @@ def _team_result(row: Row, repos: dict[str, JsonDict]) -> RowResult:
     missing = sorted({s for ev in evaluations.values() for s in ev["missing_signals"]})
     top = len(row["levels"])
     share = Fraction(str(aggregation["share"]))
-    low = _share_level([ev["bounds"][0] for ev in evaluations.values()], share, top)
-    high = _share_level([ev["bounds"][1] for ev in evaluations.values()], share, top)
+    low = share_level([ev["bounds"][0] for ev in evaluations.values()], share, top)
+    high = share_level([ev["bounds"][1] for ev in evaluations.values()], share, top)
     determined = bool(evaluations) and low == high
     return {
         "id": row["id"],
