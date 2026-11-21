@@ -211,8 +211,11 @@ def test_a_rules_include_inside_a_template_read_offline_keeps_the_merge_unknown(
 
 
 @pytest.mark.parametrize(("own", "merged"), [
-    # a trigger: job in the repository's own file
+    # a trigger: job in the repository's own file: a child pipeline
     (INCLUDE.format(project="grp/missing") + "child:\n  trigger:\n    include: ci/child.yml\n",
+     "build:\n  script:\n    - make\n"),
+    # a trigger: job in the repository's own file: a multi-project pipeline, scalar form
+    (INCLUDE.format(project="grp/missing") + "deploy:\n  trigger: grp/deploy\n",
      "build:\n  script:\n    - make\n"),
     # a trigger: job only the merge shows (it came from the uncloned template)
     (INCLUDE.format(project="grp/missing"),
