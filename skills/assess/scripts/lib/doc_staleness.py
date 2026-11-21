@@ -343,7 +343,8 @@ def _head(repo_root: Path) -> str | None:
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True, encoding="utf-8", check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip() or None
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
