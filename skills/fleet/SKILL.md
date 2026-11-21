@@ -303,8 +303,8 @@ repository, so they have no unit roll-up; their levels are in `groups.jsonl`.
 **Repositories.** Each has `key` (its id), `status`, `reason`, `active`, `web_url` (the
 `origin` remote as `https://<host>/<path>`, credentials, an ssh port and `.git` dropped; `null`
 for a local remote), `owners` and `owner_count` (the mapping's owners, else the
-CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), and `rows`, one cell per `team` row: `status`, `level`, `top_level` and the criterion
-behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
+CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), and `rows`,
+one cell per `team` row: `status`, `level`, `top_level` and the criterion behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
 next level and its measured value; at the top level both are `null`; an unknown cell
 names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
 `not_scanned` for a failed repository).
