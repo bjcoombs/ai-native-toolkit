@@ -64,6 +64,27 @@
                 "reason"
               ]
             }
+          },
+          "properties": {
+            "review_automation": {
+              "type": "object",
+              "description": "AI review in CI (lib/review_automation.py): present is true when a git-tracked CI step, GitLab component or include, or AI review app config runs an AI review; kinds names which (ci_action, ci_component, config_file).",
+              "properties": {
+                "present": {
+                  "type": "boolean"
+                },
+                "kinds": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "ci_action",
+                      "ci_component",
+                      "config_file"
+                    ]
+                  }
+                }
+              }
+            }
           }
         },
         {

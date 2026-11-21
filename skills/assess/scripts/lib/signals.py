@@ -137,7 +137,9 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # ``--platform`` because it is a dependency of a listed scan.
 # ``merged_sample`` (lib/merged_sample.py, #715) is that shared sample: ``review_reality``
 # and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
-PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery")
+# ``review_evidence`` (lib/review_automation.py, #696) is offline itself but reads
+# ``review_reality``, so the platform pass rebuilds it from the measured block.
+PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence")
 
 DEFAULT_WINDOW = "6mo"
 

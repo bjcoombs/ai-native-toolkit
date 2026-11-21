@@ -150,7 +150,9 @@ SECTION_KEYS: Mapping[str, SectionKeys] = {
                                        frozenset({"pattern"})),
         "token_users_as_agents": boolean,
     },
-    "review": {},  # #696
+    "review": {  # #696
+        "ai_review_components": string_list,
+    },
     "platform": {"jobs": positive_int, "timeout": positive_int},  # #714
 }
 
@@ -178,7 +180,10 @@ class AiUsageSection(TypedDict, total=False):
 
 
 class ReviewSection(TypedDict, total=False):
-    """``[review]``: keys added by #696."""
+    """``[review]``: ``ai_review_components`` (#696), GitLab project or component paths and
+    GitHub ``owner/repo`` actions that run an AI review in CI, read by ``review_automation``."""
+
+    ai_review_components: list[str]
 
 
 class PlatformSection(TypedDict, total=False):

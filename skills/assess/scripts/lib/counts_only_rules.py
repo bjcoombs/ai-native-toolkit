@@ -406,6 +406,21 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "shared_tooling.ci_source_ids": ID,
         "shared_tooling.marketplace_ids": ID,
     },
+    "review_automation": {
+        # Kinds, the rule that matched and a pinned reviewer slug ("configured"
+        # for a [review] ai_review_components match): never a source or a
+        # config entry (#696).
+        "review_automation.reason": DROP,
+        "review_automation.kinds": TOKEN,
+        "review_automation.matches.kind": TOKEN,
+        "review_automation.matches.rule": TOKEN,
+        "review_automation.matches.reviewer": TOKEN,
+        "review_automation.matches.path": PATH,
+    },
+    "review_evidence": {
+        # Booleans only, plus the reason of the block that could not say (#696).
+        "review_evidence.reason": DROP,
+    },
     "ci_checks": {
         # Counts, a tri-state boolean and the basis token (issue #698).
         "ci_checks.reason": DROP,

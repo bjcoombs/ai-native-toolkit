@@ -159,7 +159,12 @@ constant each.
 # network). compare.json level states carry floor too. Additive: status stays
 # level or unknown, fleet_group_version is unchanged, readers tolerate both keys
 # being absent, and run-context.json and complexity-stats.json are unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.24.0"
+# 1.25.0: run-context.json gains review_automation and review_evidence (issue
+# #696): AI review committed in CI (present, kinds, matches with kind, rule,
+# reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
+# (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
+# and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.25.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

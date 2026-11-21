@@ -221,8 +221,10 @@ def test_every_default_signal_is_emitted_by_some_real_output(
     run_context = json.loads(GOLDEN_RUN_CONTEXT.read_text(encoding="utf-8"))
     documents = [*golden_repos.values(), instructed_repo, suppressed_repo, two_package_repo,
                  run_context]
-    # review_reality needs GitHub; its fields are named in its module doc.
-    offline = {"review_reality.reviewed_share", "review_reality.approved_share"}
+    # review_reality needs GitHub; its fields are named in its module doc. review_evidence
+    # is unavailable without it unless an AI review step is committed (test_review_automation).
+    offline = {"review_reality.reviewed_share", "review_reality.approved_share",
+               "review_evidence.present"}
     signals = {c["signal"] for row in load_default_levels()["rows"]
                for level in row["levels"] for c in level["criteria"]}
     never = sorted(

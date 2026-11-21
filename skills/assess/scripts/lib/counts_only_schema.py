@@ -60,6 +60,7 @@ from lib.run_context_types import (
 )
 from lib.layer_grades import LayerGradesBlock
 from lib.scc_coverage import UnreliableCcnRow
+from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock
@@ -104,6 +105,8 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
+    ("review_automation", ReviewAutomationBlock),
+    ("review_evidence", ReviewEvidenceBlock),
     ("ci_checks", CiChecksBlock),
     ("agent_building", AgentBuildingBlock),
     ("layer_grades", LayerGradesBlock),

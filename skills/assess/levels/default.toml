@@ -90,8 +90,15 @@
 #   (shallow) or degenerate history, a target that is not a git work tree, or
 #   no mapped doc leaves the share null, so the row is unknown, never a false
 #   fresh or a false 0.
-# - Layer 7 reads review_reality, which needs GitHub: a headless run makes
-#   no network calls, so the row is unknown there.
+# - Layer 7 level 1 reads review_evidence.present (lib/review_automation.py):
+#   an AI review step committed in CI (review_automation: a pinned review
+#   action or GitLab review component, a [review] ai_review_components entry,
+#   or an AI review app's config file, git-tracked only) or a reviewed merged
+#   change (review_reality.reviewed_share > 0). It is unknown when no AI review
+#   step is committed and review_reality is unread. Level 2 reads
+#   review_reality, which needs GitHub or GitLab through gh or glab: a headless
+#   run without --platform makes no network calls, so a repository with an AI
+#   review step reads "at least 1" there, and one without reads unknown.
 # - Layer 5 level 1 reads ci_checks.test_or_lint_runs: a line of a GitHub
 #   Actions workflow or .gitlab-ci.yml runs a test or lint command (pytest,
 #   make check, npm test, a ./scripts/test.sh, as
@@ -114,7 +121,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.8"
+version = "default-2026.11.9"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -234,7 +241,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "review_reality.reviewed_share", op = "gt", value = 0 }]
+  criteria = [{ signal = "review_evidence.present", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2

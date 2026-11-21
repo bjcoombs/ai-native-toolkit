@@ -363,6 +363,62 @@ def _job_uses(text: str) -> list[tuple[int, str]]:
     return rows
 
 
+_STEP_USES = re.compile(r"""^(?:-\s+)?(?:uses|"uses"|'uses')\s*:(.*)$""")
+_STEPS_KEY = re.compile(r"""^(?:steps|"steps"|'steps')\s*:\s*$""")
+_BLOCK_SCALAR = re.compile(r""":\s*[|>][-+0-9]*\s*$""")
+_ACTION_REF = re.compile(r"""^([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)(?:/[^\s"'#@]*)?(?:@[^\s"'#]+)?$""")
+
+
+def step_uses(text: str) -> list[tuple[int, str]]:
+    """(line, value) for each step-level ``uses:`` in a GitHub workflow (#696).
+
+    A step's ``- uses: owner/repo@ref`` (or ``uses:`` under a step's ``- name:``)
+    inside a job's ``steps:`` list runs an action. Job-level ``uses:`` (a
+    reusable workflow, ``_job_uses``) is not a step, and the body of a block
+    scalar (``run: |``) is skipped, so a script that prints ``uses:`` runs nothing.
+    """
+    rows: list[tuple[int, str]] = []
+    steps_col: int | None = None
+    scalar_col: int | None = None
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        content = line.lstrip()
+        col = len(line) - len(content)
+        if scalar_col is not None:
+            if col > scalar_col:
+                continue
+            scalar_col = None
+        if steps_col is not None and col <= steps_col and not content.startswith("-"):
+            steps_col = None
+        if steps_col is not None and col < steps_col:
+            steps_col = None
+        key = content[1:].lstrip() if content.startswith("-") else content
+        key_col = col + len(content) - len(key)
+        if _BLOCK_SCALAR.search(key):
+            scalar_col = key_col
+        if _STEPS_KEY.match(key):
+            steps_col = col
+            continue
+        if steps_col is None or col < steps_col:
+            continue
+        match = _STEP_USES.match(content)
+        if match and (value := _unquote(match.group(1))):
+            rows.append((number, value))
+    return rows
+
+
+def action_repo(value: str) -> str | None:
+    """``owner/repo[/path]@ref`` -> ``owner/repo`` lowercased; None for a local
+    (``./``) or ``docker://`` action, or a value that names no repository."""
+    value = _unquote(value)
+    if value.startswith(("./", "docker://")):
+        return None
+    match = _ACTION_REF.match(value)
+    return match.group(1).lower() if match else None
+
+
 def github_reusable_workflows(text: str, path: str, tracked: bool) -> list[CiInclude]:
     """Job-level ``uses: owner/repo/.github/workflows/<file>@ref`` references."""
     entries: list[CiInclude] = []

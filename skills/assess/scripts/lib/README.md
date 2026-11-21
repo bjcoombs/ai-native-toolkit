@@ -737,8 +737,9 @@ completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
 both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
-one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`
-and `delivery`), or a network spec one of them reads, runs its `fn`. Extension point:
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`,
+`delivery` and `review_evidence`, an offline block the pass rebuilds because it reads
+`review_reality`, #696), or a network spec one of them reads, runs its `fn`. Extension point:
 append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
 changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
 which runs once under `--platform` as their dependency. Only published, single-key scans
@@ -1146,7 +1147,8 @@ writes atomically with sorted keys.
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
 `[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
-#696 and #714; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+#696 and #714; `[review]` has `ai_review_components`, a string list read by
+`review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
 --platform-jobs` and `--platform-timeout`). API:
 - `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
   and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
@@ -1255,7 +1257,9 @@ row's `scans` by repository. It never changes `status` or `reason`, so a slow ho
 make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
 omits a block gives that block `available: false` with `platform_timeout`,
 `platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
-counts-only output). Failed rows are not read. `names` is `platform_scans(--scans)`:
+counts-only output). Such a failed block never replaces an offline block that is
+available (`join`, #696): `review_evidence` credits an AI review step offline, and a slow
+host keeps that credit. Failed rows are not read. `names` is `platform_scans(--scans)`:
 `signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
 directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
 `--delete-after` hook) runs on each row after its platform read, so a clone outlives the
@@ -2751,6 +2755,38 @@ Claude Code tells marketplaces apart by, so a manifest and a settings entry nami
 it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
 `distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+`step_uses(text)` (#696) is the step-level reader the block itself does not use: (line,
+value) for each `uses:` inside a job's `steps:` list, skipping job-level `uses:` and the
+body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one into
+`owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
+sources, so they never enter `ci_includes` or `ci_source_ids`.
+
+**`review_automation.py`**
+AI review committed in CI and the Layer 7 level 1 signal (issue #696).
+`scan_review_automation(repo_root, fleet_config)` writes `{available, present, kinds[],
+matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked}`. Kinds:
+`ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
+`anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`), `ci_component` (a
+`shared_tooling.gitlab_includes` component or project whose last path segment matches
+`REVIEW_COMPONENT`, a name heuristic: `ai-code-review`, `claude_review`, `llm-review`,
+`code-review-ai`, `pr-agent`), and `config_file` (`REVIEW_CONFIG_FILES`: `.coderabbit.yaml`/`.yml`,
+`.gemini/config.yaml`, `.pr_agent.toml`, each mapped to its `delivery.AI_REVIEWERS`
+login). A CI action or include also matches (`rule: config`, `reviewer: configured`)
+when its source equals, or sits under, a `[review] ai_review_components` entry
+(lowercased, host and `@version` dropped). Copilot code review has no review-specific
+file and is not read. `present` and `kinds` credit git-tracked matches only; outside a
+git checkout the block is `available: false`. Counts-only keeps the booleans, kinds,
+rules and reviewer slugs, never a source or a config entry. `is_review_action` and
+`is_review_component` expose the pinned matcher to other CI readers (#689).
+`review_evidence(review_automation, review_reality)` is the derived block the default
+maturity model's Layer 7 level 1 reads: `{available, present, ai_review_in_ci,
+reviewed_changes}`; `present` is true when an AI review step is credited or
+`review_reality.reviewed_share > 0` (`approved_share > 0` where `reviewed_share` is
+null), false when neither block shows review, and otherwise the block is unavailable
+with the reason of the block that could not say, `review_reality`'s first (so the
+offline `network` code gives the `fleet --platform` hint). It is in
+`signals.PLATFORM_SCANS`, so the platform pass rebuilds it from the measured
+`review_reality`. Tests: `tests/test_review_automation.py`.
 
 **`agent_building.py`**
 What a repository builds with agents, per repository (issue #689): an inventory, not

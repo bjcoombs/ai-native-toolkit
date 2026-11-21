@@ -79,10 +79,22 @@ def failed_blocks(names: Sequence[str], token: str, counts_only: bool) -> dict[s
 
 
 def join(row: FleetRow, blocks: dict[str, JsonDict]) -> FleetRow:
-    """``row`` with ``blocks`` in its ``scans``; ``status`` and ``reason`` are never touched."""
+    """``row`` with ``blocks`` in its ``scans``; ``status`` and ``reason`` are never touched.
+
+    A failed platform block (``platform_<token>``) never replaces an offline block that is
+    available: ``review_evidence`` credits an AI review step offline (#696), and a slow
+    host must not take that credit away.
+    """
     if row["status"] != STATUS_OK or row["scans"] is None:
         return row
-    return {**row, "scans": {**row["scans"], **blocks}}
+    offline = row["scans"]
+    kept = {name: block for name, block in blocks.items()
+            if not (_platform_failure(block) and offline.get(name, {}).get("available") is True)}
+    return {**row, "scans": {**offline, **kept}}
+
+
+def _platform_failure(block: JsonDict) -> bool:
+    return block.get("available") is False and reason_code(block.get("reason")).startswith("platform_")
 
 
 def _blocks(document: JsonDict | str, names: Sequence[str], counts_only: bool) -> dict[str, JsonDict]:
