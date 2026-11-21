@@ -46,8 +46,14 @@ deployment bots (codecov, vercel, sonar) do not count. When an account whose
 type is unknown decides a change, ``ai_review_share`` is None.
 
 GitLab. The sample's merge requests give time to merge (``created_at`` ->
-``merged_at``) and the copied shares; first human comment and AI review need
-each merge request's notes, which #716 reads, so those figures are None here.
+``merged_at``) and the copied shares. First human comment and AI review come
+from the ``gitlab_note_facts`` spec (``lib/gitlab_notes.py``, #716), which reads
+each sampled merge request's notes once: hours from ``created_at`` to the first
+human comment's ``created_at`` over the merge requests that have one,
+``human_commented_share``, and ``ai_review_share`` (a note with an AI-review
+marker, or by an agent or access-token user). A merge request whose full page of
+notes leaves a figure undecided makes it None; so does a refused notes read
+(``review_reality`` then carries the reason).
 
 Privacy: counts, shares and durations only; no title, login or comment text.
 """
@@ -61,6 +67,7 @@ from typing import Any, Literal, TypedDict
 from lib.agent_identity import AGENT, AuthorMatcher
 from lib.ai_usage import matcher_from_config
 from lib.fleet_config import FleetConfig
+from lib.gitlab_notes import NoteFactsOrReason
 from lib.merged_sample import STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, login, parse_time
 
 # AI code-review apps, by GitHub login with the ``[bot]`` suffix dropped. A login
@@ -215,18 +222,28 @@ def github_delivery(sample: MergedSample, review: Any, matcher: AuthorMatcher) -
     return _block(len(prs), merge, comment, commented, ai, review)
 
 
-def gitlab_delivery(sample: MergedSample, review: Any) -> DeliveryBlock:
+def gitlab_delivery(sample: MergedSample, review: Any, notes: NoteFactsOrReason = None) -> DeliveryBlock:
     mrs = list(sample.changes)
     merge = [h for h in (_hours(mr.get("created_at"), mr.get("merged_at")) for mr in mrs) if h is not None]
-    return _block(len(mrs), merge, None, None, None, review)
+    if not isinstance(notes, tuple) or len(notes) != len(mrs):
+        return _block(len(mrs), merge, None, None, None, review)
+    comment: list[float] | None = None
+    commented: int | None = None
+    if all(f.human_comment is not None for f in notes):
+        commented = sum(bool(f.human_comment) for f in notes)
+        comment = [h for h in (_hours(mr.get("created_at"), f.first_human_comment_at)
+                               for mr, f in zip(mrs, notes) if f.human_comment) if h is not None]
+    ai = None if any(f.ai_review is None for f in notes) else sum(bool(f.ai_review) for f in notes)
+    return _block(len(mrs), merge, comment, commented, ai, review)
 
 
 def scan_delivery(sample: SampleOrReason, review_reality: Any,
-                  fleet_config: FleetConfig | None = None) -> DeliveryBlock | dict[str, Any]:
+                  fleet_config: FleetConfig | None = None,
+                  notes: NoteFactsOrReason = None) -> DeliveryBlock | dict[str, Any]:
     """The ``delivery`` registry entry (see the module docstring). An unavailable
     sample is returned as the block, reason and all."""
     if not isinstance(sample, MergedSample):
         return sample
     if sample.provider == "gitlab":
-        return gitlab_delivery(sample, review_reality)
+        return gitlab_delivery(sample, review_reality, notes)
     return github_delivery(sample, review_reality, matcher_from_config(fleet_config))

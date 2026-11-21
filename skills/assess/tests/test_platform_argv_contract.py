@@ -48,6 +48,7 @@ case "$*" in
   "auth status"*) exit 0 ;;
   *"merge_requests?state=merged"*) cat "$FAKE_DIR/mrs.json"; exit 0 ;;
   *"/approvals") echo '{"approved_by":[{"user":{"username":"bob"}}]}'; exit 0 ;;
+  *"/notes?"*) echo '[{"system":false,"author":{"username":"bob"},"body":"ok","created_at":"2026-11-01T01:00:00Z"}]'; exit 0 ;;
   *"approval_rules"*) echo '[{"rule_type":"regular","approvals_required":1,"applies_to_all_protected_branches":true}]'; exit 0 ;;
   *"protected_branches"*) echo '[{"name":"main"}]'; exit 0 ;;
   *"projects/grp%2Fapp") echo '{"default_branch":"main"}'; exit 0 ;;
@@ -129,7 +130,7 @@ def test_every_gitlab_platform_read_names_its_target(stubs: Path, tmp_path: Path
     calls = _calls(stubs)
     assert [c for c in calls if not _names_target(c, "grp/app")] == []
     joined = [" ".join(c) for c in calls]
-    for needle in ("merge_requests?state=merged", "/approvals", "approval_rules",
+    for needle in ("merge_requests?state=merged", "/approvals", "/notes?", "approval_rules",
                    "protected_branches"):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "glab" for c in calls)

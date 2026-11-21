@@ -171,12 +171,12 @@ def _status(stderr: str) -> str | None:
     return codes[-1] if codes else None
 
 
-def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS) -> str:
+def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS, cache: bool = True) -> str:
     """Run ``glab`` and return stdout, raising GhUnavailable with a mapped reason."""
     cmd = ["glab", *args]
     shown = " ".join(cmd)
     try:
-        proc = run_cli(cmd, timeout)
+        proc = run_cli(cmd, timeout, cache)
     except FileNotFoundError:
         raise GhUnavailable("glab_not_installed: the glab CLI is not on PATH") from None
     except subprocess.TimeoutExpired:
@@ -240,10 +240,11 @@ def open_gitlab(repo_root: Path) -> GitlabProject | None:
     return project
 
 
-def glab_api(project: GitlabProject, path: str) -> Any:
-    """``glab api --hostname <host> <path>`` parsed as JSON (a REST GET, one page)."""
+def glab_api(project: GitlabProject, path: str, cache: bool = True) -> Any:
+    """``glab api --hostname <host> <path>`` parsed as JSON (a REST GET, one page).
+    ``cache=False`` keeps the response out of the ``--platform`` response cache."""
     args = ["api", "--hostname", project.host, path]
-    out = _run_glab(args)
+    out = _run_glab(args, cache=cache)
     try:
         return json.loads(out)
     except json.JSONDecodeError:
