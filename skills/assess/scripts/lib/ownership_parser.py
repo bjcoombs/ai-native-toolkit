@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 from typing import TypedDict
 
-from lib.doc_graph import is_excluded_path, is_repo_file
+from lib.doc_graph import CODE_EXTENSIONS, is_excluded_path, is_repo_file
 from lib.git_churn import tracked_files
 
 # Where an ownership map can legitimately live. CODEOWNERS is recognised by
@@ -153,6 +153,34 @@ def _match_glob(pattern: str, rel_paths: list[str]) -> set[Path]:
         if any(fnmatch.fnmatch(rp, form) for form in forms):
             out.add(Path(rp))
     return out
+
+
+_GLOB_CHARS = frozenset("*?[")
+
+
+def _names_a_path(pattern: str) -> bool:
+    """A CODEOWNERS glob names a module path when one segment has no glob character.
+
+    ``src/``, ``/docs/**`` and ``**/tests/`` do; ``*``, ``/**``, ``**/*`` and an
+    extension glob such as ``*.py`` cut across every directory and name no boundary.
+    """
+    return any(seg and not _GLOB_CHARS & set(seg) for seg in pattern.split("/"))
+
+
+def _is_module_source(path: Path) -> bool:
+    """A tracked source file inside a module directory: a code extension, at least one
+    parent directory, and no dot-directory (``.github/``, ``.gitlab/``) on its path.
+
+    Root files (``README.md``, ``LICENSE``, ``setup.py``), docs and CI config are not.
+    """
+    parents = path.parts[:-1]
+    return (path.suffix in CODE_EXTENSIONS and bool(parents)
+            and not any(part.startswith(".") for part in parents))
+
+
+def is_boundary_pattern(pattern: str, files: set[Path]) -> bool:
+    """A CODEOWNERS line that names a module path owning tracked source (#785)."""
+    return _names_a_path(pattern) and any(_is_module_source(f) for f in files)
 
 
 def parse_codeowners(repo_root: Path) -> dict[str, set[Path]]:

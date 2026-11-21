@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from lib.context_blocks import structure_drift_tier_0
+from lib.ownership_parser import is_boundary_pattern
 from lib.structure_drift import detect_path_existence_drift
 
 _ARCH = "# Architecture\n\nThe entry point is `src/a.py`.\n"
@@ -44,6 +45,16 @@ def _repo(root: Path, files: dict[str, str]) -> Path:
     pytest.param({"CODEOWNERS": "*.py @x\n"}, 0, id="extension-glob"),
     pytest.param({"CODEOWNERS": "*.py @x\n/src/** @team\n"}, 1, id="extension-glob-plus-src"),
     pytest.param({"CODEOWNERS": "src/*.py @team\n"}, 1, id="extension-glob-under-a-path"),
+    pytest.param({".github/CODEOWNERS": "* @org\n/.github/ @org/devops\n",
+                  ".github/workflows/ci.yml": "on: push\n"}, 0, id="star-plus-dot-github"),
+    pytest.param({"CODEOWNERS": "/.github/ @x\n.gitlab/ @y\n", ".github/scripts/s.py": "x = 1\n",
+                  ".gitlab/ci.yml": "a: 1\n"}, 0, id="dot-directories"),
+    pytest.param({"CODEOWNERS": "README.md @x\nLICENSE @x\nCODEOWNERS @x\nsetup.py @x\n",
+                  "README.md": "# r\n", "LICENSE": "x\n", "setup.py": "x = 1\n"}, 0,
+                 id="root-files"),
+    pytest.param({"CODEOWNERS": "* @x\ndocs/ @writers\n", "docs/guide.md": "# g\n"}, 0,
+                 id="docs-only-path"),
+    pytest.param({"CODEOWNERS": "src/a.py @x\n"}, 1, id="one-source-file-in-a-module"),
     pytest.param({".github/CODEOWNERS": "* @x\nsrc/ @team\n"}, 1, id="star-plus-src"),
     pytest.param({".github/CODEOWNERS": "src/ @team\n"}, 1, id="src-only"),
     pytest.param({"ARCHITECTURE.md": _ARCH}, 1, id="architecture-one-path"),
@@ -66,3 +77,17 @@ def test_no_ownership_map_omits_the_block(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r", {})
     assert detect_path_existence_drift(repo)["boundary_patterns"] == 0
     assert structure_drift_tier_0(repo) is None
+
+
+@pytest.mark.parametrize(("pattern", "files", "expected"), [
+    ("src/", {"src/a.py"}, True),
+    ("**/tests/", {"pkg/tests/t.py"}, True),
+    ("src/", {"src/README.md"}, False),
+    ("/.github/", {".github/scripts/s.py"}, False),
+    ("tools/", {"tools/.hidden/x.py"}, False),
+    ("app.py", {"app.py"}, False),
+    ("*.py", {"src/a.py"}, False),
+    ("src/", set(), False),
+])
+def test_is_boundary_pattern(pattern: str, files: set[str], expected: bool) -> None:
+    assert is_boundary_pattern(pattern, {Path(f) for f in files}) is expected

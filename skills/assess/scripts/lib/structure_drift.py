@@ -73,6 +73,7 @@ from lib.ownership_parser import (
     _resolve_ref,
     _tracked_rel_paths,
     find_empty_globs,
+    is_boundary_pattern,
     parse_architecture_md,
     parse_codeowners,
 )
@@ -218,32 +219,22 @@ def _empty_refs_in_doc(
     return rows
 
 
-_GLOB_CHARS = frozenset("*?[")
-
-
-def _names_a_path(pattern: str) -> bool:
-    """A CODEOWNERS glob names a module path when one segment has no glob character.
-
-    ``src/``, ``/docs/**`` and ``**/tests/`` do; ``*``, ``/**``, ``**/*`` and an
-    extension glob such as ``*.py`` cut across every directory and name no boundary.
-    """
-    return any(seg and not _GLOB_CHARS & set(seg) for seg in pattern.split("/"))
-
-
 def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
     """(declared, matched, boundary) counts over the patterns/paths a repo declares.
 
     Counts both sides' declarations: every CODEOWNERS glob, and every distinct
     architecture-doc path reference (per declaring boundary). ``matched`` is the
-    declarations whose resolution is non-empty. ``boundary`` is ``matched`` less
-    the CODEOWNERS globs that name no module path (``_names_a_path``): a catch-all
-    or an extension glob names one owner across the tree, not a boundary (#785). Reuses the same parse/resolve path
-    as the empty-set detectors so the two never disagree on what "declared" means.
+    declarations whose resolution is non-empty. ``boundary`` counts the matched
+    architecture-doc references and the CODEOWNERS globs ``is_boundary_pattern``
+    accepts: a catch-all, an extension glob, or a path owning no module source
+    (``/.github/``, ``README.md``, ``docs/``) leaves the code with one owner (#785).
+    Reuses the same parse/resolve path as the empty-set detectors so the two never
+    disagree on what "declared" means.
     """
     codeowners = parse_codeowners(repo_root)
     declared = len(codeowners)
     matched = sum(1 for files in codeowners.values() if files)
-    boundary = sum(1 for pat, files in codeowners.items() if files and _names_a_path(pat))
+    boundary = sum(1 for pat, files in codeowners.items() if is_boundary_pattern(pat, files))
 
     docs = _discover_arch_docs(repo_root)
     if docs:
