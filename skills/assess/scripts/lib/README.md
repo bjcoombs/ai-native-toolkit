@@ -231,8 +231,8 @@ returns (`import_graph.py`); nothing in it assumes a language:
   builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Every registered builder graphs its language; the largest graph is measured and its
-language is the block's `language` field (null when nothing was measured). Degrades to
+Every registered builder graphs its language; the graph `select_graph` picks (the dominant
+source language's) is measured and its language is the block's `language` field (null when nothing was measured). Degrades to
 `available: False` when `networkx` is absent, when a builder's tool is missing or fails
 and no other language was graphed, and when nothing could be graphed (nothing measured,
 not an empty graph whose modularity 0 would read as tangled code). With no graph the
@@ -258,7 +258,7 @@ Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python
 counts-only one).
 
 **`import_graph.py`**
-The language-neutral builder interface (issue #708). A builder is any object with a
+The language-neutral builder interface (issues #708, #709). A builder is any object with a
 `language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
 (the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
 nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
@@ -275,14 +275,29 @@ or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
 | `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
 | `name_collisions` | packages sharing a name, disclosed rather than merged |
 
-`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder and
-keeps one graph per language; the largest (most modules, then most internal edges, then
-the language token) is returned. With no graph the reason is the first builder failure in
-registration order, else `no_graph_reason`, which counts source files per language
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
+dominant source language decides: when a builder covers it (its `language`, or a token in
+an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
+builder's graph is returned and its failure is final (the count honours a builder's
+optional `is_graph_source(rel)`, so files it skips, such as a Python app's
+`static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
+invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
+`no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
+the dominant language's graph, whose nodes can differ. When the dominant builder found
+nothing to graph (loose scripts, no package) or no builder covers the dominant language,
+the largest other graph stands in (most modules, then most internal edges, then the
+language token); with none the reason is the first builder failure in registration order, else
+`no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. `is_graph_source(rel_path, language)` says whether a
-file could be in that language's graph (extension, plus Go's skipped test files and
-directories). Imports no graph tool.
+`scope`) and names the dominant one. A built graph that breaks the contract (a module
+missing from `package_of`, which A3 and A4 index) is treated as a builder failure
+(`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
+reported and the measure never raises `KeyError`. `is_graph_source(rel_path, language)`
+says whether a file could be in that language's graph: its extension must be one of the
+languages the covering builder graphs (the TypeScript builder covers `.js` too), and the
+builder's own optional `is_graph_source(rel)` hook must accept it (Go skips test files and
+`GO_SKIP_DIRS`; TypeScript skips bundles, declarations, tests and tool configs). Imports
+no graph tool; the registered builders are loaded lazily when none are passed.
 
 Worked example: a builder for a language whose package is a directory and whose front
 door is the directory's `index` file.
@@ -323,7 +338,34 @@ its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which check
 registered builder's graph shape (`package_of` covers `modules`). A new block field
 or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
 the maturity model header (`levels/default.toml`).
-Tests: `tests/test_import_graph.py`, `tests/test_import_graph_contract.py`.
+Tests: `tests/test_import_graph.py`, and `tests/test_import_graph_contract.py`, the
+contract every registered builder must keep (sorted unique modules, `package_of`
+covering them, front doors, files and surfaces within them, `None` on an empty tree).
+A new builder adds a fixture tree to its `CONTRACT_FIXTURES`.
+
+**`import_graph_typescript.py`**
+The TypeScript and JavaScript builder (`TYPESCRIPT_BUILDER`, issue #709): a deterministic
+regex scan, no Node. One builder graphs both languages, since they import each other; the
+graph's `language` is `typescript` when any scanned file is TypeScript, else `javascript`.
+Modules are repo-relative file paths with the extension kept. Imports are `import ... from`,
+side-effect `import`, `export ... from`, `import()`, `require()` and `import x = require()`,
+read after comments are stripped. A relative specifier resolves against the importer's
+directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`paths`, then
+`baseUrl`, following relative `extends`; JSONC is accepted), then the workspace packages
+(every `package.json` with a `name`, its entry from `source`, the `"."` export, `module` or
+`main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
+A specifier matches a file, the file plus a source extension, a `.js` name standing for its
+`.ts` source, or a directory's `index`; anything else is external. A package is the nearest
+directory holding an `index` file or a named `package.json`, else the module's top directory;
+front doors are the `index` modules and each workspace entry; the surface is the count of
+exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
+`EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
+build and test tool configs (`vite.config.ts`, `jest.config.js` and the other
+`TOOL_CONFIG_PREFIXES`; an app's own `app.config.ts` stays) and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
+`"."` only, and `node_modules` and package `extends` are not followed. Configs and
+workspaces are read from the whole repository; modules come from `scope`.
+Tests: `tests/test_import_graph_typescript.py` (fixture `tests/fixtures/ts_workspace`).
 
 **`import_graph_python.py`**
 The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
@@ -376,10 +418,13 @@ graph never vouches for a Python tree or a directory of `_test.go` files alone. 
 `_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
 configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
 is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
-names. Build constraints are not evaluated. No `go.mod` returns `None`,
+names. The builder's `is_graph_source(rel)` hook applies the same skips to the
+dominant-language count and to `import_graph.is_graph_source`. Build constraints are not evaluated. No `go.mod` returns `None`,
 so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
-raises `GraphUnavailable`. Graphs compare by module count, so a Go repository with a
-larger Python package tree reports the Python graph.
+raises `GraphUnavailable`. Graphs are not compared by size against the dominant
+language's: a Go-dominant repository reports its Go graph even beside a larger Python
+package tree, and a Go module beside loose Python scripts (Python dominant, no package
+to graph) reports Go through the fallback.
 Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
 `tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 

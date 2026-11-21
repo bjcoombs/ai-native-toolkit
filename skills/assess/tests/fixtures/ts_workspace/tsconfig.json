@@ -1,0 +1,7 @@
+{
+  // JSONC: comments and trailing commas are allowed
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {"@app/*": ["packages/app/src/*"],},
+  },
+}

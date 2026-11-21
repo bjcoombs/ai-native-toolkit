@@ -33,14 +33,17 @@
 #   package boundary crossed the ratio is a vacuous 1.0, so a single-package
 #   repository stops at level 1. A strictly typed codebase with tangled modules
 #   scores low here and Present in /assess; a loosely typed one with clean
-#   modules the reverse. Each language builder graphs its own language and
-#   the largest graph is measured (structure.language names it). Python
-#   and Go have builders. A Go graph's node is a package (a directory) and
-#   each package is its own boundary: an import reaches only exported
-#   identifiers, so Go's front_door_ratio is 1.0 by construction and its
-#   level 2 reads modularity plus one cross-package import. A repository
-#   with no graph reports structure unavailable with a reason naming its
-#   dominant source language
+#   modules the reverse. The dominant source language's graph is measured
+#   (structure.language names it), and a failing dominant builder keeps
+#   its reason; another language's graph stands in when no builder covers
+#   the dominant one or its builder found nothing to graph. Python, Go and TypeScript/JavaScript have builders.
+#   TypeScript/JavaScript is one builder: a package is a named workspace
+#   package or a directory with an index file. A Go graph's node is a
+#   package (a directory) and each package is its own boundary: an import
+#   reaches only exported identifiers, so Go's front_door_ratio is 1.0 by
+#   construction and its level 2 reads modularity plus one cross-package
+#   import. A repository with no graph reports structure unavailable with a
+#   reason naming its dominant source language
 #   (no_import_graph_<language>, no_python_packages for Python with no
 #   importable package, no_source_files with no source), so the row is
 #   unknown there, not 0. A graph with no import edges (modules that never
@@ -118,7 +121,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.9"
+version = "default-2026.11.10"
 
 [[rows]]
 id = "layer-0-instructions"

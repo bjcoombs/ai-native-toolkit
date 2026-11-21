@@ -46,7 +46,8 @@ SCAN_BLOCK: JsonDict = {
             "block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, "
             "no_python_packages (a Python repository with no importable package), "
             "no_import_graph_<language> (no import graph for the dominant source language, "
-            "for example no_import_graph_typescript) and no_source_files."
+            "for example no_import_graph_rust), invalid_import_graph (a builder returned a graph "
+            "that breaks the module-graph contract) and no_source_files."
         ),
     }}, "required": ["reason"]},
 }

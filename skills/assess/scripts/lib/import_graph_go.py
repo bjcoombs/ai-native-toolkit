@@ -40,7 +40,11 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lib.import_graph import GO_SKIP_DIRS, ModuleGraph
+from lib.import_graph import ModuleGraph
+
+# Directories the Go builder never walks. Not EXCLUDE_DIRS: ``build``, ``out``,
+# ``dist``, ``target`` and ``test`` are ordinary Go package names (issue #710).
+GO_SKIP_DIRS = frozenset({".git", "node_modules", "vendor", "testdata"})
 
 # A Go string, raw string or rune literal (kept), or a comment (blanked).
 _LEXEME = re.compile(
@@ -223,6 +227,12 @@ class GoBuilder:
     """The Go :class:`lib.import_graph.ImportGraphBuilder`."""
 
     language = "go"
+
+    def is_graph_source(self, rel: Path) -> bool:
+        """True when the walk would graph ``rel``: a non-test ``.go`` file outside
+        ``GO_SKIP_DIRS`` and ``.``/``_`` directories."""
+        return (rel.suffix == ".go" and not rel.name.endswith("_test.go")
+                and not any(_skipped(part, set()) for part in rel.parts[:-1]))
 
     def build(
         self, repo_root: Path, extra_exclude_dirs: set[str], scope: Path | None,
