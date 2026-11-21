@@ -713,7 +713,11 @@ names, keyed `<doc>::<header>` so two docs declaring the same section don't coll
 keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
 patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
 left behind - and `parse_ownership` runs both with the module-shape degradation contract
-(`available: False`, reason `"no ownership map"` when neither map exists). It mirrors
+(`available: False`, reason `"no ownership map"` when neither map exists).
+`is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line declares a module
+boundary: a literal path segment and at least one matched file with a `CODE_EXTENSIONS`
+suffix under a non-dot directory, so `*`, `*.py`, `/.github/`, root files and docs-only
+paths do not (#785; tests in `tests/test_structure_drift_boundaries.py`). It mirrors
 `doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
 `tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
 sorted at the boundary for byte-identical output. The one inversion is that it *reads*
@@ -733,8 +737,11 @@ references) and side B the tracked, non-excluded file set, and the finding is th
 declarations whose match set is empty. Binary, no statistics; a pattern matching only
 excluded files counts as empty (the excludes are not part of the navigable repo). It emits
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
-coverage ratio, and legacy-shape `empty_globs` mirrors for the orchestrator's
-enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
+coverage ratio, `boundary_patterns` - the matched architecture-doc references plus the
+CODEOWNERS lines `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at
+least one matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`,
+`README.md` and `docs/` are left out); Layer 4 level 1 reads it (#785) - and
+legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a
 boundary groups still belong together?". Three lenses each induce a grouping - the declared
@@ -755,8 +762,8 @@ existing `hidden_coupling` finding - a recurring directory pair, not the version
 repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the
 `structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
 `structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
-`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its test
-`tests/test_structure_drift.py`.
+`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its tests
+`tests/test_structure_drift.py` and `tests/test_structure_drift_boundaries.py`.
 
 ### Signal integration
 

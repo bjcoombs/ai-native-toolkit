@@ -125,7 +125,7 @@ EXTRA_FIELD_NAMES: Final = frozenset({
     "family", "text", "commit", "survived_touches", "severity",
     # structure_drift tier 1, test_focus, instruction files
     "tier_1", "allowlist_pairs_count", "seam_allowlist_applied", "matched_patterns",
-    "total_patterns",
+    "total_patterns", "boundary_patterns",
     "human_cochange_agree_count", "human_grouped_never_cochange_count",
     "human_grouped_static_splits_count", "human_split_but_cochange_count",
     "human_split_static_fuses_count", "human_static_agree_count",

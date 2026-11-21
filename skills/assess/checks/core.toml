@@ -1645,11 +1645,11 @@ type = "bool"
 evidence = "git_history"
 
 [[entries]]
-id = "core:structure_drift.tier_0.matched_patterns"
+id = "core:structure_drift.tier_0.boundary_patterns"
 kind = "signal"
-title = "Ownership-map patterns matching a tracked file"
+title = "Ownership-map patterns naming a module path"
 collector = "core.structure_drift_block"
-path = "structure_drift.tier_0.matched_patterns"
+path = "structure_drift.tier_0.boundary_patterns"
 type = "number"
 evidence = "config_text"
 null_means = "the block is omitted with no ownership map"
@@ -1852,11 +1852,11 @@ key = "layer-3-linters.2:promissory_markers.aging_reliable"
 fix = "Run on a full clone so suppression ages can be measured."
 
 [[entries]]
-id = "core.cond.layer-4-architecture.1.matched_patterns"
+id = "core.cond.layer-4-architecture.1.boundary_patterns"
 kind = "condition"
-title = "A boundary or ownership map matches the code"
-key = "layer-4-architecture.1:structure_drift.tier_0.matched_patterns"
-fix = "Commit a CODEOWNERS or ARCHITECTURE.md whose patterns name real paths."
+title = "A boundary or ownership map names a module path"
+key = "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns"
+fix = "Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths."
 
 [[entries]]
 id = "core.cond.layer-4-architecture.2.p95"

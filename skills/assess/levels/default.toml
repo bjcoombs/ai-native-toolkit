@@ -63,10 +63,15 @@
 # - Layer 4 reads a declared boundary and the outcome of the commonest
 #   architecture test: level 1 is a committed ownership or boundary map
 #   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
-#   module boundaries) with at least one pattern matching a
-#   tracked file, level 2 adds a file-size outcome (95% of scored files at
-#   500 lines or fewer). Neither proves an architecture test runs in CI,
-#   which is what /assess looks for. With no map the structure_drift block
+#   module boundaries) with at least one pattern matching a tracked file
+#   that names a module path (boundary_patterns). A CODEOWNERS line counts
+#   only when it names a path and owns source code in a module directory:
+#   a catch-all or extension glob (`*`, `/**`, `*.py`), a dot-directory
+#   (`/.github/`), a root file (`README.md`, `LICENSE`) or a docs-only
+#   path leaves the code with one owner, so it does not count. Level 2 adds a
+#   file-size outcome (95% of scored files at 500 lines or fewer). Neither
+#   proves an architecture test runs in CI, which is what /assess looks
+#   for. With no map the structure_drift block
 #   is omitted (a headless run reports it unavailable), so the row is
 #   unknown rather than 0.
 # - Layer 0 level 1 reads layer_grades.instruction_file_present: a committed
@@ -132,7 +137,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.12"
+version = "default-2026.11.13"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -210,7 +215,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "structure_drift.tier_0.matched_patterns", op = "gt", value = 0 }]
+  criteria = [{ signal = "structure_drift.tier_0.boundary_patterns", op = "gt", value = 0 }]
 
   [[rows.levels]]
   level = 2
