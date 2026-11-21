@@ -208,6 +208,22 @@ def test_a_configured_agent_on_a_user_login_is_never_also_the_first_human():
     assert block["ai_review_share"] == 1.0
 
 
+LOOSE = '[[ai_usage.agent_identities]]\npattern = "bot"\n'
+
+
+def test_a_loose_config_rule_tries_the_bot_form_only_for_bots():
+    # "bot" would match every "<login>[bot]"; a person is still a person.
+    loose = scan_matcher(LOOSE)
+    pr = _pr(comments=(("bob", "2026-11-01T02:00:00Z"),))
+    assert first_human_comment(pr, StubBots(), loose) == 2.0
+    assert ai_reviewed(pr, StubBots(), loose) is False
+    bots = StubBots()
+    bots._known["acme-ai"] = True  # a bot App: its [bot] form matches the rule
+    assert ai_reviewed(_pr(comments=(("acme-ai", "2026-11-01T01:00:00Z"),)), bots, loose) is True
+    assert not agent_authored(_authored({"login": "alice", "is_bot": False}), "github", loose)
+    assert agent_authored(_authored({"login": "app/acme-ai", "is_bot": True}), "github", loose)
+
+
 def scan_matcher(toml: str = ""):
     from lib.ai_usage import matcher_from_config
     return matcher_from_config(parse_fleet_config(toml))

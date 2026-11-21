@@ -41,18 +41,18 @@ first-comment figures are None: the answer depends on that account.
 AI review (GitHub). A change counts when a review or comment comes from an AI
 reviewer other than the change's author (an agent commenting on its own pull
 request is not review): an account an ``[[ai_usage.agent_identities]]`` config rule matches by
-username (the #695 list; ``[bot]`` is tried as well, since ``gh pr list`` drops
-it), or a bot account (``BotClassifier`` says so) whose login is in
-``AI_REVIEWERS`` or matches a pinned ``agent_identity.AGENT_RULES`` entry with
-``[bot]`` appended. Unlike ``review_reality``'s ``bot_review_share``, status and
+username (the #695 list), or a bot account (``BotClassifier`` says so) whose
+login is in ``AI_REVIEWERS`` or matches a pinned ``agent_identity.AGENT_RULES``
+entry or a config rule with ``[bot]`` appended (``gh pr list`` drops it). The
+``[bot]`` form is tried only for a bot, so a loose config rule such as ``bot``
+never makes a person an agent, here or in the first human comment. Unlike ``review_reality``'s ``bot_review_share``, status and
 deployment bots (codecov, vercel, sonar) do not count. When an account whose
 type is unknown decides a change, ``ai_review_share`` is None.
 
 Agent-authored share (#717). The share of sampled changes whose author an agent
 identity matches, by the #695 username form (``AuthorMatcher.classify_username``):
-a config rule, tried on the login with and without ``[bot]``, or a pinned
-``AGENT_RULES`` entry. On GitHub ``gh`` drops an App author's ``[bot]`` (and
-``login`` drops ``app/``), so ``[bot]`` is re-appended for the pinned rules only
+a config rule or a pinned ``AGENT_RULES`` entry. On GitHub ``gh`` drops an App
+author's ``[bot]`` (and ``login`` drops ``app/``), so ``[bot]`` is re-appended only
 when the author object says ``is_bot``; a person whose login is ``claude`` is not
 the Claude App. On GitLab the merge request author's ``username`` is classified
 as it stands: an access-token user counts only under ``token_users_as_agents``,
@@ -171,7 +171,10 @@ def first_human_comment(pr: dict[str, Any], bots: BotClassifier,
 
 
 def _configured(matcher: AuthorMatcher, name: str) -> bool:
-    return any(matcher.classify_username(n).rule_index is not None for n in (name, f"{name}[bot]"))
+    """A config rule matches the login as given. The ``[bot]`` form is tried only
+    for a known bot (``_pinned`` after ``BotClassifier``, or an ``is_bot`` author),
+    so a loose rule such as ``bot`` never turns a person into an agent."""
+    return matcher.classify_username(name).rule_index is not None
 
 
 def agent_authored(change: dict[str, Any], provider: str, matcher: AuthorMatcher) -> bool:

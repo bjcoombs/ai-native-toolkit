@@ -2293,12 +2293,13 @@ type (a failed probe, or one left unprobed once the shared 20-login budget is sp
 before the first known human on any change nulls the three comment figures. A
 person whose login equals a pinned AI App's name probes as that App (`gh` drops
 `[bot]` and gives comment authors no type). AI review (GitHub): a review or
-comment by an `[[ai_usage.agent_identities]]` config match (username, with and
-without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
-`agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,
+comment by an `[[ai_usage.agent_identities]]` config match (username as given), or by a bot account whose login is in
+`AI_REVIEWERS` or matches `agent_identity.AGENT_RULES` or a config rule with
+`[bot]` re-appended (the `[bot]` form is tried only for a bot, so a loose rule
+never makes a person an agent); status bots never count,
 an unknown account that decides a change nulls the share. Agent-authored share
 (#717): changes whose author `AuthorMatcher.classify_username` puts in the `agent`
-bucket - a config rule (login with and without `[bot]`) or a pinned `AGENT_RULES`
+bucket - a config rule or a pinned `AGENT_RULES`
 entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
 the author `username`, so access-token users count only under
 `token_users_as_agents` and dependency bots never; a deleted author is not an
