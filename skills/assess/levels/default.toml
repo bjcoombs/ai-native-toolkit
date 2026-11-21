@@ -65,9 +65,9 @@
 #   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
 #   module boundaries) with at least one pattern matching a tracked file
 #   that is not a catch-all (boundary_patterns): a CODEOWNERS of only `*`,
-#   `/*`, `**` or `/**` names one owner for the whole tree and no boundary,
-#   so it does not count. Level 2 adds a file-size outcome (95% of scored
-#   files at 500 lines or fewer). Neither proves an architecture test runs in CI,
+#   `/*`, `**`, `/**`, `**/*` or `/**/*` names one owner for the whole
+#   tree and no boundary, so it does not count. Level 2 adds a file-size
+#   outcome (95% of scored files at 500 lines or fewer). Neither proves an architecture test runs in CI,
 #   which is what /assess looks for. With no map the structure_drift block
 #   is omitted (a headless run reports it unavailable), so the row is
 #   unknown rather than 0.

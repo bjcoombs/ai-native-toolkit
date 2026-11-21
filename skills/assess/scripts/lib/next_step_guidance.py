@@ -253,8 +253,9 @@ def _boundary_map(op: str, value: Operand) -> Guidance | None:
         return None
     return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
                       "`ARCHITECTURE.md` that names module paths.",
-            "done_when": "A committed `CODEOWNERS` or `ARCHITECTURE.md` names at least one path "
-                         "other than the catch-all `*` that exists in the repository."}
+            "done_when": "A committed `CODEOWNERS` or `ARCHITECTURE.md` names at least one path, "
+                         "other than a catch-all such as `*` or `/**`, that matches a tracked "
+                         "file in the repository."}
 
 
 def _file_size(op: str, value: Operand) -> Guidance | None:

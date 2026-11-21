@@ -734,8 +734,8 @@ declarations whose match set is empty. Binary, no statistics; a pattern matching
 excluded files counts as empty (the excludes are not part of the navigable repo). It emits
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
 coverage ratio, `boundary_patterns` - the matched declarations less the catch-all CODEOWNERS
-globs `*`, `/*`, `**` and `/**`, which Layer 4 level 1 reads (#785) - and legacy-shape `empty_globs` mirrors for the orchestrator's
-enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
+globs (`*`, `/*`, `**`, `/**`, `**/*`, `/**/*`), which Layer 4 level 1 reads (#785) - and
+legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a
 boundary groups still belong together?". Three lenses each induce a grouping - the declared

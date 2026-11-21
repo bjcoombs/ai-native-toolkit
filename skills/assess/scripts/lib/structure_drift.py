@@ -218,7 +218,8 @@ def _empty_refs_in_doc(
     return rows
 
 
-_CATCH_ALL = frozenset({"*", "/*", "**", "/**"})
+# Whole-tree CODEOWNERS spellings: each names every tracked file and no module boundary.
+_CATCH_ALL = frozenset({"*", "/*", "**", "/**", "**/*", "/**/*"})
 
 
 def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:

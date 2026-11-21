@@ -40,6 +40,7 @@ def _repo(root: Path, files: dict[str, str]) -> Path:
     pytest.param({".github/CODEOWNERS": "* @x\n"}, 0, id="star"),
     pytest.param({"CODEOWNERS": "/** @x\n"}, 0, id="slash-double-star"),
     pytest.param({"CODEOWNERS": "/* @x\n** @y\n"}, 0, id="slash-star-and-double-star"),
+    pytest.param({"CODEOWNERS": "**/* @x\n/**/* @y\n"}, 0, id="double-star-slash-star"),
     pytest.param({".github/CODEOWNERS": "* @x\nsrc/ @team\n"}, 1, id="star-plus-src"),
     pytest.param({".github/CODEOWNERS": "src/ @team\n"}, 1, id="src-only"),
     pytest.param({"ARCHITECTURE.md": _ARCH}, 1, id="architecture-one-path"),

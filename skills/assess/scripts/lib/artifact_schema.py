@@ -177,7 +177,7 @@ constant each.
 # skip null. complexity-stats.json is unchanged.
 # 1.28.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
 # #785): the matched declarations less the catch-all CODEOWNERS globs (`*`, `/*`,
-# `**`, `/**`), read by the default maturity model's Layer 4 level 1. Additive:
+# `**`, `/**`, `**/*`, `/**/*`), read by the default maturity model's Layer 4 level 1. Additive:
 # total_patterns and matched_patterns keep their meaning, and
 # complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.28.0"
@@ -280,5 +280,5 @@ ARTIFACT_SCHEMA_VERSION = "1.28.0"
 #     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
 # 24: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
 #     matched_patterns (issue #785), so a CODEOWNERS whose only matching pattern is
-#     a catch-all (`*`, `/*`, `**`, `/**`) no longer credits a declared boundary.
+#     a catch-all (`*`, `/*`, `**`, `/**`, `**/*`, `/**/*`) no longer credits a declared boundary.
 ASSESS_METHOD_VERSION = 24
