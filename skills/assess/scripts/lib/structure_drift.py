@@ -653,13 +653,12 @@ def detect_grouping_disagreement(
     human_rel = human_grouping_relation(ownership_map)
 
     mg = _module_graph(repo_root)
-    if mg is not None and mg.modules and not mg.module_file:
-        # A graph whose modules map to no file (a Go package is a directory) has
-        # no file-pair lens; an empty one would read every declared pair as split.
-        return _tier1_unavailable(f"no_static_file_map: the {mg.language} import "
-                                  "graph maps no module to a file")
+    # A graph whose modules map to no file (a Go package is a directory) has no
+    # file-pair lens: its empty relation would read every declared pair as split,
+    # so the static-derived lists are emptied below; co-change metrics stand.
+    no_file_map = mg is not None and bool(mg.modules) and not mg.module_file
     if communities is None:
-        communities = _compute_communities(repo_root, mg)
+        communities = [] if no_file_map else _compute_communities(repo_root, mg)
     static_rel = static_grouping_relation(repo_root, communities, mg)
 
     if coupling_pairs is None:
@@ -672,13 +671,23 @@ def detect_grouping_disagreement(
         human_rel, static_rel, cochange_rel,
     )
     filtered = apply_seam_allowlist(disagreement, allowlist)
+    reason = ""
+    if no_file_map and mg is not None:
+        for name in _STATIC_METRICS:
+            filtered[name], filtered[f"{name}_count"] = [], 0
+        reason = f"no_static_file_map: the {mg.language} import graph maps no module to a file"
 
     return {
         "available": True,
-        "reason": "",
+        "reason": reason,
         "tier_1_available": True,
         **filtered,
     }
+
+
+_STATIC_METRICS = (
+    "human_grouped_static_splits", "human_split_static_fuses", "human_static_agree",
+)
 
 
 def _tier1_unavailable(reason: str) -> JsonDict:

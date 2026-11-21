@@ -13,6 +13,7 @@ from lib.import_graph import is_graph_source
 from lib.keyhole_signals import _graphed_dirs
 from lib.import_graph import select_graph
 from lib.import_graph_builders import BUILDERS
+from lib.run_context_types import CoChangePair
 from lib.signals_schema import SCHEMA_PATH
 from lib.structure_drift import detect_grouping_disagreement
 from lib.import_graph_go import (
@@ -237,14 +238,22 @@ def test_hash_paths_hides_module_paths_and_package_dirs(tmp_path: Path) -> None:
 
 # -- consumers of a graph with no module file ---------------------------------
 
-def test_drift_tier_one_degrades_without_a_module_file_map(tmp_path: Path) -> None:
-    """An empty static lens would read every declared pair as split by the graph."""
+def test_drift_tier_one_keeps_co_change_without_a_module_file_map(tmp_path: Path) -> None:
+    """An empty static lens would read every declared pair as split by the graph,
+    so only the static-derived lists empty; the co-change metrics still report."""
     _two_communities(tmp_path)
     _write(tmp_path, {"CODEOWNERS": "/api/ @team-a\n/store/ @team-b\n"})
-    block = detect_grouping_disagreement(tmp_path, coupling_pairs=[])
-    assert block["available"] is False
+    pairs: list[CoChangePair] = [{"file_a": "api/api.go", "file_b": "store/store.go",
+              "co_change_count": 4, "support_pct": 100.0}]
+    block = detect_grouping_disagreement(tmp_path, coupling_pairs=pairs)
+    assert block["available"] is True and block["tier_1_available"] is True
     assert block["reason"].startswith("no_static_file_map: the go import graph")
-    assert block["human_grouped_static_splits_count"] == 0
+    for name in ("human_grouped_static_splits", "human_split_static_fuses",
+                 "human_static_agree"):
+        assert block[name] == [] and block[f"{name}_count"] == 0, name
+    assert block["human_split_but_cochange"] == [
+        {"file_a": "api/api.go", "file_b": "store/store.go"}]
+    assert block["human_grouped_never_cochange_count"] > 0
 
 
 def test_static_metrics_project_only_onto_the_graphed_language() -> None:

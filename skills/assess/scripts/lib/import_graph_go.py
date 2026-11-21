@@ -20,7 +20,8 @@ Implements the ``lib.import_graph`` builder interface for Go. No go tool runs:
   (methods excluded) and ``type`` declarations across its files.
 - No ``module_file``: a package is several files, so A1 size reads 0 and the
   footprint is the surface terms alone; structure-drift tier 1, whose static
-  lens pairs files, reads unavailable (``no_static_file_map``).
+  lens pairs files, empties its static-derived lists (``no_static_file_map``)
+  and keeps its co-change metrics.
 
 A package belongs to the nearest ``go.mod`` at or above it; a package with none
 is not graphed, and a repository with no ``go.mod`` returns ``None`` (the

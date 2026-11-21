@@ -362,8 +362,9 @@ exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
 construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
 public surface is the package's exported top-level `func` (not method) and `type`
 declarations. There is no `module_file` (a package is several files), so A1 size reads 0
-and structure-drift tier 1, whose static lens pairs files, reads unavailable
-(`no_static_file_map`) rather than reading every declared pair as split. The behaviour
+and structure-drift tier 1, whose static lens pairs files, empties its three
+static-derived lists with reason `no_static_file_map` rather than reading every declared
+pair as split; its three co-change metrics still report. The behaviour
 block projects the static metrics only onto directories holding a file the graph's
 language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
 graph never vouches for a Python tree or a directory of `_test.go` files alone. Skipped:
