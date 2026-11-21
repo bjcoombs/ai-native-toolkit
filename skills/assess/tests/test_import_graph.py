@@ -244,11 +244,30 @@ def test_the_dominant_graph_wins_over_a_larger_minor_one(tmp_path: Path) -> None
     assert select_graph(tmp_path, (ts, go)).graph.language == "go"
 
 
-def test_a_dominant_builder_with_nothing_to_graph_does_not_fall_back(tmp_path: Path) -> None:
+def test_a_dominant_builder_with_nothing_to_graph_falls_back(tmp_path: Path) -> None:
+    """Found nothing is not a failure: a minor language's graph stands in, as on main."""
     for rel in ("loose.py", "other.py", "scripts/tool.mjs"):
         _write(tmp_path, rel)
     selection = select_graph(tmp_path, (PYTHON_BUILDER, TYPESCRIPT_BUILDER))
+    assert selection.graph is not None and selection.graph.language == "javascript"
+
+
+def test_with_no_graph_at_all_the_dominant_reason_stays(tmp_path: Path) -> None:
+    for rel in ("loose.py", "other.py"):
+        _write(tmp_path, rel)
+    selection = select_graph(tmp_path, BUILDERS)
     assert selection.graph is None and selection.reason == NO_PYTHON_PACKAGES
+
+
+def test_a_go_module_beside_loose_python_scripts_reports_go(tmp_path: Path) -> None:
+    _write(tmp_path, "go.mod", "module example.com/m\n")
+    _write(tmp_path, "svc/svc.go", 'package svc\nimport "example.com/m/util"\n')
+    _write(tmp_path, "util/util.go", "package util\n")
+    for rel in ("scripts/a.py", "scripts/b.py", "scripts/c.py"):
+        _write(tmp_path, rel, "print(1)\n")
+    assert dominant_language(tmp_path, builders=BUILDERS) == "python"
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is True and block["language"] == "go"
 
 
 def test_a_dominant_language_with_no_builder_falls_back(tmp_path: Path) -> None:

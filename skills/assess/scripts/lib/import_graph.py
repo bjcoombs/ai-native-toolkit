@@ -151,16 +151,17 @@ def select_graph(
 ) -> GraphSelection:
     """Build one graph per language; the dominant language's graph wins.
 
-    The dominant language (most source files, :func:`dominant_language`) decides
-    first. When a registered builder covers it (its ``language``, or any token in
-    an optional ``languages`` attribute), that builder's outcome is the answer:
-    its graph, its failure reason (a missing tool keeps its install hint rather
-    than yielding to a minor language's graph), or, when it found nothing to
-    graph, :func:`no_graph_reason`. Graph sizes are never compared across
-    languages, whose nodes differ (files in one, packages in another).
+    The dominant language (most graphable source files, :func:`dominant_language`)
+    decides first. When a registered builder covers it (its ``language``, or any
+    token in an optional ``languages`` attribute), its graph is returned, and its
+    failure is final: a missing tool or an invalid graph keeps its reason (and
+    install hint) rather than yielding to a minor language's graph. Graph sizes
+    are never compared with the dominant language's graph, whose nodes can differ
+    (files in one, packages in another).
 
-    Only when no builder covers the dominant language does another language
-    stand in: the largest graph (most modules, then edges, then the language
+    When the dominant builder found nothing to graph (loose scripts with no
+    package), or no builder covers the dominant language, another language
+    stands in: the largest graph (most modules, then edges, then the language
     token), else the first failure in registration order, else
     :func:`no_graph_reason`. A graph that breaks the contract
     (:func:`graph_defect`) counts as its builder's failure.
@@ -182,10 +183,8 @@ def select_graph(
                 return GraphSelection(graph=None, reason=str(e))
             failures.append(str(e))
             continue
-        if covers:
-            if graph is not None and graph.modules:
-                return GraphSelection(graph=graph)
-            return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope, builders))
+        if covers and graph is not None and graph.modules:
+            return GraphSelection(graph=graph)
         if graph is not None and graph.modules:
             graphs.append(graph)
     if graphs:

@@ -278,14 +278,15 @@ or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
 `select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
 dominant source language decides: when a builder covers it (its `language`, or a token in
 an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
-builder's outcome is returned (the count honours a builder's optional
-`is_graph_source(rel)`, so files it skips, such as a Python app's `static/js/*.min.js`,
-never make their language dominant), its graph, its failure (so a missing grimp on a Python
-repository still reads `no_grimp` rather than yielding to a stray `.mjs` file), or
-`no_graph_reason` when it found nothing. Graph sizes are never compared across languages,
-whose nodes differ. Only when no builder covers the dominant language does the largest
-other graph stand in (most modules, then most internal edges, then the language token);
-with none the reason is the first builder failure in registration order, else
+builder's graph is returned and its failure is final (the count honours a builder's
+optional `is_graph_source(rel)`, so files it skips, such as a Python app's
+`static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
+invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
+`no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
+the dominant language's graph, whose nodes can differ. When the dominant builder found
+nothing to graph (loose scripts, no package) or no builder covers the dominant language,
+the largest other graph stands in (most modules, then most internal edges, then the
+language token); with none the reason is the first builder failure in registration order, else
 `no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
 `scope`) and names the dominant one. A built graph that breaks the contract (a module
@@ -420,8 +421,10 @@ is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go p
 names. The builder's `is_graph_source(rel)` hook applies the same skips to the
 dominant-language count and to `import_graph.is_graph_source`. Build constraints are not evaluated. No `go.mod` returns `None`,
 so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
-raises `GraphUnavailable`. Graphs compare by module count, so a Go repository with a
-larger Python package tree reports the Python graph.
+raises `GraphUnavailable`. Graphs are not compared by size against the dominant
+language's: a Go-dominant repository reports its Go graph even beside a larger Python
+package tree, and a Go module beside loose Python scripts (Python dominant, no package
+to graph) reports Go through the fallback.
 Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
 `tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 
