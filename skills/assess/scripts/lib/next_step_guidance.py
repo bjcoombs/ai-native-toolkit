@@ -264,11 +264,13 @@ def _stale_docs(op: str, value: Operand) -> Guidance | None:
     if number is None or op not in ("lte", "lt"):
         return None
     bound = f"{number:g}% or fewer" if op == "lte" else f"fewer than {number:g}%"
-    return {"change": "Update the docs whose code has moved on since they last changed, and "
-                      "keep docs current in the same pull request as the code they describe.",
+    return {"change": "Update the docs whose code has moved on since they last changed, "
+                      "regenerate generated docs whose source has moved on, and keep docs "
+                      "current in the same pull request as the code they describe.",
             "done_when": f"{bound[0].upper()}{bound[1:]} of the docs that describe a part of "
                          "the code have had more than two changes to their code since the doc "
-                         "last changed (the `/assess` staleness ratio above 2)."}
+                         "last changed (the `/assess` staleness ratio above 2), or whose "
+                         "declared source changed after the doc was generated."}
 
 
 def _setting(name: str) -> Wording:
