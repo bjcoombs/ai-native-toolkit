@@ -218,4 +218,7 @@ ARTIFACT_SCHEMA_VERSION = "1.23.0"
 # 17: an import graph with no edges reports ``structure.modularity_q`` null with
 #     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
 #     scorer's Layer 2 evidence on such repositories can move.
-ASSESS_METHOD_VERSION = 17
+# 18: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
+#     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
+#     instead of null and the L7 "hollow required review" row can now fire there.
+ASSESS_METHOD_VERSION = 18

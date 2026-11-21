@@ -336,7 +336,8 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
     enc = project.encoded
     if isinstance(notes, dict):
         return notes  # the notes read was refused: never "no reviews"
-    facts: Sequence[NoteFacts | None] = notes if notes is not None else [None] * len(mrs)
+    facts: Sequence[NoteFacts | None] = (
+        notes if notes is not None and len(notes) == len(mrs) else [None] * len(mrs))
     reviewed: list[bool | None] = []
     try:
         approved = self_merged = 0

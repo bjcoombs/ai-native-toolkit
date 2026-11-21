@@ -135,6 +135,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
 | `test_delivery.py` | `lib/delivery.py` + `lib/merged_sample.py` - delivery figures over a recorded, scrubbed `gh pr list` response (`fixtures/platform/`), the windowed two-read GitHub sample and one-read GitLab sample |
+| `test_gitlab_notes.py` | `lib/gitlab_notes.py` - GitLab merge-request note classification (markers, access-token and agent accounts, the author's own notes), the `gitlab_note_facts` spec and the GitLab `delivery` note figures |
 | `test_platform_argv_contract.py` | every `PLATFORM_SCANS` scan through recording `gh`/`glab` stubs: each argv names its target (`--repo`, `repos/<slug>`, `users/<login>`, `--hostname`), as the argv-keyed response cache needs |
 | `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |

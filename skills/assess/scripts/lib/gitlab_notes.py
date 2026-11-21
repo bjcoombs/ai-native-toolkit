@@ -7,27 +7,30 @@ names are read in memory and never leave this module: the read bypasses the
 is written to disk, and :class:`NoteFacts` carries booleans and one timestamp.
 
 The read. ``projects/<id>/merge_requests/<iid>/notes?sort=asc&order_by=created_at
-&per_page=100``: one page, oldest first, named by project and ``--hostname`` like
-every platform call. A full page that decides nothing leaves the undecided facts
-unknown (None), never False.
+&per_page=100`` (then ``&page=2``, ...): oldest first, named by project and
+``--hostname`` like every platform call, up to ``NOTES_MAX_PAGES`` pages, stopping at
+a short page or once a human comment and AI review are both found. Notes still
+undecided after the last page read leave those facts unknown (None), never False.
 
 Each non-system note (``system: true`` notes are GitLab's own events and are
 skipped) is classified once, first rule that applies:
 
-1. **AI review by output.** The body carries an AI-review marker: a pinned
+1. **The merge request's author**: their own notes are nothing, whatever they
+   carry. An agent or access-token user commenting on the change it authored is not
+   review (as ``delivery`` rules on GitHub).
+2. **AI review by output.** The body carries an AI-review marker: a pinned
    marker (``PINNED_MARKERS``: a line-start "AI Code Review" or "AI Review"
    heading, plain or bold, or an HTML comment naming AI review or CodeRabbit) or
    one of the ``[review] ai_review_markers`` strings from ``--fleet-config``
-   (case-insensitive substrings). Whoever posted it, the note is AI review and
-   never a human comment.
-2. **AI review by account.** The author's username is in the ``agent`` or
+   (case-insensitive substrings). Whoever else posted it, the note is AI review
+   and never a human comment.
+3. **AI review by account.** The author's username is in the ``agent`` or
    ``token_user`` bucket of ``agent_identity.AuthorMatcher.classify_username``
    (the ``[ai_usage]`` rules, #695): a GitLab project or group access-token user
    (``project_<id>_bot_<hash>``) is recognised by its generated username form,
    the token type, never by a display name. AI review is bot review too.
    An author object with ``bot: true`` (a GitLab internal bot) is bot review only.
-3. **Dependency bot** (Renovate, Dependabot): neither review nor a human comment.
-4. **The merge request's author**: their own notes are neither.
+4. **Dependency bot** (Renovate, Dependabot): neither review nor a human comment.
 5. **Human comment**: anyone else. The first one's ``created_at`` is
    ``first_human_comment_at``.
 
@@ -52,6 +55,10 @@ from lib.gitlab_cli import GitlabProject, glab_api
 from lib.merged_sample import MergedSample, SampleOrReason
 
 NOTES_PER_PAGE = 100
+
+# Pages of notes read per merge request at most (a long-running merge request with
+# an AI review on every pipeline can carry more than one page before a human note).
+NOTES_MAX_PAGES = 3
 
 # A note body is cut to this many characters before the markers are matched.
 MAX_BODY = 65536
@@ -136,6 +143,9 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
             continue
         body = note.get("body")
         author = note.get("author")
+        name = _username(author)
+        if name is not None and name == mr_author:
+            continue  # the author's own notes, an agent's on its own change included, are not review
         if (isinstance(body, str) and classifier.has_marker(body)) or classifier.is_ai(author):
             ai = bot = True
             continue
@@ -144,8 +154,7 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
             continue
         if classifier.is_dependency_bot(author):
             continue
-        name = _username(author)
-        if name is None or name == mr_author:
+        if name is None:
             continue
         if not human:
             human = True
@@ -159,12 +168,13 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
     )
 
 
-def read_notes(project: GitlabProject, iid: int) -> tuple[list[Any], bool]:
-    """One merge request's notes, oldest first, and whether the page was the last.
+def read_notes(project: GitlabProject, iid: int, page: int = 1) -> tuple[list[Any], bool]:
+    """One page of a merge request's notes, oldest first, and whether it was the last.
 
     Never cached: the response holds note bodies (see the module docstring)."""
+    more = f"&page={page}" if page > 1 else ""
     got = glab_api(project, f"projects/{project.encoded}/merge_requests/{iid}/notes"
-                            f"?sort=asc&order_by=created_at&per_page={NOTES_PER_PAGE}",
+                            f"?sort=asc&order_by=created_at&per_page={NOTES_PER_PAGE}{more}",
                    cache=False)
     if not isinstance(got, list):
         raise GhUnavailable("glab_bad_json: merge request notes were not a list")
@@ -173,15 +183,23 @@ def read_notes(project: GitlabProject, iid: int) -> tuple[list[Any], bool]:
 
 def mr_note_facts(project: GitlabProject, mr: dict[str, Any],
                   classifier: NoteClassifier) -> NoteFacts:
-    """Read one merged merge request's notes and keep only their facts.
+    """Read one merged merge request's notes and keep only their facts: page by page,
+    up to ``NOTES_MAX_PAGES``, stopping at a short page or once every fact is decided.
 
     Raises ``GhUnavailable`` on a refused or malformed read; the caller degrades."""
     iid = mr.get("iid")
     if not isinstance(iid, int):
         raise GhUnavailable("glab_bad_json: a merged merge request has no iid")
-    notes, complete = read_notes(project, iid)
-    return note_facts(notes, _username(mr.get("author")), classifier, complete)
-
+    author = _username(mr.get("author"))
+    notes: list[Any] = []
+    facts = NoteFacts(None, None, None, None)
+    for page in range(1, NOTES_MAX_PAGES + 1):
+        got, last = read_notes(project, iid, page)
+        notes.extend(got)
+        facts = note_facts(notes, author, classifier, complete=last)
+        if last or (facts.human_comment and facts.ai_review):
+            break
+    return facts
 
 # What the registry passes a reader: one ``NoteFacts`` per sampled merge request (in
 # the sample's order), None when the sample is not GitLab, or an unavailable block.

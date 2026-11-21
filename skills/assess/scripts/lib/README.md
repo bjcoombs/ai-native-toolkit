@@ -2213,20 +2213,24 @@ like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.
 
 **`gitlab_notes.py`**
 GitLab merge-request notes as facts (#716), for `review_reality` and `delivery` (#715). `read_notes(project, iid)` reads
-`projects/<id>/merge_requests/<iid>/notes?sort=asc&order_by=created_at&per_page=100` (one
-page, `--hostname` and the project in argv) with `cache=False`, so no note body reaches
+`projects/<id>/merge_requests/<iid>/notes?sort=asc&order_by=created_at&per_page=100`
+(`&page=N` after the first; `--hostname` and the project in argv) with `cache=False`;
+`mr_note_facts` reads up to `NOTES_MAX_PAGES` (3) pages, stopping at a short page or once
+a human comment and AI review are both found, so no note body reaches
 the `--platform` response cache. `note_facts(notes, mr_author, classifier, complete)`
-returns `NoteFacts(human_comment, bot_review, first_human_comment_at)`; nothing else of a
-note leaves the module. System notes are skipped. A note is, first rule first: AI review
+returns `NoteFacts(human_comment, ai_review, bot_review, first_human_comment_at)`; nothing
+else of a note leaves the module. System notes are skipped. A note is, first rule first:
+nothing when the merge request's author posted it (an agent on its own change is not
+review); AI review
 when its body (cut to `MAX_BODY`) carries a `PINNED_MARKERS` marker (a line-start "AI Code
 Review" / "AI Review" heading, plain or bold, emoji allowed, or an HTML comment naming AI
 review or CodeRabbit; prose mentioning AI review does not match) or a `[review]
-ai_review_markers` string (case-insensitive substring), whoever posted it; bot review when
+ai_review_markers` string (case-insensitive substring), whoever else posted it; bot review when
 its author is in the `agent` or `token_user` bucket of
 `agent_identity.AuthorMatcher.classify_username` (a `project_<id>_bot_<hash>` access-token
 user is recognised by that form, never a display name) or has `bot: true`; nothing for a
-dependency bot or the merge request's author; else a human comment, the first giving
-`first_human_comment_at`. With `complete` False (a full page) an undecided fact is None.
+dependency bot; else a human comment, the first giving
+`first_human_comment_at`. With `complete` False (still a full last page) an undecided fact is None.
 `NoteFacts` also splits `ai_review` (a marker, an agent or an access-token user) from
 `bot_review` (that, or a `bot: true` account). `classifier_from_config(config)` builds the
 classifier from the merged `[ai_usage]` and `[review]` sections. `gitlab_note_facts(sample,

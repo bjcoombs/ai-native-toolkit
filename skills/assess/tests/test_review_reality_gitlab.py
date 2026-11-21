@@ -478,21 +478,45 @@ def test_gitlab_marker_from_config(world: World) -> None:
     assert scan_review_reality(world.root)["reviewed_share"] == 0.5  # svc's note is a human comment
 
 
-def test_gitlab_full_notes_page_without_a_decision_is_unknown(world: World) -> None:
+def _full_pages(world: World, iid: int, pages: int) -> None:
+    for page in range(2, pages + 1):
+        world.serve(f"{notes_endpoint(iid)}&page={page}", [_note(ALICE, "rebased")] * 100)
+
+
+def test_gitlab_full_notes_pages_without_a_decision_are_unknown(world: World) -> None:
     world.remote(f"git@gitlab.com:{PROJECT}.git")
-    world.merged([_mr(1)], {1: _approvals()},
-                 {1: [_note(ALICE, "rebased") for _ in range(100)]})
+    world.merged([_mr(1)], {1: _approvals()}, {1: [_note(ALICE, "rebased")] * 100})
+    _full_pages(world, 1, 3)
     world.policy([])
     block = scan_review_reality(world.root)
     assert block["available"] is True
     assert block["bot_review_share"] is None
     assert block["reviewed_share"] is None
+    assert len([c for c in world.calls() if "/notes" in c]) == 3  # NOTES_MAX_PAGES, no more
 
 
-def test_gitlab_approval_decides_reviewed_despite_a_full_page(world: World) -> None:
+def test_gitlab_second_notes_page_decides(world: World) -> None:
     world.remote(f"git@gitlab.com:{PROJECT}.git")
-    world.merged([_mr(1)], {1: _approvals(BOB)},
-                 {1: [_note(ALICE, "rebased") for _ in range(100)]})
+    world.merged([_mr(1)], {1: _approvals()}, {1: [_note(TOKEN_USER, "## AI Code Review")] * 100})
+    world.serve(f"{notes_endpoint(1)}&page=2", [_note(BOB, "agreed")])
+    world.policy([])
+    block = scan_review_reality(world.root)
+    assert block["bot_review_share"] == 1.0 and block["reviewed_share"] == 1.0
+
+
+def test_gitlab_notes_stop_paging_once_decided(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals()},
+                 {1: [_note(TOKEN_USER, "## AI Code Review"), *[_note(BOB, "ok")] * 99]})
+    world.policy([])
+    assert scan_review_reality(world.root)["bot_review_share"] == 1.0
+    assert len([c for c in world.calls() if "/notes" in c]) == 1
+
+
+def test_gitlab_approval_decides_reviewed_despite_full_pages(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(1)], {1: _approvals(BOB)}, {1: [_note(ALICE, "rebased")] * 100})
+    _full_pages(world, 1, 3)
     world.policy([])
     assert scan_review_reality(world.root)["reviewed_share"] == 1.0
 

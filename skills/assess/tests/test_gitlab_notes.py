@@ -139,3 +139,8 @@ def test_gitlab_delivery_undecided_facts_are_none() -> None:
     assert block["human_commented_share"] is None
     assert block["first_human_comment_hours_p50"] is None
     assert block["ai_review_share"] is None
+
+
+def test_an_agent_authors_own_notes_are_not_review() -> None:
+    notes = [_note(TOKEN, "## AI Code Review\nself-review"), _note(TOKEN, "rebased")]
+    assert note_facts(notes, TOKEN, NoteClassifier()) == NoteFacts(False, False, False, None)
