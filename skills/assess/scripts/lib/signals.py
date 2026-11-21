@@ -7,10 +7,15 @@ module runs the scan table in ``scan_registry`` with inputs it builds itself,
 and returns one JSON-ready document: a run stamp plus one block per scan.
 
 It never writes, never reaches the network and never prompts. A scan declared
-``network`` runs its ``offline_fn`` when it has one and is otherwise reported
+``network`` (outside ``--platform``, below) runs its ``offline_fn`` when it has one and is otherwise reported
 ``{"available": false, "reason": ...}``; so is every block in
 ``UNREGISTERED_SCANS``. A scan that raises degrades through the registry's
 ``safe`` wrapper and the run completes.
+
+``--platform`` (``build_document(platform=True)``, #714) is the one opt-in
+exception: the scans in ``PLATFORM_SCANS`` (and the network specs they read)
+make their ``gh`` / ``glab`` reads. ``fleet --platform`` runs it in a separate
+pass after the offline scan.
 
 The scan list is every published registry key outside the core's own adapter
 modules (``CORE_MODULES``), plus ``UNREGISTERED_SCANS``, so a scan added to the
@@ -108,7 +113,17 @@ def signal_scans(
 
 
 SIGNAL_SCANS = signal_scans()
-NETWORK_REASON = "network: reads GitHub via gh; the headless runner makes no network calls"
+NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headless runner makes no "
+                  "network calls without --platform")
+
+# The scans ``--platform`` runs with their network reads (#714), an explicit list:
+# every other network scan still reports ``NETWORK_REASON``. ``fleet --platform``
+# runs exactly these in its separate platform pass. Extension point (#715, #716):
+# append a new block's name here. Blocks that should share one sample of merged
+# changes read it as a registry input: register the sample as a private
+# ``network=True`` spec, list it in the blocks' ``reads``, and it runs (once) under
+# ``--platform`` because it is a dependency of a listed scan.
+PLATFORM_SCANS: tuple[str, ...] = ("review_reality",)
 
 DEFAULT_WINDOW = "6mo"
 
@@ -211,17 +226,22 @@ def _unavailable(reason: str) -> JsonDict:
 
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
-    window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None,
+    window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
 ) -> dict[str, JsonDict]:
-    """Run the selected scans (and what they read) offline; one block per name."""
+    """Run the selected scans (and what they read); one block per name.
+
+    Offline unless ``platform``: then a network scan in ``PLATFORM_SCANS``, or one
+    a listed scan reads, runs its network ``fn``.
+    """
     inputs = build_inputs(repo_root, window, fleet_config)
     needed = _with_dependencies(selected, specs, inputs)
+    online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
     runnable: list[ScanSpec] = []
     for spec in specs:
         if spec.key not in needed:
             continue
-        if not spec.network:
+        if not spec.network or spec.key in online:
             runnable.append(spec)
         elif spec.offline_fn is not None:
             runnable.append(replace(spec, fn=spec.offline_fn))
@@ -309,7 +329,7 @@ def read_only_git() -> Iterator[None]:
 def build_document(
     repo_root: Path, requested: Sequence[str] | None = None, window: str = DEFAULT_WINDOW,
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
-    fleet_config: FleetConfig | None = None,
+    fleet_config: FleetConfig | None = None, platform: bool = False,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -324,5 +344,5 @@ def build_document(
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
             "stamp": build_stamp(repo_root, window, toolkit_root),
-            "scans": collect(repo_root, selected, specs, window, fleet_config),
+            "scans": collect(repo_root, selected, specs, window, fleet_config, platform),
         }

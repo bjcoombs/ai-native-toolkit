@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.fleet_activity import is_active
+from lib.platform_cli import CACHE_ENV
 from lib.run_context_types import JsonDict
 
 # Bumped when a row's envelope (the keys below) changes. Scan blocks carry
@@ -112,6 +113,8 @@ class ScanOptions:
     log_dir: Path | None = None  # set: a scan_exit_* row's stderr tail lands in <log_dir>/<repo>.stderr
     active_since: date | None = None  # set: an ok row's ``active`` is HEAD committed on or after it
     fleet_config: Path | None = None  # absolute: scans run with the scratch directory as cwd
+    platform: bool = False  # set: assess_signals --platform (the platform pass, lib/fleet_platform.py)
+    cache_dir: Path | None = None  # set: the scan's gh/glab response cache (lib/platform_cli.py)
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -120,10 +123,14 @@ ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
 AfterFn = Callable[[Target, FleetRow], None]
 
 
-def _read_only_env() -> dict[str, str]:
+def _read_only_env(cache_dir: Path | None = None) -> dict[str, str]:
     # PYTHONUTF8: the scan child reads and writes UTF-8 whatever the host locale
     # (a Windows code page would otherwise garble or reject non-ASCII text).
-    return {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"}
+    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"}
+    env.pop(CACHE_ENV, None)  # only the platform pass caches, and only in its own directory
+    if cache_dir is not None:
+        env[CACHE_ENV] = str(cache_dir)
+    return env
 
 
 def _git(path: Path, *args: str) -> str | None:
@@ -287,6 +294,8 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
         command += ["--scans", options.scans]
     if options.fleet_config is not None:
         command += ["--fleet-config", str(options.fleet_config)]
+    if options.platform:
+        command.append("--platform")
     return command
 
 
@@ -306,39 +315,51 @@ def scan_target(target: Target, scratch: Path, options: ScanOptions) -> FleetRow
     problem = checkout_problem(target.checkout)
     if problem:
         return _row(target, reason=problem)
-    out = scratch / (secrets.token_hex(8) + ".json")
-    try:
-        done = subprocess.run(
-            signals_command(target.checkout, out, options), cwd=scratch, env=_read_only_env(),
-            capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=options.timeout, check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return _row(target, reason=SCAN_TIMEOUT)
-    except OSError:
-        return _row(target, reason=SCAN_ERROR)
-    if done.returncode != 0:
-        write_stderr_tail(options.log_dir, target, done.stderr)
-        return _row(target, reason=f"scan_exit_{done.returncode}")
-    document = _load_document(out)
-    out.unlink(missing_ok=True)
-    if document is None:
-        return _row(target, reason=INVALID_OUTPUT)
+    document = run_signals(target, scratch, options)
+    if isinstance(document, str):
+        return _row(target, reason=document)
     since = options.active_since
     return _row(target, document=document,
                 active=None if since is None else is_active(target.checkout, since))
 
 
-def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None) -> Path | None:
+def run_signals(target: Target, scratch: Path, options: ScanOptions, log_suffix: str = ".stderr") -> JsonDict | str:
+    """``assess_signals.py`` on ``target.checkout`` in its own process: the document, or a
+    failure token (``scan_timeout``, ``scan_error``, ``scan_exit_<code>``, ``invalid_output``).
+
+    A non-zero exit leaves its stderr tail in ``<log_dir>/<repo><log_suffix>``.
+    """
+    out = scratch / (secrets.token_hex(8) + ".json")
+    try:
+        done = subprocess.run(
+            signals_command(target.checkout, out, options), cwd=scratch,
+            env=_read_only_env(options.cache_dir), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=options.timeout, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return SCAN_TIMEOUT
+    except OSError:
+        return SCAN_ERROR
+    if done.returncode != 0:
+        write_stderr_tail(options.log_dir, target, done.stderr, log_suffix)
+        return f"scan_exit_{done.returncode}"
+    document = _load_document(out)
+    out.unlink(missing_ok=True)
+    return INVALID_OUTPUT if document is None else document
+
+
+def write_stderr_tail(log_dir: Path | None, target: Target, stderr: str | None,
+                      suffix: str = ".stderr") -> Path | None:
     """The last ``STDERR_TAIL_CHARS`` of a failed scan's stderr, beside the rows, never in one.
 
-    Written to ``<log_dir>/<repo>.stderr`` (the id's segments as directories)
+    Written to ``<log_dir>/<repo><suffix>`` (the id's segments as directories; the
+    platform pass uses ``.platform.stderr``)
     for diagnosis; the row keeps only its reason token. A write that fails is
     skipped: the log is a convenience, the row is the record.
     """
     if log_dir is None:
         return None
-    path = (log_dir / f"{target.repo}.stderr").resolve()
+    path = (log_dir / f"{target.repo}{suffix}").resolve()
     if log_dir.resolve() not in path.parents:  # an id that would climb out of the logs
         return None
     try:

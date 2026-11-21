@@ -565,3 +565,10 @@ def test_view_check_reports_unreadable_runs(tmp_path):
     reasons, moved = view_check(tmp_path / "now", tmp_path / "then")
     assert "stamp version" in reasons[0] and moved == []
     assert view_check(tmp_path / "now", tmp_path / "absent") == ([], [])
+
+
+def test_a_same_day_entry_from_before_714_is_replaced_by_an_offline_run_only(tmp_path):
+    old = {k: v for k, v in STAMP.items() if k != "platform"}
+    entry = _entry_with(tmp_path, old)
+    assert entry_conflict(entry, {**STAMP, "platform": False}) is None
+    assert "different platform" in (entry_conflict(entry, {**STAMP, "platform": True}) or "")
