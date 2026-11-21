@@ -2,19 +2,19 @@
 
 This page is the single source for how `/assess` and `/fleet` will score a repository. It records **current decisions only**. Each section links the issue that holds the full reasoning. When an issue body or an older comment disagrees with this page, this page is right and the issue is stale. To change the model, raise it on https://github.com/bjcoombs/ai-native-toolkit/issues/740 and update this page in the same change.
 
-Status as of 2026-11-21: decided, and **not yet implemented**. The shipped engine (`lib/levels.py`, model `default-2026.11.11`) still uses 10 layer rows of 2 conditions each (20 conditions), 3 states and a min per row. Treat that as legacy until https://github.com/bjcoombs/ai-native-toolkit/issues/744 lands.
+Status as of 2026-11-21: decided, and **not yet implemented**. The shipped engine (`lib/levels.py`, model `default-2026.11.11`) still uses 10 layer rows of 2 conditions each (20 conditions), 3 states and a min per row. Treat that as legacy until https://github.com/bjcoombs/ai-native-toolkit/issues/744 lands. In that model a condition is one level of a row, so there are 20 conditions built from 26 criteria. Counts of 26 or 27 in older comments counted criteria or included proposed rows. Until https://github.com/bjcoombs/ai-native-toolkit/issues/747 lands, the report template in `skills/assess-findings/SKILL.md` still shows the legacy "X / 8" score, the band labels and the old Step names.
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
 | **Condition** | One checkable practice, with file:line evidence. It is the unit of counting. |
-| **Signal class** | Where a condition's evidence comes from: `config_only`, `declared`, `ci_executed` or `platform` (https://github.com/bjcoombs/ai-native-toolkit/issues/783). Only **verified** classes count toward N. **Declared** conditions are listed, not counted. |
+| **Input class and grade** | Two layers, both in `lib/level_signals.py` (merged in https://github.com/bjcoombs/ai-native-toolkit/pull/802, part of https://github.com/bjcoombs/ai-native-toolkit/issues/783). Each signal has an **input class**: what its producer read. The seven classes are `config_text`, `head_text`, `head_structure`, `git_history`, `execution_artifact`, `ci_executed` and `platform`. The input class fixes a **grade**. `config_text` grades as `config_only`, `head_text` as `declared`, and `head_structure`, `git_history` and `execution_artifact` as `measured`. `ci_executed` and `platform` grade as `verified`. `measured` and `verified` count toward N; `config_only` and `declared` are listed, not counted. Earlier lists of five or four "signal classes" in #783 mixed the two layers. |
 | **State** | Each condition has one state per run. **Met**: verified at this commit. **Unmet**: checked and absent, including a practice that was removed. **Not applicable**: nothing for it to act on, by a versioned rule. **Not measured**: the run could not see it (headless, no network, shallow history), shown with its reason. **Declined**: the repository declared an opt-out (https://github.com/bjcoombs/ai-native-toolkit/issues/828). |
 | **Truth tag** | The truth a condition keeps honest. There are eight: `behaviour`, `contracts`, `docs`, `structure`, `agent_context`, `agent_runtime`, `governance`, `supply_chain`. Tags are mutual: no tag ranks above another, and they are not a ladder. Every condition has one or more tags (https://github.com/bjcoombs/ai-native-toolkit/issues/843). |
 | **Layer (L0-L8)** | **Legacy.** Kept only as an alias, so old configs and fleet history resolve. New work groups by tag. |
 | **Step** | A milestone for how much agent autonomy the repository can support. See Steps below. |
-| **Gate** | A condition a Step requires, whatever the count. Gates are named after their condition, not after a tag or a layer. |
+| **Gate** | A condition a Step requires, whatever the count. Gates are named after their condition, not after a tag or a layer. One exception to "declared is not counted": the `instructions` gate reads a declared signal (an instruction file is text at HEAD) and still holds Step 2. It is listed, not counted in N, but it satisfies the gate (#783). |
 | **Hazard** | A harmful practice, often two good practices combined (for example, CI plus a label that skips it). A hazard blocks the Step whose gate it undermines. It never subtracts from N. |
 | **Badge** | Do not use this word for a condition. In the report it means a state marker only (HAZARD, DECLINED, NOT MEASURED). |
 
@@ -46,6 +46,7 @@ agent_context 3 · agent_runtime 2 · behaviour 2 · structure 2 · docs 1 · go
 - A Step also needs a count threshold of met conditions. **The thresholds are not set yet.** They will be calibrated on the 12-repository corpus (https://github.com/bjcoombs/ai-native-toolkit/issues/842) and versioned with the model.
 - An active hazard blocks the Step whose gate it undermines.
 - A declined condition never satisfies a gate.
+- Two data sets inform the model. A 36-repository private fleet spike (https://github.com/bjcoombs/ai-native-toolkit/issues/744) measured spread and gates. A 12-repository public calibration corpus (https://github.com/bjcoombs/ai-native-toolkit/issues/740 calibration comment, kept as the regression set in #842) found unscored practices and scanner defects.
 - Gates are staged because the 36-repository spike found an enforced coverage gate in none of the 36. Requiring every gate for every Step would hold all of them at Step 1 (https://github.com/bjcoombs/ai-native-toolkit/issues/744).
 - The Step names in this table replace the older names in `skills/assess-findings/SKILL.md` ("Parallel", "Supervised autonomy").
 
