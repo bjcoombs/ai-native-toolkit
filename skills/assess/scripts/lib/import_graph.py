@@ -39,7 +39,10 @@ EXCLUDE_DIRS = frozenset({
 })
 
 # Source extension -> language token. The token is the reason-code suffix, so it
-# stays lower-case ASCII with no separator.
+# stays lower-case ASCII with no separator. Shell counts: a shell-heavy repository
+# reads no_import_graph_shell, which tells a fleet reader what the code is rather
+# than that there is none. ``.h`` does not: C, C++ and Objective-C share it, so a
+# header-heavy C++ repository would read as C.
 LANGUAGE_BY_EXTENSION: dict[str, str] = {
     ".py": "python",
     ".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript",
@@ -55,7 +58,7 @@ LANGUAGE_BY_EXTENSION: dict[str, str] = {
     ".cs": "csharp",
     ".swift": "swift",
     ".dart": "dart",
-    ".c": "c", ".h": "c",
+    ".c": "c",
     ".cc": "cpp", ".cpp": "cpp", ".cxx": "cpp", ".hpp": "cpp", ".hh": "cpp",
     ".ex": "elixir", ".exs": "elixir",
     ".erl": "erlang",

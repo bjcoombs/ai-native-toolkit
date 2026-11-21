@@ -112,6 +112,19 @@ def test_a_python_repo_without_packages_keeps_no_python_packages(tmp_path: Path)
     assert structure(result.as_dict())["reason"].startswith("no_python_packages:")
 
 
+def test_a_shell_heavy_repo_names_shell_not_python(tmp_path: Path) -> None:
+    """Shell is named on purpose: the reader learns what the code is (#700)."""
+    for rel in ("a.sh", "b.sh", "tool.py"):
+        _write(tmp_path, rel)
+    assert analyze_structure(tmp_path).reason.startswith("no_import_graph_shell: ")
+
+
+def test_a_header_is_not_counted_as_c(tmp_path: Path) -> None:
+    for rel in ("a.h", "b.h", "c.h", "main.cpp"):
+        _write(tmp_path, rel)
+    assert dominant_language(tmp_path) == "cpp"
+
+
 def test_a_repo_with_no_source_says_so(tmp_path: Path) -> None:
     _write(tmp_path, "README.md")
     result = analyze_structure(tmp_path)
