@@ -1,5 +1,5 @@
 {
-  "assess_method_version": 18,
+  "assess_method_version": 21,
   "findings": [
     {
       "name": "hidden_coupling",
@@ -23,7 +23,7 @@
     {
       "name": "lying_map",
       "paths": [
-        "skills/assess/SKILL.md"
+        "README.md"
       ]
     },
     {
@@ -44,20 +44,26 @@
     {
       "name": "unactioned_intent",
       "paths": [
-        "skills/fleet/scripts/fleet.py"
+        "skills/assess/scripts/assess_signals.py",
+        "skills/assess/scripts/lib/fleet_schema.py",
+        "skills/assess/scripts/lib/signals_schema.py",
+        "skills/assess/tests/test_fleet_groups.py",
+        "skills/assess/tests/test_fleet_history.py",
+        "skills/fleet/scripts/fleet.py",
+        "tests/test_ghreport_gitlab.py"
       ]
     },
     {
       "name": "accretion_ratchet",
       "paths": [
-        "scripts/floor_anchor.py",
         "scripts/floor_check.py",
         "scripts/tests/test_floor_check.py",
-        "skills/assess/scripts/assess_report.py",
+        "skills/assess/scripts/lib/shared_tooling.py",
         "skills/assess/scripts/lib/test_pressure/mutmut3.py",
         "skills/assess/scripts/lib/wiki_writer.py",
         "skills/assess/tests/test_assess_finalize.py",
         "skills/assess/tests/test_complexity_treemap.py",
+        "skills/fleet/scripts/fleet.py",
         "tests/test_ghsync_gitlab.py"
       ]
     },
@@ -67,7 +73,9 @@
     },
     {
       "name": "candidate_dead_weight",
-      "paths": []
+      "paths": [
+        "skills/assess/scripts/lib/agent_environment.py"
+      ]
     },
     {
       "name": "override_contradicts_signals",
