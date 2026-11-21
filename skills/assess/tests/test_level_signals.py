@@ -298,6 +298,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
     # A current run of this single-package capture reports no boundary crossed.
     single = copy.deepcopy(run_context)
     single["structure"]["cross_package_edges"] = 0
+    single["structure"]["front_door_ratio"] = None  # #760: no boundary, no ratio
     assert _row(_run({"toolkit": single}), "layer-2-design")["level"] == 1
     # A current run counts its non-catch-all boundaries; with loc p95 483.65 that is level 2.
     single["structure_drift"]["tier_0"]["boundary_patterns"] = 115
@@ -421,6 +422,20 @@ def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_pa
         scans = _ci_repo(tmp_path / name, workflow, instructions=True)
         assert scans["agent_environment"]["layer5_cap"]["applies"] is False
         assert scans["ci_checks"]["test_or_lint_runs"] is False
+        assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
+
+
+def test_layer_five_is_zero_when_ci_only_names_pytest_or_tox_as_a_value(tmp_path: Path) -> None:
+    """Issue #725: ``needs: - pytest`` and a ``matrix:`` axis ``- tox`` are values, not CI runs."""
+    head = "name: ci\non: [pull_request]\njobs:\n"
+    needs = (head + "  pytest:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n"
+             "  deploy:\n    needs:\n      - pytest\n    runs-on: ubuntu-latest\n"
+             "    steps:\n      - run: echo deploy\n")
+    matrix = (head + "  t:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n"
+              "        tool:\n          - tox\n    steps:\n      - run: echo x\n")
+    for name, workflow in (("needs", needs), ("matrix", matrix)):
+        scans = _ci_repo(tmp_path / name, workflow, instructions=False)
+        assert scans["ci_checks"]["check_commands"] == 0
         assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
 
 

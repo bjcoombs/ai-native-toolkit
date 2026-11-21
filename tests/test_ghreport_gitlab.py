@@ -26,6 +26,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from gitbash import BASH
 
 REPO = Path(__file__).resolve().parent.parent
 GHREPORT = REPO / "skills" / "ghreport" / "scripts" / "ghreport.sh"
@@ -211,21 +212,21 @@ class Env:
         stub_dir.mkdir()
         for name, body in (("glab", GLAB_STUB), ("gh", GH_STUB)):
             stub = stub_dir / name
-            stub.write_text(body)
+            stub.write_text(body, newline="\n")
             stub.chmod(0o755)
         data = tmp_path / "glab-data"
         (data / "ids").mkdir(parents=True)
         for path, gid in GROUPS.items():
-            (data / "ids" / str(gid)).write_text(path)
+            (data / "ids" / str(gid)).write_text(path, newline="\n")
         endpoints = _endpoints()
         endpoints.update(overrides or {})
         for endpoint, value in endpoints.items():
             key = endpoint.replace("/", "__")
             if isinstance(value, int):
-                (data / f"{key}.err").write_text(str(value))
+                (data / f"{key}.err").write_text(str(value), newline="\n")
                 continue
             for n, page in enumerate(value, start=1):
-                (data / f"{key}.{n}.json").write_text(page if isinstance(page, str) else json.dumps(page))
+                (data / f"{key}.{n}.json").write_text(page if isinstance(page, str) else json.dumps(page), newline="\n")
         self.glab_log = tmp_path / "glab.log"
         self.gh_log = tmp_path / "gh.log"
         home = tmp_path / "home"
@@ -247,7 +248,7 @@ class Env:
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", str(GHREPORT), "--provider", "gitlab", "--root", str(self.root), *args],
+            [BASH, str(GHREPORT), "--provider", "gitlab", "--root", str(self.root), *args],
             capture_output=True,
             check=False,
             text=True,
@@ -398,7 +399,7 @@ def test_rejects_github_flags(env: Env, args: list[str], message: str) -> None:
 
 def test_rejects_gitlab_flags_on_github(tmp_path: Path) -> None:
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--host", HOST, "--render-dir", str(tmp_path)],
+        [BASH, str(GHREPORT), "--host", HOST, "--render-dir", str(tmp_path)],
         capture_output=True, check=False, text=True, timeout=60,
     )
     assert res.returncode == 1
@@ -477,7 +478,7 @@ def test_pipelines_request_asks_for_more_than_one(tmp_path: Path) -> None:
 
 def test_help_prints_only_the_header() -> None:
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--help"], capture_output=True, check=False, text=True, timeout=60,
+        [BASH, str(GHREPORT), "--help"], capture_output=True, check=False, text=True, timeout=60,
     )
     assert res.returncode == 0
     lines = res.stdout.splitlines()
@@ -490,7 +491,7 @@ def test_help_prints_only_the_header() -> None:
 
 def test_help_ends_at_the_closing_header_line() -> None:
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--help"], capture_output=True, check=False, text=True, timeout=60,
+        [BASH, str(GHREPORT), "--help"], capture_output=True, check=False, text=True, timeout=60,
     )
     header = GHREPORT.read_text().splitlines()
     closing = next(i for i, ln in enumerate(header) if i > 3 and ln.startswith("# ===="))
@@ -509,9 +510,9 @@ def test_help_range_follows_header_edits(tmp_path: Path, edit: str) -> None:
     else:
         del lines[closing - 2]
     copy = tmp_path / "ghreport.sh"
-    copy.write_text("\n".join(lines) + "\n")
+    copy.write_text("\n".join(lines) + "\n", newline="\n")
     res = subprocess.run(
-        ["bash", str(copy), "--help"], capture_output=True, check=False, text=True, timeout=60,
+        [BASH, str(copy), "--help"], capture_output=True, check=False, text=True, timeout=60,
     )
     assert res.returncode == 0
     out = res.stdout.splitlines()
@@ -640,13 +641,13 @@ def test_render_dir_tells_an_empty_repo_from_a_branch_named_empty(tmp_path: Path
     (frags / "0.json").write_text(json.dumps({
         **base, "repo": "grp/real", "default_branch": "empty", "empty_repo": False,
         "pipeline": "success", "protection": "protected",
-    }))
+    }), newline="\n")
     (frags / "1.json").write_text(json.dumps({
         **base, "repo": "grp/blank", "default_branch": None, "empty_repo": True,
         "pipeline": "empty", "protection": "empty",
-    }))
+    }), newline="\n")
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--provider", "gitlab", "--render-dir", str(frags), "--no-file"],
+        [BASH, str(GHREPORT), "--provider", "gitlab", "--render-dir", str(frags), "--no-file"],
         capture_output=True, check=False, text=True, timeout=60,
     )
     assert res.returncode == 0, res.stderr
@@ -802,14 +803,14 @@ def test_render_dir_replays_settings_from_their_subdirectory(tmp_path: Path) -> 
         "repo": "grp/real", "unreachable": False, "default_branch": "main", "empty_repo": False,
         "open_mrs": 0, "draft_mrs": 0, "pipeline": "success", "vulnerabilities": "no-access",
         "protection": "protected",
-    }))
+    }), newline="\n")
     unknown = {"value": "unknown", "reason": "denied: no access or tier (HTTP 403)"}
     (frags / "settings" / "0.json").write_text(json.dumps({
         "scope": "grp", "provider": "gitlab", "two_factor": unknown, "push_rules": unknown,
         "default_branch_protection": unknown, "rulesets": unknown,
-    }))
+    }), newline="\n")
     res = subprocess.run(
-        ["bash", str(GHREPORT), "--provider", "gitlab", "--render-dir", str(frags), "--no-file"],
+        [BASH, str(GHREPORT), "--provider", "gitlab", "--render-dir", str(frags), "--no-file"],
         capture_output=True, check=False, text=True, timeout=60,
     )
     assert res.returncode == 0, res.stderr
@@ -853,7 +854,7 @@ def test_unreadable_group_list_keeps_the_section(tmp_path: Path) -> None:
     """Discovery reads the group list once; the settings read fails. The
     section stays, every setting unknown, rather than disappearing."""
     env = Env(tmp_path)
-    (tmp_path / "glab-data" / "groups.fail-after").write_text("1")
+    (tmp_path / "glab-data" / "groups.fail-after").write_text("1", newline="\n")
     res = env.run("--host", HOST, "--no-file")
     assert res.returncode == 0, res.stderr
     assert "5 project(s)" in res.stdout

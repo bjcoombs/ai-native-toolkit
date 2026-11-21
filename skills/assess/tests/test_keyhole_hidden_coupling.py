@@ -92,6 +92,28 @@ def test_behaviour_block_hidden_coupling_when_modular_but_bleeds() -> None:
     assert isinstance(block["change_coupling_pairs"], list)
 
 
+def test_single_package_is_not_hidden_coupling_through_a_null_ratio() -> None:
+    """One package, Q below threshold: the null ratio does not read as modular (#760).
+
+    Before #760 the ratio here was a vacuous 1.0, above the 0.7 front-door
+    threshold, so this directory read as hidden_coupling on no evidence.
+    """
+    commit_sets = [
+        {Path("looksmodular/x.py"), Path("core/util.py")},
+        {Path("looksmodular/y.py"), Path("core/util.py")},
+        {Path("looksmodular/x.py"), Path("core/other.py")},
+        {Path("looksmodular/z.py"), Path("core/util.py")},
+        {Path("looksmodular/x.py"), Path("shared/s.py")},
+    ]
+    structure = {"available": True, "modularity_q": 0.2, "front_door_ratio": None,
+                 "cross_package_edges": 0}
+    block = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, structure)
+    assert block["hidden_coupling_findings"] == []
+    vacuous = dict(structure, front_door_ratio=1.0)  # the pre-#760 value
+    before = ks.build_behaviour_block(Path("/nonexistent"), commit_sets, vacuous)
+    assert [h["path"] for h in before["hidden_coupling_findings"]] == ["looksmodular"]
+
+
 def test_behaviour_block_bleeding_module_without_static_graph() -> None:
     """No static graph -> a bleeding dir degrades to bleeding_module."""
     commit_sets = [

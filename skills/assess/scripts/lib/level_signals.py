@@ -25,6 +25,53 @@ one. A maturity model row's ``scope`` picks the namespace:
 ``DEFAULT_LEVELS`` (``skills/assess/levels/default.toml``) is a deterministic
 approximation of the 0-8 layers; its header says where and why it can disagree
 with the ``/assess`` layer verdicts.
+
+Signal classification (#783). ``SIGNAL_INPUTS`` records the producer input of
+every signal a maturity-model criterion reads, keyed by exact signal path so a
+new signal has to be classified on purpose; ``input_class`` raises
+``UnclassifiedSignal`` naming the path for one that is not. The class set
+(``InputClass``) uses the #789 check-manifest evidence names plus the #783
+``ci_executed`` class, and each class maps to one confidence grade
+(``INPUT_GRADES``, ``config_only < declared < measured < verified``):
+
+- ``config_text``: a value from a config file at HEAD (a threshold, a
+  CODEOWNERS pattern, a settings key). Grade ``config_only``.
+- ``head_text``: text at HEAD that states a practice (an instruction file, a CI
+  line naming a check). Grade ``declared``.
+- ``head_structure``: a measurement of the code at HEAD (import graph, LOC,
+  claims checked against the tree). Grade ``measured``.
+- ``git_history`` and ``execution_artifact``: commit history, and the output of
+  running something at the commit. Grade ``measured``.
+- ``ci_executed``: a CI line that CI runs on every change; the pipeline
+  enforces its result. Grade ``verified``. No default signal has it yet:
+  ``ci_checks.test_or_lint_runs`` finds a line naming a check but does not read
+  its triggers, so it is ``head_text`` until a signal that does lands (#775).
+- ``platform``: read from the GitHub or GitLab API (``review_reality``,
+  ``agent_environment.ci_duration``). Grade ``verified``.
+
+``criterion_grade`` grades one criterion: the grade of its signal's input
+class, whatever the operator. Per the #789 grades design, the grade comes from
+the evidence and is never derived per criterion, so no operator raises it: a
+threshold or an absence test on a text count (``observability.rung gte 3``,
+``agent_environment.check.named_total gte 2``, ``... lte 0``) is still text, and
+stays ``declared`` (or ``config_only``). This supersedes the presence-test rule
+in #783 requirement 2, under which text alone could reach a counted grade.
+``is_declared`` is true when the grade is ``config_only`` or ``declared``: under
+#744 those conditions are listed, not counted. A signal one collector sets from two inputs takes the
+weaker (``review_evidence.present`` is ``head_text``; #789 3.4 splits it).
+Nothing in ``lib.levels`` reads this yet; counting is #744's engine work.
+
+Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
+
+- Platform-read signals are their own class, ``platform``, not an execution
+  artifact: verified when measured, ``not_measured`` otherwise (the block
+  reports itself unavailable, and an unknown never counts).
+- Instruction files stay declared (``layer_grades.instruction_file_present`` is
+  ``head_text``) but still satisfy a Step gate. Only ``measured`` and
+  ``verified`` conditions count toward a level.
+
+Tests: ``tests/test_signal_inputs.py`` (one case per default criterion signal,
+so an unclassified one names itself).
 """
 from __future__ import annotations
 
@@ -36,7 +83,7 @@ from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from lib.counts_only_schema import ROOTS
-from lib.levels import PathValidator, MaturityModel, Scope, load_levels
+from lib.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
 from lib.signals_schema import SCHEMA_PATH
 
 DEFAULT_LEVELS = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
@@ -123,3 +170,72 @@ def signal_path_validator() -> PathValidator:
 def load_default_levels() -> MaturityModel:
     """The shipped default maturity model, paths checked against the schema."""
     return load_levels(DEFAULT_LEVELS, signal_path_validator())
+
+
+# --- signal classification (#783; see the module doc) -------------------------
+
+InputClass = Literal["config_text", "head_text", "head_structure", "ci_executed",
+                     "git_history", "execution_artifact", "platform"]
+Grade = Literal["config_only", "declared", "measured", "verified"]
+
+INPUT_GRADES: dict[InputClass, Grade] = {
+    "config_text": "config_only",
+    "head_text": "declared",
+    "head_structure": "measured",
+    "git_history": "measured",
+    "execution_artifact": "measured",
+    "ci_executed": "verified",
+    "platform": "verified",
+}
+_LISTED_GRADES = frozenset({"config_only", "declared"})
+
+# One entry per exact signal path; a new criterion signal needs its own line.
+SIGNAL_INPUTS: dict[str, InputClass] = {
+    "layer_grades.instruction_file_present": "head_text",
+    "agent_environment.check.named_total": "head_text",
+    "agent_environment.layer5_cap.applies": "head_text",
+    "instruction_claims.failed": "head_structure",
+    "nested_instructions.budget.claude_code.lines": "head_structure",
+    "observability.rung": "head_text",
+    "structure.modularity_q": "head_structure",
+    "structure.cross_package_edges": "head_structure",
+    "structure.front_door_ratio": "head_structure",
+    "promissory_markers.families.suppression.total": "head_text",
+    "promissory_markers.families.suppression.stale": "git_history",
+    "promissory_markers.aging_reliable": "git_history",
+    "structure_drift.tier_0.matched_patterns": "config_text",
+    "stats_summary.loc.p95": "head_structure",
+    "ci_checks.test_or_lint_runs": "head_text",
+    "coverage_gate.enforced": "config_text",
+    "test_pressure.mutation_run": "execution_artifact",
+    "review_evidence.present": "head_text",
+    "review_reality.reviewed_share": "platform",
+    "review_reality.approved_share": "platform",
+    "agent_ops.summary.permissions_encoded": "config_text",
+    "agent_ops.summary.hooks_present": "config_text",
+    "agent_ops.summary.routines_present": "config_text",
+    "doc_staleness.summary.stale_pct": "git_history",
+}
+
+
+class UnclassifiedSignal(KeyError):
+    """A criterion reads a signal ``SIGNAL_INPUTS`` has no producer input class for."""
+
+
+def input_class(signal: str) -> InputClass:
+    """The producer input class of ``signal``; raises ``UnclassifiedSignal`` naming it."""
+    try:
+        return SIGNAL_INPUTS[signal]
+    except KeyError:
+        raise UnclassifiedSignal(
+            f"{signal}: no producer input class in level_signals.SIGNAL_INPUTS") from None
+
+
+def criterion_grade(criterion: Criterion) -> Grade:
+    """The confidence grade of one criterion: its signal's input-class grade, whatever the op."""
+    return INPUT_GRADES[input_class(criterion["signal"])]
+
+
+def is_declared(criterion: Criterion) -> bool:
+    """True when the criterion grades ``config_only`` or ``declared``: listed, not counted."""
+    return criterion_grade(criterion) in _LISTED_GRADES

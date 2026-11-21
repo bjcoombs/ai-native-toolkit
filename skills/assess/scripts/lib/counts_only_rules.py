@@ -8,12 +8,17 @@ levels left out and the key of a path-keyed map written ``{}``:
 ``behaviour.hidden_coupling_findings.coupled_pairs.file_a`` and
 ``instruction_files["CLAUDE.md"].grade`` is ``instruction_files.{}.grade``.
 
-Four classes:
+Five classes:
 
 - ``PATH``: a repo-relative path, directory, glob or dotted module name. Kept
   as written, or replaced by a salted hash when path hashing is on.
 - ``TOKEN``: a kind, grade, band, status, date or version. Kept only while it
   is a short slug (``TOKEN_RE``); anything longer or with spaces is dropped.
+- ``REASON``: an unavailable block's reason, kept as its code only: the
+  ``code`` of a ``code: sentence`` reason when it is a known structure code
+  (``import_graph.STRUCTURE_REASON_CODES``, a fixed allow-list), or the code a
+  known sentence maps to (``REASON_SENTENCE_CODES``), else ``unavailable``. The sentence never
+  survives; an empty reason (an available block) is dropped.
 - ``ID``: a stable identifier of another repository or marketplace, the join
   key of a fleet roll-up (``kind:owner/repo``). Kept while it has no
   whitespace or e-mail address; hashed with the paths when hashing is on.
@@ -35,15 +40,26 @@ from __future__ import annotations
 import re
 from typing import Final, Literal
 
-FieldClass = Literal["path", "token", "id", "drop"]
+FieldClass = Literal["path", "token", "reason", "id", "drop"]
 PATH: Final = "path"
 TOKEN: Final = "token"
+REASON: Final = "reason"
 ID: Final = "id"
 DROP: Final = "drop"
 
 # A kept token: a slug of at most 40 characters with no spaces, slashes or "@"
 # (so no sentence, path or e-mail address passes as a kind).
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,39}$")
+
+# Reason sentences written before the ``code: sentence`` convention, as
+# (substring, code). The headless structure marker and the REASON class both
+# read this table, so a full run and a signals run name the same code (#764).
+REASON_SENTENCE_CODES: Final[tuple[tuple[str, str], ...]] = (
+    ("grimp not installed", "no_grimp"),
+    ("networkx not installed", "no_networkx"),
+    ("grimp failed", "grimp_failed"),
+    ("no importable Python", "no_python_packages"),
+)
 
 # A key of an IDENTIFIER_KEYED_MAPS map is kept only when it is an
 # identifier-like name (a kind, a tool, a subscore).
@@ -501,7 +517,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "claude_config.findings.fix": DROP,
     },
     "structure": {
-        "structure.reason": DROP,
+        "structure.reason": REASON,
         "structure.language": TOKEN,
         "structure.modularity_reason": TOKEN,
         "structure.footprints.module": PATH,
@@ -607,8 +623,6 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "views.units.source": TOKEN,
     "views.units.name": DROP,
     "views.units.owners": DROP,
-    "views.units.levels.weakest.repo": PATH,
-    "views.units.overall.weakest.repo": PATH,
     "repos.key": PATH,
     "repos.status": TOKEN,
     "repos.reason": TOKEN,

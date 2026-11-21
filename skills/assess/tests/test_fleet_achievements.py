@@ -98,8 +98,18 @@ def test_level_ups_across_four_runs_with_their_evidence() -> None:
     assert "`grp/sub/b` met `docs.grade`" in team_docs["credit"]
 
 
-def test_firsts_are_milestones_of_the_fleets_own_history() -> None:
+def test_firsts_are_off_by_default() -> None:
+    """#772 flips #759's default: ``first`` compares a unit with its peers (#740), so it is
+    earned only when asked for, and no ``personal_best`` kind exists any more."""
     doc = _build()
+    assert not _earned(doc, fa.FIRST)
+    assert "personal_best" not in fa.KINDS
+    assert {a["kind"] for a in doc["achievements"]} <= {fa.LEVEL_UP, fa.TARGET_HIT, fa.STREAK}
+    assert _earned(doc, fa.LEVEL_UP)  # the level-ups the firsts would ride on are still earned
+
+
+def test_firsts_are_milestones_of_the_fleets_own_history() -> None:
+    doc = _build(firsts=True)
     firsts = _earned(doc, fa.FIRST)
     # the first repository at docs 2 (a) and the first team at docs 2 (grp/sub); grp/sub's
     # ci 1 is not a first (grp/two held it from the start), nor are b's moves (a repository
@@ -110,20 +120,12 @@ def test_firsts_are_milestones_of_the_fleets_own_history() -> None:
     assert credit.startswith("A first for this fleet: `ownership/grp/sub` is the first team at level 2")
 
 
-def test_streak_and_personal_best() -> None:
+def test_streak() -> None:
     doc = _build()
     assert ("2026-11-15", "streak", "ownership/grp/sub", None) in _earned(doc, fa.STREAK)
     (streak,) = [a for a in doc["achievements"] if a["kind"] == fa.STREAK and a["unit"] == TEAM[1]]
     assert streak["evidence"]["runs"] == 3
-    bests = _earned(doc, fa.PERSONAL_BEST)
-    assert ("2026-11-22", "personal_best", "ownership/grp/sub", None) in bests
-    (best,) = [a for a in doc["achievements"] if a["kind"] == fa.PERSONAL_BEST and a["unit"] == TEAM[1]
-               and a["run"] == "2026-11-22"]
-    assert best["evidence"]["share_to"] > best["evidence"]["share_from"]  # type: ignore[operator]
     assert not _earned(doc, run="2026-11-01")  # the baseline earns nothing
-    # a's docs move raises both units' shares before either rolled level moves (min rule)
-    assert {u for _r, _k, u, _row in _earned(doc, fa.PERSONAL_BEST, run="2026-11-08")} == {
-        "grp/sub/a", "ownership/grp", "ownership/grp/sub"}
 
 
 def test_a_regression_breaks_the_streak() -> None:
@@ -296,11 +298,12 @@ def test_known_level_is_the_single_floor_hook() -> None:
 
 
 def test_report_section_renders_first_with_credit_and_next_steps() -> None:
-    doc = _build(targets=resolve([TargetSpec("repo", "grp/c", "docs", 1)], Privacy().key))
+    doc = _build(targets=resolve([TargetSpec("repo", "grp/c", "docs", 1)], Privacy().key), firsts=True)
     section = credit_section(doc, MODEL)
     report = report_markdown([], section)
     assert report.index(f"## {TITLE}") < len(report) and report.startswith("# Fleet diagrams")
-    assert "**Level-ups**" in section and "**Firsts**" in section and "**Personal bests**" in section
+    assert "**Level-ups**" in section and "**Firsts**" in section and "Personal best" not in section
+    assert "**Firsts**" not in credit_section(_build(), MODEL)  # off by default (#772)
     assert "### Next level-ups" in section and "- Next for `ownership/grp/sub`" not in section  # grp/sub is at the top
     assert "- Next for `ownership/grp`:" in section
     assert "- `grp/c`, level 1 on Instruction docs: at level 0, 1 level to go." in section
@@ -370,7 +373,7 @@ def test_an_entry_is_dated_by_its_run_json_not_the_fleet_data_copy(tmp_path: Pat
     runs = earlier_runs(org, current, frozenset(BASE))
     assert [r.run_id for r in runs] == ["2026-11-01", "2026-11-08", "2026-11-15"]
     doc = fa.build_achievements(fa.HistoryRun("2026-11-22", _data("2026-11-22", HISTORY[3][1])), runs, MODEL)
-    assert {a["kind"] for a in doc["achievements"]} >= {fa.LEVEL_UP, fa.FIRST, fa.PERSONAL_BEST}
+    assert {a["kind"] for a in doc["achievements"]} >= {fa.LEVEL_UP, fa.STREAK}
     assert _earned(doc) == _earned(_build())
 
 
@@ -387,13 +390,48 @@ def test_only_an_entry_without_run_json_is_dated_by_the_fleet_data_copy(tmp_path
     assert [r.run_id for r in earlier_runs(org, current, frozenset(BASE))] == ["2026-11-01", "2026-11-08"]
 
 
+def test_a_version_1_entry_with_the_old_roll_up_is_still_replayed(tmp_path: Path) -> None:
+    """#772 removed the mean-share roll-up and bumped FLEET_DATA_VERSION; the engine reads only
+    cells and units, so a fleet's earlier version 1 entries keep their achievements."""
+    org = tmp_path / "grp"
+    for date, spec in HISTORY[:3]:
+        old = json.loads(dumps_fleet_data(_data(date, spec)))
+        old["fleet_data_version"] = 1
+        for repo in old["repos"]:
+            repo["mean_share"] = 0.5
+        for view in old["views"]:
+            for unit in view["units"]:
+                unit["overall"] = {"mean_share": 0.5, "measured": 1, "repos": 1, "weakest": None}
+                for roll in unit["levels"]:
+                    roll.update({"mean_share": 0.5, "weakest": None})
+        _entry(org, date, spec)
+        (org / date / FLEET_DATA_FILE).write_text(json.dumps(old), encoding="utf-8")
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-22"}
+    runs = earlier_runs(org, current, frozenset(BASE))
+    assert [r.run_id for r in runs] == ["2026-11-01", "2026-11-08", "2026-11-15"]
+    doc = fa.build_achievements(fa.HistoryRun("2026-11-22", _data("2026-11-22", HISTORY[3][1])), runs, MODEL)
+    assert _earned(doc) == _earned(_build())
+
+
+@pytest.mark.parametrize("version", [[1], {"v": 1}, True, "1", 1.0, None])
+def test_a_history_entry_with_a_malformed_version_is_passed_over(tmp_path: Path, version: object) -> None:
+    org = tmp_path / "grp"
+    _entry(org, "2026-11-01", BASE)
+    bad = json.loads(dumps_fleet_data(_data("2026-11-08", BASE)))
+    bad["fleet_data_version"] = version
+    _entry(org, "2026-11-08", BASE)
+    (org / "2026-11-08" / FLEET_DATA_FILE).write_text(json.dumps(bad), encoding="utf-8")
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-15"}
+    assert [r.run_id for r in earlier_runs(org, current, frozenset(BASE))] == ["2026-11-01"]
+
+
 @pytest.mark.parametrize("break_it", [
     lambda d: d.__setitem__("run", "not an object"),
     lambda d: d["repos"][0].pop("rows"),
     lambda d: d["repos"][0]["rows"][0].__setitem__("level", "two"),
-    lambda d: d["views"][0]["units"][0].pop("overall"),
-    lambda d: d["views"][0]["units"][0]["levels"][0].__setitem__("mean_share", "half"),
-    lambda d: d["views"][0]["units"][0]["levels"][0].pop("row"),
+    lambda d: d["repos"][0]["rows"][0].__setitem__("status", 1),
+    lambda d: d["views"][0]["units"][0].pop("kind"),
+    lambda d: d["views"][0]["units"][0].pop("parent"),
     lambda d: d["repos"][0]["units"].append({"view": "ownership"}),
 ])
 def test_a_malformed_history_entry_is_passed_over(tmp_path: Path, break_it: object) -> None:

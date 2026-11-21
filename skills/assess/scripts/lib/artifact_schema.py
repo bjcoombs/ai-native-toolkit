@@ -170,12 +170,17 @@ constant each.
 # reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
 # (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
 # and complexity-stats.json is unchanged.
-# 1.27.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
+# 1.27.0: run-context.json structure.front_door_ratio is null when
+# cross_package_edges is 0 (issue #760), and on an unavailable structure block:
+# with no package boundary crossed there is no contract edge to measure, so the
+# former 1.0 was vacuous. A reader comparing front_door_ratio as a number must
+# skip null. complexity-stats.json is unchanged.
+# 1.28.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
 # #785): the matched declarations less the catch-all CODEOWNERS globs (`*`, `/*`,
 # `**`, `/**`), read by the default maturity model's Layer 4 level 1. Additive:
 # total_patterns and matched_patterns keep their meaning, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.27.0"
+ARTIFACT_SCHEMA_VERSION = "1.28.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -264,7 +269,16 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     window ratios, instruction ``freshness_days`` (and so the grader's freshness
 #     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
 #     whose HEAD is old, ages shrink and windows cover the history before HEAD.
-# 22: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
+# 22: ``structure.front_door_ratio`` is null when no import crosses a package
+#     boundary (issue #760), so a single-package repository no longer reads as
+#     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
+#     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
+# 23: ``ci_checks`` no longer counts a bare list item that only names an
+#     always-check program (``- pytest``, ``- tox``) unless its parent key is a
+#     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
+#     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
+#     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
+# 24: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
 #     matched_patterns (issue #785), so a CODEOWNERS whose only matching pattern is
 #     a catch-all (`*`, `/*`, `**`, `/**`) no longer credits a declared boundary.
-ASSESS_METHOD_VERSION = 22
+ASSESS_METHOD_VERSION = 24

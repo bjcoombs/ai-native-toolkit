@@ -44,6 +44,7 @@ from typing import Any, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.context_blocks import structure_drift_tier_0
+from lib.counts_only_rules import REASON_SENTENCE_CODES
 from lib.doc_graph import is_excluded_path
 from lib.generated_files import generated_reason, matches_generated_name
 from lib.git_churn import tracked_files
@@ -105,10 +106,7 @@ def structure(scan: Any) -> JsonDict:
     A reason the scan already opens with a code (``no_import_graph_go: ...``,
     ``no_source_files: ...``) is kept whole, so ``reason_code`` reads that code.
     """
-    marker = _named(scan, (("grimp not installed", "no_grimp"),
-                           ("networkx not installed", "no_networkx"),
-                           ("grimp failed", "grimp_failed"),
-                           ("no importable Python", "no_python_packages")))
+    marker = _named(scan, REASON_SENTENCE_CODES)
     if marker is not None:
         return marker
     if not scan.get("module_count"):  # a scan from before #663 reported these available

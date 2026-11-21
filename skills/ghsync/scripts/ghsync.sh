@@ -101,6 +101,16 @@ set -euo pipefail
 #                    GHSYNC_GIT_PROTOCOL=ssh. Needs no glab.
 # ===================================================================
 
+# Under Git Bash on Windows a native jq.exe writes CRLF line endings, and every
+# name read back from it would end in a carriage return. --binary keeps LF
+# (jq 1.6 on Linux and macOS rejects the flag, so it is set only here).
+case "${OSTYPE:-}" in
+    msys* | cygwin*)
+        jq() { command jq --binary "$@"; }
+        export -f jq
+        ;;
+esac
+
 # Names ghsync owns directly under the root, lowercase. The archived-repos
 # cache is written on every real sync. The legacy status directory is no
 # longer created, but older ghsync versions still remove it at the start and

@@ -6,7 +6,7 @@
   "type": "object",
   "properties": {
     "fleet_data_version": {
-      "const": 1
+      "const": 2
     },
     "run": {
       "type": "object",
@@ -208,11 +208,8 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "mean_share": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
+                      "row": {
+                        "type": "string"
                       },
                       "measured": {
                         "type": "integer"
@@ -220,103 +217,21 @@
                       "repos": {
                         "type": "integer"
                       },
-                      "weakest": {
-                        "anyOf": [
-                          {
-                            "type": "object",
-                            "properties": {
-                              "repo": {
-                                "type": "string"
-                              },
-                              "share": {
-                                "type": "number"
-                              },
-                              "level": {
-                                "type": [
-                                  "integer",
-                                  "null"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "level",
-                              "repo",
-                              "share"
-                            ],
-                            "additionalProperties": false
-                          },
-                          {
-                            "type": "null"
-                          }
+                      "lowest_level": {
+                        "type": [
+                          "integer",
+                          "null"
                         ]
-                      },
-                      "row": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "mean_share",
+                      "lowest_level",
                       "measured",
                       "repos",
-                      "row",
-                      "weakest"
+                      "row"
                     ],
                     "additionalProperties": false
                   }
-                },
-                "overall": {
-                  "type": "object",
-                  "properties": {
-                    "mean_share": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "measured": {
-                      "type": "integer"
-                    },
-                    "repos": {
-                      "type": "integer"
-                    },
-                    "weakest": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "repo": {
-                              "type": "string"
-                            },
-                            "share": {
-                              "type": "number"
-                            },
-                            "level": {
-                              "type": [
-                                "integer",
-                                "null"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "level",
-                            "repo",
-                            "share"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "mean_share",
-                    "measured",
-                    "repos",
-                    "weakest"
-                  ],
-                  "additionalProperties": false
                 }
               },
               "required": [
@@ -324,7 +239,6 @@
                 "kind",
                 "levels",
                 "name",
-                "overall",
                 "owner_count",
                 "owners",
                 "parent",
@@ -410,12 +324,6 @@
               "additionalProperties": false
             }
           },
-          "mean_share": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
           "rows": {
             "type": "array",
             "items": {
@@ -477,7 +385,6 @@
         "required": [
           "active",
           "key",
-          "mean_share",
           "owner_count",
           "owners",
           "reason",
