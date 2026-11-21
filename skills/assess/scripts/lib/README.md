@@ -291,7 +291,8 @@ was measured): modules that never import each other have no community structure,
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
 opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
 `no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
-`modularity_q` is absent there rather than null.
+`modularity_q` is absent there rather than null. A full counts-only run keeps the same
+code as `structure.reason` (`REASON_SENTENCE_CODES`, #764).
 `structure_drift.py` builds its module map and communities from the same selected graph
 (`import_graph.select_graph`, `import_digraph`).
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),

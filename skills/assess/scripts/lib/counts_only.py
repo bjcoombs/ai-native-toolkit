@@ -7,7 +7,8 @@ scan of someone else's repository is meant to leave the machine it ran on,
 
 - every number, boolean and null is kept;
 - a string is kept only when ``lib.counts_only_rules`` classifies its field
-  as a path or a short token (kind, grade, band, date, version);
+  as a path, a short token (kind, grade, band, date, version) or a reason
+  code (the code of an unavailable block's reason, never its sentence);
 - every other string is dropped, and a dropped list of strings becomes its
   length, so "6 signals" survives where the six sentences do not.
 
