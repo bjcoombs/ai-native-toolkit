@@ -11,8 +11,11 @@ one. A maturity model row's ``scope`` picks the namespace:
   data. Where a block has a typed shape (``counts_only_schema.ROOTS``, the
   TypedDicts the counts-only allow-list is checked against) every further
   segment must name a field, may not step into a list, and must end on a
-  scalar. A block without a typed shape is open: any sub-path is accepted, so
-  a typo there loads and evaluates ``unknown`` with the path named. Run-context
+  scalar. Every block a default criterion reads is typed (#793,
+  ``lib.block_shapes``), so a misspelt sub-path under ``coverage_gate`` or
+  ``agent_ops`` fails at load. A block without a typed shape is still open: any
+  sub-path is accepted, so a typo there loads and evaluates ``unknown`` with the
+  path named. Run-context
   keys outside the schema (``instructions_grade``, ``skills_count``) are
   rejected: a fleet run never has them. The deterministic layer grades are
   published as the ``layer_grades`` block (``lib.layer_grades``), so a maturity model
@@ -203,7 +206,7 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "promissory_markers.families.suppression.total": "head_text",
     "promissory_markers.families.suppression.stale": "git_history",
     "promissory_markers.aging_reliable": "git_history",
-    "structure_drift.tier_0.matched_patterns": "config_text",
+    "structure_drift.tier_0.boundary_patterns": "config_text",
     "stats_summary.loc.p95": "head_structure",
     "ci_checks.test_or_lint_runs": "head_text",
     "coverage_gate.enforced": "config_text",

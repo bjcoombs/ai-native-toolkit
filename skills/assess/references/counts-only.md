@@ -355,6 +355,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `promissory_markers.top_offenders.family` | token |
 | `promissory_markers.top_offenders.text` | dropped |
 | `promissory_markers.top_offenders.commit` | dropped |
+| `promissory_markers.stale_by_file.{}.families` | dropped |
 
 ## agent_ops / config_drift / review
 
