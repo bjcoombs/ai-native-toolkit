@@ -19,11 +19,15 @@
   stdout is stored there under the sha256 of its argv, and the same argv later
   in the run (from any process) is answered from the file without running the
   CLI. Only successes are stored. A call made with ``cache=False`` is never
-  stored: merge-request notes (``lib/gitlab_notes.py``, #716) carry comment
-  bodies, which are read in memory only. ``fleet --platform`` sets it for its platform
+  stored. The cache never holds comment or review text on either provider:
+  every read whose response carries a body is made with ``cache=False`` and
+  read in memory only - GitLab merge-request notes (``lib/gitlab_notes.py``,
+  #716), and on GitHub the merged pull request read with reviews and comments,
+  as well as the GitLab merged list with its descriptions (``lib/merged_sample.py``,
+  #778). ``fleet --platform`` sets it for its platform
   children only, to a temporary directory removed when the pass ends: cached
-  responses hold titles and account names, so they never land in ``--out``, the
-  run history or a target. Without it nothing is cached. The key is the argv
+  responses can still hold names and account logins, so they never land in
+  ``--out``, the run history or a target. Without it nothing is cached. The key is the argv
   alone (no working directory, no environment), so every call made with the
   cache on must name its repository or project in argv (``--repo owner/name``,
   a ``repos/<slug>/...`` or ``projects/<id>/...`` path, ``--hostname``); a call
@@ -131,7 +135,7 @@ def _once(cmd: list[str], timeout: int) -> CliResult:
 
 def run_cli(cmd: list[str], timeout: int, cache: bool = True) -> CliResult:
     """Run ``cmd`` (``gh ...`` or ``glab ...``) with the rules above. ``cache=False``
-    neither reads nor writes the response cache (a response holding comment bodies)."""
+    neither reads nor writes the response cache (a response holding comment or review bodies)."""
     path = _cache_path(cmd) if cache else None
     hit = _cached(path)
     if hit is not None:

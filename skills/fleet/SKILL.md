@@ -642,7 +642,10 @@ remotes) logged in.
   headers, so in practice the 2, 4 and 8 second fallback applies. `--platform-jobs` caps the concurrent reads. One response
   cache per run, in a temporary directory removed when the pass ends, answers a
   repeated request (an auth probe, a bot-account lookup) once; it never lands in
-  `DIR`, the history or a target.
+  `DIR`, the history or a target. The response cache never holds comment or
+  review text on either provider: GitHub pull request reviews and comments, the
+  GitLab merged list and GitLab merge-request notes are read in memory only and
+  never written to disk.
 - **Stamp.** `run.json` records `platform: true` only when the pass ran a
   platform read (`--platform` with `--scans` selecting no platform scan reads
   nothing and stamps `false`); runs with and without the pass

@@ -43,7 +43,12 @@ listing returns ``{"available": False, "reason"}`` (``no_access`` on 403,
 a refusal is never an empty sample.
 
 The value holds titles, logins and comment text in memory only. It is private:
-no run-context block, counts-only document or fleet row carries it.
+no run-context block, counts-only document or fleet row carries it. Nor does
+the ``--platform`` response cache (#778): the GitHub ``PR_FIELDS`` read (reviews
+and comments with their bodies) and the GitLab merged list (titles and
+descriptions) are read with ``cache=False``; only the light ``--json mergedAt``
+listing, timestamps alone, may be cached. GitLab notes are never cached either
+(``lib/gitlab_notes.py``, #716).
 """
 from __future__ import annotations
 
@@ -188,9 +193,11 @@ def _newest(changes: list[dict[str, Any]], key: str, since: date | None,
 
 
 def _gh_merged(repo: GithubRepo, floor: str, fields: str) -> list[dict[str, Any]]:
+    """One ``gh pr list`` read. Only the light ``mergedAt`` read may be cached: the
+    ``PR_FIELDS`` read carries review and comment bodies, so it is read in memory only."""
     search = f"merged:>={floor} sort:updated-desc" if floor else "sort:updated-desc"
     got = gh_json(["pr", "list", "--repo", repo.slug, "--state", "merged", "--search", search,
-                   "--limit", str(FETCH_LIMIT), "--json", fields])
+                   "--limit", str(FETCH_LIMIT), "--json", fields], cache=fields == "mergedAt")
     if not isinstance(got, list):
         raise GhUnavailable("gh_bad_json: `gh pr list` did not return a list")
     return [pr for pr in got if isinstance(pr, dict)]
@@ -210,7 +217,8 @@ def gitlab_changes(project: GitlabProject, since: date | None) -> list[dict[str,
     """The GitLab sample's merge requests (one read; see the module docstring)."""
     after = f"&updated_after={since.isoformat()}T00:00:00Z" if since else ""
     got = glab_api(project, f"projects/{project.encoded}/merge_requests?state=merged{after}"
-                            f"&order_by=updated_at&sort=desc&per_page={FETCH_LIMIT}")
+                            f"&order_by=updated_at&sort=desc&per_page={FETCH_LIMIT}",
+                   cache=False)  # titles and descriptions: read in memory only
     if not isinstance(got, list):
         raise GhUnavailable("glab_bad_json: the merged merge request list was not a list")
     return _newest([mr for mr in got if isinstance(mr, dict)], "merged_at", since, "glab")
