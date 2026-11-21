@@ -28,6 +28,7 @@ from lib.ai_usage import AiUsageBlock
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.coverage_gate import CoverageGate
+from lib.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
@@ -60,6 +61,7 @@ from lib.run_context_types import (
 )
 from lib.layer_grades import LayerGradesBlock
 from lib.scc_coverage import UnreliableCcnRow
+from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock
@@ -104,12 +106,15 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
+    ("review_automation", ReviewAutomationBlock),
+    ("review_evidence", ReviewEvidenceBlock),
     ("ci_checks", CiChecksBlock),
     ("agent_building", AgentBuildingBlock),
     ("layer_grades", LayerGradesBlock),
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
+    ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),

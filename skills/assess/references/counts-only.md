@@ -387,6 +387,23 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `shared_tooling.ci_source_ids` | external id (hashed when hashing is on) |
 | `shared_tooling.marketplace_ids` | external id (hashed when hashing is on) |
 
+## review_automation
+
+| Field | Kept as |
+|---|---|
+| `review_automation.reason` | dropped |
+| `review_automation.kinds` | token |
+| `review_automation.matches.kind` | token |
+| `review_automation.matches.rule` | token |
+| `review_automation.matches.reviewer` | token |
+| `review_automation.matches.path` | path (hashed when hashing is on) |
+
+## review_evidence
+
+| Field | Kept as |
+|---|---|
+| `review_evidence.reason` | dropped |
+
 ## ci_checks
 
 | Field | Kept as |

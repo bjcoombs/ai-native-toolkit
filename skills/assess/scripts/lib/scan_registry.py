@@ -56,11 +56,13 @@ from lib.coverage_gate import detect_coverage_gate
 from lib.delivery import scan_delivery
 from lib.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
+from lib.gitlab_notes import gitlab_note_facts
 from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
 from lib.merged_sample import merged_sample
+from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 
@@ -428,11 +430,15 @@ SCANS: tuple[ScanSpec, ...] = (
     # so one listing serves both and they describe the same changes.
     ScanSpec("merged_sample", merged_sample, ("repo_root", "history_window", "run_date"),
              STAGE_READ_SIDE, private=True, network=True),
-    ScanSpec("review_reality", review_reality_from_sample, ("merged_sample",), STAGE_READ_SIDE,
-             network=True),
+    # Every sampled GitLab merge request's notes, read once, kept as facts (#716).
+    ScanSpec("gitlab_note_facts", gitlab_note_facts, ("merged_sample", "fleet_config"),
+             STAGE_READ_SIDE, private=True, network=True),
+    ScanSpec("review_reality", review_reality_from_sample, ("merged_sample", "gitlab_note_facts"),
+             STAGE_READ_SIDE, network=True),
     # Delivery figures (#715): time to merge, first human comment, AI review;
     # review_reality's approved and self-merged shares are copied, not recomputed.
-    ScanSpec("delivery", scan_delivery, ("merged_sample", "review_reality", "fleet_config"),
+    ScanSpec("delivery", scan_delivery,
+             ("merged_sample", "review_reality", "fleet_config", "gitlab_note_facts"),
              STAGE_READ_SIDE, network=True),
     ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
     # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
@@ -533,6 +539,15 @@ SCANS: tuple[ScanSpec, ...] = (
     # (`.claude-plugin/marketplace.json`, `extraKnownMarketplaces`), each with a
     # stable id so a fleet roll-up counts distinct sources. Offline file reads.
     ScanSpec("shared_tooling", scan_shared_tooling, ("repo_root",), STAGE_POST_OFFERS),
+    # AI review committed in CI (issue #696): a GitHub workflow step running a
+    # pinned review action, a GitLab review component or include (pinned, or
+    # listed in [review] ai_review_components), or an AI review app's config
+    # file. Offline file reads; review_evidence (Layer 7 level 1) reads it with
+    # review_reality and is rebuilt by the --platform pass (PLATFORM_SCANS).
+    ScanSpec("review_automation", scan_review_automation, ("repo_root", "fleet_config"),
+             STAGE_POST_OFFERS),
+    ScanSpec("review_evidence", review_evidence, ("review_automation", "review_reality"),
+             STAGE_POST_OFFERS),
     # CI checks (issue #698): whether a GitHub Actions or GitLab CI line runs a
     # test or lint command (check_command.is_check_command); null when no
     # check is found but a CI file pulls jobs from elsewhere (include:, a remote

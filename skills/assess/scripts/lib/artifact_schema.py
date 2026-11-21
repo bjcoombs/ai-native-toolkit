@@ -165,7 +165,12 @@ constant each.
 # human_static_agree_count) are null when set: an import graph that maps no
 # module to a file (a Go graph) has no file-pair static lens. The co-change
 # counts are unchanged. Readers treat a null count as unknown, never 0.
-ARTIFACT_SCHEMA_VERSION = "1.25.0"
+# 1.26.0: run-context.json gains review_automation and review_evidence (issue
+# #696): AI review committed in CI (present, kinds, matches with kind, rule,
+# reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
+# (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
+# and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.26.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -246,4 +251,7 @@ ARTIFACT_SCHEMA_VERSION = "1.25.0"
 #     reports ``structure`` available instead of ``no_import_graph_typescript``,
 #     so keyhole static metrics, structure_drift tier 1, hidden_coupling and the
 #     scorer's Layer 2 evidence can move there.
-ASSESS_METHOD_VERSION = 19
+# 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
+#     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
+#     instead of null and the L7 "hollow required review" row can now fire there.
+ASSESS_METHOD_VERSION = 20

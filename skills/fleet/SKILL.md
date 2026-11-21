@@ -65,8 +65,11 @@ here, with the reason code `not_registered`: `dead_code`, `runtime` and
 run assembles from its own state (`diff`, `behaviour`, `documentation`,
 `derived_findings`, `coverage_report`, `test_pressure`, `test_focus`,
 `accretion_ratchet`, `gap_actions`, `ancestor_instruction_files`). Blocks that
-read GitHub (`config_drift`, `review_reality`, `gate_cost_estimate`) read
-unavailable with the code `network`: a fleet run makes no network call. Doc
+read GitHub or GitLab (`config_drift`, `review_reality`, `gate_cost_estimate`) read
+unavailable with the code `network`: a fleet run makes no network call without
+`--platform`. Layer 7 level 1 reads `review_evidence`, which an AI review step
+committed to CI (`review_automation`) sets offline, so such a repository reads
+"at least 1" on Layer 7 without `--platform`. Doc
 staleness reads unavailable (`not_git_root`) outside a git work tree, and its
 stale share is null on a shallow clone, so the doc-freshness row is `unknown`
 there.
@@ -85,7 +88,7 @@ there.
 | `--platform-timeout S` | Seconds one repository's platform read may take before its platform blocks are unavailable (default: `[platform] timeout`, else 300). Needs `--platform`. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
-| `--scans a,b` | Only these scans (default: all). |
+| `--scans a,b` | Only these scans (default: all), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the Layer 7 level 1 signal. |
 | `--timeout S` | Seconds one repository may take before its row is marked failed (default 600). |
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
@@ -153,7 +156,7 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 | `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
 | `active` | `true` when the committer date of the checkout's `HEAD` falls inside the window (`--window`, default `6mo`, counting back from the run's UTC date in whole days, months and years by calendar), read locally from git; `null` when failed. Close to `ghsync --active-since` but not identical: ghsync counts 30-day months from the current time on platform dates, so cutoffs can differ by a few days. |
-| `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. |
+| `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. `scans.review_automation.present` is the row's "AI review in CI: yes / no" (#696): an AI review step or review app config in a git-tracked file, with `kinds` saying which (`ci_action`, `ci_component`, `config_file`). A GitHub review action counts only when its workflow runs on pull requests (`pull_request`, `pull_request_target`, `merge_group`); one wired only to `issue_comment` or `issues` is listed with `on_changes: false`. A GitLab include counts as committed: whether its jobs run in merge-request pipelines is not read. |
 
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
 characters of its stderr go to `DIR/logs/<repo>.stderr` (the id's segments as
@@ -466,10 +469,12 @@ until it does, any key in a section is unknown and exits 2.
 
 | Key | Meaning |
 |-----|---------|
+| `[review] ai_review_markers` | Strings an AI reviewer prints in its GitLab merge-request notes (a list; case-insensitive substrings). With `--platform`, a note carrying one counts as AI review in `review_reality.bot_review_share`, on top of the pinned markers (an "AI Code Review" heading, an HTML marker comment) and agent accounts. An access-token user's unmarked note is not review unless `[ai_usage] token_users_as_agents` or an identity rule makes it an agent: coverage, Danger and release bots post through tokens too. |
+| `[review] ai_review_components` | GitLab CI component or project paths, and GitHub `owner/repo` actions, that run an AI review in CI, beside the pinned list in `lib/review_automation.py` (#696). Compared lowercased with the host and `@version` dropped; a project path covers the components under it. Read by `review_automation`; a match reports `rule: config` and never the entry itself. |
 | `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
 | `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
 
-Both are read from the `--fleet-config` file only: the pass is fleet-wide, so a
+The `[platform]` keys are read from the `--fleet-config` file only: the pass is fleet-wide, so a
 repository's own `[platform]` values have no effect.
 
 `[platform] jobs` and `timeout` say how a run goes, not what it measures, so they
@@ -536,7 +541,8 @@ repository; the block never carries a pattern or a matched identity.
 The offline scan never reaches the network. `--platform` adds a second, separate
 pass after it: for each repository whose row is `ok`, one more
 `assess_signals.py --platform` child reads the platform for the scans in
-`lib/signals.py` `PLATFORM_SCANS` (`review_reality` and `delivery`), narrowed by
+`lib/signals.py` `PLATFORM_SCANS` (`review_reality`, `delivery` and `review_evidence`,
+which the pass rebuilds from the measured `review_reality`), narrowed by
 `--scans` when given. Each needs `gh` (github.com remotes) or `glab` (GitLab
 remotes) logged in.
 
@@ -553,9 +559,13 @@ remotes) logged in.
   copied from `review_reality`, and `agent_authored_share` (changes authored by a
   pinned agent app or an `[[ai_usage.agent_identities]]` rule, by username; a
   GitLab access-token user counts only under `token_users_as_agents`). Durations
-  are hours, percentiles nearest-rank. On
-  GitLab only time to merge and the copied shares are filled so far; the comment
-  and AI-review figures are null.
+  are hours, percentiles nearest-rank. On GitLab the comment and AI-review
+  figures come from each merge request's notes (#716): the first human comment is
+  the first non-system note by a person other than the author, and AI review is a
+  note with an AI-review marker or by an agent or a pinned AI-review app. A figure
+  is null when the notes leave it undecided after 3 pages (300 notes) on any
+  sampled merge request, or when the notes read is refused. Counts-only output
+  (the default) keeps every `delivery` figure, the same as `--full`.
 
 - **Joined, never failing a row.** The pass's blocks replace the offline
   `network` placeholders in the row's `scans`. It never changes a row's
@@ -563,8 +573,10 @@ remotes) logged in.
   `scan_timeout`. A read that runs past `--platform-timeout`, exits non-zero or
   writes no valid document gives each platform block `available: false` with
   `platform_timeout`, `platform_exit_<code>`, `platform_error` or
-  `platform_invalid_output`; its stderr tail goes to
-  `DIR/logs/<repo>.platform.stderr`. A refused read (`no_access`, `not_found`,
+  `platform_invalid_output`. Only a child that exits non-zero
+  (`platform_exit_<code>`) leaves its stderr tail in
+  `DIR/logs/<repo>.platform.stderr`; a timeout, an error starting the child or
+  invalid output writes no log. A refused read (`no_access`, `not_found`,
   `rate_limited`) is an unavailable block with that reason, never zeros. A row
   whose offline scan failed gets no platform read.
 - **Network hygiene.** `gh` and `glab` run with stdin closed and prompts disabled

@@ -824,8 +824,9 @@ completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
 both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
-one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`
-and `delivery`), or a network spec one of them reads, runs its `fn`. Extension point:
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`,
+`delivery` and `review_evidence`, an offline block the pass rebuilds because it reads
+`review_reality`, #696), or a network spec one of them reads, runs its `fn`. Extension point:
 append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
 changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
 which runs once under `--platform` as their dependency. Only published, single-key scans
@@ -838,7 +839,10 @@ that reads a displaced one. Names in `UNREGISTERED_SCANS` (run-context blocks
 `assess_core` assembles, several of which report `available: false` without the
 `reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
 name a reported scan also holds is dropped at runtime. `select_scans` raises
-`UnknownScanError` naming every name in neither set. `build_stamp` records the toolkit
+`UnknownScanError` naming every name in neither set, and adds each requested name's
+`COMPANION_SCANS` (`with_companions`; #696: `review_reality` brings `review_automation`
+and `review_evidence`, the Layer 7 level 1 signal); `fleet_platform.platform_scans`
+expands a `--scans` selection the same way. `build_stamp` records the toolkit
 commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
 (each nullable outside git). The window is validated, stamped and passed to the scans
 that read `history_window` (`ai_usage`). Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
@@ -1270,7 +1274,8 @@ writes atomically with sorted keys.
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
 `[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
-#696 and #714; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+#696 and #714; `[review]` has `ai_review_components`, a string list read by
+`review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
 --platform-jobs` and `--platform-timeout`). API:
 - `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
   and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
@@ -1290,7 +1295,9 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
 
 Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
 required) and `field` (`one_of("email", "username", "name")`)) and
-`token_users_as_agents` (`boolean`), read by `ai_usage` (#695).
+`token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
+classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
+`gitlab_notes` (#716).
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
@@ -1381,7 +1388,9 @@ row's `scans` by repository. It never changes `status` or `reason`, so a slow ho
 make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
 omits a block gives that block `available: false` with `platform_timeout`,
 `platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
-counts-only output). Failed rows are not read. `names` is `platform_scans(--scans)`:
+counts-only output). Such a failed block never replaces an offline block that is
+available (`join`, #696): `review_evidence` credits an AI review step offline, and a slow
+host keeps that credit. Failed rows are not read. `names` is `platform_scans(--scans)`:
 `signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
 directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
 `--delete-after` hook) runs on each row after its platform read, so a clone outlives the
@@ -1733,7 +1742,8 @@ run-context.json). `typed_field_names` supplies the record keys `counts_only` ke
 `typed_identifier_maps` the typed maps that must be declared, and `typed_string_fields`
 walks them, so a typed shape that gains a
 string field fails `tests/test_counts_only.py` until the field is classified, even when
-no fixture run populates the block.
+no fixture run populates the block. `delivery.DeliveryBlock` is a root (#769), so counts-only output keeps
+every delivery figure (`tests/test_delivery.py` checks a full block on both providers).
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
@@ -2303,7 +2313,9 @@ CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) pe
 `SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
 directory, a successful call's stdout is stored under the sha256 of its argv and the same
 argv is answered from it for the rest of the run (any process); failures are never stored.
-Only the fleet platform pass sets it, to a temporary directory it removes. Callers keep
+Only the fleet platform pass sets it, to a temporary directory it removes. A call made
+with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
+nor writes it: merge-request notes carry comment bodies, read in memory only (#716). Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
 `tests/test_platform_cli.py`.
 
@@ -2345,6 +2357,38 @@ merge, and a list still full after `PROTECTED_MAX_PAGES` (20) pages raises `trun
 None comes only from that complete list with no cover. A 403 or 404 raises
 like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
 `tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
+
+**`gitlab_notes.py`**
+GitLab merge-request notes as facts (#716), for `review_reality` and `delivery` (#715). `read_notes(project, iid)` reads
+`projects/<id>/merge_requests/<iid>/notes?sort=asc&order_by=created_at&per_page=100`
+(`&page=N` after the first; `--hostname` and the project in argv) with `cache=False`;
+`mr_note_facts` reads up to `NOTES_MAX_PAGES` (3) pages, stopping at a short page or once
+a human comment and AI review are both found, so no note body reaches
+the `--platform` response cache. `note_facts(notes, mr_author, classifier, complete)`
+returns `NoteFacts(human_comment, ai_review, first_human_comment_at)`; nothing
+else of a note leaves the module. System notes are skipped. A note is, first rule first:
+nothing when the merge request's author posted it (an agent on its own change is not
+review); AI review
+when its body (cut to `MAX_BODY`) carries a `PINNED_MARKERS` marker (a line-start "AI Code
+Review" / "AI Review" heading, plain or bold, emoji allowed, or an HTML comment naming AI
+review or CodeRabbit; prose mentioning AI review does not match) or a `[review]
+ai_review_markers` string (case-insensitive substring), whoever else posted it; AI review when
+its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username` or
+its username is in `delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for automation, a
+dependency bot or a `project_<id>_bot_<hash>` / `group_<id>_bot_<hash>` access-token user
+(recognised by that form, never a display name) that is not an agent: an unmarked token
+note is a coverage reporter, Danger or semantic-release as often as an AI reviewer, so it
+counts as AI review only with a marker, an `[ai_usage]` identity rule or `[ai_usage]
+token_users_as_agents`; else a human comment, the first giving `first_human_comment_at`.
+GitLab's note author is a basic user object with no bot flag, so none is read. With
+`complete` False (still a full last page) an undecided fact is None. `NoteFacts` is
+`(human_comment, ai_review, first_human_comment_at)`. `classifier_from_config(config)` builds the
+classifier from the merged `[ai_usage]` and `[review]` sections. `gitlab_note_facts(sample,
+fleet_config)` is the private registry spec (`network=True`, reads `merged_sample` and
+`fleet_config`): one `NoteFacts` per sampled merge request in sample order, None off GitLab,
+or an unavailable block on a refused read. `review_reality` and `delivery` both read it, so
+notes are read once per run; `delivery` fills `first_human_comment_hours_p50/p90`,
+`human_commented_share` and `ai_review_share` on GitLab from it. Tests: `tests/test_gitlab_notes.py`, `tests/test_review_reality_gitlab.py`.
 
 **`config_drift.py`**
 Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
@@ -2419,7 +2463,7 @@ never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an 
 
 **`delivery.py`**
 The `delivery` platform block (#715, part of #702), reads `merged_sample`,
-`review_reality` and `fleet_config`: `{available, merged_count,
+`review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
 approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
@@ -2442,8 +2486,10 @@ bucket - a config rule or a pinned `AGENT_RULES`
 entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
 the author `username`, so access-token users count only under
 `token_users_as_agents` and dependency bots never; a deleted author is not an
-agent. Read from the sample's own listing, no extra call. GitLab: time to merge and
-the copied shares; the notes-based figures are null until #716. An unavailable
+agent. Read from the sample's own listing, no extra call. GitLab: time to merge, the
+copied shares, and from the `gitlab_note_facts` spec (#716, `lib/gitlab_notes.py`) hours to
+the first human comment, `human_commented_share` and `ai_review_share` (null when the notes
+were undecided or refused, or no facts were passed). An unavailable
 sample is returned as the block. Tests: `tests/test_delivery.py`.
 
 **`review_reality.py`**
@@ -2460,7 +2506,8 @@ author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
 in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
 author withholds the share (null) only when it decides a pull
-request: one with a confirmed bot comment counts regardless.
+request: one with a confirmed bot comment counts regardless. A comment with no
+author login (a deleted account) is skipped, as in `delivery` (#769).
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
 classic protection, each needing `required_approving_review_count` of 1 or more;
@@ -2472,12 +2519,18 @@ when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
 the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
-sample's merged merge requests (`scan_gitlab_review_reality(project, mrs)`) and one
-`approvals` read each: `approved_share` (approved by an account other than the author),
-`self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
-and `bot_review_share` are null (approvals are the only evidence read), and
-`hollow_required_review` is False only when approvals alone clear the threshold, else
-null. `review_required` reads the project's approval rules: a non-`report_approver`
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs, notes=...)`) and
+one `approvals` read each: `approved_share` (approved by an account other than the author),
+`self_merged_share` (`merge_user`, else `merged_by`, is the author), and the note facts of
+the private `gitlab_note_facts` spec (#716, one notes read per merge request, shared with
+`delivery`): `bot_review_share` is a note with an
+AI-review marker or by an agent or pinned AI-review app (an access-token user only when
+it is an agent); `reviewed_share` is an approval by another account, a human comment by
+someone other than the author, or AI review. A merge request whose notes still decide nothing after up to `NOTES_MAX_PAGES` (3)
+pages / 300 notes makes the share null.
+`hollow_required_review` follows `reviewed_share` and is False whenever approvals alone
+clear the threshold. A refused or malformed notes read degrades the whole block like an
+approvals read. `review_required` reads the project's approval rules: a non-`report_approver`
 rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
 wildcard matching the default branch, is True; a rule scoped to all protected branches
 covers it when `gitlab_cli.branch_protection` finds the default branch protected, does
@@ -2886,6 +2939,48 @@ Claude Code tells marketplaces apart by, so a manifest and a settings entry nami
 it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
 `distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
 `available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+`step_uses(text)` (#696) is the step-level reader the block itself does not use: (line,
+value) for each `uses:` that is a step's own key (on its `- ` line or at its key column)
+inside a job's `steps:` list, skipping job-level `uses:`, a `uses:` nested under `with:`, and the
+body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one into
+`owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
+sources, so they never enter `ci_includes` or `ci_source_ids`. `workflow_events(text)`
+reads the top-level `on:` (a scalar, a flow list or mapping, a block list or mapping of
+events); None when there is none it can read.
+
+**`review_automation.py`**
+AI review committed in CI and the Layer 7 level 1 signal (issue #696).
+`scan_review_automation(repo_root, fleet_config)` writes `{available, present, kinds[],
+matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked}`. Kinds:
+`ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
+`anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
+pipelines is not read), `ci_component` (a
+`shared_tooling.gitlab_includes` component or project whose last path segment matches
+`REVIEW_COMPONENT`, a name heuristic: `ai-code-review`, `claude_review`, `llm-review`,
+`code-review-ai`, `pr-agent`), and `config_file` (`REVIEW_CONFIG_FILES`: `.coderabbit.yaml`/`.yml`,
+`.gemini/config.yaml`, `.pr_agent.toml`, each mapped to its `delivery.AI_REVIEWERS`
+login). A CI action or include also matches (`rule: config`, `reviewer: configured`)
+when its source equals, or sits under, a `[review] ai_review_components` entry
+(lowercased, host, a leading CI variable such as `$CI_SERVER_FQDN`, and `@version` dropped). Copilot code review has no review-specific
+file and is not read. A `ci_action` is credited only when its workflow's `on:` (`shared_tooling.workflow_events`)
+names `pull_request`, `pull_request_target` or `merge_group` (`REVIEW_EVENTS`): a step wired
+only to `issue_comment` or `issues` (an @claude responder) is listed with `on_changes:
+false`; an `on:` the line reader cannot read is credited. `present` and `kinds` credit
+git-tracked matches only; outside a
+git checkout the block is `available: false`. Counts-only keeps the booleans, kinds,
+rules and reviewer slugs, never a source or a config entry. `is_review_action` and
+`is_review_component` expose the pinned matcher to other CI readers (#689).
+`review_evidence(review_automation, review_reality)` is the derived block the default
+maturity model's Layer 7 level 1 reads: `{available, present, ai_review_in_ci,
+reviewed_changes}`; `present` is true when an AI review step is credited or
+`review_reality.reviewed_share > 0` (`approved_share > 0` where `reviewed_share` is
+null), false when neither block shows review (a review config file alone does not count
+against a measured `reviewed_share` of 0; a CI step, or a measured `bot_review_share > 0`,
+does), and otherwise the block is unavailable
+with the reason of the block that could not say, `review_reality`'s first (so the
+offline `network` code gives the `fleet --platform` hint). It is in
+`signals.PLATFORM_SCANS`, so the platform pass rebuilds it from the measured
+`review_reality`. Tests: `tests/test_review_automation.py`.
 
 **`agent_building.py`**
 What a repository builds with agents, per repository (issue #689): an inventory, not
