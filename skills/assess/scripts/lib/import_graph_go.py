@@ -19,8 +19,8 @@ Implements the ``lib.import_graph`` builder interface for Go. No go tool runs:
 - The **public surface** (A1) is the package's exported top-level ``func``
   (methods excluded) and ``type`` declarations across its files.
 - No ``module_file``: a package is several files, so A1 size reads 0 and the
-  footprint is the surface terms alone; the structure-drift static relation,
-  which pairs files, is empty for Go.
+  footprint is the surface terms alone; structure-drift tier 1, whose static
+  lens pairs files, reads unavailable (``no_static_file_map``).
 
 A package belongs to the nearest ``go.mod`` at or above it; a package with none
 is not graphed, and a repository with no ``go.mod`` returns ``None`` (the
@@ -140,10 +140,10 @@ def module_path(go_mod: str) -> str | None:
     lines = [line.strip() for line in strip_comments(go_mod).splitlines()]
     lines = [line for line in lines if line]
     for i, line in enumerate(lines):
-        keyword, _, rest = line.partition(" ")
-        if keyword != "module" and line != "module(":
+        keyword, *rest = line.replace("(", " ( ", 1).split(None, 1)
+        if keyword != "module":
             continue
-        value = rest.strip() if keyword == "module" else "("
+        value = rest[0].strip() if rest else ""
         if value == "(":  # the block form: module ( path )
             value = lines[i + 1] if i + 1 < len(lines) else ""
         return _unquote(value) or value or None

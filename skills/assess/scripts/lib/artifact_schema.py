@@ -215,5 +215,8 @@ ARTIFACT_SCHEMA_VERSION = "1.22.0"
 #     scorer's Layer 2 evidence on such repositories can move.
 # 18: a Go module (a go.mod with packages) is graphed from its import blocks
 #     (issue #710) instead of reporting no_import_graph_go, so structure, the
-#     keyhole static metrics and the Layer 2 evidence can move on Go repositories.
+#     Layer 2 evidence, and hidden_coupling / refactor_boundary on Go directories
+#     can move on Go repositories; structure_drift tier 1 reads unavailable for a
+#     graph that maps no module to a file, and the behaviour block projects the
+#     static metrics only onto directories in the graphed language.
 ASSESS_METHOD_VERSION = 18

@@ -5,11 +5,15 @@ import json
 import subprocess
 from pathlib import Path
 
+import jsonschema
 import pytest
 
 import assess_signals
+from lib.keyhole_signals import _graphed_dirs
 from lib.import_graph import select_graph
 from lib.import_graph_builders import BUILDERS
+from lib.signals_schema import SCHEMA_PATH
+from lib.structure_drift import detect_grouping_disagreement
 from lib.import_graph_go import (
     GO_BUILDER,
     exported_surface,
@@ -78,6 +82,8 @@ def test_comments_are_blanked_but_strings_and_lines_kept() -> None:
     ("module example.com/a\n", "example.com/a"),
     ('// module wrong\nmodule "example.com/q" // c\n', "example.com/q"),
     ("module (\n\texample.com/block\n)\n", "example.com/block"),
+    ("module\texample.com/tab\n", "example.com/tab"),
+    ("module(\n\texample.com/tight\n)\n", "example.com/tight"),
     ("go 1.22\n", None),
 ])
 def test_the_module_path_is_read_from_go_mod(text: str, expected: str | None) -> None:
@@ -200,9 +206,29 @@ def test_hash_paths_hides_module_paths_and_package_dirs(tmp_path: Path) -> None:
     assert assess_signals.main([str(repo), "--out", str(out), "--scans", "structure",
                                 "--counts-only", "--hash-paths"]) == 0
     text = out.read_text(encoding="utf-8")
-    block = json.loads(text)["scans"]["structure"]
+    doc = json.loads(text)
+    jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
+    block = doc["scans"]["structure"]
     assert block["available"] is True and block["language"] == "go"
     assert block["modularity_q"] is not None
     for leak in ("example.com", "acme-internal", "payments", "handlers", "store/db",
                  "cmd/server"):
         assert leak not in text, leak
+
+
+# -- consumers of a graph with no module file ---------------------------------
+
+def test_drift_tier_one_degrades_without_a_module_file_map(tmp_path: Path) -> None:
+    """An empty static lens would read every declared pair as split by the graph."""
+    _two_communities(tmp_path)
+    _write(tmp_path, {"CODEOWNERS": "/api/ @team-a\n/store/ @team-b\n"})
+    block = detect_grouping_disagreement(tmp_path, coupling_pairs=[])
+    assert block["available"] is False
+    assert block["reason"].startswith("no_static_file_map: the go import graph")
+    assert block["human_grouped_static_splits_count"] == 0
+
+
+def test_static_metrics_project_only_onto_the_graphed_language() -> None:
+    commits = [{Path("api/api.go"), Path("scripts/tool.py"), Path("docs/a.md")}]
+    assert _graphed_dirs(commits, "go") == {"api"}
+    assert _graphed_dirs(commits, "python") == {"scripts"}

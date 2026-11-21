@@ -62,7 +62,7 @@ lines = 1107
 reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
-lines = 1592
+lines = 1591
 reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py)"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]

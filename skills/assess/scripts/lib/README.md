@@ -360,7 +360,10 @@ exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
 construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
 public surface is the package's exported top-level `func` (not method) and `type`
 declarations. There is no `module_file` (a package is several files), so A1 size reads 0
-and the structure-drift static relation, which pairs files, is empty for Go. Skipped:
+and structure-drift tier 1, whose static lens pairs files, reads unavailable
+(`no_static_file_map`) rather than reading every declared pair as split. The behaviour
+block projects the static metrics only onto directories holding a file in the graph's
+language (`structure.language`), so a Go graph never vouches for a Python tree. Skipped:
 `_test.go` files, `testdata`, `vendor` and the other `EXCLUDE_DIRS`, and directories
 starting with `.` or `_`. Build constraints are not evaluated. No `go.mod` returns `None`,
 so the reason stays `no_import_graph_go`; the builder has no tool to miss and never

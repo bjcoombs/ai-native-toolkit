@@ -36,6 +36,7 @@ from lib.change_coupling import (
 from lib.coupling_analysis import (
     StaticModularity, detect_hidden_coupling, find_refactor_boundaries)
 from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
+from lib.import_graph import LANGUAGE_BY_EXTENSION
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.run_context_types import (
     AttentionRow, BehaviourBlock, BehaviourFields, CoChangePair, CouplingRow, DerivedFinding,
@@ -228,19 +229,18 @@ def project_static_modularity(
     return {d: dict(metrics) for d in dirs}
 
 
-def _python_bearing_dirs(commit_sets: list[set[Path]]) -> set[str]:
-    """Repo-relative dirs (and ancestors) that contain at least one .py file.
+def _graphed_dirs(commit_sets: list[set[Path]], language: str) -> set[str]:
+    """Repo-relative dirs (and ancestors) holding a file in the graphed language.
 
     Derived from the commit file-sets (git-consistent, no extra filesystem
-    walk) so it agrees with the containment view. These are the only
-    directories the Python import graph could have evidence about; projecting
-    the static-modularity metrics onto anything else manufactures false
-    hidden-coupling findings on doc / config trees.
+    walk) so it agrees with the containment view. These are the only directories
+    the import graph (``structure.language``, issue #710) has evidence about;
+    projecting it anywhere else manufactures false hidden_coupling findings.
     """
     out: set[str] = set()
     for files in commit_sets:
         for f in files:
-            if f.suffix != ".py":
+            if LANGUAGE_BY_EXTENSION.get(f.suffix.lower()) != language:
                 continue
             for parent in Path(f).parents:
                 s = parent.as_posix()
@@ -350,10 +350,9 @@ def build_behaviour_block(
     containment = containment_by_dir(repo_root, commit_sets)
     all_pairs = change_coupling_pairs(commit_sets)
     pairs = all_pairs[:MAX_COUPLING_PAIRS]
-    # Only project the (Python import-graph) static metrics onto Python-bearing
-    # directories; a bleeding doc/config tree has no static evidence and
-    # degrades to bleeding_module rather than a false hidden_coupling.
-    python_dirs = _python_bearing_dirs(commit_sets)
+    # Project the static metrics only onto directories in the graph's language;
+    # a bleeding doc/config tree degrades to bleeding_module, not hidden_coupling.
+    python_dirs = _graphed_dirs(commit_sets, str((structure or {}).get("language") or "python"))
     static_dirs = [d for d in containment if d in python_dirs]
     static_mod = project_static_modularity(structure, static_dirs)
     disagreement = detect_hidden_coupling(containment, static_modularity=static_mod)

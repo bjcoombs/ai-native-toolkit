@@ -868,6 +868,6 @@ def test_static_relation_empty_when_module_map_unavailable(
 ) -> None:
     """No resolvable module map -> the static relation is empty, not an error."""
     monkeypatch.setattr(structure_drift, "_build_module_path_map",
-                        lambda _root: {})
+                        lambda _root, _mg=None: {})
     rel = static_grouping_relation(tmp_path, [{"lib.x", "lib.y"}])
     assert rel == set()
