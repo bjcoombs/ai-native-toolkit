@@ -39,7 +39,8 @@ moved with cause ``level`` or ``set_and_level``:
 1. ``set`` with ``absent_signals`` (measured-set movement, never level movement):
    the unknown side's ``missing_signals`` name a path absent from that side's
    stored scans of a repository in the group while the other side holds it (a
-   scanner added, or dropped, the signal). It wins over the causes below.
+   scanner added, or dropped, the signal; a block reporting ``available: false``
+   is a degraded scan and does not count). It wins over the causes below.
 2. ``toolkit_changed_unknown_scope`` when the scanner diff is unavailable;
    ``notes`` gets one line saying so.
 3. ``scanner_changed`` with ``scanner`` (each block and its changed producer
@@ -283,9 +284,16 @@ def _get(scans: Any, path: str) -> bool:
 def absent_signals(missing: Sequence[str], unknown_side: Sequence[Any], other_side: Sequence[Any]) -> list[str]:
     """The ``missing`` paths absent from a repository's scans on the unknown side, held on the other.
 
-    ``unknown_side`` and ``other_side`` are the same repositories' ``scans`` maps, paired by index."""
+    ``unknown_side`` and ``other_side`` are the same repositories' ``scans`` maps, paired by index.
+    A block that reports itself unavailable (``available: false``) is a degraded scan, not a
+    signal the scanner lacked, so its paths never count as absent."""
     return sorted({path for path in missing for then, now in zip(unknown_side, other_side)
-                   if not _get(then, path) and _get(now, path)})
+                   if not _get(then, path) and _get(now, path) and not _degraded(then, path)})
+
+
+def _degraded(scans: Any, path: str) -> bool:
+    block = scans.get(path.split(".")[0]) if isinstance(scans, dict) else None
+    return isinstance(block, dict) and block.get("available") is False
 
 
 def attribute(cause: str, *, absent: Sequence[str], diff: ScannerDiff | None,

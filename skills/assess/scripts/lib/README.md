@@ -1290,8 +1290,8 @@ rows with a known level in both runs (org rows are out of the mean, the counts a
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
 removed or with no row known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
-both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
-carries a `*` explained under the chart.
+both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
+`scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
 With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
@@ -1520,7 +1520,7 @@ gives `comparable: false` with no deltas. `compare` reports the measured-set mov
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
 a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
-team row's set moved) or `set_and_level` (a team row's set and evidence moved). An org
+team row's set moved) or `set_and_level` (a team row's set and evidence moved), plus the #774 causes below. An org
 row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
 `write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate

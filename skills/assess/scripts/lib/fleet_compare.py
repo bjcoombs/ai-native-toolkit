@@ -36,6 +36,10 @@ appeared or changed (an entry written before #697 has none) is not a move.
 - ``set_and_level``: (team rows) the set moved and so did the evidence; the
   change cannot be split.
 
+With a scanner diff (``lib/fleet_scanner_diff.py``, #774) a moved team row may instead
+carry ``scanner_changed`` or ``toolkit_changed_unknown_scope``, and a row unknown on one
+side for a signal that run's scans lack is ``set`` with ``absent_signals``.
+
 Per repository scanned on both sides, ``signals`` lists every leaf of the
 ``scans`` map whose value changed (dotted path, value then and now; a side
 where the leaf is absent omits its key). Lists compare whole. Output has

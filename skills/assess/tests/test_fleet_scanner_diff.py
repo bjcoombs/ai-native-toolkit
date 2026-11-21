@@ -1,6 +1,7 @@
 """Tests for scanner-change attribution of fleet comparison moves, lib/fleet_scanner_diff.py (issue #774)."""
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -171,3 +172,77 @@ def test_row_signals_reads_fleet_data_cells():
                                 {"row": "teamdocs", "signal": "nested_instructions.budget.claude_code.lines"}]}]}
     assert sd.row_signals(data) == {"teamdocs": frozenset({"nested_instructions.budget.claude_code.lines"})}
     assert sd.row_signals([]) is None
+
+
+# --- wiring ----------------------------------------------------------------------
+
+
+def test_the_toolkit_root_holds_the_lib_directory_it_diffs():
+    from lib.signals import TOOLKIT_ROOT
+
+    assert sd.TOOLKIT_ROOT == TOOLKIT_ROOT
+    assert (sd.TOOLKIT_ROOT / sd.LIB_PATH).is_dir()
+
+
+def _write(out: Path, rows: list[Any], fleet_data: dict[str, Any] | None = None, **stamp: Any) -> None:
+    from lib.fleet import write_rows
+    from lib.fleet_groups import write_groups
+    from lib.fleet_stamp import write_stamp
+
+    run = _run(rows, **stamp)
+    write_rows(out, rows)
+    write_groups(out, run.groups)
+    write_stamp(out, run.stamp)
+    if fleet_data is not None:
+        (out / "fleet-data.json").write_text(json.dumps(fleet_data), encoding="utf-8")
+
+
+def test_load_run_carries_the_row_signals_of_fleet_data(tmp_path):
+    cells = {"repos": [{"rows": [{"row": "teamdocs", "signal": "shared_tooling.available"}]}]}
+    _write(tmp_path / "a", EARLIER, cells)
+    _write(tmp_path / "b", EARLIER)
+    assert fc.load_run(tmp_path / "a").row_signals == {"teamdocs": frozenset({"shared_tooling.available"})}
+    assert fc.load_run(tmp_path / "b").row_signals is None
+
+
+def test_the_compare_cli_degrades_to_unknown_scope(tmp_path, capsys):
+    from test_fleet_history import compare_cli
+
+    _write(tmp_path / "a", EARLIER, toolkit_commit=None, plugin_version="1.1.0")
+    _write(tmp_path / "b", LATER, toolkit_commit="bbb", plugin_version="1.2.0")
+    assert compare_cli.main([str(tmp_path / "a"), str(tmp_path / "b")]) == 0
+    captured = capsys.readouterr()
+    comparison = json.loads(captured.out)
+    assert _row_move(comparison, "grpa", "teamdocs")["cause"] == sd.CAUSE_UNKNOWN_SCOPE
+    assert comparison["notes"][0].startswith("scanner diff unavailable")
+    assert "fleet compare: scanner diff unavailable" in captured.err
+
+
+def test_fleet_compare_flag_passes_the_scanner_diff(tmp_path, capsys):
+    from test_fleet import make_repo
+    from test_fleet_cli import fleet_cli
+
+    root = tmp_path / "estate"
+    make_repo(root, "acme/svc1", files={"CLAUDE.md": "a\n"})
+    args = [str(root), "--scans", "nested_instructions", "--no-history", "--no-diagrams"]
+    assert fleet_cli.main([*args, "--out", str(tmp_path / "o1")]) == 0
+    stamp_path = tmp_path / "o1" / "run.json"
+    stamp = json.loads(stamp_path.read_text(encoding="utf-8"))
+    # an install that is not a git checkout, one minor release earlier: comparable, diff unknown
+    stamp.update(toolkit_commit=None, plugin_version=f"{stamp['plugin_version'].split('.')[0]}.999.0")
+    stamp_path.write_text(json.dumps(stamp), encoding="utf-8")
+    capsys.readouterr()
+
+    assert fleet_cli.main([*args, "--out", str(tmp_path / "o2"), "--compare", str(tmp_path / "o1")]) == 0
+    comparison = json.loads((tmp_path / "o2" / "compare.json").read_text(encoding="utf-8"))
+    assert comparison["comparable"], comparison["reasons"]
+    assert comparison["notes"][0].startswith("scanner diff unavailable")
+    assert "fleet: compare: scanner diff unavailable" in capsys.readouterr().err
+
+
+def test_a_degraded_block_is_not_an_absent_signal():
+    degraded = {**_scans(5), "nested_instructions": {"available": False, "reason": "scan_error"}}
+    comparison = compare(_run([_row("grpa/svc1", degraded)]), _run([_row("grpa/svc1", _scans(5))]))
+    row = _row_move(comparison, "grpa", "teamdocs")
+    assert row["then"]["status"] == "unknown"
+    assert row["cause"] == fc.CAUSE_LEVEL and "absent_signals" not in row

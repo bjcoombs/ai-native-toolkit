@@ -176,6 +176,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_legacy.py` | `lib/fleet_legacy.py` - a run written before the 2.0.0 maturity-model rename (`fixtures/fleet_legacy/`) loads, compares and counts in the history and trend |
 | `test_fleet_history.py` | `lib/fleet_history.py` + `skills/fleet/scripts/fleet.py` + `skills/fleet/scripts/fleet_compare.py` - the dated run history, the `--compare` wiring and the compare CLI |
 | `test_fleet_compare.py` | `lib/fleet_compare.py` - comparing two fleet runs without rescanning: level movement apart from measured-set movement, and the not-comparable reasons |
+| `test_fleet_scanner_diff.py` | `lib/fleet_scanner_diff.py` - attributing a fleet comparison move to a scanner change (`scanner_changed`), an unavailable scanner diff (`toolkit_changed_unknown_scope`) or a signal one run lacks (`set`), and the CLI wiring (#774) |
 
 ### Infrastructure suites
 
