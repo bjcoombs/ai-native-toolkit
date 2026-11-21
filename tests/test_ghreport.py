@@ -528,7 +528,7 @@ def test_keep_fragments_capture_then_replay_is_identical(tmp_path):
     rep = subprocess.run(
         ["bash", str(GHREPORT), "--render-dir", str(keep), "--org", "testorg",
          "--root", str(replay_root), "--quiet"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, check=False, text=True, timeout=60,
     )
     assert rep.returncode == 0, rep.stderr
     assert _without_report_path(rep.stdout) == _without_report_path(res.stdout)
@@ -556,6 +556,6 @@ def test_keep_fragments_with_render_dir_is_rejected(fragments_dir, tmp_path):
 
 def test_help_names_the_capture_route():
     res = subprocess.run(["bash", str(GHREPORT), "--help"],
-                         capture_output=True, text=True, timeout=30)
+                         capture_output=True, check=False, text=True, timeout=30)
     assert "--keep-fragments DIR" in res.stdout
     assert "--render-dir DIR" in res.stdout
