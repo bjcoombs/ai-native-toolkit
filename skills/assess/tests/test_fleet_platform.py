@@ -140,7 +140,9 @@ GH_STUB = """#!/bin/sh
 echo "$*" >> "$GH_STUB_DIR/log"
 case "$1" in
   auth) exit 0 ;;
-  pr) [ -f "$GH_STUB_DIR/hang" ] && sleep 20; echo '[]'; exit 0 ;;
+  pr) [ -f "$GH_STUB_DIR/hang" ] && sleep 20
+      [ -f "$GH_STUB_DIR/refuse" ] && { echo "gh: HTTP 403" >&2; exit 1; }
+      echo '[]'; exit 0 ;;
 esac
 echo "gh: Not Found (HTTP 404)" >&2; exit 1
 """
@@ -211,6 +213,15 @@ def test_delivery_is_absent_offline_and_joined_by_the_platform_pass(world, tmp_p
     delivery = rows[0]["scans"]["delivery"]
     assert delivery["available"] is True and delivery["merged_count"] == 0
     jsonschema.validate(rows[0], build_schema())
+
+
+def test_a_refused_pr_list_gives_both_platform_blocks_no_access(world, tmp_path):
+    """``gh pr list`` answering HTTP 403 reads as ``no_access``, as on GitLab (#779)."""
+    (world / "refuse").write_text("", encoding="utf-8")
+    rows, _ = _run(tmp_path, "--scans", "agent_ops,review_reality,delivery", "--platform")
+    assert rows[0]["status"] == "ok"
+    for name in ("review_reality", "delivery"):
+        assert rows[0]["scans"][name] == {"available": False, "reason": "no_access"}, name
 
 
 def test_a_hanging_host_never_turns_the_row_into_scan_timeout(world, tmp_path):
