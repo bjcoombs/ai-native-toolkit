@@ -5,7 +5,7 @@ language produced it. A builder turns a repository's source in one language into
 a :class:`ModuleGraph`; :func:`select_graph` runs every registered builder,
 keeps one graph per language and returns the largest. A repository with no graph
 gets a reason that names its dominant source language
-(``no_import_graph_typescript``), so a fleet reader can tell a tooling gap from a
+(``no_import_graph_rust``), so a fleet reader can tell a tooling gap from a
 repository with no code (``no_source_files``).
 
 A builder is any object with a ``language`` token and a ``build`` method (the
@@ -72,6 +72,7 @@ LANGUAGE_BY_EXTENSION: dict[str, str] = {
 # Reason when the dominant language is Python and no importable package exists;
 # the headless runner maps it to ``no_python_packages``.
 NO_PYTHON_PACKAGES = "no importable Python packages found"
+INVALID_IMPORT_GRAPH = "invalid_import_graph"
 NO_SOURCE_FILES = "no_source_files: no source file in a language /assess recognises"
 
 
@@ -165,6 +166,10 @@ def select_graph(
             failures.append(str(e))
             continue
         if graph is not None and graph.modules:
+            defect = graph_defect(graph)
+            if defect is not None:
+                failures.append(defect)
+                continue
             graphs.append(graph)
     if graphs:
         best = min(graphs, key=lambda g: (-_size(g)[0], -_size(g)[1], g.language))
@@ -172,6 +177,21 @@ def select_graph(
     if failures:
         return GraphSelection(graph=None, reason=failures[0])
     return GraphSelection(graph=None, reason=no_graph_reason(repo_root, extra, scope))
+
+
+def graph_defect(graph: ModuleGraph) -> str | None:
+    """Why ``graph`` breaks the :class:`ModuleGraph` contract, or None.
+
+    A3 and A4 index ``package_of`` by every module, so a module with no package
+    would raise ``KeyError`` mid-measure. ``select_graph`` treats such a graph as a
+    builder failure instead: another language can still be reported, and with
+    none the block degrades with this reason.
+    """
+    missing = [m for m in graph.modules if m not in graph.package_of]
+    if missing:
+        return (f"{INVALID_IMPORT_GRAPH}: the {graph.language} builder returned "
+                f"{len(missing)} module(s) with no package; structure not assessed")
+    return None
 
 
 def language_counts(

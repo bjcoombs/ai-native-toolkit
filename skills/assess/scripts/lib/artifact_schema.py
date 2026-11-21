@@ -213,4 +213,9 @@ ARTIFACT_SCHEMA_VERSION = "1.22.0"
 # 17: an import graph with no edges reports ``structure.modularity_q`` null with
 #     ``modularity_reason: no_import_edges`` instead of 0.0 (issue #682), so the
 #     scorer's Layer 2 evidence on such repositories can move.
-ASSESS_METHOD_VERSION = 17
+# 18: TypeScript and JavaScript sources get an import graph (issue #709), so a
+#     repository whose largest graph is now TypeScript or JavaScript reports
+#     ``structure`` available with that language instead of
+#     ``no_import_graph_typescript``; keyhole static metrics, structure_drift
+#     tier 1 and the scorer's Layer 2 evidence can move on such repositories.
+ASSESS_METHOD_VERSION = 18

@@ -86,13 +86,13 @@ def _write(root: Path, rel: str, text: str = "x\n") -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def test_a_typescript_repo_names_its_language(tmp_path: Path) -> None:
-    for rel in ("src/a.ts", "src/b.tsx", "web/c.js", "tools/x.py"):
+def test_a_repo_in_a_language_with_no_builder_names_it(tmp_path: Path) -> None:
+    for rel in ("src/a.rs", "src/b.rs", "tools/x.py"):
         _write(tmp_path, rel)
     result = analyze_structure(tmp_path)
     assert result.available is False
     assert result.language is None
-    assert result.reason.startswith("no_import_graph_typescript: ")
+    assert result.reason.startswith("no_import_graph_rust: ")
 
 
 def test_the_headless_marker_keeps_the_language_code(tmp_path: Path) -> None:

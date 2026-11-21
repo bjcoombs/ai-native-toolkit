@@ -279,7 +279,10 @@ keeps one graph per language; the largest (most modules, then most internal edge
 the language token) is returned. With no graph the reason is the first builder failure in
 registration order, else `no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. Imports no graph tool.
+`scope`) and names the dominant one. A built graph that breaks the contract (a module
+missing from `package_of`, which A3 and A4 index) is treated as a builder failure
+(`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
+reported and the measure never raises `KeyError`. Imports no graph tool.
 
 Worked example: a builder for a language whose package is a directory and whose front
 door is the directory's `index` file.
@@ -318,7 +321,33 @@ class IndexDirBuilder:
 Register it by appending to `BUILDERS` in `import_graph_builders.py`. A new block field
 or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
 the maturity model header (`levels/default.toml`).
-Tests: `tests/test_import_graph.py`.
+Tests: `tests/test_import_graph.py`, and `tests/test_import_graph_contract.py`, the
+contract every registered builder must keep (sorted unique modules, `package_of`
+covering them, front doors, files and surfaces within them, `None` on an empty tree).
+A new builder adds a fixture tree to its `CONTRACT_FIXTURES`.
+
+**`import_graph_typescript.py`**
+The TypeScript and JavaScript builder (`TYPESCRIPT_BUILDER`, issue #709): a deterministic
+regex scan, no Node. One builder graphs both languages, since they import each other; the
+graph's `language` is `typescript` when any scanned file is TypeScript, else `javascript`.
+Modules are repo-relative file paths with the extension kept. Imports are `import ... from`,
+side-effect `import`, `export ... from`, `import()`, `require()` and `import x = require()`,
+read after comments are stripped. A relative specifier resolves against the importer's
+directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`paths`, then
+`baseUrl`, following relative `extends`; JSONC is accepted), then the workspace packages
+(every `package.json` with a `name`, its entry from `source`, the `"."` export, `module` or
+`main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
+A specifier matches a file, the file plus a source extension, a `.js` name standing for its
+`.ts` source, or a directory's `index`; anything else is external. A package is the nearest
+directory holding an `index` file or a `package.json`, else the module's top directory;
+front doors are the `index` modules and each workspace entry; the surface is the count of
+exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
+`EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
+`*.config.*` and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
+`"."` only, and `node_modules` and package `extends` are not followed. Configs and
+workspaces are read from the whole repository; modules come from `scope`.
+Tests: `tests/test_import_graph_typescript.py` (fixture `tests/fixtures/ts_workspace`).
 
 **`import_graph_python.py`**
 The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
