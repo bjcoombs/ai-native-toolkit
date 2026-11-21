@@ -214,6 +214,7 @@ def test_human_commit_sets_anchor_and_clock(tmp_path: Path) -> None:
             author=("Alice", "alice@example.com"),
             committer=("Alice", "alice@example.com"),
             days_ago=30)
+    _commit(repo, {"notes.txt": "later"}, "later")  # HEAD today: the clock counts to it
 
     authorship = {"svc.py": authorship_analysis(repo, "svc.py")}
     assert authorship["svc.py"]["human_anchor"] is True
@@ -235,6 +236,7 @@ def test_mixed_repo_classified_mixed(tmp_path: Path) -> None:
             committer=("Bob", "bob@example.com"),
             co_authors=["Claude <noreply@anthropic.com>"],
             days_ago=10)
+    _commit(repo, {"notes.txt": "later"}, "later")  # HEAD today: the clock counts to it
 
     authorship = {"svc.py": authorship_analysis(repo, "svc.py")}
     assert authorship["svc.py"]["authorship_class"] == "mixed"
@@ -262,5 +264,6 @@ def test_agent_commit_does_not_count_as_comprehension_event(tmp_path: Path) -> N
     authorship = {"svc.py": authorship_analysis(repo, "svc.py")}
     result = analyze_understanding(repo, authorship, _no_docs(), _stats_high("svc.py"))
     mod = result["modules"][0]
-    # The agent commit (5 days ago) is ignored; the clock reads the human one.
-    assert 39 <= mod["days_since_comprehension_event"] <= 41
+    # The agent commit (5 days ago, HEAD) is ignored; the clock reads the human
+    # one, counted to HEAD (#773): 40 - 5 days.
+    assert 34 <= mod["days_since_comprehension_event"] <= 36

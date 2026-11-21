@@ -259,8 +259,13 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 # 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
 #     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
 #     instead of null and the L7 "hollow required review" row can now fire there.
-# 21: ``structure.front_door_ratio`` is null when no import crosses a package
+# 21: every git-history window and day count is counted back from HEAD's committer
+#     time instead of today (issue #773): churn windows, ``doc_staleness`` ages and
+#     window ratios, instruction ``freshness_days`` (and so the grader's freshness
+#     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
+#     whose HEAD is old, ages shrink and windows cover the history before HEAD.
+# 22: ``structure.front_door_ratio`` is null when no import crosses a package
 #     boundary (issue #760), so a single-package repository no longer reads as
 #     modular through a vacuous 1.0: ``hidden_coupling`` there rests on
 #     modularity alone, and a ``structure.front_door_ratio`` criterion is unknown.
-ASSESS_METHOD_VERSION = 21
+ASSESS_METHOD_VERSION = 22

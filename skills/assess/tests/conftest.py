@@ -152,3 +152,54 @@ def git_repo(tmp_path: Path):
         _git(repo, "commit", "-q", "-m", message, env=env)
 
     return repo, commit
+
+
+# One commit of the dated history: (ISO time, {path: text to append}, message).
+DatedCommit = tuple[str, dict[str, str], str]
+
+# The issue #773 history (contract I773-1). Every date is absolute, so the
+# windows the scans read are fixed by HEAD (2020-01-15), never by the clock.
+# The 2019-10-03 edit is out of date order and carries the one agent trailer.
+DATED_HISTORY: list[DatedCommit] = [
+    ("2019-01-10T12:00:00Z", {
+        "README.md": "# App\n\nSee [app](pkg/app.py).\n",
+        "pkg/README.md": "# pkg\n\nHolds app.py.\n",
+        "pkg/app.py": "def f():\n    return 1\n",
+    }, "init"),
+    ("2019-03-01T12:00:00Z", {"CLAUDE.md": "# Project\n\nNotes.\n"}, "instructions"),
+    ("2019-11-01T12:00:00Z", {"pkg/app.py": "# edit 1\n"}, "edit 1"),
+    ("2019-12-02T12:00:00Z", {"pkg/app.py": "# edit 2\n"}, "edit 2"),
+    ("2019-10-03T12:00:00Z", {"pkg/app.py": "# edit 3\n"},
+     "edit 3\n\nCo-authored-by: Claude <noreply@anthropic.com>"),
+    ("2019-11-04T12:00:00Z", {"pkg/app.py": "# edit 4\n"}, "edit 4"),
+    ("2019-12-05T12:00:00Z", {"pkg/app.py": "# edit 5\n"}, "edit 5"),
+    ("2020-01-15T12:00:00Z", {"pkg/app.py": "# head\n"}, "head"),
+]
+
+
+def build_dated_repo(repo: Path, history: list[DatedCommit] = DATED_HISTORY) -> Path:
+    """A repository whose commits carry these absolute author and committer times."""
+    repo.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@example.com")
+    _git(repo, "config", "user.name", "t")
+    for when, appends, message in history:
+        for rel, text in appends.items():
+            path = repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(text)
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", message,
+             env={"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+    return repo
+
+
+@pytest.fixture
+def dated_git_repo(tmp_path: Path) -> Path:
+    """The issue #773 history with absolute dates; HEAD is 2020-01-15T12:00:00Z.
+
+    The ``git_repo`` fixture dates commits relative to the current time, so it
+    cannot show that a window is counted from HEAD rather than from today.
+    """
+    return build_dated_repo(tmp_path / "dated")
