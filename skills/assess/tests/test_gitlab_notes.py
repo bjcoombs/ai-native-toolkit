@@ -75,6 +75,7 @@ def test_bot_accounts_are_bot_review_never_human(user: str, extra: dict[str, obj
 
 def test_dependency_bot_is_neither() -> None:
     assert _facts(_note("renovate-bot", "rebased")) == NoteFacts(False, False, False, None)
+    assert _facts(_note("renovate-bot", "rebased", bot=True)) == NoteFacts(False, False, False, None)
 
 
 def test_config_markers_and_identities() -> None:

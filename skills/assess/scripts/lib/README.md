@@ -2229,8 +2229,8 @@ ai_review_markers` string (case-insensitive substring), whoever else posted it; 
 its author is in the `agent` or `token_user` bucket of
 `agent_identity.AuthorMatcher.classify_username` (a `project_<id>_bot_<hash>` access-token
 user is recognised by that form, never a display name), whose username is in
-`delivery.AI_REVIEWERS` (`[bot]` dropped), or has `bot: true`; nothing for a
-dependency bot; else a human comment, the first giving
+`delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for a dependency bot (even one with
+`bot: true`); bot review only for another `bot: true` account; else a human comment, the first giving
 `first_human_comment_at`. With `complete` False (still a full last page) an undecided fact is None.
 `NoteFacts` also splits `ai_review` (a marker, an agent or an access-token user) from
 `bot_review` (that, or a `bot: true` account). `classifier_from_config(config)` builds the

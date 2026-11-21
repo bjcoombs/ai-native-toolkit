@@ -31,9 +31,11 @@ skipped) is classified once, first rule that applies:
    the token type, never by a display name. A username in ``delivery.AI_REVIEWERS``
    (the pinned AI-review apps, ``[bot]`` dropped) is AI review too. AI review is
    bot review too.
-   An author object with ``bot: true`` (a GitLab internal bot) is bot review only.
-4. **Dependency bot** (Renovate, Dependabot): neither review nor a human comment.
-5. **Human comment**: anyone else. The first one's ``created_at`` is
+4. **Dependency bot** (Renovate, Dependabot): neither review nor a human comment,
+   even when its account carries ``bot: true``.
+5. **Other bot**: an author object with ``bot: true`` (a GitLab internal bot) is
+   bot review only.
+6. **Human comment**: anyone else. The first one's ``created_at`` is
    ``first_human_comment_at``.
 
 ``review_reality`` counts a merge request reviewed on a human comment, bot review
@@ -155,10 +157,10 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
         if (isinstance(body, str) and classifier.has_marker(body)) or classifier.is_ai(author):
             ai = bot = True
             continue
+        if classifier.is_dependency_bot(author):
+            continue  # before ``bot: true``: a Renovate service account is never review
         if classifier.is_bot(author):
             bot = True
-            continue
-        if classifier.is_dependency_bot(author):
             continue
         if name is None:
             continue
