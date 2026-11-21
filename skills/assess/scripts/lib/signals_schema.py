@@ -39,7 +39,17 @@ _SCALARS: dict[Any, str] = {str: "string", int: "integer", bool: "boolean", type
 SCAN_BLOCK: JsonDict = {
     "type": "object",
     "if": {"properties": {"available": {"const": False}}, "required": ["available"]},
-    "then": {"properties": {"reason": {"type": "string"}}, "required": ["reason"]},
+    "then": {"properties": {"reason": {
+        "type": "string",
+        "description": (
+            "'code: sentence'; a counts-only document keeps the code only. The structure "
+            "block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, "
+            "no_python_packages (a Python repository with no importable package), "
+            "no_import_graph_<language> (no import graph for the dominant source language, "
+            "for example no_import_graph_rust), invalid_import_graph (a builder returned a graph "
+            "that breaks the module-graph contract) and no_source_files."
+        ),
+    }}, "required": ["reason"]},
 }
 
 

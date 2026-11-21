@@ -13,6 +13,12 @@ plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
 never as a malformed stamp.
 
 The old names below are the only place the fleet readers still accept them.
+
+A stamp key added later with a default that is not None goes in
+``STAMP_DEFAULTS``: ``stamp_value`` reads it so for a stamp written before
+it, so an earlier run still matches and compares. ``platform`` (#714) reads as
+``False`` in a stamp written before ``--platform`` existed (a key that defaults
+to None, such as ``fleet_config_sha256``, needs no entry: ``.get`` gives None).
 """
 from __future__ import annotations
 
@@ -36,3 +42,14 @@ def upgrade(data: dict[str, Any]) -> dict[str, Any]:
         if old in data and new not in data:
             upgraded[new] = data[old]
     return upgraded
+
+
+# Stamp key -> the value a stamp written before the key existed means.
+STAMP_DEFAULTS: Mapping[str, Any] = {"platform": False}
+
+
+def stamp_value(stamp: Mapping[str, Any], key: str) -> Any:
+    """``stamp[key]``, or what its absence means: the ``STAMP_DEFAULTS`` value, else None.
+
+    Every comparability check reads stamp keys through it, on both sides."""
+    return stamp.get(key, STAMP_DEFAULTS.get(key))

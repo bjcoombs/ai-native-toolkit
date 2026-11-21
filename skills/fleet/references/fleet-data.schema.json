@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/fleet-data.schema.json",
+  "title": "fleet data bundle",
+  "description": "fleet-data.json written by skills/fleet/scripts/fleet.py: the run stamp, the maturity model rows, the ownership and system unit trees with rolled-up levels, and per repository its units, web URL and per-row level, value and reason. Generated from lib/fleet_data.py by lib/fleet_data_schema.py.",
+  "type": "object",
+  "properties": {
+    "fleet_data_version": {
+      "const": 1
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "toolkit_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plugin_version": {
+          "type": "string"
+        },
+        "scan_date": {
+          "type": "string"
+        },
+        "window": {
+          "type": "string"
+        },
+        "levels_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "counts_only": {
+          "type": "boolean"
+        },
+        "paths_hashed": {
+          "type": "boolean"
+        },
+        "scans": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fleet_config_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "platform": {
+          "type": "boolean"
+        },
+        "repositories": {
+          "type": "object",
+          "properties": {
+            "selected": {
+              "type": "integer"
+            },
+            "scanned_ok": {
+              "type": "integer"
+            },
+            "failed": {
+              "type": "integer"
+            },
+            "qualifying": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "failed",
+            "qualifying",
+            "scanned_ok",
+            "selected"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "counts_only",
+        "fleet_config_sha256",
+        "levels_version",
+        "paths_hashed",
+        "platform",
+        "plugin_version",
+        "repositories",
+        "scan_date",
+        "scans",
+        "toolkit_commit",
+        "window"
+      ],
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "org",
+              "team"
+            ]
+          },
+          "top_level": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "title",
+          "top_level"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "views": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "enum": [
+              "ownership",
+              "system"
+            ]
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "view": {
+                  "enum": [
+                    "ownership",
+                    "system"
+                  ]
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "org",
+                    "division",
+                    "department",
+                    "team",
+                    "system"
+                  ]
+                },
+                "source": {
+                  "enum": [
+                    "path",
+                    "github_teams",
+                    "codeowners",
+                    "mapping"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "owners": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "owner_count": {
+                  "type": "integer"
+                },
+                "repos": {
+                  "type": "integer"
+                },
+                "levels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "mean_share": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "measured": {
+                        "type": "integer"
+                      },
+                      "repos": {
+                        "type": "integer"
+                      },
+                      "weakest": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "repo": {
+                                "type": "string"
+                              },
+                              "share": {
+                                "type": "number"
+                              },
+                              "level": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "repo",
+                              "share"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "row": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "mean_share",
+                      "measured",
+                      "repos",
+                      "row",
+                      "weakest"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "overall": {
+                  "type": "object",
+                  "properties": {
+                    "mean_share": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "measured": {
+                      "type": "integer"
+                    },
+                    "repos": {
+                      "type": "integer"
+                    },
+                    "weakest": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "repo": {
+                              "type": "string"
+                            },
+                            "share": {
+                              "type": "number"
+                            },
+                            "level": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "level",
+                            "repo",
+                            "share"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "mean_share",
+                    "measured",
+                    "repos",
+                    "weakest"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "key",
+                "kind",
+                "levels",
+                "name",
+                "overall",
+                "owner_count",
+                "owners",
+                "parent",
+                "repos",
+                "source",
+                "view"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "units",
+          "view"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "web_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owners": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "owner_count": {
+            "type": "integer"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "view": {
+                  "enum": [
+                    "ownership",
+                    "system"
+                  ]
+                },
+                "unit": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "unit",
+                "view"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "mean_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "row": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "level",
+                    "unknown"
+                  ]
+                },
+                "level": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "top_level": {
+                  "type": "integer"
+                },
+                "signal": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "value": {
+                  "type": [
+                    "integer",
+                    "number",
+                    "boolean",
+                    "string",
+                    "null"
+                  ]
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "level",
+                "reason",
+                "row",
+                "signal",
+                "status",
+                "top_level",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "active",
+          "key",
+          "mean_share",
+          "owner_count",
+          "owners",
+          "reason",
+          "rows",
+          "status",
+          "units",
+          "web_url"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "fleet_data_version",
+    "model",
+    "repos",
+    "run",
+    "views"
+  ],
+  "additionalProperties": false
+}

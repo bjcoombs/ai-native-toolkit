@@ -1,0 +1,772 @@
+{
+  "drift_communities": [
+    [
+      "alpha",
+      "alpha.core",
+      "alpha.sub.x",
+      "alpha.util",
+      "beta",
+      "beta.api",
+      "beta.internal"
+    ],
+    [
+      "alpha.sub"
+    ],
+    [
+      "gamma"
+    ],
+    [
+      "gamma.a1",
+      "gamma.a2",
+      "gamma.a3"
+    ],
+    [
+      "gamma.b1",
+      "gamma.b2",
+      "gamma.b3"
+    ],
+    [
+      "one/lib"
+    ],
+    [
+      "one/lib.m",
+      "one/lib.n"
+    ],
+    [
+      "two/lib",
+      "two/lib.m"
+    ]
+  ],
+  "drift_module_paths": {
+    "alpha": "alpha/__init__.py",
+    "alpha.core": "alpha/core.py",
+    "alpha.sub": "alpha/sub/__init__.py",
+    "alpha.sub.x": "alpha/sub/x.py",
+    "alpha.util": "alpha/util.py",
+    "beta": "beta/__init__.py",
+    "beta.api": "beta/api.py",
+    "beta.internal": "beta/internal.py",
+    "gamma": "gamma/__init__.py",
+    "gamma.a1": "gamma/a1.py",
+    "gamma.a2": "gamma/a2.py",
+    "gamma.a3": "gamma/a3.py",
+    "gamma.b1": "gamma/b1.py",
+    "gamma.b2": "gamma/b2.py",
+    "gamma.b3": "gamma/b3.py",
+    "one/lib": "one/lib/__init__.py",
+    "one/lib.m": "one/lib/m.py",
+    "one/lib.n": "one/lib/n.py",
+    "two/lib": "two/lib/__init__.py",
+    "two/lib.m": "two/lib/m.py"
+  },
+  "headless_structure": {
+    "available": true,
+    "breakup_candidates": [
+      {
+        "clusters": [
+          [
+            "gamma.a1",
+            "gamma.a2",
+            "gamma.a3"
+          ],
+          [
+            "gamma.b1",
+            "gamma.b2",
+            "gamma.b3"
+          ],
+          [
+            "gamma"
+          ]
+        ],
+        "modularity_q": 0.5,
+        "num_clusters": 3,
+        "package": "gamma"
+      }
+    ],
+    "cross_package_edges": 3,
+    "edge_count": 15,
+    "footprints": [
+      {
+        "dep_surface": 3,
+        "exposed_surface": 2,
+        "module": "alpha.util",
+        "over_budget": false,
+        "size": 6,
+        "total": 11
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 2,
+        "module": "alpha",
+        "over_budget": false,
+        "size": 7,
+        "total": 10
+      },
+      {
+        "dep_surface": 3,
+        "exposed_surface": 1,
+        "module": "alpha.core",
+        "over_budget": false,
+        "size": 4,
+        "total": 8
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 1,
+        "module": "alpha.sub.x",
+        "over_budget": false,
+        "size": 5,
+        "total": 7
+      },
+      {
+        "dep_surface": 2,
+        "exposed_surface": 1,
+        "module": "beta.api",
+        "over_budget": false,
+        "size": 3,
+        "total": 6
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 2,
+        "module": "beta.internal",
+        "over_budget": false,
+        "size": 4,
+        "total": 6
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "beta",
+        "over_budget": false,
+        "size": 3,
+        "total": 4
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.a1",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "gamma.a3",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.b1",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "gamma.b3",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "one/lib",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.a2",
+        "over_budget": false,
+        "size": 1,
+        "total": 2
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.b2",
+        "over_budget": false,
+        "size": 1,
+        "total": 2
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "one/lib.m",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "one/lib.n",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "two/lib.m",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "alpha.sub",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "gamma",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "two/lib",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      }
+    ],
+    "front_door_ratio": 0.6667,
+    "internal_burrow_edges": [
+      {
+        "imported": "beta.internal",
+        "importer": "alpha.util"
+      }
+    ],
+    "keyhole_budget": 2000,
+    "modularity_q": 0.7143,
+    "modularity_reason": null,
+    "module_count": 20,
+    "name_collisions": [
+      {
+        "name": "lib",
+        "paths": [
+          "one/lib",
+          "two/lib"
+        ]
+      }
+    ],
+    "reason": "",
+    "sccs": [
+      [
+        "alpha.core",
+        "alpha.util"
+      ]
+    ]
+  },
+  "structure": {
+    "available": true,
+    "breakup_candidates": [
+      {
+        "clusters": [
+          [
+            "gamma.a1",
+            "gamma.a2",
+            "gamma.a3"
+          ],
+          [
+            "gamma.b1",
+            "gamma.b2",
+            "gamma.b3"
+          ],
+          [
+            "gamma"
+          ]
+        ],
+        "modularity_q": 0.5,
+        "num_clusters": 3,
+        "package": "gamma"
+      }
+    ],
+    "cross_package_edges": 3,
+    "edge_count": 15,
+    "footprints": [
+      {
+        "dep_surface": 3,
+        "exposed_surface": 2,
+        "module": "alpha.util",
+        "over_budget": false,
+        "size": 6,
+        "total": 11
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 2,
+        "module": "alpha",
+        "over_budget": false,
+        "size": 7,
+        "total": 10
+      },
+      {
+        "dep_surface": 3,
+        "exposed_surface": 1,
+        "module": "alpha.core",
+        "over_budget": false,
+        "size": 4,
+        "total": 8
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 1,
+        "module": "alpha.sub.x",
+        "over_budget": false,
+        "size": 5,
+        "total": 7
+      },
+      {
+        "dep_surface": 2,
+        "exposed_surface": 1,
+        "module": "beta.api",
+        "over_budget": false,
+        "size": 3,
+        "total": 6
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 2,
+        "module": "beta.internal",
+        "over_budget": false,
+        "size": 4,
+        "total": 6
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "beta",
+        "over_budget": false,
+        "size": 3,
+        "total": 4
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.a1",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "gamma.a3",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.b1",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "gamma.b3",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "one/lib",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.a2",
+        "over_budget": false,
+        "size": 1,
+        "total": 2
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.b2",
+        "over_budget": false,
+        "size": 1,
+        "total": 2
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "one/lib.m",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "one/lib.n",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "two/lib.m",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "alpha.sub",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "gamma",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "two/lib",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      }
+    ],
+    "front_door_ratio": 0.6667,
+    "internal_burrow_edges": [
+      {
+        "imported": "beta.internal",
+        "importer": "alpha.util"
+      }
+    ],
+    "keyhole_budget": 2000,
+    "modularity_q": 0.7143,
+    "modularity_reason": null,
+    "module_count": 20,
+    "name_collisions": [
+      {
+        "name": "lib",
+        "paths": [
+          "one/lib",
+          "two/lib"
+        ]
+      }
+    ],
+    "reason": "",
+    "sccs": [
+      [
+        "alpha.core",
+        "alpha.util"
+      ]
+    ]
+  },
+  "structure_budget_20": {
+    "available": true,
+    "breakup_candidates": [
+      {
+        "clusters": [
+          [
+            "gamma.a1",
+            "gamma.a2",
+            "gamma.a3"
+          ],
+          [
+            "gamma.b1",
+            "gamma.b2",
+            "gamma.b3"
+          ],
+          [
+            "gamma"
+          ]
+        ],
+        "modularity_q": 0.5,
+        "num_clusters": 3,
+        "package": "gamma"
+      }
+    ],
+    "cross_package_edges": 3,
+    "edge_count": 15,
+    "footprints": [
+      {
+        "dep_surface": 3,
+        "exposed_surface": 2,
+        "module": "alpha.util",
+        "over_budget": false,
+        "size": 6,
+        "total": 11
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 2,
+        "module": "alpha",
+        "over_budget": false,
+        "size": 7,
+        "total": 10
+      },
+      {
+        "dep_surface": 3,
+        "exposed_surface": 1,
+        "module": "alpha.core",
+        "over_budget": false,
+        "size": 4,
+        "total": 8
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 1,
+        "module": "alpha.sub.x",
+        "over_budget": false,
+        "size": 5,
+        "total": 7
+      },
+      {
+        "dep_surface": 2,
+        "exposed_surface": 1,
+        "module": "beta.api",
+        "over_budget": false,
+        "size": 3,
+        "total": 6
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 2,
+        "module": "beta.internal",
+        "over_budget": false,
+        "size": 4,
+        "total": 6
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "beta",
+        "over_budget": false,
+        "size": 3,
+        "total": 4
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.a1",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "gamma.a3",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.b1",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "gamma.b3",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 1,
+        "module": "one/lib",
+        "over_budget": false,
+        "size": 2,
+        "total": 3
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.a2",
+        "over_budget": false,
+        "size": 1,
+        "total": 2
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 0,
+        "module": "gamma.b2",
+        "over_budget": false,
+        "size": 1,
+        "total": 2
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "one/lib.m",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "one/lib.n",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "two/lib.m",
+        "over_budget": false,
+        "size": 1,
+        "total": 1
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "alpha.sub",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "gamma",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "two/lib",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      }
+    ],
+    "front_door_ratio": 0.6667,
+    "internal_burrow_edges": [
+      {
+        "imported": "beta.internal",
+        "importer": "alpha.util"
+      }
+    ],
+    "keyhole_budget": 20,
+    "modularity_q": 0.7143,
+    "modularity_reason": null,
+    "module_count": 20,
+    "name_collisions": [
+      {
+        "name": "lib",
+        "paths": [
+          "one/lib",
+          "two/lib"
+        ]
+      }
+    ],
+    "reason": "",
+    "sccs": [
+      [
+        "alpha.core",
+        "alpha.util"
+      ]
+    ]
+  },
+  "structure_scoped_alpha": {
+    "available": true,
+    "breakup_candidates": [],
+    "cross_package_edges": 0,
+    "edge_count": 4,
+    "footprints": [
+      {
+        "dep_surface": 1,
+        "exposed_surface": 2,
+        "module": "alpha",
+        "over_budget": false,
+        "size": 7,
+        "total": 10
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 2,
+        "module": "alpha.util",
+        "over_budget": false,
+        "size": 6,
+        "total": 9
+      },
+      {
+        "dep_surface": 2,
+        "exposed_surface": 1,
+        "module": "alpha.core",
+        "over_budget": false,
+        "size": 4,
+        "total": 7
+      },
+      {
+        "dep_surface": 1,
+        "exposed_surface": 1,
+        "module": "alpha.sub.x",
+        "over_budget": false,
+        "size": 5,
+        "total": 7
+      },
+      {
+        "dep_surface": 0,
+        "exposed_surface": 0,
+        "module": "alpha.sub",
+        "over_budget": false,
+        "size": 0,
+        "total": 0
+      }
+    ],
+    "front_door_ratio": 1.0,
+    "internal_burrow_edges": [],
+    "keyhole_budget": 2000,
+    "modularity_q": 0.0,
+    "modularity_reason": null,
+    "module_count": 5,
+    "name_collisions": [],
+    "reason": "",
+    "sccs": [
+      [
+        "alpha.core",
+        "alpha.util"
+      ]
+    ]
+  }
+}

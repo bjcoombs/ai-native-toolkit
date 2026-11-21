@@ -259,6 +259,20 @@ def _file_size(op: str, value: Operand) -> Guidance | None:
                          f"{bound}."}
 
 
+def _stale_docs(op: str, value: Operand) -> Guidance | None:
+    number = _number(value)
+    if number is None or op not in ("lte", "lt"):
+        return None
+    bound = f"{number:g}% or fewer" if op == "lte" else f"fewer than {number:g}%"
+    return {"change": "Update the docs whose code has moved on since they last changed, "
+                      "regenerate generated docs whose source has moved on, and keep docs "
+                      "current in the same pull request as the code they describe.",
+            "done_when": f"{bound[0].upper()}{bound[1:]} of the docs that describe a part of "
+                         "the code have had more than two changes to their code since the doc "
+                         "last changed (the `/assess` staleness ratio above 2), or whose "
+                         "declared source changed after the doc was generated."}
+
+
 def _setting(name: str) -> Wording:
     label = SETTING_NAMES.get(name, f"`{name}` setting")
 
@@ -305,6 +319,7 @@ _WORDING: dict[str, Wording] = {
         "`git rev-parse --is-shallow-repository` prints `false` and most changed files have "
         "more than one commit in the history."),
     "stats_summary.loc.p95": _file_size,
+    "doc_staleness.summary.stale_pct": _stale_docs,
     "coverage_gate.enforced": _flag(
         "Make the test run fail when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -334,9 +349,11 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
     "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
-                               "`no_networkx`)") + " The import graph reads Python only: a "
-                 "repository with no importable Python package reads unknown "
-                 "(`no_python_packages`). An import graph with no edges leaves "
+                               "`no_networkx`)") + " With no import graph the reason names "
+                 "the dominant source language: `no_import_graph_<language>` when no "
+                 "builder graphs that language, `no_python_packages` for a Python "
+                 "repository with no importable package, `no_source_files` with no "
+                 "source at all. An import graph with no edges leaves "
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
                  "that never import each other have no community structure to measure.",
     "stats_summary": _NEEDS.format("stats_summary", "lizard is missing (`no_lizard`)"),
@@ -346,8 +363,13 @@ _MEASURE_HINTS = {
     "structure_drift": "Unavailable (`no_ownership_map`) when the repository commits no "
                        "supported ownership map (`CODEOWNERS`, `ARCHITECTURE.md`, `DESIGN.md`, "
                        "or a `README.md` that declares module boundaries).",
-    "observability": "Only a full `/assess` run reports the observability rung; a headless fleet "
-                     "scan leaves it unavailable.",
+    "observability": "Read from committed files by a full `/assess` run and a headless scan "
+                     "alike; unavailable when the scan raised (`scan_failed`) or the scan came "
+                     "from an older toolkit, which measured it in a full run only.",
+    "doc_staleness": "Measured from git history: unavailable (`not_git_root`) outside a git work "
+                     "tree, and the stale share is null on a shallow clone or a history where "
+                     "every file has about one commit (rescan a full-history clone), or when no "
+                     "doc describes a part of the code of its own.",
     "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
                       "calls, so this is not measured there.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "

@@ -53,7 +53,8 @@ exit 1
 
 PROJECT = "grp/sub/app"
 ENC = "grp%2Fsub%2Fapp"
-MRS = f"projects/{ENC}/merge_requests?state=merged&order_by=created_at&sort=desc&per_page=30"
+# The shared sample's listing (lib/merged_sample.py) with no window: newest updated first.
+MRS = f"projects/{ENC}/merge_requests?state=merged&order_by=updated_at&sort=desc&per_page=100"
 
 ALICE = {"username": "Alice"}
 BOB = {"username": "bob"}
@@ -337,7 +338,8 @@ def test_gitlab_refused_approvals_read_is_unavailable(world: World, code: str, r
 
 @pytest.mark.parametrize("mrs,approvals", [
     ({"message": "x"}, {}),
-    ([{"title": "no iid"}], {}),
+    ([{"title": "no iid", "merged_at": "2026-09-01T00:00:00Z"}], {}),
+    ([{"iid": 1, "title": "no merge time"}], {}),
     ([_mr(1)], {1: ["not", "an", "object"]}),
 ])
 def test_gitlab_malformed_reads_are_unavailable(world: World, mrs: object,

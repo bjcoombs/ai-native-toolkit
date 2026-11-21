@@ -340,3 +340,9 @@ def test_union_of_groups_counts_distinct_marketplaces(froot, tmp_path):  # noqa:
     rows = [json.loads(line) for line in (tmp_path / "o" / "repos.jsonl").read_text().splitlines()]
     ids = {i for row in rows for i in row["scans"]["shared_tooling"]["marketplace_ids"]}
     assert len(ids) == 2
+
+
+def test_a_fragment_teams_list_is_not_a_setting() -> None:
+    fragment = {**_fragment("acme", "on"), "provider": "github",
+                "teams": [{"slug": "eng", "parent": None, "repos": ["svc"]}]}
+    assert "teams" not in fg.normalise_settings(fragment)

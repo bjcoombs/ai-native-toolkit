@@ -22,7 +22,7 @@ Writes are narrow and fail closed:
 - a same-day entry is replaced only when it is this tool's (a readable
   ``run.json`` at the stamp version this code writes) and its stamp agrees on
   maturity-model version, window, output mode, scan selection, path hashing and
-  ``--fleet-config`` hash, and
+  ``--fleet-config`` hash and ``--platform`` (absent before #714: ``false``), and
   holds the same repository set (so a partial ``--from-list`` rerun never
   replaces the full-fleet entry); otherwise ``entry_conflict`` names why, the entry is kept, and
   ``choose_entry`` moves on to a suffixed sibling (``<date>.2``, ``<date>.3``,
@@ -39,23 +39,26 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from lib.fleet import REPOS_FILE
+from lib.fleet_data import FLEET_DATA_FILE
 from lib.fleet_doc_freshness import FRESHNESS_FILE
 from lib.fleet_groups import GROUPS_FILE
-from lib.fleet_legacy import upgrade
+from lib.fleet_legacy import stamp_value, upgrade
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 
 HISTORY_FILES = (REPOS_FILE, GROUPS_FILE, RUN_FILE)  # written in this order: run.json last
 # Kept when the run wrote them (``doc_freshness.jsonl`` exists only when a docs
 # repository declares ``[[describes]]``, #664); moved in before ``run.json``, and
 # a same-day entry's stale copy is removed when the new run wrote none.
-OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE,)
+# ``fleet-data.json`` (#703) is optional so entries written before it still load.
+OPTIONAL_HISTORY_FILES = (FRESHNESS_FILE, FLEET_DATA_FILE)
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$")
-_MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256")
+_MATCH_KEYS = ("levels_version", "window", "counts_only", "scans", "paths_hashed", "fleet_config_sha256",
+               "platform")
 _ENTRY = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.([1-9][0-9]*))?$")
 MAX_SAME_DAY = 99
 
@@ -128,7 +131,7 @@ def entry_conflict(entry: Path, stamp: Mapping[str, Any], repos: frozenset[str] 
     if not isinstance(earlier, dict) or earlier.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
         return f"{run} is not a run stamp this toolkit writes"
     earlier = upgrade(earlier)  # an entry written before the 2.0.0 rename
-    differs = [key for key in _MATCH_KEYS if earlier.get(key) != stamp.get(key)]
+    differs = [key for key in _MATCH_KEYS if stamp_value(earlier, key) != stamp_value(stamp, key)]
     if differs:
         return f"{entry} is a same-day run with a different {', '.join(differs)}"
     if repos is not None:
@@ -171,6 +174,33 @@ def dated_entries(org_dir: Path) -> list[tuple[tuple[str, int], Path]]:
         return []
     return sorted((order, p) for p in org_dir.iterdir()
                   if (order := _entry_order(p)) is not None and p.is_dir() and not p.is_symlink())
+
+
+T = TypeVar("T")
+
+
+def one_per_date(org_dir: Path, before: str, repos: frozenset[str],
+                 read: Callable[[Path, str], T | None]) -> list[tuple[str, T]]:
+    """One entry per scan date before ``before``, oldest first, as ``(date, read(entry, date))``.
+
+    ``read`` returns None to pass an entry over. Between same-day entries ``read`` accepts,
+    the one over ``repos`` wins, then the highest suffix; ``repos.jsonl`` is read only to
+    choose between them. Shared by the trend lines and the achievements engine.
+    """
+    by_date: dict[str, list[tuple[int, Path, T]]] = {}
+    for (date, suffix), entry in dated_entries(org_dir):
+        if date >= before:
+            continue
+        value = read(entry, date)
+        if value is not None:
+            by_date.setdefault(date, []).append((suffix, entry, value))
+    chosen: list[tuple[str, T]] = []
+    for date in sorted(by_date):
+        options = by_date[date]
+        if len(options) > 1:
+            options = sorted(options, key=lambda o: (entry_repos(o[1]) == repos, o[0]))
+        chosen.append((date, options[-1][2]))
+    return chosen
 
 
 def latest_matching(org_dir: Path, stamp: Mapping[str, Any], repos: frozenset[str] | None = None) -> Path | None:

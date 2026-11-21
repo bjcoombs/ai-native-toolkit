@@ -10,7 +10,8 @@ them: it runs the headless signals entry point (`assess_signals.py`) on every
 repository and writes one JSON line per repository plus a run stamp, the same
 way every time, so two people measuring the same estate get the same numbers.
 
-Gathering is a pure script: no subagent, no model, no network call. The only
+Gathering is a pure script: no subagent, no model, and no network call unless you
+pass the opt-in [`--platform`](#platform-pass---platform). The only
 model step is the optional labelling below, which runs after gathering and
 writes its own file.
 
@@ -37,6 +38,10 @@ block (lint suppressions) needs ripgrep (`rg`) instead. lizard scores every
 tracked source file, so a very large repository can need a longer `--timeout`. `python3 fleet.py ...` without them still runs; those blocks then
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
+A repository with no import graph names its dominant
+language instead (`no_import_graph_go`, `no_import_graph_rust`), so the
+fleet output says which language is missing; `no_python_packages` is a Python
+repository with no importable package and `no_source_files` one with no source.
 
 **Without uv.** Install the three dependencies into the interpreter you run
 the script with, then run it with that interpreter:
@@ -51,14 +56,33 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 `winget install --scope user BurntSushi.ripgrep.MSVC` puts it even when no
 `PATH` alias is created. A `no_rg` reason names the lookups it tried.
 
+The observability rung, the doc graph, doc staleness and the archetype are
+read from committed files and git history, so a fleet run measures them
+(Layer 1 and the doc-freshness row get a level). Some blocks are measured
+only by a full `/assess` run of one repository and always read unavailable
+here, with the reason code `not_registered`: `dead_code`, `runtime` and
+`understanding` (the costly scans, opt-in to a full run), plus the blocks a full
+run assembles from its own state (`diff`, `behaviour`, `documentation`,
+`derived_findings`, `coverage_report`, `test_pressure`, `test_focus`,
+`accretion_ratchet`, `gap_actions`, `ancestor_instruction_files`). Blocks that
+read GitHub (`config_drift`, `review_reality`, `gate_cost_estimate`) read
+unavailable with the code `network`: a fleet run makes no network call. Doc
+staleness reads unavailable (`not_git_root`) outside a git work tree, and its
+stale share is null on a shallow clone, so the doc-freshness row is `unknown`
+there.
+
 | Flag | Meaning |
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
-| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. Unreadable input exits 2. |
+| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
+| `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
 | `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
+| `--platform` | After the offline scan, run a separate platform pass that reads GitHub or GitLab through `gh` or `glab` and joins its blocks into each `ok` row. Off by default: without it no network call is made. See [Platform pass](#platform-pass---platform). |
+| `--platform-jobs N` | Repositories read in parallel by the platform pass (default: `[platform] jobs`, else 4). Needs `--platform`. |
+| `--platform-timeout S` | Seconds one repository's platform read may take before its platform blocks are unavailable (default: `[platform] timeout`, else 300). Needs `--platform`. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
 | `--scans a,b` | Only these scans (default: all). |
@@ -66,20 +90,21 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
 | `--hash-salt VALUE` | Hash paths under this salt; reruns stay byte-identical and join across runs. |
-| `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
+| `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. With `--platform` no clone is deleted until the whole offline scan is done, so peak disk use is the whole estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
 | `--compare [RUN_DIR]` | Compare this run with an earlier one and write `DIR/compare.json`. `RUN_DIR` is an `--out` directory or a history entry; a bare `--compare` takes the latest history entry whose stamp matches this run. See [Run history and comparison](#run-history-and-comparison). |
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
+| `--targets FILE` | Level targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and a `level`. Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
 when some repositories failed (each is a `failed` row; stderr prints the count
 and the failed ids). `2`: usage error - no `ROOT` and no `--from-list`, a root
 or list that does not exist, no repositories found, `--out` inside a target, an
-invalid `--levels`, `--settings` or `--fleet-config` (a settings directory with no `*.json` fragment
-file included), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
+invalid `--levels`, `--settings`, `--fleet-config` or `--units` (a settings directory with no `*.json` fragment
+file included, or a units file naming a missing unit), a list entry whose `~user` cannot be expanded, an unknown scan, a bad
 window, a `DIR` that cannot be created or written to (checked before any scan, so
 `--delete-after` never removes a clone whose results could not be written), an
 unusable run history location, or a `--compare` directory that is missing or
@@ -181,7 +206,7 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
 | `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with an unavailable setting's reason reduced to `unknown` and a value's reason to `null`; `--full` keeps them. `null` without a match. |
 | `levels_version` | The maturity model's `version`; `null` without `--levels`. |
-| `levels` | One entry per maturity model row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
+| `levels` | One entry per maturity model row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`; on an `unknown` row only, optional `floor` (the level its confirmed criteria reach, when at least 1: "at least N", never the exact level) and `full_run_only` (the missing signals only a full `/assess` measures, their block unavailable as `not_registered` or `network` in every repository missing them; a `--platform` scan's block such as `review_reality` is left out, since `fleet --platform` measures it, and the next-steps page says so). Both are absent otherwise and in rows written before #697, which readers handle. |
 
 Maturity model signal paths are checked at load against `lib/level_signals.py` (an
 unknown path exits 2 before any scan) and evaluated by `lib/levels.py`, with no
@@ -206,6 +231,158 @@ earlier history entries still load and match. `--compare` against a 1.x run from
 
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
+
+## Output: `fleet-data.json`
+
+One JSON document per run beside `groups.jsonl`: the versioned bundle the fleet
+artifact reads (#692). Keys sorted, compact, every list sorted; the same inputs give the
+same bytes. Schema: [`references/fleet-data.schema.json`](references/fleet-data.schema.json).
+Logic: `lib/fleet_units.py`, `lib/fleet_repo_facts.py`, `lib/fleet_data.py`. It is kept in
+the run history beside the other files.
+
+| Key | Value |
+|-----|-------|
+| `fleet_data_version` | Document version (1). |
+| `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
+| `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
+| `views` | One entry per view, `ownership` and `system`, each with its `units`. |
+| `repos` | One entry per repository row, sorted by `key`. |
+
+**Units.** A unit is an org, division, department, team or system. Each has a `key`
+(`<view>/<id>`), `view`, `parent` (the parent's key, `null` at a root), `kind`, `source`
+(`path`, `github_teams`, `codeowners` or `mapping`), `name`, `owners` and `owner_count`,
+`repos` (repositories below it at any depth), and its roll-ups. The ownership view is
+built from, in order:
+
+1. the repository path: GitLab nested groups (`grp/sub/proj` sits in `grp/sub`, under `grp`);
+2. GitHub teams from a `--settings` fragment's `teams` list (a repository in several teams takes the deepest, then the first slug);
+3. CODEOWNERS, as a fallback for a repository in a one-segment group no team placed: a
+   catch-all (`*`) owner that is a team under its group (`@acme/platform`) places it in
+   that team;
+4. the `--units` mapping, which always wins.
+
+An inferred unit's kind follows its place: a root is `org`, a unit that holds a
+repository is `team`, any other is `division` one level down and `department` deeper.
+An inferred unit the mapping left with no repository is dropped. The system view comes
+from the mapping alone. A repository sits in at most one unit per view, so it is counted
+once per view.
+
+The mapping file:
+
+```toml
+[[unit]]
+view = "ownership"        # or "system"; default "ownership"
+id = "acme/platform"      # unique within its view
+kind = "division"         # org, division, department, team, system
+parent = "acme"           # optional, a unit of the same view
+name = "Platform"         # optional
+owners = ["@acme/leads"]  # optional
+
+[[repo]]
+repo = "acme/svc1"        # a repos.jsonl id
+ownership = "acme/platform"
+system = "checkout"
+owners = ["@acme/payments"]  # optional; replaces the CODEOWNERS owners
+```
+
+A mapped repository not in the run is skipped and named on stderr.
+
+**Roll-ups.** Per unit, one entry in `levels` per `team` row: `mean_share`, the mean of
+each measured repository's level as a share of the row's top level (the quadrant's and
+trend lines' unit), `measured` of `repos` ("8 of 12 measured": an unknown or failed
+repository is counted, never read as 0), and `weakest`, the measured repository with the
+lowest share (then key) with its `share` and `level`. `overall` does the same over each
+repository's own mean share. `org` rows read a group's settings, not a repository, so
+they have no unit roll-up; their levels are in `groups.jsonl`.
+
+**Repositories.** Each has `key` (its id), `status`, `reason`, `active`, `web_url` (the
+`origin` remote as `https://<host>/<path>`, credentials, an ssh port and `.git` dropped; `null`
+for a local remote), `owners` and `owner_count` (the mapping's owners, else the
+CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), `mean_share`,
+and `rows`, one cell per `team` row: `status`, `level`, `top_level` and the criterion
+behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
+next level and its measured value; at the top level both are `null`; an unknown cell
+names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
+`not_scanned` for a failed repository).
+
+**Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
+the group and team paths (`ownership/acme/platform`) and repository ids unless
+`--hash-paths` or `--hash-salt` is given, and tokens and
+web URLs (so the host name of each remote appears, in `--out` and the run history), writes a string `value` that is not a short token as `set`, and drops unit
+names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, every unit
+and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no
+name, owner or web URL is written: the file names no repository, group or host. Hashes
+join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` in
+`lib/counts_only_rules.py`.
+
+## Output: `achievements.json`
+
+What each unit and repository earned, and the next step for each (#704, parent #692).
+Written on every run beside `fleet-data.json`, from run data only: the engine replays
+this run and the earlier comparable runs' `fleet-data.json` copies in the run history,
+oldest first, every time. It never reads an earlier `achievements.json`, so editing
+output cannot change what is earned. Keys sorted, compact; the same history gives the
+same bytes. Schema: [`references/achievements.schema.json`](references/achievements.schema.json).
+Logic: `lib/fleet_achievements.py` (engine), `lib/fleet_achievements_runs.py` (history),
+`lib/fleet_targets.py` (`--targets`), `lib/fleet_credit.py` (report section).
+
+**Comparable runs.** A history entry is replayed when its `run.json` passes the
+`--compare` rule against this run (plugin major version, maturity-model version, window,
+output mode, scans, path hashing, `--fleet-config`, `--platform`) and it holds a
+`fleet-data.json` at this version. One run per date, dates before this run's. Without
+the history (`--no-history`, `--full`) only this run is read: no achievement, just next
+steps, with `note` saying why.
+
+**Subjects.** Every unit of every view (`view` `ownership` or `system`) and every
+repository (`view` and `unit_kind` `repo`). A unit's level on a team row is the row's
+roll-up rule (`min` or `share`) over its measured repositories, those with a known level.
+
+**Unknown never earns or loses.** A row counts only when it *moves cleanly*: known in
+both runs over the same measured set of repositories. A repository going unknown,
+failing its scan, joining or leaving a unit, or hashed under another salt makes that
+move neutral. Under counts-only, credit goes to units and repositories, never to people:
+owners are never read.
+
+**Kinds.** The oldest replayed run is the baseline and earns nothing.
+
+| Kind | Earned when |
+|------|-------------|
+| `level_up` | A row moves cleanly to a higher level. |
+| `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
+| `target_hit` | A row moves cleanly from below a `--targets` level to at or above it. |
+| `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up on some row. |
+| `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
+
+Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
+`unit_kind`, `run` and `previous_run` (run ids are scan dates), `evidence` (`row`,
+`from_level`, `to_level`, `level`, `share_from`, `share_to`, `runs`, and `moves`: each
+repository that moved up, from which level to which, and `criterion`, the next-level
+criterion that went from unmet to met) and `credit`, one Markdown line.
+
+**Next steps.** `nearest_level_ups` holds one entry per subject and team row below the
+top level: among the measured repositories one level below the next, the next-level
+criterion most of them share (`signal`), those `repos`, how many more must reach the next
+level for the subject to move (`needed`), and the `change` and `done_when` in the team
+next-steps pages' wording. `targets` gives each target's current `level` and `distance`
+in levels.
+
+**Targets file** (`--targets`):
+
+```toml
+[[target]]
+view = "ownership"      # "ownership" (default), "system", or "repo"
+unit = "acme/payments"  # a unit id in that view, or a repository id for "repo"
+row = "layer-5-ci"      # a team row of the maturity model
+level = 2               # 1 to the row's top level
+```
+
+With hashed paths the unit is hashed under the run's salt before it is matched.
+
+**Report.** `report.md` opens with "What changed and who earned it", before the
+diagrams: this run's achievements by kind (up to 20 lines each), then each unit's nearest
+level-up (the row needing the fewest repositories), then target distances. Every line is
+credit or a next step. With `--no-diagrams` there is no report; `achievements.json` is
+still written.
 
 ## Output: `agent_clusters.json`
 
@@ -268,6 +445,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `scans` | The `--scans` names, deduplicated and sorted (`--scans a,a` stamps `["a"]`); `null` for all. |
 | `fleet_config_sha256` | sha256 of the `--fleet-config` file's canonical form; `null` without one. A comparability key. Absent in a run from before #706, which reads as `null`. |
 | `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
+| `platform` | `true` when `--platform` ran a platform read; `false` without it, and also when `--scans` selects no platform scan (nothing was read). A comparability key. Absent in a run from before #714, which reads as `false`. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
@@ -284,7 +462,18 @@ One TOML file of fleet-wide lists and settings, with one section per consumer:
 ```
 
 The sections are known and may be empty or left out. Each consumer adds its keys;
-until it does, any key in a section is unknown and exits 2. The loader and the key
+until it does, any key in a section is unknown and exits 2.
+
+| Key | Meaning |
+|-----|---------|
+| `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
+| `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
+
+Both are read from the `--fleet-config` file only: the pass is fleet-wide, so a
+repository's own `[platform]` values have no effect.
+
+`[platform] jobs` and `timeout` say how a run goes, not what it measures, so they
+are left out of `fleet_config_sha256`: changing them never breaks comparability. The loader and the key
 tables are `lib/fleet_config.py` (`SECTION_KEYS`).
 
 - **Validation.** `fleet.py` validates the file before any scan. A TOML error, an
@@ -342,10 +531,69 @@ Dependabot) are always `dependency_bot_commits`, whatever a rule says. Per-rule
 counts are by position in the merged list, so a fleet rule keeps its index in every
 repository; the block never carries a pattern or a matched identity.
 
+## Platform pass: `--platform`
+
+The offline scan never reaches the network. `--platform` adds a second, separate
+pass after it: for each repository whose row is `ok`, one more
+`assess_signals.py --platform` child reads the platform for the scans in
+`lib/signals.py` `PLATFORM_SCANS` (`review_reality` and `delivery`), narrowed by
+`--scans` when given. Each needs `gh` (github.com remotes) or `glab` (GitLab
+remotes) logged in.
+
+- **One shared sample.** Both blocks read the same sample: up to 30 changes merged
+  inside `--window` (counted back from the scan date), the most recently merged
+  first. `review_reality` used to read the 30 most recently *opened* merged
+  changes with no window, so its shares move between a pre-#715 run and a later
+  one, and a narrow window can sample fewer than 30.
+- **`delivery`.** `merged_count`, `time_to_merge_hours_p50` / `_p90` (opened to
+  merged), `first_human_comment_hours_p50` / `_p90` and `human_commented_share`
+  (the first comment or review by a person other than the author), `ai_review_share`
+  (a review or comment by a known AI review app, a pinned agent app, or an
+  `[[ai_usage.agent_identities]]` rule), and `approved_share` / `self_merged_share`
+  copied from `review_reality`, and `agent_authored_share` (changes authored by a
+  pinned agent app or an `[[ai_usage.agent_identities]]` rule, by username; a
+  GitLab access-token user counts only under `token_users_as_agents`). Durations
+  are hours, percentiles nearest-rank. On
+  GitLab only time to merge and the copied shares are filled so far; the comment
+  and AI-review figures are null.
+
+- **Joined, never failing a row.** The pass's blocks replace the offline
+  `network` placeholders in the row's `scans`. It never changes a row's
+  `status` or `reason`: a slow or refusing host cannot turn an offline row into
+  `scan_timeout`. A read that runs past `--platform-timeout`, exits non-zero or
+  writes no valid document gives each platform block `available: false` with
+  `platform_timeout`, `platform_exit_<code>`, `platform_error` or
+  `platform_invalid_output`; its stderr tail goes to
+  `DIR/logs/<repo>.platform.stderr`. A refused read (`no_access`, `not_found`,
+  `rate_limited`) is an unavailable block with that reason, never zeros. A row
+  whose offline scan failed gets no platform read.
+- **Network hygiene.** `gh` and `glab` run with stdin closed and prompts disabled
+  (`GH_PROMPT_DISABLED`, `NO_PROMPT`, `GIT_TERMINAL_PROMPT=0`). A rate limit (HTTP 429, or GitHub's 403
+  "API rate limit exceeded" / "secondary rate limit") is retried up to 3 times, waiting the `Retry-After` seconds when the CLI prints
+  it, else 2, 4 and 8 seconds (at most 60 per wait); still limited, the block is
+  `rate_limited`. Plain `gh api` and `glab api` calls do not print response
+  headers, so in practice the 2, 4 and 8 second fallback applies. `--platform-jobs` caps the concurrent reads. One response
+  cache per run, in a temporary directory removed when the pass ends, answers a
+  repeated request (an auth probe, a bot-account lookup) once; it never lands in
+  `DIR`, the history or a target.
+- **Stamp.** `run.json` records `platform: true` only when the pass ran a
+  platform read (`--platform` with `--scans` selecting no platform scan reads
+  nothing and stamps `false`); runs with and without the pass
+  are not comparable (`platform pass changed ...`), and each gets its own
+  history entry and trend line.
+- **With `--delete-after`.** A clone is deleted after its platform read, not
+  after its offline scan, so the pass can still read its remote. The platform
+  pass starts only once the whole offline scan is done, so no clone is deleted
+  before then: peak disk use is the whole estate, not flat. On an estate too
+  large to hold at once, run without `--platform`, or in batches with
+  `--from-list`.
+- **Counts-only.** Every platform field is a count, share, flag or duration.
+
 ## `--delete-after`
 
 The fleet run did not create the clones, so it deletes only what nothing would
-miss. Right after a repository's row is in hand, its checkout
+miss. Right after a repository's row is in hand (with `--platform`, after its
+platform read), its checkout
 (`<repo>/<repo>-main`) is removed when all of these hold, and kept otherwise:
 
 - the row is `ok` (a failed scan keeps its clone for diagnosis and a retry);
@@ -370,7 +618,7 @@ kept counts and each kept repository with its reason token (`scan_not_ok`,
 
 Each counts-only run is also kept, so a programme can see what moved since the
 last sprint. The run's `repos.jsonl`, `groups.jsonl` and `run.json` (plus
-`doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
+`fleet-data.json`, and `doc_freshness.jsonl` when the run wrote one) are copied to `<history>/<org>/<scan_date>/`, where `<history>` is `--history-dir` or
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`, and `<org>` is
 `--history-org` or the first segment every repository id shares (the distinct
 ones sorted and joined by `+` when they differ, e.g. `grpa+grpb`). A `--full`
@@ -403,7 +651,7 @@ unambiguous.
 `--compare RUN_DIR` reads the earlier run before scanning and writes
 `DIR/compare.json`, with a summary on stderr. A bare `--compare` picks the
 latest history entry (by date, then suffix) whose stamp matches this run's
-maturity-model version, window, output mode, scans, path hashing and `--fleet-config` hash, preferring one
+maturity-model version, window, output mode, scans, path hashing, `--fleet-config` hash and `--platform`, preferring one
 over the same repository set, so a partial rerun is not taken as the baseline;
 with none, stderr says so and nothing is compared. To compare two existing runs without
 rescanning:
@@ -421,7 +669,8 @@ malformed (a `run.json` missing a key the comparison reads).
 
 **Not comparable.** Runs that differ in maturity-model version, window, counts-only
 mode, scan selection, path hashing or `--fleet-config` (`fleet_config_sha256`; a run
-with no config and a run from before the key read alike), in the plugin's major version (the
+with no config and a run from before the key read alike) or `--platform` (`platform`; a run
+from before #714 reads as without it), in the plugin's major version (the
 `/assess` stats-diff rule), or in file versions (a run from before `run.json`)
 give `comparable: false` with every reason in `reasons` and no deltas.
 
@@ -450,6 +699,8 @@ Every run draws diagrams from its own rows, with no model call, and writes them 
 in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
+The report opens with "What changed and who earned it", before the diagrams (see
+[`achievements.json`](#output-achievementsjson)).
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows
@@ -469,7 +720,10 @@ scale. The layer bars draw team rows too and name the org rows under the bars.
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
 `shared_tooling` evidence, a group with no row known in both compared runs, or a repository
 with an undetermined level for a layer, is named on a hatched strip or segment, and a group
-with no level in a run breaks its trend line and is named on a hatched note. Colours follow the
+with no level in a run breaks its trend line and is named on a hatched note. An unknown row with
+a confirmed `floor` is shown as "at least N": a distinct hatched segment in the layer bars, and
+beside each known-only mean a floor-inclusive figure labelled as a lower bound (tooltips and
+the not-plotted strip), never moving a plotted point. Colours follow the
 viewer's light or dark scheme. The SVGs have no script and no external font or link, and the
 same run draws the same bytes. Logic: `lib/fleet_diagrams.py`, `lib/fleet_quadrant.py`,
 `lib/fleet_tooling_map.py`, `lib/fleet_trends.py`, `lib/fleet_slope.py`, `lib/fleet_layer_bars.py`,
@@ -498,7 +752,10 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --levels levels.toml -
 Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and
 darker for a higher level reached, with the level printed in every cell. An
 `unknown` cell is white with grey hatching, never level 0: it prints `?` and a
-key letter, and the key under the grid names the missing signals. The canvas
+key letter, and the key under the grid names the missing signals. An unknown
+cell with a `floor` is the floor's ramp colour under the hatch and prints `N+`
+(at least level N, never the exact level); its key says which missing signals
+need a full `/assess`. The canvas
 has its own white background. The same run gives a byte-identical file. Exit
 codes: `0` written, `2` an unreadable or malformed run, a run without maturity model
 levels, a mismatched `--levels` or an unreadable `--compare` run.
@@ -550,7 +807,11 @@ invalid maturity model or settings, or inputs that disagree with the run.
   crashes, hangs past `--timeout` or writes an unreadable document becomes a
   `failed` row; the other repositories complete. A broken `.git` is checked by
   the runner, since `assess_signals.py` degrades it to unavailable blocks.
-- **Deterministic.** Rows are sorted by id, never by completion order.
+- **Deterministic.** Rows are sorted by id, never by completion order. A
+  `--platform` run reads live platform state, so its platform blocks can differ
+  between two runs on the same day.
+- **No network by default.** Only `--platform` makes `gh` or `glab` calls, in
+  its own pass; a platform failure never fails a row.
 
 ## Optional: repository labels (`--label`)
 

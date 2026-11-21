@@ -52,6 +52,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+from lib.doc_complexity_join import is_stale
 from lib.doc_graph import (
     CODE_EXTENSIONS,
     DOC_EXTENSIONS,
@@ -132,6 +133,27 @@ class DocModularity(TypedDict):
     large_repo: bool
 
 
+class DocStalenessSummary(TypedDict):
+    """``doc_staleness.summary``: integer counts a maturity model reads (#699).
+
+    ``measured_docs`` counts the docs with a code subject of their own (every
+    method but ``repo-baseline``: a baseline doc is measured against all of the
+    repository's churn, so it reads stale on any active repository and says
+    nothing about the doc), plus any generated doc whose declared source gave a
+    ``source_newer`` verdict. ``stale_docs`` counts those that
+    ``doc_complexity_join.is_stale`` marks (a ratio above
+    ``STALENESS_RATIO_THRESHOLD``, or a newer declared source) and
+    ``stale_pct`` is their share of ``measured_docs`` as a whole percent,
+    rounded up so a share is never understated. Both are null when the history
+    cannot carry the measure (a truncated or degenerate history) or no doc is
+    measured, so a reader sees unknown rather than a false fresh.
+    """
+
+    measured_docs: int
+    stale_docs: int | None
+    stale_pct: int | None
+
+
 class DocStalenessBlock(TypedDict):
     """``run-context.json`` ``doc_staleness``: :func:`analyze_doc_staleness`."""
 
@@ -149,6 +171,8 @@ class DocStalenessBlock(TypedDict):
     modularity: DocModularity
     # ``[[describes]]`` cross-repo mappings (#664): listed, measured only by /fleet.
     declared_cross_repo: NotRequired[list[DeclaredMapping]]
+    # Integer counts for a maturity model (#699); absent in blocks written before it.
+    summary: NotRequired[DocStalenessSummary]
 
 
 # A repo at or above this many hand-written code files is "large" enough that
@@ -320,7 +344,8 @@ def _head(repo_root: Path) -> str | None:
     try:
         return subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False, timeout=GIT_TIMEOUT_SECONDS,
+            capture_output=True, text=True, encoding="utf-8", check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
         ).stdout.strip() or None
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
@@ -355,7 +380,7 @@ def _safe_rel(path: Path, repo_root: Path) -> str:
     try:
         return path.relative_to(repo_root).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _window_since(churn_label: str | None) -> str | None:
@@ -416,6 +441,18 @@ class _ChurnContext:
     clock: ContentClock
     generated_sources: list[tuple[str, list[str]]]
     renames_complete: bool = True
+
+
+def staleness_summary(rows: list[DocStalenessRow], reliable: bool) -> DocStalenessSummary:
+    """The ``summary`` counts over the subject-mapped ``rows``; null counts when
+    not ``reliable`` or no row is mapped."""
+    mapped = [row for row in rows if row["subject_method"] != REPO_BASELINE
+              or row.get("provenance", {}).get("source_newer") is not None]
+    if not reliable or not mapped:
+        return {"measured_docs": len(mapped), "stale_docs": None, "stale_pct": None}
+    stale = sum(1 for row in mapped if is_stale({**row}))
+    return {"measured_docs": len(mapped), "stale_docs": stale,
+            "stale_pct": -(-100 * stale // len(mapped))}
 
 
 def _resolve_docs(
@@ -668,6 +705,7 @@ def analyze_doc_staleness(
     pct_docs_mapping = docs_mapping_to_code / len(docs) if docs else 0.0
 
     declared = declared_block(repo_root)
+    rows = [r.as_dict() for r in sorted(results, key=lambda r: -r.ratio)]
     block: DocStalenessBlock = {
         "available": True,
         "churn_window": churn_label,
@@ -676,7 +714,7 @@ def analyze_doc_staleness(
         # commit), so any finding built on `code_churn_in_window` / `ratio` must
         # be discounted - see `lib.git_churn.churn_is_degenerate`.
         "churn_degenerate": churn_degenerate,
-        "docs": [r.as_dict() for r in sorted(results, key=lambda r: -r.ratio)],
+        "docs": rows,
         # Bulk mechanical commits (a commit touching more than half of the
         # repo's docs, and at least ten) that `last_commit_days` skipped:
         # newest first, capped; the total sits beside it. `complete` False means
@@ -709,4 +747,7 @@ def analyze_doc_staleness(
     }
     if declared:  # omitted when nothing is declared: the feature is opt-in
         block["declared_cross_repo"] = declared
+    # A truncated (shallow) or degenerate history cannot carry the measure.
+    block["summary"] = staleness_summary(
+        rows, reliable=not (clock.truncated or churn_degenerate))
     return block

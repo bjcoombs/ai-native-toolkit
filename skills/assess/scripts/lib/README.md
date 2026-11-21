@@ -3,7 +3,8 @@
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
 data, with two bounded exceptions. Live platform reads are confined to `gh_cli.py`
-(GitHub) and `gitlab_cli.py` (GitLab); they are optional (they need a github.com or
+(GitHub) and `gitlab_cli.py` (GitLab), which run their CLI through `platform_cli.py`;
+the headless runner makes them only under `--platform`. They are optional (they need a github.com or
 GitLab remote and an authenticated `gh` or `glab`) and degrade to `available: False`
 with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
@@ -227,15 +228,23 @@ recorded as a graduated hotspot. Pure stdlib; an unreadable file is never exclud
 ### Static analysis
 
 **`structure_graph.py`**
-Python import-graph analysis (Signals A1-A4) via `grimp` + `networkx`:
+Import-graph analysis (Signals A1-A4) via `networkx`, over the graph a language builder
+returns (`import_graph.py`); nothing in it assumes a language:
 - A1 comprehension footprint: direct-dependency surface area for a unit.
 - A2 blob vs modular: strongly-connected components and Newman modularity Q.
-- A3 contracts: front-door vs burrow (internals-reaching) inbound edges.
+- A3 contracts: front-door vs burrow (internals-reaching) inbound edges, across the
+  builder's package boundaries (`package_of`) into its `front_doors`.
 - A4 breakup candidates: packages whose sub-modules form separable clusters.
 
-Degrades to `available: False` when `grimp`/`networkx` are absent rather than
-blocking the run, and when no importable Python package exists (nothing measured,
-not an empty graph whose modularity 0 would read as tangled code). `cross_package_edges` counts the
+Every registered builder graphs its language; the graph `select_graph` picks (the dominant
+source language's) is measured and its language is the block's `language` field (null when nothing was measured). Degrades to
+`available: False` when `networkx` is absent, when a builder's tool is missing or fails
+and no other language was graphed, and when nothing could be graphed (nothing measured,
+not an empty graph whose modularity 0 would read as tangled code). With no graph the
+reason names the dominant source language (issues #707, #708):
+`no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
+packages found` for a Python repository, `no_source_files: ...` with no source in a
+recognised language. `cross_package_edges` counts the
 import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
 (no package boundary is crossed). A graph with packages but no import edges stays
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
@@ -244,10 +253,133 @@ was measured): modules that never import each other have no community structure,
 `modularity_q` is therefore null in two cases: an edgeless graph (`modularity_reason`
 `no_import_edges`) and an unavailable block (`available` false; the cause is in
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
-opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`;
-`lib/headless_layers.py`), so `modularity_q` is absent there rather than null.
-Tests: `tests/test_structure_graph.py`, `tests/test_level_signals.py`,
-`tests/test_headless_layers.py` (a full signals run and a counts-only one).
+opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
+`no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
+`modularity_q` is absent there rather than null.
+`structure_drift.py` builds its module map and communities from the same selected graph
+(`import_graph.select_graph`, `import_digraph`).
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
+`tests/test_level_signals.py`, `tests/test_headless_layers.py` (a full signals run and a
+counts-only one).
+
+**`import_graph.py`**
+The language-neutral builder interface (issues #708, #709). A builder is any object with a
+`language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
+(the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
+nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
+or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
+
+| Field | Meaning |
+|-------|---------|
+| `language` | the token the block reports and the `no_import_graph_<language>` suffix |
+| `modules` | sorted module ids; module ids are paths or path-like names, hashed by the counts-only PATH rule |
+| `edges` | importer -> the modules it imports directly; a target outside `modules` is ignored |
+| `front_doors` | the modules a package exposes as its public API (A3) |
+| `module_file` | module -> absolute source file; a module without one reads size 0 |
+| `package_of` | module -> package boundary id (A3 contract edges, A4 per-package splits) |
+| `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
+| `name_collisions` | packages sharing a name, disclosed rather than merged |
+
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
+dominant source language decides: when a builder covers it (its `language`, or a token in
+an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
+builder's graph is returned and its failure is final (the count honours a builder's
+optional `is_graph_source(rel)`, so files it skips, such as a Python app's
+`static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
+invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
+`no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
+the dominant language's graph, whose nodes can differ. When the dominant builder found
+nothing to graph (loose scripts, no package) or no builder covers the dominant language,
+the largest other graph stands in (most modules, then most internal edges, then the
+language token); with none the reason is the first builder failure in registration order, else
+`no_graph_reason`, which counts source files per language
+(`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
+`scope`) and names the dominant one. A built graph that breaks the contract (a module
+missing from `package_of`, which A3 and A4 index) is treated as a builder failure
+(`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
+reported and the measure never raises `KeyError`. `is_graph_source(rel_path, language)`
+says whether a file could be in that language's graph: its extension must be one of the
+languages the covering builder graphs (the TypeScript builder covers `.js` too), and the
+builder's own optional `is_graph_source(rel)` hook must accept it (Go skips test files and
+`GO_SKIP_DIRS`; TypeScript skips bundles, declarations, tests and tool configs). Imports
+no graph tool; the registered builders are loaded lazily when none are passed.
+
+Worked example: a builder for a language whose package is a directory and whose front
+door is the directory's `index` file.
+
+```python
+from pathlib import Path
+
+from lib.import_graph import GraphUnavailable, ModuleGraph
+
+
+class IndexDirBuilder:
+    language = "typescript"
+
+    def build(self, repo_root: Path, extra_exclude_dirs: set[str],
+              scope: Path | None) -> ModuleGraph | None:
+        root = scope or repo_root
+        files = sorted(p for p in root.rglob("*.ts")
+                       if not set(p.relative_to(repo_root).parts) & extra_exclude_dirs)
+        if not files:
+            return None                        # nothing to graph: the dominant-language reason applies
+        try:
+            imports = read_imports(files)      # your scan: module id -> module ids it imports
+        except OSError as e:
+            raise GraphUnavailable(f"typescript import scan failed ({e})") from e
+        ids = {p: p.relative_to(repo_root).with_suffix("").as_posix() for p in files}
+        return ModuleGraph(
+            language=self.language,
+            modules=sorted(ids.values()),
+            edges=imports,
+            front_doors={m for m in ids.values() if m.rsplit("/", 1)[-1] == "index"},
+            module_file={m: p for p, m in ids.items()},
+            package_of={m: m.rsplit("/", 1)[0] if "/" in m else "." for m in ids.values()},
+        )
+```
+
+Register it by appending to `BUILDERS` in `import_graph_builders.py` and add files in
+its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which checks every
+registered builder's graph shape (`package_of` covers `modules`). A new block field
+or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
+the maturity model header (`levels/default.toml`).
+Tests: `tests/test_import_graph.py`, and `tests/test_import_graph_contract.py`, the
+contract every registered builder must keep (sorted unique modules, `package_of`
+covering them, front doors, files and surfaces within them, `None` on an empty tree).
+A new builder adds a fixture tree to its `CONTRACT_FIXTURES`.
+
+**`import_graph_typescript.py`**
+The TypeScript and JavaScript builder (`TYPESCRIPT_BUILDER`, issue #709): a deterministic
+regex scan, no Node. One builder graphs both languages, since they import each other; the
+graph's `language` is `typescript` when any scanned file is TypeScript, else `javascript`.
+Modules are repo-relative file paths with the extension kept. Imports are `import ... from`,
+side-effect `import`, `export ... from`, `import()`, `require()` and `import x = require()`,
+read after comments are stripped. A relative specifier resolves against the importer's
+directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`paths`, then
+`baseUrl`, following relative `extends`; JSONC is accepted), then the workspace packages
+(every `package.json` with a `name`, its entry from `source`, the `"."` export, `module` or
+`main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
+A specifier matches a file, the file plus a source extension, a `.js` name standing for its
+`.ts` source, or a directory's `index`; anything else is external. A package is the nearest
+directory holding an `index` file or a named `package.json`, else the module's top directory;
+front doors are the `index` modules and each workspace entry; the surface is the count of
+exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
+`EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
+build and test tool configs (`vite.config.ts`, `jest.config.js` and the other
+`TOOL_CONFIG_PREFIXES`; an app's own `app.config.ts` stays) and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
+`"."` only, and `node_modules` and package `extends` are not followed. Configs and
+workspaces are read from the whole repository; modules come from `scope`.
+Tests: `tests/test_import_graph_typescript.py` (fixture `tests/fixtures/ts_workspace`).
+
+**`import_graph_python.py`**
+The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
+holding an `__init__.py`, `grimp` reads their imports, and `module_graph` turns the result
+into a `ModuleGraph`. A package is the top dotted component, front doors are the package
+roots and every `__init__` module, and the public surface is the count of public top-level
+`def` / `class` definitions read with `ast`. With packages but no grimp it raises
+`GraphUnavailable` (`grimp not installed; ...`); a grimp failure raises `grimp failed to
+build import graph (...)`.
 
 Packages resolve by path, never by import name. grimp's default finder asks
 `importlib.util.find_spec`, which answers from `sys.modules` first, so a target
@@ -263,8 +395,48 @@ between builds is unresolved, not only an import of the colliding name, since
 which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
 grimp's package-finder port (`determine_package_directory` before 3.14,
 `determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
-`structure_drift.py` builds its module map and communities through the same
-`build_import_map` / `import_digraph`.
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
+
+**`import_graph_go.py`**
+The Go builder (`GO_BUILDER`, issue #710). It reads `go.mod` and each file's `import`
+declarations as text and never runs a go tool (`go list` can reach the network). A
+graph module is a Go package, a directory holding a non-test `.go` file, with its
+repo-relative path as the id (`.` for the root). The go.mod module path
+(`example.com/org/svc`) only resolves an import to a directory and never reaches an id,
+so no module path appears in the block, hashed or not. A package belongs to the nearest
+`go.mod` at or above it; nested modules resolve each other's imports. Each package is
+its own boundary (`package_of[m] == m`) and a front door, since an importer reaches only
+exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
+construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
+public surface is the package's exported top-level `func` (not method) and `type`
+declarations. There is no `module_file` (a package is several files), so A1 size reads 0
+and structure-drift tier 1, whose static lens pairs files, empties its three
+static-derived lists with reason `no_static_file_map` rather than reading every declared
+pair as split; its three co-change metrics still report. The run-context `tier_1` block
+(`context_blocks.py`) carries those three counts as null with `static_lens_reason:
+no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, never 0. The behaviour
+block projects the static metrics only onto directories holding a file the graph's
+language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
+graph never vouches for a Python tree or a directory of `_test.go` files alone. Go's
+`front_door_ratio` is projected as null there (1.0 by construction is not evidence), so
+`hidden_coupling` on a Go directory rests on `modularity_q` alone. Skipped:
+`_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
+configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
+is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
+names. The builder's `is_graph_source(rel)` hook applies the same skips to the
+dominant-language count and to `import_graph.is_graph_source`. Build constraints are not evaluated. No `go.mod` returns `None`,
+so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
+raises `GraphUnavailable`. Graphs are not compared by size against the dominant
+language's: a Go-dominant repository reports its Go graph even beside a larger Python
+package tree, and a Go module beside loose Python scripts (Python dominant, no package
+to graph) reports Go through the fallback.
+Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
+`tests/test_import_graph_contract.py` (the contract every registered builder keeps).
+
+**`import_graph_builders.py`**
+The registered builders (`BUILDERS`), one per language; `structure_graph` and
+`structure_drift` both read it. Order decides only which failure is reported when no
+graph is built.
 
 ### Document analysis
 
@@ -446,7 +618,13 @@ carries `history_truncated: true` and `history_boundary_date`, every row is conf
 `low`, and a doc whose newest visible change is the boundary carries
 `last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
 floor. Its ratio still rests only on subject commits after the boundary, so the
-boundary listing every code file does not make it stale. The `modularity` block's `base_doc_dir_ratio`
+boundary listing every code file does not make it stale. `summary` (#699) carries the integer
+counts a maturity model reads: `measured_docs` (rows with a code subject of their own,
+every method but `repo-baseline`), `stale_docs` (those `doc_complexity_join.is_stale`
+marks: ratio above `STALENESS_RATIO_THRESHOLD`, or a newer declared source) and
+`stale_pct` (their share, a whole percent rounded up). Both counts are null on a truncated
+or degenerate history, or with no measured doc, so the doc-freshness row reads unknown.
+Paths are repo-relative POSIX (`as_posix`) on every platform. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
 within 0-1 (tests: `tests/test_doc_modularity.py`).
@@ -644,12 +822,19 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
-`{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
+`{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
+both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`
+and `delivery`), or a network spec one of them reads, runs its `fn`. Extension point:
+append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
+changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
+which runs once under `--platform` as their dependency. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
-registry with `headless_layers.HEADLESS_SCANS` in place of every core entry that
-publishes one of their names, and of every entry that reads a displaced one (#667). Names in `UNREGISTERED_SCANS` (run-context blocks
+registry with `HEADLESS_SCANS` (`headless_layers.py`, #667, and `headless_static.py`,
+#699) in place of every core entry that publishes one of their names, and of every entry
+that reads a displaced one. Names in `UNREGISTERED_SCANS` (run-context blocks
 `assess_core` assembles, several of which report `available: false` without the
 `reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
 name a reported scan also holds is dropped at runtime. `select_scans` raises
@@ -660,22 +845,33 @@ that read `history_window` (`ai_usage`). Every git call runs inside `read_only_g
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
+`FULL_RUN_ONLY_REASONS` (#697) is the set of reason codes (`lib.counts_only.reason_code` of `UNREGISTERED_REASON` and `NETWORK_REASON`: `not_registered`, `network`) that mark a block only a full `/assess` run produces; derived, never listed by hand.
 
 **`headless_layers.py`**
 The headless runner's entries for the four blocks the default maturity model's layer 2-4
 rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
-`structure_scan`, needs grimp and networkx), `promissory_markers` (the private
+`structure_scan`, needs networkx and a language builder's tool, grimp for Python), `promissory_markers` (the private
 `promissory` scan, needs `rg`), `structure_drift` (tier 0 from the ownership map via
 `context_blocks.structure_drift_tier_0`; tier 1 needs the keyhole co-change pairs and is
 `not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
 `files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
-`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_rg`,
+`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
 and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
 map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
+
+**`headless_static.py`**
+The headless runner's entries for the four static blocks the core publishes from
+`core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
+directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
+`doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
+doc->code edges; needs a git work tree: `not_git_root`) and `archetype`. A scan that
+raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
+maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
+`signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
 
 **`tool_lookup.py`**
 Finds the external tools the headless scans need, Windows included (#711). `find_rg`
@@ -760,7 +956,8 @@ no threshold config of its own. `load_settings` reads ghreport settings fragment
 `settings_for` joins a group to the exact scope or the nearest ancestor;
 `normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
 `{available: false, reason}` so `levels.resolve_signal` reads it unavailable and the
-org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
+org row is unknown, never 0; a fragment's `teams` list (#703, read by `fleet_units`) is not a
+setting (`NOT_SETTINGS`). `reduce_settings` is the counts-only form (token values,
 else `set`; a value's reason `null`, an unavailable one's `unknown`). Maturity model data follows
 `level_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
@@ -768,6 +965,7 @@ repository, never a passing one) and `settings_signals` the normalised settings 
 the fragment's `scope` and `provider`. The CLI loads the maturity model with
 `level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
+Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
@@ -791,6 +989,7 @@ maturity model titles are escaped (`text`), ids are code spans (`code`). `write_
 `page_path` refuses an id with an empty, dot or backslash segment. Golden pages:
 `tests/fixtures/fleet_next_steps/expected/` (regeneration command in the test
 module's docstring).
+A row with a floor (#697) reads "at least N of top" in the levels table and "Level at least N" in its section; a full-run-only signal gets `FULL_RUN_HINT` in place of a scan hint.
 
 **`next_step_guidance.py`**
 Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
@@ -814,6 +1013,88 @@ Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
 
+**`fleet_units.py`**
+The fleet's org units (#703, parent #692): one `Tree` per view (`ownership`, `system`),
+each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`) and a
+`placement` map, repository id to unit id, so a repository sits once per view.
+`build_trees` infers the ownership view from repository paths (every prefix of a GitLab
+`path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
+a GitHub settings fragment (deepest team wins, then the first slug), then, for a
+repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
+under that group, and
+finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
+`[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
+with no repository left are dropped; their kind follows their place (root `org`, a unit
+holding a repository `team`, else `division` then `department`). Every fault raises
+`UnitsError` naming the entry (an unknown key or kind, a duplicate, a missing parent or
+unit, a cycle). `repo_owners` gives each repository the mapping's owners, else its
+CODEOWNERS ones; `unmatched_repos` names mapped repositories the run did not include.
+
+**`fleet_repo_facts.py`**
+What the units tree and `fleet-data.json` read from each checkout before any scan
+(#703): `web_url` normalises the `origin` remote (scp, `ssh://`, `http(s)://`) to
+`https://<host>/<path>`, dropping credentials, an ssh port and `.git` (an http(s) port
+is kept), and gives None for a local remote; `default_owners` takes the owners on the last catch-all rule of the first
+CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab section
+headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
+read gives no URL and no owners.
+
+**`fleet_data.py`**
+`fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
+#704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
+the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
+repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
+or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
+per team row, `fleet_maturity.mean_share` over the repositories below it, `measured` of
+`repos`, and the weakest measured repository (lowest share, then key); `overall_roll_up`
+does the same over each repository's own mean share. `org` rows stay in `groups.jsonl`.
+`Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
+names and owners and writes a non-token value as `set`; with a salt every unit and
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+`write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
+
+**`fleet_data_schema.py`**
+Generates `skills/fleet/references/fleet-data.schema.json` from the `FleetData` TypedDict
+with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
+
+**`fleet_achievements.py`**
+The deterministic achievements engine (#704, `ACHIEVEMENTS_VERSION`; #705 and #744 build
+on its evidence model). `build_achievements` replays comparable runs' `fleet-data.json`
+oldest first: `subjects` gives every unit and repository its level per team row, the row's
+roll-up rule (`levels.share_level`) over measured members, with the measured set;
+`clean` is the one gate on a move (known both sides, same measured set), and
+`known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
+emits `level_up`, `first`, `target_hit`, `personal_best` and `streak`, each with
+`moves` evidence (repository, row, from and to level, the criterion that became met) and
+a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
+Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
+
+**`fleet_achievements_runs.py`**
+`earlier_runs` reads the history entries the engine replays: `run.json` passing
+`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+one per date before this run's (`fleet_history.one_per_date`). Unreadable entries are
+passed over.
+
+**`fleet_achievements_schema.py`**
+Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
+TypedDict with `fleet_group_schema.type_schema`. `tests/test_fleet_achievements.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_achievements_schema.py` from `skills/assess`.
+
+**`fleet_targets.py`**
+The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, `level`), the stand-in for
+the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming the entry;
+`resolve` keys each target as `fleet-data.json` does (hashed under the run's salt).
+
+**`fleet_credit.py`**
+`credit_section` renders `report.md`'s first section, "What changed and who earned it",
+from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
+nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
+distances. `fleet_diagrams.report_markdown` places it before the diagrams.
+
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
 heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
@@ -830,6 +1111,7 @@ without `--levels` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
 `delta` or `was`), marking the comparison not comparable across maturity-model versions (a run
 without a maturity model is named as having none, not as maturity model `None`).
+`floor` and `full_run_only` (#697) are optional: an older row without them loads; a present `floor` must be a whole number of at least 1 on an unknown row.
 
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
@@ -845,6 +1127,7 @@ by character count, fixed number formatting: the same run gives the same bytes. 
 renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README). Its text,
 truncation, hatch pattern and document head come from `fleet_svg` with the heat map's own
 literal colours, so the goldens stayed byte-identical through the move.
+A floor cell (#697) is the floor's ramp colour under a transparent hatch (`fleet-floor`), printing `N+` and a key letter, with its own legend entry; the key says which missing signals need a full `/assess`. The pattern and legend entry appear only when a floor does, so runs without one render as before.
 
 **`fleet_svg.py`**
 Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
@@ -874,6 +1157,7 @@ an unknown level or a missing top level (`None` when nothing is left, never 0);
 `known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single
 repository can be measured by, so the group charts use them too and the three read on one
 scale. Pure arithmetic.
+`floor_mean(cells)` (#697) over `(level, floor, top)` triples is the floor-inclusive lower bound printed beside the known-only mean as "at least"; `floor_shares` lists its shares and `has_floor` says whether any unknown row has a floor. Plotted positions stay on `mean_share`.
 
 **`fleet_quadrant.py`**
 The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
@@ -886,6 +1170,7 @@ and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws
 the busy-and-immature quadrant (at or above the median commits, below half the top level,
 `at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
 never at zero, and every label that fit nowhere under the plot.
+A repository with a floored unknown row also gets `maturity_floor` (`fleet_maturity.floor_mean`, #697), shown as "at least" in the tooltip and on the not-plotted strip; the dot stays on the known-only mean.
 
 **`fleet_tooling_map.py`**
 The shared-tooling map (#674). `tooling_view(repos)` reads each scanned repository's
@@ -910,6 +1195,7 @@ removed or with no row known in both runs is named on a hatched strip, never at 
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
 both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
 carries a `*` explained under the chart.
+With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
 The per-layer maturity bars (#675). `layer_bars(levels, repos)` evaluates every `team` row
@@ -919,6 +1205,7 @@ stacks them pale to dark on the heat map's ramp (`fleet_svg.ramp_step`, so a row
 the darkest step whatever its level count), the unknown segment hatched and its repositories
 named, never counted as level 0; `org` rows, which have no per-repository level, are named
 under the bars.
+An unknown repository with a floor (#697) is named in `floored` and drawn first in the unknown part of the bar, in its floor's ramp colour under a hatch; the notes name it "(at least N)".
 
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
@@ -927,7 +1214,8 @@ The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#
 team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
-`comparison` is the result `_keep_and_compare` wrote. `report_markdown` embeds each with a relative clickable image link or says
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
@@ -937,7 +1225,7 @@ report heading and question to `HEADINGS` (one source for a drawn, skipped or fa
 
 **`fleet_trends.py`**
 Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
-reads each `<date>[.<n>]` entry (`fleet_history.dated_entries`; `run.json`,
+reads each `<date>[.<n>]` entry (`fleet_history.one_per_date`; `run.json`,
 `groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
 path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
 run per date: the entry over this run's repository set, else the highest suffix.
@@ -954,6 +1242,7 @@ splits each line at an unknown or absent value and at a maturity-model version c
 (`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
 `fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
 (regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
+A run with floored unknown team rows carries `floor_means` (#697), printed in each point's tooltip and never drawn, so the line does not jump where floors first appear in the history.
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -971,7 +1260,9 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
 `scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
-without one, absent before #706 and read as null, so the stamp version stays 1). No path,
+without one, absent before #706 and read as null, so the stamp version stays 1), and
+`platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
+false through `fleet_legacy.stamp_value`). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
@@ -979,7 +1270,8 @@ writes atomically with sorted keys.
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
 `[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
-#696 and #714). API:
+#696 and #714; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+--platform-jobs` and `--platform-timeout`). API:
 - `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
   and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
   value; both CLIs exit 2 on it.
@@ -992,7 +1284,8 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
   ignored with a warning); an unset scalar takes the repository value. Repository input
   that does not validate is skipped with a stderr warning, never raised.
 - `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
-  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  count, list order does; `UNHASHED_KEYS`, settings of how a run goes such as `[platform]
+  jobs` and `timeout`, are left out so they never break comparability) and `section_entries` (a list counts its items, else 1) feed
   the run stamp.
 
 Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
@@ -1055,8 +1348,8 @@ other failure keeps the clone as `delete_error`.
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` when the
-run wrote one (`OPTIONAL_HISTORY_FILES`, #664; a same-day replacement without it removes
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` and `fleet-data.json` when the
+run wrote them (`OPTIONAL_HISTORY_FILES`, #664 and #703; a same-day replacement without it removes
 the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
@@ -1070,11 +1363,30 @@ repository set (`entry_repos`), so a partial rerun never replaces a full-fleet e
 `<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
 `latest_matching` finds the newest matching entry, preferring one over the same
 repository set, the default for a bare `--compare`. `dated_entries` lists the
-`<date>[.<n>]` directories oldest first (also read by `fleet_trends`).
+`<date>[.<n>]` directories oldest first; `one_per_date` keeps one accepted entry per date
+before a run's (the entry over its repository set, else the highest suffix), shared by
+`fleet_trends` and `fleet_achievements_runs`.
 `persist` writes the three files to a hidden temp sibling first: a new entry is that
 directory renamed into place in one step, and a replaced same-day entry loses its
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
 leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
+
+**`fleet_platform.py`**
+The fleet platform pass, `fleet.py --platform` (issue #714). `run_platform(rows, targets,
+options, jobs=, timeout=, names=, after=)` runs after the offline scan: one more
+`assess_signals.py --platform --scans <names>` child per `ok` row (`fleet.run_signals`,
+the offline scan's output mode and salt, `--platform-jobs` workers, `--platform-timeout`
+each, stderr tails in `<logs>/<repo>.platform.stderr`) and `join`s its blocks into the
+row's `scans` by repository. It never changes `status` or `reason`, so a slow host cannot
+make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
+omits a block gives that block `available: false` with `platform_timeout`,
+`platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
+counts-only output). Failed rows are not read. `names` is `platform_scans(--scans)`:
+`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
+`--delete-after` hook) runs on each row after its platform read, so a clone outlives the
+read of its remote. A new platform block (#715, #716) needs no change here: see
+`signals.py`. Tests: `tests/test_fleet_platform.py`.
 
 **`fleet_legacy.py`**
 Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
@@ -1085,7 +1397,10 @@ already under its new name wins, and the input is never mutated. `fleet_view._ch
 entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
 entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
 from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
-never as a malformed stamp. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714); every comparability
+check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
+reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
 `tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
 
@@ -1096,7 +1411,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
 adds maturity-model version, window, output mode, scan selection, path hashing and the
-`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
+`platform` (a pre-#714 stamp is false); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -1107,6 +1423,7 @@ row reads the group's settings, not its repositories, so on both sides it is `le
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
+A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -1390,7 +1707,9 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
-generates `references/counts-only.md`, the per-block field list. Tests:
+generates `references/counts-only.md`, the per-block field list (plus the
+`fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
+the fleet's unit and repository keys (#703). Tests:
 `tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 
 **`counts_only_rules.py`**
@@ -1403,7 +1722,9 @@ they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus th
 fields and rule segments), so a map keyed by a login or a function name is dropped
 rather than kept unhashed. Adding a run-context string field or block means adding its
 rule or field name here and regenerating `references/counts-only.md`.
-Tests: `tests/test_counts_only.py`.
+`FLEET_DATA_RULES` and `classify_fleet_data` classify the fleet's `fleet-data.json`
+fields (#703), kept apart from `RULES` so their names never widen the run-context field
+names. Tests: `tests/test_counts_only.py`, `tests/test_fleet_data.py`.
 
 **`counts_only_schema.py`**
 Derives the string fields the allow-list must cover from the block TypedDicts in
@@ -1589,6 +1910,7 @@ is the resolved value only when it is a finite scalar, null otherwise, and
 `dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
 A team roll-up applies the rule to the low and the high bounds and reports a level
 only when both agree; `unknown_repos` names the repositories whose level is open.
+`share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
@@ -1597,6 +1919,7 @@ rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fle
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
 flag in `tests/test_fleet_legacy.py`.
+An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
@@ -1963,10 +2286,26 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
 `unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
-(HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
+(HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
+`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
 lives here and is shared with `gitlab_cli`.
+
+**`platform_cli.py`**
+How `gh_cli._run_gh` and `gitlab_cli._run_glab` run their binary (issue #714). `run_cli`
+closes stdin and sets `GH_PROMPT_DISABLED`, `NO_PROMPT` (glab) and `GIT_TERMINAL_PROMPT=0`
+over the inherited environment, so a prompt fails the call. A reply reporting a rate limit
+(`rate_limited`: HTTP 429 in gh's `(HTTP 429)` and glab's `glab: HTTP 429` or `429 Too Many
+Requests` forms, or GitHub's rate-limit 403 text "API rate limit exceeded" / "secondary
+rate limit") is retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
+CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) per wait;
+`SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
+directory, a successful call's stdout is stored under the sha256 of its argv and the same
+argv is answered from it for the rest of the run (any process); failures are never stored.
+Only the fleet platform pass sets it, to a temporary directory it removes. Callers keep
+their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
+`tests/test_platform_cli.py`.
 
 **`gitlab_cli.py`**
 The GitLab side of the platform seam, with `gh_cli`'s contract: the `glab` binary as a
@@ -1974,8 +2313,9 @@ subprocess with `--hostname` on every call, no token read, JSON parsed in Python
 call capped (`GLAB_TIMEOUT_SECONDS`, 20; the self-managed probe
 `GLAB_PROBE_TIMEOUT_SECONDS`, 8). Failures raise `gh_cli.GhUnavailable`: `glab_not_installed`,
 `not_authenticated`, `unreachable` (ghsync's network patterns, or a probe timeout),
-`no_access` (HTTP 401/403), `not_found` (HTTP 404), `glab_timeout`, `glab_error` (any
-other non-zero exit), `glab_bad_json`. `open_gitlab` detects the provider from the
+`no_access` (HTTP 401/403), `not_found` (HTTP 404), `rate_limited` (HTTP 429 after the
+backoff), `glab_timeout`, `glab_error` (any other non-zero exit), `glab_bad_json`. `glab`
+runs through `platform_cli.run_cli`. `open_gitlab` detects the provider from the
 remote: github.com or no remote returns None without invoking `glab`; a `gitlab.com`
 remote is GitLab and must pass `glab auth status --hostname gitlab.com` (else it
 raises); any other host is GitLab only when that probe passes for it, and any probe
@@ -2050,22 +2390,76 @@ failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
 alongside any change to discovery or the diff.
 
+**`merged_sample.py`**
+The shared sample of merged changes (#715), registered as the private
+`network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
+`run_date`; `review_reality` and `delivery` read it, so one listing serves both
+blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+on or after `fleet_activity.window_start(history_window, run_date)`, newest
+`merged_at` first; `history_window` None (interactive `/assess` with no churn
+window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
+--search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
+(an update is never before its merge, so the newest merges are among the most
+recently updated), then the same search from the 30th newest `mergedAt` with
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
+for the heavy fields. GitLab, one read:
+`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
+then filtered and ordered by `merged_at` client-side (works on GitLab versions
+without `order_by=merged_at`). A change with no readable merge time is
+`<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
+dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
+so an account is probed once); any refusal is `{"available": false, "reason"}`,
+which each reader returns as its own block. `BotClassifier` (moved from
+`review_reality`): an author object with `is_bot`/`type` is classified from it, a
+`[bot]` login is a bot, any other login is probed once with `gh api
+users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
+person, anything else unknown. The value holds logins and text in memory only and
+never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an app author, so the author compares equal to the same app as a commenter. Tests: `tests/test_delivery.py`,
+`tests/test_platform_argv_contract.py`.
+
+**`delivery.py`**
+The `delivery` platform block (#715, part of #702), reads `merged_sample`,
+`review_reality` and `fleet_config`: `{available, merged_count,
+time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
+first_human_comment_hours_p90, human_commented_share, ai_review_share,
+approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
+nearest-rank. `approved_share` and `self_merged_share` are copied from
+`review_reality` (null when it is unavailable). First human comment (GitHub): the
+earliest comment or review by an account that is not the author, not
+`github-actions`, not a bot and not an `[[ai_usage.agent_identities]]` config match
+(a configured agent on a user login is AI review, never a human); an author-less event is skipped; an account of unknown
+type (a failed probe, or one left unprobed once the shared 20-login budget is spent)
+before the first known human on any change nulls the three comment figures. A
+person whose login equals a pinned AI App's name probes as that App (`gh` drops
+`[bot]` and gives comment authors no type). AI review (GitHub): a review or
+comment by an `[[ai_usage.agent_identities]]` config match (username as given), or by a bot account whose login is in
+`AI_REVIEWERS` or matches `agent_identity.AGENT_RULES` or a config rule with
+`[bot]` re-appended (the `[bot]` form is tried only for a bot, so a loose rule
+never makes a person an agent); status bots never count,
+an unknown account that decides a change nulls the share. Agent-authored share
+(#717): changes whose author `AuthorMatcher.classify_username` puts in the `agent`
+bucket - a config rule or a pinned `AGENT_RULES`
+entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
+the author `username`, so access-token users count only under
+`token_users_as_agents` and dependency bots never; a deleted author is not an
+agent. Read from the sample's own listing, no extra call. GitLab: time to merge and
+the copied shares; the notes-based figures are null until #716. An unavailable
+sample is returned as the block. Tests: `tests/test_delivery.py`.
+
 **`review_reality.py`**
-Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
-`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
-requests (`gh pr list` orders by creation, not merge) with
-`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
-and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed. The
+registry entry `review_reality_from_sample` reads the shared `merged_sample`
+(above; before #715 it was the 30 most recently opened merged pull requests,
+unwindowed, so figures shift with the window); `scan_review_reality(repo_root,
+history_window=None, run_date=None)` draws the sample itself. It
+emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
 review_required, hollow_required_review, required_approval_bypassed}`.
 `reviewed_share` counts a review in any state by any account other than the
 author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
-in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
-object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
-probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
-404 is a person, anything else is unknown, as is a comment with no author
-login. An unknown author withholds the share (null) only when it decides a pull
+in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
+author withholds the share (null) only when it decides a pull
 request: one with a confirmed bot comment counts regardless.
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
@@ -2076,10 +2470,10 @@ null when neither says yes and one was refused. `hollow_required_review` is
 where an AI reviewer comments on every change but nobody approves. Both are null
 when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
-the block. A failed pull-request read degrades the whole block to `available:
+the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
-`DEFAULT_LIMIT` most recently created merged merge requests and one `approvals` read
-each: `approved_share` (approved by an account other than the author),
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs)`) and one
+`approvals` read each: `approved_share` (approved by an account other than the author),
 `self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
 and `bot_review_share` are null (approvals are the only evidence read), and
 `hollow_required_review` is False only when approvals alone clear the threshold, else

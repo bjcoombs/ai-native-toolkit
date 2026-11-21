@@ -16,6 +16,12 @@ trend counts only share runs toward ``MIN_RUNS``. A group with no team row
 at a level, or absent from a run, has no value there: its line breaks and the
 gap is named on a hatched note, never drawn at zero.
 
+**Lower bound (#697).** A run whose groups have an unknown team row with a confirmed
+``floor`` also carries ``floor_means``: ``fleet_maturity.floor_mean`` per group, a
+lower bound over the rows with a level or a floor. It is printed as "at least" in a
+point's tooltip, never drawn: an entry written before #697 has no floors, so a line
+on that figure would jump where the floors first appear.
+
 **Comparable runs.** ``history_runs`` reads the ``<date>[.<n>]`` entries under
 the history ``<org>`` directory (``lib/fleet_history.py``): ``run.json`` and
 ``groups.jsonl``, and ``repos.jsonl`` only to choose between same-day runs. An entry counts when its stamp is at this toolkit's stamp
@@ -43,17 +49,17 @@ import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from lib import fleet_svg as svg
 from lib.fleet_groups import GROUPS_FILE, GroupRow, RowLevel
-from lib.fleet_legacy import upgrade
-from lib.fleet_history import dated_entries, entry_repos
-from lib.fleet_maturity import SCOPE, mean_share
+from lib.fleet_legacy import stamp_value, upgrade
+from lib.fleet_history import one_per_date
+from lib.fleet_maturity import SCOPE, floor_mean, has_floor, mean_share
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
 from lib.fleet_svg import THEMED_HATCH, LinearScale
 from lib.fleet_view import load_groups
-from lib.levels import MaturityModel
+from lib.levels import MaturityModel, floor_of
 
 TITLE = "Group maturity over time"
 FILE = "trend.svg"
@@ -72,7 +78,7 @@ WRAP = 104
 LINE_H = 16.0
 AXIS_LABEL = "Mean share of top level"
 Y_TICKS = (0.0, 0.25, 0.5, 0.75, 1.0)
-MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed", "fleet_config_sha256")
+MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed", "fleet_config_sha256", "platform")
 
 # Series colours (light, dark), assigned to groups in sorted order; past the eighth
 # group the colours repeat with a dashed line.
@@ -89,6 +95,7 @@ class TrendRun(TypedDict):
     levels_version: str  # the maturity-model version the run used
     means: dict[str, float | None]  # group -> mean share of top level; None: no team row at a level
     scaled: bool  # False: an entry without top levels on an older model version; not drawn
+    floor_means: NotRequired[dict[str, float | None]]  # floor-inclusive lower bound (#697)
 
 
 # --- reading the history ------------------------------------------------------
@@ -109,6 +116,16 @@ def scaled(groups: Sequence[GroupRow]) -> bool:
 def group_mean(group: GroupRow) -> float | None:
     """The group's mean share of top level over its known team rows; None when none is."""
     return mean_share((row["level"], row.get("top_level")) for row in _known(group))
+
+
+def _floor_cells(group: GroupRow) -> list[tuple[int | None, int | None, int | None]]:
+    return [(row["level"] if row["status"] == "level" and type(row["level"]) is int else None,
+             floor_of(row), row.get("top_level")) for row in group["levels"] if row["scope"] == SCOPE]
+
+
+def group_floor_mean(group: GroupRow) -> float | None:
+    """The group's floor-inclusive mean share (a lower bound); None when no row has a level or floor."""
+    return floor_mean(_floor_cells(group))
 
 
 def with_top_levels(groups: Sequence[GroupRow], levels: MaturityModel | None,
@@ -138,9 +155,12 @@ def trend_run(stamp: Mapping[str, Any], groups: Sequence[GroupRow],
         return None
     groups = with_top_levels(groups, levels, version)
     unit = scaled(groups)
-    return {"label": stamp["scan_date"], "levels_version": version, "scaled": unit,
-            "means": {g["group"]: group_mean(g) if unit else None
-                      for g in sorted(groups, key=lambda g: g["group"])}}
+    ordered = sorted(groups, key=lambda g: g["group"])
+    run: TrendRun = {"label": stamp["scan_date"], "levels_version": version, "scaled": unit,
+                     "means": {g["group"]: group_mean(g) if unit else None for g in ordered}}
+    if unit and any(has_floor(_floor_cells(g)) for g in ordered):
+        run["floor_means"] = {g["group"]: group_floor_mean(g) for g in ordered}
+    return run
 
 
 def share_runs(runs: Sequence[TrendRun]) -> list[TrendRun]:
@@ -159,7 +179,7 @@ def hidden_note(runs: Sequence[TrendRun]) -> str | None:
 
 def _comparable(stamp: Any, current: FleetStamp) -> bool:
     return (isinstance(stamp, dict) and stamp.get("fleet_stamp_version") == FLEET_STAMP_VERSION
-            and all(stamp.get(key) == current.get(key) for key in MATCH_KEYS))
+            and all(stamp_value(stamp, key) == stamp_value(current, key) for key in MATCH_KEYS))
 
 
 def _read_entry(entry: Path, current: FleetStamp, levels: MaturityModel | None) -> TrendRun | None:
@@ -179,20 +199,11 @@ def history_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str],
                  levels: MaturityModel | None = None) -> list[TrendRun]:
     """Earlier comparable runs under ``org_dir``, one per scan date before this run's, oldest
     first; ``levels`` is this run's maturity model (``trend_run``)."""
-    by_date: dict[str, list[tuple[int, Path, TrendRun]]] = {}
-    for (date, suffix), entry in dated_entries(org_dir):
-        if date >= current["scan_date"]:
-            continue
+    def read(entry: Path, date: str) -> TrendRun | None:
         run = _read_entry(entry, current, levels)
-        if run is not None and run["label"] == date:
-            by_date.setdefault(date, []).append((suffix, entry, run))
-    chosen = []
-    for date in sorted(by_date):
-        options = by_date[date]  # by suffix; repos.jsonl is read only to choose between same-day runs
-        if len(options) > 1:
-            options = sorted(options, key=lambda o: (entry_repos(o[1]) == repos, o[0]))
-        chosen.append(options[-1][2])
-    return chosen
+        return run if run is not None and run["label"] == date else None
+
+    return [run for _date, run in one_per_date(org_dir, current["scan_date"], repos, read)]
 
 
 def series_runs(earlier: Sequence[TrendRun], current: TrendRun) -> list[TrendRun]:
@@ -307,6 +318,21 @@ def _versions_line(runs: Sequence[TrendRun]) -> str:
     return f"Maturity model {shown}; each line breaks where the version changes"
 
 
+def _bound_tip(run: TrendRun, group: str) -> str:
+    bound = run.get("floor_means", {}).get(group)
+    return "" if bound is None else f" (with floors, at least {bound:.2f})"
+
+
+def _bound_lines(run: TrendRun, groups: Sequence[str]) -> list[str]:
+    """The last run's floor-inclusive lower bounds as visible text; none without floors."""
+    bounds = run.get("floor_means", {})
+    floored = [f"{g}\u00a0{bounds[g]:.2f}" for g in groups if bounds.get(g) is not None]
+    if not floored:
+        return []
+    return textwrap.wrap(f"With floors, a lower bound (unknown rows counted at their confirmed floor), "
+                         f"at least, on {run['label']}: " + ", ".join(floored), WRAP)
+
+
 def _series_class(index: int) -> tuple[str, str]:
     """The colour role and any dash for the ``index``-th group."""
     dash = ' stroke-dasharray="6 3"' if index >= len(SERIES) else ""
@@ -353,6 +379,7 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
                             f'stroke-width="2"{dash}/>')
             for (px, py), i in zip(points, segment):
                 tip = f"{group}: {runs[i]['means'][group]:.2f} on {runs[i]['label']}"
+                tip += _bound_tip(runs[i], group)
                 body.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="3.5" class="f-{role}">'
                             f'<title>{svg.esc(tip)}</title></circle>')
     for label in plan.labels:
@@ -377,6 +404,9 @@ def render_trend(runs: Sequence[TrendRun]) -> str:
     body.append(svg.text(PLOT_L, cursor, "End label: group, its mean in its last run, and the change "
                          "over its last unbroken stretch", size=11.5, cls="muted"))
     cursor += LINE_H
+    for line in _bound_lines(runs[-1], plan.groups):
+        body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))
+        cursor += LINE_H
     if hidden:
         for line in textwrap.wrap(hidden, WRAP):
             body.append(svg.text(PLOT_L, cursor, line, size=11.5, cls="muted"))

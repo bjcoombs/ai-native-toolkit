@@ -13,6 +13,14 @@ shared CI sources and marketplaces, the joined ``--settings`` and each
 Similar ``builds-agent`` repositories across groups are clustered into
 ``<out>/agent_clusters.json`` (``lib/fleet_agent_building.py``): counts and SDK
 slugs only, member repositories named only with ``--name-agent-clusters``.
+``<out>/fleet-data.json`` (``lib/fleet_data.py``, schema
+``skills/fleet/references/fleet-data.schema.json``) holds the org units tree per view
+(``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
+units, web URL and per-row level, value and reason. ``<out>/achievements.json``
+(``lib/fleet_achievements.py``, schema ``skills/fleet/references/achievements.schema.json``)
+replays the comparable runs in the history and credits each unit's level-ups, firsts,
+streaks, personal bests and ``--targets`` hit, with each unit's nearest level-up; the
+report opens with them ("What changed and who earned it", ``lib/fleet_credit.py``).
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -33,6 +41,16 @@ and every repository scan gets the same copy of it; a repository's own
 records its canonical sha256 and per-section entry counts, never a value, and
 runs with different configs do not compare.
 
+``--platform`` (``lib/fleet_platform.py``, #714) runs a separate platform pass after
+the offline scan: one more ``assess_signals.py --platform`` child per ok repository
+(``--platform-jobs`` at a time, ``--platform-timeout`` each; defaults from the
+``[platform]`` section of ``--fleet-config``) whose ``gh``/``glab`` blocks
+(``lib/signals.py`` ``PLATFORM_SCANS``) are joined into the row by repository. It
+never changes a row's status; a failed read is an unavailable block. ``run.json``
+records ``platform`` (true only when a platform read ran: ``--scans`` selecting no
+platform scan stamps false), and runs with and without it do not compare. With
+``--delete-after`` a clone is deleted only after its platform read.
+
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
 (``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
@@ -46,17 +64,19 @@ Exit codes:
        count is printed to stderr. Failures never change the exit code.
     2  usage error: no root and no --from-list, a root or list that does not
        exist, no repositories found, --out inside a target, an unreadable
-       --levels or --settings (a settings directory with no fragment files included),
+       --levels, --settings or --units (a settings directory with no fragment files included,
+       or a units file naming a missing unit),
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, an unreadable --compare run, or an unreadable or invalid
        --fleet-config (the message names the key)
 
 Run:
-    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--jobs N] [--window 6mo]
+    uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
         [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters]
+        [--platform [--platform-jobs N] [--platform-timeout SECONDS]]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
 # /// script
@@ -78,6 +98,7 @@ import argparse
 import os
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -94,6 +115,7 @@ from lib.fleet import (  # noqa: E402
     LOGS_DIR,
     REPOS_FILE,
     STATUS_FAILED,
+    STATUS_OK,
     ScanOptions,
     Target,
     discover_root,
@@ -125,8 +147,30 @@ from lib.fleet_diagrams import (  # noqa: E402
     clear_diagrams,
     write_diagrams,
 )
+from lib.fleet_achievements import (  # noqa: E402
+    ACHIEVEMENTS_FILE,
+    HistoryRun,
+    build_achievements,
+    clear_achievements,
+    write_achievements,
+)
+from lib.fleet_achievements_runs import earlier_runs  # noqa: E402
+from lib.fleet_credit import credit_section  # noqa: E402
+from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
+from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.fleet_repo_facts import collect_facts  # noqa: E402
+from lib.fleet_units import (  # noqa: E402
+    Tree,
+    UnitsError,
+    UnitsMap,
+    build_trees,
+    empty_map,
+    load_units,
+    repo_owners,
+    unmatched_repos,
+)
 from lib.fleet_history import (  # noqa: E402
     HistoryError,
     choose_entry,
@@ -136,6 +180,12 @@ from lib.fleet_history import (  # noqa: E402
     latest_matching,
     persist,
     safe_component,
+)
+from lib.fleet_platform import (  # noqa: E402
+    DEFAULT_PLATFORM_JOBS,
+    DEFAULT_PLATFORM_TIMEOUT,
+    platform_scans,
+    run_platform,
 )
 from lib.fleet_trends import TrendRun, history_runs, series_runs, trend_run  # noqa: E402
 from lib.fleet_view import FleetViewError  # noqa: E402
@@ -192,6 +242,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "settings/ subdirectory is read). Joined to each group by scope, nearest ancestor first.",
     )
     parser.add_argument(
+        "--units", metavar="FILE",
+        help="Org units mapping (TOML, lib/fleet_units.py format): declared units and repository "
+             "placements for the ownership and system views of OUT/fleet-data.json. It overrides "
+             "the tree inferred from repository paths, GitHub teams and CODEOWNERS.",
+    )
+    parser.add_argument(
         "--fleet-config", metavar="FILE",
         help="Fleet settings (TOML): the [ai_usage], [review] and [platform] sections, validated "
              "before any scan and passed to every repository scan. A repository's own "
@@ -232,9 +288,31 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="The <org> directory name in the history (default: from the repository ids).")
     parser.add_argument("--no-history", action="store_true", help="Do not keep this run in the history.")
     parser.add_argument(
+        "--targets", metavar="FILE",
+        help=f"Level targets (TOML, lib/fleet_targets.py): each [[target]] names a view, a unit, a "
+             f"team row and a level. OUT/{ACHIEVEMENTS_FILE} credits a target when it is reached and "
+             "the report shows the distance to each. Needs --levels; not part of the run stamp.",
+    )
+    parser.add_argument(
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
+    )
+    parser.add_argument(
+        "--platform", action="store_true",
+        help="After the offline scan, run a separate platform pass (gh or glab) for the scans in "
+             "lib/signals.py PLATFORM_SCANS and join its blocks into each ok row. Needs gh or glab "
+             "logged in; never changes a row's status. Without it no network call is made.",
+    )
+    parser.add_argument(
+        "--platform-jobs", type=int, default=None, metavar="N",
+        help="Repositories read in parallel by the platform pass (default: [platform] jobs in "
+             f"--fleet-config, else {DEFAULT_PLATFORM_JOBS}).",
+    )
+    parser.add_argument(
+        "--platform-timeout", type=int, default=None, metavar="SECONDS",
+        help="Seconds one repository's platform read may take before its platform blocks are "
+             f"unavailable (default: [platform] timeout in --fleet-config, else {DEFAULT_PLATFORM_TIMEOUT}).",
     )
     parser.add_argument(
         "--name-agent-clusters", action="store_true",
@@ -255,6 +333,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.error("--hash-salt needs a non-empty value")
     if args.jobs < 1 or args.timeout < 1:
         parser.error("--jobs and --timeout must be at least 1")
+    if any(value is not None and value < 1 for value in (args.platform_jobs, args.platform_timeout)):
+        parser.error("--platform-jobs and --platform-timeout must be at least 1")
+    if not args.platform and (args.platform_jobs is not None or args.platform_timeout is not None):
+        parser.error("--platform-jobs and --platform-timeout apply to --platform")
     return args
 
 
@@ -376,14 +458,14 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
 
 def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | None, rows: list[FleetRow],
               window: str, *, history: list[TrendRun] | None = None,
-              comparison: Comparison | None = None) -> None:
+              comparison: Comparison | None = None, credit: str | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
-        write_diagrams(out_dir, diagrams)
+        write_diagrams(out_dir, diagrams, credit)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -393,16 +475,85 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
     print(f"fleet: diagrams -> {out_dir / REPORT_FILE}", file=sys.stderr)
 
 
+def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_model: MaturityModel | None,
+                  org_dir: Path | None, entry: Path | None, repos: frozenset[str], specs: list[TargetSpec],
+                  privacy_key: Callable[[str], str]) -> str | None:
+    """``OUT/achievements.json`` (lib/fleet_achievements.py) and the report's credit section;
+    None when not written. Never raises: achievements never fail a completed run."""
+    try:
+        if org_dir is None or entry is None:
+            earlier, note = [], "this run is not kept in the run history (--no-history or --full)"
+        else:
+            earlier, note = earlier_runs(org_dir, stamp, repos), None
+        doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
+                                 targets=resolve(specs, privacy_key), note=note)
+        write_achievements(out_dir, doc)
+        section = credit_section(doc, maturity_model)
+    except Exception as e:  # noqa: BLE001 - achievements never fail a completed run
+        clear_achievements(out_dir)
+        print(f"fleet: achievements: not written ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    mine = sum(1 for a in doc["achievements"] if a["run"] == doc["run"])
+    print(f"fleet: achievements: {mine} earned this run over {len(doc['runs'])} comparable run(s) "
+          f"-> {ACHIEVEMENTS_FILE}", file=sys.stderr)
+    for t in doc["targets"]:
+        if t["level"] is None:
+            print(f"fleet: targets: {t['view']} {t['unit']} has no measured level on {t['row']}",
+                  file=sys.stderr)
+    return section
+
+
+def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
+                      maturity_model: MaturityModel | None, trees: list[Tree], full: bool,
+                      hash_salt: str | None, units: UnitsMap, codeowners: dict[str, list[str]],
+                      web_urls: dict[str, str | None]) -> FleetData:
+    """``OUT/fleet-data.json`` (lib/fleet_data.py), before the run is kept in the history."""
+    data = build_fleet_data(stamp, rows, maturity_model, trees,
+                            owners=repo_owners(units, codeowners, (row["repo"] for row in rows)),
+                            web_urls=web_urls, privacy=privacy_for(full, hash_salt))
+    write_fleet_data(out_dir, data)
+    print(f"fleet: units: {sum(len(v['units']) for v in data['views'])} units -> {FLEET_DATA_FILE}",
+          file=sys.stderr)
+    return data
+
+
+PlatformPass = Callable[[list[FleetRow], ScanOptions], list[FleetRow]]
+
+
 def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: CloneDeleter | None,
-              fleet_config_text: str | None) -> list[FleetRow]:
-    """Every scan. With ``--fleet-config``, each reads one private copy of the text validated
-    before any scan, by absolute path, so an edit mid-run cannot reach some scans only."""
+              fleet_config_text: str | None, platform: PlatformPass | None = None) -> list[FleetRow]:
+    """Every scan, then the ``--platform`` pass when given. With ``--fleet-config``, each reads
+    one private copy of the text validated before any scan, by absolute path, so an edit
+    mid-run cannot reach some scans only. With a platform pass, ``--delete-after`` waits for it."""
+    def scan(scan_options: ScanOptions) -> list[FleetRow]:
+        rows = run_fleet(targets, scan_options, jobs, after=None if platform is not None else deleter)
+        return platform(rows, scan_options) if platform is not None else rows
+
     if fleet_config_text is None:
-        return run_fleet(targets, options, jobs, after=deleter)
+        return scan(options)
     with tempfile.TemporaryDirectory(prefix="fleet-config-") as tmp:
         copy = Path(tmp).resolve() / "fleet-config.toml"
         copy.write_text(fleet_config_text, encoding="utf-8")
-        return run_fleet(targets, replace(options, fleet_config=copy), jobs, after=deleter)
+        return scan(replace(options, fleet_config=copy))
+
+
+def _platform_pass(args: argparse.Namespace, targets: list[Target], fleet_config: FleetConfig | None,
+                   scans: list[str] | None, deleter: CloneDeleter | None) -> PlatformPass | None:
+    """``--platform``: the separate pass run after the offline scan and joined into its rows
+    (``lib/fleet_platform.py``); None without it."""
+    if not args.platform:
+        return None
+    section = fleet_config["platform"] if fleet_config is not None else {}
+    jobs = args.platform_jobs or section.get("jobs") or DEFAULT_PLATFORM_JOBS
+    timeout = args.platform_timeout or section.get("timeout") or DEFAULT_PLATFORM_TIMEOUT
+    names = platform_scans(scans)
+
+    def platform(rows: list[FleetRow], options: ScanOptions) -> list[FleetRow]:
+        ok = sum(row["status"] == STATUS_OK for row in rows)
+        print(f"fleet: platform: {', '.join(names) or 'no platform scan selected by --scans'} "
+              f"over {ok} repositories, {jobs} at a time", file=sys.stderr)
+        return run_platform(rows, targets, options, jobs=jobs, timeout=timeout, names=names, after=deleter)
+    return platform
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -410,6 +561,7 @@ def main(argv: list[str] | None = None) -> int:
     maturity_model: MaturityModel | None = None
     scans: list[str] | None = None
     settings: dict[str, JsonDict] = {}
+    units: UnitsMap = empty_map()
     fleet_config: FleetConfig | None = None
     fleet_config_text: str | None = None
     try:
@@ -420,15 +572,21 @@ def main(argv: list[str] | None = None) -> int:
             maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
+        if args.units is not None:
+            units = load_units(Path(args.units))
         if args.scans is not None:
             scans = select_scans([s.strip() for s in args.scans.split(",") if s.strip()])
         if args.window is not None:
             parse_window(args.window)
+        level_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
         targets = _targets(args)
+    except TargetsError as e:
+        print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
+        return 2
     except FleetConfigError as e:
         print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
         return 2
-    except (LevelsError, SettingsError, UnknownScanError, ValueError, OSError) as e:
+    except (LevelsError, SettingsError, UnitsError, UnknownScanError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     if not targets:
@@ -440,15 +598,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --out {args.out} is inside target {inside.repo}; the fleet run never "
               "writes into a target", file=sys.stderr)
         return 2
+    # Web URLs and CODEOWNERS are read before any scan, so --delete-after cannot remove a
+    # checkout first. The trees are built before anything is written, so a mapping that
+    # names a missing unit exits 2 and leaves nothing behind.
+    facts = collect_facts(targets, args.jobs)
+    codeowners = {repo: list(f.owners) for repo, f in facts.items()}
+    try:
+        trees = build_trees((t.repo for t in targets), units, settings, codeowners)
+    except UnitsError as e:
+        print(f"error: --units {args.units}: {e}", file=sys.stderr)
+        return 2
+    for repo in unmatched_repos(units, (t.repo for t in targets)):
+        print(f"fleet: units: {repo} is mapped but not in this run; skipped", file=sys.stderr)
     today = datetime.now(timezone.utc).date()
     window = args.window or DEFAULT_WINDOW
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
+    # stamped only when a platform read runs: --scans can select no platform scan
+    platform_ran = args.platform and bool(platform_scans(scans))
     planned: JsonDict = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
         "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
         "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
+        "platform": platform_ran,
     }
     keeps_history = not args.no_history and not args.full
     try:
@@ -496,7 +669,8 @@ def main(argv: list[str] | None = None) -> int:
     freshness_path = write_freshness(out_dir, freshness.rows)
     # Each scan runs with this interpreter: one hint here, not one per repository.
     warn_missing_packages()
-    rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text)
+    platform = _platform_pass(args, targets, fleet_config, scans, deleter)
+    rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text, platform)
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
@@ -506,12 +680,18 @@ def main(argv: list[str] | None = None) -> int:
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
-        fleet_config=fleet_config,
+        fleet_config=fleet_config, platform=platform_ran,
     )
     write_stamp(out_dir, stamp)
+    data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
+                             {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
+    credit = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
+                           frozenset(row["repo"] for row in rows), level_targets,
+                           privacy_for(args.full, hash_salt).key)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
-    _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison)
+    _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
+              credit=credit)
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

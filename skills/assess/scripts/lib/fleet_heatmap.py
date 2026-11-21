@@ -18,6 +18,11 @@ Encoding:
   The cell prints ``?`` and a key letter; the key under the grid names the
   missing signals for each distinct set, in visible text (an SVG shown as an
   image has no tooltips; ``<title>`` repeats it on hover).
+- A floor (#697, an unknown row whose confirmed criteria reach level N): the
+  ramp colour of N under the grey hatch, printing ``N+`` and a key letter, so
+  it reads apart from both a known level and plain unknown and never as exactly
+  N. The key names the missing signals and, when a signal only a full
+  ``/assess`` measures (``full_run_only``), says so.
 - Colour is never the only channel: every known cell prints its level, and the
   text colour per ramp step comes from a fixed table (dark on pale steps, white
   on dark ones).
@@ -58,10 +63,13 @@ from lib.fleet_view import (
     level_columns,
     run_levels_version,
 )
-from lib.levels import MaturityModel
+from lib.levels import MaturityModel, floor_of
 
 UNKNOWN_FILL = "url(#fleet-unknown)"
 _UNKNOWN_PATTERN = hatch_pattern("fleet-unknown", "#ffffff", "#8c8c8c")
+FLOOR_HATCH = "url(#fleet-floor)"
+# The floor overlay: grey hatch lines on a transparent ground, over the ramp colour.
+_FLOOR_PATTERN = hatch_pattern("fleet-floor", "none", "#8c8c8c", "1.2")
 MUTED = "#5f6368"
 GRID_STROKE = "#ffffff"
 FRAME_STROKE = "#bdbdbd"
@@ -122,7 +130,9 @@ def change_text(change: Change) -> str:
 
 def _missing_text(entry: RowLevel) -> str:
     if entry["missing_signals"]:
-        return "missing " + ", ".join(entry["missing_signals"])
+        text = "missing " + ", ".join(entry["missing_signals"])
+        only = entry.get("full_run_only", [])
+        return text + (f"; needs a full /assess: {', '.join(only)}" if only else "")
     return "no evidence (no repository scanned)"
 
 
@@ -163,12 +173,39 @@ def _legend_entries(groups: Sequence[GroupRow], columns: Sequence[Column]) -> li
     return entries
 
 
+def _swatches(groups: Sequence[GroupRow], columns: Sequence[Column], y: float,
+              floors: bool) -> list[tuple[str, str, int]]:
+    """(swatch, label text, label width) per legend entry, one ``LINE_H + 4`` apart from ``y``."""
+    entries: list[tuple[str, str]] = [(ORRD_9[step], label)
+                                      for step, label in _legend_entries(groups, columns)]
+    entries.append((UNKNOWN_FILL, "unknown: not measured, never level 0 (? and a key letter)"))
+    if floors:
+        entries.append((FLOOR_HATCH, "N+: at least level N confirmed, a higher level not measured "
+                                     "(a lower bound, never the exact level)"))
+    out = []
+    for fill, label in entries:
+        box = f'x="{PAD:.1f}" y="{y:.1f}" width="{SWATCH:.1f}" height="{SWATCH:.1f}"'
+        under = f'<rect {box} fill="{ORRD_9[2]}"/>' if fill == FLOOR_HATCH else ""
+        swatch = under + f'<rect {box} fill="{fill}" stroke="{FRAME_STROKE}" stroke-width="1"/>'
+        out.append((swatch, _text(PAD + SWATCH + 8, y + 12, label), len(label) + 4))
+        y += LINE_H + 4
+    return out
+
+
 def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[str, str],
                 change: Change | None) -> list[str]:
     entry = cell(group, column["id"])
     cx = x + CELL_W / 2
     known = entry["status"] == STATUS_LEVEL and entry["level"] is not None
-    if known:
+    floor = None if known else floor_of(entry)
+    if floor is not None:
+        missing = _missing_text(entry)
+        step = ramp_step(floor, column["top"])
+        fill, ink = ORRD_9[step], TEXT_DARK
+        of_top = "" if column["top"] is None else f" of {column['top']}"
+        label = f"{floor}+ {keys[missing]}"
+        tip = f"at least level {floor}{of_top}, higher levels unknown: {missing}"
+    elif known:
         level = entry["level"] or 0
         step = ramp_step(level, column["top"])
         fill, ink = ORRD_9[step], STEP_TEXT[step]
@@ -179,14 +216,17 @@ def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[
         fill, ink = UNKNOWN_FILL, TEXT_DARK
         label = f"? {keys[missing]}"
         tip = f"unknown: {missing}"
-        if entry["unknown_repos"]:
-            count = len(entry["unknown_repos"])
-            tip += f"; {count} {'repository' if count == 1 else 'repositories'} without a level"
+    if not known and entry["unknown_repos"]:
+        count = len(entry["unknown_repos"])
+        tip += f"; {count} {'repository' if count == 1 else 'repositories'} without a level"
     if change is not None:
         tip += f"; change: {change_text(change)}"
     title = html.escape(f"{group['group']} · {column['title']}: {tip}", quote=False)
     parts = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{CELL_W:.1f}" height="{CELL_H:.1f}" '
              f'fill="{fill}" stroke="{GRID_STROKE}" stroke-width="1"><title>{title}</title></rect>']
+    if floor is not None:
+        parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{CELL_W:.1f}" height="{CELL_H:.1f}" '
+                     f'fill="{FLOOR_HATCH}" pointer-events="none"/>')
     text_y = y + (16.0 if change is not None else CELL_H / 2 + 5)
     if not known:
         # A white plate keeps the label clear of the hatch lines.
@@ -263,14 +303,11 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
              else "whole level (no maturity model file: not scaled to each row's top level)")
     body.append(_text(PAD, y, f"Legend: {scale}", weight="bold"))
     y += 10
-    entries: list[tuple[str, str]] = [(ORRD_9[step], label)
-                                      for step, label in _legend_entries(groups, columns)]
-    entries.append((UNKNOWN_FILL, "unknown: not measured, never level 0 (? and a key letter)"))
-    for fill, label in entries:
-        body.append(f'<rect x="{PAD:.1f}" y="{y:.1f}" width="{SWATCH:.1f}" height="{SWATCH:.1f}" '
-                    f'fill="{fill}" stroke="{FRAME_STROKE}" stroke-width="1"/>')
-        body.append(_text(PAD + SWATCH + 8, y + 12, label))
-        widest = max(widest, len(label) + 4)
+    floors = any(floor_of(cell(g, c["id"])) is not None for g in groups for c in columns)
+    for part in _swatches(groups, columns, y, floors):
+        body.append(part[0])
+        body.append(part[1])
+        widest = max(widest, part[2])
         y += LINE_H + 4
 
     if keys:
@@ -294,4 +331,4 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
     style = ('<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", '
              'Helvetica, Arial, sans-serif; }</style>')
     return fleet_svg.document(width, height, SVG_TITLE, desc, body, style=style,
-                              defs=_UNKNOWN_PATTERN, background="#ffffff")
+                              defs=_UNKNOWN_PATTERN + (_FLOOR_PATTERN if floors else ""), background="#ffffff")
