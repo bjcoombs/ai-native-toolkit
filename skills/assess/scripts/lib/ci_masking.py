@@ -40,7 +40,9 @@ without ``pipefail`` (``pytest | tee log``) is credited; an ``if pytest; then``
 wrapper is credited; ``allow_failure`` inherited through ``default:``,
 ``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
 ``before_script:`` does not reach ``script:``; reusable-workflow and
-composite-action internals are not read.
+composite-action internals are not read. A check that is the last statement
+after ``set +e`` is masked by design (issue #775 scope): bash would exit with
+its status, but any trailing line would hide it.
 """
 from __future__ import annotations
 
