@@ -737,11 +737,11 @@ completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
 both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
-one exception: a network scan in `PLATFORM_SCANS` (an explicit list, `review_reality`
-today), or a network spec one of them reads, runs its `fn`. Extension point for #715 and
-#716: append a new platform block's name to `PLATFORM_SCANS`; register a sample of merged
-changes several blocks share as a private `network=True` spec they `read`, and it runs
-once under `--platform` as their dependency. Only published, single-key scans
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`
+and `delivery`), or a network spec one of them reads, runs its `fn`. Extension point:
+append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
+changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
+which runs once under `--platform` as their dependency. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
@@ -758,6 +758,7 @@ that read `history_window` (`ai_usage`). Every git call runs inside `read_only_g
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
+`FULL_RUN_ONLY_REASONS` (#697) is the set of reason codes (`lib.counts_only.reason_code` of `UNREGISTERED_REASON` and `NETWORK_REASON`: `not_registered`, `network`) that mark a block only a full `/assess` run produces; derived, never listed by hand.
 
 **`headless_layers.py`**
 The headless runner's entries for the four blocks the default maturity model's layer 2-4
@@ -877,6 +878,7 @@ repository, never a passing one) and `settings_signals` the normalised settings 
 the fragment's `scope` and `provider`. The CLI loads the maturity model with
 `level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
+Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
@@ -900,6 +902,7 @@ maturity model titles are escaped (`text`), ids are code spans (`code`). `write_
 `page_path` refuses an id with an empty, dot or backslash segment. Golden pages:
 `tests/fixtures/fleet_next_steps/expected/` (regeneration command in the test
 module's docstring).
+A row with a floor (#697) reads "at least N of top" in the levels table and "Level at least N" in its section; a full-run-only signal gets `FULL_RUN_HINT` in place of a scan hint.
 
 **`next_step_guidance.py`**
 Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
@@ -1021,6 +1024,7 @@ without `--levels` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
 `delta` or `was`), marking the comparison not comparable across maturity-model versions (a run
 without a maturity model is named as having none, not as maturity model `None`).
+`floor` and `full_run_only` (#697) are optional: an older row without them loads; a present `floor` must be a whole number of at least 1 on an unknown row.
 
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
@@ -1036,6 +1040,7 @@ by character count, fixed number formatting: the same run gives the same bytes. 
 renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README). Its text,
 truncation, hatch pattern and document head come from `fleet_svg` with the heat map's own
 literal colours, so the goldens stayed byte-identical through the move.
+A floor cell (#697) is the floor's ramp colour under a transparent hatch (`fleet-floor`), printing `N+` and a key letter, with its own legend entry; the key says which missing signals need a full `/assess`. The pattern and legend entry appear only when a floor does, so runs without one render as before.
 
 **`fleet_svg.py`**
 Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
@@ -1065,6 +1070,7 @@ an unknown level or a missing top level (`None` when nothing is left, never 0);
 `known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single
 repository can be measured by, so the group charts use them too and the three read on one
 scale. Pure arithmetic.
+`floor_mean(cells)` (#697) over `(level, floor, top)` triples is the floor-inclusive lower bound printed beside the known-only mean as "at least"; `floor_shares` lists its shares and `has_floor` says whether any unknown row has a floor. Plotted positions stay on `mean_share`.
 
 **`fleet_quadrant.py`**
 The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
@@ -1077,6 +1083,7 @@ and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws
 the busy-and-immature quadrant (at or above the median commits, below half the top level,
 `at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
 never at zero, and every label that fit nowhere under the plot.
+A repository with a floored unknown row also gets `maturity_floor` (`fleet_maturity.floor_mean`, #697), shown as "at least" in the tooltip and on the not-plotted strip; the dot stays on the known-only mean.
 
 **`fleet_tooling_map.py`**
 The shared-tooling map (#674). `tooling_view(repos)` reads each scanned repository's
@@ -1101,6 +1108,7 @@ removed or with no row known in both runs is named on a hatched strip, never at 
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
 both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
 carries a `*` explained under the chart.
+With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
 The per-layer maturity bars (#675). `layer_bars(levels, repos)` evaluates every `team` row
@@ -1110,6 +1118,7 @@ stacks them pale to dark on the heat map's ramp (`fleet_svg.ramp_step`, so a row
 the darkest step whatever its level count), the unknown segment hatched and its repositories
 named, never counted as level 0; `org` rows, which have no per-repository level, are named
 under the bars.
+An unknown repository with a floor (#697) is named in `floored` and drawn first in the unknown part of the bar, in its floor's ramp colour under a hatch; the notes name it "(at least N)".
 
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
@@ -1146,6 +1155,7 @@ splits each line at an unknown or absent value and at a maturity-model version c
 (`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
 `fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
 (regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
+A run with floored unknown team rows carries `floor_means` (#697), printed in each point's tooltip and never drawn, so the line does not jump where floors first appear in the history.
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -1326,6 +1336,7 @@ row reads the group's settings, not its repositories, so on both sides it is `le
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
+A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -1821,6 +1832,7 @@ rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fle
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
 flag in `tests/test_fleet_legacy.py`.
+An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
@@ -2291,22 +2303,68 @@ failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
 alongside any change to discovery or the diff.
 
+**`merged_sample.py`**
+The shared sample of merged changes (#715), registered as the private
+`network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
+`run_date`; `review_reality` and `delivery` read it, so one listing serves both
+blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+on or after `fleet_activity.window_start(history_window, run_date)`, newest
+`merged_at` first; `history_window` None (interactive `/assess` with no churn
+window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
+--search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
+(an update is never before its merge, so the newest merges are among the most
+recently updated), then the same search from the 30th newest `mergedAt` with
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
+for the heavy fields. GitLab, one read:
+`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
+then filtered and ordered by `merged_at` client-side (works on GitLab versions
+without `order_by=merged_at`). A change with no readable merge time is
+`<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
+dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
+so an account is probed once); any refusal is `{"available": false, "reason"}`,
+which each reader returns as its own block. `BotClassifier` (moved from
+`review_reality`): an author object with `is_bot`/`type` is classified from it, a
+`[bot]` login is a bot, any other login is probed once with `gh api
+users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
+person, anything else unknown. The value holds logins and text in memory only and
+never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an app author, so the author compares equal to the same app as a commenter. Tests: `tests/test_delivery.py`,
+`tests/test_platform_argv_contract.py`.
+
+**`delivery.py`**
+The `delivery` platform block (#715, part of #702), reads `merged_sample`,
+`review_reality` and `fleet_config`: `{available, merged_count,
+time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
+first_human_comment_hours_p90, human_commented_share, ai_review_share,
+approved_share, self_merged_share}`. Hours rounded to 0.01; percentiles are
+nearest-rank. `approved_share` and `self_merged_share` are copied from
+`review_reality` (null when it is unavailable). First human comment (GitHub): the
+earliest comment or review by an account that is not the author, not
+`github-actions` and not a bot; an author-less event is skipped; an account of unknown
+type (a failed probe, or one left unprobed once the shared 20-login budget is spent)
+before the first known human on any change nulls the three comment figures. A
+person whose login equals a pinned AI App's name probes as that App (`gh` drops
+`[bot]` and gives comment authors no type). AI review (GitHub): a review or
+comment by an `[[ai_usage.agent_identities]]` config match (username, with and
+without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
+`agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,
+an unknown account that decides a change nulls the share. GitLab: time to merge and
+the copied shares; the notes-based figures are null until #716. An unavailable
+sample is returned as the block. Tests: `tests/test_delivery.py`.
+
 **`review_reality.py`**
-Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
-`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
-requests (`gh pr list` orders by creation, not merge) with
-`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
-and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed. The
+registry entry `review_reality_from_sample` reads the shared `merged_sample`
+(above; before #715 it was the 30 most recently opened merged pull requests,
+unwindowed, so figures shift with the window); `scan_review_reality(repo_root,
+history_window=None, run_date=None)` draws the sample itself. It
+emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
 review_required, hollow_required_review, required_approval_bypassed}`.
 `reviewed_share` counts a review in any state by any account other than the
 author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
-in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
-object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
-probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
-404 is a person, anything else is unknown, as is a comment with no author
-login. An unknown author withholds the share (null) only when it decides a pull
+in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
+author withholds the share (null) only when it decides a pull
 request: one with a confirmed bot comment counts regardless.
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
@@ -2317,10 +2375,10 @@ null when neither says yes and one was refused. `hollow_required_review` is
 where an AI reviewer comments on every change but nobody approves. Both are null
 when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
-the block. A failed pull-request read degrades the whole block to `available:
+the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
-`DEFAULT_LIMIT` most recently created merged merge requests and one `approvals` read
-each: `approved_share` (approved by an account other than the author),
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs)`) and one
+`approvals` read each: `approved_share` (approved by an account other than the author),
 `self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
 and `bot_review_share` are null (approvals are the only evidence read), and
 `hollow_required_review` is False only when approvals alone clear the threshold, else

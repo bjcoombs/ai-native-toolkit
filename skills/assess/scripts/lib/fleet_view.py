@@ -118,6 +118,12 @@ def _check_row(data: dict[str, Any], where: str) -> GroupRow:
         known = entry["status"] == STATUS_LEVEL and type(entry["level"]) is int  # bool is not a level
         if not known and entry["status"] != STATUS_UNKNOWN:
             raise FleetViewError(f"{where}: maturity model row {entry['id']!r} has no whole level")
+        # Optional since #697: absent in older rows, so only a present value is checked.
+        if "floor" in entry and (known or type(entry["floor"]) is not int or entry["floor"] < 1):
+            raise FleetViewError(f"{where}: maturity model row {entry['id']!r} has a malformed floor")
+        only = entry.get("full_run_only", [])
+        if not isinstance(only, list) or not all(isinstance(i, str) for i in only):
+            raise FleetViewError(f"{where}: maturity model row {entry['id']!r} has a malformed full_run_only list")
     row: GroupRow = data  # type: ignore[assignment]  # checked above for the fields views read
     return row
 

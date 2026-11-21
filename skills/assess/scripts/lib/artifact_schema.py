@@ -153,7 +153,13 @@ constant each.
 # history), read by the default maturity model's doc-freshness row. Row paths
 # are repo-relative POSIX on every platform. Additive; no finding moves, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.23.0"
+# 1.24.0: /fleet groups.jsonl level rows gain optional floor and full_run_only
+# (issue #697): an unknown row's confirmed low bound when at least 1, and the
+# missing signals only a full /assess measures (block reason not_registered or
+# network). compare.json level states carry floor too. Additive: status stays
+# level or unknown, fleet_group_version is unchanged, readers tolerate both keys
+# being absent, and run-context.json and complexity-stats.json are unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.24.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

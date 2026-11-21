@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.assess_config import load_excludes
+from lib.counts_only import reason_code
 from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
@@ -118,6 +119,15 @@ SIGNAL_SCANS = signal_scans()
 NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headless runner makes no "
                   "network calls without --platform")
 
+# The reason codes of the blocks only a full /assess run measures (#697): the code
+# ``lib.counts_only.reason_code`` keeps of each reason the runner writes for a block it
+# cannot produce, so a counts-only row and a --full row read alike. Derived, never
+# listed, so a reason added here (or a scan moving out of UNREGISTERED_SCANS) carries.
+# A PLATFORM_SCANS block is the exception: ``fleet --platform`` measures it, so its
+# ``network`` gap is a scan option away, not a full run (``lib.fleet_groups``).
+FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
+    reason_code(reason) for reason in (UNREGISTERED_REASON, NETWORK_REASON))
+
 # The scans ``--platform`` runs with their network reads (#714), an explicit list:
 # every other network scan still reports ``NETWORK_REASON``. ``fleet --platform``
 # runs exactly these in its separate platform pass. Extension point (#715, #716):
@@ -125,7 +135,9 @@ NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headl
 # changes read it as a registry input: register the sample as a private
 # ``network=True`` spec, list it in the blocks' ``reads``, and it runs (once) under
 # ``--platform`` because it is a dependency of a listed scan.
-PLATFORM_SCANS: tuple[str, ...] = ("review_reality",)
+# ``merged_sample`` (lib/merged_sample.py, #715) is that shared sample: ``review_reality``
+# and ``delivery`` read it, and #716 extends the same two blocks on GitLab.
+PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery")
 
 DEFAULT_WINDOW = "6mo"
 

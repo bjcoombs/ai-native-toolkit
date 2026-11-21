@@ -154,6 +154,15 @@
               "null"
             ]
           },
+          "floor": {
+            "type": "integer"
+          },
+          "full_run_only": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "top_level": {
             "type": "integer"
           },
