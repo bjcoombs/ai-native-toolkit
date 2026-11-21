@@ -25,7 +25,8 @@ def test_ran_and_skipped_with_reasons() -> None:
     assert text.startswith(HEADING + "\n")
     assert f"[docs/what-we-measure.md]({CATALOG_URL})" in text
     ran, skipped = text.split("### Skipped")
-    assert "### Ran (3, over 2 repositories)" in ran
+    assert "3 scans ran over 2 repositories and 4 were skipped." in ran
+    assert "### Ran (3)" in ran
     assert "- `ci_checks`\n" in ran
     assert "- `structure`: not measured in 1 of 2 (no_python_packages)" in ran
     assert "- `agent_ops`: skipped in 1 of 2" in ran
@@ -47,7 +48,7 @@ def test_absent_reason_and_partial_lines() -> None:
 
 def test_no_repository_scanned() -> None:
     text = measured_section([])
-    assert text.endswith("No repository was scanned, so no scan ran.")
+    assert text.startswith(f"{HEADING}\n\nNo repository was scanned, so no scan ran. Every check")
 
 
 def test_fleet_report_appends_the_section_last() -> None:

@@ -187,6 +187,11 @@ class Catalog(TypedDict):
     findings: list[CatalogFinding]
 
 
+def grade_of(input_class: str) -> str:
+    """The grade of a producer input class, or ``unclassified`` for an unknown one."""
+    return next((g for c, g in INPUT_GRADES.items() if c == input_class), UNCLASSIFIED)
+
+
 def counts(grade: str) -> bool:
     """True when a condition at ``grade`` counts toward a level (#744, #789 decision)."""
     return grade in GRADE_ORDER and grade not in _LISTED_GRADES
@@ -222,7 +227,7 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
                 signal = signals.get(criterion["signal"])
                 cond = conditions.get(key)
                 input_class = signal["evidence"] if signal else UNCLASSIFIED
-                grade = INPUT_GRADES.get(input_class, UNCLASSIFIED)  # type: ignore[call-overload]
+                grade = grade_of(input_class)
                 title = signal["title"] if signal else criterion["signal"]
                 criteria.append(CatalogCriterion(
                     key=key, signal=criterion["signal"], op=criterion["op"], value=criterion["value"],
@@ -293,7 +298,7 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
         headless = _headless(name, collector)
         names = {name} if spread else {name, cm.scan_key(collector)}
         evidence = [Evidence(signal=s["path"], input_class=s["evidence"],
-                             grade=INPUT_GRADES.get(s["evidence"], UNCLASSIFIED))  # type: ignore[call-overload]
+                             grade=grade_of(s["evidence"]))
                     for s in signals if _first(s["path"]) == name]
         grades = [g for g in GRADE_ORDER if any(e["grade"] == g for e in evidence)] or [UNCLASSIFIED]
         out.append(CatalogScan(
@@ -325,7 +330,7 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
                                      private=bool(c.get("private"))) for c in cm.collectors(manifest)],
         signals=[CatalogSignal(path=s["path"], title=s["title"], type=s["type"], collector=s["collector"],
                                input_class=s["evidence"],
-                               grade=INPUT_GRADES.get(s["evidence"], UNCLASSIFIED),  # type: ignore[call-overload]
+                               grade=grade_of(s["evidence"]),
                                null_means=s.get("null_means", "")) for s in signals],
         findings=[CatalogFinding(name=f["name"], title=f["title"], order=f["order"], action=f["action"],
                                  mode=f["mode"], concern=f["concern"], inputs=list(f["inputs"]),

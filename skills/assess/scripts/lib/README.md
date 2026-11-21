@@ -1838,7 +1838,8 @@ known scan, **Ran** when its block exists without a `not_registered` or `network
 least one repository (with "not measured in k of n" and the reason codes where the block is
 unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
 a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
-"not in this run's context" for `assess_report.py`). It links `docs/what-we-measure.md` by
+"this run wrote no block for it" for `assess_report.py`). Its first line says how many scans
+ran and were skipped. It links `docs/what-we-measure.md` by
 absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
 Tests: `tests/test_measured_appendix.py`.
 

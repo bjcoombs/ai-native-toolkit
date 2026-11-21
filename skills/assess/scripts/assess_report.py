@@ -595,7 +595,7 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         diff_section=render_diff_section(ctx),
     )
     # The scans this run measured, the ones it skipped and why, and the catalog link (#794).
-    measured = measured_section([ctx], absent="not in this run's context")
+    measured = measured_section([ctx], absent="this run wrote no block for it")
     return f"{report.rstrip()}\n\n{measured}\n"
 
 

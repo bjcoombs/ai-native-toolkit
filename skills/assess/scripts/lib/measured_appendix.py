@@ -54,11 +54,10 @@ def measured_section(documents: Sequence[Mapping[str, object]],
     reason for a scan whose block no document holds (a fleet's ``--scans`` selection)."""
     names = known_scans() if names is None else names
     total = len(documents)
-    lines = [HEADING, "",
-             f"Every check is described in [docs/what-we-measure.md]({CATALOG_URL}). "
-             "A scan that did not run, or could not read its input, earns nothing and costs nothing."]
+    link = (f"Every check is described in [docs/what-we-measure.md]({CATALOG_URL}). A scan that "
+            "was skipped, or could not read its input, earns nothing and costs nothing.")
     if total == 0:
-        return "\n".join([*lines, "", "No repository was scanned, so no scan ran."])
+        return "\n".join([HEADING, "", f"No repository was scanned, so no scan ran. {link}"])
     ran: list[str] = []
     skipped: list[str] = []
     for name in names:
@@ -77,6 +76,7 @@ def measured_section(documents: Sequence[Mapping[str, object]],
             line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total}"
         ran.append(line)
     scope = "1 repository" if total == 1 else f"{total} repositories"
-    lines += ["", f"### Ran ({len(ran)}, over {scope})", "", *(ran or ["- none"]),
+    lines = [HEADING, "", f"{len(ran)} {'scan' if len(ran) == 1 else 'scans'} ran over {scope} and {len(skipped)} {'was' if len(skipped) == 1 else 'were'} skipped. {link}",
+             "", f"### Ran ({len(ran)})", "", *(ran or ["- none"]),
               "", f"### Skipped ({len(skipped)})", "", *(skipped or ["- none"])]
     return "\n".join(lines)

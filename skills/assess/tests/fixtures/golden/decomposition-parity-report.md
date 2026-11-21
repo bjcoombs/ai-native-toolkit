@@ -34,9 +34,9 @@ _Deterministic portion of the assessment: metrics, hotspots, and cross-layer fin
 
 ## How this was measured
 
-Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that did not run, or could not read its input, earns nothing and costs nothing.
+40 scans ran over 1 repository and 1 was skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (40, over 1 repository)
+### Ran (40)
 
 - `agent_ops`
 - `config_drift`
@@ -81,4 +81,4 @@ Every check is described in [docs/what-we-measure.md](https://github.com/bjcoomb
 
 ### Skipped (1)
 
-- `structure_drift`: not in this run's context.
+- `structure_drift`: this run wrote no block for it.
