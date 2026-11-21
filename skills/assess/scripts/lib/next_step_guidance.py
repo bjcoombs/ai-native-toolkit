@@ -325,8 +325,8 @@ _WORDING: dict[str, Wording] = {
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
         "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it fails."),
     "coverage_gate.threshold_meets_minimum": _flag(
-        "Make the test run fail when line coverage drops below 50 percent or more: set the "
-        "coverage threshold to at least 50 (a JaCoCo ratio of at least `0.50`).",
+        "Make the test run fail when line coverage drops below a threshold of at least 50 "
+        "percent (a JaCoCo ratio of at least `0.50`).",
         "A committed coverage threshold of at least 50 percent (`fail_under = 50` in "
         "`pyproject.toml`, `--cov-fail-under=50`, Jest `coverageThreshold`, JaCoCo `<minimum>0.50"
         "</minimum>`, or similar) is in the repository as a number, not a variable. A threshold "
