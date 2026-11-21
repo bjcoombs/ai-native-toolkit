@@ -72,7 +72,7 @@ def test_counts_only_document_is_content_free_and_validates(target: Path, tmp_pa
     doc = _run(target, tmp_path / "counts.json", "--counts-only")
     jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
     assert doc["stamp"]["target_head"] is None
-    assert set(doc["scans"]) == set(signals.known_scans())
+    assert set(doc["scans"]) == set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
 
     text = json.dumps(doc)
     for leaked in (SECRET, "Jane Doe", "jane@example.com", "payments migration",

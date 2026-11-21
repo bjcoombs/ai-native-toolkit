@@ -5,8 +5,9 @@ up to 30 changes merged in the run window, newest merge first) and the
 ``review_reality`` block built from the same sample, so both blocks describe the
 same changes and the shares ``review_reality`` already computes are copied, never
 computed a second time. ``fleet --platform`` runs it in the platform pass
-(``PLATFORM_SCANS``); without ``--platform`` it is the offline ``network``
-placeholder, never zeros.
+(``PLATFORM_SCANS``); without ``--platform`` the headless document has no
+``delivery`` block at all (``signals.PLATFORM_ONLY_SCANS``, #779), never zeros
+and never a placeholder.
 
 Block (``delivery``)::
 
