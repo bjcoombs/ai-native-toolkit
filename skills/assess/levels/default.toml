@@ -63,9 +63,11 @@
 # - Layer 4 reads a declared boundary and the outcome of the commonest
 #   architecture test: level 1 is a committed ownership or boundary map
 #   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
-#   module boundaries) with at least one pattern matching a
-#   tracked file, level 2 adds a file-size outcome (95% of scored files at
-#   500 lines or fewer). Neither proves an architecture test runs in CI,
+#   module boundaries) with at least one pattern matching a tracked file
+#   that is not a catch-all (boundary_patterns): a CODEOWNERS of only `*`,
+#   `/*`, `**` or `/**` names one owner for the whole tree and no boundary,
+#   so it does not count. Level 2 adds a file-size outcome (95% of scored
+#   files at 500 lines or fewer). Neither proves an architecture test runs in CI,
 #   which is what /assess looks for. With no map the structure_drift block
 #   is omitted (a headless run reports it unavailable), so the row is
 #   unknown rather than 0.
@@ -128,7 +130,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.11"
+version = "default-2026.11.12"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -206,7 +208,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "structure_drift.tier_0.matched_patterns", op = "gt", value = 0 }]
+  criteria = [{ signal = "structure_drift.tier_0.boundary_patterns", op = "gt", value = 0 }]
 
   [[rows.levels]]
   level = 2

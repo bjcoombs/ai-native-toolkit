@@ -170,7 +170,12 @@ constant each.
 # reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
 # (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
 # and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.26.0"
+# 1.27.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
+# #785): the matched declarations less the catch-all CODEOWNERS globs (`*`, `/*`,
+# `**`, `/**`), read by the default maturity model's Layer 4 level 1. Additive:
+# total_patterns and matched_patterns keep their meaning, and
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.27.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -259,4 +264,7 @@ ARTIFACT_SCHEMA_VERSION = "1.26.0"
 #     window ratios, instruction ``freshness_days`` (and so the grader's freshness
 #     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
 #     whose HEAD is old, ages shrink and windows cover the history before HEAD.
-ASSESS_METHOD_VERSION = 21
+# 22: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
+#     matched_patterns (issue #785), so a CODEOWNERS whose only matching pattern is
+#     a catch-all (`*`, `/*`, `**`, `/**`) no longer credits a declared boundary.
+ASSESS_METHOD_VERSION = 22

@@ -108,6 +108,7 @@ class PathDriftBlock(TypedDict):
     empty_ownership_patterns: list[EmptyOwnershipPattern]
     total_patterns: int
     matched_patterns: int
+    boundary_patterns: int
     coverage_ratio: float
     empty_globs: list[LegacyEmptyGlob]
     declared_paths: int
@@ -217,17 +218,23 @@ def _empty_refs_in_doc(
     return rows
 
 
-def _count_declared_and_matched(repo_root: Path) -> tuple[int, int]:
-    """Total declared patterns/paths and how many match at least one tracked file.
+_CATCH_ALL = frozenset({"*", "/*", "**", "/**"})
+
+
+def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
+    """(declared, matched, boundary) counts over the patterns/paths a repo declares.
 
     Counts both sides' declarations: every CODEOWNERS glob, and every distinct
     architecture-doc path reference (per declaring boundary). ``matched`` is the
-    declarations whose resolution is non-empty. Reuses the same parse/resolve path
+    declarations whose resolution is non-empty. ``boundary`` is ``matched`` less
+    the catch-all CODEOWNERS globs (``_CATCH_ALL``), which name one owner for the
+    whole tree and no module boundary (#785). Reuses the same parse/resolve path
     as the empty-set detectors so the two never disagree on what "declared" means.
     """
     codeowners = parse_codeowners(repo_root)
     declared = len(codeowners)
     matched = sum(1 for files in codeowners.values() if files)
+    boundary = sum(1 for pat, files in codeowners.items() if files and pat not in _CATCH_ALL)
 
     docs = _discover_arch_docs(repo_root)
     if docs:
@@ -241,7 +248,8 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int]:
             d, m = _declared_refs_in_doc(text, repo_root, rel_paths)
             declared += d
             matched += m
-    return declared, matched
+            boundary += m
+    return declared, matched, boundary
 
 
 def _declared_refs_in_doc(
@@ -297,7 +305,7 @@ def detect_path_existence_drift(
           available, reason,
           tier_0_available,
           empty_ownership_patterns: [{pattern, declared_in, owners}],
-          total_patterns, matched_patterns, coverage_ratio,
+          total_patterns, matched_patterns, boundary_patterns, coverage_ratio,
           # legacy-shape mirrors for the orchestrator's enumerate-both-sides view:
           empty_globs: [{pattern, file, owner}],
           declared_paths, matched_paths,
@@ -321,6 +329,7 @@ def detect_path_existence_drift(
             "empty_ownership_patterns": [],
             "total_patterns": 0,
             "matched_patterns": 0,
+            "boundary_patterns": 0,
             "coverage_ratio": 0.0,
             "empty_globs": [],
             "declared_paths": 0,
@@ -330,7 +339,7 @@ def detect_path_existence_drift(
     empties = _empty_codeowners_patterns(repo_root) + _empty_architecture_refs(repo_root)
     empties.sort(key=lambda e: (e["pattern"], e["declared_in"]))
 
-    total, matched = _count_declared_and_matched(repo_root)
+    total, matched, boundary = _count_declared_and_matched(repo_root)
     coverage = round(matched / total, 3) if total else 0.0
 
     return {
@@ -340,6 +349,7 @@ def detect_path_existence_drift(
         "empty_ownership_patterns": empties,
         "total_patterns": total,
         "matched_patterns": matched,
+        "boundary_patterns": boundary,
         "coverage_ratio": coverage,
         # The orchestrator's enumerate-both-sides view (#59c) reads an
         # ``empty_globs`` list and a declared/matched count pair; mirror the
