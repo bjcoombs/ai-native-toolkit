@@ -29,8 +29,10 @@ First human comment (GitHub). The earliest comment (``createdAt``) or review
 (``submittedAt``) on the pull request by an account that is neither its author,
 nor ``github-actions``, nor a bot (the sample's shared ``BotClassifier``). Its
 hours are counted from ``createdAt`` and only over the changes that have one;
-``human_commented_share`` says how many do. When an author whose account type
-could not be learned comes before the first known human on any change, the
+``human_commented_share`` says how many do. An event with no author login (a
+deleted account) is skipped, and so is an account left unprobed because the
+shared probe budget (``MAX_LOGIN_PROBES``) was spent. When a probed account whose
+type could not be learned comes before the first known human on any change, the
 three first-comment figures are None: the answer depends on that account.
 
 AI review (GitHub). A change counts when a review or comment comes from an AI
@@ -62,8 +64,12 @@ from lib.fleet_config import FleetConfig
 from lib.merged_sample import STATUS_BOTS, BotClassifier, MergedSample, SampleOrReason, login, parse_time
 
 # AI code-review apps, by GitHub login with the ``[bot]`` suffix dropped. A login
-# counts only for a bot account, so a person who happens to hold one is not read
-# as AI review. Extend with an ``[[ai_usage.agent_identities]]`` config rule.
+# counts only when ``BotClassifier`` reads the account as a bot. ``gh pr list``
+# drops the suffix and carries no account type for comment and review authors,
+# and the classifier's ``users/<login>[bot]`` probe only shows that the App
+# exists, so a person whose login equals one of these App names would read as
+# that App. The names are App slugs, which few people hold. Extend with an
+# ``[[ai_usage.agent_identities]]`` config rule.
 AI_REVIEWERS = frozenset({
     "coderabbitai",                    # CodeRabbit
     "copilot-pull-request-reviewer",   # GitHub Copilot code review
@@ -131,17 +137,17 @@ _UNDECIDED = "undecided"
 
 
 def first_human_comment(pr: dict[str, Any], bots: BotClassifier) -> float | None | str:
-    """Hours to the first human comment, None for none, ``_UNDECIDED`` when an
-    unknown account comes first."""
+    """Hours to the first human comment, None for none, ``_UNDECIDED`` when a
+    probed account of unknown type comes first."""
     author = login(pr.get("author"))
     for when, actor in _events(pr):
         name = login(actor)
-        if name is None:
-            return _UNDECIDED
-        if name == author or name in STATUS_BOTS:
+        if name is None or name == author or name in STATUS_BOTS:
             continue
         verdict = bots.is_bot(actor)
         if verdict is None:
+            if bots.unprobed(actor):
+                continue
             return _UNDECIDED
         if not verdict:
             return _hours(pr.get("createdAt"), when)

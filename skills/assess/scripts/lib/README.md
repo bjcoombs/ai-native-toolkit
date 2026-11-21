@@ -2219,8 +2219,11 @@ approved_share, self_merged_share}`. Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
-`github-actions` and not a bot; an unknown account before the first known human
-on any change nulls the three comment figures. AI review (GitHub): a review or
+`github-actions` and not a bot; an author-less event, or an account left unprobed
+once the shared probe budget is spent, is skipped; a probed account of unknown type
+before the first known human on any change nulls the three comment figures. A
+person whose login equals a pinned AI App's name probes as that App (`gh` drops
+`[bot]` and gives comment authors no type). AI review (GitHub): a review or
 comment by an `[[ai_usage.agent_identities]]` config match (username, with and
 without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
 `agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,

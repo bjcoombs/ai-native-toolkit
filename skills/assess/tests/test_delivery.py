@@ -129,6 +129,26 @@ def test_an_unknown_account_before_any_human_withholds_the_comment_figures():
     assert block["time_to_merge_hours_p50"] == 10.0  # unaffected
 
 
+def test_an_authorless_event_is_skipped_not_undecided():
+    pr = _pr(comments=(("bob", "2026-11-01T02:00:00Z"),))
+    pr["comments"].insert(0, {"author": None, "createdAt": "2026-11-01T01:00:00Z"})
+    block = scan_delivery(sample([pr]), REVIEW)
+    assert block["first_human_comment_hours_p50"] == 2.0
+    assert block["human_commented_share"] == 1.0
+
+
+def test_a_spent_probe_budget_skips_the_unprobed_account(monkeypatch):
+    monkeypatch.setattr(ms, "MAX_LOGIN_PROBES", 0)
+
+    pr = _pr(comments=(("mystery", "2026-11-01T01:00:00Z"),),
+             reviews=(("carol", "2026-11-01T03:00:00Z"),))
+    pr["reviews"][0]["author"]["is_bot"] = False  # typed: needs no probe
+    bots = BotClassifier()
+    block = scan_delivery(sample([pr], bots), REVIEW)
+    assert bots.unprobed({"login": "mystery"})
+    assert block["first_human_comment_hours_p50"] == 3.0
+
+
 def test_an_unknown_account_after_the_first_human_does_not_matter():
     pr = _pr(comments=(("bob", "2026-11-01T01:00:00Z"), ("mystery", "2026-11-01T02:00:00Z")))
     block = scan_delivery(sample([pr], StubBots(frozenset({"mystery"}))), REVIEW)
@@ -138,10 +158,10 @@ def test_an_unknown_account_after_the_first_human_does_not_matter():
 
 # ---- AI review -----------------------------------------------------------------
 
-def test_status_bots_are_not_ai_review_and_a_person_with_an_ai_login_is_not_either():
+def test_status_bots_are_not_ai_review_nor_is_an_ai_login_the_classifier_reads_as_a_person():
     matcher = scan_matcher()
     assert ai_reviewed(_pr(comments=(("codecov", "2026-11-01T01:00:00Z"),)), StubBots(), matcher) is False
-    person = _pr(comments=(("cursor", "2026-11-01T01:00:00Z"),))  # not in BOTS: a person
+    person = _pr(comments=(("cursor", "2026-11-01T01:00:00Z"),))  # the stub reads it as a person
     assert "cursor" in AI_REVIEWERS
     assert ai_reviewed(person, StubBots(), matcher) is False
 
