@@ -204,6 +204,20 @@ gate_reason = "self_degrading"
 revision = 1
 
 [[entries]]
+id = "core.ghsync_root"
+kind = "collector"
+title = "ghsync root for GitLab includes"
+issues = [766]
+callable = "lib.run_setup:ghsync_root"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
 id = "core.measured_commit"
 kind = "collector"
 title = "Measured commit"
@@ -1350,7 +1364,7 @@ title = "AI review committed in CI"
 issues = [696]
 callable = "lib.review_automation:scan_review_automation"
 publishes = ["review_automation"]
-reads = ["repo_root", "fleet_config"]
+reads = ["repo_root", "fleet_config", "ghsync_root"]
 stage = "post_offers"
 headless = { review_automation = "registered" }
 shapes = [
@@ -1392,7 +1406,7 @@ summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint comman
 issues = [698]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
-reads = ["repo_root"]
+reads = ["repo_root", "ghsync_root"]
 stage = "post_offers"
 headless = { ci_checks = "registered" }
 shapes = [
@@ -1405,6 +1419,10 @@ unknown_reasons = [
   [entries.privacy]
   "ci_checks.reason" = "drop"
   "ci_checks.basis" = "token"
+  "ci_checks.includes.kind" = "token"
+  "ci_checks.includes.id" = "id"
+  "ci_checks.includes.status" = "token"
+  "ci_checks.includes.ref_basis" = "token"
 
 [[entries]]
 id = "core.agent_building"
@@ -1656,12 +1674,12 @@ evidence = "head_text"
 null_means = "included_jobs: the check may live in an included file"
 
 [[entries]]
-id = "core:agent_environment.layer5_cap.applies"
+id = "core:agent_environment.pinning.unlocked_total"
 kind = "signal"
-title = "The Layer 5 cap applies"
+title = "Dependency manifests without a committed lockfile"
 collector = "core.agent_environment"
-path = "agent_environment.layer5_cap.applies"
-type = "bool"
+path = "agent_environment.pinning.unlocked_total"
+type = "number"
 evidence = "head_text"
 
 [[entries]]
@@ -1855,11 +1873,11 @@ key = "layer-5-ci.1:ci_checks.test_or_lint_runs"
 fix = "Add a CI step that runs your test or lint command on pull requests."
 
 [[entries]]
-id = "core.cond.layer-5-ci.2.applies"
+id = "core.cond.layer-5-ci.2.unlocked_total"
 kind = "condition"
-title = "An agent can run the check locally"
-key = "layer-5-ci.2:agent_environment.layer5_cap.applies"
-fix = "Name a check command that resolves and commit the setup an agent needs to run it."
+title = "Every dependency manifest has its lockfile"
+key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
+fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests."
 
 [[entries]]
 id = "core.cond.layer-6-coverage.1.enforced"
