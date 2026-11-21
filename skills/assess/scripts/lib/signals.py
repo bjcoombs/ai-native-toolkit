@@ -9,7 +9,8 @@ and returns one JSON-ready document: a run stamp plus one block per scan.
 It never writes, never reaches the network and never prompts. A scan declared
 ``network`` (outside ``--platform``, below) runs its ``offline_fn`` when it has one and is otherwise reported
 ``{"available": false, "reason": ...}``; so is every block in
-``UNREGISTERED_SCANS``. A scan that raises degrades through the registry's
+``UNREGISTERED_SCANS``. A ``PLATFORM_ONLY_SCANS`` block (``delivery``) is left
+out instead. A scan that raises degrades through the registry's
 ``safe`` wrapper and the run completes.
 
 ``--platform`` (``build_document(platform=True)``, #714) is the one opt-in
@@ -141,6 +142,13 @@ FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
 # ``review_reality``, so the platform pass rebuilds it from the measured block.
 PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidence")
 
+# The PLATFORM_SCANS blocks that exist only on the platform (#779): without
+# ``--platform`` the document leaves them out (absent, never a ``network``
+# placeholder), so a row read without the platform carries no figure, not even
+# an unavailable one. ``review_reality`` keeps its offline ``network`` block and
+# ``review_evidence`` is offline itself, so neither is listed.
+PLATFORM_ONLY_SCANS: tuple[str, ...] = ("delivery",)
+
 DEFAULT_WINDOW = "6mo"
 
 # skills/assess/scripts/lib/signals.py -> the toolkit checkout root.
@@ -265,7 +273,8 @@ def collect(
     """Run the selected scans (and what they read); one block per name.
 
     Offline unless ``platform``: then a network scan in ``PLATFORM_SCANS``, or one
-    a listed scan reads, runs its network ``fn``.
+    a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
+    name gets no block at all.
     """
     inputs = build_inputs(repo_root, window, fleet_config)
     needed = _with_dependencies(selected, specs, inputs)
@@ -284,7 +293,8 @@ def collect(
     if runnable:
         for stage in STAGES:
             run_scans(ctx, inputs, stage, runnable)
-    return {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected}
+    return {name: ctx.get(name, _unavailable(UNREGISTERED_REASON)) for name in selected
+            if platform or name not in PLATFORM_ONLY_SCANS}
 
 
 def read_plugin_version(toolkit_root: Path = TOOLKIT_ROOT) -> str:

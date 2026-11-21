@@ -69,7 +69,7 @@ from lib.counts_only import reason_code
 from lib.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids
-from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_SCANS
+from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS
 
 # Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other
 # version, so lib/fleet_legacy.py maps the old keys and earlier history lines still load.
@@ -223,9 +223,12 @@ def full_run_only(data: Mapping[str, Any], signal: str) -> bool:
 
 
 def platform_only(data: Mapping[str, Any], signal: str) -> bool:
-    """The signal's block is a ``PLATFORM_SCANS`` one left unmeasured for want of ``--platform``."""
-    return (signal.split(".", 1)[0] in PLATFORM_SCANS
-            and _unavailable_code(data, signal) == reason_code(NETWORK_REASON))
+    """The signal's block is a ``PLATFORM_SCANS`` one left unmeasured for want of ``--platform``:
+    it reads ``network``, or it is a ``PLATFORM_ONLY_SCANS`` block absent from the row (#779)."""
+    name = signal.split(".", 1)[0]
+    if name in PLATFORM_ONLY_SCANS and name not in data:
+        return True
+    return name in PLATFORM_SCANS and _unavailable_code(data, signal) == reason_code(NETWORK_REASON)
 
 
 def _missing_everywhere(evaluations: Mapping[str, Evaluation], signals: Mapping[str, Mapping[str, Any]],

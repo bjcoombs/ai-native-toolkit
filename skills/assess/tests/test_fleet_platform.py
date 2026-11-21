@@ -200,6 +200,19 @@ def test_platform_joins_the_read_and_stamps_the_run(world, tmp_path):
     jsonschema.validate(rows[0], build_schema())
 
 
+def test_delivery_is_absent_offline_and_joined_by_the_platform_pass(world, tmp_path):
+    """No ``--platform``: no ``delivery`` block at all, not a placeholder (#779); the pass adds it."""
+    scans = ("--scans", "agent_ops,review_reality,delivery")
+    rows, _ = _run(tmp_path, *scans)
+    assert "delivery" not in rows[0]["scans"]
+    assert rows[0]["scans"]["review_reality"]["available"] is False
+    jsonschema.validate(rows[0], build_schema())
+    rows, _ = _run(tmp_path, *scans, "--platform")
+    delivery = rows[0]["scans"]["delivery"]
+    assert delivery["available"] is True and delivery["merged_count"] == 0
+    jsonschema.validate(rows[0], build_schema())
+
+
 def test_a_hanging_host_never_turns_the_row_into_scan_timeout(world, tmp_path):
     (world / "hang").write_text("", encoding="utf-8")
     rows, _ = _run(tmp_path, "--platform", "--platform-timeout", "4")

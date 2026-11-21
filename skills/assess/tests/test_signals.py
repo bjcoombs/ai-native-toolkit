@@ -81,7 +81,18 @@ def test_full_run_leaves_the_target_untouched_and_validates(fixture_repo, tmp_pa
     assert stamp["target_dirty"] is False
     assert stamp["window"] == "6mo"
     assert stamp["plugin_version"] == signals.read_plugin_version()
-    assert set(doc["scans"]) == set(signals.known_scans())
+    # Every known scan but the platform-only ones, absent without --platform (#779).
+    assert set(doc["scans"]) == set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
+    assert "delivery" not in doc["scans"] and "review_reality" in doc["scans"]
+
+
+def test_platform_only_block_is_absent_without_platform(fixture_repo, no_gh):
+    """``delivery`` is left out offline, even when named; never a placeholder (#779)."""
+    assert signals.PLATFORM_ONLY_SCANS == ("delivery",)
+    offline = signals.collect(fixture_repo, ["review_reality", "delivery"])
+    assert set(offline) == {"review_reality"}
+    assert offline["review_reality"] == {"available": False, "reason": signals.NETWORK_REASON}
+    assert not no_gh.exists()
 
 
 def test_network_scans_are_unavailable_and_agent_environment_runs_offline(fixture_repo, tmp_path, no_gh):
