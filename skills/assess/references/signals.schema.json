@@ -307,6 +307,113 @@
             }
           }
         },
+        "coverage_gate": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI files at HEAD, never from measured coverage. Each gate keeps its threshold as written beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80).",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the block is unavailable."
+            },
+            "enforced": {
+              "type": "boolean",
+              "description": "True when any gate gates something (a non-zero threshold, or a null one from a tool default or a templated flag)."
+            },
+            "gates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": "integer"
+                  },
+                  "tool": {
+                    "type": "string"
+                  },
+                  "form": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "The threshold as written; null when not read (a template variable, a tool default)."
+                  },
+                  "unit": {
+                    "enum": [
+                      "percent",
+                      "ratio",
+                      "uncovered_count"
+                    ]
+                  },
+                  "threshold_percent": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "The threshold as a percentage: as written for percent, times 100 for ratio; null for uncovered_count or a threshold not read."
+                  },
+                  "metric": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "description": "Each gate found, with its file and 1-based line."
+            },
+            "max_threshold_percent": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The highest non-null threshold_percent across the gates; null when no gate has one."
+            },
+            "threshold_meets_minimum": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at least 50; null (unknown) when none is but a counted gate's percentage was not read; false otherwise. Gates counted are those enforced counts."
+            },
+            "not_detected": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "A list of strings; counts-only output keeps only its length."
+            }
+          }
+        },
         "delivery": {
           "type": "object",
           "if": {

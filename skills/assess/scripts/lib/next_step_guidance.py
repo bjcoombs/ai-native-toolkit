@@ -324,6 +324,13 @@ _WORDING: dict[str, Wording] = {
         "Make the test run fail when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
         "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it fails."),
+    "coverage_gate.threshold_meets_minimum": _flag(
+        "Make the test run fail when line coverage drops below 50 percent or more: set the "
+        "coverage threshold to at least 50 (a JaCoCo ratio of at least `0.50`).",
+        "A committed coverage threshold of at least 50 percent (`fail_under = 50` in "
+        "`pyproject.toml`, `--cov-fail-under=50`, Jest `coverageThreshold`, JaCoCo `<minimum>0.50"
+        "</minimum>`, or similar) is in the repository as a number, not a variable. A threshold "
+        "below 50 does not count, even when measured coverage is higher."),
     "test_pressure.mutation_run": _flag(
         "Run mutation testing against the test suite.",
         "A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a "
@@ -384,6 +391,12 @@ _MEASURE_HINTS = {
                  "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
                  "`include:` or component, a reusable workflow from another repository): the "
                  "check may live in the included file, which the scan does not read.",
+    "coverage_gate": "The `coverage_gate` scan reads the threshold unknown when none of at "
+                     "least 50 percent is committed but a gate's threshold is not a readable "
+                     "percentage: a variable (`--cov-fail-under=${{ env.COV_MIN }}`), an nyc/c8 "
+                     "default, or a Jest uncovered-line count. Write the threshold as a number "
+                     "to measure it. The block is unavailable when the scan did not run: check "
+                     "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
 }

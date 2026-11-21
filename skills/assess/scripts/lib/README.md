@@ -946,13 +946,14 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. The `ai_usage`, `ci_checks` and `delivery` blocks (`scan_block_schemas.py`, #779)
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate` and `delivery` blocks (`scan_block_schemas.py`, #779, #781)
 also name and describe their fields (`described_block`), loosely: no required field, and a
 string list may be its counts-only length.
 
 **`scan_block_schemas.py`**
 `BLOCK_SCHEMAS`: hand-written field descriptions (with units: delivery durations are hours)
-of the blocks a fleet reader compares, `ai_usage`, `ci_checks` and `delivery` (#779), read
+of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781)
+and `delivery` (#779), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -3171,8 +3172,9 @@ package; a package-level config outside the scope is dropped. A root CI gate is
 reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
-`coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
-`{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
+`coverage_gate` block (`CoverageGateBlock`): `{available, enforced, gates,
+max_threshold_percent, threshold_meets_minimum, not_detected}`, each gate
+`{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
 (`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
 and `coverage report|xml|json|html|lcov --fail-under` in GitHub workflows and
@@ -3197,6 +3199,23 @@ typed by the `CoverageGate` TypedDict. `enforced` is true when
 any gate has a non-zero threshold, or a null one from nyc/c8 (which check at a
 built-in default) or a templated coverage.py / pytest-cov flag; `fail_under = 0` and a Jest/Vitest anchor whose threshold was
 not read are listed but gate nothing.
+
+The threshold reading (#781), which Layer 6 level 1 of the default maturity model
+reads. `threshold_percent` is the gate's threshold as a percentage, derived in `_gate`
+from `unit` alone by `threshold_percent()`: as written for `percent`, times 100 for
+`ratio` (rounded to 6 places, so `0.55` is `55.0`), and null for `uncovered_count` or
+a null threshold. `threshold` and `unit` stay as written. `max_threshold_percent` is the
+highest non-null `threshold_percent` across all gates, null when none has one.
+`threshold_meets_minimum` reads only the gates `enforced` counts (`_gates_something`),
+in this order: true when one has `threshold_percent >= MINIMUM_THRESHOLD_PERCENT` (50);
+null (not measured) when none does but one has a null `threshold_percent` (a templated
+value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
+false otherwise, including no counted gate. Measured coverage is never read: a report
+is a working-tree file, so the level would stop being a function of the commit.
+Adding a gate form (Go, Rust under #788): build the gate with `_gate` and the right
+`unit`; `threshold_percent` and both block fields follow with no other change. A form
+whose number is not a coverage percentage (a count) needs its own `unit`, mapped to
+null in `threshold_percent()`, so it reads unknown rather than credited.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty

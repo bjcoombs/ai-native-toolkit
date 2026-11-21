@@ -123,12 +123,23 @@
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
 #   a run, a known limit.
+# - Layer 6 level 1 reads coverage_gate.threshold_meets_minimum
+#   (lib/coverage_gate.py): a committed coverage gate whose threshold is at
+#   least 50 percent, with units normalised (a JaCoCo ratio 0.80 is 80). Only
+#   gates that gate something count, so fail_under = 0 is level 0, and the
+#   highest threshold wins (fail_under = 1 beside --cov-fail-under=85 is met).
+#   A gate whose percentage is not read (a templated --cov-fail-under, an
+#   nyc/c8 default, a Jest uncovered-line count) with none at 50 or more is
+#   unknown, never 0. Measured coverage is not read: a coverage report is a
+#   working-tree artifact, not part of the commit. Go and Rust gate forms are
+#   not read yet (#788), so such a repository is level 0. Level 2 reads
+#   test_pressure.mutation_run, which a headless run does not build.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.11"
+version = "default-2026.11.12"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -234,7 +245,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "coverage_gate.enforced", op = "eq", value = true }]
+  criteria = [{ signal = "coverage_gate.threshold_meets_minimum", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2

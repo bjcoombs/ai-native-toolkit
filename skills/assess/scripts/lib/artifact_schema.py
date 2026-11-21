@@ -170,7 +170,13 @@ constant each.
 # reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
 # (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
 # and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.26.0"
+# 1.27.0: run-context.json coverage_gate gains max_threshold_percent and
+# threshold_meets_minimum, and each gate gains threshold_percent (issue #781): the
+# threshold as a percentage (a JaCoCo ratio 0.80 is 80) and the Layer 6 level 1
+# signal (true at 50 percent or more, null when a counted gate's percentage is not
+# read). Additive: threshold and unit stay as written, and complexity-stats.json is
+# unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.27.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

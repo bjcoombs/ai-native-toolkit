@@ -131,7 +131,8 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "agent_environment.ci_duration.over_target",   # NotRequired field
     "test_pressure.reason",                        # a union arm (unavailable shape)
     "stats_summary.loc.p95",                       # typed field under an untyped block
-    "coverage_gate.enforced",                      # untyped block: open
+    "coverage_gate.enforced",                      # typed block (#781)
+    "coverage_gate.threshold_meets_minimum",
     "review_reality.anything.deeper",              # untyped block: open
     "agent_ops.available",                         # every block may report status
     "layer_grades.instructions_grade",             # deterministic layer grade (#620)
@@ -151,6 +152,7 @@ def test_team_paths_accepted(path: str) -> None:
     "agent_environment.check.named.command",   # steps into a list
     "observability.rung.deeper",               # past a scalar
     "stats_summary.loc.no_such",
+    "coverage_gate.threshold_minimum",         # typed since #781
     "layer_grades.layer_3_grade",              # no such layer grade
     "layer_grades",                            # ends on an object
 ])
@@ -472,3 +474,44 @@ def test_counts_only_output_reaches_the_same_levels(
 
 def test_rerun_is_byte_identical(golden_repos: dict[str, dict[str, Any]]) -> None:
     assert dumps_result(_run(golden_repos)) == dumps_result(_run(copy.deepcopy(golden_repos)))
+
+
+def _coverage_repo(root: Path, files: dict[str, str]) -> dict[str, Any]:
+    root.mkdir()
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+    return _scans(_commit(root))
+
+
+def test_layer_six_level_one_needs_a_threshold_of_at_least_fifty(tmp_path: Path) -> None:
+    """Issue #781: a 1 percent gate is level 0; 85 is level 1; a templated one is unknown."""
+    report = "[project]\nname = 'x'\nversion = '0'\n\n[tool.coverage.report]\nfail_under = {}\n"
+    low = _coverage_repo(tmp_path / "low", {"pyproject.toml": report.format(1)})
+    assert low["coverage_gate"]["threshold_meets_minimum"] is False
+    assert _row(_run({"r": low}), "layer-6-coverage")["level"] == 0
+
+    high = _coverage_repo(tmp_path / "high", {"pyproject.toml": report.format(85)})
+    row = _row(_run({"r": high}), "layer-6-coverage")
+    # Mutation (level 2) is not measured headless, so level 1 shows as the floor.
+    assert (row["status"], row.get("floor")) == ("unknown", 1)
+
+    workflow = ("on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
+                "      - run: pytest --cov-fail-under=${{ env.COV_MIN }}\n")
+    templated = _coverage_repo(tmp_path / "templated", {".github/workflows/ci.yml": workflow})
+    row = _row(_run({"r": templated}), "layer-6-coverage")
+    assert (row["status"], row["level"], row.get("floor")) == ("unknown", None, None)
+    assert "coverage_gate.threshold_meets_minimum" in row["missing_signals"]
+
+
+@pytest.mark.parametrize("meets", [True, False, None])
+def test_coverage_threshold_signal_survives_counts_only(meets: bool | None) -> None:
+    """Counts-only output keeps the three-state signal and both percentages (#781)."""
+    gate = {"file": "pom.xml", "line": 3, "tool": "jacoco", "form": "<rules> <minimum>",
+            "threshold": 0.8, "unit": "ratio", "threshold_percent": 80.0, "metric": "line"}
+    block = {"available": True, "enforced": True, "gates": [gate], "max_threshold_percent": 80.0,
+             "threshold_meets_minimum": meets, "not_detected": ["x"]}
+    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
+    assert out["threshold_meets_minimum"] is meets
+    assert out["max_threshold_percent"] == 80.0
+    assert (out["gates"][0]["threshold"], out["gates"][0]["threshold_percent"]) == (0.8, 80.0)

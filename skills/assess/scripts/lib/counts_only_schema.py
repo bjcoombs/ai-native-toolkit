@@ -27,7 +27,7 @@ from lib.ci_checks import CiChecksBlock
 from lib.ai_usage import AiUsageBlock
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
-from lib.coverage_gate import CoverageGate
+from lib.coverage_gate import CoverageGate, CoverageGateBlock
 from lib.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
 from lib.doc_complexity_join import DocUnit
@@ -100,6 +100,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("agent_environment", AgentEnvironmentBlock),
     ("claude_config", ClaudeConfigBlock),
     ("claude_config.findings", ClaudeConfigFinding),
+    ("coverage_gate", CoverageGateBlock),
     ("coverage_gate.gates", CoverageGate),
     ("gap_actions", GapAction),
     ("structure", StructureBlock),
