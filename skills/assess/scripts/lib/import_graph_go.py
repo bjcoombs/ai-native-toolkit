@@ -26,8 +26,10 @@ Implements the ``lib.import_graph`` builder interface for Go. No go tool runs:
 A package belongs to the nearest ``go.mod`` at or above it; a package with none
 is not graphed, and a repository with no ``go.mod`` returns ``None`` (the
 dominant-language reason, ``no_import_graph_go``, then applies). Test files,
-``testdata``, and directories starting with ``.`` or ``_`` are skipped, as the
-go tool skips them. Build constraints are not evaluated: every non-test file
+``GO_SKIP_DIRS`` (``vendor``, ``testdata``, ``node_modules``, ``.git``), the
+configured excludes, and directories starting with ``.`` or ``_`` are skipped.
+The shared ``EXCLUDE_DIRS`` is not used: ``build``, ``out``, ``dist``, ``target``
+and ``test`` are ordinary Go package names. Build constraints are not evaluated: every non-test file
 counts. A file that cannot be read is skipped. The builder has no tool to miss,
 so it never raises ``GraphUnavailable``.
 """
@@ -38,7 +40,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lib.import_graph import EXCLUDE_DIRS, ModuleGraph
+from lib.import_graph import GO_SKIP_DIRS, ModuleGraph
 
 # A Go string, raw string or rune literal (kept), or a comment (blanked).
 _LEXEME = re.compile(
@@ -47,18 +49,24 @@ _LEXEME = re.compile(
 )
 _TOKEN = re.compile(r'"(?:\\.|[^"\\\n])*"|`[^`]*`|\w+|\S', re.UNICODE)
 _DECL = re.compile(r"^(func|type)[ \t]+(\(?)[ \t]*(\w*)", re.MULTILINE | re.UNICODE)
-_RAW_STRING = re.compile(r"`[^`]*`")
 _GROUP_MEMBER = re.compile(r"^\s+(\w+)", re.UNICODE)
 
 
-def strip_comments(text: str) -> str:
-    """``text`` with every comment blanked; strings and line breaks kept."""
+def strip_comments(text: str, blank_raw_strings: bool = False) -> str:
+    """``text`` with every comment blanked; strings and line breaks kept.
+
+    With ``blank_raw_strings`` a raw string's body is blanked too (its line
+    breaks kept). It happens in the same lexing pass, so a backtick inside
+    ``"`"`` or ``'`'`` never opens a raw string.
+    """
     def blank(match: re.Match[str]) -> str:
         lexeme = match.group(0)
         if lexeme.startswith("//"):
             return ""
         if lexeme.startswith("/*"):
             return "\n" * lexeme.count("\n") or " "
+        if blank_raw_strings and lexeme.startswith("`"):
+            return "`" + "\n" * lexeme.count("\n") + "`"
         return lexeme
     return _LEXEME.sub(blank, text)
 
@@ -113,8 +121,7 @@ def exported_surface(text: str) -> int:
     Raw-string bodies are blanked (line breaks kept) first, so a backtick
     literal holding ``func Fake() {}`` is not counted.
     """
-    stripped = _RAW_STRING.sub(
-        lambda m: "`" + "\n" * m.group(0).count("\n") + "`", strip_comments(text))
+    stripped = strip_comments(text, blank_raw_strings=True)
     count = 0
     for match in _DECL.finditer(stripped):
         keyword, paren, name = match.groups()
@@ -176,8 +183,7 @@ def _read(path: Path) -> str | None:
 
 
 def _skipped(name: str, extra: set[str]) -> bool:
-    return (name in EXCLUDE_DIRS or name in extra or name == "testdata"
-            or name.startswith((".", "_")))
+    return name in GO_SKIP_DIRS or name in extra or name.startswith((".", "_"))
 
 
 def _walk(repo_root: Path, extra: set[str]) -> tuple[dict[Path, str], list[_Package]]:

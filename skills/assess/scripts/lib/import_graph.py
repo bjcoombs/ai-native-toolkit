@@ -38,6 +38,10 @@ EXCLUDE_DIRS = frozenset({
     ".assess", "mutants", "tests", "test",
 })
 
+# Directories the Go builder never walks. Not EXCLUDE_DIRS: ``build``, ``out``,
+# ``dist``, ``target`` and ``test`` are ordinary Go package names (issue #710).
+GO_SKIP_DIRS = frozenset({".git", "node_modules", "vendor", "testdata"})
+
 # Source extension -> language token. The token is the reason-code suffix, so it
 # stays lower-case ASCII with no separator. Shell counts: a shell-heavy repository
 # reads no_import_graph_shell, which tells a fleet reader what the code is rather
@@ -217,14 +221,14 @@ def is_graph_source(rel_path: Path, language: str) -> bool:
     """True when a repo-relative file could be in ``language``'s graph.
 
     Its extension must map to ``language``. For Go, test files (``_test.go``),
-    ``testdata``, directories starting with ``.`` or ``_`` and ``EXCLUDE_DIRS``
-    are out, as the Go builder skips them (issue #710); other languages keep
-    the extension check alone.
+    ``GO_SKIP_DIRS`` and directories starting with ``.`` or ``_`` are out, as
+    the Go builder skips them (issue #710); other languages keep the extension
+    check alone.
     """
     if LANGUAGE_BY_EXTENSION.get(rel_path.suffix.lower()) != language:
         return False
     if language != "go":
         return True
     return not rel_path.name.endswith("_test.go") and not any(
-        part in EXCLUDE_DIRS or part == "testdata" or part.startswith((".", "_"))
+        part in GO_SKIP_DIRS or part.startswith((".", "_"))
         for part in rel_path.parts[:-1])

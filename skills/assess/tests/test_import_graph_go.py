@@ -117,6 +117,34 @@ def test_a_multi_line_func_type_member_does_not_end_its_group() -> None:
     assert exported_surface(src) == 3
 
 
+def test_a_backtick_in_a_string_or_rune_opens_no_raw_string() -> None:
+    src = ("package p\n\nvar q = \"`\"\n\nfunc A() {}\n\nvar r = '`'\n\n"
+           "func B() {}\n\ntype C int\n")
+    assert exported_surface(src) == 3
+    assert parse_imports('package p\nimport (\n\t"a"\n\t`b`\n)\n') == ["a", "b"]
+
+
+def test_go_package_names_the_shared_excludes_hold_are_graphed(tmp_path: Path) -> None:
+    _write(tmp_path, {
+        "go.mod": "module m\n",
+        "main.go": 'package main\nimport (\n\t"m/build"\n\t"m/test"\n\t"m/out"\n)\n',
+        "build/b.go": 'package build\nimport "m/dist"\n',
+        "dist/d.go": "package dist\n",
+        "out/o.go": "package out\n",
+        "target/t.go": "package target\n",
+        "test/t.go": "package test\n",
+        "node_modules/n/n.go": "package n\n",
+    })
+    graph = GO_BUILDER.build(tmp_path, set(), None)
+    assert graph is not None
+    assert graph.modules == [".", "build", "dist", "out", "target", "test"]
+    assert graph.edges["build"] == {"dist"}
+    assert graph.edges["."] == {"build", "out", "test"}
+    for rel in ("build/b.go", "dist/d.go", "out/o.go", "target/t.go", "test/t.go"):
+        assert is_graph_source(Path(rel), "go"), rel
+    assert not is_graph_source(Path("node_modules/n/n.go"), "go")
+
+
 def test_a_raw_string_opened_on_a_const_line_hides_its_contents() -> None:
     fake = "package p\n\nconst sample = `\nfunc Fictional() {}\ntype Fiction int\n`\n"
     assert exported_surface(fake) == 0

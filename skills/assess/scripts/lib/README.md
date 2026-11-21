@@ -370,8 +370,10 @@ no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, neve
 block projects the static metrics only onto directories holding a file the graph's
 language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
 graph never vouches for a Python tree or a directory of `_test.go` files alone. Skipped:
-`_test.go` files, `testdata`, `vendor` and the other `EXCLUDE_DIRS`, and directories
-starting with `.` or `_`. Build constraints are not evaluated. No `go.mod` returns `None`,
+`_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
+configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
+is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
+names. Build constraints are not evaluated. No `go.mod` returns `None`,
 so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
 raises `GraphUnavailable`. Graphs compare by module count, so a Go repository with a
 larger Python package tree reports the Python graph.
