@@ -25,9 +25,16 @@ from lib.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
 from lib.ai_usage import AiUsageBlock
+from lib.block_shapes import (
+    AgentOpsBlock,
+    CoverageGateBlock,
+    InstructionClaimsBlock,
+    PromissoryMarkersBlock,
+    ReviewRealityBlock,
+    StructureDriftBlock,
+)
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
-from lib.coverage_gate import CoverageGate, CoverageGateBlock
 from lib.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
 from lib.doc_complexity_join import DocUnit
@@ -63,7 +70,6 @@ from lib.layer_grades import LayerGradesBlock
 from lib.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
-from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
 
@@ -101,10 +107,9 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("claude_config", ClaudeConfigBlock),
     ("claude_config.findings", ClaudeConfigFinding),
     ("coverage_gate", CoverageGateBlock),
-    ("coverage_gate.gates", CoverageGate),
     ("gap_actions", GapAction),
     ("structure", StructureBlock),
-    ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
+    ("structure_drift", StructureDriftBlock),
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
     ("review_automation", ReviewAutomationBlock),
@@ -121,6 +126,12 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),
     ("stats_summary.est_tokens.budget", KeyholeBudget),
+    # The blocks a default criterion reads (#793), so a --levels path under them
+    # is checked segment by segment at load.
+    ("agent_ops", AgentOpsBlock),
+    ("instruction_claims", InstructionClaimsBlock),
+    ("promissory_markers", PromissoryMarkersBlock),
+    ("review_reality", ReviewRealityBlock),
 )
 
 _UNIONS = (Union, types.UnionType)

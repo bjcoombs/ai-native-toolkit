@@ -766,6 +766,30 @@ row's set and evidence both moved and the change cannot be split. An org row
 reads the group's settings, not its repositories, so on both sides it is always
 `level` (`settings_changed` says whether the settings moved).
 
+Three more causes keep a toolkit change from reading as the repository's own move
+(`lib/fleet_scanner_diff.py`, #774). They apply to a moved team row present in both runs:
+
+- `set` with `absent_signals`: the row is unknown on one side because that run's scans lack a
+  signal the other run holds (a scanner added or dropped it). This is measured-set movement,
+  never level movement, and earns or loses nothing.
+- `scanner_changed` with `scanner` (each signal block and its changed producer modules under
+  `skills/assess/scripts/lib/`): the runs carry different `toolkit_commit`s, git in this
+  toolkit checkout shows a producer of a block the row reads changed, and a repository in the
+  group changed a signal in that block.
+- `toolkit_changed_unknown_scope`: the scanner diff is unavailable (one run with a null
+  `toolkit_commit`, an install that is not a git checkout, and the other with one; both null
+  at different `plugin_version`s; or a commit git cannot find here). `notes` carries one line saying the scanner diff was
+  unavailable. A marketplace install is not a git checkout, so across a plugin update this
+  is the usual case there: expect every moved team row to carry it. Run from a git
+  checkout of the toolkit holding both commits to get `scanner_changed` instead.
+
+A row whose cause was `set_and_level` keeps `set_moved: true` beside its new cause, so the
+measured-set movement stays reported.
+
+A scanner change that alters a signal's meaning ships under a new signal name or a
+`signals_schema_version` bump, so an earlier run reads the new signal as absent; these causes
+are the backstop for a change that kept the name.
+
 ## Output: `report.md` and diagrams
 
 Every run draws diagrams from its own rows, with no model call, and writes them beside
@@ -788,7 +812,7 @@ scale. The layer bars draw team rows too and name the org rows under the bars.
 | `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--levels` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--levels` or without team rows. |
 | `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep, or a ref that is a CI variable (`$TPL_REF`), is dotted as pin unknown, never unpinned or drift. |
 | `trend.svg` | Is each team improving? | The run history: each group's mean maturity (each known team row's level as a share of its `top_level`, the slope chart's unit) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode, path hashing and `--fleet-config` hash, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. A history entry written before `groups.jsonl` carried `top_level` takes the top levels from this run's maturity model when it used the same version; otherwise (an older maturity-model version) it is not drawn, so the axis is always 0 to 1 share of top level, and the caption names it ("N earlier runs on an older maturity-model version not shown"). End labels give the last value and the change over the last unbroken stretch. Skipped with fewer than 3 comparable share runs (the skip line names any runs left out), without `--levels` or without team rows, or when the run is not kept in the history (`--no-history`, `--full`). |
-| `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a team row's level as a share of its top level) in the earlier run and this one, over the team rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too. Skipped when no earlier run was compared (no `--compare`, or a bare `--compare` matched no history entry), when the runs are not comparable (the reasons are named), without `--levels` or without team rows, or when no group has a team row with a known level in both runs. |
+| `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a team row's level as a share of its top level) in the earlier run and this one, over the team rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too, or the scanner changed (`scanner_changed`, `toolkit_changed_unknown_scope`). Skipped when no earlier run was compared (no `--compare`, or a bare `--compare` matched no history entry), when the runs are not comparable (the reasons are named), without `--levels` or without team rows, or when no group has a team row with a known level in both runs. |
 | `layer-bars.svg` | Which layer is the org-wide weak spot? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-dark ramp); repositories whose level is undetermined are a hatched segment and named. Skipped without `--levels`, without team rows, or with no repositories in the run. |
 
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no

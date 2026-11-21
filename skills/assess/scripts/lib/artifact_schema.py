@@ -179,13 +179,20 @@ constant each.
 # resolved_includes, unresolved_includes and includes[] (kind, id, status,
 # ref_basis, depth: GitLab includes resolved offline, issue #766), and each
 # review_automation match gains depth. Additive: no existing key moves.
-# 1.29.0: run-context.json coverage_gate gains max_threshold_percent and
+# 1.29.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
+# #785): the matched declarations that name a module path - every matched
+# architecture-doc reference, and every CODEOWNERS glob with a literal path
+# segment that owns source code under a non-dot directory (not `*`, `*.py`,
+# `/.github/`, `README.md` or a docs-only path). Read by the default
+# maturity model's Layer 4 level 1. Additive: total_patterns and matched_patterns
+# keep their meaning, and complexity-stats.json is unchanged.
+# 1.32.0: run-context.json coverage_gate gains max_threshold_percent and
 # threshold_meets_minimum, and each gate gains threshold_percent (issue #781): the
 # threshold as a percentage (a JaCoCo ratio 0.80 is 80) and the Layer 6 level 1
 # signal (true at 50 percent or more, null when a counted gate's percentage is not
 # read). Additive: threshold and unit stay as written, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.29.0"
+ARTIFACT_SCHEMA_VERSION = "1.32.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -294,4 +301,8 @@ ARTIFACT_SCHEMA_VERSION = "1.29.0"
 #     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
 #     file names no check can now read level 2, and one with committed setup
 #     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
-ASSESS_METHOD_VERSION = 25
+# 26: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
+#     matched_patterns (issue #785), so a CODEOWNERS whose lines own no module
+#     source (`*`, `*.py`, `/.github/`, `README.md`, `docs/`) no longer credits a
+#     declared boundary.
+ASSESS_METHOD_VERSION = 26
