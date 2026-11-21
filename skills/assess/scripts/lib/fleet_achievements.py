@@ -27,6 +27,15 @@ Anything else (a repository going unknown, failing its scan, joining or leaving 
 unit, keys hashed under another salt) is neutral: it neither earns nor loses
 anything. This is how an unknown level never earns or loses anything at unit level.
 
+**Re-scored entries (#771).** An earlier run kept under another maturity-model version
+replays re-scored under this run's model (``lib/fleet_achievements_runs.py``,
+``lib/fleet_rescore.py``), so every move the replay sees is the repositories' own. A move
+the rule change alone caused is never earned or lost: it is listed in ``recount``
+(``fleet_rescore.recount``, from the newest earlier entry when it was re-scored) and never
+feeds the replay. On a step from a re-scored entry a repository's own move to or from
+unknown counts (``unknown_move``): known to unknown is a slip for its streak, unknown to a
+level above 0 extends it; a cell the re-score made unknown, or a failed scan, stays neutral.
+
 **Evidence.** Every earned achievement carries the repositories that moved up on the
 row (``moves``: from which level to which, and ``criterion``, the earlier run's first
 unmet next-level criterion: the one that went from unmet to met).
@@ -82,16 +91,18 @@ from fractions import Fraction
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
-from lib.fleet_data import FLEET_DATA_VERSION, PLACES, Cell, FleetData
+from lib.fleet_data import FLEET_DATA_VERSION, NOT_SCANNED, PLACES, Cell, FleetData
 from lib.fleet_maturity import SCOPE
 from lib.fleet_next_steps import code, expression, text
+from lib.fleet_rescore import Recount, recount, rule_unknowns
 from lib.levels import MaturityModel, Row, share_level
 from lib.next_step_guidance import guidance
 
 # 1 (#704): first version. 2 (#780): share targets (``Evidence.target_share``,
 # ``TargetProgress.share_target``/``share``/``share_distance``, ``target`` nullable).
+# 3 (#771): ``recount`` (lib/fleet_rescore.py), the rule-caused moves of a maturity-model bump.
 # Bump on any change to the shapes below; #705 and #744 read it.
-ACHIEVEMENTS_VERSION = 2
+ACHIEVEMENTS_VERSION = 3
 ACHIEVEMENTS_FILE = "achievements.json"
 REPO_VIEW = "repo"
 LEVEL_UP, FIRST, TARGET_HIT, PERSONAL_BEST, STREAK = "level_up", "first", "target_hit", "personal_best", "streak"
@@ -171,11 +182,14 @@ class Achievements(TypedDict):
     achievements: list[Achievement]
     nearest_level_ups: list[NextStep]
     targets: list[TargetProgress]
+    recount: Recount | None  # set on the first run under a new maturity-model version
 
 
 class HistoryRun(NamedTuple):
     run_id: str
     data: FleetData
+    rescored_from: str | None = None  # the stored maturity-model version of a re-scored entry
+    stored: FleetData | None = None  # a re-scored entry's cells as stored, under its own rules
 
 
 class Target(NamedTuple):
@@ -391,8 +405,12 @@ class _Replay:
         self.out.append(_achievement(kind, sub, run, previous, ev, self.titles, self.tops))
 
     def step(self, run: str, previous: str, then: Mapping[SubjectKey, Subject], now: Mapping[SubjectKey, Subject],
-             then_cells: Mapping[str, Mapping[str, Cell]], now_cells: Mapping[str, Mapping[str, Cell]]) -> None:
-        """Everything earned moving from ``previous`` to ``run``; then ``run`` is recorded as held."""
+             then_cells: Mapping[str, Mapping[str, Cell]], now_cells: Mapping[str, Mapping[str, Cell]],
+             rescored: frozenset[tuple[str, str]] | None = None) -> None:
+        """Everything earned moving from ``previous`` to ``run``; then ``run`` is recorded as held.
+
+        ``rescored`` is set when ``previous`` is a re-scored entry: the cells either run's
+        re-score made unknown (the rules caused it; see ``unknown_move``)."""
         reached_before = dict(self.reached)
         peers: dict[tuple[str, str], int] = {}
         for sub in now.values():  # a kind with one subject (the org root) has no firsts to claim
@@ -432,13 +450,39 @@ class _Replay:
             if prior is not None and sub.share is not None and sub.share > prior and same_sets and moved:
                 self._earn(PERSONAL_BEST, sub, run, previous,
                            _evidence(moves=moved, share_from=prior, share_to=sub.share))
+            moved_unknown = [unknown_move(then_cells, now_cells, sub.key, row, rescored)
+                             for row in sorted(sub.rows) if row not in clean_rows] \
+                if rescored is not None and sub.kind == REPO_VIEW else []
+            slipped = slipped or LAPSE in moved_unknown
             if slipped:
                 self.streak[key] = 1
-            elif clean_rows:
+            elif clean_rows or GAIN in moved_unknown:
                 self.streak[key] = self.streak.get(key, 1) + 1
                 if self.streak[key] in STREAK_MILESTONES:
                     self._earn(STREAK, sub, run, previous, _evidence(runs=self.streak[key]))
         self.see(now)
+
+
+LAPSE, GAIN = "lapse", "gain"
+
+
+def unknown_move(then_cells: Mapping[str, Mapping[str, Cell]], now_cells: Mapping[str, Mapping[str, Cell]],
+                 repo: str, row: str, rule_caused: frozenset[tuple[str, str]]) -> str | None:
+    """A repository's move to or from unknown on ``row`` across a step from a re-scored entry (#771):
+    known to unknown is a ``LAPSE``, unknown to a level above 0 a ``GAIN``; None otherwise.
+
+    Only a repository-caused move counts: a cell the re-score made unknown (``rule_caused``,
+    the rules caused it) or a failed scan is neutral."""
+    before, after = then_cells.get(repo, {}).get(row), now_cells.get(repo, {}).get(row)
+    if before is None or after is None or (repo, row) in rule_caused \
+            or NOT_SCANNED in (before["reason"], after["reason"]):
+        return None
+    lv_then, lv_now = known_level(before), known_level(after)
+    if lv_then is not None and lv_now is None:
+        return LAPSE
+    if lv_then is None and lv_now:
+        return GAIN
+    return None
 
 
 def _sort_key(a: Achievement) -> tuple[int, str, str, str]:
@@ -522,21 +566,28 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     runs = [*earlier, current]
     replay = _Replay(titles, tops, targets)
     states = [(run.run_id, subjects(run.data, rules), run_cells(run.data)) for run in runs]
+    caused = [rule_unknowns(run.stored, run.data) if run.stored is not None else None for run in runs]
     replay.see(states[0][1])
-    for (prev_id, prev, prev_cells), (run_id, now, now_cells) in zip(states, states[1:]):
-        replay.step(run_id, prev_id, prev, now, prev_cells, now_cells)
+    for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
+        then_caused = caused[i]
+        rescored = then_caused | (caused[i + 1] or frozenset()) if then_caused is not None else None
+        replay.step(run_id, prev_id, prev, now, prev_cells, now_cells, rescored)
     order = {run.run_id: i for i, run in enumerate(runs)}
     achievements = sorted(replay.out, key=lambda a: (order[a["run"]], *_sort_key(a)))
     now_subs, now_cells = states[-1][1], states[-1][2]
     steps = [step for key in sorted(now_subs) for rid in rules
              if (step := nearest_level_up(now_subs[key], rows[rid], rules[rid], now_cells)) is not None]
+    last = earlier[-1] if earlier else None
+    counted = (recount(last.stored, last.data, model, last.run_id, last.rescored_from)
+               if last is not None and last.stored is not None and last.rescored_from is not None
+               and model is not None else None)
     if not earlier and note is None:
         note = "no earlier comparable run in the history: this run is the baseline"
     return {"achievements_version": ACHIEVEMENTS_VERSION, "fleet_data_version": FLEET_DATA_VERSION,
             "run": current.run_id, "levels_version": model["version"] if model is not None else None,
             "runs": [run.run_id for run in runs], "note": note if not earlier else None,
             "achievements": achievements, "nearest_level_ups": steps,
-            "targets": target_progress(now_subs, targets)}
+            "targets": target_progress(now_subs, targets), "recount": counted}
 
 
 def dumps_achievements(doc: Achievements) -> str:
