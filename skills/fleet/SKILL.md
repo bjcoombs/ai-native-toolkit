@@ -480,7 +480,10 @@ remotes) logged in.
   (the first comment or review by a person other than the author), `ai_review_share`
   (a review or comment by a known AI review app, a pinned agent app, or an
   `[[ai_usage.agent_identities]]` rule), and `approved_share` / `self_merged_share`
-  copied from `review_reality`. Durations are hours, percentiles nearest-rank. On
+  copied from `review_reality`, and `agent_authored_share` (changes authored by a
+  pinned agent app or an `[[ai_usage.agent_identities]]` rule, by username; a
+  GitLab access-token user counts only under `token_users_as_agents`). Durations
+  are hours, percentiles nearest-rank. On
   GitLab only time to merge and the copied shares are filled so far; the comment
   and AI-review figures are null.
 
