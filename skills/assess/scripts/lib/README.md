@@ -1737,7 +1737,8 @@ run-context.json). `typed_field_names` supplies the record keys `counts_only` ke
 `typed_identifier_maps` the typed maps that must be declared, and `typed_string_fields`
 walks them, so a typed shape that gains a
 string field fails `tests/test_counts_only.py` until the field is classified, even when
-no fixture run populates the block.
+no fixture run populates the block. `delivery.DeliveryBlock` is a root (#769), so counts-only output keeps
+every delivery figure (`tests/test_delivery.py` checks a full block on both providers).
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
@@ -2500,7 +2501,8 @@ author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
 in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
 author withholds the share (null) only when it decides a pull
-request: one with a confirmed bot comment counts regardless.
+request: one with a confirmed bot comment counts regardless. A comment with no
+author login (a deleted account) is skipped, as in `delivery` (#769).
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
 classic protection, each needing `required_approving_review_count` of 1 or more;
