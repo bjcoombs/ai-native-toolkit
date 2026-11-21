@@ -3177,7 +3177,9 @@ pattern); `continue-on-error: true` or `allow_failure:
 true` (literal, a trailing comment ignored) masks the mapping that holds it and
 everything under it (a step or a job); `set +e` masks the rest of its script body
 (a block scalar, or one `script:` list) until `set -e`, unless a later statement
-reads `$?` / `PIPESTATUS` or exits non-zero. `\` continuations are joined first.
+exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
+joined first.
 Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
 wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:

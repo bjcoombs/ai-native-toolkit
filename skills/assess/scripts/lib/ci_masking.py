@@ -32,7 +32,7 @@ parser (the core has no YAML dependency). Only literal values count.
 - ``set +e`` in one script body (a block scalar such as ``run: |``, or one
   ``script:`` / ``before_script:`` list) masks the statements after it until a
   ``set -e``, unless a later statement of that body re-raises a status: it
-  reads ``$?`` or ``PIPESTATUS``, or exits non-zero (``exit 1``,
+  exits or returns a non-zero literal, a variable or ``$?`` (``exit 1``,
   ``exit $status``), as ``.github/workflows/floor.yml``'s retry loop does.
 
 Known limits: ``|| echo ...`` is not a no-op here, so it stays credited; a pipe
@@ -58,7 +58,10 @@ _MASK_KEYS = frozenset({"continue-on-error", "allow_failure"})
 _BODY_KEYS = frozenset({"run", "script", "before_script", "after_script"})
 _NOOPS = frozenset({"true", "/bin/true", ":", "exit 0"})
 _EXIT_NONZERO = re.compile(r"\bexit\s+(?:[1-9]\d*|\"?\$\{?\w+\}?\"?)")
-_STATUS_READ = re.compile(r"\$\?|PIPESTATUS|" + _EXIT_NONZERO.pattern)
+# A status re-raised: ``exit`` / ``return`` with a non-zero literal, a variable or ``$?``
+# (``exit $?``, ``rc=$?; ... exit $rc``, ``[ $? -eq 0 ] || exit 1``). Reading ``$?`` alone
+# (``echo "code $?"``) re-raises nothing.
+_RERAISE = re.compile(r"\b(?:exit|return)\s+(?:[1-9]\d*|\"?\$(?:\?|\{?\w+\}?)\"?)")
 _REDIRECT_TARGET = re.compile(r"(?:^|\s)(?:&|\d)?>>?\s*([^\s&;|<>]+)")
 _TEE_TARGET = re.compile(r"^tee(?:\s+-\w+)*\s+([^\s;|]+)")
 # Sinks no later step reads back: output sent there is not a capture.
@@ -362,7 +365,7 @@ def unmasked_lines(text: str) -> list[str]:
             first, k = refs[idx]
             if state[idx] and not reraised:
                 masked.setdefault(first, set()).add(k)
-            reraised = reraised or bool(_STATUS_READ.search(_join(parsed[first][k])))
+            reraised = reraised or bool(_RERAISE.search(_join(parsed[first][k])))
     out = list(lines)
     for span in spans:
         drop = masked.get(span[0], set())

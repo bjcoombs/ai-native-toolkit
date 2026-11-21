@@ -185,6 +185,7 @@ def test_a_local_reusable_workflow_is_not_an_include() -> None:
     pytest.param("test:\n  allow_failure: true\n  script:\n    - pytest", id="gitlab_allow_failure"),
     pytest.param("run: |\n  set +e\n  pytest", id="set_plus_e_block"),
     pytest.param("test:\n  script:\n    - set +e\n    - pytest", id="gitlab_set_plus_e_list"),
+    pytest.param("run: |\n  set +e\n  pytest\n  echo \"code $?\"", id="set_plus_e_status_only_echoed"),
     # A redirect with no later failing exit is still a mask, not a capture.
     pytest.param("run: ruff check . > out.txt || true", id="redirect_without_check_is_masked"),
     pytest.param("run: pytest > /dev/null || true\n", id="dev_null_is_masked"),
@@ -231,6 +232,8 @@ _SUBSTITUTION_CAPTURE = (
                  id="allow_failure_exit_codes"),
     pytest.param("run: |\n  set +e\n  pytest\n  status=$?\n  exit $status", id="set_plus_e_reraised"),
     pytest.param("run: |\n  set +e\n  make docs\n  set -e\n  pytest", id="set_plus_e_then_set_e"),
+    pytest.param("run: |\n  set +e\n  pytest\n  exit $?", id="set_plus_e_exit_status"),
+    pytest.param("run: |\n  set +e\n  pytest\n  [ $? -eq 0 ] || exit 1", id="set_plus_e_test_then_exit"),
     pytest.param("steps:\n  - name: a\n    continue-on-error: true\n    run: make docs\n"
                  "  - name: b\n    run: pytest", id="continue_on_error_on_sibling_step"),
     pytest.param("test:\n  allow_failure: true\n  script:\n    - make docs\nlint:\n  script:\n    - pytest",

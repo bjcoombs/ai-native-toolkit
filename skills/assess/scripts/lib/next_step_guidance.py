@@ -417,7 +417,13 @@ _MEASURE_HINTS = {
                  "included_jobs`: a GitLab `include:` whose template is not cloned in the "
                  "fleet root, or a `template:` or `remote:` include, a reusable workflow from "
                  "another repository): the check may live there. Cloning the template into "
-                 "the same ghsync root lets the fleet read it.",
+                 "the same ghsync root lets the fleet read it. `enforced_check_runs` is also "
+                 "unknown when the check's workflow or job has triggers the scan cannot settle "
+                 "(`enforced_basis: unknown_trigger`: no `on:` key, a `workflow_call` nobody "
+                 "calls, a GitLab `rules: if:` on a custom variable): say when the workflow "
+                 "runs, by adding `push` or `pull_request` triggers (or a merge request rule). "
+                 "A scan stored before `enforced_check_runs` existed has no such key: re-run "
+                 "the scan to measure it.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
 }
