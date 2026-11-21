@@ -1788,6 +1788,10 @@ tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the de
 model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
 against the schema. Until later steps generate those tables from the manifest, adding a
 scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+A finding `inputs` path under a typed root must name fields of its shape
+(`test_finding_inputs_under_a_typed_root_name_its_fields`, #793); one under an untyped
+block or a collector is checked on its first segment only. `derive` is checked as a
+callable only: it stays documentary until a later step generates the findings from it.
 Loader tests: `tests/test_check_manifest_loader.py`.
 
 **`check_validation.py`**

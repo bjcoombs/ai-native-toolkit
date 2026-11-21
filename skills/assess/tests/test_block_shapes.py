@@ -24,6 +24,7 @@ from lib import block_shapes as bs
 from lib.agent_ops import scan_agent_ops
 from lib.context_blocks import _structure_drift_block
 from lib.counts_only_schema import ROOTS
+from lib.counts_only import HASH_PREFIX, counts_only
 from lib.coverage_gate import detect_coverage_gate
 from lib.headless_layers import structure_drift as headless_structure_drift
 from lib.instruction_claims import scan_instruction_claims
@@ -220,3 +221,15 @@ def test_a_misspelt_sub_path_fails_at_load(tmp_path: Path, signal: str) -> None:
         f'criteria = [{{ signal = "{signal}", op = "eq", value = true }}]\n', encoding="utf-8")
     with pytest.raises(LevelsError, match=f"team:{signal}"):
         load_levels(model, signal_path_validator())
+
+
+def test_counts_only_keeps_the_newly_typed_integer_and_counts_the_families(repo: Path) -> None:
+    """The stated counts-only effect of #793: ``max_survived`` became a known field name,
+    so it now survives reduction; the per-file ``families`` list stays a count."""
+    block = scan_promissory_markers(repo, stale_touches=1).summary()
+    for hashed in (False, True):
+        out = counts_only({"promissory_markers": block}, hash_paths=hashed, salt="s")
+        rows = out["promissory_markers"]["stale_by_file"]
+        assert rows and all(set(r) == {"count", "families", "max_survived"} for r in rows.values())
+        assert all(isinstance(r["families"], int) and r["max_survived"] >= 1 for r in rows.values())
+        assert all(k.startswith(HASH_PREFIX) for k in rows) is hashed
