@@ -25,6 +25,7 @@ from lib.fleet_achievements import (  # noqa: E402
 )
 from lib.fleet_data import FLEET_DATA_VERSION  # noqa: E402
 from lib.fleet_group_schema import type_schema  # noqa: E402
+from lib.fleet_rescore import DIRECTIONS, RULES  # noqa: E402
 from lib.fleet_units import KINDS as UNIT_KINDS, VIEWS  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
@@ -46,6 +47,10 @@ def build_schema() -> JsonDict:
     step["kind"] = {"const": NEAREST_LEVEL_UP}
     step["view"], step["unit_kind"] = views, unit_kinds
     props["targets"]["items"]["properties"]["view"] = views
+    recount = next(branch for branch in props["recount"]["anyOf"] if branch.get("type") == "object")
+    line = recount["properties"]["lines"]["items"]["properties"]
+    line["direction"] = {"enum": list(DIRECTIONS)}
+    line["attributed_to"] = {"const": RULES}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,
@@ -54,7 +59,7 @@ def build_schema() -> JsonDict:
             "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository "
             "earned over the comparable runs in the history (level-ups, firsts, streaks, personal "
             "bests, targets hit), each with its evidence and a credit line, plus each one's nearest "
-            "level-up and target distances. Generated from lib/fleet_achievements.py by "
+            "level-up and target distances, and the Recount of a maturity-model change. Generated from lib/fleet_achievements.py by "
             "lib/fleet_achievements_schema.py."
         ),
         **schema,

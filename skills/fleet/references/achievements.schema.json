@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/achievements.schema.json",
   "title": "fleet achievements",
-  "description": "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository earned over the comparable runs in the history (level-ups, firsts, streaks, personal bests, targets hit), each with its evidence and a credit line, plus each one's nearest level-up and target distances. Generated from lib/fleet_achievements.py by lib/fleet_achievements_schema.py.",
+  "description": "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository earned over the comparable runs in the history (level-ups, firsts, streaks, personal bests, targets hit), each with its evidence and a credit line, plus each one's nearest level-up and target distances, and the Recount of a maturity-model change. Generated from lib/fleet_achievements.py by lib/fleet_achievements_schema.py.",
   "type": "object",
   "properties": {
     "achievements_version": {
-      "const": 2
+      "const": 3
     },
     "fleet_data_version": {
       "const": 1
@@ -333,6 +333,109 @@
         ],
         "additionalProperties": false
       }
+    },
+    "recount": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "from_version": {
+              "type": "string"
+            },
+            "to_version": {
+              "type": "string"
+            },
+            "run": {
+              "type": "string"
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "repo": {
+                    "type": "string"
+                  },
+                  "row": {
+                    "type": "string"
+                  },
+                  "from_status": {
+                    "type": "string"
+                  },
+                  "from_level": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "to_status": {
+                    "type": "string"
+                  },
+                  "to_level": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "direction": {
+                    "enum": [
+                      "down",
+                      "up",
+                      "now_measured",
+                      "not_measured"
+                    ]
+                  },
+                  "attributed_to": {
+                    "const": "rules"
+                  },
+                  "cause": {
+                    "type": "string"
+                  },
+                  "signal": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "attributed_to",
+                  "cause",
+                  "direction",
+                  "from_level",
+                  "from_status",
+                  "repo",
+                  "row",
+                  "signal",
+                  "text",
+                  "to_level",
+                  "to_status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "from_version",
+            "lines",
+            "run",
+            "to_version"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rescored_runs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [
@@ -342,6 +445,8 @@
     "levels_version",
     "nearest_level_ups",
     "note",
+    "recount",
+    "rescored_runs",
     "run",
     "runs",
     "targets"

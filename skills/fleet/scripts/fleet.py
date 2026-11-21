@@ -489,7 +489,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
         if org_dir is None or entry is None:
             earlier, note = [], "this run is not kept in the run history (--no-history or --full)"
         else:
-            earlier, note = earlier_runs(org_dir, stamp, repos), None
+            earlier, note = earlier_runs(org_dir, stamp, repos, model=maturity_model, key=privacy_key), None
         doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
                                  targets=resolve(specs, privacy_key), note=note)
         write_achievements(out_dir, doc)

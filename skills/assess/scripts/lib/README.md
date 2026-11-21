@@ -87,6 +87,11 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   and README follow by hand in the same PR. `skills/assess/tests/test_ci_workflow.py`
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
+- **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
+  roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `overall_roll_up`, so a
+  change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
+  `tests/test_fleet_rescore.py::test_rescore_recomputes_mean_share_and_unit_overall`
+  fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
 ever cut, this note is where the intended boundary is written down.
@@ -1129,7 +1134,11 @@ emits `level_up`, `first`, `target_hit` (a level target on the row's level, a sh
 target on its mean share of top level, the `fleet-data.json` row roll-up, #780),
 `personal_best` and `streak`, each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
-a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
+repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
+step; `build_achievements` sets `recount` (`fleet_rescore.recount`) when the newest earlier
+run was re-scored, and `rescored_runs` (every re-scored replayed run, which
+`fleet_credit` reads for the report's opening rule). `nearest_level_up` picks per subject and row the next-level
 criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
 Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
 
@@ -1138,7 +1147,24 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 `fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
-the entry has no `run.json` (#780). Unreadable entries are passed over.
+the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
+model and key function (`model=`, `key=`), an entry whose only refusal is the
+maturity-model version is re-scored from its `repos.jsonl` (`fleet_view.read_repos`,
+`fleet_rescore.rescore`) and returned as a `HistoryRun` with `rescored_from` (its stored
+version) and `stored` (its `fleet-data.json`) set (#771).
+
+**`fleet_rescore.py`**
+Re-scores a stored run under the current maturity model and builds the Recount (#771).
+`rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
+cells from `fleet_data.repo_cells` (values through `Privacy().value`), each repository's
+`mean_share`, and each unit's row and overall roll-ups (`row_roll_up`, `overall_roll_up`)
+over the stored placements; None when a stored key does not join under the run's key
+function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783) is
+applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
+stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
+`now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
+`rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
+(`fleet_achievements.unknown_move`). Tests: `tests/test_fleet_rescore.py`.
 
 **`fleet_achievements_schema.py`**
 Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
@@ -1156,7 +1182,9 @@ the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming th
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
 from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
 nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
-distances (in levels, or in share for a share target). `fleet_diagrams.report_markdown` places it before the diagrams.
+distances (in levels, or in share for a share target), plus a `### Recount` subsection
+after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
+first). `fleet_diagrams.report_markdown` places it before the diagrams.
 
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
