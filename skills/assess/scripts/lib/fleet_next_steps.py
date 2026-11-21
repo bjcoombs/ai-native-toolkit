@@ -407,6 +407,6 @@ def write_pages(out_dir: Path, pages: Mapping[str, str]) -> list[Path]:
         if not target.resolve().is_relative_to(root):
             raise NextStepsError(f"page {relative} resolves outside {out_dir}")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(pages[relative], encoding="utf-8")
+        target.write_text(pages[relative], encoding="utf-8", newline="\n")
         written.append(target)
     return written

@@ -4,10 +4,11 @@ name: Windows
 # separator, encoding and path-conversion regressions in /fleet and /assess
 # show up before a Windows user hits them (#701, #713).
 #
-# Tests that need POSIX-only machinery (symlinks, chmod/getuid permissions,
-# #!/bin/sh stubs on PATH) carry a skip marker on Windows; see the
-# "Windows skip markers" note in skills/assess/tests/conftest.py. No coverage
-# gate here: the Linux job owns the floor.
+# Tests that need POSIX-only machinery carry one of the Windows skip markers
+# declared in skills/assess/tests/conftest.py (WINDOWS_SKIP_MARKERS:
+# needs_symlink, needs_posix_perms, needs_posix_shell), or call its
+# skip_without_posix_shell() from a fixture that puts a #!/bin/sh gh/glab stub
+# on PATH. No coverage gate here: the Linux job owns the floor.
 #
 # The job is continue-on-error until its first green run; then drop that line
 # and add "windows fleet + assess pytest" to the required checks.
@@ -50,8 +51,19 @@ jobs:
         run: uv run --locked --python 3.11 python --version
         working-directory: skills/assess
 
-      # -ra lists every skip and failure in the summary, so one log read shows
-      # the whole picture.
+      # A fixture estate built at test time is run through fleet.py and its
+      # repos.jsonl compared with the one committed from Linux
+      # (tests/fixtures/fleet_golden/repos.jsonl): field-level differences are
+      # listed by dotted path, then the bytes (LF endings) are compared.
+      - name: Fleet golden run against the committed Linux repos.jsonl
+        run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
+        working-directory: skills/assess
+
+      # The rest of the suite runs even when the golden step fails. -ra lists
+      # every skip and failure in the summary, so one log read shows it all.
       - name: Run pytest
-        run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
+          --ignore=tests/test_fleet_golden.py
         working-directory: skills/assess

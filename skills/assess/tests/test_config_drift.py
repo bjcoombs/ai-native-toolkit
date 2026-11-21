@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.config_drift import diff_values, find_snapshots, scan_config_drift  # noqa: E402
@@ -76,6 +78,7 @@ def _git(repo: Path, *args: str) -> None:
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A git repo with a github.com origin and a fake gh first on PATH."""
+    skip_without_posix_shell()
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "a.py").write_text("x = 1\n")

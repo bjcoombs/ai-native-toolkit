@@ -12,6 +12,7 @@ Regenerate after a scan changes its output, on Linux with ripgrep installed:
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -56,6 +57,26 @@ def _git(repo: Path, *args: str) -> None:
                    encoding="utf-8", errors="replace", env=env)
 
 
+def _leaves(value: object, prefix: str) -> dict[str, object]:
+    """Every scalar in a JSON value keyed by its dotted path."""
+    if isinstance(value, dict):
+        return {k: v for key, item in value.items() for k, v in _leaves(item, f"{prefix}.{key}").items()}
+    if isinstance(value, list):
+        return {k: v for i, item in enumerate(value) for k, v in _leaves(item, f"{prefix}[{i}]").items()}
+    return {prefix: value}
+
+
+def _differences(produced: bytes, golden: bytes) -> list[str]:
+    """The dotted paths whose values differ, so a Windows log names the field."""
+    got = {r["repo"]: r for r in map(json.loads, produced.decode("utf-8").splitlines())}
+    want = {r["repo"]: r for r in map(json.loads, golden.decode("utf-8").splitlines())}
+    flat_got = {k: v for repo, row in got.items() for k, v in _leaves(row, repo).items()}
+    flat_want = {k: v for repo, row in want.items() for k, v in _leaves(row, repo).items()}
+    return [f"{key}: got {flat_got.get(key, '<absent>')!r}, golden {flat_want.get(key, '<absent>')!r}"
+            for key in sorted(flat_got.keys() | flat_want.keys())
+            if flat_got.get(key, "<absent>") != flat_want.get(key, "<absent>")]
+
+
 def _build_estate(root: Path) -> None:
     for slug, files in ESTATE.items():
         repo_dir = root / slug
@@ -87,7 +108,9 @@ def test_fixture_fleet_run_matches_the_committed_linux_repos_jsonl(tmp_path, mon
     if os.environ.get("FLEET_GOLDEN_REGEN") == "1":
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
         GOLDEN.write_bytes(produced)
-    assert b"\r\n" not in produced
-    assert produced == GOLDEN.read_bytes(), (
+    golden = GOLDEN.read_bytes()
+    assert _differences(produced, golden) == [], (
         "fleet repos.jsonl differs from the committed Linux golden; if a scan changed on "
         "purpose, regenerate it (see this module's docstring)")
+    assert b"\r\n" not in produced, "repos.jsonl must be written with LF line endings"
+    assert produced == golden

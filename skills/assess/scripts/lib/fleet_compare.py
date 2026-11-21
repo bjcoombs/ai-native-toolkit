@@ -444,7 +444,7 @@ def write_comparison_file(target: Path, comparison: Comparison) -> Path:
     """Write ``comparison`` to ``target`` through a temp file beside it and ``os.replace``."""
     fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(dumps_comparison(comparison))
         os.chmod(tmp, 0o644)
         os.replace(tmp, target)

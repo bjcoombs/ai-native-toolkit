@@ -167,6 +167,7 @@ def test_without_a_levels_file_levels_index_the_ramp(tmp_path):
     assert _cells(svg)["grpa · teamdocs"] == fh.ORRD_9[2]
 
 
+@pytest.mark.needs_posix_perms
 def test_default_output_is_beside_groups_jsonl(tmp_path):
     run = tmp_path / "run"
     run.mkdir()

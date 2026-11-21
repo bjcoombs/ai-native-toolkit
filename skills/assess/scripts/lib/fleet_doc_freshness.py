@@ -331,7 +331,7 @@ def write_freshness(out_dir: Path, rows: Sequence[FreshnessRow]) -> Path | None:
     if not rows:
         path.unlink(missing_ok=True)
         return None
-    path.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8")
+    path.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8", newline="\n")
     return path
 
 

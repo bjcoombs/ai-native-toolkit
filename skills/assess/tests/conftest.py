@@ -18,6 +18,7 @@ import datetime as _dt
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -34,6 +35,38 @@ os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 # the real ~/.local/share.
 _XDG_DATA_HOME = tempfile.mkdtemp(prefix="assess-tests-xdg-")
 os.environ["XDG_DATA_HOME"] = _XDG_DATA_HOME
+
+
+# Windows skip markers (#713). The windows-latest job runs this suite; a test
+# that needs POSIX-only machinery carries one of these markers and is skipped
+# there with the marker's reason, so the skip list reads as a category, not a
+# scatter of ad-hoc skipif lines. Anything else that fails on Windows is a bug.
+WINDOWS_SKIP_MARKERS = {
+    "needs_symlink": "symlink creation is not reliable on Windows",
+    "needs_posix_perms": "chmod/getuid permission semantics are POSIX-only",
+    "needs_posix_shell": "runs a #!/bin/sh stub or sh -c, which Windows cannot execute",
+}
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip the POSIX-only marked tests on Windows."""
+    if sys.platform != "win32":
+        return
+    for item in items:
+        for name, reason in WINDOWS_SKIP_MARKERS.items():
+            if item.get_closest_marker(name):
+                item.add_marker(pytest.mark.skip(reason=f"Windows: {reason}"))
+                break
+
+
+def skip_without_posix_shell() -> None:
+    """Call first in a fixture that puts a ``#!/bin/sh`` stub (fake gh/glab) on PATH.
+
+    The fixture-level form of ``needs_posix_shell``: Windows cannot execute the
+    stub, so every test using the fixture skips with the same reason.
+    """
+    if sys.platform == "win32":
+        pytest.skip(f"Windows: {WINDOWS_SKIP_MARKERS['needs_posix_shell']}")
 
 
 @pytest.fixture(scope="session", autouse=True)

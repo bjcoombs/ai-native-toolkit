@@ -150,6 +150,7 @@ def _own_fork_block() -> str:
     return "\n".join(lines[start : end + 1]) + "\n"
 
 
+@pytest.mark.needs_posix_shell
 @pytest.mark.parametrize(
     "viewer, owner, is_fork, expected",
     [

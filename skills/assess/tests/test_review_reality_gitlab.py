@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import gitlab_cli  # noqa: E402
@@ -111,6 +113,7 @@ class World:
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
+    skip_without_posix_shell()
     repo, data, bindir = tmp_path / "repo", tmp_path / "glab", tmp_path / "bin"
     for d in (repo, data, bindir):
         d.mkdir()
