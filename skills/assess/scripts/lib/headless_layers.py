@@ -113,7 +113,7 @@ def structure(scan: Any) -> JsonDict:
         return marker
     if not scan.get("module_count"):  # a scan from before #663 reported these available
         return _marker("no_python_packages",
-                       "no importable Python package; the import graph reads Python only")
+                       "no module in the import graph")
     block: JsonDict = scan
     return block
 

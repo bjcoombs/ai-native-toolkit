@@ -434,8 +434,8 @@ def static_grouping_relation(
 def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
     """Map every graphed module name to its repo-relative source file.
 
-    Reuses ``structure_graph``'s graph selection (the same largest per-language
-    graph the ``structure`` block measures) and its module->file map, so a
+    Reuses ``structure_graph``'s graph selection (the largest per-language
+    graph) and its module->file map, so a
     community's module names map back to the exact tracked paths the human and
     co-change relations are expressed in. Degrades to an empty map when no graph
     is built (a missing tool, no module) - the caller then yields an empty
@@ -459,7 +459,13 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
 
 
 def _module_graph(repo_root: Path) -> ModuleGraph | None:
-    """The graph ``structure_graph.analyze_structure`` measures, or None."""
+    """The largest per-language import graph of the whole repo, or None.
+
+    Selected as ``structure_graph.analyze_structure`` selects, but over the whole
+    repository with no configured excludes or scope, as drift always read it. With
+    one builder per language and a scoped or excluded run, the language picked
+    here can differ from ``structure.language``.
+    """
     try:
         from lib.import_graph_builders import BUILDERS
     except ImportError:  # pragma: no cover - exercised only on a broken env
