@@ -65,7 +65,7 @@ from typing import Any
 from urllib.parse import quote
 
 from lib.gh_cli import GhUnavailable, git_remote_url
-from lib.platform_cli import run_cli
+from lib.platform_cli import rate_limited, run_cli
 
 GITLAB_COM = "gitlab.com"
 
@@ -188,7 +188,7 @@ def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS) -> str:
     stderr = (proc.stderr or "").strip()
     detail = stderr.splitlines()[-1] if stderr else f"exit {proc.returncode}"
     status = _status(stderr)
-    if status == "429":
+    if rate_limited(stderr):  # any 429 form glab prints, still limited after the backoff
         raise GhUnavailable(f"rate_limited: `{shown}` was still rate limited after retries ({detail})")
     if status in ("401", "403"):
         raise GhUnavailable(f"no_access: `{shown}` was refused ({detail})")

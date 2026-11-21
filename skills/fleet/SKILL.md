@@ -350,8 +350,8 @@ remotes) or `glab` (GitLab remotes) logged in.
   `rate_limited`) is an unavailable block with that reason, never zeros. A row
   whose offline scan failed gets no platform read.
 - **Network hygiene.** `gh` and `glab` run with stdin closed and prompts disabled
-  (`GH_PROMPT_DISABLED`, `NO_PROMPT`, `GIT_TERMINAL_PROMPT=0`). An HTTP 429 is
-  retried up to 3 times, waiting the `Retry-After` seconds when the CLI prints
+  (`GH_PROMPT_DISABLED`, `NO_PROMPT`, `GIT_TERMINAL_PROMPT=0`). A rate limit (HTTP 429, or GitHub's 403
+  "API rate limit exceeded" / "secondary rate limit") is retried up to 3 times, waiting the `Retry-After` seconds when the CLI prints
   it, else 2, 4 and 8 seconds (at most 60 per wait); still limited, the block is
   `rate_limited`. Plain `gh api` and `glab api` calls do not print response
   headers, so in practice the 2, 4 and 8 second fallback applies. `--platform-jobs` caps the concurrent reads. One response

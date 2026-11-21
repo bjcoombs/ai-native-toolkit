@@ -241,3 +241,11 @@ def test_delete_after_waits_for_the_platform_read(world, tmp_path, monkeypatch):
     monkeypatch.setattr(fleet_cli, "run_platform", spy)
     _run(tmp_path, "--platform", "--delete-after")
     assert order == ["platform", "delete"]
+
+
+def test_platform_with_no_platform_scan_selected_is_not_stamped(world, tmp_path):
+    assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "out"), "--no-history",
+                           "--no-diagrams", "--scans", "agent_ops", "--platform"]) == 0
+    stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
+    assert stamp["platform"] is False
+    assert _calls(world) == []

@@ -8,7 +8,8 @@
   closed stdin is what guarantees no prompt can wait) and
   ``GIT_TERMINAL_PROMPT=0``, so a credential or confirmation prompt fails the
   call instead of waiting for a person who is not there. The rest of the environment is inherited.
-- **429 backoff.** A call whose output reports HTTP 429 is retried up to
+- **Rate-limit backoff.** A call whose output reports HTTP 429, or GitHub's
+  rate-limit 403 ("API rate limit exceeded", "secondary rate limit"), is retried up to
   ``MAX_RETRIES`` times. Each wait is the ``Retry-After`` seconds when the CLI
   printed that header (``gh api --include`` does; a plain call does not), else
   ``BASE_WAIT * 2**attempt``; never more than ``MAX_WAIT`` per wait. The last
@@ -48,7 +49,11 @@ MAX_RETRIES = 3
 BASE_WAIT = 2.0
 MAX_WAIT = 60.0
 
-_RATE_LIMITED_RE = re.compile(r"\(HTTP 429\)|\b429 Too Many Requests\b", re.IGNORECASE)
+# HTTP 429 in gh's "(HTTP 429)" and glab's "glab: HTTP 429" or "429 Too Many Requests"
+# forms, plus GitHub's usual rate-limit reply: HTTP 403 with this text.
+_RATE_LIMITED_RE = re.compile(
+    r"\bHTTP 429\b|\b429 Too Many Requests\b|API rate limit exceeded|secondary rate limit",
+    re.IGNORECASE)
 _RETRY_AFTER_RE = re.compile(r"^\s*Retry-After:\s*(\d+)\s*$", re.IGNORECASE | re.MULTILINE)
 
 SLEEP: Callable[[float], None] = time.sleep
@@ -61,7 +66,7 @@ class CliResult(NamedTuple):
 
 
 def rate_limited(text: str) -> bool:
-    """True when a CLI's output reports HTTP 429."""
+    """True when a CLI's output reports a rate limit (HTTP 429, or GitHub's rate-limit 403)."""
     return bool(_RATE_LIMITED_RE.search(text))
 
 

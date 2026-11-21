@@ -508,13 +508,15 @@ def main(argv: list[str] | None = None) -> int:
     today = datetime.now(timezone.utc).date()
     window = args.window or DEFAULT_WINDOW
     hash_salt = None if args.full else run_salt(args.hash_paths, args.hash_salt)
+    # stamped only when a platform read runs: --scans can select no platform scan
+    platform_ran = args.platform and bool(platform_scans(scans))
     planned: JsonDict = {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
         "levels_version": maturity_model["version"] if maturity_model is not None else None, "window": window,
         "counts_only": not args.full, "scans": sorted(scans) if scans is not None else None,
         "paths_hashed": hash_salt is not None,
         "fleet_config_sha256": config_sha256(fleet_config) if fleet_config is not None else None,
-        "platform": args.platform,
+        "platform": platform_ran,
     }
     keeps_history = not args.no_history and not args.full
     try:
@@ -573,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
-        fleet_config=fleet_config, platform=args.platform,
+        fleet_config=fleet_config, platform=platform_ran,
     )
     write_stamp(out_dir, stamp)
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)

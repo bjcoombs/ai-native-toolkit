@@ -1980,7 +1980,7 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
 `unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
-(HTTP 404), `rate_limited` (HTTP 429 after the backoff), `gh_timeout`, `gh_error`,
+(HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
 `gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
@@ -1989,8 +1989,10 @@ lives here and is shared with `gitlab_cli`.
 **`platform_cli.py`**
 How `gh_cli._run_gh` and `gitlab_cli._run_glab` run their binary (issue #714). `run_cli`
 closes stdin and sets `GH_PROMPT_DISABLED`, `NO_PROMPT` (glab) and `GIT_TERMINAL_PROMPT=0`
-over the inherited environment, so a prompt fails the call. A reply reporting HTTP 429 is
-retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
+over the inherited environment, so a prompt fails the call. A reply reporting a rate limit
+(`rate_limited`: HTTP 429 in gh's `(HTTP 429)` and glab's `glab: HTTP 429` or `429 Too Many
+Requests` forms, or GitHub's rate-limit 403 text "API rate limit exceeded" / "secondary
+rate limit") is retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
 CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) per wait;
 `SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
 directory, a successful call's stdout is stored under the sha256 of its argv and the same

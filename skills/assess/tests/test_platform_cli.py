@@ -141,3 +141,37 @@ def test_an_unwritable_cache_is_skipped(stub, tmp_path, monkeypatch):
     assert gh_cli.gh_api("repos/o/r") == {"ok": True}
     assert gh_cli.gh_api("repos/o/r") == {"ok": True}
     assert len(_calls(stub)) == 2
+
+
+@pytest.mark.parametrize("message", [
+    "gh: API rate limit exceeded for user ID 1. (HTTP 403)",
+    "gh: You have exceeded a secondary rate limit. (HTTP 403)",
+])
+def test_githubs_rate_limit_403_is_backed_off_and_never_no_access(stub, waits, message):
+    _limit(stub, 1, message)
+    assert gh_cli.gh_api("repos/o/r") == {"ok": True}
+    assert len(_calls(stub)) == 2 and waits == [2.0]
+    _limit(stub, 99, message)
+    (stub / "count").unlink()
+    with pytest.raises(GhUnavailable) as caught:
+        gh_cli.gh_api("repos/o/r")
+    assert caught.value.reason.startswith("rate_limited:")
+
+
+def test_a_plain_403_is_still_no_access(stub, waits):
+    _limit(stub, 99, "gh: Resource not accessible by integration (HTTP 403)")
+    with pytest.raises(GhUnavailable) as caught:
+        gh_cli.gh_api("repos/o/r")
+    assert caught.value.reason.startswith("no_access:") and waits == []
+
+
+def test_glabs_unparenthesised_http_429_is_retried_then_rate_limited(stub, waits):
+    project = GitlabProject(host="gl.example", path="g/app")
+    _limit(stub, 1, "glab: HTTP 429")
+    assert gitlab_cli.glab_api(project, "projects/x") == {"ok": True}
+    assert len(_calls(stub)) == 2 and waits == [2.0]
+    _limit(stub, 99, "glab: HTTP 429")
+    (stub / "count").unlink()
+    with pytest.raises(GhUnavailable) as caught:
+        gitlab_cli.glab_api(project, "projects/x")
+    assert caught.value.reason.startswith("rate_limited:")
