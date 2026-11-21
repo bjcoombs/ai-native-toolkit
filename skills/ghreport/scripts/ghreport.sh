@@ -33,8 +33,14 @@ set -euo pipefail
 # reason; an unreadable value is never `off`. Replay reads them from
 # <render-dir>/settings/*.json, which the per-repo glob never matches.
 #
+# Capture then replay: a live run with --keep-fragments DIR keeps its per-repo
+# fragments, and the settings/ subdirectory, in DIR in exactly the layout
+# --render-dir reads, so `--render-dir DIR` later renders the same report
+# without any API call.
+#
 # Usage: ./ghreport.sh [--provider github|gitlab] [--root DIR] [--limit N]
-#                      [--quiet] [--no-file] [--render-dir DIR]
+#                      [--quiet] [--no-file] [--keep-fragments DIR]
+#                      [--render-dir DIR]
 #                      GitHub: [--org NAME]   GitLab: [--host HOST] [--group PATH]
 #   --provider P      github (default) or gitlab
 #   --org NAME        Org / account to report on (default: basename of --root/cwd)
@@ -46,6 +52,8 @@ set -euo pipefail
 #   --no-file         Terminal only; do not write the markdown file
 #   --render-dir DIR  Render from a dir of pre-collected per-repo JSON fragments
 #                     (skips discovery + querying; replay / testing)
+#   --keep-fragments DIR  Live run: keep the per-repo fragments and settings/
+#                     in DIR (new or empty) for a later --render-dir DIR replay
 # ===================================================================
 
 ORG=""
@@ -54,6 +62,7 @@ LIMIT=0
 QUIET_MODE=false
 NO_FILE=false
 RENDER_DIR=""
+KEEP_DIR=""
 PROVIDER=github
 GITLAB_HOST=""
 GITLAB_GROUP=""
@@ -78,6 +87,8 @@ while [[ $# -gt 0 ]]; do
     --no-file) NO_FILE=true; shift ;;
     --render-dir) RENDER_DIR=$2; shift 2 ;;
     --render-dir=*) RENDER_DIR=${1#*=}; shift ;;
+    --keep-fragments) KEEP_DIR=$2; shift 2 ;;
+    --keep-fragments=*) KEEP_DIR=${1#*=}; shift ;;
     -h|--help)
       # The header runs from the first rule line to the next one.
       awk '/^# ====/ { print; if (++rules == 2) exit; next } rules == 1' "$0"
@@ -85,7 +96,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--limit N] [--quiet] [--no-file] [--render-dir DIR]" >&2
+      echo "Usage: $0 [--provider github|gitlab] [--root DIR] [--limit N] [--quiet] [--no-file] [--keep-fragments DIR] [--render-dir DIR]" >&2
       echo "       GitHub: [--org NAME]   GitLab: [--host HOST] [--group PATH]" >&2
       exit 1
       ;;
@@ -768,6 +779,10 @@ emit_report() {
 }
 
 # ---- render-only (replay / testing) ----------------------------------------
+if [ -n "$RENDER_DIR" ] && [ -n "$KEEP_DIR" ]; then
+    echo "Error: --keep-fragments captures a live run; it cannot be combined with --render-dir" >&2
+    exit 1
+fi
 if [ -n "$RENDER_DIR" ]; then
     if [ ! -d "$RENDER_DIR" ]; then
         echo "Error: --render-dir not a directory: $RENDER_DIR" >&2
@@ -775,6 +790,24 @@ if [ -n "$RENDER_DIR" ]; then
     fi
     assemble "$RENDER_DIR"
     exit 0
+fi
+
+# A capture directory must be new or empty: a replay reads every *.json in it,
+# so a stale fragment from another run would become a report row. Checked
+# before discovery, so a bad path fails before any API call.
+if [ -n "$KEEP_DIR" ]; then
+    if [ -e "$KEEP_DIR" ] && [ ! -d "$KEEP_DIR" ]; then
+        echo "Error: --keep-fragments not a directory: $KEEP_DIR" >&2
+        exit 1
+    fi
+    if [ -d "$KEEP_DIR" ] && [ -n "$(ls -A "$KEEP_DIR")" ]; then
+        echo "Error: --keep-fragments directory is not empty: $KEEP_DIR" >&2
+        exit 1
+    fi
+    mkdir -p "$KEEP_DIR" || {
+        echo "Error: cannot create --keep-fragments directory: $KEEP_DIR" >&2
+        exit 1
+    }
 fi
 
 # ---- discovery (delegated to ghsync --porcelain) ---------------------------
@@ -822,8 +855,14 @@ if [ "$LIMIT" -gt 0 ] && [ "$LIMIT" -lt ${#repos[@]} ]; then
 fi
 echo "Querying state for ${#repos[@]} repo(s) ..." >&2
 
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+# Fragments go to a temp dir that is removed on exit, or with
+# --keep-fragments straight into the capture dir, which is kept.
+if [ -n "$KEEP_DIR" ]; then
+    TMP_DIR=$KEEP_DIR
+else
+    TMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TMP_DIR"' EXIT
+fi
 
 # Org / group settings, into a subdirectory the per-repo glob skips. A
 # settings query that fails outright degrades to all-unknown for its scope
@@ -869,3 +908,6 @@ wait
 [ "$QUIET_MODE" = false ] && printf "\n" >&2
 
 assemble "$TMP_DIR"
+if [ -n "$KEEP_DIR" ]; then
+    echo "Fragments kept in: $KEEP_DIR (replay with --render-dir $KEEP_DIR)" >&2
+fi

@@ -858,3 +858,25 @@ def test_unreadable_group_list_keeps_the_section(tmp_path: Path) -> None:
     assert set(settings) == set(SETTINGS)
     assert set(settings.values()) == {"unknown (group list unreadable)"}
     assert "1 group(s): 0 setting(s) off, 4 unknown" in res.stdout
+
+
+def test_keep_fragments_capture_then_replay_is_identical(env: Env) -> None:
+    """#694: a live GitLab run captured with --keep-fragments replays through
+    --render-dir to the same terminal report and markdown file, with the group
+    settings read from settings/."""
+    keep = env.tmp / "capture"
+    live = env.run("--host", HOST, "--quiet", "--keep-fragments", str(keep))
+    assert live.returncode == 0, live.stderr
+    assert any(keep.glob("*.json")), "no per-project fragments kept"
+    assert any((keep / "settings").glob("*.json")), "no settings fragments kept"
+    live_file = next(env.root.glob(f"org-state-{HOST}-*.md"))
+    live_body = live_file.read_text()
+    live_file.unlink()
+    calls_before = len(env.api_calls())
+
+    replay = env.run("--host", HOST, "--quiet", "--render-dir", str(keep))
+    assert replay.returncode == 0, replay.stderr
+    assert replay.stdout == live.stdout
+    assert next(env.root.glob(f"org-state-{HOST}-*.md")).read_text() == live_body
+    assert "Group settings" in replay.stdout
+    assert len(env.api_calls()) == calls_before, "replay must not call the API"

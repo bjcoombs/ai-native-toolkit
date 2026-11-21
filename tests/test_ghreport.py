@@ -499,3 +499,63 @@ def test_jq16_shim_reproduces_empty_input_exit(jq16_bin):
     assert subprocess.run([jq, "-e", "type==\"object\""], input="", text=True).returncode == 0
     assert subprocess.run([jq, "-en", "input"], input="", text=True,
                           capture_output=True).returncode != 0
+
+
+# ---- capture then replay (--keep-fragments, #694) ---------------------------
+
+def _without_report_path(out):
+    """Drop the line naming the report file: capture and replay write to
+    different roots, and everything else must match."""
+    return "\n".join(ln for ln in out.splitlines() if not ln.startswith("Report written to:"))
+
+
+def test_keep_fragments_capture_then_replay_is_identical(tmp_path):
+    """A live run with --keep-fragments, replayed with --render-dir, gives the
+    same terminal report and the same markdown file, settings included."""
+    keep = tmp_path / "capture"
+    res, root = _run_with_org(tmp_path, {
+        "orgs/testorg": {"login": "testorg", "two_factor_requirement_enabled": True},
+        "orgs/testorg/rulesets": [],
+    }, "--keep-fragments", str(keep))
+    assert res.returncode == 0, res.stderr
+    assert f"Fragments kept in: {keep}" in res.stderr
+    assert sorted(p.relative_to(keep).as_posix() for p in keep.rglob("*.json")) == [
+        "openrepo.json", "settings/org.json"]
+    assert "Org settings" in res.stdout
+
+    replay_root = tmp_path / "replay"
+    replay_root.mkdir()
+    rep = subprocess.run(
+        ["bash", str(GHREPORT), "--render-dir", str(keep), "--org", "testorg",
+         "--root", str(replay_root), "--quiet"],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert rep.returncode == 0, rep.stderr
+    assert _without_report_path(rep.stdout) == _without_report_path(res.stdout)
+    live_file = next(root.glob("org-state-testorg-*.md")).read_text()
+    replay_file = next(replay_root.glob("org-state-testorg-*.md")).read_text()
+    assert replay_file == live_file
+
+
+def test_keep_fragments_refuses_a_non_empty_dir(tmp_path):
+    """A stale fragment in the capture dir would become a replay row."""
+    keep = tmp_path / "capture"
+    keep.mkdir()
+    (keep / "stale.json").write_text("{}")
+    res, _ = _run_with_org(tmp_path, {}, "--no-file", "--keep-fragments", str(keep))
+    assert res.returncode != 0
+    assert "not empty" in res.stderr
+    assert not (tmp_path / "gh.log").exists(), "must fail before any gh call"
+
+
+def test_keep_fragments_with_render_dir_is_rejected(fragments_dir, tmp_path):
+    res = _render(fragments_dir, tmp_path, "--keep-fragments", str(tmp_path / "k"))
+    assert res.returncode != 0
+    assert "cannot be combined with --render-dir" in res.stderr
+
+
+def test_help_names_the_capture_route():
+    res = subprocess.run(["bash", str(GHREPORT), "--help"],
+                         capture_output=True, text=True, timeout=30)
+    assert "--keep-fragments DIR" in res.stdout
+    assert "--render-dir DIR" in res.stdout

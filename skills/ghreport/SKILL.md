@@ -162,6 +162,26 @@ bash "${CLAUDE_SKILL_DIR}/scripts/ghreport.sh" --provider gitlab --host gitlab.e
 | `--quiet` | Suppress the per-repo progress dots; keep the summary and file |
 | `--no-file` | Terminal only; do not write the markdown file |
 | `--render-dir DIR` | Skip discovery + querying and render a report from a directory of previously-collected per-repo JSON fragments (replay / testing); org or group settings fragments are read from its `settings/` subdirectory |
+| `--keep-fragments DIR` | Live run: keep the per-repo fragments and the `settings/` subdirectory in `DIR` (created if missing; must be empty) in exactly the layout `--render-dir` reads. See [Capture and replay](#capture-and-replay) |
+
+## Capture and replay
+
+To keep a live run's data and re-render it later without any API call, capture
+it with `--keep-fragments`, then replay it with `--render-dir`:
+
+```bash
+ghreport.sh --org acme --keep-fragments ./acme-capture     # live run, fragments kept
+ghreport.sh --org acme --render-dir ./acme-capture         # same report, no API calls
+```
+
+Pass the same `--org` (GitHub) or `--provider gitlab --host HOST [--group PATH]`
+(GitLab) to the replay: the report title and file name come from those flags,
+not from the fragments. On the same day the replay prints the same per-repo
+rows, headline and settings section as the live run, and writes the same
+markdown file. The capture directory must be new or empty, because a replay
+reads every `*.json` in it as a repository row; a stale fragment from an
+earlier run would otherwise appear in the report. `--keep-fragments` cannot be
+combined with `--render-dir`.
 
 ## Output
 
