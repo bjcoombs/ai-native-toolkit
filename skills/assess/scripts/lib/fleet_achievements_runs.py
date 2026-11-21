@@ -14,6 +14,13 @@ directory (``lib/fleet_history.py``) and keeps each entry that:
   engine reads decodes, so one malformed entry is passed over rather than costing
   every later run its achievements).
 
+**Re-score (#771).** An entry whose only refusal is the maturity-model version is not
+passed over when the caller gives this run's model and key function: its ``repos.jsonl``
+scans are re-scored under this run's model (``lib/fleet_rescore.py``) and it replays as
+``HistoryRun(..., rescored_from=<its version>, stored=<its fleet-data.json>)``. It is passed
+over (today's behaviour, never an error) when ``repos.jsonl`` does not read as fleet rows
+with scans or a stored repository key does not join under this run's key function.
+
 An entry is dated by its ``run.json`` ``scan_date``, not by the copy of the stamp
 inside ``fleet-data.json``: a run copied into the history with a re-dated ``run.json``
 is replayed on that date. Only an entry with no ``run.json`` is read through that copy.
@@ -25,17 +32,20 @@ bytes. An unreadable entry is passed over, never an error. An earlier
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 from lib.fleet_achievements import HistoryRun, subjects
 from lib.fleet_compare import comparability
 from lib.fleet_data import FLEET_DATA_FILE, FLEET_DATA_VERSION, FleetData
 from lib.fleet_history import one_per_date
 from lib.fleet_legacy import upgrade
+from lib.fleet_rescore import rescore
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
+from lib.fleet_view import FleetViewError, read_repos
+from lib.levels import MaturityModel
 
 _TOP_KEYS = ("run", "model", "views", "repos")
 # The fleet-data.json versions whose cells and units the engine reads alike: 1 (#703) carried
@@ -52,7 +62,38 @@ def _stamp(entry: Path, data: Mapping[str, Any]) -> Any:
     return {**run, "fleet_stamp_version": FLEET_STAMP_VERSION} if isinstance(run, dict) else None
 
 
-def _read(entry: Path, date: str, current: FleetStamp) -> HistoryRun | None:
+class Rescorer(NamedTuple):
+    """This run's maturity model and repository key function: what a re-score needs."""
+
+    model: MaturityModel
+    key: Callable[[str], str]
+
+
+def _version_only(stamp: FleetStamp, current: FleetStamp) -> bool:
+    """Whether the maturity-model version is the only difference ``comparability`` refuses."""
+    return not comparability({**stamp, "levels_version": current["levels_version"]}, current)[0]
+
+
+def _rescored(entry: Path, data: FleetData, stamp: FleetStamp, current: FleetStamp,
+              rescorer: Rescorer | None) -> HistoryRun | None:
+    """The entry re-scored under this run's model from its ``repos.jsonl``; None to pass it over."""
+    if rescorer is None or rescorer.model["version"] != current["levels_version"] \
+            or not _version_only(stamp, current):
+        return None
+    try:
+        rows = read_repos(entry)
+    except (FleetViewError, OSError):
+        return None
+    try:
+        again = rescore(data, rows, rescorer.model, rescorer.key)
+    except (KeyError, TypeError, AttributeError, ValueError, IndexError):
+        return None  # a stored row an older scanner wrote that the evaluator cannot read
+    if again is None:
+        return None
+    return HistoryRun(stamp["scan_date"], again, stamp["levels_version"] or "none", data)
+
+
+def _read(entry: Path, date: str, current: FleetStamp, rescorer: Rescorer | None = None) -> HistoryRun | None:
     """The entry as a replayed run dated ``date``, or None to pass it over.
 
     The entry's date is its own ``run.json`` ``scan_date`` (it must match the entry name);
@@ -67,14 +108,17 @@ def _read(entry: Path, date: str, current: FleetStamp) -> HistoryRun | None:
         if not isinstance(stamp, dict) or stamp.get("fleet_stamp_version") != FLEET_STAMP_VERSION:
             return None
         stamp = upgrade(stamp)
-        if stamp.get("scan_date") != date or comparability(cast(FleetStamp, stamp), current)[0]:
+        if stamp.get("scan_date") != date:
             return None
+        refused = bool(comparability(cast(FleetStamp, stamp), current)[0])
     except (OSError, ValueError, KeyError, TypeError):
         return None
     version = data.get("fleet_data_version")  # an int only: a list or dict is unhashable, True == 1
     if type(version) is not int or version not in READABLE_FLEET_DATA_VERSIONS \
             or not all(k in data for k in _TOP_KEYS) or not well_formed(cast(FleetData, data)):
         return None
+    if refused:
+        return _rescored(entry, cast(FleetData, data), cast(FleetStamp, stamp), current, rescorer)
     return HistoryRun(date, cast(FleetData, data))
 
 
@@ -106,7 +150,13 @@ def well_formed(data: FleetData) -> bool:
     return True
 
 
-def earlier_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str]) -> list[HistoryRun]:
-    """Earlier comparable runs with a ``fleet-data.json``, one per date before this run's, oldest first."""
+def earlier_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str], *,
+                 model: MaturityModel | None = None,
+                 key: Callable[[str], str] | None = None) -> list[HistoryRun]:
+    """Earlier comparable runs with a ``fleet-data.json``, one per date before this run's, oldest first.
+
+    With ``model`` (this run's) and ``key`` (this run's repository key function), an entry whose
+    only difference is the maturity-model version is re-scored (``lib/fleet_rescore.py``)."""
+    rescorer = Rescorer(model, key) if model is not None and key is not None else None
     return [run for _date, run in one_per_date(org_dir, current["scan_date"], repos,
-                                               lambda entry, date: _read(entry, date, current))]
+                                               lambda entry, date: _read(entry, date, current, rescorer))]

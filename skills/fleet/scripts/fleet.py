@@ -496,7 +496,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
         if org_dir is None or entry is None:
             earlier, note = [], "this run is not kept in the run history (--no-history or --full)"
         else:
-            earlier, note = earlier_runs(org_dir, stamp, repos), None
+            earlier, note = earlier_runs(org_dir, stamp, repos, model=maturity_model, key=privacy_key), None
         doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
                                  targets=resolve(specs, privacy_key), note=note, firsts=firsts)
         write_achievements(out_dir, doc)
@@ -545,7 +545,7 @@ def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: C
         return scan(options)
     with tempfile.TemporaryDirectory(prefix="fleet-config-") as tmp:
         copy = Path(tmp).resolve() / "fleet-config.toml"
-        copy.write_text(fleet_config_text, encoding="utf-8")
+        copy.write_text(fleet_config_text, encoding="utf-8", newline="\n")
         return scan(replace(options, fleet_config=copy))
 
 

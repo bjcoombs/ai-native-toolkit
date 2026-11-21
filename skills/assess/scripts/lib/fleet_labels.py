@@ -438,5 +438,5 @@ def render_schema() -> str:
 
 
 if __name__ == "__main__":  # pragma: no cover - regeneration entry point
-    SCHEMA_PATH.write_text(render_schema(), encoding="utf-8")
+    SCHEMA_PATH.write_text(render_schema(), encoding="utf-8", newline="\n")
     print(f"wrote {SCHEMA_PATH}")

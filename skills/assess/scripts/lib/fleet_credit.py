@@ -10,7 +10,11 @@ model, before the diagrams, so the report opens on credit and the next step:
    ``achievements.json``.
 2. **Next level-ups**: each unit's (not repository's) nearest level-up: the row whose
    step needs the fewest repositories, then maturity-model order. At most ``MAX_STEPS``.
-3. **Targets**, when a targets file was given: met, or the distance (in levels for a
+3. **Recount**, on the first run under a new maturity-model version (``recount`` in
+   ``achievements.json``, ``lib/fleet_rescore.py``): each move the rule change alone caused,
+   raised moves first. These are not achievements and take nothing away: every line says the
+   repository did not change. At most ``PER_KIND`` lines.
+4. **Targets**, when a targets file was given: met, or the distance (in levels for a
    level target, in share of top level for a share target).
 
 Every line is phrased as credit or as a next step. Deterministic; no date.
@@ -21,6 +25,7 @@ from collections.abc import Mapping, Sequence
 
 from lib.fleet_achievements import KINDS, REPO_VIEW, Achievements, NextStep, TargetProgress
 from lib.fleet_next_steps import code, text
+from lib.fleet_rescore import NOW_MEASURED, UP
 from lib.levels import MaturityModel
 
 TITLE = "What changed and who earned it"
@@ -30,7 +35,15 @@ KIND_LABELS = {"level_up": "Level-ups", "first": "Firsts", "target_hit": "Target
 
 
 def _intro(doc: Achievements) -> str:
-    rule = "Every line is computed from run data; an unknown level never earns or loses anything."
+    rule = "Every line is computed from run data."
+    if not doc["rescored_runs"]:
+        rule += " An unknown level never earns or loses anything."
+    else:
+        rule += (" Runs kept under an earlier maturity model are re-scored under the current one; a move "
+                 "caused only by the rule change is never an achievement. After a re-scored run, a "
+                 "repository whose own level becomes unknown starts its streak again.")
+    if doc["recount"] is not None:
+        rule += " The Recount below lists the moves the rule change caused."
     if len(doc["runs"]) < 2:
         return f"This run is the starting line ({doc['note'] or 'no earlier comparable run'}). {rule}"
     return (f"Since {code(doc['runs'][-2])}, over {len(doc['runs'])} comparable runs in this fleet's "
@@ -52,6 +65,25 @@ def _earned(doc: Achievements) -> list[str]:
             lines.append(f"- And {len(of_kind) - PER_KIND} more in `achievements.json`.")
         lines.append("")
     return lines[:-1]
+
+
+def _recount(doc: Achievements) -> list[str]:
+    counted = doc["recount"]
+    if counted is None:
+        return []
+    head = (f"The maturity model changed from {code(counted['from_version'])} to {code(counted['to_version'])}. "
+            f"Run {code(counted['run'])} is re-scored under the new rules; these moves come from the rules, "
+            "not from the repositories, and are not earned.")
+    raised = [line for line in counted["lines"] if line["direction"] in (UP, NOW_MEASURED)]
+    rest = [line for line in counted["lines"] if line["direction"] not in (UP, NOW_MEASURED)]
+    ordered = raised + rest
+    lines = ["### Recount", "", head, ""]
+    if not ordered:
+        return [*lines, "No repository's level moved under the new rules.", ""]
+    lines += [f"- {line['text']}" for line in ordered[:PER_KIND]]
+    if len(ordered) > PER_KIND:
+        lines.append(f"- And {len(ordered) - PER_KIND} more in `achievements.json`.")
+    return [*lines, ""]
 
 
 def team_steps(steps: Sequence[NextStep], order: Mapping[str, int]) -> list[NextStep]:
@@ -106,7 +138,7 @@ def credit_section(doc: Achievements, model: MaturityModel | None) -> str:
     order = {row["id"]: i for i, row in enumerate(rows)}
     titles = {row["id"]: row["title"] for row in rows}
     lines = [f"## {TITLE}", "", _intro(doc), "", "### Earned this run", "", *_earned(doc), "",
-             "### Next level-ups", "", *_steps(doc, order), ""]
+             *_recount(doc), "### Next level-ups", "", *_steps(doc, order), ""]
     if doc["targets"]:
         lines += ["### Targets", "", *(_target(t, titles) for t in doc["targets"]), ""]
     return "\n".join(lines)

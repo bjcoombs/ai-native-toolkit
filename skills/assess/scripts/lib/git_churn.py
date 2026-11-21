@@ -32,12 +32,12 @@ from lib.assess_config import (
 )
 from lib.change_coupling import build_rename_map
 from lib.content_paths import RAW_LOG_ARGS, content_paths
+# GIT_TIMEOUT_SECONDS is defined once, in commit_anchor; re-exported for this
+# module's importers.
+from lib.commit_anchor import GIT_TIMEOUT_SECONDS as GIT_TIMEOUT_SECONDS
+from lib.commit_anchor import head_commit_epoch, since_args
 from lib.history_window import WINDOW_PATTERN
 from lib.run_context_types import BulkCommit, JsonDict
-
-# Cap every git call so a stuck invocation (huge repo, lock contention, a hung
-# credential prompt) degrades to "no churn data" rather than blocking the run.
-GIT_TIMEOUT_SECONDS = 20
 
 # Git pathspec dropping that directory from a status call. Exclude-only
 # pathspecs are legal: git includes everything else.
@@ -76,15 +76,16 @@ def _under(top: Path, base: Path) -> Callable[[str], bool]:
 
 
 def git_churn_scores(
-    root: Path, since: str | None = None, scope: Path | None = None,
-    renames: Mapping[str, str] | None = None,
+    root: Path, window: str | None = None, scope: Path | None = None,
+    renames: Mapping[str, str] | None = None, anchor_epoch: int | None = None,
 ) -> dict[Path, int]:
     """Return {abs_path: commit_count} for files under root tracked in git.
 
     Returns empty dict if root is not inside a git repo. Commit counts are
-    over the full history reachable from HEAD by default. Pass `since` as
-    a git-compatible date expression (e.g. "6 months ago") to window the
-    count.
+    over the full history reachable from HEAD by default. Pass `window`
+    (``"12mo"``, the ``lib.history_window`` grammar) to count only the commits
+    since that long before `anchor_epoch` (HEAD's committer time by default),
+    never before today (issue #773); no HEAD gives an empty dict.
 
     `renames` maps historical paths (relative to the git top) to current ones,
     as ``change_coupling.build_rename_map`` gives them (issue #425). A commit
@@ -114,10 +115,11 @@ def git_churn_scores(
     repo = Path(repo_top).resolve()
     scope_abs = scope.resolve() if scope is not None else None
 
+    bound = since_args(root, window, anchor_epoch)
+    if bound is None:
+        return {}
     cmd = ["git", "-C", repo_top, "-c", "core.quotepath=off", "log",
-           "--pretty=format:%x00", *RAW_LOG_ARGS]
-    if since:
-        cmd.append(f"--since={since}")
+           "--pretty=format:%x00", *RAW_LOG_ARGS, *bound]
     if scope_abs is not None:
         cmd += ["--", str(scope_abs)]
     try:
@@ -148,18 +150,23 @@ def git_churn_scores(
 
 
 def commit_epochs_by_file(
-    repo_root: Path, since: str | None,
-    renames: Mapping[str, str] | None = None,
+    repo_root: Path, window: str | None,
+    renames: Mapping[str, str] | None = None, anchor_epoch: int | None = None,
 ) -> dict[Path, list[tuple[int, int]]] | None:
-    """{abs_path: [(author epoch, commit index)]} over the churn window.
+    """{abs_path: [(author epoch, commit index)]} over the churn window
+    (`window` counted back from `anchor_epoch`, as for `git_churn_scores`).
 
     The per-commit counterpart of `git_churn_scores`: the same walk and the
     same `renames` remap, keeping each commit's author time (`%at`, the clock
     the doc side uses) so a caller can count only the commits after a given
     moment. The commit index lets a caller count distinct commits rather than
     file-commits; a commit appears once per file even when it touches the file
-    under two names. Paths outside `repo_root` are dropped. None when git fails.
+    under two names. Paths outside `repo_root` are dropped. None when git fails
+    or a window has no anchor.
     """
+    bound = since_args(repo_root, window, anchor_epoch)
+    if bound is None:
+        return None
     try:
         top = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
@@ -172,10 +179,7 @@ def commit_epochs_by_file(
     top_path = Path(top).resolve()
     root = repo_root.resolve()
     cmd = ["git", "-C", top, "-c", "core.quotepath=off", "log",
-           "--pretty=format:%x00%at", *RAW_LOG_ARGS]
-    if since:
-        cmd.append(f"--since={since}")
-    cmd += ["--", str(root)]
+           "--pretty=format:%x00%at", *RAW_LOG_ARGS, *bound, "--", str(root)]
     try:
         raw = subprocess.run(
             cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
@@ -207,7 +211,7 @@ def git_commit_info(root: Path) -> JsonDict:
       - ``available``: False (with ``reason``) when ``root`` isn't a git repo or
         git is unreachable; the report then omits the snapshot line.
       - ``head_sha`` / ``head_short``: the commit HEAD pointed at during the scan.
-      - ``committed_date``: ISO-8601 author date of HEAD.
+      - ``committed_date``: HEAD's committer date, ``YYYY-MM-DD``.
       - ``subject``: HEAD's commit subject line.
       - ``dirty``: True when tracked files have uncommitted changes, so the
         measured numbers reflect the working tree, not any single commit. The
@@ -289,8 +293,7 @@ def file_last_commit_epoch(path: Path) -> int | None:
     ``%ct`` would reset the clock and hide the decay. This matches the author-time
     (``%at``) axis `lib.accretion_ratchet` and `lib.promissory_markers` already use.
 
-    The raw commit time, before the days-ago conversion `file_last_commit_days`
-    applies. Provenance-aware staleness needs the absolute timestamp so it can
+    The raw commit time, before any days-ago conversion. Provenance-aware staleness needs the absolute timestamp so it can
     compare a generated doc against its declared source on the same axis (epoch
     seconds), independent of "now" - see `lib.doc_provenance`.
     """
@@ -310,23 +313,6 @@ def file_last_commit_epoch(path: Path) -> int | None:
         return int(raw)
     except ValueError:
         return None
-
-
-def file_last_commit_days(path: Path) -> int | None:
-    """Days since `path` was last committed in git. None if not tracked.
-
-    Distinct from churn count - this is the staleness axis (how long since
-    the file last moved), used to colour the docs-staleness heatmap and to
-    compute the doc-vs-code staleness ratio. None means "no git history for
-    this file" so callers can degrade rather than treating untracked as fresh.
-    """
-    import datetime as _dt
-
-    ts = file_last_commit_epoch(path)
-    if ts is None:
-        return None
-    delta = _dt.datetime.now().timestamp() - ts
-    return max(0, int(delta // 86400))
 
 
 # Bulk mechanical commits (issue #333). A licence-header sweep, formatter run or
@@ -377,6 +363,9 @@ class ContentClock(NamedTuple):
     boundary commit, so their age is a lower bound (the real last change can be
     older). A boundary commit lists
     every file, like a root commit, so it is never counted as bulk.
+
+    ``anchor_epoch`` is HEAD's committer time: :meth:`days` counts from it, not
+    from today (issue #773). None without a HEAD, and then ``days`` is None.
     """
 
     epochs: dict[Path, int]
@@ -389,6 +378,7 @@ class ContentClock(NamedTuple):
     truncated: bool = False
     boundary_epoch: int | None = None
     lower_bound: frozenset[Path] = frozenset()
+    anchor_epoch: int | None = None
 
     @property
     def boundary_date(self) -> str | None:
@@ -402,12 +392,11 @@ class ContentClock(NamedTuple):
         return _file_content_epoch(path, self.bulk_shas)
 
     def days(self, path: Path) -> int | None:
-        import datetime as _dt
-
+        """Whole days from ``path``'s last content change to HEAD's commit time."""
         ts = self.epoch(path)
-        if ts is None:
+        if ts is None or self.anchor_epoch is None:
             return None
-        return max(0, int((_dt.datetime.now().timestamp() - ts) // 86400))
+        return max(0, (self.anchor_epoch - ts) // 86400)
 
 
 def _file_content_epoch(path: Path, bulk_shas: frozenset[str]) -> int | None:
@@ -450,7 +439,8 @@ def content_commit_clock(
     ``change_coupling.build_rename_map`` gives them), so a doc's commits under an
     old name still count after a mass rename.
     """
-    empty = ContentClock({}, frozenset(), (), 0, len(docs), True)
+    anchor = head_commit_epoch(repo_root)  # read before any early return: epoch() still answers
+    empty = ContentClock({}, frozenset(), (), 0, len(docs), True, anchor_epoch=anchor)
     try:
         top = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
@@ -472,7 +462,7 @@ def content_commit_clock(
             timeout=GIT_TIMEOUT_SECONDS, errors="replace",
         ).stdout
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        return ContentClock({}, frozenset(), (), 0, len(docs), False)
+        return ContentClock({}, frozenset(), (), 0, len(docs), False, anchor_epoch=anchor)
     shallow = _shallow_probe(top)
     full_history = shallow == "false"
     boundary = _shallow_boundary(top) if shallow == "true" else {}
@@ -534,6 +524,7 @@ def content_commit_clock(
         truncated=shallow == "true",
         boundary_epoch=max(boundary.values(), default=None),
         lower_bound=frozenset(p for p, sha in chosen.items() if sha in boundary),
+        anchor_epoch=anchor,
     )
 
 
@@ -639,12 +630,12 @@ def tracked_files(root: Path) -> frozenset[Path] | None:
 # Time windows tried in order from narrowest to widest. The first one
 # that gives both gradient depth (max >= MIN_MAX) AND visual coverage
 # (>= MIN_COVERAGE_PCT of files touched) wins. If nothing qualifies, we
-# fall back to the widest window that returned any data. since=None
-# means "full history".
+# fall back to the widest window that returned any data. Each window counts
+# back from HEAD's commit time (issue #773); None means "full history".
 CHURN_WINDOWS: list[tuple[str, str | None]] = [
-    ("last 12mo", "12 months ago"),
-    ("last 24mo", "24 months ago"),
-    ("last 5y",   "5 years ago"),
+    ("last 12mo", "12mo"),
+    ("last 24mo", "24mo"),
+    ("last 5y",   "5y"),
     ("all-time",  None),
 ]
 _WINDOW_IN_LABEL = re.compile(rf"\blast ({WINDOW_PATTERN})\b")
@@ -678,6 +669,7 @@ def is_tracked(path: Path, tracked: frozenset[Path] | None) -> bool:
 
 def pick_churn_window(
     root: Path, file_paths: list[Path], renames: Mapping[str, str] | None = None,
+    anchor_epoch: int | None = None,
 ) -> tuple[dict[Path, int] | None, str | None]:
     """Walk CHURN_WINDOWS narrowest-to-widest; return the first window
     that gives both gradient depth and visual coverage. Falls back to
@@ -687,15 +679,18 @@ def pick_churn_window(
     scoreable, so coverage % is comparable across windows. Returns
     (per-file-count-dict, "commits (<label>)") or (None, None) when the
     path isn't inside a git repo. Every window follows renames through
-    `renames` (as for `git_churn_scores`), built once here when omitted.
+    `renames` (as for `git_churn_scores`), built once here when omitted, and
+    counts back from `anchor_epoch` (HEAD's committer time when omitted).
     """
     if renames is None:
         renames = rename_paths(root)
+    if anchor_epoch is None:
+        anchor_epoch = head_commit_epoch(root)
     total_files = max(len(file_paths), 1)
     widest_fallback: tuple[dict[Path, int], str] | None = None
 
-    for label, since in CHURN_WINDOWS:
-        data = git_churn_scores(root, since=since, renames=renames)
+    for label, window in CHURN_WINDOWS:
+        data = git_churn_scores(root, window=window, renames=renames, anchor_epoch=anchor_epoch)
         if not data:
             continue
         scored_hits = {p: data[p] for p in file_paths if p in data}

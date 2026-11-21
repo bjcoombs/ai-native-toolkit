@@ -87,6 +87,11 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   and README follow by hand in the same PR. `skills/assess/tests/test_ci_workflow.py`
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
+- **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
+  roll-ups with `fleet_data`'s own `repo_cells` and `row_roll_up`, so a
+  change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
+  `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
+  fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
 ever cut, this note is where the intended boundary is written down.
@@ -95,15 +100,21 @@ ever cut, this note is where the intended boundary is written down.
 
 ## Module reference
 
-Windows portability (#712): every text-mode `subprocess.run` names
+Windows portability (#712, #752): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
 round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
-`tests/test_windows_portability.py` guards both across `scripts/`.
+`tests/test_windows_portability.py` guards all three across every runtime Python tree: each
+`skills/*/scripts/` and the repo-level `scripts/`, leaving out `tests/`, `fixtures/` and dot directories.
 The fleet run files (`repos.jsonl`, `groups.jsonl`, `run.json`, `compare.json`, `labels.jsonl`,
-`doc_freshness.jsonl`, `agent_clusters.json` and the next-steps pages) are written with `newline="\n"`, so Windows and
-Linux produce the same bytes, and `promissory_markers` asks `rg` for `--path-separator /`
+`doc_freshness.jsonl`, `agent_clusters.json`, `achievements.json`, `fleet-data.json`, the
+generated fleet schemas and the next-steps pages) are written with `newline="\n"`, so Windows and
+Linux produce the same bytes; the same test checks that every writer in `lib/fleet*.py` and
+`skills/fleet/scripts/` names `newline`. `promissory_markers` asks `rg` for `--path-separator /`
 so its paths are POSIX on Windows too, and `change_coupling` keys and sorts co-change pairs
-as POSIX strings, so pair order is the same on every OS (#713). The windows-latest job
+as POSIX strings, so pair order is the same on every OS (#713). That is the canonical order
+`structure_drift` already used, and it changed Linux pair order too: `file_a`/`file_b` now
+follow POSIX string order, so `src/foo.py` sorts before `src/foo/bar.py` (`.` < `/`), where
+the earlier `Path` ordering compared path parts and put `src/foo/bar.py` first. The windows-latest job
 (`.github/workflows/windows.yml`) checks both through `tests/test_fleet_golden.py`.
 
 ### Data collection
@@ -151,6 +162,31 @@ root commit, so it is never counted as bulk. A failed probe is unknown, not
 truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
+Commit-anchored windows (issue #773): `CHURN_WINDOWS` holds window tokens (`12mo`,
+`24mo`, `5y`, None), and `git_churn_scores`, `commit_epochs_by_file` and
+`pick_churn_window` take `window` plus an optional `anchor_epoch` (HEAD's committer time
+when omitted, read through `commit_anchor`), so each walk passes an absolute
+`--since=@<epoch>`. `ContentClock.anchor_epoch` is HEAD's committer time, read inside
+`content_commit_clock` before any early return, and `ContentClock.days` counts to it,
+so `last_commit_days` and `freshness_days` are a function of the commit. No HEAD gives
+an empty churn map, a None epoch map and None days: never a fallback to today.
+
+**`commit_anchor.py`**
+The anchor of every history window (issue #773). `head_commit_epoch(root)` is HEAD's
+committer time (`%ct`, the time `git log --since` filters on) or None; `since_args(root,
+window, anchor_epoch)` gives `["--since=@<epoch>"]` through
+`history_window.anchored_since`, `[]` for all history, and None when a window has no
+anchor so the caller degrades. Used by `git_churn` and `understanding_analysis`;
+`ai_usage` reads HEAD through its own `_git` so a missing git or a timeout keeps its
+reason, then builds the bound with `anchored_since`. Tests: `tests/test_commit_anchor.py` (anchored values on a
+dated fixture repository, and the same `scans` from two faked dates, Python's clock and
+git's), `tests/test_no_wall_clock.py` (an AST guard: no wall-clock read
+outside an allowlist of run-metadata and network functions, no relative git date
+literal, and every date bound a headless run passes to git starts with `@`).
+Outside the guarantee: the network scans (`merged_sample`, `review_reality`,
+`delivery`, `gate_cost`, `config_drift`) read forge state that is not a function of the
+commit, so Layer 7 level 2 (`layer-7-review`) is not yet same-commit-same-level; they
+are unavailable in a headless run. A dirty working tree is never a function of a commit.
 
 **`history_window.py`**
 The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
@@ -158,8 +194,12 @@ The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
 string (`re.fullmatch`), so `"6mo\n"` is rejected as the ECMA-262 schema pattern rejects it; `WINDOW_PATTERN` is the
 unanchored regex fragment. `signals.parse_window`, `ai_usage.resolve_window`,
 `fleet_activity.window_start`, `git_churn.window_from_churn_label` and the
-`run.schema.json` window pattern (`fleet_schema`) all read it. Tests:
-`tests/test_history_window.py`.
+`run.schema.json` window pattern (`fleet_schema`) all read it.
+`anchored_since(window, anchor_epoch)` is the absolute `"@<epoch>"` start of a window
+counted back from an epoch (days and weeks exactly, months and years by calendar,
+clamped to the month end, time of day kept); None for all history, or for a start git
+cannot read as an epoch (fewer than nine digits, before 1973-03-03). Tests:
+`tests/test_history_window.py`, `tests/test_commit_anchor.py`.
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -894,7 +934,11 @@ for `rg.exe`, last path in sorted order), since a user-scope winget install may 
 `missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
 do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
 stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
-exit codes do not change. Standard library only. Tests: `tests/test_tool_lookup.py`.
+exit codes do not change. `require_packages` is the hard form (#752): `complexity-treemap.py`
+and `doc-graph-svg.py` call it before their first third-party import, so a run without uv
+and without their PEP 723 dependencies prints the `require_hint` install line (no `--user`
+inside a virtualenv) and exits 1 with no traceback. A module already in `sys.modules`
+counts as present. Standard library only. Tests: `tests/test_tool_lookup.py`.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
@@ -1091,7 +1135,11 @@ by default since #772), `target_hit` (a level target on the row's level, a share
 on its mean share of top level, `RowState.share`, worked out from the cells, #780) and
 `streak` (#772 retired `personal_best`), each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
-a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
+repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
+step; `build_achievements` sets `recount` (`fleet_rescore.recount`) when the newest earlier
+run was re-scored, and `rescored_runs` (every re-scored replayed run, which
+`fleet_credit` reads for the report's opening rule). `nearest_level_up` picks per subject and row the next-level
 criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
 Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
 
@@ -1101,7 +1149,24 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 `READABLE_FLEET_DATA_VERSIONS` (1 and 2: version 1's roll-up is not read, #772),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
-the entry has no `run.json` (#780). Unreadable entries are passed over.
+the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
+model and key function (`model=`, `key=`), an entry whose only refusal is the
+maturity-model version is re-scored from its `repos.jsonl` (`fleet_view.read_repos`,
+`fleet_rescore.rescore`) and returned as a `HistoryRun` with `rescored_from` (its stored
+version) and `stored` (its `fleet-data.json`) set (#771).
+
+**`fleet_rescore.py`**
+Re-scores a stored run under the current maturity model and builds the Recount (#771).
+`rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
+cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
+roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
+`overall` are dropped, #772); None when a stored key does not join under the run's key
+function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783) is
+applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
+stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
+`now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
+`rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
+(`fleet_achievements.unknown_move`). Tests: `tests/test_fleet_rescore.py`.
 
 **`fleet_achievements_schema.py`**
 Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
@@ -1119,7 +1184,9 @@ the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming th
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
 from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
 nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
-distances (in levels, or in share for a share target). `fleet_diagrams.report_markdown` places it before the diagrams.
+distances (in levels, or in share for a share target), plus a `### Recount` subsection
+after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
+first). `fleet_diagrams.report_markdown` places it before the diagrams.
 
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
@@ -1638,8 +1705,8 @@ for it, and the layer scorer owns that check.
 **`understanding_analysis.py`**
 Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
 source (is there an externalised spec/doc?), authorship class, and the velocity clock
-(days since the last comprehension event - a human-authored commit - rather than
-calendar age). Primary finding: orphaned understanding - high complexity with no human
+(days from the last comprehension event - a human-authored commit - to HEAD's
+committer time, issue #773, rather than calendar age; None without a HEAD). Primary finding: orphaned understanding - high complexity with no human
 anchor and no externalised spec. Reuses `change_coupling.authorship_analysis` so the
 conservative agent/human classification is defined one way.
 
@@ -2928,7 +2995,9 @@ Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
 the headless `--window`), or None for full history (`window: "all-time"`);
-`resolve_window` raises on anything else, which degrades the block. `limits` is the
+`resolve_window` returns the label and raises on anything else, which degrades the
+block. The window counts back from HEAD's committer time (issue #773) and `since`
+records the absolute `@<epoch>` bound; a window with no HEAD is `available: false`. `limits` is the
 fixed `LIMITS` tuple (squash merges, stripped or missing trailers, unrecognised
 identities, an agent under a person's identity, automation bots not counted; dependency
 bots and token users counted apart). Counts, shares and fixed strings only: no name, e-mail, pattern or

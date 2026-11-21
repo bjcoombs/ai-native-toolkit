@@ -198,6 +198,8 @@ def test_a_trailing_rename_only_commit_does_not_reset_the_doc_age(tmp_path: Path
         if rename:
             _git(repo, "mv", "docs/old.md", "docs/guide.md")
             _commit(repo, "rename only", 10)
+        _append(repo, "notes.txt", "x\n")
+        _commit(repo, "head", 0)  # ages count to HEAD (#773): the same HEAD date for both
         row = next(d for d in analyze_doc_staleness(repo)["docs"]
                    if d["path"] in ("docs/old.md", "docs/guide.md"))
         ages[rename] = row["last_commit_days"]
