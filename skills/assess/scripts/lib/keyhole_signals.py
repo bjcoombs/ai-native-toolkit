@@ -222,10 +222,9 @@ def project_static_modularity(
     """
     if not structure or not structure.get("available"):
         return None
-    metrics = {
-        "modularity_q": structure.get("modularity_q"),
-        "front_door_ratio": structure.get("front_door_ratio"),
-    }
+    # Go's ratio is 1.0 by construction (each package its own front door): not evidence.
+    fd = None if structure.get("language") == "go" else structure.get("front_door_ratio")
+    metrics = {"modularity_q": structure.get("modularity_q"), "front_door_ratio": fd}
     return {d: dict(metrics) for d in dirs}
 
 

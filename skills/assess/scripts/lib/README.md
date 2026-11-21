@@ -370,7 +370,9 @@ pair as split; its three co-change metrics still report. The run-context `tier_1
 no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, never 0. The behaviour
 block projects the static metrics only onto directories holding a file the graph's
 language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
-graph never vouches for a Python tree or a directory of `_test.go` files alone. Skipped:
+graph never vouches for a Python tree or a directory of `_test.go` files alone. Go's
+`front_door_ratio` is projected as null there (1.0 by construction is not evidence), so
+`hidden_coupling` on a Go directory rests on `modularity_q` alone. Skipped:
 `_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
 configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
 is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package

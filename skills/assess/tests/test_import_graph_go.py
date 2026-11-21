@@ -12,7 +12,8 @@ import assess_signals
 from assess_report import format_structure_drift_findings
 from lib.context_blocks import _structure_drift_block
 from lib.import_graph import is_graph_source
-from lib.keyhole_signals import _graphed_dirs
+from lib.coupling_analysis import detect_hidden_coupling
+from lib.keyhole_signals import _graphed_dirs, project_static_modularity
 from lib.import_graph import select_graph
 from lib.import_graph_builders import BUILDERS
 from lib.run_context_types import CoChangePair
@@ -330,3 +331,21 @@ def test_unknown_static_counts_render_n_a_not_zero(tmp_path: Path) -> None:
     assert "**n/a (no_static_file_map)** `human_grouped_static_splits`" in out
     assert "**n/a (no_static_file_map)** `human_static_agree`" in out
     assert "**1** `human_split_but_cochange`" in out
+
+
+def test_a_low_q_go_graph_reads_no_hidden_coupling() -> None:
+    """Go's front_door_ratio is 1.0 by construction, so it is not projected:
+    a bleeding directory of a tangled (low Q) Go graph is not hidden_coupling."""
+    structure = {"available": True, "language": "go", "modularity_q": 0.05,
+                 "front_door_ratio": 1.0}
+    static = project_static_modularity(structure, ["pkg"])
+    assert static == {"pkg": {"modularity_q": 0.05, "front_door_ratio": None}}
+    rows = detect_hidden_coupling({"pkg": 0.1}, static_modularity=static)
+    assert [r["finding"] for r in rows if r["path"] == "pkg"] != ["hidden_coupling"]
+    # A modular Go graph still reads hidden_coupling on Q alone.
+    modular = project_static_modularity({**structure, "modularity_q": 0.8}, ["pkg"])
+    rows = detect_hidden_coupling({"pkg": 0.1}, static_modularity=modular)
+    assert [r["finding"] for r in rows if r["path"] == "pkg"] == ["hidden_coupling"]
+    # Python keeps its measured ratio.
+    python = project_static_modularity({**structure, "language": "python"}, ["pkg"])
+    assert python == {"pkg": {"modularity_q": 0.05, "front_door_ratio": 1.0}}
