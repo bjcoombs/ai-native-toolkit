@@ -378,6 +378,7 @@ def test_a_writable_out_is_left_empty_by_the_probe(tmp_path, monkeypatch):
     assert seen == [[]]
 
 
+@pytest.mark.windows_followup
 def test_an_unexpandable_list_entry_exits_2(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "list.txt").write_text("~nosuchuser-fleet-616/repo\n", encoding="utf-8")

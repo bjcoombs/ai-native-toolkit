@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.review_reality import scan_review_reality  # noqa: E402
@@ -55,6 +57,7 @@ def _pr(n: int, *, merger=PERSON, reviews=(), comments=(), state="APPROVED",
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    skip_without_posix_shell()
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")

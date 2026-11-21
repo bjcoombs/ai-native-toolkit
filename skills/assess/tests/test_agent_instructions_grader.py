@@ -270,6 +270,7 @@ def _fixture(fixtures_dir: Path, name: str) -> str:
     return (fixtures_dir / "instruction_grading" / name).read_text()
 
 
+@pytest.mark.windows_followup
 def test_verified_commands_outgrade_a_directive_monolith(
     fixtures_dir: Path, grading_repo: RepoContext,
 ) -> None:

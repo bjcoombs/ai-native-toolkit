@@ -478,6 +478,7 @@ def test_run_mutmut3_names_scope_as_the_cause_when_the_filter_empties_results(
                            "in the focus set")
 
 
+@pytest.mark.windows_followup
 def test_run_mutmut3_reason_carries_no_scratch_directory(
         tmp_path: Path, monkeypatch) -> None:
     _write(tmp_path, "pkg/calc.py", "def add(a, b):\n    return a + b\n")
@@ -497,6 +498,7 @@ def test_run_mutmut3_reason_carries_no_scratch_directory(
     assert "assess-mutmut-" not in r["reason"]
 
 
+@pytest.mark.windows_followup
 def test_no_records_reason_strips_the_longer_scratch_spelling_first(
         tmp_path: Path) -> None:
     """Behind a symlinked temp dir the unresolved scratch path is a substring of

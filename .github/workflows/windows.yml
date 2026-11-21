@@ -1,0 +1,69 @@
+name: Windows
+
+# Runs the skills/assess suite (the fleet tests included) on windows-latest so
+# separator, encoding and path-conversion regressions in /fleet and /assess
+# show up before a Windows user hits them (#701, #713).
+#
+# Tests that need POSIX-only machinery carry one of the Windows skip markers
+# declared in skills/assess/tests/conftest.py (WINDOWS_SKIP_MARKERS:
+# needs_symlink, needs_posix_perms, needs_posix_shell), or call its
+# skip_without_posix_shell() from a fixture that puts a #!/bin/sh gh/glab stub
+# on PATH. No coverage gate here: the Linux job owns the floor.
+#
+# The job is continue-on-error until its first green run; then drop that line
+# and add "windows fleet + assess pytest" to the required checks.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-pytest:
+    name: windows fleet + assess pytest
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      # Without this, checkout converts every text file to CRLF and fixture
+      # byte and line counts stop matching the Linux goldens.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+
+      # The promissory-marker scan and the fleet golden run shell out to rg.
+      - name: Install ripgrep
+        run: |
+          choco install ripgrep -y --no-progress
+          rg --version
+
+      - name: Python version
+        run: uv run --locked --python 3.11 python --version
+        working-directory: skills/assess
+
+      # A fixture estate built at test time is run through fleet.py and its
+      # repos.jsonl compared with the one committed from Linux
+      # (tests/fixtures/fleet_golden/repos.jsonl): field-level differences are
+      # listed by dotted path, then the bytes (LF endings) are compared.
+      - name: Fleet golden run against the committed Linux repos.jsonl
+        run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
+        working-directory: skills/assess
+
+      # The rest of the suite runs even when the golden step fails. -ra lists
+      # every skip and failure in the summary, so one log read shows it all.
+      - name: Run pytest
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
+          --ignore=tests/test_fleet_golden.py
+        working-directory: skills/assess

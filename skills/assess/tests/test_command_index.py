@@ -5,6 +5,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import lib.command_index as command_index
 from lib.command_index import TargetSet, build_index, repo_files
 
@@ -158,6 +160,7 @@ def test_repo_files_in_git_lists_tracked_only(git_repo) -> None:
     assert repo_files(sub) == frozenset({"inner.txt"})  # relative to the given root
 
 
+@pytest.mark.windows_followup
 def test_non_utf8_tracked_filename_does_not_abort(git_repo) -> None:  # type: ignore[no-untyped-def]  # conftest fixture
     """A tracked name that is not UTF-8 (added straight to the index, since
     some filesystems refuse to create one) degrades, never raises."""

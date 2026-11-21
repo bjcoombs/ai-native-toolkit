@@ -112,6 +112,7 @@ print("fleet:" + ascii(fleet._git(Path(repo), "log", "-1", "--format=%s")))
 """
 
 
+@pytest.mark.windows_followup
 def test_git_output_decodes_as_utf8_under_an_ascii_locale(tmp_path):
     repo = make_checkout(tmp_path / "repo")
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "café ✓"],

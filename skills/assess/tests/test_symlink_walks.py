@@ -130,6 +130,7 @@ def test_scratch_copy_keeps_a_tracked_directory_link(tmp_path: Path) -> None:
     assert (fallback / "pkg" / "src" / "lib" / "a.py").is_file()
 
 
+@pytest.mark.needs_symlink
 def test_scratch_copy_never_links_back_into_the_assessed_tree(tmp_path: Path) -> None:
     """A link out of the repository (absolute, or climbing past its root)
     would let a suite write through the copy into real files: a file target is

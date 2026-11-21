@@ -307,7 +307,7 @@ def write_labels(out_dir: Path, rows: Iterable[LabelRow]) -> Path:
     target = out_dir / LABELS_FILE
     fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{LABELS_FILE}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(dumps_labels(rows))
         os.chmod(tmp, 0o644)
         os.replace(tmp, target)

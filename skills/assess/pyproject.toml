@@ -42,7 +42,14 @@ norecursedirs = ["tests/fixtures"]
 # pytest-cov registers no_cover itself; declaring it here keeps a run without
 # pytest-cov (the plain local `uv run --with pytest pytest`) free of an
 # unknown-marker warning.
-markers = ["no_cover: run this test with coverage tracing paused (pytest-cov)"]
+markers = [
+    "no_cover: run this test with coverage tracing paused (pytest-cov)",
+    # Windows skip markers (#713); tests/conftest.py skips them on Windows.
+    "needs_symlink: creates a symlink; skipped on Windows",
+    "needs_posix_perms: relies on chmod/getuid permission semantics; skipped on Windows",
+    "needs_posix_shell: runs a #!/bin/sh stub or sh -c; skipped on Windows",
+    "windows_followup: known Windows failure tracked in #762; skipped on Windows",
+]
 
 [tool.coverage.report]
 # Layer 6 floor: CI's --cov=scripts run fails below this line rate. Measured

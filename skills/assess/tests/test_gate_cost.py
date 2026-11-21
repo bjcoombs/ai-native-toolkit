@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.gate_cost import MINUTES_PER_RUN, estimate_gate_cost  # noqa: E402
@@ -47,6 +49,7 @@ def _merged(n: int, when: datetime) -> list[dict]:
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    skip_without_posix_shell()
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")

@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import signals  # noqa: E402
@@ -64,6 +66,7 @@ def _git(repo: Path, *args: str) -> None:
 
 @pytest.fixture
 def stubs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    skip_without_posix_shell()
     bindir, data = tmp_path / "bin", tmp_path / "data"
     bindir.mkdir()
     data.mkdir()

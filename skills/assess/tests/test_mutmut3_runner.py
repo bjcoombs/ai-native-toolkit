@@ -234,6 +234,7 @@ def test_reason_does_not_repeat_the_detail() -> None:
         "ModuleNotFoundError: No module named 'grimp'")
 
 
+@pytest.mark.windows_followup
 def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
                                                    monkeypatch) -> None:
     """An ImportError names the file it imported from: in the uv runner's
@@ -273,6 +274,7 @@ def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
         "ImportError: from pkg/.venv/lib/y.py")
 
 
+@pytest.mark.windows_followup
 def test_labels_stop_at_a_separator_and_skip_a_root_home(tmp_path: Path) -> None:
     proc = subprocess.CompletedProcess(
         ["m"], 1, stdout="", stderr="ImportError: x (/home/u/a.py) (/home/u2/b.py)\n")

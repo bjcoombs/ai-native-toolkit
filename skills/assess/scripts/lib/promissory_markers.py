@@ -379,7 +379,7 @@ def _detect(repo_root: Path, extra_globs: list[str], rg: str = "rg") -> list[Mar
     markers: list[Marker] = []
     regions: dict[str, PyRegions | None] = {}
     for family, pattern in FAMILY_PATTERNS.items():
-        cmd = [rg, "-n", "--no-heading", "--no-messages", "-e", pattern]
+        cmd = [rg, "-n", "--no-heading", "--no-messages", "--path-separator", "/", "-e", pattern]
         for g in [*EXCLUDE_GLOBS, *extra_globs]:
             cmd += ["--glob", g]
         cmd.append(".")

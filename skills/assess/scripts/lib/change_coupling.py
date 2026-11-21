@@ -287,9 +287,9 @@ def change_coupling_pairs(
     for files in commit_sets:
         if len(files) < 2 or len(files) > MAX_COMMIT_FILES_FOR_COUPLING:
             continue
-        # sorted() over Paths gives a deterministic, file_a<file_b ordering.
-        for a, b in combinations(sorted(files), 2):
-            key = (str(a), str(b))
+        # Sorting the POSIX strings, not the Paths, gives the same file_a<file_b
+        # ordering on every OS (WindowsPath compares case-insensitively).
+        for key in combinations(sorted(f.as_posix() for f in files), 2):
             counts[key] = counts.get(key, 0) + 1
 
     pairs: list[CoChangePair] = [
@@ -529,7 +529,7 @@ def find_self_referential_tests(
         return []
     if commit_sets is None:
         commit_sets = parse_commit_file_sets(Path(repo_root))
-    commit_path_sets = [{str(f) for f in files} for files in commit_sets]
+    commit_path_sets = [{f.as_posix() for f in files} for files in commit_sets]
     self_ref: list[SelfReferentialTest] = []
     for test_file, source_file in sorted(test_to_code_map.items()):
         for paths in commit_path_sets:

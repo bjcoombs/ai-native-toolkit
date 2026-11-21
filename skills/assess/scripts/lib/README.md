@@ -99,6 +99,12 @@ Windows portability (#712): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
 round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
 `tests/test_windows_portability.py` guards both across `scripts/`.
+The fleet run files (`repos.jsonl`, `groups.jsonl`, `run.json`, `compare.json`, `labels.jsonl`,
+`doc_freshness.jsonl`, `agent_clusters.json` and the next-steps pages) are written with `newline="\n"`, so Windows and
+Linux produce the same bytes, and `promissory_markers` asks `rg` for `--path-separator /`
+so its paths are POSIX on Windows too, and `change_coupling` keys and sorts co-change pairs
+as POSIX strings, so pair order is the same on every OS (#713). The windows-latest job
+(`.github/workflows/windows.yml`) checks both through `tests/test_fleet_golden.py`.
 
 ### Data collection
 

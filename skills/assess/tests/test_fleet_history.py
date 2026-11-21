@@ -464,6 +464,7 @@ def _load_heatmap_cli() -> ModuleType:
     return module
 
 
+@pytest.mark.windows_followup
 def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     from test_fleet_groups import LEVELS_TOML
     heatmap = _load_heatmap_cli()

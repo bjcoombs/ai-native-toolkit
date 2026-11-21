@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import skip_without_posix_shell
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.agent_environment import (  # noqa: E402
@@ -352,6 +354,7 @@ exit 1
 
 @pytest.fixture
 def gh_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    skip_without_posix_shell()
     root = _repo(tmp_path, {"README.md": "x"})
     _git(root, "remote", "add", "origin", "https://github.com/acme/widget.git")
     bindir, ghdir = tmp_path / "bin", tmp_path / "gh"
@@ -422,6 +425,7 @@ def test_ci_duration_degrades(gh_world, setup: str, prefix: str) -> None:
     assert block["reason"].startswith(prefix)
 
 
+@pytest.mark.needs_symlink
 def test_ci_duration_without_gh_or_remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _repo(tmp_path, {"README.md": "x"})
     assert ci_duration(root)["reason"].startswith("no_remote")

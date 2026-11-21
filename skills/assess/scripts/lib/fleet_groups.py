@@ -319,7 +319,7 @@ def write_groups(out_dir: Path, rows: Iterable[GroupRow]) -> Path:
     text = "".join(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n" for row in rows)
     fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{GROUPS_FILE}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
         os.chmod(tmp, 0o644)
         os.replace(tmp, target)
