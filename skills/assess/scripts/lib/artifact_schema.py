@@ -273,8 +273,9 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
 #     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
 #     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
-# 24: ``agent_environment.setup_ready`` reports the setup half of ``layer5_cap`` on
-#     its own (issue #786), and Layer 5 level 2 reads it instead of the cap, so a
-#     repository whose instruction file names no check can now read Layer 5
-#     level 2. ``layer5_cap`` itself is unchanged.
+# 24: ``agent_environment`` adds ``setup_ready`` (the setup half of ``layer5_cap``)
+#     and ``pinning.unlocked_total`` (issue #786). Layer 5 level 2 reads
+#     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
+#     file names no check can now read level 2, and one with committed setup
+#     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
 ASSESS_METHOD_VERSION = 24

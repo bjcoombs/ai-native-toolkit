@@ -386,7 +386,7 @@ def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) 
     ci = _CI_WORKFLOW.replace("make check", "make test")
     unlocked = _ci_repo(tmp_path / "unlocked", ci, instructions=True, extra=_UNLOCKED)
     assert unlocked["ci_checks"]["test_or_lint_runs"] is True
-    assert unlocked["agent_environment"]["setup_ready"] is False
+    assert unlocked["agent_environment"]["pinning"]["unlocked_total"] == 1
     assert _row(_run({"r": unlocked}), "layer-5-ci")["level"] == 1
     named = _ci_repo(tmp_path / "named", ci, instructions=True)
     assert _row(_run({"r": named}), "layer-5-ci")["level"] == 2
@@ -404,6 +404,18 @@ def test_layer_five_level_two_does_not_read_the_named_check(tmp_path: Path) -> N
     levels = _levels(_run({"r": unnamed}))
     assert levels["layer-0-instructions"] == 1   # the missing named check costs Layer 0 only
     assert levels["layer-5-ci"] == 2
+
+
+def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -> None:
+    """Issue #786: committed setup does not stand in for a lockfile at Layer 5 level 2."""
+    ci = _CI_WORKFLOW.replace("make check", "make test")
+    setup = _ci_repo(tmp_path / "setup", ci, instructions=True,
+                     extra={**_UNLOCKED, "init.sh": "#!/bin/sh\nnpm install\n"})
+    env = setup["agent_environment"]
+    assert env["setup"]["present"] is True and env["setup_ready"] is True
+    assert env["pinning"]["unlocked_total"] == 1
+    row = _row(_run({"r": setup}), "layer-5-ci")
+    assert row["level"] == 1
 
 
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:

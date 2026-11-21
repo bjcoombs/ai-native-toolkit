@@ -2913,7 +2913,7 @@ Can an agent set up the repository and check its own work (issue #514)?
 `scan_agent_environment(repo_root, instruction_files, agent_harness, excludes)` reads the
 files at HEAD through `command_index.build_index` and writes `{available,
 setup{present, sources[]}, check{entry_points[], named[], named_total,
-unresolved[]}, pinning{manifests[], all_locked}, ci_duration, findings[],
+unresolved[]}, pinning{manifests[], all_locked, unlocked_total}, ci_duration, findings[],
 setup_ready, layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
 `copilot-setup-steps.yml` (credited only when it passes the checks), a dev
 container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
@@ -2928,8 +2928,10 @@ constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `setup_ready` is the
 setup half of that cap on its own (committed setup, or every manifest locked, or
-no manifest): Layer 5 level 2 of the maturity model reads it, so the named check
-is read once, by Layer 0 level 2 (issue #786). The cap itself is unchanged for
+no manifest). `pinning.unlocked_total` counts manifests with no lock (0 with no
+manifest); Layer 5 level 2 of the maturity model reads it `eq 0`, so committed
+setup does not stand in for a lockfile and the named check is read once, by
+Layer 0 level 2 (issue #786). The cap itself is unchanged for
 the /assess scorer. `ci_duration` is the one
 network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
