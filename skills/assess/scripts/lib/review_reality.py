@@ -56,9 +56,9 @@ cached, only facts kept) give ``bot_review_share``, a note carrying an AI-review
 marker or posted by an agent, access-token or ``bot`` account (a GitLab AI reviewer
 often posts as ``project_<id>_bot_<hash>``, so it is recognised by its output or its
 token type, never by a display name), and ``reviewed_share``, an approval by another
-account, a human comment by someone other than the author, or bot review. A full
-page of notes that decides nothing leaves that merge request unknown and the share
-None; so does a call made without note facts. ``hollow_required_review`` follows
+account, a human comment by someone other than the author, or bot review. Notes that
+still decide nothing after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes leave that
+merge request unknown and the share None; so does a call made without note facts. ``hollow_required_review`` follows
 ``reviewed_share`` and is False whenever approvals alone clear the threshold. A
 refused notes read degrades the whole block. ``review_required`` reads the
 project's approval rules: a rule (other than a ``report_approver`` rule)

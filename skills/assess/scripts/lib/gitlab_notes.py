@@ -84,7 +84,8 @@ PINNED_MARKERS: tuple[re.Pattern[str], ...] = (
 
 
 class NoteFacts(NamedTuple):
-    """What one merge request's notes say; None where a full page left it undecided."""
+    """What one merge request's notes say; None where up to ``NOTES_MAX_PAGES`` (3) pages /
+    300 notes left it undecided."""
 
     human_comment: bool | None        # a non-system note by a person other than the author
     ai_review: bool | None            # an AI-review marker, an agent or an access-token user

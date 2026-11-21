@@ -2368,7 +2368,8 @@ the private `gitlab_note_facts` spec (#716, one notes read per merge request, sh
 `delivery`): `bot_review_share` is a note with an
 AI-review marker or by an agent, access-token or `bot` account; `reviewed_share` is an
 approval by another account, a human comment by someone other than the author, or bot
-review. A merge request whose full page of notes decides nothing makes the share null.
+review. A merge request whose notes still decide nothing after up to `NOTES_MAX_PAGES` (3)
+pages / 300 notes makes the share null.
 `hollow_required_review` follows `reviewed_share` and is False whenever approvals alone
 clear the threshold. A refused or malformed notes read degrades the whole block like an
 approvals read. `review_required` reads the project's approval rules: a non-`report_approver`
