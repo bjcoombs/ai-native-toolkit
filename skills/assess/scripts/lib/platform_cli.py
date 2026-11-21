@@ -21,10 +21,10 @@
   CLI. Only successes are stored. A call made with ``cache=False`` is never
   stored. The cache never holds comment or review text on either provider:
   every read whose response carries a body is made with ``cache=False`` and
-  read in memory only - GitLab merge-request notes (``lib/gitlab_notes.py``,
-  #716), and on GitHub the merged pull request read with reviews and comments,
-  as well as the GitLab merged list with its descriptions (``lib/merged_sample.py``,
-  #778). ``fleet --platform`` sets it for its platform
+  read in memory only. On GitHub: the merged pull request read with reviews and
+  comments (``lib/merged_sample.py``, #778). On GitLab: merge-request notes
+  (``lib/gitlab_notes.py``, #716) and the merged list with its descriptions
+  (``lib/merged_sample.py``, #778). ``fleet --platform`` sets it for its platform
   children only, to a temporary directory removed when the pass ends: cached
   responses can still hold names and account logins, so they never land in
   ``--out``, the run history or a target. Without it nothing is cached. The key is the argv

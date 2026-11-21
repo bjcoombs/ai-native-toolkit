@@ -192,12 +192,13 @@ def _newest(changes: list[dict[str, Any]], key: str, since: date | None,
     return [c for _, c in kept[:SAMPLE_CAP]]
 
 
-def _gh_merged(repo: GithubRepo, floor: str, fields: str) -> list[dict[str, Any]]:
-    """One ``gh pr list`` read. Only the light ``mergedAt`` read may be cached: the
-    ``PR_FIELDS`` read carries review and comment bodies, so it is read in memory only."""
+def _gh_merged(repo: GithubRepo, floor: str, fields: str, cache: bool) -> list[dict[str, Any]]:
+    """One ``gh pr list`` read. Each caller states ``cache``: only the light ``mergedAt``
+    read may be cached; the ``PR_FIELDS`` read carries review and comment bodies, so it
+    passes ``cache=False`` and is read in memory only."""
     search = f"merged:>={floor} sort:updated-desc" if floor else "sort:updated-desc"
     got = gh_json(["pr", "list", "--repo", repo.slug, "--state", "merged", "--search", search,
-                   "--limit", str(FETCH_LIMIT), "--json", fields], cache=fields == "mergedAt")
+                   "--limit", str(FETCH_LIMIT), "--json", fields], cache=cache)
     if not isinstance(got, list):
         raise GhUnavailable("gh_bad_json: `gh pr list` did not return a list")
     return [pr for pr in got if isinstance(pr, dict)]
@@ -205,12 +206,12 @@ def _gh_merged(repo: GithubRepo, floor: str, fields: str) -> list[dict[str, Any]
 
 def github_changes(repo: GithubRepo, since: date | None) -> list[dict[str, Any]]:
     """The GitHub sample's pull requests (two reads; see the module docstring)."""
-    light = _newest(_gh_merged(repo, since.isoformat() if since else "", "mergedAt"),
+    light = _newest(_gh_merged(repo, since.isoformat() if since else "", "mergedAt", cache=True),
                     "mergedAt", since, "gh")
     if not light:
         return []
     floor = str(light[-1]["mergedAt"])
-    return _newest(_gh_merged(repo, floor, PR_FIELDS), "mergedAt", since, "gh")
+    return _newest(_gh_merged(repo, floor, PR_FIELDS, cache=False), "mergedAt", since, "gh")
 
 
 def gitlab_changes(project: GitlabProject, since: date | None) -> list[dict[str, Any]]:

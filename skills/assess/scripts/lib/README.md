@@ -2430,8 +2430,9 @@ argv is answered from it for the rest of the run (any process); failures are nev
 Only the fleet platform pass sets it, to a temporary directory it removes. A call made
 with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
 nor writes it. The cache never holds comment or review text on either provider: GitLab
-merge-request notes (#716), the GitHub merged pull request read with reviews and comments
-and the GitLab merged list (`merged_sample.py`, `gh_json(..., cache=False)`, #778) are read
+merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
+through `gitlab_cli.glab_api(..., cache=False)`, and the GitHub merged pull request read with
+reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
 in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
 `tests/test_platform_cli.py`.
