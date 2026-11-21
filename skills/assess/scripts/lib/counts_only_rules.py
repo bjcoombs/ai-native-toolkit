@@ -386,6 +386,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "promissory_markers.top_offenders.family": TOKEN,
         "promissory_markers.top_offenders.text": DROP,
         "promissory_markers.top_offenders.commit": DROP,
+        # Family names per stale file; kept as a count, as before #793 typed it.
+        "promissory_markers.stale_by_file.{}.families": DROP,
     },
     "agent_ops / config_drift / review": {
         "config_drift.reason": DROP,

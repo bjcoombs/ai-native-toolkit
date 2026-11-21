@@ -142,8 +142,13 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "agent_environment.ci_duration.over_target",   # NotRequired field
     "test_pressure.reason",                        # a union arm (unavailable shape)
     "stats_summary.loc.p95",                       # typed field under an untyped block
-    "coverage_gate.enforced",                      # untyped block: open
-    "review_reality.anything.deeper",              # untyped block: open
+    "coverage_gate.enforced",                      # typed since #793
+    "agent_ops.summary.permissions_encoded",       # typed since #793
+    "promissory_markers.families.suppression.total",  # through an identifier-keyed map
+    "structure_drift.tier_0.matched_patterns",     # typed since #793
+    "review_reality.reviewed_share",               # typed since #793
+    "instruction_claims.failed",                   # typed since #793
+    "config_drift.anything.deeper",                # untyped block: open
     "agent_ops.available",                         # every block may report status
     "layer_grades.instructions_grade",             # deterministic layer grade (#620)
     "layer_grades.instruction_file_present",
@@ -164,6 +169,16 @@ def test_team_paths_accepted(path: str) -> None:
     "stats_summary.loc.no_such",
     "layer_grades.layer_3_grade",              # no such layer grade
     "layer_grades",                            # ends on an object
+    # #793: the blocks a default criterion reads are typed, so a misspelt
+    # sub-path fails at load instead of evaluating unknown.
+    "coverage_gate.enforcd",
+    "agent_ops.summary.permissions_encodd",
+    "agent_ops.summary",                       # ends on an object
+    "promissory_markers.families.suppression.totl",
+    "structure_drift.tier_0.matched",
+    "structure_drift.tier_1.human_static_agree",
+    "review_reality.anything.deeper",
+    "instruction_claims.failures.kind",        # steps into a list
 ])
 def test_team_paths_rejected(path: str) -> None:
     assert not team_path_ok(path)

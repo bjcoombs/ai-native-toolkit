@@ -39,7 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, cast
 
-from lib.check_validation import ValidationError, closest, finding, format_error
+from lib.check_validation import ValidationError, closest, errors_only, finding, format_error
 
 CORE_MANIFEST = Path(__file__).resolve().parents[2] / "checks" / "core.toml"
 MANIFEST_VERSION = 1
@@ -514,7 +514,7 @@ def validate_manifest(data: Mapping[str, Any]) -> list[ValidationError]:
 
 def parse_manifest(data: Mapping[str, Any], source: str = "check manifest") -> CheckManifest:
     """``data`` as a ``CheckManifest``; raises ``CheckManifestError`` on any error finding."""
-    errors = [e for e in validate_manifest(data) if e["severity"] == "error"]
+    errors = errors_only(validate_manifest(data))
     if errors:
         raise CheckManifestError(source, errors)
     return cast(CheckManifest, data)
