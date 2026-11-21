@@ -21,9 +21,9 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from typing import Any
 
 import pytest
+from _pytest.mark.structures import ParameterSet
 
 from lib.level_signals import load_default_levels
 from lib.levels import Group, evaluate
@@ -32,6 +32,11 @@ from lib.signals import build_document
 
 _ISSUES = "https://github.com/bjcoombs/ai-native-toolkit/issues/"
 _NONE_FILED = "hollow: no fixing issue filed"
+# Inherited from a hook or a caller's git, these would point git -C at another repository.
+_GIT_LOCATION_VARS = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+)
 
 
 def _workflow(run: str) -> str:
@@ -54,7 +59,7 @@ _JACOCO_POM = (
 )
 
 
-def _case(case_id: str, row: str, level: int, files: dict[str, str], fixed_by: str | None) -> Any:
+def _case(case_id: str, row: str, level: int, files: dict[str, str], fixed_by: str | None) -> ParameterSet:
     """One hollow case; ``fixed_by`` is the xfail reason, None once the model rejects it."""
     marks = [pytest.mark.xfail(strict=True, raises=AssertionError, reason=fixed_by)] if fixed_by else []
     return pytest.param(row, level, files, id=case_id, marks=marks)
@@ -140,7 +145,9 @@ def test_every_case_names_its_fixing_issue_or_none() -> None:
 
 @pytest.mark.parametrize(("row_id", "level", "files"), CASES)
 def test_hollow_fixture_does_not_meet_its_condition(
-    tmp_path: Path, row_id: str, level: int, files: dict[str, str],
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, row_id: str, level: int, files: dict[str, str],
 ) -> None:
+    for name in _GIT_LOCATION_VARS:
+        monkeypatch.delenv(name, raising=False)
     repo = _committed(tmp_path / "r", files)
     assert _level_met(repo, row_id, level) is not True
