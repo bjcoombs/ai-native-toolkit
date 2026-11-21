@@ -169,7 +169,7 @@ def _filter_step_script() -> str:
         if line.strip() and not line.startswith(" " * 10):
             break
         body.append(line)
-    return textwrap.dedent("\n".join(body)).replace("${{ github.base_ref }}", "main")
+    return textwrap.dedent("\n".join(body))
 
 
 def _run_filter(
@@ -190,6 +190,7 @@ def _run_filter(
         "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
         "RUNNER_TEMP": str(runner_temp),
         "GITHUB_OUTPUT": str(output),
+        "BASE_REF": "main",
         "PR_AUTHOR": author,
         "PR_ACTOR": author if actor is None else actor,
     }
@@ -249,13 +250,13 @@ def test_a_pull_request_copy_of_the_script_cannot_exempt_itself(repo, tmp_path):
 
 
 def test_a_base_without_the_subcommand_exempts_nothing(repo, tmp_path):
-    # Bootstrap: the base copy predates `pin-bump-only` (this PR's own run).
+    # Bootstrap: the base copy predates `path-filter` (#679's own run).
     path = repo / "scripts" / "floor_check.py"
     path.write_text(
-        path.read_text(encoding="utf-8").replace('"pin-bump-only",', '"retired",'),
+        path.read_text(encoding="utf-8").replace('"path-filter",\n', '"retired",\n'),
         encoding="utf-8",
     )
-    base = _commit(repo, "base predates pin-bump-only")
+    base = _commit(repo, "base predates path-filter")
     _bump(repo)
     _commit(repo, "bump")
     assert "floor_core_changed=true" in _run_filter(repo, base, DEPENDABOT, tmp_path)
