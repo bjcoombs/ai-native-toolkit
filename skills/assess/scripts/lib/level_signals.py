@@ -51,7 +51,7 @@ new signal has to be classified on purpose; ``input_class`` raises
 
 ``criterion_grade`` grades one criterion. A text class (``config_text``,
 ``head_text``) keeps its grade only for a presence test (``eq``/``ne`` on a
-boolean, ``gt 0``, ``gte 1``); a threshold on such a value (``observability.rung
+boolean, ``ne 0``, ``gt 0``, ``gte 1``); a threshold on such a value (``observability.rung
 gte 3``) measures the text and grades ``measured``. ``is_declared`` is true when
 the grade is ``config_only`` or ``declared``: under #744 those conditions are
 listed, not counted. A signal one collector sets from two inputs takes the
@@ -233,9 +233,7 @@ def _is_presence_test(criterion: Criterion) -> bool:
     op, value = criterion["op"], criterion["value"]
     if isinstance(value, bool):
         return op in ("eq", "ne")
-    if op == "ne":
-        return True
-    return type(value) is int and (op, value) in (("gt", 0), ("gte", 1))
+    return type(value) is int and (op, value) in (("ne", 0), ("gt", 0), ("gte", 1))
 
 
 def criterion_grade(criterion: Criterion) -> Grade:

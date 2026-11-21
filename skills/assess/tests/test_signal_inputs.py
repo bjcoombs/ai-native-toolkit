@@ -76,8 +76,14 @@ def test_criterion_grade_follows_the_input_class(criterion: Criterion, grade: Gr
 
 def test_a_bool_is_not_read_as_a_presence_count() -> None:
     # True == 1 in Python; ``gte true`` is not the count presence test ``gte 1``.
-    assert not is_declared({"signal": "observability.rung", "op": "gte", "value": 2})
+    assert not is_declared({"signal": "observability.rung", "op": "gte", "value": True})
+    assert is_declared({"signal": "observability.rung", "op": "gte", "value": 1})
     assert criterion_grade({"signal": "observability.rung", "op": "gt", "value": False}) == "measured"
+
+
+def test_ne_is_a_presence_test_only_against_zero() -> None:
+    assert is_declared({"signal": "observability.rung", "op": "ne", "value": 0})
+    assert criterion_grade({"signal": "observability.rung", "op": "ne", "value": 3}) == "measured"
 
 
 def test_every_input_class_has_a_grade() -> None:

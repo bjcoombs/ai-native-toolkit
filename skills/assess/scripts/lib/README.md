@@ -1980,7 +1980,7 @@ its producer input class (`InputClass`: `config_text`, `head_text`, `head_struct
 `ci_executed`, `git_history`, `execution_artifact`, `platform`), keyed by exact path;
 `input_class` raises `UnclassifiedSignal` naming an unclassified one. `INPUT_GRADES` maps
 each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
-keeps a text class's grade only for a presence test and grades a threshold on it
+keeps a text class's grade only for a presence test (`eq`/`ne` on a boolean, `ne 0`, `gt 0`, `gte 1`) and grades a threshold on it
 `measured`. `is_declared(criterion)` is true for `config_only` and `declared`, the
 conditions #744 lists without counting. The module doc records the rulings (platform
 reads are their own class; instruction files stay declared but still gate Steps). Nothing
