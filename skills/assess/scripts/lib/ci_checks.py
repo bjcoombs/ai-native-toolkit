@@ -54,6 +54,9 @@ file repeats the own and resolved jobs). ``merged_config`` says what happened:
 ``not_read`` (offline), ``not_needed`` (every include resolved offline: the
 offline reading wins), ``read``, ``invalid`` or ``unavailable``, with the
 reason code in ``merged_config_reason``. The merged text is never published.
+Known limit: the lint API merges in its own context, so an include behind
+``rules:`` that does not match there, and a child pipeline (``trigger:``), are
+not in the merged file; a check that lives only there reads false.
 
 ``test_or_lint_runs`` is true when any CI line, own or included, runs a check.
 With none it is false, except when a CI file pulls jobs from a file this run

@@ -174,6 +174,13 @@ def test_ci_checks_reads_the_merged_check_where_offline_was_unknown(tmp_path):
     assert (block["check_commands"], block["included_check_commands"]) == (0, 0)
 
 
+def test_ci_checks_reads_gitlabs_yaml_dump_shape(tmp_path):
+    """GitLab dumps merged_yaml with a document marker and indentless lists."""
+    root, app = _offline_app(tmp_path)
+    block = scan_ci_checks(app, root, MergedCi("read", text="---\nunit:\n  script:\n  - pytest\n"))
+    assert (block["test_or_lint_runs"], block["merged_check_commands"]) == (True, 1)
+
+
 def test_ci_checks_reads_false_when_the_merged_config_holds_no_check(tmp_path):
     root, app = _offline_app(tmp_path)
     block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
