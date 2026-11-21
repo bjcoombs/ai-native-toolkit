@@ -52,6 +52,14 @@ records ``platform`` (true only when a platform read ran: ``--scans`` selecting 
 platform scan stamps false), and runs with and without it do not compare. With
 ``--delete-after`` a clone is deleted only after its platform read.
 
+GitLab includes (#766): every scan of a ROOT run gets ``--ghsync-root ROOT``, so a
+repository's ``include: project:`` / ``component:`` files are read from the clones
+in the same root (``lib/ci_includes.py``) and ``ci_checks`` and ``review_automation``
+see the jobs in shared templates; a template that is not cloned stays unknown.
+A ``--from-list`` run passes ROOT when one is given. With ``--delete-after`` no root
+is passed (a template clone could be deleted before a repository including it is
+scanned), so those includes stay unknown.
+
 A counts-only run is also kept in the run history,
 ``${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet/<org>/<date>/``
 (``--history-dir``, ``--history-org``, ``--no-history``; ``lib/fleet_history.py``).
@@ -350,6 +358,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         if problem is not None:
             parser.error(problem)
     return args
+
+
+def include_root(args: argparse.Namespace) -> Path | None:
+    """The root GitLab includes resolve against (#766): ROOT, unless --delete-after, where a
+    template clone could be deleted before a repository that includes it is scanned, so a
+    row would depend on scan order. Then includes of other projects stay unknown."""
+    if args.root is None or args.delete_after:
+        return None
+    return Path(args.root).resolve()
 
 
 def _targets(args: argparse.Namespace) -> list[Target]:
@@ -654,6 +671,7 @@ def main(argv: list[str] | None = None) -> int:
         hash_salt=hash_salt,
         window=args.window, scans=args.scans, timeout=args.timeout,
         log_dir=out_dir / LOGS_DIR, active_since=window_start(window, today),
+        ghsync_root=include_root(args),
     )
     try:  # before any scan, so --delete-after never removes a clone whose results cannot land
         out_dir.mkdir(parents=True, exist_ok=True)

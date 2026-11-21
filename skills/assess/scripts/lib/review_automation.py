@@ -33,7 +33,14 @@ match is listed with ``tracked: false`` and does not set ``present``. A
 with ``on_changes: false``. A workflow whose ``on:`` the line reader cannot read
 is credited. A GitLab include is credited as committed: the jobs it brings live
 in the included file, so whether they run in merge-request pipelines is not read
-(a known limit). When git
+(a known limit). Includes inside a GitLab template the run resolved offline
+(``lib/ci_includes.py``, #766: a ``local:`` file, or a ``project:`` /
+``component:`` clone in the ``--ghsync-root``) are matched the same way: such a
+match keeps the path and line of the repository's own include that led to it,
+tracked as that file is, with ``depth`` the include level it was found at (0
+for the repository's own file). Job scripts in a template are not read for
+review steps; a review is seen through a review component or project name, or a
+``[review] ai_review_components`` entry (a known limit). When git
 tracking is unknown the block is unavailable. Counts-only output keeps
 ``present``, the ``kinds`` and each match's ``kind``, ``rule`` (``pinned`` or
 ``config``) and ``reviewer`` slug (``configured`` for a config match), never a
@@ -58,6 +65,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypeGuard, TypedDict
 
+from lib.ci_includes import resolve_includes
 from lib.fleet_config import FleetConfig
 from lib.git_churn import is_tracked, tracked_files
 from lib.shared_tooling import action_repo, gitlab_includes, step_uses, workflow_events
@@ -111,6 +119,7 @@ class ReviewMatch(TypedDict):
     line: int | None  # None for a config file
     tracked: bool
     on_changes: bool  # runs on proposed changes (a ci_action's workflow triggers on pull requests)
+    depth: int  # include level the match was found at: 0 for the repository's own file (#766)
 
 
 class ReviewAutomationBlock(TypedDict):
@@ -168,13 +177,14 @@ def _configured(source: str, configured: Sequence[str]) -> bool:
 
 
 def _match(kind: ReviewKind, source: str, pinned: str | None, configured: Sequence[str],
-           path: str, line: int | None, tracked: bool, on_changes: bool = True) -> ReviewMatch | None:
+           path: str, line: int | None, tracked: bool, on_changes: bool = True,
+           depth: int = 0) -> ReviewMatch | None:
     if pinned is not None:
         return {"kind": kind, "rule": "pinned", "reviewer": pinned, "path": path, "line": line,
-                "tracked": tracked, "on_changes": on_changes}
+                "tracked": tracked, "on_changes": on_changes, "depth": depth}
     if _configured(source, configured):
         return {"kind": kind, "rule": "config", "reviewer": CONFIGURED, "path": path, "line": line,
-                "tracked": tracked, "on_changes": on_changes}
+                "tracked": tracked, "on_changes": on_changes, "depth": depth}
     return None
 
 
@@ -203,17 +213,22 @@ def _read(path: Path) -> str | None:
 
 
 def _gitlab_matches(repo_root: Path, tracked: frozenset[Path] | None,
-                    configured: Sequence[str]) -> list[ReviewMatch]:
+                    configured: Sequence[str], ghsync_root: Path | None) -> list[ReviewMatch]:
     path = repo_root / _GITLAB_CI
     if not _in_repo_file(repo_root, path) or (text := _read(path)) is None:
         return []
+    own_tracked = is_tracked(path, tracked)
+    sources = [(text, None, 0)] + [(f.text, f.line, f.depth)
+                                   for f in resolve_includes(repo_root, ghsync_root).files]
     out: list[ReviewMatch] = []
-    for entry in gitlab_includes(text, _GITLAB_CI, is_tracked(path, tracked)):
-        pinned = "ai-review-component" if is_review_component(entry["source"]) else None
-        match = _match("ci_component", entry["source"], pinned, configured, _GITLAB_CI,
-                       entry["line"], entry["tracked"])
-        if match is not None:
-            out.append(match)
+    for body, top_line, depth in sources:
+        for entry in gitlab_includes(body, _GITLAB_CI, own_tracked):
+            pinned = "ai-review-component" if is_review_component(entry["source"]) else None
+            match = _match("ci_component", entry["source"], pinned, configured, _GITLAB_CI,
+                           entry["line"] if top_line is None else top_line, entry["tracked"],
+                           depth=depth)
+            if match is not None:
+                out.append(match)
     return out
 
 
@@ -246,16 +261,18 @@ def _config_file_matches(repo_root: Path, tracked: frozenset[Path] | None) -> li
         path = repo_root / rel
         if _in_repo_file(repo_root, path):
             out.append({"kind": "config_file", "rule": "pinned", "reviewer": reviewer, "path": rel,
-                        "line": None, "tracked": is_tracked(path, tracked), "on_changes": True})
+                        "line": None, "tracked": is_tracked(path, tracked), "on_changes": True,
+                        "depth": 0})
     return out
 
 
-def scan_review_automation(repo_root: Path, fleet_config: FleetConfig | None = None) -> ReviewAutomationBlock:
+def scan_review_automation(repo_root: Path, fleet_config: FleetConfig | None = None,
+                           ghsync_root: Path | None = None) -> ReviewAutomationBlock:
     """Build the ``review_automation`` block for one repository."""
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
     configured = configured_components(fleet_config)
-    matches = (_gitlab_matches(repo_root, tracked, configured)
+    matches = (_gitlab_matches(repo_root, tracked, configured, ghsync_root)
                + _workflow_matches(repo_root, tracked, configured)
                + _config_file_matches(repo_root, tracked))
     credited = {m["kind"] for m in matches if m["tracked"] and m["on_changes"]}
