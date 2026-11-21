@@ -35,6 +35,10 @@ keys come from the file tree, so a key like `docs/My Notes.md` is kept
 (hashed when hashing is on). A field named `path`, `file`,
 `file_a`, `file_b`, `test_file` or `source_file` is a path in every block,
 and a field named `reason` is dropped in every block without its own rule.
+A field kept as a reason code keeps only the code of a `code: sentence`
+reason when it is a known structure code (`no_import_graph_rust`),
+or the code a known sentence maps to (`no_grimp`), else `unavailable`,
+so a path or name before the colon is never kept; an empty reason is dropped.
 
 Not filtered: the wiki pages, hotspot pages, badge and report the run
 also writes stay in the target repository's `.assess/` directory and
@@ -503,7 +507,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 
 | Field | Kept as |
 |---|---|
-| `structure.reason` | dropped |
+| `structure.reason` | reason code |
 | `structure.language` | token |
 | `structure.modularity_reason` | token |
 | `structure.footprints.module` | path (hashed when hashing is on) |
@@ -626,8 +630,6 @@ kept as written. A string
 | `views.units.source` | token |
 | `views.units.name` | dropped |
 | `views.units.owners` | dropped |
-| `views.units.levels.weakest.repo` | path (hashed when hashing is on) |
-| `views.units.overall.weakest.repo` | path (hashed when hashing is on) |
 | `repos.key` | path (hashed when hashing is on) |
 | `repos.status` | token |
 | `repos.reason` | token |

@@ -87,6 +87,11 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   and README follow by hand in the same PR. `skills/assess/tests/test_ci_workflow.py`
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
+- **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
+  roll-ups with `fleet_data`'s own `repo_cells` and `row_roll_up`, so a
+  change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
+  `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
+  fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
 ever cut, this note is where the intended boundary is written down.
@@ -281,8 +286,9 @@ reason names the dominant source language (issues #707, #708):
 `no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
 packages found` for a Python repository, `no_source_files: ...` with no source in a
 recognised language. `cross_package_edges` counts the
-import edges `front_door_ratio` is measured over; 0 means that ratio's 1.0 is vacuous
-(no package boundary is crossed). A graph with packages but no import edges stays
+import edges `front_door_ratio` is measured over; at 0 no package boundary is crossed and
+`front_door_ratio` is null (unknown, not a vacuous 1.0; issue #760), as it is on an
+unavailable block. A graph with packages but no import edges stays
 available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
 was measured): modules that never import each other have no community structure, and a
 0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
@@ -291,7 +297,10 @@ was measured): modules that never import each other have no community structure,
 `structure.reason`). A headless run reduces that block to the bare marker, whose reason
 opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
 `no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
-`modularity_q` is absent there rather than null.
+`modularity_q` is absent there rather than null. A full counts-only run keeps the same
+code as `structure.reason` (`REASON_SENTENCE_CODES`, #764). `STRUCTURE_REASON_CODES` is
+that run's allow-list, derived from `NO_SOURCE_FILES`, `INVALID_IMPORT_GRAPH`,
+`LANGUAGE_BY_EXTENSION` and `REASON_SENTENCE_CODES`.
 `structure_drift.py` builds its module map and communities from the same selected graph
 (`import_graph.select_graph`, `import_digraph`).
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
@@ -1104,9 +1113,9 @@ read gives no URL and no owners.
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
-per team row, `fleet_maturity.mean_share` over the repositories below it, `measured` of
-`repos`, and the weakest measured repository (lowest share, then key); `overall_roll_up`
-does the same over each repository's own mean share. `org` rows stay in `groups.jsonl`.
+per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it
+(the lowest Step's stand-in until #744). Version 2 (#772) holds no average and names no
+repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
@@ -1125,20 +1134,43 @@ oldest first: `subjects` gives every unit and repository its level per team row,
 roll-up rule (`levels.share_level`) over measured members, with the measured set;
 `clean` is the one gate on a move (known both sides, same measured set), and
 `known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
-emits `level_up`, `first`, `target_hit` (a level target on the row's level, a share
-target on its mean share of top level, the `fleet-data.json` row roll-up, #780),
-`personal_best` and `streak`, each with
+emits `level_up`, `first` (only with `firsts=True`, `fleet.py --first-achievements`; off
+by default since #772), `target_hit` (a level target on the row's level, a share target
+on its mean share of top level, `RowState.share`, worked out from the cells, #780) and
+`streak` (#772 retired `personal_best`), each with
 `moves` evidence (repository, row, from and to level, the criterion that became met) and
-a Markdown `credit` line. `nearest_level_up` picks per subject and row the next-level
+a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
+repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
+step; `build_achievements` sets `recount` (`fleet_rescore.recount`) when the newest earlier
+run was re-scored, and `rescored_runs` (every re-scored replayed run, which
+`fleet_credit` reads for the report's opening rule). `nearest_level_up` picks per subject and row the next-level
 criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
 Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
 
 **`fleet_achievements_runs.py`**
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
-`fleet_compare.comparability` against this run and a `fleet-data.json` at this version,
+`fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
+`READABLE_FLEET_DATA_VERSIONS` (1 and 2: version 1's roll-up is not read, #772),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
-the entry has no `run.json` (#780). Unreadable entries are passed over.
+the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
+model and key function (`model=`, `key=`), an entry whose only refusal is the
+maturity-model version is re-scored from its `repos.jsonl` (`fleet_view.read_repos`,
+`fleet_rescore.rescore`) and returned as a `HistoryRun` with `rescored_from` (its stored
+version) and `stored` (its `fleet-data.json`) set (#771).
+
+**`fleet_rescore.py`**
+Re-scores a stored run under the current maturity model and builds the Recount (#771).
+`rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
+cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
+roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
+`overall` are dropped, #772); None when a stored key does not join under the run's key
+function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783) is
+applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
+stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
+`now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
+`rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
+(`fleet_achievements.unknown_move`). Tests: `tests/test_fleet_rescore.py`.
 
 **`fleet_achievements_schema.py`**
 Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
@@ -1156,7 +1188,9 @@ the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming th
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
 from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
 nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
-distances (in levels, or in share for a share target). `fleet_diagrams.report_markdown` places it before the diagrams.
+distances (in levels, or in share for a share target), plus a `### Recount` subsection
+after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
+first). `fleet_diagrams.report_markdown` places it before the diagrams.
 
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
@@ -1775,7 +1809,12 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 `run-context.counts-only.json` beside `run-context.json`) and the headless entry point
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
-its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
+its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
+reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
+allow-list `import_graph.STRUCTURE_REASON_CODES` names it (so a path or a name never leaks), the code of
+a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
+so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
+Tests: `tests/test_counts_only_reason.py`. `render_doc`
 generates `references/counts-only.md`, the per-block field list (plus the
 `fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
 the fleet's unit and repository keys (#703). Tests:
@@ -1785,7 +1824,9 @@ the fleet's unit and repository keys (#703). Tests:
 The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
 an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
-with the paths), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+with the paths), a `REASON` class for an unavailable block's reason kept as its code
+only, `REASON_SENTENCE_CODES` (the structure reason sentences that predate the
+`code: sentence` form, shared with `headless_layers.structure`), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
 field names and `classify`. Every other object is a record whose keys survive only when
 they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
 fields and rule segments), so a map keyed by a login or a function name is dropped
@@ -2013,6 +2054,18 @@ where); no instruction file reads level 0 through the never-null
 `layer_grades.instruction_file_present`, not `unknown`. Tests:
 `tests/test_level_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
+
+Signal classification (#783): `SIGNAL_INPUTS` gives every signal a default criterion reads
+its producer input class (`InputClass`: `config_text`, `head_text`, `head_structure`,
+`ci_executed`, `git_history`, `execution_artifact`, `platform`), keyed by exact path;
+`input_class` raises `UnclassifiedSignal` naming an unclassified one. `INPUT_GRADES` maps
+each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
+returns the signal's class grade whatever the operator (the #789 grades design: no
+threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
+conditions #744 lists without counting. The module doc records the rulings (platform
+reads are their own class; instruction files stay declared but still gate Steps). Nothing
+in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through

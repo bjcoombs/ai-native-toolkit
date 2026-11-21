@@ -24,6 +24,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from gitbash import BASH, base_env, rmtree
 
 REPO = Path(__file__).resolve().parent.parent
 GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
@@ -86,7 +87,7 @@ class Env:
         stub_dir = tmp_path / "bin"
         stub_dir.mkdir()
         gh = stub_dir / "gh"
-        gh.write_text(GH_STUB)
+        gh.write_text(GH_STUB, newline="\n")
         gh.chmod(0o755)
         self.gh_log = tmp_path / "gh.log"
         gitconfig = tmp_path / "gitconfig"
@@ -95,10 +96,12 @@ class Env:
             "[init]\n\tdefaultBranch = main\n"
             "[commit]\n\tgpgsign = false\n"
             "[uploadpack]\n\tallowFilter = true\n"
-            f'[url "file://{self.bare}/"]\n\tinsteadOf = https://github.com/\n'
+            f'[url "{self.bare.as_uri()}/"]\n\tinsteadOf = https://github.com/\n',
+            newline="\n",
         )
         self.env = {
-            "PATH": f"{stub_dir}:{os.environ['PATH']}",
+            **base_env(),
+            "PATH": f"{stub_dir}{os.pathsep}{os.environ['PATH']}",
             "HOME": str(tmp_path),
             "GIT_CONFIG_GLOBAL": str(gitconfig),
             "GIT_CONFIG_NOSYSTEM": "1",
@@ -121,7 +124,7 @@ class Env:
         self.git("init", "-q", "--bare", "-b", "main", str(bare), cwd=self.tmp)
         work = self.tmp / "seed" / path
         self.git("clone", "-q", str(bare), str(work), cwd=self.tmp)
-        (work / "README").write_text(f"{path}\n")
+        (work / "README").write_text(f"{path}\n", newline="\n")
         self.git("add", "README", cwd=work)
         self.git("commit", "-q", "-m", "init", cwd=work)
         self.git("push", "-q", "origin", "main", cwd=work)
@@ -150,7 +153,7 @@ class Env:
 
     def run(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", str(GHSYNC), "--org", ORG, "--root", str(self.root),
+            [BASH, str(GHSYNC), "--org", ORG, "--root", str(self.root),
              "--quiet", *args],
             capture_output=True, text=True, env=self.env, timeout=120,
         )
@@ -230,7 +233,7 @@ def test_behind_uncommitted_and_branch_states(env: Env) -> None:
     nested = env.checkout("ns/nested")
     nested_head = env.head("ns/nested")
     nested_new = env.advance("ns/nested")
-    (nested / "README").write_text("local edit\n")
+    (nested / "README").write_text("local edit\n", newline="\n")
 
     # Non-default branch: the dotted name is on a feature branch.
     dotted = env.checkout("dotted.name-x")
@@ -259,7 +262,7 @@ def test_staged_change_is_also_uncommitted(env: Env) -> None:
     checkout = env.checkout("ns/alpha")
     head = env.head("ns/alpha")
     env.advance("ns/alpha")
-    (checkout / "README").write_text("staged edit\n")
+    (checkout / "README").write_text("staged edit\n", newline="\n")
     env.git("add", "README", cwd=checkout)
     res = env.run()
     assert res.returncode == 0, res.stdout + res.stderr
@@ -269,7 +272,7 @@ def test_staged_change_is_also_uncommitted(env: Env) -> None:
 
 def test_failed_clone_removes_only_its_own_directories(env: Env) -> None:
     """A failed nested clone leaves its sibling under the shared parent."""
-    shutil.rmtree(env.bare / ORG / "ns" / "nested.git")
+    rmtree(env.bare / ORG / "ns" / "nested.git")
     res = env.run()
     assert res.returncode == 0, res.stdout + res.stderr
     assert _section(res.stdout, "Failed") == ["ns/nested"]
@@ -369,7 +372,7 @@ def test_clone_flag_without_value_fails(env: Env, args: list[str]) -> None:
 
 def test_partial_without_quiet_omits_q(env: Env) -> None:
     res = subprocess.run(
-        ["bash", str(GHSYNC), "--org", ORG, "--root", str(env.root),
+        [BASH, str(GHSYNC), "--org", ORG, "--root", str(env.root),
          "--partial", "--limit", "1"],
         capture_output=True, text=True, env=env.env, timeout=120,
     )

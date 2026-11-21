@@ -100,6 +100,7 @@ there.
 | `--no-history` | Do not keep this run in the history. |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
 | `--targets FILE` | Targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the targets file format below). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
+| `--first-achievements` | Also credit `first` achievements in [`achievements.json`](#output-achievementsjson) (a unit reaching a level no unit of its view and kind has held on that row in this fleet's history). Off by default (#772), since it compares a unit with its peers. Not part of the run stamp. |
 | `--no-diagrams` | Do not draw the [diagrams](#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
 **Exit codes.** `0`: the run completed and `repos.jsonl` and `run.json` were written, including
@@ -290,20 +291,20 @@ owners = ["@acme/payments"]  # optional; replaces the CODEOWNERS owners
 
 A mapped repository not in the run is skipped and named on stderr.
 
-**Roll-ups.** Per unit, one entry in `levels` per `team` row: `mean_share`, the mean of
-each measured repository's level as a share of the row's top level (the quadrant's and
-trend lines' unit), `measured` of `repos` ("8 of 12 measured": an unknown or failed
-repository is counted, never read as 0), and `weakest`, the measured repository with the
-lowest share (then key) with its `share` and `level`. `overall` does the same over each
-repository's own mean share. `org` rows read a group's settings, not a repository, so
-they have no unit roll-up; their levels are in `groups.jsonl`.
+**Roll-ups.** Per unit, one entry in `levels` per `team` row: `measured` of `repos`
+("8 of 12 measured": an unknown or failed repository is counted in `repos`, never read
+as 0) and `lowest_level`, the lowest level a measured repository holds on the row
+(`null` when none was measured). Steps (#744) are not yet available, so the lowest row
+level stands in for the lowest Step. The roll-up holds no average and names no
+repository (#772: the no-comparison rule of #740), so `fleet-data.json` version 2 has no
+`mean_share`, `weakest` or `overall`. `org` rows read a group's settings, not a
+repository, so they have no unit roll-up; their levels are in `groups.jsonl`.
 
 **Repositories.** Each has `key` (its id), `status`, `reason`, `active`, `web_url` (the
 `origin` remote as `https://<host>/<path>`, credentials, an ssh port and `.git` dropped; `null`
 for a local remote), `owners` and `owner_count` (the mapping's owners, else the
-CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), `mean_share`,
-and `rows`, one cell per `team` row: `status`, `level`, `top_level` and the criterion
-behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
+CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), and `rows`,
+one cell per `team` row: `status`, `level`, `top_level` and the criterion behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
 next level and its measured value; at the top level both are `null`; an unknown cell
 names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
 `not_scanned` for a failed repository).
@@ -327,33 +328,53 @@ oldest first, every time. It never reads an earlier `achievements.json`, so edit
 output cannot change what is earned. Keys sorted, compact; the same history gives the
 same bytes. Schema: [`references/achievements.schema.json`](references/achievements.schema.json).
 Logic: `lib/fleet_achievements.py` (engine), `lib/fleet_achievements_runs.py` (history),
-`lib/fleet_targets.py` (`--targets`), `lib/fleet_credit.py` (report section).
+`lib/fleet_targets.py` (`--targets`), `lib/fleet_credit.py` (report section),
+`lib/fleet_rescore.py` (re-score and Recount).
 
 **Comparable runs.** A history entry is replayed when its `run.json` passes the
 `--compare` rule against this run (plugin major version, maturity-model version, window,
 output mode, scans, path hashing, `--fleet-config`, `--platform`) and it holds a
-`fleet-data.json` at this version. One run per date, dates before this run's. Without
+`fleet-data.json` at version 1 or 2 (version 1 entries carry the old roll-up, which the
+engine does not read). One run per date, dates before this run's. Without
 the history (`--no-history`, `--full`) only this run is read: no achievement, just next
 steps, with `note` saying why.
+
+**A maturity-model change re-scores the history (#771).** An entry whose only difference
+from this run is the maturity-model version (a `--levels` file with a new `version`) is
+not dropped: the engine re-scores it, evaluating the scans in its `repos.jsonl` under
+this run's model in memory (history files are never rewritten), and replays it as if it
+were comparable, so streaks and level-ups survive a version bump. An entry is still passed
+over when its `repos.jsonl` holds no readable scans or a stored repository key does not
+join under this run's key (another `--hash-salt`). A row whose new criterion reads a
+signal the stored scans lack re-scores as unknown in the earlier runs: neutral, never a
+slip. Pure signal renames are read under their new name (`SIGNAL_ALIASES` in
+`lib/fleet_rescore.py`, empty until a rename ships), so a rename causes no Recount line.
+`--compare`, `trend.svg` and the heat map's compare view still refuse across a
+maturity-model change.
 
 **Subjects.** Every unit of every view (`view` `ownership` or `system`) and every
 repository (`view` and `unit_kind` `repo`). A unit's level on a team row is the row's
 roll-up rule (`min` or `share`) over its measured repositories, those with a known level.
 
-**Unknown never earns or loses.** A row counts only when it *moves cleanly*: known in
+**Unknown is neutral, with one exception.** A row counts only when it *moves cleanly*: known in
 both runs over the same measured set of repositories. A repository going unknown,
 failing its scan, joining or leaving a unit, or hashed under another salt makes that
-move neutral. Under counts-only, credit goes to units and repositories, never to people:
+move neutral. One exception, on a step from a re-scored entry into a run at another
+maturity-model version (a step between two runs re-scored from the same version keeps the
+credit it had under that version): a repository's own move
+from a known level to unknown breaks its streak, and from unknown to a level above 0 extends
+it; a cell the re-score itself made unknown stays neutral. Under counts-only, credit goes to units and repositories, never to people:
 owners are never read.
 
-**Kinds.** The oldest replayed run is the baseline and earns nothing.
+**Kinds.** The oldest replayed run is the baseline and earns nothing. `first` is off by
+default (#772): it compares a unit with its peers, so it is earned only with
+`--first-achievements`. There is no personal-best kind.
 
 | Kind | Earned when |
 |------|-------------|
 | `level_up` | A row moves cleanly to a higher level. |
-| `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
-| `target_hit` | A row moves cleanly from below a `--targets` target to at or above it: a `level` target reads the row's level; a `share` target reads the unit's mean share of top level on the row over its measured repositories (the `fleet-data.json` row roll-up), so it can be hit while a `min` row's level stays put. |
-| `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up on some row. |
+| `first` | Off by default; on with `--first-achievements`. A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
+| `target_hit` | A row moves cleanly from below a `--targets` target to at or above it: a `level` target reads the row's level; a `share` target reads the unit's mean share of top level on the row over its measured repositories (worked out by the engine from the repository cells), so it can be hit while a `min` row's level stays put. |
 | `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
 
 Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
@@ -371,6 +392,24 @@ next-steps pages' wording. `targets` gives each target's current `level` and `sh
 target, `share_distance` in share for a share target (0 when met; null when the row is not
 measured this run or the target is of the other kind). `target` holds a level target's
 level and `share_target` a share target's share; the other is null.
+
+**Recount.** `recount` is set on the first run under a new maturity-model version,
+when the newest replayed earlier entry was re-scored, and null otherwise (on the next run
+that entry is at the current version, so no stored state is needed). It holds
+`from_version`, `to_version`, `run` (the re-scored entry) and `lines`: one per repository
+and team row whose stored cell (its scans under its own rules) differs from its re-scored
+cell (the same scans under this run's rules). Every line is attributed to the rules
+(`attributed_to` `rules`) and says the repository did not change; its `direction` is
+`down` (cause "Now checked", the new criterion as `signal`), `up` ("No longer checked",
+the old criterion), `now_measured` (unknown to a level, "Now measured") or `not_measured`
+(a level to unknown, "Not measured under the new rules"). Each line has `repo`, `row`,
+`from_status`, `from_level`, `to_status`, `to_level`, `cause`, `signal` and `text`, one
+Markdown line:
+`` `<repo>` <row title>: level <A> -> <B> under maturity model <new> (was <old>). <Cause>: `<signal>`. The repository did not change. ``
+Recount lines are display-only: they never earn an achievement, break a streak or change
+a level reached or a best share. `rescored_runs` lists every replayed run that was
+re-scored from an earlier maturity-model version (empty when none was); the report's
+opening line states the unknown exception whenever it is non-empty, Recount or not.
 
 **Targets file** (`--targets`):
 
@@ -394,7 +433,9 @@ With hashed paths the unit is hashed under the run's salt before it is matched.
 
 **Report.** `report.md` opens with "What changed and who earned it", before the
 diagrams: this run's achievements by kind (up to 20 lines each), then each unit's nearest
-level-up (the row needing the fewest repositories), then target distances. Every line is
+level-up (the row needing the fewest repositories), then target distances. On the first
+run under a new maturity-model version a `### Recount` subsection follows "Earned this
+run": the Recount lines, raised moves first (up to 20). Every line is
 credit or a next step. With `--no-diagrams` there is no report; `achievements.json` is
 still written.
 

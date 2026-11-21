@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TypedDict
 
+from lib.counts_only_rules import REASON_SENTENCE_CODES
+
 # Directories never worth walking for source. Mirrors doc_graph's EXCLUDE_DIRS
 # (kept local so this module pulls in no heavy deps): build artefacts, vendor
 # trees, virtualenvs and /assess's own output are not the repo's source.
@@ -75,6 +77,16 @@ LANGUAGE_BY_EXTENSION: dict[str, str] = {
 NO_PYTHON_PACKAGES = "no importable Python packages found"
 INVALID_IMPORT_GRAPH = "invalid_import_graph"
 NO_SOURCE_FILES = "no_source_files: no source file in a language /assess recognises"
+
+# Every code a ``structure.reason`` can open with or map to: the allow-list a
+# counts-only run keeps (#764). Derived from the constants above, so a new
+# language or code cannot drift from it; anything else reads ``unavailable``.
+STRUCTURE_REASON_CODES: frozenset[str] = frozenset({
+    NO_SOURCE_FILES.split(":", 1)[0],
+    INVALID_IMPORT_GRAPH,
+    *(f"no_import_graph_{lang}" for lang in LANGUAGE_BY_EXTENSION.values()),
+    *(code for _, code in REASON_SENTENCE_CODES),
+})
 
 
 class NameCollision(TypedDict):

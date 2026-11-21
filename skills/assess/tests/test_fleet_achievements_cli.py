@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -107,5 +108,34 @@ def test_runs_copied_into_the_history_replay_on_their_run_json_date(tmp_path, mo
     doc = json.loads((tmp_path / "r3" / "achievements.json").read_text(encoding="utf-8"))
     assert doc["runs"][:2] == ["2000-01-01", "2000-01-02"]
     earned = {(a["run"], a["kind"], a["unit"]) for a in doc["achievements"]}
-    assert {("2000-01-02", "level_up", "grpa/svc1"), ("2000-01-02", "first", "grpa/svc1"),
-            ("2000-01-02", "personal_best", "grpa/svc1")} <= earned
+    assert ("2000-01-02", "level_up", "grpa/svc1") in earned
+    # #772: no personal best, and no first unless --first-achievements asks for it
+    assert not {kind for _run, kind, _unit in earned} & {"first", "personal_best"}
+    assert fleet_cli.main([str(after), "--levels", "levels.toml", "--history-dir", "hist", "--history-org", "org",
+                           "--no-diagrams", "--first-achievements", "--out", "r4"]) == 0
+    doc = json.loads((tmp_path / "r4" / "achievements.json").read_text(encoding="utf-8"))
+    assert ("2000-01-02", "first", "grpa/svc1") in {(a["run"], a["kind"], a["unit"]) for a in doc["achievements"]}
+
+
+def test_fleet_rerun_after_model_bump_keeps_history(tmp_path, monkeypatch, capsys):
+    """A maturity-model version bump re-scores the stored runs instead of starting over (#771)."""
+    root = _root(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    args = [str(root), "--levels", "levels.toml", "--history-dir", "hist"]
+    assert fleet_cli.main([*args, "--out", "o1"]) == 0
+    (today,) = (tmp_path / "hist" / "grpa+grpb").iterdir()
+    _seed_lower(today, "2000-01-01", "grpa/svc1")
+    version = re.search(r'^version = "([^"]+)"', TEAM_LEVELS, re.M)
+    assert version is not None
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS.replace(version.group(0), 'version = "bumped-2"'),
+                                          encoding="utf-8")
+    capsys.readouterr()
+    assert fleet_cli.main([*args, "--out", "o2"]) == 0
+    err = capsys.readouterr().err
+    doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
+    assert doc["runs"][0] == "2000-01-01" and len(doc["runs"]) > 1
+    counted = re.search(r"over (\d+) comparable run\(s\)", err)
+    assert counted is not None and int(counted.group(1)) > 1
+    assert doc["recount"]["from_version"] == version.group(1) and doc["recount"]["to_version"] == "bumped-2"
+    assert "### Recount" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")

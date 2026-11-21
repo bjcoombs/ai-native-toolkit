@@ -18,8 +18,9 @@ slugs only, member repositories named only with ``--name-agent-clusters``.
 (``lib/fleet_units.py``; ``--units`` maps it), each unit's roll-ups and each repository's
 units, web URL and per-row level, value and reason. ``<out>/achievements.json``
 (``lib/fleet_achievements.py``, schema ``skills/fleet/references/achievements.schema.json``)
-replays the comparable runs in the history and credits each unit's level-ups, firsts,
-streaks, personal bests and ``--targets`` hit, with each unit's nearest level-up; the
+replays the comparable runs in the history and credits each unit's level-ups, streaks
+and ``--targets`` hit (firsts only with ``--first-achievements``), with each unit's
+nearest level-up; the
 report opens with them ("What changed and who earned it", ``lib/fleet_credit.py``).
 
 Target repositories are never written to. With ``--delete-after`` a scanned
@@ -303,6 +304,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "the report shows the distance to each. Needs --levels; not part of the run stamp.",
     )
     parser.add_argument(
+        "--first-achievements", action="store_true",
+        help=f"Also credit 'first' achievements in OUT/{ACHIEVEMENTS_FILE}: a unit reaching a level no "
+             "unit of its kind has held on that row in this fleet's history. Off by default, since it "
+             "compares a unit with its peers. Not part of the run stamp.",
+    )
+    parser.add_argument(
         "--no-diagrams", action="store_true",
         help=f"Do not draw the diagrams (OUT/{REPORT_FILE} and its SVGs); any a previous run left "
              "are removed.",
@@ -499,16 +506,16 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
 
 def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_model: MaturityModel | None,
                   org_dir: Path | None, entry: Path | None, repos: frozenset[str], specs: list[TargetSpec],
-                  privacy_key: Callable[[str], str]) -> str | None:
+                  privacy_key: Callable[[str], str], firsts: bool = False) -> str | None:
     """``OUT/achievements.json`` (lib/fleet_achievements.py) and the report's credit section;
     None when not written. Never raises: achievements never fail a completed run."""
     try:
         if org_dir is None or entry is None:
             earlier, note = [], "this run is not kept in the run history (--no-history or --full)"
         else:
-            earlier, note = earlier_runs(org_dir, stamp, repos), None
+            earlier, note = earlier_runs(org_dir, stamp, repos, model=maturity_model, key=privacy_key), None
         doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
-                                 targets=resolve(specs, privacy_key), note=note)
+                                 targets=resolve(specs, privacy_key), note=note, firsts=firsts)
         write_achievements(out_dir, doc)
         section = credit_section(doc, maturity_model)
     except Exception as e:  # noqa: BLE001 - achievements never fail a completed run
@@ -711,7 +718,7 @@ def main(argv: list[str] | None = None) -> int:
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups), earlier)
     credit = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
                            frozenset(row["repo"] for row in rows), level_targets,
-                           privacy_for(args.full, hash_salt).key)
+                           privacy_for(args.full, hash_salt).key, args.first_achievements)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
               credit=credit)

@@ -754,7 +754,7 @@
         "total": 0
       }
     ],
-    "front_door_ratio": 1.0,
+    "front_door_ratio": null,
     "internal_burrow_edges": [],
     "keyhole_budget": 2000,
     "modularity_q": 0.0,
