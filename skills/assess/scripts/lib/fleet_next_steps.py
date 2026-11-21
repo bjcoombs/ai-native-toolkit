@@ -17,8 +17,9 @@ one page per group, with no rescan:
   "at least N", and a signal only a full ``/assess`` measures (its block
   unavailable as ``not_registered`` or ``network`` in every repository missing
   it, ``fleet_groups.full_run_only_signals``) says so instead of a scan hint; a
-  ``PLATFORM_SCANS`` signal unmeasured as ``network`` says ``fleet --platform``
-  measures it (``PLATFORM_HINT``).
+  ``PLATFORM_SCANS`` signal unmeasured as ``network`` (or in a
+  ``PLATFORM_ONLY_SCANS`` block, absent without ``--platform``) says ``fleet
+  --platform`` measures it (``PLATFORM_HINT``).
 
 Levels come from re-running ``lib.levels.evaluate`` on the same inputs the
 roll-up (``lib/fleet_groups.py``) evaluated: each repository's ``scans`` and
@@ -65,8 +66,8 @@ FULL_RUN_HINT = ("Only a full `/assess` run measures it: the headless fleet run 
                  "unavailable (`not_registered`, or `network` outside the `--platform` scans), so "
                  "this is not a gap a scan option closes.")
 PLATFORM_HINT = ("Measured with `fleet --platform`: the run made no network calls, so its block "
-                 "reads `network`; this is a gap a scan option does close, with no full `/assess` "
-                 "needed.")
+                 "reads `network` (or, for `delivery`, is absent); this is a gap a scan option "
+                 "does close, with no full `/assess` needed.")
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>|#~])")
 
 

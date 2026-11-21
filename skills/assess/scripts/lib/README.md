@@ -981,7 +981,7 @@ repository, never a passing one) and `settings_signals` the normalised settings 
 the fragment's `scope` and `provider`. The CLI loads the maturity model with
 `level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
-Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
+Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`, including a `signals.PLATFORM_ONLY_SCANS` block absent from the row, #779); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
