@@ -45,6 +45,7 @@ def jq16_bin(tmp_path: Path) -> Path:
     d = tmp_path / "jq16-bin"
     d.mkdir()
     shim = d / "jq"
-    shim.write_text(JQ16_SHIM.replace('"$REAL_JQ"', f'"{real}"'))
+    # LF endings and a forward-slash path, so Git Bash runs it on Windows (#753).
+    shim.write_text(JQ16_SHIM.replace('"$REAL_JQ"', f'"{Path(real).as_posix()}"'), newline="\n")
     shim.chmod(0o755)
     return d

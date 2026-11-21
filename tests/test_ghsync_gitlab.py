@@ -27,7 +27,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from gitbash import BASH, IS_WINDOWS, base_env, write_script
+from gitbash import BASH, IS_WINDOWS, base_env, rmtree, write_script
 
 REPO = Path(__file__).resolve().parent.parent
 GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
@@ -320,7 +320,7 @@ def _section(output: str, heading: str) -> list[str]:
 
 
 def _checkouts(root: Path) -> set[str]:
-    return {str(p.parent.parent.relative_to(root)) for p in root.rglob("*-main/.git")}
+    return {p.parent.parent.relative_to(root).as_posix() for p in root.rglob("*-main/.git")}
 
 
 @pytest.fixture
@@ -552,7 +552,7 @@ def test_group_on_second_membership_page_is_synced(env: Env) -> None:
 
 def test_quiet_drops_clone_progress_lines(env: Env) -> None:
     """--quiet suppresses Cloning / Cloned; a failed clone is still named."""
-    shutil.rmtree(env.bare / "grp" / "sub" / "beta.git")
+    rmtree(env.bare / "grp" / "sub" / "beta.git")
     res = env.sync()
     assert res.returncode == 0, res.stdout + res.stderr
     assert "*** Cloning" not in res.stdout

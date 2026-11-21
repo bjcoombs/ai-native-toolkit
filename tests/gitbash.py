@@ -12,10 +12,17 @@ Linux unchanged and cover what differs on Windows:
 - `base_env` carries the variables a Windows process needs to start into an
   environment a test builds from scratch. It is empty off Windows.
 - Tests join PATH entries with `os.pathsep`, which is `;` on Windows.
+- `rmtree` clears the read-only bit git sets on object files, which Windows
+  will not delete otherwise.
+
+The scripts themselves pass `--binary` to jq under Git Bash, since a native
+jq.exe writes CRLF line endings.
 """
 import os
 import shutil
+import stat
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
@@ -38,3 +45,13 @@ def write_script(path: Path, body: str) -> None:
     """Write an executable stub with LF line endings."""
     path.write_text(body, newline="\n")
     path.chmod(0o755)
+
+
+def rmtree(path: Path) -> None:
+    """shutil.rmtree that also removes read-only files (git objects on Windows)."""
+
+    def _retry(func: Callable[[str], object], target: str, _exc: object) -> None:
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+
+    shutil.rmtree(path, onerror=_retry)

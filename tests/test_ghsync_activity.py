@@ -64,7 +64,7 @@ case "$cmd" in
     key=${endpoint//\//__}
     f="$DATA/$key.json"
     [ -f "$f" ] || { echo "404 Not Found: $endpoint" >&2; exit 1; }
-    if [ -n "$jqexpr" ]; then jq -r "$jqexpr" "$f"; else cat "$f"; fi ;;
+    if [ -n "$jqexpr" ]; then (set -o pipefail; jq -r "$jqexpr" "$f" | tr -d '\r'); else cat "$f"; fi ;;
   *) exit 1 ;;
 esac
 """

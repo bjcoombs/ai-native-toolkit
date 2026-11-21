@@ -24,7 +24,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from gitbash import BASH, base_env
+from gitbash import BASH, base_env, rmtree
 
 REPO = Path(__file__).resolve().parent.parent
 GHSYNC = REPO / "skills" / "ghsync" / "scripts" / "ghsync.sh"
@@ -272,7 +272,7 @@ def test_staged_change_is_also_uncommitted(env: Env) -> None:
 
 def test_failed_clone_removes_only_its_own_directories(env: Env) -> None:
     """A failed nested clone leaves its sibling under the shared parent."""
-    shutil.rmtree(env.bare / ORG / "ns" / "nested.git")
+    rmtree(env.bare / ORG / "ns" / "nested.git")
     res = env.run()
     assert res.returncode == 0, res.stdout + res.stderr
     assert _section(res.stdout, "Failed") == ["ns/nested"]

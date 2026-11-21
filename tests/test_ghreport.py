@@ -498,9 +498,10 @@ def test_empty_settings_body_is_unknown_and_table_renders(tmp_path, request, jq1
 def test_jq16_shim_reproduces_empty_input_exit(jq16_bin):
     """Guards the shim itself: `jq -e` over empty input exits 0 through it,
     while `jq -en input` still fails, which is what the fix relies on."""
-    jq = str(jq16_bin / "jq")
-    assert subprocess.run([jq, "-e", "type==\"object\""], input="", text=True).returncode == 0
-    assert subprocess.run([jq, "-en", "input"], input="", text=True,
+    # Windows cannot exec a shebang script directly, so bash runs the shim there.
+    jq = [BASH, str(jq16_bin / "jq")] if IS_WINDOWS else [str(jq16_bin / "jq")]
+    assert subprocess.run([*jq, "-e", "type==\"object\""], input="", text=True).returncode == 0
+    assert subprocess.run([*jq, "-en", "input"], input="", text=True,
                           capture_output=True).returncode != 0
 
 
