@@ -62,6 +62,7 @@ agent_context 3 · agent_runtime 2 · behaviour 2 · structure 2 · docs 1 · go
 ## Still open
 
 - Step count thresholds, waiting on https://github.com/bjcoombs/ai-native-toolkit/issues/842.
+- Wording: the headline says "Verified practices", but N counts both `measured` and `verified` grades (`_LISTED_GRADES` in `lib/level_signals.py` lists only `config_only` and `declared`). Either the label changes (for example "Evidenced practices") or `measured` is shown separately.
 
 ## Build order
 
