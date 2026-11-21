@@ -9,16 +9,18 @@ Every line keeps its index; a line whose statements are all masked is empty.
 The rules read the text line by line with an indentation model, with no YAML
 parser (the core has no YAML dependency). Only literal values count.
 
-- Same line. A statement (the text between top-level ``;``) is masked when a
-  top-level ``||`` in it is followed by a no-op: ``true``, ``/bin/true``,
-  ``:`` or ``exit 0``. ``cd x && pytest || true`` is masked; in
-  ``pytest || true; ruff check .`` only ``pytest`` is. Quoted text and command
+- Same line. In a statement (the text between top-level ``;``), a top-level
+  ``||`` followed by a no-op (``true``, ``/bin/true``, ``:`` or ``exit 0``)
+  masks every segment before it: ``cd x && pytest || true`` is masked; in
+  ``pytest || true; ruff check .`` only ``pytest`` is, and in
+  ``mkdir -p out || true && pytest`` ``pytest`` still counts. Quoted text and command
   substitutions (``$(...)``, backticks) hold no top-level operator, so
   ``OUT="$(ruff check . || true)"`` is not masked. Lines continued with ``\\``
   are joined first.
 - Capture, not mask. A statement that sends the check's output to a file
-  (``> out.txt``, ``&> out.txt``, ``| tee out.txt``; ``/dev/null`` does not
-  count) is a capture when a later line of the same job exits non-zero
+  (``> out.txt``, ``&> out.txt``, ``| tee out.txt``; ``/dev/null`` and
+  ``$GITHUB_STEP_SUMMARY`` do not count) is a capture when a later line of the
+  same job names that file and it, or a line after it, exits non-zero
   (``exit 1``, ``exit $status``): the job checks the captured result itself
   (the grafana ``lint:circular`` pattern).
 - GitHub Actions ``continue-on-error: true`` and GitLab ``allow_failure: true``
@@ -55,8 +57,10 @@ _BODY_KEYS = frozenset({"run", "script", "before_script", "after_script"})
 _NOOPS = frozenset({"true", "/bin/true", ":", "exit 0"})
 _EXIT_NONZERO = re.compile(r"\bexit\s+(?:[1-9]\d*|\"?\$\{?\w+\}?\"?)")
 _STATUS_READ = re.compile(r"\$\?|PIPESTATUS|" + _EXIT_NONZERO.pattern)
-_FILE_REDIRECT = re.compile(r"(?:^|\s)(?:&|\d)?>>?\s*(?!&|/dev/null\b)[^\s&]")
-_TEE = re.compile(r"^tee\s+(?!/dev/null\b)\S")
+_REDIRECT_TARGET = re.compile(r"(?:^|\s)(?:&|\d)?>>?\s*([^\s&;|<>]+)")
+_TEE_TARGET = re.compile(r"^tee(?:\s+-\w+)*\s+([^\s;|]+)")
+# Sinks no later step reads back: output sent there is not a capture.
+_NOT_CAPTURED = re.compile(r"^(?:/dev/null|\$\{?GITHUB_STEP_SUMMARY\}?)$")
 
 
 @dataclass(frozen=True)
@@ -103,72 +107,54 @@ def _strip_comment(value: str) -> str:
 
 
 class _Tree:
-    """Indentation scopes over one file's parsed lines."""
+    """Indentation scopes over one file's parsed lines, built in one pass."""
 
     def __init__(self, parsed: list[_Line]) -> None:
         self.lines = parsed
         self.owner: list[int | None] = []
+        self.mapping_of: dict[int, int] = {}
+        self.siblings: list[list[int]] = []
+        self.parent: list[int | None] = []
         current: int | None = None
+        stack: list[tuple[int, int]] = []
+        last_key: dict[int, int] = {}
         for i, line in enumerate(parsed):
-            if line.structural:
-                current = i if _BLOCK_INDICATOR.match(line.value) else None
-                self.owner.append(None)
-            else:
-                self.owner.append(current)
-
-    def _prev(self, i: int) -> int | None:
-        for j in range(i - 1, -1, -1):
-            if self.lines[j].structural:
-                return j
-        return None
-
-    def mapping(self, i: int) -> tuple[list[int], int | None]:
-        """The sibling key lines of the mapping holding line ``i``, and that mapping's parent line."""
-        col = self.lines[i].level
-        start = i
-        parent: int | None = None
-        if not self.lines[i].dash:
-            j = self._prev(i)
-            while j is not None:
-                if self.lines[j].indent < col:
-                    if self.lines[j].dash and self.lines[j].level == col:
-                        start = j
-                    else:
-                        parent = j
-                    break
-                start = j
-                j = self._prev(j)
-        if self.lines[start].dash:
-            parent = self._sequence_parent(start)
-        siblings = [start] if self.lines[start].level == col else []
-        for j in range(start + 1, len(self.lines)):
-            line = self.lines[j]
             if not line.structural:
+                self.owner.append(current)
                 continue
-            if j > i and line.indent < col:
-                break
-            if line.level == col and not line.dash:
-                siblings.append(j)
-        return siblings, parent
+            self.owner.append(None)
+            current = i if _BLOCK_INDICATOR.match(line.value) else None
+            limit = line.indent if line.dash else line.level
+            while stack and stack[-1][0] > limit:
+                stack.pop()
+            if not line.dash and stack and stack[-1][0] == line.level:
+                mapping = stack[-1][1]
+            else:
+                mapping = len(self.siblings)
+                self.siblings.append([])
+                self.parent.append(last_key[stack[-1][1]] if stack else None)
+                stack.append((line.level, mapping))
+            self.siblings[mapping].append(i)
+            self.mapping_of[i] = mapping
+            last_key[mapping] = i
+        self.masked: list[bool] = []
+        for mapping, keys in enumerate(self.siblings):
+            parent = self.parent[mapping]
+            inherited = parent is not None and self.masked[self.mapping_of[parent]]
+            self.masked.append(inherited or any(
+                parsed[k].key in _MASK_KEYS and parsed[k].value.lower() == "true" for k in keys))
 
-    def _sequence_parent(self, dash: int) -> int | None:
-        indent = self.lines[dash].indent
-        j = self._prev(dash)
-        while j is not None:
-            line = self.lines[j]
-            if line.indent < indent or (line.indent == indent and not line.dash):
-                return j
-            j = self._prev(j)
-        return None
+    def _node(self, i: int) -> int:
+        owner = self.owner[i]
+        return owner if owner is not None else i
 
-    def chain(self, i: int) -> list[tuple[list[int], int | None]]:
-        """Every mapping enclosing line ``i``, innermost first."""
-        node: int | None = self.owner[i] if self.owner[i] is not None else i
-        out: list[tuple[list[int], int | None]] = []
-        while node is not None:
-            siblings, parent = self.mapping(node)
-            out.append((siblings, parent))
-            node = parent
+    def ancestors(self, i: int) -> list[int]:
+        """The parent key lines of line ``i``, innermost first."""
+        out: list[int] = []
+        parent = self.parent[self.mapping_of[self._node(i)]] if self._node(i) in self.mapping_of else None
+        while parent is not None:
+            out.append(parent)
+            parent = self.parent[self.mapping_of[parent]]
         return out
 
     def subtree(self, i: int) -> range:
@@ -183,23 +169,22 @@ class _Tree:
         return range(i, end)
 
     def step_or_job_masked(self, i: int) -> bool:
-        return any(
-            self.lines[s].key in _MASK_KEYS and self.lines[s].value.lower() == "true"
-            for siblings, _ in self.chain(i) for s in siblings)
+        node = self._node(i)
+        return node in self.mapping_of and self.masked[self.mapping_of[node]]
 
     def body(self, i: int) -> int:
         """The line naming line ``i``'s shell body: a block owner, a ``script:`` key, or ``i``."""
         owner = self.owner[i]
         if owner is not None:
             return owner
-        _, parent = self.mapping(i)
-        if parent is not None and self.lines[parent].key in _BODY_KEYS and not self.lines[parent].value:
-            return parent
+        ancestors = self.ancestors(i)
+        if ancestors and self.lines[ancestors[0]].key in _BODY_KEYS and not self.lines[ancestors[0]].value:
+            return ancestors[0]
         return i
 
     def job(self, i: int) -> range:
         """The lines of line ``i``'s job: the mapping under ``jobs:``, else its top-level key."""
-        ancestors = [p for _, p in self.chain(i) if p is not None]
+        ancestors = self.ancestors(i)
         for below, above in zip(ancestors, ancestors[1:]):
             if self.lines[above].key == "jobs" and self.lines[above].level == 0:
                 return self.subtree(below)
@@ -263,12 +248,29 @@ def _redirect_amp(text: str, i: int) -> bool:
     return text[i] == "&" and ((i > 0 and text[i - 1] == ">") or text[i + 1:i + 2] == ">")
 
 
-def _or_noop(statement: list[tuple[str, str]]) -> bool:
-    return any(op == "||" and " ".join(seg.split()) in _NOOPS for op, seg in statement)
+def _noop_cut(statement: list[tuple[str, str]]) -> int:
+    """The index of the last ``|| <no-op>`` segment, or -1: it masks every segment before it."""
+    cut = -1
+    for k, (op, seg) in enumerate(statement):
+        if op == "||" and " ".join(seg.split()) in _NOOPS:
+            cut = k
+    return cut
 
 
-def _captures(statement: list[tuple[str, str]]) -> bool:
-    return any(_FILE_REDIRECT.search(seg) or (op == "|" and _TEE.match(seg)) for op, seg in statement)
+def _capture_targets(statement: list[tuple[str, str]]) -> list[str]:
+    """Files the statement writes its output to (``> f``, ``&> f``, ``| tee f``), sinks excluded."""
+    found = [m.group(1) for _, seg in statement for m in _REDIRECT_TARGET.finditer(seg)]
+    found += [m.group(1) for op, seg in statement if op == "|" and (m := _TEE_TARGET.match(seg))]
+    targets = [t.strip("'\"") for t in found if not t.startswith("&")]
+    return [t for t in targets if t and not _NOT_CAPTURED.match(t)]
+
+
+def _checked_later(targets: list[str], later: list[str]) -> bool:
+    """A later line names a captured file, and that line or one after it exits non-zero."""
+    for idx, line in enumerate(later):
+        if any(t in line for t in targets):
+            return any(_EXIT_NONZERO.search(rest) for rest in later[idx:])
+    return False
 
 
 def _errexit(statement: list[tuple[str, str]], current: bool) -> bool:
@@ -317,6 +319,7 @@ def unmasked_lines(text: str) -> list[str]:
     spans = _logical_lines(lines)
     parsed = {span[0]: split_statements(_joined(lines, span)) for span in spans}
     masked: dict[int, set[int]] = {}
+    changed: set[int] = set()
     bodies: dict[int, list[tuple[int, int]]] = {}
     for span in spans:
         first = span[0]
@@ -324,10 +327,18 @@ def unmasked_lines(text: str) -> list[str]:
         if tree.step_or_job_masked(first):
             masked[first] = set(range(len(statements)))
             continue
-        job_after = [j for j in tree.job(first) if j > span[-1]]
         for k, statement in enumerate(statements):
-            if _or_noop(statement) and not (
-                    _captures(statement) and any(_EXIT_NONZERO.search(lines[j]) for j in job_after)):
+            cut = _noop_cut(statement)
+            if cut < 0:
+                continue
+            targets = _capture_targets(statement[:cut])
+            if targets and _checked_later(targets, [lines[j] for j in tree.job(first) if j > span[-1]]):
+                continue
+            tail = statement[cut + 1:]
+            changed.add(first)
+            if tail:
+                statements[k] = [("", tail[0][1]), *tail[1:]]
+            else:
                 masked.setdefault(first, set()).add(k)
         bodies.setdefault(tree.body(first), []).extend((first, k) for k in range(len(statements)))
     for refs in bodies.values():
@@ -344,8 +355,8 @@ def unmasked_lines(text: str) -> list[str]:
             reraised = reraised or bool(_STATUS_READ.search(_join(parsed[first][k])))
     out = list(lines)
     for span in spans:
-        drop = masked.get(span[0])
-        if not drop:
+        drop = masked.get(span[0], set())
+        if not drop and span[0] not in changed:
             continue
         kept = [_join(s) for k, s in enumerate(parsed[span[0]]) if k not in drop]
         lead = _LEAD.match(lines[span[0]])

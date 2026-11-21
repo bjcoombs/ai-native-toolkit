@@ -143,6 +143,16 @@ def test_a_local_reusable_workflow_is_not_an_include() -> None:
     # A redirect with no later failing exit is still a mask, not a capture.
     pytest.param("run: ruff check . > out.txt || true", id="redirect_without_check_is_masked"),
     pytest.param("run: pytest > /dev/null || true\n", id="dev_null_is_masked"),
+    pytest.param("run: pytest | tee -a $GITHUB_STEP_SUMMARY || true\n", id="step_summary_is_masked"),
+    pytest.param("steps:\n  - run: pytest > out.txt || true\n  - run: |\n      make build\n      exit 1\n",
+                 id="redirect_then_unrelated_exit_is_masked"),
+    # Trimmed `.github/workflows/windows.yml`: job-level continue-on-error.
+    pytest.param("jobs:\n  windows:\n    runs-on: windows-latest\n    continue-on-error: true\n"
+                 "    steps:\n      - uses: actions/checkout@v4\n      - name: tests\n"
+                 "        run: |\n          uv run --locked pytest -ra\n", id="windows_job_continue_on_error"),
+    # Trimmed `.github/workflows/claude-review.yml`: an advisory comment after the value.
+    pytest.param("      - name: review\n        continue-on-error: true  # advisory: never blocks\n"
+                 "        run: npm test\n", id="claude_review_advisory_comment"),
 ])
 def test_a_masked_ci_check_is_not_enforced(text: str) -> None:
     assert check_commands(text) == 1
@@ -184,6 +194,8 @@ _SUBSTITUTION_CAPTURE = (
                  id="continue_on_error_on_next_step"),
     # Issue #775 calibration (grafana): `|| true` that captures output for a later explicit check.
     pytest.param(_GRAFANA_CAPTURE, id="capture_then_later_step_exits"),
+    pytest.param("run: mkdir -p out || true && pytest", id="noop_before_check_leaves_it_enforced"),
+    pytest.param("run: pytest || true && ruff check .", id="check_after_noop_is_enforced"),
 ])
 def test_an_unmasked_ci_check_is_enforced(text: str) -> None:
     assert enforced_check_commands(text) == (1, 0)
@@ -203,6 +215,12 @@ def test_the_floor_retry_loop_is_not_masked() -> None:
         "          done\n          exit 1\n"
     )
     assert enforced_check_commands(text) == (1, 0)
+
+
+def test_a_masked_continuation_of_a_non_check_counts_nothing() -> None:
+    """Trimmed `.github/workflows/mutation.yml`: mutmut is not a check command, masked or not."""
+    text = "        run: |\n          uv run mutmut results \\\n            > mutmut-results.txt || true\n"
+    assert enforced_check_commands(text) == (0, 0)
 
 
 def test_a_masked_and_an_unmasked_step_count_separately() -> None:

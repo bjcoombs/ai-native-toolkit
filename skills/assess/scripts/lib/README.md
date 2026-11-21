@@ -2961,10 +2961,12 @@ classifier counts what can fail the job by running its line test over this list,
 and the masked count as its count over the original lines minus that.
 `split_statements(text)` splits one shell line into top-level `;` statements of
 `(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
-operator. Rules: a statement with a top-level `|| true` / `|| :` / `|| /bin/true` /
-`|| exit 0` is masked unless it sends output to a file (`>`, `&>`, `| tee`; not
-`/dev/null`) and a later line of the same job exits non-zero (a capture, the
-grafana `lint:circular` pattern); `continue-on-error: true` or `allow_failure:
+operator. Rules: a top-level `|| true` / `|| :` / `|| /bin/true` / `|| exit 0`
+masks the segments before it in its statement (`mkdir -p x || true && pytest`
+keeps `pytest`), unless they send output to a file (`>`, `&>`, `| tee`; not
+`/dev/null` or `$GITHUB_STEP_SUMMARY`) that a later line of the same job names,
+with a non-zero exit at or after it (a capture, the grafana `lint:circular`
+pattern); `continue-on-error: true` or `allow_failure:
 true` (literal, a trailing comment ignored) masks the mapping that holds it and
 everything under it (a step or a job); `set +e` masks the rest of its script body
 (a block scalar, or one `script:` list) until `set -e`, unless a later statement

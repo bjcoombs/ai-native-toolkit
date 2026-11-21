@@ -551,7 +551,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # CI checks (issue #698): whether a GitHub Actions or GitLab CI line runs a
     # test or lint command (check_command.is_check_command); null when no
     # check is found but a CI file pulls jobs from elsewhere (include:, a remote
-    # reusable workflow). Layer 5 level 1 of the default maturity model. Offline.
+    # reusable workflow). enforced_check_runs (issue #775) leaves out masked
+    # checks (lib/ci_masking.py); Layer 5 level 1 of the default maturity model
+    # reads it. Offline.
     ScanSpec("ci_checks", scan_ci_checks, ("repo_root",), STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
