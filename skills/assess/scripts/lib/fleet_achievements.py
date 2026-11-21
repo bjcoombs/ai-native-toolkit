@@ -38,13 +38,17 @@ baseline and earns nothing:
 - ``first``: a ``level_up`` to a level no subject of the same view and kind held on
   that row in any earlier run of this fleet's history; every subject reaching it in
   the same run is credited. A milestone of the fleet's own history, never a ranking.
+  A view and kind with a single subject in the run (one org root) earns no ``first``:
+  its level-up already says it.
 - ``streak``: the subject's run count since its last slip reaches a milestone
   (``STREAK_MILESTONES``). A slip is a clean move down on any row. A run where the
   subject had a clean move on some row and slipped on none extends the streak; a run
   with no clean move is neutral.
 - ``personal_best``: the subject's overall mean share is strictly above every earlier
   run's, every row's measured set is unchanged from the previous run, and at least
-  one repository moved up.
+  one repository moved up on a row. Known limit: the best share remembered includes
+  runs whose share rose only because a repository went unknown, which can hold back a
+  later personal best (never award a false one).
 - ``target_hit``: a clean move from below a target level to at or above it (targets
   file, ``lib/fleet_targets.py``).
 
@@ -349,13 +353,15 @@ class _Replay:
              then_cells: Mapping[str, Mapping[str, Cell]], now_cells: Mapping[str, Mapping[str, Cell]]) -> None:
         """Everything earned moving from ``previous`` to ``run``; then ``run`` is recorded as held."""
         reached_before = dict(self.reached)
+        peers: dict[tuple[str, str], int] = {}
+        for sub in now.values():  # a kind with one subject (the org root) has no firsts to claim
+            peers[(sub.view, sub.kind)] = peers.get((sub.view, sub.kind), 0) + 1
         for key in sorted(now):
             sub, old = now[key], then.get(key)
             if old is None:  # new to the fleet (or keys under another salt): nothing to compare with
                 continue
             clean_rows = [row for row in sorted(sub.rows) if clean(old.rows.get(row), sub.rows[row])]
             slipped = False
-            moved: list[Move] = []
             for row in clean_rows:
                 lv_then, lv_now = old.rows[row].level, sub.rows[row].level
                 assert lv_then is not None and lv_now is not None  # clean() guarantees both
@@ -364,10 +370,9 @@ class _Replay:
                 if lv_now <= lv_then:
                     continue
                 moves = moves_up(row, sub.rows[row], then_cells, now_cells)
-                moved += moves
                 self._earn(LEVEL_UP, sub, run, previous, _evidence(row, lv_then, lv_now, moves))
                 held = reached_before.get((sub.view, sub.kind, row))
-                if held is None or lv_now > held:
+                if (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
                     self._earn(FIRST, sub, run, previous, _evidence(row, lv_then, lv_now, moves, level=lv_now))
                 for target in self.targets:
                     if (target.view, target.unit, target.row) == (sub.view, sub.key, row) \
@@ -376,6 +381,9 @@ class _Replay:
                                    _evidence(row, lv_then, lv_now, moves, level=target.level))
             prior = self.best.get(key)
             same_sets = all(r in old.rows and old.rows[r].measured == s.measured for r, s in sub.rows.items())
+            # under ``min`` a unit's share rises before its level does: the evidence is every
+            # member that moved up on any row, not only on rows whose rolled level rose
+            moved = [m for r in clean_rows for m in moves_up(r, sub.rows[r], then_cells, now_cells)]
             if prior is not None and sub.share is not None and sub.share > prior and same_sets and moved:
                 self._earn(PERSONAL_BEST, sub, run, previous,
                            _evidence(moves=moved, share_from=prior, share_to=sub.share))

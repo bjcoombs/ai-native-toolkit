@@ -348,9 +348,9 @@ owners are never read.
 | Kind | Earned when |
 |------|-------------|
 | `level_up` | A row moves cleanly to a higher level. |
-| `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. |
+| `first` | A `level_up` to a level no subject of the same view and kind has held on that row in this fleet's history. Every subject reaching it in the same run is credited: a milestone, never a ranking. A view and kind with one subject (the org root) earns none. |
 | `target_hit` | A row moves cleanly from below a `--targets` level to at or above it. |
-| `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up. |
+| `personal_best` | The subject's overall mean share is above every earlier run's, every row's measured set is unchanged, and a repository moved up on some row. |
 | `streak` | Runs since the subject last slipped (a clean move down on any row) reach 3, 5, 10, 25, 50 or 100. A run with no clean move neither breaks nor extends it. |
 
 Each achievement has `kind`, `view`, `unit` (the key `fleet-data.json` writes),
@@ -682,6 +682,8 @@ Every run draws diagrams from its own rows, with no model call, and writes them 
 in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
+The report opens with "What changed and who earned it", before the diagrams (see
+[`achievements.json`](#output-achievementsjson)).
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows

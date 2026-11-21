@@ -2,7 +2,8 @@
 
 ``build_diagrams`` turns one fleet run's repository rows (and the maturity
 model it used) into a list of ``Diagram`` entries, each either an SVG or the
-one-line reason it was skipped. ``report_markdown`` renders ``report.md``: one
+one-line reason it was skipped. ``report_markdown`` renders ``report.md``: the
+"What changed and who earned it" section first when given (``lib/fleet_credit.py``), then one
 section per diagram, the SVG embedded with a relative, clickable image link,
 or the skip reason in its place. ``write_diagrams`` writes the SVGs and the
 report beside ``groups.jsonl``, removing any diagram file a previous run left

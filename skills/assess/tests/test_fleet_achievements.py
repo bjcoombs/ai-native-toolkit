@@ -53,7 +53,7 @@ def _data(date: str, spec: Spec, privacy: Privacy = Privacy()) -> FleetData:
     return build_fleet_data(stamp, rows, MODEL, build_trees(sorted(spec), empty_map(), {}, {}), privacy=privacy)
 
 
-BASE: Spec = {"grp/sub/a": (1, True), "grp/sub/b": (1, False), "grp/c": (0, True)}
+BASE: Spec = {"grp/sub/a": (1, True), "grp/sub/b": (1, False), "grp/c": (0, True), "grp/two/d": (1, True)}
 HISTORY: list[tuple[str, Spec]] = [
     ("2026-11-01", BASE),
     ("2026-11-08", {**BASE, "grp/sub/a": (2, True)}),  # a: docs 1 -> 2
@@ -101,11 +101,10 @@ def test_level_ups_across_four_runs_with_their_evidence() -> None:
 def test_firsts_are_milestones_of_the_fleets_own_history() -> None:
     doc = _build()
     firsts = _earned(doc, fa.FIRST)
-    # the first repository at docs 2 (a), the first org and team at ci 1, the first team at
-    # docs 2; b's docs 2 and ci 1 are not firsts: a repository already held them
+    # the first repository at docs 2 (a) and the first team at docs 2 (grp/sub); grp/sub's
+    # ci 1 is not a first (grp/two held it from the start), nor are b's moves (a repository
+    # already held those levels); the one org root claims none
     assert firsts == [("2026-11-08", "first", "grp/sub/a", "docs"),
-                      ("2026-11-15", "first", "ownership/grp", "ci"),
-                      ("2026-11-15", "first", "ownership/grp/sub", "ci"),
                       ("2026-11-22", "first", "ownership/grp/sub", "docs")]
     credit = [a["credit"] for a in doc["achievements"] if a["kind"] == fa.FIRST][-1]
     assert credit.startswith("A first for this fleet: `ownership/grp/sub` is the first team at level 2")
@@ -122,6 +121,9 @@ def test_streak_and_personal_best() -> None:
                and a["run"] == "2026-11-22"]
     assert best["evidence"]["share_to"] > best["evidence"]["share_from"]  # type: ignore[operator]
     assert not _earned(doc, run="2026-11-01")  # the baseline earns nothing
+    # a's docs move raises both units' shares before either rolled level moves (min rule)
+    assert {u for _r, _k, u, _row in _earned(doc, fa.PERSONAL_BEST, run="2026-11-08")} == {
+        "grp/sub/a", "ownership/grp", "ownership/grp/sub"}
 
 
 def test_a_regression_breaks_the_streak() -> None:

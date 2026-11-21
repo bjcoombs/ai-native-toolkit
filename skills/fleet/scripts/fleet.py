@@ -488,6 +488,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
         doc = build_achievements(HistoryRun(stamp["scan_date"], data), earlier, maturity_model,
                                  targets=resolve(specs, privacy_key), note=note)
         write_achievements(out_dir, doc)
+        section = credit_section(doc, maturity_model)
     except Exception as e:  # noqa: BLE001 - achievements never fail a completed run
         clear_achievements(out_dir)
         print(f"fleet: achievements: not written ({type(e).__name__}: {e})", file=sys.stderr)
@@ -499,7 +500,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
         if t["level"] is None:
             print(f"fleet: targets: {t['view']} {t['unit']} has no measured level on {t['row']}",
                   file=sys.stderr)
-    return credit_section(doc, maturity_model)
+    return section
 
 
 def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
