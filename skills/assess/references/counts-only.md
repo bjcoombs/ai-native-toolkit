@@ -500,6 +500,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `structure_drift.tier_0.empty_ownership_patterns.pattern` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.declared_in` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.owners` | dropped |
+| `structure_drift.tier_1.static_lens_reason` | token |
 
 ## behaviour
 

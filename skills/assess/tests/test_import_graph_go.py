@@ -9,6 +9,8 @@ import jsonschema
 import pytest
 
 import assess_signals
+from assess_report import format_structure_drift_findings
+from lib.context_blocks import _structure_drift_block
 from lib.import_graph import is_graph_source
 from lib.keyhole_signals import _graphed_dirs
 from lib.import_graph import select_graph
@@ -279,3 +281,24 @@ def test_a_test_only_go_directory_gets_no_static_projection() -> None:
     commits = [{Path("api/api.go"), Path("checks/check_test.go")}]
     assert _graphed_dirs(commits, "go") == {"api"}
     assert _graphed_dirs([{Path("tests/test_x.py")}], "python") == {"tests"}
+
+
+def test_unknown_static_counts_render_n_a_not_zero(tmp_path: Path) -> None:
+    """Run-context nulls the three static counts and the report prints n/a."""
+    _two_communities(tmp_path)
+    _write(tmp_path, {"CODEOWNERS": "/api/ @team-a\n/store/ @team-b\n"})
+    pairs: list[CoChangePair] = [{"file_a": "api/api.go", "file_b": "store/store.go",
+                                  "co_change_count": 4, "support_pct": 100.0}]
+    tier_1 = detect_grouping_disagreement(tmp_path, coupling_pairs=pairs)
+    assert tier_1["available"] is True, tier_1["reason"]
+    block = _structure_drift_block(
+        tmp_path, tier_1)
+    assert block is not None, "tier 0 needs the ownership map"
+    tier_1 = block["tier_1"]
+    assert tier_1["static_lens_reason"] == "no_static_file_map"
+    assert tier_1["human_grouped_static_splits_count"] is None
+    assert tier_1["human_split_but_cochange_count"] == 1
+    out = format_structure_drift_findings(block)
+    assert "**n/a (no_static_file_map)** `human_grouped_static_splits`" in out
+    assert "**n/a (no_static_file_map)** `human_static_agree`" in out
+    assert "**1** `human_split_but_cochange`" in out

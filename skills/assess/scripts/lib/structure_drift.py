@@ -673,9 +673,9 @@ def detect_grouping_disagreement(
     filtered = apply_seam_allowlist(disagreement, allowlist)
     reason = ""
     if no_file_map and mg is not None:
-        for name in _STATIC_METRICS:
+        for name in STATIC_METRICS:
             filtered[name], filtered[f"{name}_count"] = [], 0
-        reason = f"no_static_file_map: the {mg.language} import graph maps no module to a file"
+        reason = f"{NO_STATIC_FILE_MAP}: the {mg.language} import graph maps no module to a file"
 
     return {
         "available": True,
@@ -685,9 +685,11 @@ def detect_grouping_disagreement(
     }
 
 
-_STATIC_METRICS = (
+# The Tier 1 metrics that read the static lens; unknown without a file map.
+STATIC_METRICS = (
     "human_grouped_static_splits", "human_split_static_fuses", "human_static_agree",
 )
+NO_STATIC_FILE_MAP = "no_static_file_map"
 
 
 def _tier1_unavailable(reason: str) -> JsonDict:

@@ -364,7 +364,9 @@ public surface is the package's exported top-level `func` (not method) and `type
 declarations. There is no `module_file` (a package is several files), so A1 size reads 0
 and structure-drift tier 1, whose static lens pairs files, empties its three
 static-derived lists with reason `no_static_file_map` rather than reading every declared
-pair as split; its three co-change metrics still report. The behaviour
+pair as split; its three co-change metrics still report. The run-context `tier_1` block
+(`context_blocks.py`) carries those three counts as null with `static_lens_reason:
+no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, never 0. The behaviour
 block projects the static metrics only onto directories holding a file the graph's
 language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
 graph never vouches for a Python tree or a directory of `_test.go` files alone. Skipped:
