@@ -42,8 +42,8 @@ read. ``ci_checks`` publishes the records as ``includes`` with the counts
 ``resolved_includes`` / ``unresolved_includes``; ``review_automation`` reads
 the include entries of the resolved files. Template text is never published.
 
-Deterministic for fixed checkouts: ``git show`` of committed content, sorted
-output, no network. Read only (``GIT_OPTIONAL_LOCKS=0``).
+Deterministic for fixed checkouts: ``git show`` of committed content, records in
+walk order (file order, each nested include after its parent), no network. Read only (``GIT_OPTIONAL_LOCKS=0``).
 """
 from __future__ import annotations
 
@@ -260,7 +260,7 @@ class _BlockReader:
         for number, line, _ in rows:
             content = line.lstrip()
             col = len(line) - len(content)
-            if self.list_col is None and content.startswith("-"):
+            if self.list_col is None and self.key_col is None and content.startswith("-"):
                 self.list_col = col
             if content.startswith("-") and col == self.list_col:
                 started = self.start_item(content, col, number)
@@ -275,7 +275,8 @@ class _BlockReader:
         return self.out
 
     def key(self, content: str, col: int) -> None:
-        if self.pending_file and self.key_col is not None and col > self.key_col \
+        # ">=": an indentless sequence (`- a.yml` at the key column) is valid YAML.
+        if self.pending_file and self.key_col is not None and col >= self.key_col \
                 and content.startswith("-"):
             self.keys.setdefault("file", []).extend(_values(content[1:]))
             return
@@ -384,17 +385,19 @@ class _Walk:
 
     def read_all(self, source: _Source, paths: list[str], depth: int, line: int) -> bool:
         texts: list[str] = []
+        keys: list[tuple[str, str | None, str]] = []
         for rel in paths:
             key = (str(source.checkout), source.commit, rel)
-            if key in self.seen:
+            if key in self.seen or key in keys:
                 continue
-            if len(self.seen) >= MAX_FILES:
+            if len(self.seen) + len(keys) >= MAX_FILES:
                 return False
             text = source.read(rel)
             if text is None:
-                return False
-            self.seen.add(key)
+                return False  # nothing of this item is marked read: a later item reads it afresh
+            keys.append(key)
             texts.append(text)
+        self.seen.update(keys)  # only once the whole item has read
         for text in texts:
             self.files.append(IncludedFile(text, depth, line))
             self.walk(text, source, depth + 1, line)

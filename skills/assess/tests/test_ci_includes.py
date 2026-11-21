@@ -305,3 +305,21 @@ def test_counts_only_keeps_review_depth_and_null_ids(tmp_path: Path) -> None:
     assert [m["depth"] for m in out["review_automation"]["matches"]] == [1]
     assert out["review_automation"]["present"] is True
     assert "ci/build.yml" not in json.dumps(out)
+
+
+@pytest.mark.parametrize("text", [
+    "include:\n  - project: a/b\n    file:\n    - /x.yml\n    - /y.yml\n",
+    "include:\n  project: a/b\n  file:\n  - /x.yml\n  - /y.yml\n",
+])
+def test_an_indentless_file_sequence_is_read(text: str) -> None:
+    items, _, dropped = include_items(text)
+    assert (items[0].files, dropped) == (("/x.yml", "/y.yml"), 0)
+
+
+def test_a_file_from_a_failed_item_is_read_again_by_a_later_item(tmp_path: Path) -> None:
+    ci = ("include:\n  - project: grp/ci-templates\n    file: [/templates/test.yml, /missing.yml]\n"
+          "  - project: grp/ci-templates\n    file: /templates/test.yml\n")
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
+    block = scan_ci_checks(app, root)
+    assert [r["status"] for r in block["includes"]] == ["file_missing", "resolved"]
+    assert block["included_check_commands"] == 1 and block["test_or_lint_runs"] is True
