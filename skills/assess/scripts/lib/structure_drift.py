@@ -77,6 +77,7 @@ from lib.ownership_parser import (
     parse_codeowners,
 )
 from lib.git_churn import tracked_files
+from lib.import_graph import ModuleGraph, select_graph
 from lib.run_context_types import CoChangePair, JsonDict
 
 
@@ -431,35 +432,22 @@ def static_grouping_relation(
 
 
 def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
-    """Map every importable dotted module name to its repo-relative source file.
+    """Map every graphed module name to its repo-relative source file.
 
-    Reuses ``structure_graph``'s package discovery and module->file resolution so
-    a community's dotted names map back to the exact tracked paths the human and
-    co-change relations are expressed in. Degrades to an empty map when grimp /
-    networkx is unavailable or no package is found - the caller then yields an
-    empty static relation rather than crashing.
+    Reads the largest per-language graph from ``import_graph.select_graph``
+    (through ``_module_graph``) and its module->file map, so a community's
+    module names map back to the exact tracked paths the human and co-change
+    relations are expressed in. Degrades to an empty map when no graph
+    is built (a missing tool, no module) - the caller then yields an empty
+    static relation rather than crashing.
     """
-    try:
-        from lib.structure_graph import (
-            _module_file,
-            build_import_map,
-            discover_packages,
-        )
-    except ImportError:  # pragma: no cover - exercised only on a broken env
-        return {}
-
     repo_root = repo_root.resolve()
-    package_dirs = discover_packages(repo_root)
-    if not package_dirs:
+    mg = _module_graph(repo_root)
+    if mg is None:
         return {}
-    try:
-        imap = build_import_map(package_dirs, repo_root)
-    except Exception:  # pragma: no cover - grimp parse failure on odd trees
-        return {}
-
     mapping: dict[str, Path] = {}
-    for module in imap.modules:
-        src = _module_file(module, imap.roots)
+    for module in mg.modules:
+        src = mg.module_file.get(module)
         if src is None:
             continue
         try:
@@ -468,6 +456,24 @@ def _build_module_path_map(repo_root: Path) -> dict[str, Path]:
             continue
         mapping[module] = rel
     return mapping
+
+
+def _module_graph(repo_root: Path) -> ModuleGraph | None:
+    """The largest per-language import graph of the whole repo, or None.
+
+    Selected as ``structure_graph.analyze_structure`` selects, but over the whole
+    repository with no configured excludes or scope, as drift always read it. With
+    one builder per language and a scoped or excluded run, the language picked
+    here can differ from ``structure.language``.
+    """
+    try:
+        from lib.import_graph_builders import BUILDERS
+    except ImportError:  # pragma: no cover - exercised only on a broken env
+        return None
+    try:
+        return select_graph(repo_root, BUILDERS).graph
+    except Exception:  # pragma: no cover - a builder crash on odd trees
+        return None
 
 
 def cochange_grouping_relation(
@@ -708,33 +714,25 @@ def _human_ownership_map(repo_root: Path) -> dict[str, set[Path]]:
 def _compute_communities(repo_root: Path) -> list[set[str]]:
     """Import-graph communities for the repo, or ``[]`` when unavailable.
 
-    Builds the same grimp digraph ``structure_graph.analyze_structure`` builds and
-    runs its community detection. Returns ``[]`` (no static lens) when grimp /
-    networkx is missing or no Python package is found, so the caller's static
-    relation is simply empty.
+    Builds the same digraph ``structure_graph.analyze_structure`` builds and
+    runs its community detection. Returns ``[]`` (no static lens) when networkx
+    is missing or no graph is built, so the caller's static relation is simply
+    empty.
     """
     try:
         from lib.structure_graph import (
             _NETWORKX_AVAILABLE,
             _detect_communities,
-            build_import_map,
-            discover_packages,
             import_digraph,
         )
     except ImportError:  # pragma: no cover - exercised only on a broken env
         return []
     if not _NETWORKX_AVAILABLE:
         return []
-
-    package_dirs = discover_packages(repo_root)
-    if not package_dirs:
+    mg = _module_graph(repo_root.resolve())
+    if mg is None:
         return []
-    try:
-        imap = build_import_map(package_dirs, repo_root)
-    except Exception:  # pragma: no cover - grimp parse failure on odd trees
-        return []
-
-    return _detect_communities(import_digraph(imap).to_undirected())
+    return _detect_communities(import_digraph(mg).to_undirected())
 
 
 def _compute_coupling_pairs(repo_root: Path) -> list[CoChangePair]:
