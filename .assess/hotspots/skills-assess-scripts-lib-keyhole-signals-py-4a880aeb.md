@@ -1,7 +1,7 @@
-<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
 # Hotspot: `skills/assess/scripts/lib/keyhole_signals.py`
 
-_First flagged: 2026-06-01. Last seen: 2026-11-20. Status: regressed._
+_First flagged: 2026-06-01. Last seen: 2026-11-20. Status: persistent._
 
 ## Current metrics
 
@@ -27,12 +27,13 @@ _First flagged: 2026-06-01. Last seen: 2026-11-20. Status: regressed._
 | 2026-10-08 | 32cb78d4 | 860 | 247 | 26 | persistent |
 | 2026-10-11 | 0d249381 | 860 | 247 | 26 | persistent |
 | 2026-11-20 | 2e2af36e | 860 | 248 | 27 | regressed |
+| 2026-11-20 | d1e8fc2e | 860 | 248 | 27 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/scripts/lib/keyhole_signals.py`:
 
-Hotspot (regressed). 860 LOC, aggregate cyclomatic complexity 248 (worst function `render_findings_markdown` 11), 27 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
+Hotspot (persistent). 860 LOC, aggregate cyclomatic complexity 248 (worst function `render_findings_markdown` 11), 27 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.)
 
 ## Suggested actions
 

@@ -47,7 +47,7 @@ from typing import Any, TypedDict
 
 from lib import fleet_svg as svg
 from lib.fleet_groups import GROUPS_FILE, GroupRow, RowLevel
-from lib.fleet_legacy import upgrade
+from lib.fleet_legacy import stamp_value, upgrade
 from lib.fleet_history import dated_entries, entry_repos
 from lib.fleet_maturity import SCOPE, mean_share
 from lib.fleet_stamp import FLEET_STAMP_VERSION, RUN_FILE, FleetStamp
@@ -72,7 +72,7 @@ WRAP = 104
 LINE_H = 16.0
 AXIS_LABEL = "Mean share of top level"
 Y_TICKS = (0.0, 0.25, 0.5, 0.75, 1.0)
-MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed", "fleet_config_sha256")
+MATCH_KEYS = ("window", "scans", "counts_only", "paths_hashed", "fleet_config_sha256", "platform")
 
 # Series colours (light, dark), assigned to groups in sorted order; past the eighth
 # group the colours repeat with a dashed line.
@@ -159,7 +159,7 @@ def hidden_note(runs: Sequence[TrendRun]) -> str | None:
 
 def _comparable(stamp: Any, current: FleetStamp) -> bool:
     return (isinstance(stamp, dict) and stamp.get("fleet_stamp_version") == FLEET_STAMP_VERSION
-            and all(stamp.get(key) == current.get(key) for key in MATCH_KEYS))
+            and all(stamp_value(stamp, key) == stamp_value(current, key) for key in MATCH_KEYS))
 
 
 def _read_entry(entry: Path, current: FleetStamp, levels: MaturityModel | None) -> TrendRun | None:

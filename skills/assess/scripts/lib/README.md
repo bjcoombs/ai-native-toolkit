@@ -3,7 +3,8 @@
 Deterministic library modules for the `/assess` engine. No LLM calls anywhere in this
 package - every function is a pure transform of filesystem, git, or pre-computed signal
 data, with two bounded exceptions. Live platform reads are confined to `gh_cli.py`
-(GitHub) and `gitlab_cli.py` (GitLab); they are optional (they need a github.com or
+(GitHub) and `gitlab_cli.py` (GitLab), which run their CLI through `platform_cli.py`;
+the headless runner makes them only under `--platform`. They are optional (they need a github.com or
 GitLab remote and an authenticated `gh` or `glab`) and degrade to `available: False`
 with a reason, never to a clean result. The opt-in mutation pass's uv
 runner (`test_pressure/mutmut3.py`) may fetch mutmut, pytest and the assessed package's
@@ -565,7 +566,13 @@ carries `history_truncated: true` and `history_boundary_date`, every row is conf
 `low`, and a doc whose newest visible change is the boundary carries
 `last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
 floor. Its ratio still rests only on subject commits after the boundary, so the
-boundary listing every code file does not make it stale. The `modularity` block's `base_doc_dir_ratio`
+boundary listing every code file does not make it stale. `summary` (#699) carries the integer
+counts a maturity model reads: `measured_docs` (rows with a code subject of their own,
+every method but `repo-baseline`), `stale_docs` (those `doc_complexity_join.is_stale`
+marks: ratio above `STALENESS_RATIO_THRESHOLD`, or a newer declared source) and
+`stale_pct` (their share, a whole percent rounded up). Both counts are null on a truncated
+or degenerate history, or with no measured doc, so the doc-freshness row reads unknown.
+Paths are repo-relative POSIX (`as_posix`) on every platform. The `modularity` block's `base_doc_dir_ratio`
 is code directories holding a base doc over all code directories; a base doc in a
 directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
 within 0-1 (tests: `tests/test_doc_modularity.py`).
@@ -763,12 +770,19 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 `non_interactive=True`), so a raising scan degrades through `safe` and the run
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
-`{"available": false, "reason": NETWORK_REASON}`. Only published, single-key scans
+`{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
+both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`
+and `delivery`), or a network spec one of them reads, runs its `fn`. Extension point:
+append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
+changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
+which runs once under `--platform` as their dependency. Only published, single-key scans
 outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
 #557) are reported; the core's entries run only when a reported scan reads one, and
 the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
-registry with `headless_layers.HEADLESS_SCANS` in place of every core entry that
-publishes one of their names, and of every entry that reads a displaced one (#667). Names in `UNREGISTERED_SCANS` (run-context blocks
+registry with `HEADLESS_SCANS` (`headless_layers.py`, #667, and `headless_static.py`,
+#699) in place of every core entry that publishes one of their names, and of every entry
+that reads a displaced one. Names in `UNREGISTERED_SCANS` (run-context blocks
 `assess_core` assembles, several of which report `available: false` without the
 `reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
 name a reported scan also holds is dropped at runtime. `select_scans` raises
@@ -795,6 +809,16 @@ and a maturity model row reads `unknown`. It diverges from the full run in two p
 map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
 lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
+
+**`headless_static.py`**
+The headless runner's entries for the four static blocks the core publishes from
+`core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
+directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
+`doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
+doc->code edges; needs a git work tree: `not_git_root`) and `archetype`. A scan that
+raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
+maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
+`signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
 
 **`tool_lookup.py`**
 Finds the external tools the headless scans need, Windows included (#711). `find_rg`
@@ -879,7 +903,8 @@ no threshold config of its own. `load_settings` reads ghreport settings fragment
 `settings_for` joins a group to the exact scope or the nearest ancestor;
 `normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
 `{available: false, reason}` so `levels.resolve_signal` reads it unavailable and the
-org row is unknown, never 0. `reduce_settings` is the counts-only form (token values,
+org row is unknown, never 0; a fragment's `teams` list (#703, read by `fleet_units`) is not a
+setting (`NOT_SETTINGS`). `reduce_settings` is the counts-only form (token values,
 else `set`; a value's reason `null`, an unavailable one's `unknown`). Maturity model data follows
 `level_signals`' namespaces: `repo_signals` is a
 repository's `scans` map (a failed repository's is empty, so it is an unknown
@@ -932,6 +957,52 @@ Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
 `required`). `tests/test_fleet_groups.py` fails when the checked-in
 file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
 from `skills/assess`.
+
+**`fleet_units.py`**
+The fleet's org units (#703, parent #692): one `Tree` per view (`ownership`, `system`),
+each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`) and a
+`placement` map, repository id to unit id, so a repository sits once per view.
+`build_trees` infers the ownership view from repository paths (every prefix of a GitLab
+`path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
+a GitHub settings fragment (deepest team wins, then the first slug), then, for a
+repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
+under that group, and
+finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
+`[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
+with no repository left are dropped; their kind follows their place (root `org`, a unit
+holding a repository `team`, else `division` then `department`). Every fault raises
+`UnitsError` naming the entry (an unknown key or kind, a duplicate, a missing parent or
+unit, a cycle). `repo_owners` gives each repository the mapping's owners, else its
+CODEOWNERS ones; `unmatched_repos` names mapped repositories the run did not include.
+
+**`fleet_repo_facts.py`**
+What the units tree and `fleet-data.json` read from each checkout before any scan
+(#703): `web_url` normalises the `origin` remote (scp, `ssh://`, `http(s)://`) to
+`https://<host>/<path>`, dropping credentials, an ssh port and `.git` (an http(s) port
+is kept), and gives None for a local remote; `default_owners` takes the owners on the last catch-all rule of the first
+CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab section
+headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
+read gives no URL and no owners.
+
+**`fleet_data.py`**
+`fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
+#704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
+the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
+repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
+or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
+per team row, `fleet_maturity.mean_share` over the repositories below it, `measured` of
+`repos`, and the weakest measured repository (lowest share, then key); `overall_roll_up`
+does the same over each repository's own mean share. `org` rows stay in `groups.jsonl`.
+`Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
+names and owners and writes a non-token value as `set`; with a salt every unit and
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+`write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
+
+**`fleet_data_schema.py`**
+Generates `skills/fleet/references/fleet-data.schema.json` from the `FleetData` TypedDict
+with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
 
 **`fleet_view.py`**
 The shared reader for the views built on one fleet run's output (#553): the
@@ -1090,7 +1161,9 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 (`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
 `scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
-without one, absent before #706 and read as null, so the stamp version stays 1). No path,
+without one, absent before #706 and read as null, so the stamp version stays 1), and
+`platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
+false through `fleet_legacy.stamp_value`). No path,
 salt, timing or input mode, so a
 root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
 writes atomically with sorted keys.
@@ -1098,7 +1171,8 @@ writes atomically with sorted keys.
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
 `[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
-#696 and #714). API:
+#696 and #714; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+--platform-jobs` and `--platform-timeout`). API:
 - `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
   and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
   value; both CLIs exit 2 on it.
@@ -1111,7 +1185,8 @@ The fleet settings file, `--fleet-config FILE` (issue #706), with the known sect
   ignored with a warning); an unset scalar takes the repository value. Repository input
   that does not validate is skipped with a stderr warning, never raised.
 - `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
-  count, list order does) and `section_entries` (a list counts its items, else 1) feed
+  count, list order does; `UNHASHED_KEYS`, settings of how a run goes such as `[platform]
+  jobs` and `timeout`, are left out so they never break comparability) and `section_entries` (a list counts its items, else 1) feed
   the run stamp.
 
 Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
@@ -1174,8 +1249,8 @@ other failure keeps the clone as `delete_error`.
 
 **`fleet_history.py`**
 The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
-and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` when the
-run wrote one (`OPTIONAL_HISTORY_FILES`, #664; a same-day replacement without it removes
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` and `fleet-data.json` when the
+run wrote them (`OPTIONAL_HISTORY_FILES`, #664 and #703; a same-day replacement without it removes
 the old copy so an entry never mixes runs). `history_root` is
 `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
 `XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
@@ -1195,6 +1270,23 @@ directory renamed into place in one step, and a replaced same-day entry loses it
 `run.json` before the new files move in (`run.json` last), so a failure part-way never
 leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
 
+**`fleet_platform.py`**
+The fleet platform pass, `fleet.py --platform` (issue #714). `run_platform(rows, targets,
+options, jobs=, timeout=, names=, after=)` runs after the offline scan: one more
+`assess_signals.py --platform --scans <names>` child per `ok` row (`fleet.run_signals`,
+the offline scan's output mode and salt, `--platform-jobs` workers, `--platform-timeout`
+each, stderr tails in `<logs>/<repo>.platform.stderr`) and `join`s its blocks into the
+row's `scans` by repository. It never changes `status` or `reason`, so a slow host cannot
+make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
+omits a block gives that block `available: false` with `platform_timeout`,
+`platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
+counts-only output). Failed rows are not read. `names` is `platform_scans(--scans)`:
+`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
+`--delete-after` hook) runs on each row after its platform read, so a clone outlives the
+read of its remote. A new platform block (#715, #716) needs no change here: see
+`signals.py`. Tests: `tests/test_fleet_platform.py`.
+
 **`fleet_legacy.py`**
 Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
 moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its new name
@@ -1204,7 +1296,10 @@ already under its new name wins, and the input is never mutated. `fleet_view._ch
 entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
 entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
 from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
-never as a malformed stamp. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714); every comparability
+check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
+reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
 `tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
 
@@ -1215,7 +1310,8 @@ Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
 turn into a not-comparable result). `comparability` reuses
 `diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
 adds maturity-model version, window, output mode, scan selection, path hashing and the
-`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config); any reason
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
+`platform` (a pre-#714 stamp is false); any reason
 gives `comparable: false` with no deltas. `compare` reports the measured-set movement
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
@@ -1509,7 +1605,9 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
-generates `references/counts-only.md`, the per-block field list. Tests:
+generates `references/counts-only.md`, the per-block field list (plus the
+`fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
+the fleet's unit and repository keys (#703). Tests:
 `tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 
 **`counts_only_rules.py`**
@@ -1522,7 +1620,9 @@ they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus th
 fields and rule segments), so a map keyed by a login or a function name is dropped
 rather than kept unhashed. Adding a run-context string field or block means adding its
 rule or field name here and regenerating `references/counts-only.md`.
-Tests: `tests/test_counts_only.py`.
+`FLEET_DATA_RULES` and `classify_fleet_data` classify the fleet's `fleet-data.json`
+fields (#703), kept apart from `RULES` so their names never widen the run-context field
+names. Tests: `tests/test_counts_only.py`, `tests/test_fleet_data.py`.
 
 **`counts_only_schema.py`**
 Derives the string fields the allow-list must cover from the block TypedDicts in
@@ -2082,10 +2182,26 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
 `unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
-(HTTP 404), `gh_timeout`, `gh_error`, `gh_bad_json`. A scan must degrade on it,
+(HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
+`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
 lives here and is shared with `gitlab_cli`.
+
+**`platform_cli.py`**
+How `gh_cli._run_gh` and `gitlab_cli._run_glab` run their binary (issue #714). `run_cli`
+closes stdin and sets `GH_PROMPT_DISABLED`, `NO_PROMPT` (glab) and `GIT_TERMINAL_PROMPT=0`
+over the inherited environment, so a prompt fails the call. A reply reporting a rate limit
+(`rate_limited`: HTTP 429 in gh's `(HTTP 429)` and glab's `glab: HTTP 429` or `429 Too Many
+Requests` forms, or GitHub's rate-limit 403 text "API rate limit exceeded" / "secondary
+rate limit") is retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
+CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) per wait;
+`SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
+directory, a successful call's stdout is stored under the sha256 of its argv and the same
+argv is answered from it for the rest of the run (any process); failures are never stored.
+Only the fleet platform pass sets it, to a temporary directory it removes. Callers keep
+their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
+`tests/test_platform_cli.py`.
 
 **`gitlab_cli.py`**
 The GitLab side of the platform seam, with `gh_cli`'s contract: the `glab` binary as a
@@ -2093,8 +2209,9 @@ subprocess with `--hostname` on every call, no token read, JSON parsed in Python
 call capped (`GLAB_TIMEOUT_SECONDS`, 20; the self-managed probe
 `GLAB_PROBE_TIMEOUT_SECONDS`, 8). Failures raise `gh_cli.GhUnavailable`: `glab_not_installed`,
 `not_authenticated`, `unreachable` (ghsync's network patterns, or a probe timeout),
-`no_access` (HTTP 401/403), `not_found` (HTTP 404), `glab_timeout`, `glab_error` (any
-other non-zero exit), `glab_bad_json`. `open_gitlab` detects the provider from the
+`no_access` (HTTP 401/403), `not_found` (HTTP 404), `rate_limited` (HTTP 429 after the
+backoff), `glab_timeout`, `glab_error` (any other non-zero exit), `glab_bad_json`. `glab`
+runs through `platform_cli.run_cli`. `open_gitlab` detects the provider from the
 remote: github.com or no remote returns None without invoking `glab`; a `gitlab.com`
 remote is GitLab and must pass `glab auth status --hostname gitlab.com` (else it
 raises); any other host is GitLab only when that probe passes for it, and any probe
@@ -2169,22 +2286,68 @@ failed read degrades the whole block, never a partial clean result. Add a case
 in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
 alongside any change to discovery or the diff.
 
+**`merged_sample.py`**
+The shared sample of merged changes (#715), registered as the private
+`network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
+`run_date`; `review_reality` and `delivery` read it, so one listing serves both
+blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+on or after `fleet_activity.window_start(history_window, run_date)`, newest
+`merged_at` first; `history_window` None (interactive `/assess` with no churn
+window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
+--search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
+(an update is never before its merge, so the newest merges are among the most
+recently updated), then the same search from the 30th newest `mergedAt` with
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
+for the heavy fields. GitLab, one read:
+`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
+then filtered and ordered by `merged_at` client-side (works on GitLab versions
+without `order_by=merged_at`). A change with no readable merge time is
+`<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
+dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
+so an account is probed once); any refusal is `{"available": false, "reason"}`,
+which each reader returns as its own block. `BotClassifier` (moved from
+`review_reality`): an author object with `is_bot`/`type` is classified from it, a
+`[bot]` login is a bot, any other login is probed once with `gh api
+users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
+person, anything else unknown. The value holds logins and text in memory only and
+never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an app author, so the author compares equal to the same app as a commenter. Tests: `tests/test_delivery.py`,
+`tests/test_platform_argv_contract.py`.
+
+**`delivery.py`**
+The `delivery` platform block (#715, part of #702), reads `merged_sample`,
+`review_reality` and `fleet_config`: `{available, merged_count,
+time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
+first_human_comment_hours_p90, human_commented_share, ai_review_share,
+approved_share, self_merged_share}`. Hours rounded to 0.01; percentiles are
+nearest-rank. `approved_share` and `self_merged_share` are copied from
+`review_reality` (null when it is unavailable). First human comment (GitHub): the
+earliest comment or review by an account that is not the author, not
+`github-actions` and not a bot; an author-less event is skipped; an account of unknown
+type (a failed probe, or one left unprobed once the shared 20-login budget is spent)
+before the first known human on any change nulls the three comment figures. A
+person whose login equals a pinned AI App's name probes as that App (`gh` drops
+`[bot]` and gives comment authors no type). AI review (GitHub): a review or
+comment by an `[[ai_usage.agent_identities]]` config match (username, with and
+without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
+`agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,
+an unknown account that decides a change nulls the share. GitLab: time to merge and
+the copied shares; the notes-based figures are null until #716. An unavailable
+sample is returned as the block. Tests: `tests/test_delivery.py`.
+
 **`review_reality.py`**
-Layer 7 truth-pressure signal: whether merged pull requests were reviewed, via
-`gh_cli`. Samples the `DEFAULT_LIMIT` (30) most recently opened merged pull
-requests (`gh pr list` orders by creation, not merge) with
-`gh pr list --state merged --json author,mergedBy,mergedAt,reviews,reviewDecision,comments`
-and emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed. The
+registry entry `review_reality_from_sample` reads the shared `merged_sample`
+(above; before #715 it was the 30 most recently opened merged pull requests,
+unwindowed, so figures shift with the window); `scan_review_reality(repo_root,
+history_window=None, run_date=None)` draws the sample itself. It
+emits `review_reality: {available, merged_count, oldest_merged_days_ago,
 reviewed_share, approved_share, bot_review_share, self_merged_share,
 review_required, hollow_required_review, required_approval_bypassed}`.
 `reviewed_share` counts a review in any state by any account other than the
 author; `approved_share` counts only `APPROVED` ones;
 `bot_review_share` counts a comment by a bot other than `github-actions` (nothing
-in `reviews`). `gh pr list` drops a comment author's `[bot]` suffix, so an author
-object without `is_bot`/`type` is classified by one `gh api users/<login>[bot]`
-probe per distinct login (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot,
-404 is a person, anything else is unknown, as is a comment with no author
-login. An unknown author withholds the share (null) only when it decides a pull
+in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
+author withholds the share (null) only when it decides a pull
 request: one with a confirmed bot comment counts regardless.
 `review_required` reads the default branch's effective rules
 (`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
@@ -2195,10 +2358,10 @@ null when neither says yes and one was refused. `hollow_required_review` is
 where an AI reviewer comments on every change but nobody approves. Both are null
 when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
 rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
-the block. A failed pull-request read degrades the whole block to `available:
+the block. A failed sample read degrades the whole block to `available:
 False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
-`DEFAULT_LIMIT` most recently created merged merge requests and one `approvals` read
-each: `approved_share` (approved by an account other than the author),
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs)`) and one
+`approvals` read each: `approved_share` (approved by an account other than the author),
 `self_merged_share` (`merge_user`, else `merged_by`, is the author); `reviewed_share`
 and `bot_review_share` are null (approvals are the only evidence read), and
 `hollow_required_review` is False only when approvals alone clear the threshold, else
