@@ -205,7 +205,7 @@ Logic: `skills/assess/scripts/lib/fleet_groups.py`.
 | `settings_scope` | The settings fragment joined: the one whose `scope` equals the group, else the nearest ancestor (a top-level GitLab group covers its subgroups); `null` when none matches. |
 | `settings` | That fragment's settings, each `{value, reason}` or `{available: false, reason}` when ghreport read it as `unknown`. Counts-only (the default) keeps a value that is a short token (`on`, `off`, `full`) and writes any value that is not a short token (a list of rule or ruleset names) as `set`, with an unavailable setting's reason reduced to `unknown` and a value's reason to `null`; `--full` keeps them. `null` without a match. |
 | `levels_version` | The maturity model's `version`; `null` without `--levels`. |
-| `levels` | One entry per maturity model row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`. |
+| `levels` | One entry per maturity model row: `id`, `scope`, `status` (`level` or `unknown`), `level` (a whole number, `null` when unknown), `top_level` (the row's number of levels, so a level reads as a share of it without the maturity model file; absent in rows written before it was added, which readers handle), `aggregation` (the team rule, `{rule, share}`; `null` for org rows), `missing_signals`, `unknown_repos`; on an `unknown` row only, optional `floor` (the level its confirmed criteria reach, when at least 1: "at least N", never the exact level) and `full_run_only` (the missing signals only a full `/assess` measures, their block unavailable as `not_registered` or `network` in every repository missing them; a `--platform` scan's block such as `review_reality` is left out, since `fleet --platform` measures it, and the next-steps page says so). Both are absent otherwise and in rows written before #697, which readers handle. |
 
 Maturity model signal paths are checked at load against `lib/level_signals.py` (an
 unknown path exits 2 before any scan) and evaluated by `lib/levels.py`, with no
@@ -645,7 +645,10 @@ scale. The layer bars draw team rows too and name the org rows under the bars.
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
 `shared_tooling` evidence, a group with no row known in both compared runs, or a repository
 with an undetermined level for a layer, is named on a hatched strip or segment, and a group
-with no level in a run breaks its trend line and is named on a hatched note. Colours follow the
+with no level in a run breaks its trend line and is named on a hatched note. An unknown row with
+a confirmed `floor` is shown as "at least N": a distinct hatched segment in the layer bars, and
+beside each known-only mean a floor-inclusive figure labelled as a lower bound (tooltips and
+the not-plotted strip), never moving a plotted point. Colours follow the
 viewer's light or dark scheme. The SVGs have no script and no external font or link, and the
 same run draws the same bytes. Logic: `lib/fleet_diagrams.py`, `lib/fleet_quadrant.py`,
 `lib/fleet_tooling_map.py`, `lib/fleet_trends.py`, `lib/fleet_slope.py`, `lib/fleet_layer_bars.py`,
@@ -674,7 +677,10 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --levels levels.toml -
 Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and
 darker for a higher level reached, with the level printed in every cell. An
 `unknown` cell is white with grey hatching, never level 0: it prints `?` and a
-key letter, and the key under the grid names the missing signals. The canvas
+key letter, and the key under the grid names the missing signals. An unknown
+cell with a `floor` is the floor's ramp colour under the hatch and prints `N+`
+(at least level N, never the exact level); its key says which missing signals
+need a full `/assess`. The canvas
 has its own white background. The same run gives a byte-identical file. Exit
 codes: `0` written, `2` an unreadable or malformed run, a run without maturity model
 levels, a mismatched `--levels` or an unreadable `--compare` run.
