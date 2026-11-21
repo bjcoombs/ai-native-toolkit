@@ -13,7 +13,7 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, get_type_hints
 
 import pytest
 
@@ -21,11 +21,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib import merged_sample as ms  # noqa: E402
 from lib.delivery import (  # noqa: E402
-    AI_REVIEWERS, agent_authored, ai_reviewed, first_human_comment, percentile, scan_delivery,
+    AI_REVIEWERS, DeliveryBlock, agent_authored, ai_reviewed, first_human_comment, percentile,
+    scan_delivery,
 )
+from lib.counts_only import counts_only_scans  # noqa: E402
 from lib.fleet_config import parse_fleet_config  # noqa: E402
 from lib.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
 from lib.gitlab_cli import GitlabProject  # noqa: E402
+from lib.gitlab_notes import NoteFacts  # noqa: E402
 from lib.merged_sample import BotClassifier, MergedSample  # noqa: E402
 
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "platform" / "github_merged_prs.json"
@@ -391,3 +394,30 @@ def test_a_refused_listing_is_an_unavailable_sample(monkeypatch, tmp_path):
     monkeypatch.setattr(ms, "gh_json", refuse)
     assert ms.merged_sample(tmp_path, "6mo", "2026-11-21") == {
         "available": False, "reason": "no_access: HTTP 403"}
+
+
+# ---- counts-only (#769) ----------------------------------------------------------
+
+def _full_github_block() -> dict[str, Any]:
+    prs = recorded()
+    first = copy.deepcopy(prs[0])
+    first["reviews"].append({"author": {"login": "bob"}, "submittedAt": "2026-11-20T23:27:07Z",
+                             "state": "APPROVED"})
+    return dict(scan_delivery(sample([first, *prs[1:]]), REVIEW))
+
+
+def _full_gitlab_block() -> dict[str, Any]:
+    mrs = ({"iid": 1, "created_at": "2026-11-01T00:00:00Z", "merged_at": "2026-11-01T06:00:00Z"},
+           {"iid": 2, "created_at": "2026-11-01T00:00:00Z", "merged_at": "2026-11-02T00:00:00Z"})
+    notes = (NoteFacts(True, True, "2026-11-01T02:00:00Z"), NoteFacts(False, False, None))
+    project = GitlabProject("gitlab.com", "grp/app")
+    return dict(scan_delivery(MergedSample("gitlab", mrs, None, gitlab=project), REVIEW,
+                              notes=notes))
+
+
+@pytest.mark.parametrize("build", [_full_github_block, _full_gitlab_block], ids=["github", "gitlab"])
+def test_counts_only_keeps_every_delivery_figure(build):
+    block = build()
+    assert set(block) == set(get_type_hints(DeliveryBlock))
+    assert all(value is not None for value in block.values())  # every figure is exercised
+    assert counts_only_scans({"delivery": block}) == {"delivery": block}

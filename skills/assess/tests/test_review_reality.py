@@ -245,11 +245,14 @@ def test_review_reality_reports_age_of_oldest_merge() -> None:
     assert summarize([_pr(0, merged_at=None)], True, now=now)["oldest_merged_days_ago"] is None
 
 
-def test_review_reality_comment_without_author_is_unknown(world) -> None:
+def test_review_reality_comment_without_author_is_skipped(world) -> None:
     _require_by_ruleset(world)
     bot = {"login": "reviewbot", "is_bot": True, "type": "Bot"}
-    # A confirmed bot comment still counts; an authorless comment alone is unknown.
+    # A deleted account's comment (no author) is skipped, as in ``delivery`` (#769):
+    # a confirmed bot comment still counts, an authorless comment alone is no bot review.
     world.serve("prs.json", [_pr(0, comments=[None, bot]), _pr(1, comments=[None])])
-    assert scan_review_reality(world.root)["bot_review_share"] is None
+    assert scan_review_reality(world.root)["bot_review_share"] == 0.5
+    world.serve("prs.json", [_pr(0, comments=[{"login": ""}]), _pr(1, comments=[{}])])
+    assert scan_review_reality(world.root)["bot_review_share"] == 0.0
     world.serve("prs.json", [_pr(0, comments=[None, bot]), _pr(1)])
     assert scan_review_reality(world.root)["bot_review_share"] == 0.5

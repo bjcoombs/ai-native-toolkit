@@ -554,9 +554,13 @@ remotes) logged in.
   copied from `review_reality`, and `agent_authored_share` (changes authored by a
   pinned agent app or an `[[ai_usage.agent_identities]]` rule, by username; a
   GitLab access-token user counts only under `token_users_as_agents`). Durations
-  are hours, percentiles nearest-rank. On
-  GitLab only time to merge and the copied shares are filled so far; the comment
-  and AI-review figures are null.
+  are hours, percentiles nearest-rank. On GitLab the comment and AI-review
+  figures come from each merge request's notes (#716): the first human comment is
+  the first non-system note by a person other than the author, and AI review is a
+  note with an AI-review marker or by an agent or a pinned AI-review app. A figure
+  is null when the notes leave it undecided after 3 pages (300 notes) on any
+  sampled merge request, or when the notes read is refused. Counts-only output
+  (the default) keeps every `delivery` figure, the same as `--full`.
 
 - **Joined, never failing a row.** The pass's blocks replace the offline
   `network` placeholders in the row's `scans`. It never changes a row's
@@ -564,8 +568,10 @@ remotes) logged in.
   `scan_timeout`. A read that runs past `--platform-timeout`, exits non-zero or
   writes no valid document gives each platform block `available: false` with
   `platform_timeout`, `platform_exit_<code>`, `platform_error` or
-  `platform_invalid_output`; its stderr tail goes to
-  `DIR/logs/<repo>.platform.stderr`. A refused read (`no_access`, `not_found`,
+  `platform_invalid_output`. Only a child that exits non-zero
+  (`platform_exit_<code>`) leaves its stderr tail in
+  `DIR/logs/<repo>.platform.stderr`; a timeout, an error starting the child or
+  invalid output writes no log. A refused read (`no_access`, `not_found`,
   `rate_limited`) is an unavailable block with that reason, never zeros. A row
   whose offline scan failed gets no platform read.
 - **Network hygiene.** `gh` and `glab` run with stdin closed and prompts disabled

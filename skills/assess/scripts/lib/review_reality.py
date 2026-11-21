@@ -35,7 +35,8 @@ Shares are floats in [0, 1], None when nothing was sampled. ``review_required``
 is None when the rules could not be read (a refused protection read on a branch
 no ruleset covers), and ``hollow_required_review`` follows it. ``bot_review_share``
 is None when a commenter's account type could not be learned and that decides
-whether a sampled pull request counts.
+whether a sampled pull request counts. A comment with no author login (a deleted
+account) is skipped, as in ``delivery`` (#769).
 
 Bot classification is the sample's ``merged_sample.BotClassifier`` (shared with
 ``delivery``, so an account is probed once per run). ``github-actions`` comments
@@ -108,8 +109,9 @@ def _has_bot_comment(pr: dict[str, Any], bots: BotClassifier) -> bool | None:
     unknown = False
     for comment in pr.get("comments") or []:
         actor = comment.get("author") if isinstance(comment, dict) else None
-        if _login(actor) in STATUS_BOTS:
-            continue
+        name = _login(actor)
+        if name is None or name in STATUS_BOTS:
+            continue  # a deleted account (no login) is skipped, as in ``delivery``
         verdict = bots.is_bot(actor)
         if verdict:
             return True
