@@ -1975,6 +1975,18 @@ where); no instruction file reads level 0 through the never-null
 `tests/test_level_signals.py`, on headless runs of the golden fixture repositories
 and the golden `run-context.json`.
 
+Signal classification (#783): `SIGNAL_INPUTS` gives every signal a default criterion reads
+its producer input class (`InputClass`: `config_text`, `head_text`, `head_structure`,
+`ci_executed`, `git_history`, `execution_artifact`, `platform`), keyed by exact path;
+`input_class` raises `UnclassifiedSignal` naming an unclassified one. `INPUT_GRADES` maps
+each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
+keeps a text class's grade only for a presence test and grades a threshold on it
+`measured`. `is_declared(criterion)` is true for `config_only` and `declared`, the
+conditions #744 lists without counting. The module doc records the rulings (platform
+reads are their own class; instruction files stay declared but still gate Steps). Nothing
+in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line.
+Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
+
 **`instruction_files.py`**
 Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
 `agent_instructions_grader`. `grade_instruction_files` grades each committed file with
