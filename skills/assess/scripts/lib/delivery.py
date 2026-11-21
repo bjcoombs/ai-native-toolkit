@@ -66,7 +66,8 @@ from the ``gitlab_note_facts`` spec (``lib/gitlab_notes.py``, #716), which reads
 each sampled merge request's notes once: hours from ``created_at`` to the first
 human comment's ``created_at`` over the merge requests that have one,
 ``human_commented_share``, and ``ai_review_share`` (a note with an AI-review
-marker, or by an agent or access-token user). A merge request whose notes leave a figure
+marker, or by an agent or pinned AI-review app; an access-token user only when
+``token_users_as_agents`` or an identity rule makes it an agent). A merge request whose notes leave a figure
 undecided after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes makes it None; so does a refused notes read
 (``review_reality`` then carries the reason).
 

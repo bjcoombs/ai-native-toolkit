@@ -24,22 +24,26 @@ skipped) is classified once, first rule that applies:
    one of the ``[review] ai_review_markers`` strings from ``--fleet-config``
    (case-insensitive substrings). Whoever else posted it, the note is AI review
    and never a human comment.
-3. **AI review by account.** The author's username is in the ``agent`` or
-   ``token_user`` bucket of ``agent_identity.AuthorMatcher.classify_username``
-   (the ``[ai_usage]`` rules, #695): a GitLab project or group access-token user
-   (``project_<id>_bot_<hash>``) is recognised by its generated username form,
-   the token type, never by a display name. A username in ``delivery.AI_REVIEWERS``
-   (the pinned AI-review apps, ``[bot]`` dropped) is AI review too. AI review is
-   bot review too.
-4. **Dependency bot** (Renovate, Dependabot): neither review nor a human comment,
-   even when its account carries ``bot: true``.
-5. **Other bot**: an author object with ``bot: true`` (a GitLab internal bot) is
-   bot review only.
-6. **Human comment**: anyone else. The first one's ``created_at`` is
+3. **AI review by account.** The author's username is in the ``agent`` bucket of
+   ``agent_identity.AuthorMatcher.classify_username`` (an ``[ai_usage]`` identity
+   rule or a pinned agent, #695), or in ``delivery.AI_REVIEWERS`` (the pinned
+   AI-review apps, ``[bot]`` dropped). A GitLab project or group access-token user
+   (``project_<id>_bot_<hash>``, recognised by that generated form, never a display
+   name) lands in the ``agent`` bucket only with ``[ai_usage] token_users_as_agents``.
+4. **Automation** (neither review nor a human comment): an access-token user that is
+   not an agent and whose note carries no marker (coverage reporters, Danger,
+   semantic-release post through tokens; counting them would make review look done
+   when nobody looked), and a dependency bot (Renovate, Dependabot).
+5. **Human comment**: anyone else. The first one's ``created_at`` is
    ``first_human_comment_at``.
 
-``review_reality`` counts a merge request reviewed on a human comment, bot review
-or an approval by another account; ``delivery`` takes ``ai_review`` and
+GitLab's note ``author`` is a basic user object (id, username, name, state,
+avatar and web URLs), with no bot flag, so nothing here reads one: an account is
+known only by its username.
+
+``review_reality`` counts a merge request reviewed on a human comment, AI review
+or an approval by another account, and its ``bot_review_share`` is the AI-review
+share; ``delivery`` takes ``ai_review`` and
 ``first_human_comment_at``. :func:`gitlab_note_facts` is the private registry spec
 that reads every sampled merge request's notes once for both.
 
@@ -88,8 +92,7 @@ class NoteFacts(NamedTuple):
     300 notes left it undecided."""
 
     human_comment: bool | None        # a non-system note by a person other than the author
-    ai_review: bool | None            # an AI-review marker, an agent or an access-token user
-    bot_review: bool | None           # ai_review, or a ``bot: true`` account
+    ai_review: bool | None            # an AI-review marker, an agent or a pinned AI-review app
     first_human_comment_at: str | None  # ISO ``created_at`` of the first human comment
 
 
@@ -108,23 +111,23 @@ class NoteClassifier:
         lowered = body.lower()
         return any(m in lowered for m in self.markers)
 
+    def _bucket(self, author: Any) -> str | None:
+        name = author.get("username") if isinstance(author, dict) else None
+        if not isinstance(name, str) or not name:
+            return None
+        return self.matcher.classify_username(name).bucket
+
     def is_ai(self, author: Any) -> bool:
-        """An agent, a GitLab access-token user or a pinned AI-review app, by username."""
+        """An agent (a token user only under ``token_users_as_agents``) or a pinned
+        AI-review app, by username."""
         name = author.get("username") if isinstance(author, dict) else None
         if not isinstance(name, str) or not name:
             return False
-        bare = name.lower().removesuffix("[bot]")
-        return bare in AI_REVIEWERS \
-            or self.matcher.classify_username(name).bucket in (AGENT, TOKEN_USER)
+        return name.lower().removesuffix("[bot]") in AI_REVIEWERS or self._bucket(author) == AGENT
 
-    @staticmethod
-    def is_bot(author: Any) -> bool:
-        return isinstance(author, dict) and author.get("bot") is True
-
-    def is_dependency_bot(self, author: Any) -> bool:
-        name = author.get("username") if isinstance(author, dict) else None
-        return isinstance(name, str) and bool(name) \
-            and self.matcher.classify_username(name).bucket == DEPENDENCY_BOT
+    def is_automation(self, author: Any) -> bool:
+        """A non-agent access-token user or a dependency bot: never review, never human."""
+        return self._bucket(author) in (TOKEN_USER, DEPENDENCY_BOT)
 
 
 def classifier_from_config(config: FleetConfig | None) -> NoteClassifier:
@@ -145,7 +148,7 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
                complete: bool = True) -> NoteFacts:
     """The facts of one merge request's notes (oldest first). ``complete`` is False when
     the read may have stopped before the last note; then an undecided fact is None."""
-    human = ai = bot = False
+    human = ai = False
     first_human: str | None = None
     for note in notes:
         if not isinstance(note, dict) or note.get("system") is True:
@@ -156,12 +159,9 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
         if name is not None and name == mr_author:
             continue  # the author's own notes, an agent's on its own change included, are not review
         if (isinstance(body, str) and classifier.has_marker(body)) or classifier.is_ai(author):
-            ai = bot = True
+            ai = True
             continue
-        if classifier.is_dependency_bot(author):
-            continue  # before ``bot: true``: a Renovate service account is never review
-        if classifier.is_bot(author):
-            bot = True
+        if classifier.is_automation(author):
             continue
         if name is None:
             continue
@@ -172,7 +172,6 @@ def note_facts(notes: Sequence[Any], mr_author: str | None, classifier: NoteClas
     return NoteFacts(
         human_comment=human if human or complete else None,
         ai_review=ai if ai or complete else None,
-        bot_review=bot if bot or complete else None,
         first_human_comment_at=first_human,
     )
 
@@ -201,7 +200,7 @@ def mr_note_facts(project: GitlabProject, mr: dict[str, Any],
         raise GhUnavailable("glab_bad_json: a merged merge request has no iid")
     author = _username(mr.get("author"))
     notes: list[Any] = []
-    facts = NoteFacts(None, None, None, None)
+    facts = NoteFacts(None, None, None)
     for page in range(1, NOTES_MAX_PAGES + 1):
         got, last = read_notes(project, iid, page)
         notes.extend(got)

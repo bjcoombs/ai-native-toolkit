@@ -53,10 +53,12 @@ an account other than its author and ``self_merged_share`` one whose
 ``merge_user`` (else ``merged_by``) is its author. The sample's notes
 (``gitlab_note_facts``, ``lib/gitlab_notes.py``, #716; read once, in memory, never
 cached, only facts kept) give ``bot_review_share``, a note carrying an AI-review
-marker or posted by an agent, access-token or ``bot`` account (a GitLab AI reviewer
-often posts as ``project_<id>_bot_<hash>``, so it is recognised by its output or its
-token type, never by a display name), and ``reviewed_share``, an approval by another
-account, a human comment by someone other than the author, or bot review. Notes that
+marker or posted by an agent or a pinned AI-review app (a GitLab AI reviewer often
+posts as an access-token user, ``project_<id>_bot_<hash>``, so it is recognised by its
+output; a token user's unmarked note counts only under ``token_users_as_agents`` or an
+identity rule, since coverage and release bots post the same way), and
+``reviewed_share``, an approval by another account, a human comment by someone other
+than the author, or AI review. Notes that
 still decide nothing after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes leave that
 merge request unknown and the share None; so does a call made without note facts. ``hollow_required_review`` follows
 ``reviewed_share`` and is False whenever approvals alone clear the threshold. A
@@ -352,7 +354,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
             by_other = _approved_by_other(approvals, author)
             approved += by_other
             fact = facts[len(reviewed)] if len(reviewed) < len(facts) else None
-            reviewed.append(_any_of(by_other, fact.human_comment, fact.bot_review)
+            reviewed.append(_any_of(by_other, fact.human_comment, fact.ai_review)
                             if fact is not None else (True if by_other else None))
             self_merged += author is not None and author == merger
             age = _days_ago(mr.get("merged_at"), now)
@@ -364,7 +366,7 @@ def scan_gitlab_review_reality(project: GitlabProject, mrs: Sequence[dict[str, A
     required = gitlab_review_required(project)
     approved_share = _share(approved, total)
     reviewed_share = None if None in reviewed else _share(sum(map(bool, reviewed)), total)
-    bots = [f.bot_review if f is not None else None for f in facts]
+    bots = [f.ai_review if f is not None else None for f in facts]
     bypassed = _flag(required, approved_share, total)
     hollow = _flag(required, reviewed_share, total)
     if hollow is None and bypassed is False:

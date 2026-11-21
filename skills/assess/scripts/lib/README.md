@@ -2352,22 +2352,24 @@ GitLab merge-request notes as facts (#716), for `review_reality` and `delivery` 
 `mr_note_facts` reads up to `NOTES_MAX_PAGES` (3) pages, stopping at a short page or once
 a human comment and AI review are both found, so no note body reaches
 the `--platform` response cache. `note_facts(notes, mr_author, classifier, complete)`
-returns `NoteFacts(human_comment, ai_review, bot_review, first_human_comment_at)`; nothing
+returns `NoteFacts(human_comment, ai_review, first_human_comment_at)`; nothing
 else of a note leaves the module. System notes are skipped. A note is, first rule first:
 nothing when the merge request's author posted it (an agent on its own change is not
 review); AI review
 when its body (cut to `MAX_BODY`) carries a `PINNED_MARKERS` marker (a line-start "AI Code
 Review" / "AI Review" heading, plain or bold, emoji allowed, or an HTML comment naming AI
 review or CodeRabbit; prose mentioning AI review does not match) or a `[review]
-ai_review_markers` string (case-insensitive substring), whoever else posted it; bot review when
-its author is in the `agent` or `token_user` bucket of
-`agent_identity.AuthorMatcher.classify_username` (a `project_<id>_bot_<hash>` access-token
-user is recognised by that form, never a display name), whose username is in
-`delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for a dependency bot (even one with
-`bot: true`); bot review only for another `bot: true` account; else a human comment, the first giving
-`first_human_comment_at`. With `complete` False (still a full last page) an undecided fact is None.
-`NoteFacts` also splits `ai_review` (a marker, an agent or an access-token user) from
-`bot_review` (that, or a `bot: true` account). `classifier_from_config(config)` builds the
+ai_review_markers` string (case-insensitive substring), whoever else posted it; AI review when
+its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username` or
+its username is in `delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for automation, a
+dependency bot or a `project_<id>_bot_<hash>` / `group_<id>_bot_<hash>` access-token user
+(recognised by that form, never a display name) that is not an agent: an unmarked token
+note is a coverage reporter, Danger or semantic-release as often as an AI reviewer, so it
+counts as AI review only with a marker, an `[ai_usage]` identity rule or `[ai_usage]
+token_users_as_agents`; else a human comment, the first giving `first_human_comment_at`.
+GitLab's note author is a basic user object with no bot flag, so none is read. With
+`complete` False (still a full last page) an undecided fact is None. `NoteFacts` is
+`(human_comment, ai_review, first_human_comment_at)`. `classifier_from_config(config)` builds the
 classifier from the merged `[ai_usage]` and `[review]` sections. `gitlab_note_facts(sample,
 fleet_config)` is the private registry spec (`network=True`, reads `merged_sample` and
 `fleet_config`): one `NoteFacts` per sampled merge request in sample order, None off GitLab,
@@ -2508,9 +2510,9 @@ one `approvals` read each: `approved_share` (approved by an account other than t
 `self_merged_share` (`merge_user`, else `merged_by`, is the author), and the note facts of
 the private `gitlab_note_facts` spec (#716, one notes read per merge request, shared with
 `delivery`): `bot_review_share` is a note with an
-AI-review marker or by an agent, access-token or `bot` account; `reviewed_share` is an
-approval by another account, a human comment by someone other than the author, or bot
-review. A merge request whose notes still decide nothing after up to `NOTES_MAX_PAGES` (3)
+AI-review marker or by an agent or pinned AI-review app (an access-token user only when
+it is an agent); `reviewed_share` is an approval by another account, a human comment by
+someone other than the author, or AI review. A merge request whose notes still decide nothing after up to `NOTES_MAX_PAGES` (3)
 pages / 300 notes makes the share null.
 `hollow_required_review` follows `reviewed_share` and is False whenever approvals alone
 clear the threshold. A refused or malformed notes read degrades the whole block like an

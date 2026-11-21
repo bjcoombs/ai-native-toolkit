@@ -442,10 +442,10 @@ def test_gitlab_token_user_ai_review_on_every_mr(world: World, tmp_path: Path,
     world.remote(f"https://gitlab.example.com/{PROJECT}.git")
     mrs = [_mr(i) for i in range(1, 6)]
     notes: dict[int, object] = {
-        i: [_note(ALICE, "merged", system=True), _note(TOKEN_USER, f"{SENTINEL} {i}")]
+        i: [_note(ALICE, "merged", system=True), _note(TOKEN_USER, f"## AI Code Review\n{SENTINEL} {i}")]
         for i in range(1, 6)
     }
-    notes[1] = [_note(TOKEN_USER, f"{SENTINEL} 1"), _note(BOB, f"{SENTINEL} human")]
+    notes[1] = [_note(TOKEN_USER, f"## AI Code Review\n{SENTINEL} 1"), _note(BOB, f"{SENTINEL} human")]
     world.merged(mrs, {i: _approvals() for i in range(1, 6)}, notes)
     world.policy([{"rule_type": "regular", "approvals_required": 1, "protected_branches": []}])
     block = scan_review_reality(world.root)
@@ -564,7 +564,7 @@ def test_gitlab_delivery_and_review_reality_share_one_notes_read(world: World) -
     def note(author: dict[str, str], hours: int, body: str = "ok") -> dict[str, object]:
         return {**_note(author, body), "created_at": stamp(opened + timedelta(hours=hours))}
 
-    world.serve(notes_endpoint(1), [note(TOKEN_USER, 1, "findings"), note(BOB, 2)])
+    world.serve(notes_endpoint(1), [note(TOKEN_USER, 1, "## AI Code Review findings"), note(BOB, 2)])
     world.serve(notes_endpoint(2), [note(ALICE, 1), note(BOB, 4)])
     scans = collect(world.root, ["review_reality", "delivery"], window="6mo", platform=True)
     review, delivery = scans["review_reality"], scans["delivery"]
@@ -574,3 +574,14 @@ def test_gitlab_delivery_and_review_reality_share_one_notes_read(world: World) -
     assert delivery["human_commented_share"] == 1.0
     assert delivery["ai_review_share"] == 0.5
     assert len([c for c in world.calls() if "/notes" in c]) == 2  # once per MR, for both blocks
+
+
+def test_gitlab_coverage_bot_token_notes_are_not_review(world: World) -> None:
+    world.remote(f"git@gitlab.com:{PROJECT}.git")
+    world.merged([_mr(i) for i in range(1, 6)], {i: _approvals() for i in range(1, 6)},
+                 {i: [_note(TOKEN_USER, "Coverage: 87.2% (+0.4%)")] for i in range(1, 6)})
+    world.policy([{"rule_type": "regular", "approvals_required": 1, "protected_branches": []}])
+    block = scan_review_reality(world.root)
+    assert block["bot_review_share"] == 0.0
+    assert block["reviewed_share"] == 0.0
+    assert block["hollow_required_review"] is True  # nobody looked
