@@ -95,15 +95,21 @@ ever cut, this note is where the intended boundary is written down.
 
 ## Module reference
 
-Windows portability (#712): every text-mode `subprocess.run` names
+Windows portability (#712, #752): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
 round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
-`tests/test_windows_portability.py` guards both across `scripts/`.
+`tests/test_windows_portability.py` guards all three across every runtime Python tree: each
+`skills/*/scripts/` and the repo-level `scripts/`, leaving out `tests/`, `fixtures/` and dot directories.
 The fleet run files (`repos.jsonl`, `groups.jsonl`, `run.json`, `compare.json`, `labels.jsonl`,
-`doc_freshness.jsonl`, `agent_clusters.json` and the next-steps pages) are written with `newline="\n"`, so Windows and
-Linux produce the same bytes, and `promissory_markers` asks `rg` for `--path-separator /`
+`doc_freshness.jsonl`, `agent_clusters.json`, `achievements.json`, `fleet-data.json`, the
+generated fleet schemas and the next-steps pages) are written with `newline="\n"`, so Windows and
+Linux produce the same bytes; the same test checks that every writer in `lib/fleet*.py` and
+`skills/fleet/scripts/` names `newline`. `promissory_markers` asks `rg` for `--path-separator /`
 so its paths are POSIX on Windows too, and `change_coupling` keys and sorts co-change pairs
-as POSIX strings, so pair order is the same on every OS (#713). The windows-latest job
+as POSIX strings, so pair order is the same on every OS (#713). That is the canonical order
+`structure_drift` already used, and it changed Linux pair order too: `file_a`/`file_b` now
+follow POSIX string order, so `src/foo.py` sorts before `src/foo/bar.py` (`.` < `/`), where
+the earlier `Path` ordering compared path parts and put `src/foo/bar.py` first. The windows-latest job
 (`.github/workflows/windows.yml`) checks both through `tests/test_fleet_golden.py`.
 
 ### Data collection
@@ -894,7 +900,11 @@ for `rg.exe`, last path in sorted order), since a user-scope winget install may 
 `missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
 do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
 stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
-exit codes do not change. Standard library only. Tests: `tests/test_tool_lookup.py`.
+exit codes do not change. `require_packages` is the hard form (#752): `complexity-treemap.py`
+and `doc-graph-svg.py` call it before their first third-party import, so a run without uv
+and without their PEP 723 dependencies prints the `require_hint` install line (no `--user`
+inside a virtualenv) and exits 1 with no traceback. A module already in `sys.modules`
+counts as present. Standard library only. Tests: `tests/test_tool_lookup.py`.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and

@@ -390,7 +390,7 @@ def write_fleet_data(out_dir: Path, data: FleetData) -> Path:
     target = out_dir / FLEET_DATA_FILE
     fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{FLEET_DATA_FILE}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(dumps_fleet_data(data))
         os.chmod(tmp, 0o644)
         os.replace(tmp, target)

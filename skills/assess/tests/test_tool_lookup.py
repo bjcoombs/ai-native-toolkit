@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import shutil
 import subprocess
+import venv
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,8 @@ from lib.tool_lookup import (
     find_rg,
     missing_packages,
     pip_hint,
+    require_hint,
+    require_packages,
     warn_missing_packages,
     winget_rg,
 )
@@ -158,3 +161,55 @@ def test_signals_cli_prints_the_hint_when_a_package_is_missing(
     assert assess_signals.main([str(repo), "--out", str(out), "--scans", "promissory_markers"]) == 0
     assert "python -m pip install --user lizard==1.23.0" in capsys.readouterr().err
     assert out.is_file()  # advisory: the run still completes
+
+
+# --- hard requirement for the SVG renderers (#752) ------------------------------
+
+
+def test_require_hint_names_the_packages_and_drops_user_inside_a_venv() -> None:
+    outside = require_hint(["lizard==1.23.0", "numpy"], in_venv=False)
+    assert outside.startswith("error: lizard, numpy not installed")
+    assert outside.endswith("python -m pip install --user lizard==1.23.0 numpy")
+    assert require_hint(["numpy"], in_venv=True).endswith("python -m pip install numpy")
+
+
+def test_require_packages_exits_1_only_when_something_is_missing() -> None:
+    out = io.StringIO()
+    wanted = [("zz_absent_module", "zz-absent==1.0")]  # never in sys.modules
+    require_packages(wanted, out, find_spec=lambda _: object())
+    assert out.getvalue() == ""
+    with pytest.raises(SystemExit) as exc:
+        require_packages(wanted, out, find_spec=lambda _: None)
+    assert exc.value.code == 1
+    assert "pip install --user zz-absent==1.0" in out.getvalue() or \
+        "pip install zz-absent==1.0" in out.getvalue()
+
+
+def test_require_packages_counts_an_already_imported_module_as_present() -> None:
+    out = io.StringIO()
+    require_packages([("io", "io")], out, find_spec=lambda _: None)
+    assert out.getvalue() == ""
+
+
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+
+
+@pytest.mark.parametrize(("script", "needs"), [
+    ("complexity-treemap.py", "lizard"),
+    ("doc-graph-svg.py", "matplotlib"),
+])
+def test_svg_scripts_print_the_install_hint_in_a_bare_interpreter(
+    tmp_path: Path, script: str, needs: str,
+) -> None:
+    env_dir = tmp_path / "venv"
+    venv.create(env_dir, with_pip=False)
+    python = next(p for p in (env_dir / "bin" / "python", env_dir / "Scripts" / "python.exe")
+                  if p.exists())
+    (tmp_path / "r").mkdir()
+    done = subprocess.run(
+        [str(python), str(SCRIPTS / script), str(tmp_path / "r"), "-o", str(tmp_path / "x.svg")],
+        capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+    )
+    assert done.returncode == 1
+    assert "pip install" in done.stderr and needs in done.stderr
+    assert "Traceback" not in done.stderr

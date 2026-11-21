@@ -1,4 +1,8 @@
-"""Windows correctness on any host (issue #712): explicit UTF-8, POSIX paths, read-only rmtree.
+"""Windows correctness on any host (issues #712, #752): explicit UTF-8, POSIX paths, read-only rmtree.
+
+The static guards scan every runtime Python tree in the repository (``skills/*/scripts``
+and ``scripts/``), leaving out tests, fixtures and virtualenvs. Run with
+``cd skills/assess && uv run --locked pytest tests/test_windows_portability.py``.
 
 Windows behaviour is emulated: an ASCII locale with UTF-8 mode off stands in for a
 non-UTF-8 code page, and an ``os.unlink`` shim that refuses read-only files stands
@@ -22,16 +26,40 @@ from test_fleet import make_checkout
 from test_fleet_run_stamp import _pushed_repo, _row, _target
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+REPO = SCRIPTS.parents[2]
+# Runtime Python trees: every skill's scripts/ and the repo-level scripts/.
+RUNTIME_TREES = [*sorted(REPO.glob("skills/*/scripts")), REPO / "scripts"]
+# Directory names that hold tests, fixtures or tooling rather than runtime code.
+SKIPPED_DIRS = {"tests", "test", "fixtures", "__pycache__", "node_modules"}
 EXEMPT: set[str] = set()
+
+
+def _runtime_files() -> list[Path]:
+    out = []
+    for tree in RUNTIME_TREES:
+        for path in sorted(tree.rglob("*.py")):
+            parts = path.relative_to(tree).parts[:-1]
+            if any(p in SKIPPED_DIRS or p.startswith(".") for p in parts):
+                continue
+            out.append(path)
+    return out
 
 
 def _sources() -> list[tuple[str, ast.Module]]:
     out = []
-    for path in sorted(SCRIPTS.rglob("*.py")):
-        rel = path.relative_to(SCRIPTS).as_posix()
+    for path in _runtime_files():
+        rel = path.relative_to(REPO).as_posix()
         if rel not in EXEMPT:
             out.append((rel, ast.parse(path.read_text(encoding="utf-8"))))
     return out
+
+
+def test_the_scan_covers_every_runtime_python_tree():
+    scanned = {rel for rel, _ in _sources()}
+    for expected in ("skills/assess/scripts/assess_core.py", "skills/fleet/scripts/fleet.py",
+                     "scripts/floor_check.py", "scripts/contract/freeze.py"):
+        assert expected in scanned
+    assert not any("/tests/" in rel or "/fixtures/" in rel for rel in scanned)
 
 
 def _is_relative_to_call(node: ast.AST) -> bool:
@@ -53,6 +81,87 @@ def test_every_text_mode_subprocess_call_names_its_encoding():
             if isinstance(text, ast.Constant) and text.value is True and "encoding" not in kwargs:
                 missing.append(f"{rel}:{node.lineno}")
     assert missing == []
+
+
+def _is_text_write(call: ast.Call) -> bool:
+    """``x.write_text(...)``, or ``open``/``os.fdopen``/``Path.open`` with a constant ``"w"``/``"a"`` mode.
+
+    ``Path.open`` takes the mode first; ``open``, ``io.open`` and ``os.fdopen`` take it second.
+    """
+    func = call.func
+    name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
+    if name == "write_text":
+        return True
+    if name not in ("open", "fdopen"):
+        return False
+    module_open = not isinstance(func, ast.Attribute) or name == "fdopen" or (
+        isinstance(func.value, ast.Name) and func.value.id in ("io", "codecs", "builtins"))
+    index = 1 if module_open else 0
+    mode = call.args[index] if len(call.args) > index else next(
+        (k.value for k in call.keywords if k.arg == "mode"), None)
+    return (isinstance(mode, ast.Constant) and isinstance(mode.value, str)
+            and mode.value[:1] in "wa" and "b" not in mode.value)
+
+
+def test_every_fleet_writer_pins_lf_line_endings():
+    """Fleet run files are compared byte for byte across hosts (#713, #752)."""
+    fleet_files = {rel for rel, _ in _sources()
+                   if rel.startswith(("skills/assess/scripts/lib/fleet", "skills/fleet/scripts/"))}
+    assert "skills/assess/scripts/lib/fleet_achievements.py" in fleet_files
+    missing = []
+    for rel, tree in _sources():
+        if rel not in fleet_files:
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and _is_text_write(node)
+                    and not any(k.arg == "newline" for k in node.keywords)):
+                missing.append(f"{rel}:{node.lineno}")
+    assert missing == []
+
+
+def _string_args(call: ast.Call) -> list[str]:
+    """String constants in the call's first positional argument (a literal argv list)."""
+    if not call.args or not isinstance(call.args[0], (ast.List, ast.Tuple)):
+        return []
+    return [e.value for e in call.args[0].elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+
+
+def test_every_nul_separated_ls_files_call_decodes_with_surrogateescape():
+    """``git ls-files -z`` names are bytes; a non-UTF-8 name must not abort the decode."""
+    missing = []
+    for rel, tree in _sources():
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            argv = _string_args(node)
+            if "ls-files" not in argv or "-z" not in argv:
+                continue
+            kwargs = {k.arg: k.value for k in node.keywords}
+            text_mode = any(k in kwargs for k in ("text", "encoding", "universal_newlines"))
+            errors = kwargs.get("errors")
+            if text_mode and not (isinstance(errors, ast.Constant) and errors.value == "surrogateescape"):
+                missing.append(f"{rel}:{node.lineno}")
+    assert missing == []
+
+
+def _first_call(source: str) -> ast.Call:
+    return next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+
+
+def test_the_ls_files_guard_reads_a_literal_argv():
+    call = _first_call("subprocess.run(['git', 'ls-files', '-z'], encoding='utf-8')")
+    assert "ls-files" in _string_args(call) and "-z" in _string_args(call)
+
+
+def test_the_lf_guard_sees_text_writes_and_skips_binary_and_reads():
+    assert _is_text_write(_first_call("p.write_text(s, encoding='utf-8')"))
+    assert _is_text_write(_first_call("os.fdopen(fd, 'w', encoding='utf-8')"))
+    assert not _is_text_write(_first_call("os.fdopen(fd, 'wb')"))
+    assert not _is_text_write(_first_call("open(p, encoding='utf-8')"))
+    assert _is_text_write(_first_call("p.open('w', encoding='utf-8')"))
+    assert _is_text_write(_first_call("io.open(p, 'a', encoding='utf-8')"))
+    assert not _is_text_write(_first_call("p.open('rb')"))
+    assert not _is_text_write(_first_call("p.open()"))
 
 
 def _relative_path_names(scope: ast.AST) -> set[str]:
