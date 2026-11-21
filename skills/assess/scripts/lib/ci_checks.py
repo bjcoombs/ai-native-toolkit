@@ -32,12 +32,22 @@ evidence is static, read from the files at HEAD:
 - Triggers are not read: a check in a workflow that runs only on push counts
   the same as one on pull requests.
 
-``test_or_lint_runs`` is true when any CI line runs a check. With none it is
-false, except when a CI file pulls jobs from a file this checkout does not
-hold (GitLab ``include:`` of any kind, a GitHub job-level ``uses:`` calling
-another repository's reusable workflow; ``shared_tooling.pulls_jobs_from_elsewhere``):
-the check may live there, so the signal is null (unknown), never false.
-``basis`` names which case applied.
+GitLab includes are resolved offline where the included file is on disk
+(``lib/ci_includes.py``, #766): ``local:`` files of the checkout, and
+``project:`` / ``component:`` files of a clone in the ghsync root passed as
+``ghsync_root`` (``assess_signals --ghsync-root``; ``fleet.py`` passes its
+ROOT). Each resolved file's lines are classified the same way and counted in
+``included_check_commands``. ``includes`` lists one record per include item
+(kind, id, status, ref_basis, depth; never a file name or text), with the
+``resolved_includes`` / ``unresolved_includes`` counts.
+
+``test_or_lint_runs`` is true when any CI line, own or included, runs a check.
+With none it is false, except when a CI file pulls jobs from a file this run
+could not read (a GitLab include that did not resolve, a GitHub job-level
+``uses:`` calling another repository's reusable workflow;
+``shared_tooling.pulls_jobs_from_elsewhere``): the check may live there, so the
+signal is null (unknown), never false. A GitLab file whose every include
+resolved and holds no check reads false. ``basis`` names which case applied.
 """
 from __future__ import annotations
 
@@ -45,6 +55,7 @@ import re
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
+from lib.ci_includes import IncludeRecord, resolve_includes
 from lib.check_command import LINT_PROGRAMS, is_check_command, is_lint_command
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
@@ -61,6 +72,10 @@ class CiChecksBlock(TypedDict):
     ci_files: int
     check_commands: int
     included_files: int
+    included_check_commands: int  # check lines in included files read offline (#766)
+    resolved_includes: int
+    unresolved_includes: int
+    includes: list[IncludeRecord]
     test_or_lint_runs: bool | None
     basis: CiChecksBasis
 
@@ -94,25 +109,36 @@ def check_commands(text: str) -> int:
     return sum(1 for line in text.splitlines() if _line_runs_check(line))
 
 
-def scan_ci_checks(repo_root: Path) -> CiChecksBlock:
+def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``."""
     root = repo_root.resolve()
     files = ci_config_files(repo_files(root))
     checks = 0
     included = 0
+    elsewhere = 0  # files whose pulled jobs this run cannot read
+    resolution = resolve_includes(root, ghsync_root) if any(f in CI_CONFIG_FILES for f in files) else None
     for rel in files:
         text = read_config(root, rel)
         checks += check_commands(text)
-        included += pulls_jobs_from_elsewhere(text, gitlab=rel in CI_CONFIG_FILES)
+        gitlab = rel in CI_CONFIG_FILES
+        pulls = pulls_jobs_from_elsewhere(text, gitlab=gitlab)
+        included += pulls
+        if pulls and not (gitlab and resolution is not None and resolution.unresolved == 0):
+            elsewhere += 1
+    included_checks = sum(check_commands(f.text) for f in resolution.files) if resolution else 0
+    records = list(resolution.includes) if resolution else []
     runs: bool | None
     basis: CiChecksBasis
-    if checks:
+    if checks or included_checks:
         runs, basis = True, "check_command"
-    elif included:
+    elif elsewhere:
         runs, basis = None, "included_jobs"
     elif files:
         runs, basis = False, "no_check_command"
     else:
         runs, basis = False, "no_ci"
     return {"available": True, "ci_files": len(files), "check_commands": checks,
-            "included_files": included, "test_or_lint_runs": runs, "basis": basis}
+            "included_files": included, "included_check_commands": included_checks,
+            "resolved_includes": sum(r["status"] == "resolved" for r in records),
+            "unresolved_includes": sum(r["status"] != "resolved" for r in records),
+            "includes": records, "test_or_lint_runs": runs, "basis": basis}

@@ -116,6 +116,7 @@ class ScanOptions:
     fleet_config: Path | None = None  # absolute: scans run with the scratch directory as cwd
     platform: bool = False  # set: assess_signals --platform (the platform pass, lib/fleet_platform.py)
     cache_dir: Path | None = None  # set: the scan's gh/glab response cache (lib/platform_cli.py)
+    ghsync_root: Path | None = None  # set: assess_signals --ghsync-root (GitLab includes, #766)
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
@@ -296,6 +297,8 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
         command += ["--scans", scans]
     if options.fleet_config is not None:
         command += ["--fleet-config", str(options.fleet_config)]
+    if options.ghsync_root is not None:
+        command += ["--ghsync-root", str(options.ghsync_root)]
     if options.platform:
         command.append("--platform")
     return command

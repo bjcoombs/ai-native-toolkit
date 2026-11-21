@@ -392,3 +392,12 @@ def test_similar_agent_builders_in_two_groups_are_one_unnamed_cluster(tmp_path, 
                            "--name-agent-clusters"]) == 0
     named = json.loads((tmp_path / "out" / "agent_clusters.json").read_text(encoding="utf-8"))
     assert named["clusters"][0]["repo_ids"] == ["team-alpha/ticket-agent", "team-beta/mr-agent"]
+
+
+def test_include_root_is_root_unless_delete_after(tmp_path: Path) -> None:
+    """GitLab includes (#766) resolve against ROOT; --delete-after could remove a template
+    clone before a dependant is scanned, so then no root is passed."""
+    import argparse
+    assert fleet_cli.include_root(argparse.Namespace(root=str(tmp_path), delete_after=False)) == tmp_path.resolve()
+    assert fleet_cli.include_root(argparse.Namespace(root=str(tmp_path), delete_after=True)) is None
+    assert fleet_cli.include_root(argparse.Namespace(root=None, delete_after=False)) is None

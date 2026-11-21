@@ -381,9 +381,11 @@ _MEASURE_HINTS = {
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
-                 "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
-                 "`include:` or component, a reusable workflow from another repository): the "
-                 "check may live in the included file, which the scan does not read.",
+                 "but a CI file pulls jobs from a file the run could not read (`basis: "
+                 "included_jobs`: a GitLab `include:` whose template is not cloned in the "
+                 "fleet root, or a `template:` or `remote:` include, a reusable workflow from "
+                 "another repository): the check may live there. Cloning the template into "
+                 "the same ghsync root lets the fleet read it.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
 }

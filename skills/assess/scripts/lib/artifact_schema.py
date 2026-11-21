@@ -170,7 +170,11 @@ constant each.
 # reviewer, path, line, tracked) and the derived Layer 7 level 1 signal
 # (present, ai_review_in_ci, reviewed_changes). Additive: no existing key moves,
 # and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.26.0"
+# 1.27.0: run-context.json ci_checks gains included_check_commands,
+# resolved_includes, unresolved_includes and includes[] (kind, id, status,
+# ref_basis, depth: GitLab includes resolved offline, issue #766), and each
+# review_automation match gains depth. Additive: no existing key moves.
+ARTIFACT_SCHEMA_VERSION = "1.27.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -254,4 +258,10 @@ ARTIFACT_SCHEMA_VERSION = "1.26.0"
 # 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
 #     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
 #     instead of null and the L7 "hollow required review" row can now fire there.
-ASSESS_METHOD_VERSION = 20
+# 21: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
+#     reads a check in an included local file or a template cloned in the fleet root
+#     (true), or false when every include resolved without one, where it was null;
+#     ``review_automation`` credits a review component inside a resolved template;
+#     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
+#     an issue_comment-only review action is no longer credited.
+ASSESS_METHOD_VERSION = 21
