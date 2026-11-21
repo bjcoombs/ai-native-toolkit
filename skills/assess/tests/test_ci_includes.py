@@ -348,3 +348,15 @@ def test_an_item_stopped_by_the_file_limit_says_so(tmp_path: Path, monkeypatch: 
 def test_a_key_after_a_file_list_ends_it(text: str) -> None:
     items, _, dropped = include_items(text)
     assert (items[0].files, dropped) == (("/x.yml",), 0)
+
+
+@pytest.mark.parametrize("file", ["/ci", "/link.yml"])
+def test_a_directory_or_symlink_in_a_template_is_not_read(tmp_path: Path, file: str) -> None:
+    ci = f"include:\n  - project: grp/ci-templates\n    file: {file}\n"
+    root, app = _root_with_template(tmp_path, {"ci/a.yml": TEST_TPL}, ci=ci)
+    tpl = _clone(root, "grp/ci-templates")
+    (tpl / "link.yml").symlink_to("ci/a.yml")
+    _commit(tpl, {})
+    block = scan_ci_checks(app, root)
+    assert [r["status"] for r in block["includes"]] == ["file_missing"]
+    assert block["test_or_lint_runs"] is None

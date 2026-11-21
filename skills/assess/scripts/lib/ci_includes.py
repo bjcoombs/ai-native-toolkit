@@ -121,6 +121,7 @@ EMPTY = Resolution((), ())
 _KEY = re.compile(r"""^["']?(project|component|local|template|remote|file|ref)["']?\s*:(.*)$""")
 _SAFE_REF = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./+~-]*$")
 _GLOB = re.compile(r"[*?\[]")
+_REGULAR_MODES = frozenset({"100644", "100755"})
 
 
 # --- parsing -----------------------------------------------------------------
@@ -342,10 +343,17 @@ class _Source:
                 return path.read_text(encoding="utf-8", errors="replace")
             except (OSError, ValueError):
                 return None
-        size = _git(self.checkout, "cat-file", "-s", f"{self.commit}:{rel}")
-        if size is None or not size.strip().isdigit() or int(size) > MAX_CONFIG_BYTES:
+        # A regular file only, as the work tree reads: a directory (a tree listing) or a
+        # committed symlink (its target path) is no CI file.
+        entry = _git(self.checkout, "--literal-pathspecs", "ls-tree", "-z", "--long",
+                     self.commit, "--", rel)
+        meta, _, name = (entry or "").rstrip("\0").partition("\t")
+        fields = meta.split()
+        if (name != rel or len(fields) != 4 or fields[0] not in _REGULAR_MODES
+                or fields[1] != "blob" or not fields[3].isdigit()
+                or int(fields[3]) > MAX_CONFIG_BYTES):
             return None
-        return _git(self.checkout, "show", f"{self.commit}:{rel}")
+        return _git(self.checkout, "cat-file", "blob", fields[2])
 
 
 def _clone(root: Path, project: str) -> Path | None:
