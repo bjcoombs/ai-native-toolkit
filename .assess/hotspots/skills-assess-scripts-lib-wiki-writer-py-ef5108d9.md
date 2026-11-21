@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
 # Hotspot: `skills/assess/scripts/lib/wiki_writer.py`
 
 _First flagged: 2026-10-07. Last seen: 2026-11-20. Status: persistent._
@@ -26,6 +26,7 @@ _First flagged: 2026-10-07. Last seen: 2026-11-20. Status: persistent._
 | 2026-10-08 | 32cb78d4 | 534 | 170 | 17 | persistent |
 | 2026-10-11 | 0d249381 | 534 | 170 | 17 | persistent |
 | 2026-11-20 | 2e2af36e | 534 | 170 | 17 | persistent |
+| 2026-11-20 | d1e8fc2e | 534 | 170 | 17 | persistent |
 
 ## Briefing for editing this file
 

@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
 # Hotspot: `skills/assess/tests/test_complexity_treemap.py`
 
 _First flagged: 2026-09-19. Last seen: 2026-11-20. Status: persistent._
@@ -10,7 +10,7 @@ _First flagged: 2026-09-19. Last seen: 2026-11-20. Status: persistent._
 | LOC | 1227 |
 | Cyclomatic complexity (file aggregate) | 189 |
 | Worst function | `test_write_stats_tie_break_by_path_takes_first_ten_in_path_order` (6) |
-| Commits in churn window | 36 |
+| Commits in churn window | 40 |
 | Has test file | yes |
 
 ## History across runs
@@ -27,14 +27,16 @@ _First flagged: 2026-09-19. Last seen: 2026-11-20. Status: persistent._
 | 2026-10-08 | 32cb78d4 | 1227 | 189 | 25 | persistent |
 | 2026-10-11 | 0d249381 | 1227 | 189 | 26 | persistent |
 | 2026-11-20 | 2e2af36e | 1227 | 189 | 36 | persistent |
+| 2026-11-20 | d1e8fc2e | 1227 | 189 | 40 | persistent |
 
 ## Briefing for editing this file
 
 Use this briefing when about to modify `skills/assess/tests/test_complexity_treemap.py`:
 
-Hotspot (persistent). 1227 LOC, aggregate cyclomatic complexity 189 (worst function `test_write_stats_tie_break_by_path_takes_first_ten_in_path_order` 6), 36 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+1798 lines net over 36 commits to this file in 6 months, none a net reduction).
+Hotspot (persistent). 1227 LOC, aggregate cyclomatic complexity 189 (worst function `test_write_stats_tie_break_by_path_takes_first_ten_in_path_order` 6), 40 commits in churn window. (Briefing refined by LLM via assess_finalize - see Suggested actions below.) Growth profile: monotonic (+1798 lines net over 40 commits to this file in 6 months, none a net reduction).
 
 ## Suggested actions
 
-- Split skills/assess/tests/test_complexity_treemap.py (accretion_ratchet; 1,798 lines at its ratchet ceiling) by concern, moving tests unchanged
+- Split by concern into sibling test modules each under 800 lines (move-only, no assertion changes)
+- Remove or lower its ceiling in .file-size-ratchet.toml once split
 

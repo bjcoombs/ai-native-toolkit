@@ -185,3 +185,16 @@
 
 ---
 <!-- chain:aa22539638f12da6 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
+## 2026-11-20 (v2.0.0, run d1e8fc2e)
+
+- **Files scored:** 348
+- **AI Readiness:** 7.5 / 8 (AI-Native)
+- **Instructions grade:** A
+- **Hotspot transitions:** 1 graduated, 2 regressed, 0 restructured, 1 new, 7 persistent
+- **Top action:** Request independent review of scripts/floor_anchor.py tests against FLOOR.md / docs/floor-anchor-proof.md (same-commit tests)
+
+[Full report](./assess-report.md)
+
+---
+<!-- chain:0629f7131ea63e54 -->

@@ -1,4 +1,4 @@
-<!-- assess:run_id=20261120130057-2e2af36e artifact_schema_version=1.14.0 -->
+<!-- assess:run_id=20261120202111-d1e8fc2e artifact_schema_version=1.18.0 -->
 # Assess Wiki Index
 
 _Last updated: 2026-11-20_
@@ -8,18 +8,18 @@ Catalog of every hotspot ever flagged by `/assess` in this repo. Status reflects
 | File | First Flagged | Last Seen | Status | Latest CCN | Latest LOC |
 |------|---------------|-----------|--------|------------|------------|
 | `skills/assess/scripts/complexity-treemap.py` | 2026-05-31 | 2026-11-20 | persistent | 201.0 | 818 |
-| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-11-20 | regressed | 248.0 | 860 |
+| `skills/assess/scripts/lib/keyhole_signals.py` | 2026-06-01 | 2026-11-20 | persistent | 248.0 | 860 |
 | `skills/assess/tests/test_complexity_treemap.py` | 2026-09-19 | 2026-11-20 | persistent | 189.0 | 1227 |
 | `skills/assess/scripts/lib/doc_graph.py` | 2026-05-31 | 2026-11-20 | persistent | 209.0 | 705 |
-| `skills/assess/scripts/lib/git_churn.py` | 2026-11-20 | 2026-11-20 | new | 138.0 | 446 |
+| `skills/assess/scripts/lib/git_churn.py` | 2026-11-20 | 2026-11-20 | persistent | 135.0 | 439 |
+| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-11-20 | regressed | 69.0 | 542 |
 | `skills/assess/scripts/lib/wiki_writer.py` | 2026-10-07 | 2026-11-20 | persistent | 170.0 | 534 |
-| `skills/assess/tests/test_assess_core.py` | 2026-05-31 | 2026-11-20 | persistent | 62.0 | 518 |
-| `skills/assess/scripts/lib/scan_registry.py` | 2026-11-20 | 2026-11-20 | new | 53.0 | 330 |
-| `skills/assess/scripts/assess_report.py` | 2026-11-20 | 2026-11-20 | new | 118.0 | 393 |
-| `scripts/floor_check.py` | 2026-11-20 | 2026-11-20 | new | 199.0 | 629 |
+| `skills/assess/scripts/lib/scan_registry.py` | 2026-11-20 | 2026-11-20 | persistent | 53.0 | 330 |
+| `skills/assess/scripts/assess_report.py` | 2026-11-20 | 2026-11-20 | regressed | 128.0 | 409 |
+| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-11-20 | new | 80.0 | 445 |
+| `scripts/floor_check.py` | 2026-11-20 | 2026-11-20 | graduated | 199 | 629 |
 | `skills/assess/scripts/assess_core.py` | 2026-05-31 | 2026-11-20 | graduated | - | - |
 | `skills/assess/scripts/assess_finalize.py` | 2026-10-08 | 2026-11-20 | graduated | - | - |
-| `skills/assess/scripts/lib/doc_staleness.py` | 2026-05-31 | 2026-11-20 | graduated | - | - |
 | `scripts/floor_anchor.py` | 2026-09-19 | 2026-11-20 | graduated | 188 | 646 |
 | `skills/assess/tests/test_keyhole_signals.py` | 2026-06-19 | 2026-10-08 | retired - file deleted | - | - |
 | `skills/assess/scripts/doc-graph-svg.py` | 2026-05-31 | 2026-10-07 | graduated | - | - |
