@@ -115,6 +115,7 @@ class RowMove(TypedDict):
     cause: str | None  # None when not moved
     scanner: NotRequired[list[ScannerCause]]  # cause scanner_changed: the blocks and changed modules (#774)
     absent_signals: NotRequired[list[str]]  # cause set: signals one run's scans lack (#774)
+    set_moved: NotRequired[bool]  # a #774 cause replaced set_and_level: the measured set moved too
 
 
 class SetChanges(TypedDict):
@@ -468,6 +469,8 @@ def _attribute(groups: list[GroupChange], earlier: FleetRun, later: FleetRun,
                 row["scanner"] = result["scanner"]
             if "absent_signals" in result:
                 row["absent_signals"] = result["absent_signals"]
+            if result.get("set_moved"):
+                row["set_moved"] = True
 
 
 def _row_blocks(row_id: str, earlier: FleetRun, later: FleetRun) -> frozenset[str] | None:
@@ -537,13 +540,14 @@ def _scanner_notes(comparison: Comparison) -> list[str]:
 
 def _why(row: RowMove) -> str:
     """What a #774 cause rests on: the changed producers, or the signals one run lacks."""
+    also = "; the measured set of repositories moved too" if row.get("set_moved") else ""
     if "scanner" in row:
         named = "; ".join(f"{c['block']} <- {', '.join(c['modules'])}" for c in row["scanner"])
-        return f": the scanner changed ({named}); not read as a repository move"
+        return f": the scanner changed ({named}); not read as a repository move{also}"
     if "absent_signals" in row:
         return (f": {', '.join(row['absent_signals'])} absent from one run's scans; "
-                "measured-set movement, not a level move")
-    return ""
+                f"measured-set movement, not a level move{also}")
+    return f": not read as a repository move{also}" if also else ""
 
 
 def _show(state: LevelState | None) -> str:

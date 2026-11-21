@@ -61,6 +61,7 @@ def test_missing_toolkit_commit_degrades_to_unknown_scope():
     later = _run(LATER, toolkit_commit="bbb")
     diff = scanner_diff(earlier.stamp, later.stamp, diff=_no_git)
     assert diff["status"] == "unavailable"
+    assert diff["reason"] == "the earlier run recorded no toolkit_commit and plugin_version changed '1.1.0'->'1.2.0'"
 
     comparison = compare(earlier, later, diff, PRODUCERS)
     assert _row_move(comparison, "grpa", "teamdocs")["cause"] == sd.CAUSE_UNKNOWN_SCOPE
@@ -260,3 +261,32 @@ def test_a_toolkit_commit_that_is_not_a_hash_never_reaches_git(tmp_path):
     # git_changed_files itself ends option parsing before the commits
     assert sd.git_changed_files(sd.TOOLKIT_ROOT, f"--output={target}", "HEAD") is None
     assert not target.exists()
+
+
+def test_a_set_and_level_row_keeps_its_set_movement_under_a_new_cause():
+    for diff, cause in ((_changed(NESTED), sd.CAUSE_SCANNER_CHANGED),
+                        ({"status": "unavailable", "changed": [], "reason": "r"}, sd.CAUSE_UNKNOWN_SCOPE)):
+        result = sd.attribute("set_and_level", absent=[], diff=diff,
+                              blocks_changed={"nested_instructions": [NESTED]}, row_blocks=None,
+                              moved_blocks={"nested_instructions"})
+        assert result["cause"] == cause and result["set_moved"] is True
+    kept = sd.attribute("level", absent=[], diff=_changed(NESTED), blocks_changed={"nested_instructions": [NESTED]},
+                        row_blocks=None, moved_blocks={"nested_instructions"})
+    assert "set_moved" not in kept
+
+    # end to end: a repository joins the group while svc1's scanner-produced signal moves
+    later = [*LATER, _row("grpa/svc2", _scans(0))]
+    comparison = compare(_run(EARLIER, toolkit_commit="aaa"), _run(later, toolkit_commit="bbb"),
+                         _changed(NESTED), PRODUCERS)
+    row = _row_move(comparison, "grpa", "teamdocs")
+    assert row["cause"] == sd.CAUSE_SCANNER_CHANGED and row["set_moved"] is True
+    (line,) = [line for line in summary_lines(comparison) if "teamdocs" in line]
+    assert "the measured set of repositories moved too" in line
+
+
+def test_both_null_commits_name_both_plugin_versions():
+    diff = scanner_diff(_stamp([], toolkit_commit=None, plugin_version="1.0.0"),
+                        _stamp([], toolkit_commit=None, plugin_version="1.1.0"), diff=_no_git)
+    assert diff["reason"] is not None
+    assert diff["reason"].startswith("neither run recorded a toolkit_commit")
+    assert "'1.0.0'->'1.1.0'" in diff["reason"]

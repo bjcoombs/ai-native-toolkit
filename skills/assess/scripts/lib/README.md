@@ -1563,7 +1563,8 @@ producer modules:
    reads (`row_signals`, else any) changed producers and a repository in the group changed a
    signal in it.
 
-Org rows keep their cause. Limits: the map comes from the running code, a change outside
+A `set_and_level` row given one of these causes also carries `set_moved: true`, so the
+measured-set movement stays reported. Org rows keep their cause. Limits: the map comes from the running code, a change outside
 `lib/` is not seen, and the import closure over-attributes rather than misses.
 Tests: `tests/test_fleet_scanner_diff.py`.
 

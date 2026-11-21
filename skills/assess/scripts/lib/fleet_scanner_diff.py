@@ -51,7 +51,9 @@ moved with cause ``level`` or ``set_and_level``:
    ``signal`` of its ``fleet-data.json`` cells in either run; without that file,
    any block) and a repository in the group changed a signal in it.
 
-Org rows read the group's settings, not scans, and keep their cause.
+A ``set_and_level`` row given one of these causes also carries ``set_moved: true``,
+so the measured-set movement stays reported. Org rows read the group's settings,
+not scans, and keep their cause.
 """
 from __future__ import annotations
 
@@ -93,6 +95,7 @@ class Attribution(TypedDict):
     cause: str
     scanner: NotRequired[list[ScannerCause]]
     absent_signals: NotRequired[list[str]]
+    set_moved: NotRequired[bool]  # the incoming cause was set_and_level: the measured set moved too
 
 
 GitDiff = Callable[[Path, str, str], list[str] | None]
@@ -124,9 +127,10 @@ def scanner_diff(earlier: FleetStamp, later: FleetStamp, root: Path = TOOLKIT_RO
     if then is None or now is None:
         if earlier.get("plugin_version") == later.get("plugin_version"):
             return {"status": "same", "changed": [], "reason": None}
-        side = "earlier" if then is None else "later"
+        side = ("neither run recorded a toolkit_commit" if then is None and now is None
+                else f"the {'earlier' if then is None else 'later'} run recorded no toolkit_commit")
         return {"status": "unavailable", "changed": [],
-                "reason": f"the {side} run recorded no toolkit_commit and plugin_version changed "
+                "reason": f"{side} and plugin_version changed "
                           f"{earlier.get('plugin_version')!r}->{later.get('plugin_version')!r}"}
     if not (_COMMIT.fullmatch(then) and _COMMIT.fullmatch(now)):
         return {"status": "unavailable", "changed": [],
@@ -340,7 +344,20 @@ def _degraded(scans: Any, path: str) -> bool:
 def attribute(cause: str, *, absent: Sequence[str], diff: ScannerDiff | None,
               blocks_changed: Mapping[str, list[str]], row_blocks: frozenset[str] | None,
               moved_blocks: set[str]) -> Attribution:
-    """A moved team row's cause, present in both runs, from its compare cause (module doc order)."""
+    """A moved team row's cause, present in both runs, from its compare cause (module doc order).
+
+    When the incoming cause is ``set_and_level`` and this replaces it, ``set_moved`` is true so
+    the measured-set movement stays reported."""
+    result = _attribute(cause, absent=absent, diff=diff, blocks_changed=blocks_changed,
+                        row_blocks=row_blocks, moved_blocks=moved_blocks)
+    if cause == "set_and_level" and result["cause"] != cause:
+        result["set_moved"] = True
+    return result
+
+
+def _attribute(cause: str, *, absent: Sequence[str], diff: ScannerDiff | None,
+               blocks_changed: Mapping[str, list[str]], row_blocks: frozenset[str] | None,
+               moved_blocks: set[str]) -> Attribution:
     if cause not in ("level", "set_and_level"):
         return {"cause": cause}
     if absent:

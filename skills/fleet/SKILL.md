@@ -776,6 +776,9 @@ Three more causes keep a toolkit change from reading as the repository's own mov
   is the usual case there: expect every moved team row to carry it. Run from a git
   checkout of the toolkit holding both commits to get `scanner_changed` instead.
 
+A row whose cause was `set_and_level` keeps `set_moved: true` beside its new cause, so the
+measured-set movement stays reported.
+
 A scanner change that alters a signal's meaning ships under a new signal name or a
 `signals_schema_version` bump, so an earlier run reads the new signal as absent; these causes
 are the backstop for a change that kept the name.
