@@ -25,7 +25,9 @@ Reads the ``repos.jsonl`` rows ``lib/fleet.py`` builds and writes one
   ``/assess`` run measures, each one unavailable in every repository missing it
   because its block carries a ``lib.signals.FULL_RUN_ONLY_REASONS`` code
   (``not_registered``, ``network``). A failed scan or a mistyped value is a
-  plain gap, so such a signal is not listed. Only on an ``unknown`` row (a known
+  plain gap, so such a signal is not listed, and so is one in a
+  ``lib.signals.PLATFORM_SCANS`` block, which ``fleet --platform`` measures
+  (``platform_signals``). Only on an ``unknown`` row (a known
   row's missing signals do not decide its level); absent when empty.
 
 Maturity model inputs:
@@ -56,7 +58,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
@@ -67,7 +69,7 @@ from lib.counts_only import reason_code
 from lib.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids
-from lib.signals import FULL_RUN_ONLY_REASONS
+from lib.signals import FULL_RUN_ONLY_REASONS, NETWORK_REASON, PLATFORM_SCANS
 
 # Not bumped for the 2.0.0 maturity-model key renames (#670): readers reject any other
 # version, so lib/fleet_legacy.py maps the old keys and earlier history lines still load.
@@ -201,22 +203,48 @@ def repo_signals(row: FleetRow) -> JsonDict:
     return dict(row["scans"] or {})
 
 
-def full_run_only(data: Mapping[str, Any], signal: str) -> bool:
-    """The signal's block is unavailable for a reason only a full ``/assess`` run lifts."""
+def _unavailable_code(data: Mapping[str, Any], signal: str) -> str | None:
+    """The reason code of the signal's block when it is unavailable; None otherwise."""
     block = data.get(signal.split(".", 1)[0])
-    return (isinstance(block, dict) and block.get("available") is False
-            and reason_code(block.get("reason")) in FULL_RUN_ONLY_REASONS)
+    if not isinstance(block, dict) or block.get("available") is not False:
+        return None
+    return reason_code(block.get("reason"))
 
 
-def full_run_only_signals(evaluations: Mapping[str, Evaluation],
-                          signals: Mapping[str, Mapping[str, Any]]) -> list[str]:
-    """The missing signals that are full-run-only in every repository missing them."""
+def full_run_only(data: Mapping[str, Any], signal: str) -> bool:
+    """The signal's block is unavailable for a reason only a full ``/assess`` run lifts.
+
+    A ``PLATFORM_SCANS`` block is never full-run-only: ``fleet --platform`` measures it."""
+    return (signal.split(".", 1)[0] not in PLATFORM_SCANS
+            and _unavailable_code(data, signal) in FULL_RUN_ONLY_REASONS)
+
+
+def platform_only(data: Mapping[str, Any], signal: str) -> bool:
+    """The signal's block is a ``PLATFORM_SCANS`` one left unmeasured for want of ``--platform``."""
+    return (signal.split(".", 1)[0] in PLATFORM_SCANS
+            and _unavailable_code(data, signal) == reason_code(NETWORK_REASON))
+
+
+def _missing_everywhere(evaluations: Mapping[str, Evaluation], signals: Mapping[str, Mapping[str, Any]],
+                        test: Callable[[Mapping[str, Any], str], bool]) -> list[str]:
     missing: dict[str, list[str]] = {}
     for name, evaluation in evaluations.items():
         for signal in evaluation["missing_signals"]:
             missing.setdefault(signal, []).append(name)
     return sorted(signal for signal, names in missing.items()
-                  if all(full_run_only(signals.get(name, {}), signal) for name in names))
+                  if all(test(signals.get(name, {}), signal) for name in names))
+
+
+def full_run_only_signals(evaluations: Mapping[str, Evaluation],
+                          signals: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """The missing signals that are full-run-only in every repository missing them."""
+    return _missing_everywhere(evaluations, signals, full_run_only)
+
+
+def platform_signals(evaluations: Mapping[str, Evaluation],
+                     signals: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """The missing signals ``fleet --platform`` would measure, in every repository missing them."""
+    return _missing_everywhere(evaluations, signals, platform_only)
 
 
 def _row_level(result: RowResult, top: int, signals: Mapping[str, JsonDict]) -> RowLevel:

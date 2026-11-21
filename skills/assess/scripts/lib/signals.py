@@ -123,6 +123,8 @@ NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headl
 # ``lib.counts_only.reason_code`` keeps of each reason the runner writes for a block it
 # cannot produce, so a counts-only row and a --full row read alike. Derived, never
 # listed, so a reason added here (or a scan moving out of UNREGISTERED_SCANS) carries.
+# A PLATFORM_SCANS block is the exception: ``fleet --platform`` measures it, so its
+# ``network`` gap is a scan option away, not a full run (``lib.fleet_groups``).
 FULL_RUN_ONLY_REASONS: frozenset[str] = frozenset(
     reason_code(reason) for reason in (UNREGISTERED_REASON, NETWORK_REASON))
 

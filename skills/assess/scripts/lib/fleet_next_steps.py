@@ -16,7 +16,9 @@ one page per group, with no rescan:
   measurement gap, never a failure. A row with a confirmed floor (#697) reads
   "at least N", and a signal only a full ``/assess`` measures (its block
   unavailable as ``not_registered`` or ``network`` in every repository missing
-  it, ``fleet_groups.full_run_only_signals``) says so instead of a scan hint.
+  it, ``fleet_groups.full_run_only_signals``) says so instead of a scan hint; a
+  ``PLATFORM_SCANS`` signal unmeasured as ``network`` says ``fleet --platform``
+  measures it (``PLATFORM_HINT``).
 
 Levels come from re-running ``lib.levels.evaluate`` on the same inputs the
 roll-up (``lib/fleet_groups.py``) evaluated: each repository's ``scans`` and
@@ -47,7 +49,8 @@ from typing import Any
 
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
-from lib.fleet_groups import GroupRow, full_run_only_signals, repo_signals, settings_for, settings_signals
+from lib.fleet_groups import (GroupRow, full_run_only_signals, platform_signals, repo_signals, settings_for,
+                              settings_signals)
 from lib.next_step_guidance import guidance, measure_hint
 from lib.next_step_guidance import parts as unmet_parts_of
 from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
@@ -59,7 +62,11 @@ INDEX_FILE = "teams.md"
 _OPS = {"eq": "=", "ne": "!=", "lt": "<", "lte": "<=", "gt": ">", "gte": ">=",
         "in": "in", "not_in": "not in"}
 FULL_RUN_HINT = ("Only a full `/assess` run measures it: the headless fleet run reports its block "
-                 "unavailable (`not_registered` or `network`), so this is not a gap a scan option closes.")
+                 "unavailable (`not_registered`, or `network` outside the `--platform` scans), so "
+                 "this is not a gap a scan option closes.")
+PLATFORM_HINT = ("Measured with `fleet --platform`: the run made no network calls, so its block "
+                 "reads `network`; this is a gap a scan option does close, with no full `/assess` "
+                 "needed.")
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>|#~])")
 
 
@@ -282,11 +289,12 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
             else f"Level at least {floor} of {top}, unknown above it (up to {high})")
     lines = [f"{head}. {gap}", ""]
     only = set(full_run_only_signals(evaluations, signals))
+    platform = set(platform_signals(evaluations, signals))
     for signal in result["missing_signals"]:
         names = sorted(n for n, ev in evaluations.items() if signal in ev["missing_signals"])
         hint = ("The repository scan failed in each of them; the reason token is listed below."
                 if all(n in failed for n in names) else FULL_RUN_HINT if signal in only
-                else measure_hint(signal))
+                else PLATFORM_HINT if signal in platform else measure_hint(signal))
         lines.append(f"- {code(signal)}: not measured in {len(names)} of {_repos(len(evaluations))}. {hint}")
     undetermined = result.get("unknown_repos", [])
     if undetermined:

@@ -300,3 +300,22 @@ def test_rows_without_floors_render_no_floor_text():
     run = ft.trend_run({"levels_version": "t-1", "scan_date": "2026-11-20"},
                        [group_row("g", [_row("g/a", _scans(gate=False))], _model(), {})])
     assert run is not None and "floor_means" not in run and ft._bound_lines(run, ["g"]) == []
+
+
+def test_a_platform_scan_block_is_not_full_run_only_and_gets_the_platform_hint():
+    block = signals.PLATFORM_SCANS[0]  # review_reality: fleet --platform measures it
+    model = parse_levels({"version": "t-1", "rows": [
+        {"id": "rev", "title": "Review", "scope": "team", "aggregation": "min",
+         "levels": [{"level": 1, "criteria": [GATE]},
+                    {"level": 2, "criteria": [{"signal": f"{block}.reviewed_share", "op": "gte",
+                                               "value": 0.5}]}]}]})
+    for reason in ("network", signals.NETWORK_REASON):
+        scans = {"gate": {"available": True, "enforced": True},
+                 block: {"available": False, "reason": reason}}
+        rows = [_row("g/a", scans)]
+        group = group_row("g", rows, model, {})
+        entry = group["levels"][0]
+        assert entry.get("floor") == 1 and "full_run_only" not in entry
+        page = ns.group_page(model, group, rows, ns.evaluate_group(model, "g", rows, {}))
+        assert ns.PLATFORM_HINT in page and ns.FULL_RUN_HINT not in page
+        assert "fleet --platform" in ns.PLATFORM_HINT and "does close" in ns.PLATFORM_HINT
