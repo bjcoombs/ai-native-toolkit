@@ -19,7 +19,9 @@ from conftest import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+from lib.counts_only import reason_code  # noqa: E402
 from lib.review_reality import scan_review_reality  # noqa: E402
+from lib.signals import collect  # noqa: E402
 
 FAKE_GH = """#!/bin/sh
 echo "$*" >> "$FAKE_GH/log"
@@ -172,6 +174,22 @@ def test_review_reality_403_degrades_to_unavailable(world) -> None:
     assert block["reason"].startswith("no_access")
     assert "hollow_required_review" not in block
     assert world.calls()
+
+
+@pytest.mark.parametrize("line", ["gh: HTTP 403", "HTTP 403: Must have push access (https://api.github.com/graphql)"])
+def test_platform_blocks_read_a_refused_pr_list_as_no_access(world, line: str) -> None:
+    """A refused ``gh pr list`` gives both platform blocks ``no_access``, as GitLab does (#779).
+
+    ``gh`` prints a GraphQL refusal without the parentheses of its REST form."""
+    world.fail_with(line)
+    scans = collect(world.root, ["review_reality", "delivery"], window="6mo", platform=True)
+    for name in ("review_reality", "delivery"):
+        block = scans[name]
+        assert block["available"] is False, name
+        assert reason_code(block["reason"]) == "no_access", (name, block["reason"])
+        assert not any(isinstance(v, (int, float)) and not isinstance(v, bool)
+                       for v in block.values()), name
+    assert any(call.startswith("pr list") for call in world.calls())
 
 
 def test_review_reality_no_remote_never_calls_gh(world) -> None:

@@ -12,7 +12,9 @@ The envelope is strict (every stamp field, no extra top-level keys). The
 so the schema publishes the block namespace maturity model signal paths are checked
 against (``lib/level_signals.py``); regenerate after adding a scan. Per-scan
 blocks stay open objects - each scan owns its own shape - except that a block
-reporting ``"available": false`` must carry a string ``reason``.
+reporting ``"available": false`` must carry a string ``reason``. The blocks in
+``lib/scan_block_schemas.py`` (``ai_usage``, ``ci_checks``, ``delivery``; #779)
+also name and describe their fields.
 """
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
+from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.scan_registry import ScanSpec  # noqa: E402
 from lib.signals import SIGNAL_SCANS, known_scans  # noqa: E402
 
@@ -76,11 +79,20 @@ def type_schema(tp: Any) -> JsonDict:
     raise TypeError(f"no JSON schema mapping for {tp!r}")
 
 
+def described_block(name: str) -> JsonDict:
+    """``SCAN_BLOCK`` plus the block's described fields (``lib/scan_block_schemas.py``)."""
+    return {"type": "object", **SCAN_BLOCK, **BLOCK_SCHEMAS[name]}
+
+
 def build_schema(specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> JsonDict:
     """The full document schema, ready to serialise (``specs``: the scan table)."""
     document = type_schema(SignalsDocument)
     # Sorted, so a scan added anywhere in the registry adds one line here.
-    document["properties"]["scans"]["propertyNames"] = {"enum": sorted(known_scans(specs))}
+    known = sorted(known_scans(specs))
+    scans = document["properties"]["scans"]
+    scans["propertyNames"] = {"enum": known}
+    # The blocks a fleet reader compares (#779) name their fields; each keeps the reason rule.
+    scans["properties"] = {name: described_block(name) for name in BLOCK_SCHEMAS if name in known}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,

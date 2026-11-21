@@ -824,7 +824,12 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
-both providers). `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+both providers), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
+out of the document offline: absent, never a placeholder. `platform_only_error` makes
+`assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
+`offline_scans` strips those names from the `--scans` of a fleet run's offline child
+(`fleet.signals_command`); `fleet_groups.platform_only` reads such an absent block as a
+`--platform` gap only on a row that has scans. `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
 one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`,
 `delivery` and `review_evidence`, an offline block the pass rebuilds because it reads
 `review_reality`, #696), or a network spec one of them reads, runs its `fn`. Extension point:
@@ -897,7 +902,17 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. `tests/test_signals.py` fails when the checked-in file differs from
+`reason`. The `ai_usage`, `ci_checks` and `delivery` blocks (`scan_block_schemas.py`, #779)
+also name and describe their fields (`described_block`), loosely: no required field, and a
+string list may be its counts-only length.
+
+**`scan_block_schemas.py`**
+`BLOCK_SCHEMAS`: hand-written field descriptions (with units: delivery durations are hours)
+of the blocks a fleet reader compares, `ai_usage`, `ci_checks` and `delivery` (#779), read
+by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
+describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
+TypedDict field and every TypedDict field is described; real full and counts-only blocks
+validate). `tests/test_signals.py` fails when the checked-in file differs from
 `build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
 from `skills/assess`.
 
@@ -970,7 +985,7 @@ repository, never a passing one) and `settings_signals` the normalised settings 
 the fragment's `scope` and `provider`. The CLI loads the maturity model with
 `level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
-Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
+Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`, including a `signals.PLATFORM_ONLY_SCANS` block absent from the row, #779); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
@@ -1251,7 +1266,8 @@ A run with floored unknown team rows carries `floor_means` (#697), printed in ea
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
-`signals_schema.type_schema`, with a `status` enum, a reason-token pattern and an
+`signals_schema.type_schema` (with `review_automation` and the `scan_block_schemas` blocks
+described under `scans`), with a `status` enum, a reason-token pattern and an
 `if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
 (`build_stamp_schema`, mapping the `scans` name list itself); and
 `doc_freshness.schema.json` from `fleet_doc_freshness.FreshnessRow`
@@ -2296,7 +2312,8 @@ no token read, JSON parsed in Python, never `--jq`/`--template`). Order of work:
 only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
 `unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
-`gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403), `not_found`
+`gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403, in both forms `gh`
+prints it: REST `(HTTP 403)` and GraphQL `HTTP 403: ...`, as GitLab's 403 does; #779), `not_found`
 (HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
 `gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`

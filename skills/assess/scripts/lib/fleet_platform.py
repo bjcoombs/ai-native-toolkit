@@ -6,7 +6,8 @@ whose offline row is ``ok``, one more ``assess_signals.py`` child with
 ``--platform --scans <PLATFORM_SCANS>`` (``lib/signals.py``), the same output
 mode and salt, its own worker pool (``--platform-jobs``) and its own per-repo
 timeout (``--platform-timeout``). Its blocks are joined into the row's
-``scans`` by repository, replacing the offline ``network`` placeholders, the way
+``scans`` by repository, replacing the offline ``network`` placeholders and adding
+the ``PLATFORM_ONLY_SCANS`` blocks (``delivery``) the offline row leaves out, the way
 ``--settings`` is joined after the scan. The pass never changes a row's
 ``status`` or ``reason``: a slow or refusing host cannot turn an offline row into
 ``scan_timeout``. A child that times out, exits non-zero or writes no valid

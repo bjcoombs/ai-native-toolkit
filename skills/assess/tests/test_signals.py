@@ -81,7 +81,29 @@ def test_full_run_leaves_the_target_untouched_and_validates(fixture_repo, tmp_pa
     assert stamp["target_dirty"] is False
     assert stamp["window"] == "6mo"
     assert stamp["plugin_version"] == signals.read_plugin_version()
-    assert set(doc["scans"]) == set(signals.known_scans())
+    # Every known scan but the platform-only ones, absent without --platform (#779).
+    assert set(doc["scans"]) == set(signals.known_scans()) - set(signals.PLATFORM_ONLY_SCANS)
+    assert "delivery" not in doc["scans"] and "review_reality" in doc["scans"]
+
+
+def test_platform_only_block_is_absent_without_platform(fixture_repo, no_gh):
+    """``delivery`` is left out offline, even when named; never a placeholder (#779)."""
+    assert signals.PLATFORM_ONLY_SCANS == ("delivery",)
+    offline = signals.collect(fixture_repo, ["review_reality", "delivery"])
+    assert set(offline) == {"review_reality"}
+    assert offline["review_reality"] == {"available": False, "reason": signals.NETWORK_REASON}
+    assert not no_gh.exists()
+
+
+def test_scans_delivery_without_platform_exits_2_naming_platform(fixture_repo, tmp_path, no_gh, capsys):
+    """An explicit platform-only scan offline would write ``{}`` with no reason (#779)."""
+    out = tmp_path / "signals.json"
+    assert _run(fixture_repo, out, "--scans", "agent_ops,delivery") == 2
+    assert "--platform" in capsys.readouterr().err and not out.exists()
+    assert signals.platform_only_error(["delivery"], platform=True) is None
+    assert signals.platform_only_error(["agent_ops"], platform=False) is None
+    assert signals.offline_scans("agent_ops, delivery") == "agent_ops"
+    assert signals.offline_scans(None) is None
 
 
 def test_network_scans_are_unavailable_and_agent_environment_runs_offline(fixture_repo, tmp_path, no_gh):

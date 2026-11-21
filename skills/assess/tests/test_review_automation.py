@@ -290,6 +290,12 @@ def test_review_evidence_is_registered_after_its_inputs_and_rebuilt_by_platform(
     assert keys.index("review_automation") < keys.index("review_evidence")
     assert "review_evidence" in PLATFORM_SCANS
     assert platform_only({"review_evidence": review_evidence(AUTO_NO, OFFLINE)}, "review_evidence.present")
+    # A platform-only block is absent offline (#779): still a gap --platform closes.
+    measured = {"agent_ops": {"available": True}}
+    assert platform_only(measured, "delivery.merged_count")
+    assert not platform_only({}, "delivery.merged_count")  # a failed row has no scans
+    assert not platform_only({"delivery": {"available": True}}, "delivery.merged_count")
+    assert not platform_only(measured, "ai_usage.total_commits")
 
 
 # --- Layer 7 in a headless run --------------------------------------------------------

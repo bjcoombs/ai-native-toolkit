@@ -15,8 +15,9 @@ Contract (every caller relies on it):
   invoking ``gh`` when there is none; then the auth probe; then the calls.
 - Every failure raises :class:`GhUnavailable` carrying a non-empty reason, which
   the caller turns into ``{"available": False, "reason": ...}`` via
-  :func:`unavailable`. An API refusal (HTTP 403) gives a reason starting
-  ``no_access`` - never a clean result; a rate limit (HTTP 429, or a 403
+  :func:`unavailable`. An API refusal (HTTP 403, in either form ``gh`` prints
+  it: ``(HTTP 403)`` or ``HTTP 403: ...``) gives a reason starting
+  ``no_access``, as GitLab does - never a clean result; a rate limit (HTTP 429, or a 403
   saying "rate limit"), still refused after the backoff, gives ``rate_limited``.
 - ``gh`` runs through ``lib.platform_cli.run_cli``: stdin closed, prompts
   disabled, a bounded 429 backoff, and the per-run response cache when
@@ -56,7 +57,9 @@ _REMOTE_RE = re.compile(
     r"(?P<owner>[A-Za-z0-9_.-]+)/(?P<name>[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
 )
 
-_HTTP_STATUS_RE = re.compile(r"\(HTTP (\d{3})\)")
+# ``gh`` prints a REST status as ``Not Found (HTTP 404)`` and a GraphQL one (``gh pr
+# list``) as ``HTTP 403: ...``; both forms map the same way.
+_HTTP_STATUS_RE = re.compile(r"\bHTTP (\d{3})\b")
 
 
 class GhUnavailable(Exception):

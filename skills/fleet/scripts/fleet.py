@@ -199,6 +199,7 @@ from lib.signals import (  # noqa: E402
     TOOLKIT_ROOT,
     UnknownScanError,
     parse_window,
+    platform_only_error,
     read_plugin_version,
     select_scans,
     toolkit_commit,
@@ -337,6 +338,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.error("--platform-jobs and --platform-timeout must be at least 1")
     if not args.platform and (args.platform_jobs is not None or args.platform_timeout is not None):
         parser.error("--platform-jobs and --platform-timeout apply to --platform")
+    if args.scans is not None:
+        problem = platform_only_error([s.strip() for s in args.scans.split(",")], args.platform)
+        if problem is not None:
+            parser.error(problem)
     return args
 
 

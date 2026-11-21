@@ -84,6 +84,293 @@
                   }
                 }
               }
+            },
+            "ai_usage": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              },
+              "description": "Agent involvement in the commits of the run window (lib/ai_usage.py), counted from git history. An agent identity is matched by trailer (Co-Authored-By and similar) or by author against the pinned agent rules plus any [[ai_usage.agent_identities]] rules of --fleet-config. Counts are commits; shares are of total_commits. A lower bound: an agent that leaves no trace is not counted.",
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "window": {
+                  "type": "string",
+                  "description": "The history window read, for example 6mo."
+                },
+                "since": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The window as git --since text; dropped in counts-only output."
+                },
+                "merge_rule": {
+                  "type": "string",
+                  "description": "How merge commits are treated (excluded: not counted)."
+                },
+                "total_commits": {
+                  "type": "integer",
+                  "description": "Commits in the window."
+                },
+                "agent_trailer_commits": {
+                  "type": "integer",
+                  "description": "Commits carrying an agent trailer."
+                },
+                "agent_trailer_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of commits carrying an agent trailer; null when nothing was counted."
+                },
+                "agent_authored_commits": {
+                  "type": "integer",
+                  "description": "Commits whose author an agent identity matches."
+                },
+                "agent_authored_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of commits whose author an agent identity matches; null when nothing was counted."
+                },
+                "agent_either_commits": {
+                  "type": "integer",
+                  "description": "Commits with an agent trailer or an agent author."
+                },
+                "agent_either_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of commits with an agent trailer or an agent author; null when nothing was counted."
+                },
+                "dependency_bot_commits": {
+                  "type": "integer",
+                  "description": "Commits by a dependency-update bot (Dependabot, Renovate); never counted as agent work."
+                },
+                "token_user_commits": {
+                  "type": "integer",
+                  "description": "Commits by a GitLab access-token user (project_<id>_bot_<hex>) not promoted to agent; a config rule or token_users_as_agents promotes one."
+                },
+                "agent_identity_rule_commits": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "description": "Commits each [[ai_usage.agent_identities]] rule matched, a positional list in rule order; the rule patterns themselves are never written."
+                },
+                "lower_bound": {
+                  "type": "boolean"
+                },
+                "covered_agents": {
+                  "type": [
+                    "array",
+                    "integer"
+                  ],
+                  "description": "A list of strings; counts-only output keeps only its length."
+                },
+                "covered_author_agents": {
+                  "type": [
+                    "array",
+                    "integer"
+                  ],
+                  "description": "A list of strings; counts-only output keeps only its length."
+                },
+                "limits": {
+                  "type": [
+                    "array",
+                    "integer"
+                  ],
+                  "description": "A list of strings; counts-only output keeps only its length."
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            },
+            "ci_checks": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              },
+              "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files. test_or_lint_runs is true when a CI line runs one, false when none does, and null (unknown) when a CI file pulls jobs from a file this checkout does not hold (a GitLab include, a reusable workflow in another repository); basis says which.",
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why the block is unavailable."
+                },
+                "ci_files": {
+                  "type": "integer",
+                  "description": "CI configuration files read."
+                },
+                "check_commands": {
+                  "type": "integer",
+                  "description": "CI lines that run a test or lint check."
+                },
+                "included_files": {
+                  "type": "integer",
+                  "description": "CI files that pull jobs from elsewhere."
+                },
+                "test_or_lint_runs": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "The CI test-or-lint signal: true, false, or null when included jobs may hold the check."
+                },
+                "basis": {
+                  "enum": [
+                    "check_command",
+                    "included_jobs",
+                    "no_check_command",
+                    "no_ci"
+                  ],
+                  "description": "The reason for test_or_lint_runs: check_command (true), included_jobs (null), no_check_command or no_ci (false)."
+                }
+              }
+            },
+            "delivery": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              },
+              "description": "How work flows through review to merge (lib/delivery.py), from one shared sample of up to 30 changes merged inside the run window, newest merge first (the sample review_reality reads). A platform block: present only under --platform (absent otherwise); a refused read is available false with a reason (no_access on HTTP 403), never zeros. Durations are hours; shares are of merged_count.",
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why the block is unavailable."
+                },
+                "merged_count": {
+                  "type": "integer",
+                  "description": "Merged changes in the sample (at most 30)."
+                },
+                "time_to_merge_hours_p50": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Median time from opened to merged, in hours (rounded to 0.01, nearest-rank percentile); null when no sampled change has both timestamps."
+                },
+                "time_to_merge_hours_p90": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "90th percentile time from opened to merged, in hours (rounded to 0.01, nearest-rank percentile); null when no sampled change has both timestamps."
+                },
+                "first_human_comment_hours_p50": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Median time from opened to the first comment or review by a person other than the author (bots and agent identities excluded), in hours (rounded to 0.01, nearest-rank percentile); null when no sampled change has both timestamps."
+                },
+                "first_human_comment_hours_p90": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "90th percentile time from opened to the first human comment or review, in hours (rounded to 0.01, nearest-rank percentile); null when no sampled change has both timestamps."
+                },
+                "human_commented_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes with any human comment or review; null when nothing was counted."
+                },
+                "ai_review_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes with a review or comment by an AI reviewer other than the author; null when nothing was counted."
+                },
+                "approved_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes approved by someone other than the author (copied from review_reality); null when nothing was counted."
+                },
+                "self_merged_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes merged by their author (copied from review_reality); null when nothing was counted."
+                },
+                "agent_authored_share": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Share (0 to 1) of changes an agent identity authored; null when nothing was counted."
+                }
+              }
             }
           }
         },
