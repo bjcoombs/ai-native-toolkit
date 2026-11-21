@@ -138,6 +138,22 @@ def test_every_nul_separated_ls_files_call_decodes_with_surrogateescape():
     assert missing == []
 
 
+def _first_call(source: str) -> ast.Call:
+    return next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+
+
+def test_the_ls_files_guard_reads_a_literal_argv():
+    call = _first_call("subprocess.run(['git', 'ls-files', '-z'], encoding='utf-8')")
+    assert "ls-files" in _string_args(call) and "-z" in _string_args(call)
+
+
+def test_the_lf_guard_sees_text_writes_and_skips_binary_and_reads():
+    assert _is_text_write(_first_call("p.write_text(s, encoding='utf-8')"))
+    assert _is_text_write(_first_call("os.fdopen(fd, 'w', encoding='utf-8')"))
+    assert not _is_text_write(_first_call("os.fdopen(fd, 'wb')"))
+    assert not _is_text_write(_first_call("open(p, encoding='utf-8')"))
+
+
 def _relative_path_names(scope: ast.AST) -> set[str]:
     """Names bound directly to a ``relative_to(...)`` Path within one function."""
     return {t.id for node in ast.walk(scope) if isinstance(node, ast.Assign)

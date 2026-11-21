@@ -38,8 +38,8 @@ LAYER_PACKAGES: tuple[tuple[str, str], ...] = (
     ("lizard", "lizard==1.23.0"),
 )
 
-Which = Callable[[str], str | None]
-FindSpec = Callable[[str], object | None]
+Which = Callable[[str], "str | None"]
+FindSpec = Callable[[str], "object | None"]
 
 
 def winget_rg(local_app_data: str | None) -> str | None:
