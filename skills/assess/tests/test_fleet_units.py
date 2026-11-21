@@ -183,6 +183,8 @@ def test_mapping_shape_errors_name_the_entry(text: str, message: str) -> None:
 
 @pytest.mark.parametrize(("text", "message"), [
     ('[[unit]]\nid = "x"\nkind = "team"\nparent = "nope"\n', "parent 'nope' is not a unit"),
+    ('[[unit]]\nid = "a"\nkind = "team"\nparent = "b"\n[[unit]]\nid = "b"\nkind = "division"\nparent = "gone"\n',
+     "unit 'b' \\(ownership\\): parent 'gone' is not a unit"),
     ('[[unit]]\nid = "x"\nkind = "team"\nparent = "y"\n[[unit]]\nid = "y"\nkind = "team"\nparent = "x"\n',
      "cycle"),
     ('[[repo]]\nrepo = "grp/proj4"\nsystem = "nope"\n', "system unit 'nope' is not a unit"),

@@ -299,15 +299,15 @@ def _place_by_codeowners(units: dict[str, Unit], placement: dict[str, str], repo
 
 def _check_tree(view: str, units: Mapping[str, Unit]) -> None:
     for uid in sorted(units):
-        parent = units[uid]["parent"]
-        if parent is not None and parent not in units:
-            raise UnitsError(f"unit {uid!r} ({view}): parent {parent!r} is not a unit of that view")
+        child, parent = uid, units[uid]["parent"]
         seen = {uid}
         while parent is not None:
+            if parent not in units:  # at any depth: a missing grandparent is a fault, not a KeyError
+                raise UnitsError(f"unit {child!r} ({view}): parent {parent!r} is not a unit of that view")
             if parent in seen:
                 raise UnitsError(f"unit {uid!r} ({view}): parent chain has a cycle")
             seen.add(parent)
-            parent = units[parent]["parent"]
+            child, parent = parent, units[parent]["parent"]
 
 
 def _depth(uid: str, units: Mapping[str, Unit]) -> int:
