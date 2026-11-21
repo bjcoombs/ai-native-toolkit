@@ -136,7 +136,12 @@ constant each.
 # groups.jsonl lines gain agent_building class counts and the run writes
 # agent_clusters.json. Additive: no existing key moves, and complexity-stats.json
 # is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.20.0"
+# 1.21.0: run-context.json ai_usage gains author counts (issue #695):
+# agent_authored_commits/share, agent_either_commits/share,
+# dependency_bot_commits, token_user_commits, agent_identity_rule_commits
+# (positional, per [ai_usage] config rule) and covered_author_agents; limits
+# reworded. Additive; the trailer fields are unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.21.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
