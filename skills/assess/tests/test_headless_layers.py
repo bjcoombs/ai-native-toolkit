@@ -17,7 +17,7 @@ import assess_signals
 from lib import headless_layers as hl
 from lib import scan_registry as reg
 from lib import signals
-from lib import structure_graph
+from lib import import_graph_python
 from lib.counts_only import reason_code
 from lib.counts_only_rules import ID, PATH, classify
 from lib.levels import _UNAVAILABLE, evaluate, resolve_signal
@@ -269,7 +269,7 @@ def test_no_tool_run_reads_unknown_with_named_reasons(
     assert git is not None
     (git_only / "git").symlink_to(git)
     monkeypatch.setenv("PATH", str(git_only))
-    monkeypatch.setattr(structure_graph, "_GRIMP_AVAILABLE", False)
+    monkeypatch.setattr(import_graph_python, "_GRIMP_AVAILABLE", False)
     monkeypatch.setattr(hl, "lizard_analyzer", lambda: None)
     doc = _run(target, tmp_path / "co.json", "--counts-only")
     jsonschema.validate(doc, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))

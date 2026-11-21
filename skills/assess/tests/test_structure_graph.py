@@ -12,6 +12,7 @@ from __future__ import annotations
 import networkx as nx
 import pytest
 
+from lib import import_graph_python as igp
 from lib import structure_graph as sg
 from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
 
@@ -21,7 +22,9 @@ from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
 # --------------------------------------------------------------------------
 
 def test_degrades_when_grimp_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr(sg, "_GRIMP_AVAILABLE", False)
+    monkeypatch.setattr(igp, "_GRIMP_AVAILABLE", False)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
     result = sg.analyze_structure(tmp_path)
     assert result.available is False
     assert "grimp" in result.reason
@@ -45,9 +48,12 @@ def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
     assert result.as_dict()["modularity_q"] is None   # unmeasured is null, not 0.0
 
 
-@pytest.mark.parametrize("flag", ["_GRIMP_AVAILABLE", "_NETWORKX_AVAILABLE"])
-def test_an_unavailable_block_emits_null_modularity(monkeypatch, tmp_path, flag):
-    monkeypatch.setattr(sg, flag, False)
+@pytest.mark.parametrize("module, flag", [(igp, "_GRIMP_AVAILABLE"),
+                                          (sg, "_NETWORKX_AVAILABLE")])
+def test_an_unavailable_block_emits_null_modularity(monkeypatch, tmp_path, module, flag):
+    monkeypatch.setattr(module, flag, False)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
     block = sg.analyze_structure(tmp_path).as_dict()
     assert block["available"] is False
     assert block["modularity_q"] is None
@@ -165,11 +171,16 @@ def test_separated_clusters_score_higher_than_dense_crosstalk():
 # A3 -- contracts (front door vs burrow)
 # --------------------------------------------------------------------------
 
+def _tops(g):
+    """Python-style package boundaries: a module's top dotted component."""
+    return {n: n.split(".", 1)[0] for n in g}
+
+
 def test_all_imports_via_front_door_ratio_is_one():
     g = nx.DiGraph()
     # app imports the pkg package itself (its __init__ / public API).
     g.add_edge("app", "pkg")
-    ratio, burrow = sg.compute_front_door_ratio(g, packages={"app", "pkg"})
+    ratio, burrow = sg.compute_front_door_ratio(g, {"app", "pkg"}, _tops(g))
     assert ratio == 1.0
     assert burrow == []
 
@@ -178,7 +189,7 @@ def test_burrowing_lowers_ratio_and_records_edges():
     g = nx.DiGraph()
     g.add_edge("app", "pkg")            # front door
     g.add_edge("app", "pkg.internal")   # burrow into internals
-    ratio, burrow = sg.compute_front_door_ratio(g, packages={"app", "pkg"})
+    ratio, burrow = sg.compute_front_door_ratio(g, {"app", "pkg"}, _tops(g))
     assert ratio == 0.5  # 1 front / 2 total -- exactly representable
     assert burrow == [{"importer": "app", "imported": "pkg.internal"}]
 
@@ -186,10 +197,10 @@ def test_burrowing_lowers_ratio_and_records_edges():
 def test_intra_package_edges_are_not_contract_edges():
     g = nx.DiGraph()
     g.add_edge("pkg.a", "pkg.b")  # same package -> internal cohesion, ignored
-    ratio, burrow = sg.compute_front_door_ratio(g, packages={"pkg"})
+    ratio, burrow = sg.compute_front_door_ratio(g, {"pkg"}, _tops(g))
     assert ratio == 1.0
     assert burrow == []
-    assert sg.count_cross_package_edges(g) == 0   # the 1.0 above is vacuous
+    assert sg.count_cross_package_edges(g, _tops(g)) == 0   # the 1.0 above is vacuous
 
 
 def test_cross_package_edges_counts_front_doors_and_burrows():
@@ -197,7 +208,7 @@ def test_cross_package_edges_counts_front_doors_and_burrows():
     g.add_edge("app", "pkg")            # front door
     g.add_edge("app", "pkg.internal")   # burrow
     g.add_edge("pkg.a", "pkg.b")        # intra-package: not counted
-    assert sg.count_cross_package_edges(g) == 2
+    assert sg.count_cross_package_edges(g, _tops(g)) == 2
 
 
 # --------------------------------------------------------------------------
@@ -283,7 +294,7 @@ def test_discover_packages_finds_top_level_only(tmp_path):
     sub.mkdir()
     (pkg / "__init__.py").write_text("")
     (sub / "__init__.py").write_text("")
-    found = sg.discover_packages(tmp_path)
+    found = igp.discover_packages(tmp_path)
     assert found == [pkg.resolve()]  # sub is a subpackage, not top-level
 
 
@@ -294,7 +305,7 @@ def test_discover_packages_skips_excluded_dirs(tmp_path):
     venv_pkg = tmp_path / ".venv" / "junk"
     venv_pkg.mkdir(parents=True)
     (venv_pkg / "__init__.py").write_text("")
-    found = sg.discover_packages(tmp_path)
+    found = igp.discover_packages(tmp_path)
     assert found == [real.resolve()]
 
 
@@ -399,10 +410,10 @@ def test_package_finder_restored_when_grimp_raises(tmp_path, monkeypatch):
     def boom(*_args, **_kwargs):
         raise RuntimeError("parse failure")
 
-    monkeypatch.setattr(sg.grimp, "build_graph", boom)
+    monkeypatch.setattr(igp.grimp, "build_graph", boom)
     pkg = _pkg(tmp_path, "pkg", {"a": ""})
     with pytest.raises(RuntimeError, match="parse failure"):
-        sg.build_import_map([pkg], tmp_path)
+        igp.build_import_map([pkg], tmp_path)
     assert settings.PACKAGE_FINDER is finder_before
 
 
@@ -441,7 +452,7 @@ def test_qualified_name_escapes_dots_in_the_path(tmp_path):
 def test_path_finder_serves_both_grimp_port_shapes(tmp_path):
     # grimp 3.0-3.13 call determine_package_directory (one path); 3.14+ call
     # determine_package_directories (a set). Both must answer from the path.
-    finder = sg._PathPackageFinder({"lib": tmp_path / "lib"})
+    finder = igp._PathPackageFinder({"lib": tmp_path / "lib"})
     assert finder.determine_package_directory("lib", None) == str(tmp_path / "lib")
     assert finder.determine_package_directories("lib", None) == {
         str(tmp_path / "lib"),
@@ -505,7 +516,7 @@ def test_partition_isolates_colliding_roots_and_shares_the_rest(tmp_path):
         tmp_path / "a" / "lib", tmp_path / "b" / "lib",
         tmp_path / "c" / "app", tmp_path / "d" / "core",
     ]
-    builds = sg._partition_builds(dirs)
+    builds = igp._partition_builds(dirs)
     assert builds == [
         [tmp_path / "c" / "app", tmp_path / "d" / "core"],
         [tmp_path / "a" / "lib"],

@@ -37,6 +37,10 @@ block (lint suppressions) needs ripgrep (`rg`) instead. lizard scores every
 tracked source file, so a very large repository can need a longer `--timeout`. `python3 fleet.py ...` without them still runs; those blocks then
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
+A repository with no import graph names its dominant
+language instead (`no_import_graph_typescript`, `no_import_graph_go`), so the
+fleet output says which language is missing; `no_python_packages` is a Python
+repository with no importable package and `no_source_files` one with no source.
 
 **Without uv.** Install the three dependencies into the interpreter you run
 the script with, then run it with that interpreter:
