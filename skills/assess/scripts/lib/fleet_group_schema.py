@@ -95,5 +95,5 @@ def render() -> str:
 
 
 if __name__ == "__main__":
-    SCHEMA_PATH.write_text(render(), encoding="utf-8")
+    SCHEMA_PATH.write_text(render(), encoding="utf-8", newline="\n")
     print(f"wrote {SCHEMA_PATH}")

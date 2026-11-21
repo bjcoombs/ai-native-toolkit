@@ -258,10 +258,15 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 # 20: on a GitLab remote ``review_reality`` reads each sampled merge request's notes
 #     (issue #716), so ``reviewed_share`` and ``bot_review_share`` are measured
 #     instead of null and the L7 "hollow required review" row can now fire there.
-# 21: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
+# 21: every git-history window and day count is counted back from HEAD's committer
+#     time instead of today (issue #773): churn windows, ``doc_staleness`` ages and
+#     window ratios, instruction ``freshness_days`` (and so the grader's freshness
+#     penalty), ``ai_usage`` counts and the keyhole velocity clock. On a repository
+#     whose HEAD is old, ages shrink and windows cover the history before HEAD.
+# 22: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
 #     reads a check in an included local file or a template cloned in the fleet root
 #     (true), or false when every include resolved without one, where it was null;
 #     ``review_automation`` credits a review component inside a resolved template;
 #     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
 #     an issue_comment-only review action is no longer credited.
-ASSESS_METHOD_VERSION = 21
+ASSESS_METHOD_VERSION = 22

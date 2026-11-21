@@ -549,7 +549,7 @@ def write_achievements(out_dir: Path, doc: Achievements) -> Path:
     target = out_dir / ACHIEVEMENTS_FILE
     fd, tmp = tempfile.mkstemp(dir=out_dir, prefix=f".{ACHIEVEMENTS_FILE}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(dumps_achievements(doc))
         os.chmod(tmp, 0o644)
         os.replace(tmp, target)

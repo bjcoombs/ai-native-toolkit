@@ -82,19 +82,19 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 
-import lizard
-import matplotlib.pyplot as plt
-import numpy as np
-
 # Shared layout/SVG primitives and churn machinery live in lib/ so the code
 # heatmap, the docs heatmap, and the Layer 0 staleness metric reuse one
 # implementation. Only the colour mapping differs per heatmap and stays local.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# ruff: noqa: E402 - without uv the PEP 723 dependencies may be absent: print the
+# install line and exit 1 before the first third-party import, not a traceback (#752).
+from lib.tool_lookup import require_packages
+require_packages((("lizard", "lizard==1.23.0"), ("squarify", "squarify"), ("matplotlib", "matplotlib"), ("numpy", "numpy")))
+import lizard
+import matplotlib.pyplot as plt
+import numpy as np
 from lib.assess_config import resolve_excludes
-from lib.dart_complexity import (
-    BACKEND_NAME as DART_BACKEND,
-    dart_function_scores,
-)
+from lib.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
 from lib.git_churn import (
     churn_is_degenerate,
     git_churn_scores, pick_churn_window, rename_paths,

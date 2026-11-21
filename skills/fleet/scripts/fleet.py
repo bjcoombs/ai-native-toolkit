@@ -555,7 +555,7 @@ def _scan_all(targets: list[Target], options: ScanOptions, jobs: int, deleter: C
         return scan(options)
     with tempfile.TemporaryDirectory(prefix="fleet-config-") as tmp:
         copy = Path(tmp).resolve() / "fleet-config.toml"
-        copy.write_text(fleet_config_text, encoding="utf-8")
+        copy.write_text(fleet_config_text, encoding="utf-8", newline="\n")
         return scan(replace(options, fleet_config=copy))
 
 

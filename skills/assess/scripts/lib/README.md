@@ -95,15 +95,21 @@ ever cut, this note is where the intended boundary is written down.
 
 ## Module reference
 
-Windows portability (#712): every text-mode `subprocess.run` names
+Windows portability (#712, #752): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must
 round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str()`.
-`tests/test_windows_portability.py` guards both across `scripts/`.
+`tests/test_windows_portability.py` guards all three across every runtime Python tree: each
+`skills/*/scripts/` and the repo-level `scripts/`, leaving out `tests/`, `fixtures/` and dot directories.
 The fleet run files (`repos.jsonl`, `groups.jsonl`, `run.json`, `compare.json`, `labels.jsonl`,
-`doc_freshness.jsonl`, `agent_clusters.json` and the next-steps pages) are written with `newline="\n"`, so Windows and
-Linux produce the same bytes, and `promissory_markers` asks `rg` for `--path-separator /`
+`doc_freshness.jsonl`, `agent_clusters.json`, `achievements.json`, `fleet-data.json`, the
+generated fleet schemas and the next-steps pages) are written with `newline="\n"`, so Windows and
+Linux produce the same bytes; the same test checks that every writer in `lib/fleet*.py` and
+`skills/fleet/scripts/` names `newline`. `promissory_markers` asks `rg` for `--path-separator /`
 so its paths are POSIX on Windows too, and `change_coupling` keys and sorts co-change pairs
-as POSIX strings, so pair order is the same on every OS (#713). The windows-latest job
+as POSIX strings, so pair order is the same on every OS (#713). That is the canonical order
+`structure_drift` already used, and it changed Linux pair order too: `file_a`/`file_b` now
+follow POSIX string order, so `src/foo.py` sorts before `src/foo/bar.py` (`.` < `/`), where
+the earlier `Path` ordering compared path parts and put `src/foo/bar.py` first. The windows-latest job
 (`.github/workflows/windows.yml`) checks both through `tests/test_fleet_golden.py`.
 
 ### Data collection
@@ -151,6 +157,31 @@ root commit, so it is never counted as bulk. A failed probe is unknown, not
 truncated. Tests: `tests/test_shallow_history.py`.
 `window_from_churn_label` turns a `pick_churn_window` label (`"commits (last 12mo)"`)
 into the `history_window` scan input (`"12mo"`, None for all-time).
+Commit-anchored windows (issue #773): `CHURN_WINDOWS` holds window tokens (`12mo`,
+`24mo`, `5y`, None), and `git_churn_scores`, `commit_epochs_by_file` and
+`pick_churn_window` take `window` plus an optional `anchor_epoch` (HEAD's committer time
+when omitted, read through `commit_anchor`), so each walk passes an absolute
+`--since=@<epoch>`. `ContentClock.anchor_epoch` is HEAD's committer time, read inside
+`content_commit_clock` before any early return, and `ContentClock.days` counts to it,
+so `last_commit_days` and `freshness_days` are a function of the commit. No HEAD gives
+an empty churn map, a None epoch map and None days: never a fallback to today.
+
+**`commit_anchor.py`**
+The anchor of every history window (issue #773). `head_commit_epoch(root)` is HEAD's
+committer time (`%ct`, the time `git log --since` filters on) or None; `since_args(root,
+window, anchor_epoch)` gives `["--since=@<epoch>"]` through
+`history_window.anchored_since`, `[]` for all history, and None when a window has no
+anchor so the caller degrades. Used by `git_churn` and `understanding_analysis`;
+`ai_usage` reads HEAD through its own `_git` so a missing git or a timeout keeps its
+reason, then builds the bound with `anchored_since`. Tests: `tests/test_commit_anchor.py` (anchored values on a
+dated fixture repository, and the same `scans` from two faked dates, Python's clock and
+git's), `tests/test_no_wall_clock.py` (an AST guard: no wall-clock read
+outside an allowlist of run-metadata and network functions, no relative git date
+literal, and every date bound a headless run passes to git starts with `@`).
+Outside the guarantee: the network scans (`merged_sample`, `review_reality`,
+`delivery`, `gate_cost`, `config_drift`) read forge state that is not a function of the
+commit, so Layer 7 level 2 (`layer-7-review`) is not yet same-commit-same-level; they
+are unavailable in a headless run. A dirty working tree is never a function of a commit.
 
 **`history_window.py`**
 The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
@@ -158,8 +189,12 @@ The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
 string (`re.fullmatch`), so `"6mo\n"` is rejected as the ECMA-262 schema pattern rejects it; `WINDOW_PATTERN` is the
 unanchored regex fragment. `signals.parse_window`, `ai_usage.resolve_window`,
 `fleet_activity.window_start`, `git_churn.window_from_churn_label` and the
-`run.schema.json` window pattern (`fleet_schema`) all read it. Tests:
-`tests/test_history_window.py`.
+`run.schema.json` window pattern (`fleet_schema`) all read it.
+`anchored_since(window, anchor_epoch)` is the absolute `"@<epoch>"` start of a window
+counted back from an epoch (days and weeks exactly, months and years by calendar,
+clamped to the month end, time of day kept); None for all history, or for a start git
+cannot read as an epoch (fewer than nine digits, before 1973-03-03). Tests:
+`tests/test_history_window.py`, `tests/test_commit_anchor.py`.
 `git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
 pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
 scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
@@ -894,7 +929,11 @@ for `rg.exe`, last path in sorted order), since a user-scope winget install may 
 `missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
 do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
 stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
-exit codes do not change. Standard library only. Tests: `tests/test_tool_lookup.py`.
+exit codes do not change. `require_packages` is the hard form (#752): `complexity-treemap.py`
+and `doc-graph-svg.py` call it before their first third-party import, so a run without uv
+and without their PEP 723 dependencies prints the `require_hint` install line (no `--user`
+inside a virtualenv) and exits 1 with no traceback. A module already in `sys.modules`
+counts as present. Standard library only. Tests: `tests/test_tool_lookup.py`.
 
 **`signals_schema.py`**
 Generates the published `references/signals.schema.json` from the `SignalsDocument` and
@@ -1636,8 +1675,8 @@ for it, and the layer scorer owns that check.
 **`understanding_analysis.py`**
 Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
 source (is there an externalised spec/doc?), authorship class, and the velocity clock
-(days since the last comprehension event - a human-authored commit - rather than
-calendar age). Primary finding: orphaned understanding - high complexity with no human
+(days from the last comprehension event - a human-authored commit - to HEAD's
+committer time, issue #773, rather than calendar age; None without a HEAD). Primary finding: orphaned understanding - high complexity with no human
 anchor and no externalised spec. Reuses `change_coupling.authorship_analysis` so the
 conservative agent/human classification is defined one way.
 
@@ -2969,7 +3008,9 @@ Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
 the headless `--window`), or None for full history (`window: "all-time"`);
-`resolve_window` raises on anything else, which degrades the block. `limits` is the
+`resolve_window` returns the label and raises on anything else, which degrades the
+block. The window counts back from HEAD's committer time (issue #773) and `since`
+records the absolute `@<epoch>` bound; a window with no HEAD is `available: false`. `limits` is the
 fixed `LIMITS` tuple (squash merges, stripped or missing trailers, unrecognised
 identities, an agent under a person's identity, automation bots not counted; dependency
 bots and token users counted apart). Counts, shares and fixed strings only: no name, e-mail, pattern or

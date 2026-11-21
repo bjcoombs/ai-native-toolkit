@@ -449,8 +449,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "agent_building.git_hosts": TOKEN,
     },
     "ai_usage": {
-        # window is the <n>d|w|mo|y grammar or "all-time"; since is the git
-        # expression behind it ("12 months ago"), redundant with window.
+        # window is the <n>d|w|mo|y grammar or "all-time"; since is the absolute
+        # git bound behind it ("@<epoch>", counted from HEAD), redundant with window.
         # covered_agents, covered_author_agents and limits are fixed sentences:
         # kept as their length. agent_identity_rule_commits is a positional list
         # of counts (#695), kept as numbers; no rule pattern ever reaches it.

@@ -292,7 +292,9 @@ def test_cost_one_git_log_per_mapping_on_the_service(tmp_path, monkeypatch):
     result = freshness_rows(_targets(root, "grp/docs", "grp/billing"), full=False, hash_salt=None)
 
     assert len(result.rows) == 2
-    logs = [c for c in calls if "log" in c]
+    # History walks only: the content clock's one-commit HEAD read (``log -1``,
+    # the anchor its day counts are measured to, #773) walks no history.
+    logs = [c for c in calls if "log" in c and "-1" not in c]
     service_logs = [c for c in logs if str(svc) in c]
     assert len(service_logs) == 2  # one per mapping
     assert len(logs) - len(service_logs) <= 1  # the docs repository's content clock

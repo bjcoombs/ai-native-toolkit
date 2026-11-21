@@ -158,7 +158,7 @@
                 "string",
                 "null"
               ],
-              "description": "The window as git --since text; dropped in counts-only output."
+              "description": "The window as an absolute git --since bound (@<epoch>, counted back from HEAD's commit time); dropped in counts-only output."
             },
             "merge_rule": {
               "type": "string",

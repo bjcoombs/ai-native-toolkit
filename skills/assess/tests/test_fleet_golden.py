@@ -1,11 +1,11 @@
 """Golden fixture fleet run: Windows and Linux produce the same repos.jsonl (#701, #713).
 
-The fixture estate is built at test time with LF bytes and fixed commit dates
-years in the past, so every history-window count (commits in the window,
-``active``) is zero on any future date. The one field measured against the
-wall clock, ``last_commit_days`` (days from a doc's last commit to now), is
-masked in both the produced file and the committed one before they are
-compared (``WALL_CLOCK_FIELDS``), so the test reads the same on every day. The
+The fixture estate is built at test time with LF bytes and fixed commit dates.
+Every history window and day count (``ai_usage`` commits in the window,
+``last_commit_days``) is counted back from HEAD's commit time (issue #773), so
+the file reads the same on every day without masking; ``active`` is fleet run
+metadata measured from the scan date, and with commit dates years in the past
+it is false on any later date. The
 Linux job proves the committed ``repos.jsonl`` is Linux-true; the Windows job
 (.github/workflows/windows.yml) compares its own run against the same file, so
 a separator, encoding or line-ending difference fails there.
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -29,17 +28,6 @@ from test_fleet_cli import fleet_cli
 
 GOLDEN = Path(__file__).parent / "fixtures" / "fleet_golden" / "repos.jsonl"
 DATE = "2020-01-01T00:00:00+00:00"
-
-# Integer fields computed against the wall clock rather than the commit dates.
-# Masked at the byte level, so the LF and byte-equality checks still see
-# everything else exactly as fleet.py wrote it.
-WALL_CLOCK_FIELDS = ("last_commit_days",)
-_WALL_CLOCK_RE = re.compile(
-    rb'"(' + b"|".join(re.escape(f.encode()) for f in WALL_CLOCK_FIELDS) + rb')":\d+')
-
-
-def _mask_wall_clock(raw: bytes) -> bytes:
-    return _WALL_CLOCK_RE.sub(rb'"\1":"<wall-clock>"', raw)
 
 # Paths at several depths and a non-ASCII name and body, so separators and
 # encodings both reach the output.
@@ -120,11 +108,11 @@ def test_fixture_fleet_run_matches_the_committed_linux_repos_jsonl(tmp_path, mon
     assert fleet_cli.main([str(root), "--out", "out", "--jobs", "1",
                            "--no-history", "--no-diagrams"]) == 0
 
-    produced = _mask_wall_clock((tmp_path / "out" / "repos.jsonl").read_bytes())
+    produced = (tmp_path / "out" / "repos.jsonl").read_bytes()
     if os.environ.get("FLEET_GOLDEN_REGEN") == "1":
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
         GOLDEN.write_bytes(produced)
-    golden = _mask_wall_clock(GOLDEN.read_bytes())
+    golden = GOLDEN.read_bytes()
     assert _differences(produced, golden) == [], (
         "fleet repos.jsonl differs from the committed Linux golden; if a scan changed on "
         "purpose, regenerate it (see this module's docstring)")
