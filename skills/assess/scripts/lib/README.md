@@ -1775,7 +1775,11 @@ run-context holds with no rule. A block that degraded to the scan table's unavai
 `run-context.counts-only.json` beside `run-context.json`) and the headless entry point
 one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
-its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `render_doc`
+its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
+reduces a `REASON` field (`structure.reason`) to its code: the leading code, the code of
+a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
+so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
+Tests: `tests/test_counts_only_reason.py`. `render_doc`
 generates `references/counts-only.md`, the per-block field list (plus the
 `fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
 the fleet's unit and repository keys (#703). Tests:
@@ -1785,7 +1789,9 @@ the fleet's unit and repository keys (#703). Tests:
 The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
 an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
-with the paths), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+with the paths), a `REASON` class for an unavailable block's reason kept as its code
+only, `REASON_SENTENCE_CODES` (the structure reason sentences that predate the
+`code: sentence` form, shared with `headless_layers.structure`), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
 field names and `classify`. Every other object is a record whose keys survive only when
 they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
 fields and rule segments), so a map keyed by a login or a function name is dropped

@@ -28,8 +28,10 @@ from lib.counts_only_rules import (
     FLAT_RULES,
     IDENTIFIER_KEYED_MAPS,
     PATH,
+    REASON,
     RULES,
     TOKEN,
+    TOKEN_RE,
     classify,
 )
 import lib.run_context_types as rct
@@ -302,7 +304,9 @@ def _assert_content_free(out: dict[str, Any]) -> None:
         cls = classify(pattern)
         if pattern.endswith(".<key>"):
             continue  # a map key, checked by the hashing test
-        assert cls in (PATH, TOKEN), f"{pattern} kept unclassified string {value!r}"
+        assert cls in (PATH, TOKEN, REASON), f"{pattern} kept unclassified string {value!r}"
+        if cls == REASON:
+            assert TOKEN_RE.match(value), f"{pattern} kept a reason sentence {value!r}"
         if len(value) > N:
             assert cls == PATH, f"{pattern} kept {len(value)}-char {value[:60]!r}"
 
@@ -373,6 +377,7 @@ def test_live_run_writes_a_content_free_file(live_repo: Path, live_ctx: dict[str
         assert leaked not in text
     assert live_ctx["agent_harness"]["executes"], "fixture should populate agent_harness"
     assert out["agent_harness"]["executes"][0]["kind"]
+    assert out["structure"]["reason"] == "no_python_packages"  # #764: the code survives
 
 
 def _repo_paths(repo: Path) -> set[str]:

@@ -42,6 +42,8 @@ from lib.counts_only_rules import (
     KEY_RE,
     PATH,
     PATH_KEYED_MAPS,
+    REASON,
+    REASON_SENTENCE_CODES,
     RULES,
     TOKEN,
     TOKEN_RE,
@@ -145,6 +147,8 @@ class _Filter:
             return self.identifier(value)
         if cls == TOKEN and TOKEN_RE.match(value):
             return value
+        if cls == REASON:
+            return reason_token(value)
         return None
 
     def value(self, pattern: str, value: Any) -> tuple[bool, Any]:
@@ -258,6 +262,7 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
 
 
 _CLASS_LABEL = {PATH: "path (hashed when hashing is on)", TOKEN: "token",
+                REASON: "reason code",
                 ID: "external id (hashed when hashing is on)", DROP: "dropped"}
 
 
@@ -303,6 +308,9 @@ def render_doc() -> str:
         "(hashed when hashing is on). A field named `path`, `file`,",
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
+        "A field kept as a reason code keeps only the code of a `code: sentence`",
+        "reason (`no_import_graph_rust`), or the code a known sentence maps to",
+        "(`no_grimp`), else `unavailable`; an empty reason is dropped.",
         "",
         "Not filtered: the wiki pages, hotspot pages, badge and report the run",
         "also writes stay in the target repository's `.assess/` directory and",
@@ -406,6 +414,17 @@ def reason_code(reason: object) -> str:
     """
     code = str(reason).split(":", 1)[0].strip() if reason is not None else ""
     return code if TOKEN_RE.match(code) else "unavailable"
+
+
+def reason_token(reason: str) -> str | None:
+    """A ``REASON`` field's code: the leading code, a known sentence's code, or
+    ``"unavailable"``; None (dropped) for an empty reason (#764)."""
+    if not reason.strip():
+        return None
+    code = reason_code(reason)
+    if code != "unavailable":
+        return code
+    return next((c for needle, c in REASON_SENTENCE_CODES if needle in reason), code)
 
 
 def counts_only_scans(
