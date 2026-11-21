@@ -21,7 +21,9 @@ Contract (every caller relies on it):
   saying "rate limit"), still refused after the backoff, gives ``rate_limited``.
 - ``gh`` runs through ``lib.platform_cli.run_cli``: stdin closed, prompts
   disabled, a bounded 429 backoff, and the per-run response cache when
-  ``fleet --platform`` turns it on.
+  ``fleet --platform`` turns it on. A read whose response holds review or
+  comment bodies passes ``cache=False`` (``gh_json(..., cache=False)``), so no
+  body is written to disk (#778).
 
 Typical use::
 
@@ -130,12 +132,13 @@ def resolve_github_remote(repo_root: Path) -> GithubRepo | None:
     return parse_github_remote(url) if url else None
 
 
-def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> str:
-    """Run ``gh`` and return stdout, raising GhUnavailable with a mapped reason."""
+def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS, cache: bool = True) -> str:
+    """Run ``gh`` and return stdout, raising GhUnavailable with a mapped reason.
+    ``cache=False`` keeps the response out of the ``--platform`` response cache."""
     cmd = ["gh", *args]
     shown = " ".join(cmd)
     try:
-        proc = run_cli(cmd, timeout)
+        proc = run_cli(cmd, timeout, cache)
     except FileNotFoundError:
         raise GhUnavailable("gh_not_installed: the gh CLI is not on PATH") from None
     except subprocess.TimeoutExpired:
@@ -186,8 +189,10 @@ def gh_api(path: str) -> Any:
     return _parse(_run_gh(["api", path]), f"gh api {path}")
 
 
-def gh_json(args: list[str], timeout: int = GH_TIMEOUT_SECONDS) -> Any:
+def gh_json(args: list[str], timeout: int = GH_TIMEOUT_SECONDS, cache: bool = True) -> Any:
     """Any other ``gh`` command whose output is JSON, e.g.
     ``["pr", "list", "--repo", slug, "--state", "merged", "--json", "number"]``.
-    ``timeout`` shortens the per-call cap for an optional probe."""
-    return _parse(_run_gh(list(args), timeout), "gh " + " ".join(args))
+    ``timeout`` shortens the per-call cap for an optional probe. ``cache=False``
+    reads it in memory only: a response holding review or comment bodies is
+    never written to the ``--platform`` response cache."""
+    return _parse(_run_gh(list(args), timeout, cache), "gh " + " ".join(args))

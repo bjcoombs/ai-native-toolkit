@@ -2429,7 +2429,11 @@ directory, a successful call's stdout is stored under the sha256 of its argv and
 argv is answered from it for the rest of the run (any process); failures are never stored.
 Only the fleet platform pass sets it, to a temporary directory it removes. A call made
 with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
-nor writes it: merge-request notes carry comment bodies, read in memory only (#716). Callers keep
+nor writes it. The cache never holds comment or review text on either provider: GitLab
+merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
+through `gitlab_cli.glab_api(..., cache=False)`, and the GitHub merged pull request read with
+reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
+in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
 `tests/test_platform_cli.py`.
 
@@ -2563,7 +2567,10 @@ recently updated), then the same search from the 30th newest `mergedAt` with
 for the heavy fields. GitLab, one read:
 `projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
 then filtered and ordered by `merged_at` client-side (works on GitLab versions
-without `order_by=merged_at`). A change with no readable merge time is
+without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
+with `cache=False`: reviews, comments, titles and descriptions are read in memory only and
+never reach the `--platform` response cache; only the light `--json mergedAt` read is
+cached (#778). A change with no readable merge time is
 `<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
 dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
 so an account is probed once); any refusal is `{"available": false, "reason"}`,
