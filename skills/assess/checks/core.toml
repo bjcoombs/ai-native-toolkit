@@ -1,0 +1,2098 @@
+# The core check manifest (#789): every collector, signal, condition and finding the
+# toolkit ships, declared once. Contract: skills/assess/references/check-manifest.schema.json;
+# loader: skills/assess/scripts/lib/check_manifest.py; agreement with the scan registry,
+# the finding tables, the counts-only rules and the default maturity model:
+# skills/assess/tests/test_check_manifest.py. Collectors are in scan-table order.
+
+manifest_version = 1
+owner = "core"
+
+# -- collectors ----------------------------------------------------------------------
+[[entries]]
+id = "core.run_scope"
+kind = "collector"
+title = "Run scope"
+callable = "lib.run_setup:run_scope"
+publishes = []
+reads = ["repo_root", "requested_scope"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "bad_scope"
+revision = 1
+
+[[entries]]
+id = "core.scope"
+kind = "collector"
+title = "Scope root"
+callable = "lib.run_setup:scope_root"
+publishes = []
+reads = ["run_scope"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.assess_dir"
+kind = "collector"
+title = "Artifact directory"
+callable = "lib.run_setup:run_assess_dir"
+publishes = []
+reads = ["repo_root", "run_scope"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.run_id"
+kind = "collector"
+title = "Run id"
+callable = "lib.run_setup:new_run_id"
+publishes = []
+reads = []
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.current"
+kind = "collector"
+title = "Complexity stats (this run)"
+callable = "lib.run_setup:current_stats"
+publishes = []
+reads = ["assess_dir"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.prior"
+kind = "collector"
+title = "Complexity stats (prior run)"
+callable = "lib.run_setup:prior_stats"
+publishes = []
+reads = ["assess_dir"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.excluded_as_generated"
+kind = "collector"
+title = "Generated-file paths"
+callable = "lib.run_setup:generated_paths"
+publishes = []
+reads = ["current"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.diff"
+kind = "collector"
+title = "Stats diff against the prior run"
+callable = "lib.run_setup:stats_diff"
+publishes = []
+reads = ["prior", "current", "excluded_as_generated"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.instruction_grading"
+kind = "collector"
+title = "Instruction-file grading"
+callable = "lib.run_setup:instruction_grading"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.instruction_files"
+kind = "collector"
+title = "Graded instruction files"
+callable = "lib.run_setup:graded_instruction_files"
+publishes = []
+reads = ["instruction_grading"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.rename_map"
+kind = "collector"
+title = "Git rename map"
+callable = "lib.run_setup:rename_map"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.first_flagged"
+kind = "collector"
+title = "First-flagged hotspot dates"
+callable = "lib.run_setup:first_flagged"
+publishes = []
+reads = ["assess_dir", "rename_map"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.excludes"
+kind = "collector"
+title = "Config excludes"
+callable = "lib.run_setup:config_excludes"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.history_window"
+kind = "collector"
+title = "Git history window"
+callable = "lib.run_setup:history_window"
+publishes = []
+reads = ["current"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.fleet_config"
+kind = "collector"
+title = "Fleet settings sections"
+callable = "lib.run_setup:fleet_config"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+
+[[entries]]
+id = "core.ghsync_root"
+kind = "collector"
+title = "ghsync root for GitLab includes"
+issues = [766]
+callable = "lib.run_setup:ghsync_root"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.measured_commit"
+kind = "collector"
+title = "Measured commit"
+callable = "lib.run_setup:measured_commit"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.superseded"
+kind = "collector"
+title = "Superseded run"
+callable = "lib.run_setup:superseded_run"
+publishes = []
+reads = ["assess_dir", "run_date", "measured_commit"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.unfinalized"
+kind = "collector"
+title = "Unfinalized exclusions"
+callable = "lib.run_setup:unfinalized_exclusions"
+publishes = []
+reads = ["assess_dir", "superseded", "first_flagged", "current", "diff", "excludes"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.promissory"
+kind = "collector"
+title = "Promissory marker scan"
+callable = "lib.core_scans:promissory_scan"
+publishes = []
+reads = ["repo_root", "excludes", "scope"]
+stage = "setup"
+private = true
+label = "promissory_markers"
+revision = 1
+
+[[entries]]
+id = "core.accretion_scan"
+kind = "collector"
+title = "Accretion scan"
+callable = "lib.core_scans:accretion_scan"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+
+[[entries]]
+id = "core.accretion_by_file"
+kind = "collector"
+title = "Accretion by file"
+callable = "lib.core_scans:accretion_by_file"
+publishes = []
+reads = ["accretion_scan"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.hot_test_index"
+kind = "collector"
+title = "Repository test index"
+callable = "lib.core_scans:hot_test_index"
+publishes = []
+reads = ["repo_root", "current"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
+
+[[entries]]
+id = "core.run_header"
+kind = "collector"
+title = "Run header"
+callable = "lib.run_setup:run_header"
+publishes = ["run_id", "artifact_schema_version", "assess_method_version", "run_date", "scope", "scope_slug", "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files", "instructions_grade", "diff", "diff_reliable", "diff_version_note", "diff_trend_reset", "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions", "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots", "dropped_first_flagged", "provisional_first_flagged", "log_integrity", "prior_findings_snapshot"]
+reads = ["run_id", "run_date", "run_scope", "measured_commit", "current", "prior", "instruction_grading", "diff", "unfinalized"]
+stage = "setup"
+spread = true
+degrade = false
+gate_reason = "setup"
+headless = { stats_summary = "headless_variant", diff = "unregistered" }
+headless_variants = [
+  { block = "stats_summary", callable = "lib.headless_layers:stats_summary", reads = ["repo_root", "excludes", "scope"], stage = "read_side" },
+]
+shapes = [
+  { path = "stats_summary.fn_ccn", type = "lib.run_context_types:FnCcnBlock" },
+  { path = "stats_summary.top_hotspots", type = "lib.run_context_types:HotspotRow" },
+  { path = "stats_summary.top_complex", type = "lib.run_context_types:HotspotRow" },
+  { path = "stats_summary.top_large", type = "lib.run_context_types:HotspotRow" },
+  { path = "stats_summary.complexity_unreliable", type = "lib.scc_coverage:UnreliableCcnRow" },
+  { path = "prior_findings_snapshot", type = "lib.run_context_types:FindingsSnapshot" },
+  { path = "stats_summary.loc", type = "lib.run_context_types:SizeBlock" },
+  { path = "stats_summary.est_tokens", type = "lib.run_context_types:SizeBlock" },
+  { path = "stats_summary.est_tokens.budget", type = "lib.run_context_types:KeyholeBudget" },
+]
+revision = 1
+  [entries.privacy]
+  run_id = "token"
+  artifact_schema_version = "token"
+  schema_version = "token"
+  prior_schema_version = "token"
+  prior_plugin_version = "token"
+  run_date = "token"
+  scope = "path"
+  scope_slug = "path"
+  "tool_versions.*" = "token"
+  "prior_tool_versions.*" = "token"
+  diff_version_note = "drop"
+  "measured_commit.committed_date" = "token"
+  "measured_commit.head_sha" = "drop"
+  "measured_commit.head_short" = "drop"
+  "measured_commit.subject" = "drop"
+  "measured_commit.upstream" = "drop"
+  "stats_summary.ccn.basis" = "token"
+  "stats_summary.fn_ccn.basis" = "token"
+  "stats_summary.fn_ccn.source.name" = "token"
+  "stats_summary.fn_ccn.backend_by_language.*" = "token"
+  "stats_summary.est_tokens.budget.budget_basis" = "drop"
+  "stats_summary.top_hotspots.ccn_basis" = "token"
+  "stats_summary.top_hotspots.source" = "token"
+  "stats_summary.top_hotspots.max_fn_name" = "drop"
+  "stats_summary.top_complex.ccn_basis" = "token"
+  "stats_summary.top_complex.source" = "token"
+  "stats_summary.top_complex.max_fn_name" = "drop"
+  "stats_summary.top_large.ccn_basis" = "token"
+  "stats_summary.top_large.source" = "token"
+  "stats_summary.top_large.max_fn_name" = "drop"
+  "stats_summary.complexity_unreliable.path" = "path"
+  "stats_summary.complexity_unreliable.language" = "token"
+  pruned_hotspots = "path"
+  retired_excluded_hotspots = "path"
+  dropped_first_flagged = "path"
+  provisional_first_flagged = "path"
+  instructions_grade = "token"
+  "instruction_files.{}.grade" = "token"
+  "instruction_files.{}.findings.kind" = "token"
+  "instruction_files.{}.findings.reference" = "drop"
+  "instruction_files.{}.findings.reason" = "drop"
+  "prior_findings_snapshot.findings.name" = "token"
+  "prior_findings_snapshot.findings.paths" = "path"
+
+[[entries]]
+id = "core.working_notes"
+kind = "collector"
+title = "Working notes"
+callable = "lib.core_scans:working_notes"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+
+[[entries]]
+id = "core.doc_graph"
+kind = "collector"
+title = "Doc graph"
+callable = "lib.core_scans:doc_graph"
+publishes = ["doc_graph"]
+reads = ["repo_root", "excludes", "scope", "working_notes"]
+stage = "setup"
+headless = { doc_graph = "headless_variant" }
+headless_variants = [
+  { block = "doc_graph", callable = "lib.headless_static:doc_graph", reads = ["repo_root", "excludes"], stage = "setup" },
+]
+shapes = [
+  { path = "doc_graph", type = "lib.run_context_types:DocGraphBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "doc_graph.reason" = "drop"
+  "doc_graph.orphans" = "path"
+  "doc_graph.entry_points" = "path"
+  "doc_graph.unreachable" = "path"
+  "doc_graph.moc_named_but_not_wired" = "path"
+  "doc_graph.doc_to_code_edges.doc" = "path"
+  "doc_graph.doc_to_code_edges.code" = "path"
+  "doc_graph.broken_links.from" = "path"
+  "doc_graph.broken_links.target" = "path"
+  "doc_graph.broken_links.kind" = "token"
+  "doc_graph.missing_xrefs.from" = "path"
+  "doc_graph.missing_xrefs.to" = "path"
+  "doc_graph.link_parents.link_parent" = "path"
+  "doc_graph.link_parents.link_entry" = "path"
+
+[[entries]]
+id = "core.doc_staleness"
+kind = "collector"
+title = "Doc staleness"
+summary = "Each doc's last content change against its code subject's churn, following renames."
+callable = "lib.core_scans:doc_staleness"
+publishes = ["doc_staleness"]
+reads = ["repo_root", "doc_graph", "excludes", "scope"]
+stage = "read_side"
+headless = { doc_staleness = "headless_variant" }
+headless_variants = [
+  { block = "doc_staleness", callable = "lib.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },
+]
+shapes = [
+  { path = "doc_staleness", type = "lib.doc_staleness:DocStalenessBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "doc_staleness.churn_window" = "drop"
+  "doc_staleness.docs.subject_method" = "token"
+  "doc_staleness.docs.subject_roots" = "path"
+  "doc_staleness.docs.subject_paths" = "path"
+  "doc_staleness.docs.base_doc_dir" = "path"
+  "doc_staleness.docs.confidence" = "token"
+  "doc_staleness.docs.last_change_basis" = "token"
+  "doc_staleness.docs.last_commit_days_bound" = "token"
+  "doc_staleness.history_boundary_date" = "token"
+  "doc_staleness.docs.provenance.method" = "token"
+  "doc_staleness.docs.provenance.sources" = "path"
+  "doc_staleness.docs.provenance.generated_by" = "drop"
+  "doc_staleness.bulk_commits_skipped.sha" = "drop"
+  "doc_staleness.bulk_commits_skipped.date" = "token"
+  "doc_staleness.declared_cross_repo.path" = "path"
+  "doc_staleness.declared_cross_repo.repo" = "id"
+  "doc_staleness.declared_cross_repo.scope" = "path"
+  "doc_staleness.declared_cross_repo.status" = "token"
+  "doc_staleness.declared_cross_repo.reason" = "token"
+
+[[entries]]
+id = "core.stale_hubs"
+kind = "collector"
+title = "Stale doc hubs"
+callable = "lib.core_scans:stale_hubs"
+publishes = ["stale_hubs"]
+reads = ["doc_graph", "doc_staleness"]
+stage = "read_side"
+shapes = [
+  { path = "stale_hubs", type = "lib.doc_staleness:DocStalenessRow" },
+]
+revision = 1
+  [entries.privacy]
+  "stale_hubs.subject_method" = "token"
+  "stale_hubs.subject_roots" = "path"
+  "stale_hubs.subject_paths" = "path"
+  "stale_hubs.base_doc_dir" = "path"
+  "stale_hubs.confidence" = "token"
+  "stale_hubs.last_change_basis" = "token"
+  "stale_hubs.last_commit_days_bound" = "token"
+  "stale_hubs.provenance.method" = "token"
+  "stale_hubs.provenance.sources" = "path"
+  "stale_hubs.provenance.generated_by" = "drop"
+
+[[entries]]
+id = "core.churn_degenerate"
+kind = "collector"
+title = "Degenerate churn history"
+callable = "lib.core_scans:churn_degenerate"
+publishes = ["churn_degenerate"]
+reads = ["doc_staleness"]
+stage = "read_side"
+revision = 1
+
+[[entries]]
+id = "core.doc_join"
+kind = "collector"
+title = "Doc and complexity join"
+callable = "lib.core_scans:doc_join"
+publishes = []
+reads = ["current", "doc_staleness", "repo_root"]
+stage = "read_side"
+private = true
+label = "documentation"
+revision = 1
+
+[[entries]]
+id = "core.untracked_instruction_files"
+kind = "collector"
+title = "Untracked instruction files"
+callable = "lib.core_scans:untracked_instruction_files"
+publishes = ["untracked_instruction_files"]
+reads = ["instruction_grading"]
+stage = "read_side"
+revision = 1
+  [entries.privacy]
+  untracked_instruction_files = "path"
+
+[[entries]]
+id = "core.broken_instruction_refs"
+kind = "collector"
+title = "Broken instruction references"
+callable = "lib.core_scans:instruction_refs"
+publishes = ["broken_instruction_refs"]
+reads = ["doc_graph", "instruction_grading"]
+stage = "read_side"
+revision = 1
+  [entries.privacy]
+  broken_instruction_refs = "path"
+
+[[entries]]
+id = "core.sensitive_instruction_content"
+kind = "collector"
+title = "Sensitive instruction content"
+callable = "lib.core_scans:sensitive_instruction_content"
+publishes = ["sensitive_instruction_content"]
+reads = ["instruction_grading"]
+stage = "read_side"
+shapes = [
+  { path = "sensitive_instruction_content.{}", type = "lib.agent_instructions_grader:SensitiveFinding" },
+]
+revision = 1
+  [entries.privacy]
+  "sensitive_instruction_content.{}.category" = "token"
+  "sensitive_instruction_content.{}.evidence" = "drop"
+
+[[entries]]
+id = "core.archetype"
+kind = "collector"
+title = "Repository archetype"
+callable = "lib.core_scans:archetype"
+publishes = ["archetype"]
+reads = ["repo_root"]
+stage = "read_side"
+headless = { archetype = "headless_variant" }
+headless_variants = [
+  { block = "archetype", callable = "lib.headless_static:archetype", reads = ["repo_root"], stage = "read_side" },
+]
+revision = 1
+  [entries.privacy]
+  "archetype.archetype" = "token"
+  "archetype.detected_via" = "token"
+  "archetype.reason" = "drop"
+  "archetype.kb_maintenance.gist" = "drop"
+
+[[entries]]
+id = "core.ancestor_instruction_files"
+kind = "collector"
+title = "Ancestor instruction files"
+callable = "lib.core_scans:ancestor_instructions"
+publishes = ["ancestor_instruction_files"]
+reads = ["repo_root"]
+stage = "read_side"
+headless = { ancestor_instruction_files = "unregistered" }
+revision = 1
+  [entries.privacy]
+  ancestor_instruction_files = "drop"
+
+[[entries]]
+id = "core.skills"
+kind = "collector"
+title = "Skills factoring"
+callable = "lib.core_scans:skills_blocks"
+publishes = ["skills_present", "skills_count", "skill_files"]
+reads = ["instruction_grading"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  skill_files = "path"
+
+[[entries]]
+id = "core.instruction_file_size"
+kind = "collector"
+title = "Instruction file size"
+callable = "lib.core_scans:instruction_sizes"
+publishes = ["instruction_file_size"]
+reads = ["instruction_files"]
+stage = "read_side"
+revision = 1
+
+[[entries]]
+id = "core.liveness"
+kind = "collector"
+title = "Liveness scan"
+callable = "lib.core_scans:liveness_scan"
+publishes = []
+reads = ["repo_root", "excludes", "scope"]
+stage = "read_side"
+private = true
+revision = 1
+
+[[entries]]
+id = "core.liveness_blocks"
+kind = "collector"
+title = "Liveness blocks"
+callable = "lib.core_scans:liveness_blocks"
+publishes = ["dead_code", "observability", "capability_offers", "language_capabilities"]
+reads = ["liveness"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+headless = { dead_code = "unregistered", observability = "headless_variant" }
+headless_variants = [
+  { block = "observability", callable = "lib.headless_static:observability", reads = ["repo_root", "excludes"], stage = "read_side" },
+]
+shapes = [
+  { path = "dead_code", type = "lib.run_context_types:DeadCodeBlock" },
+  { path = "observability", type = "lib.liveness_scan:ObservabilityBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "dead_code.caveat" = "drop"
+  "dead_code.candidates.kind" = "token"
+  "dead_code.candidates.symbol" = "drop"
+  "dead_code.tools.language" = "token"
+  "dead_code.tools.tool" = "token"
+  "dead_code.tools.status" = "token"
+  "dead_code.tools.reason" = "drop"
+  "dead_code.tools.consent" = "drop"
+  "observability.boundary" = "drop"
+  "observability.instrumented.signals" = "drop"
+  "observability.discoverable.signals" = "drop"
+  "observability.reachable.signals" = "drop"
+  "capability_offers.build_system" = "token"
+  "capability_offers.build_files" = "path"
+
+[[entries]]
+id = "core.structure_scan"
+kind = "collector"
+title = "Import graph scan"
+callable = "lib.core_scans:structure_scan"
+publishes = []
+reads = ["repo_root", "excludes", "scope"]
+stage = "read_side"
+private = true
+label = "structure"
+revision = 1
+
+[[entries]]
+id = "core.coverage_data"
+kind = "collector"
+title = "Coverage report data"
+callable = "lib.core_scans:coverage_data"
+publishes = []
+reads = ["repo_root"]
+stage = "read_side"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+
+[[entries]]
+id = "core.coverage_report"
+kind = "collector"
+title = "Coverage report"
+callable = "lib.core_scans:coverage_report"
+publishes = ["coverage_report"]
+reads = ["repo_root", "coverage_data"]
+stage = "read_side"
+headless = { coverage_report = "unregistered" }
+revision = 1
+  [entries.privacy]
+  "coverage_report.source" = "path"
+  "coverage_report.format" = "token"
+
+[[entries]]
+id = "core.test_pressure_scan"
+kind = "collector"
+title = "Test pressure scan"
+callable = "lib.core_scans:test_pressure_scan"
+publishes = []
+reads = ["repo_root", "current", "coverage_data"]
+stage = "read_side"
+private = true
+label = "test_pressure"
+revision = 1
+
+[[entries]]
+id = "core.test_pressure"
+kind = "collector"
+title = "Test pressure"
+callable = "lib.core_scans:test_pressure_block"
+publishes = ["test_pressure"]
+reads = ["test_pressure_scan"]
+stage = "read_side"
+degrade = false
+gate_reason = "self_degrading"
+headless = { test_pressure = "unregistered" }
+shapes = [
+  { path = "test_pressure", type = "lib.run_context_types:TestPressureBlock" },
+  { path = "test_pressure", type = "lib.run_context_types:TestPressureUnavailable" },
+]
+revision = 1
+  [entries.privacy]
+  "test_pressure.reason" = "drop"
+  "test_pressure.gap_signal" = "token"
+  "test_pressure.mutation_note" = "drop"
+  "test_pressure.mutation_tools_detected" = "token"
+  "test_pressure.mutation_scope" = "path"
+  "test_pressure.mutation_groups.root" = "path"
+  "test_pressure.mutation_groups.config" = "token"
+  "test_pressure.mutation_groups.scope" = "path"
+  "test_pressure.mutation_groups.runner" = "token"
+  "test_pressure.mutation_groups.unmeasured" = "path"
+  "test_pressure.mutation_groups.reason" = "drop"
+  "test_pressure.cheap_heuristics.confidence_note" = "drop"
+  "test_pressure.cheap_heuristics.assertion_on_internal.subject_function" = "drop"
+  "test_pressure.cheap_heuristics.assertion_on_internal.internal_field" = "drop"
+  "test_pressure.cheap_heuristics.assertion_on_internal.confidence" = "token"
+  "test_pressure.cheap_heuristics.untested_boundaries.operator" = "token"
+  "test_pressure.cheap_heuristics.duplicate_truth.field_name" = "drop"
+  "test_pressure.cheap_heuristics.duplicate_truth.derives_from" = "drop"
+  "test_pressure.cheap_heuristics.duplicate_truth.confidence" = "token"
+
+[[entries]]
+id = "core.mutation_not_run_cap"
+kind = "collector"
+title = "Mutation-not-run cap"
+callable = "lib.core_scans:mutation_cap"
+publishes = ["mutation_not_run_cap"]
+reads = ["test_pressure"]
+stage = "read_side"
+shapes = [
+  { path = "mutation_not_run_cap", type = "lib.mutation_cap:MutationNotRunCap" },
+]
+revision = 1
+  [entries.privacy]
+  "mutation_not_run_cap.max_layer6_band" = "token"
+  "mutation_not_run_cap.annotation" = "drop"
+
+[[entries]]
+id = "core.test_focus"
+kind = "collector"
+title = "Test focus"
+callable = "lib.core_scans:test_focus"
+publishes = ["test_focus"]
+reads = ["repo_root", "current", "coverage_data", "test_pressure", "hot_test_index"]
+stage = "read_side"
+headless = { test_focus = "unregistered" }
+revision = 1
+  [entries.privacy]
+  "test_focus.entries.risk_band" = "token"
+  "test_focus.entries.test_signal" = "token"
+  "test_focus.entries.suggested_action" = "token"
+  "test_focus.entries.hollow_heuristic_kinds" = "token"
+
+[[entries]]
+id = "core.promissory_markers"
+kind = "collector"
+title = "Promissory markers"
+callable = "lib.core_scans:promissory_block"
+publishes = ["promissory_markers"]
+reads = ["promissory"]
+stage = "read_side"
+headless = { promissory_markers = "headless_variant" }
+headless_variants = [
+  { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
+]
+revision = 1
+  [entries.privacy]
+  "promissory_markers.reason" = "drop"
+  "promissory_markers.top_offenders.family" = "token"
+  "promissory_markers.top_offenders.text" = "drop"
+  "promissory_markers.top_offenders.commit" = "drop"
+
+[[entries]]
+id = "core.agent_ops"
+kind = "collector"
+title = "Agent-operations guardrails"
+summary = "Committed permission allowlists, hooks, sandbox rules and routine definitions."
+callable = "lib.agent_ops:scan_agent_ops"
+publishes = ["agent_ops"]
+reads = ["repo_root"]
+stage = "read_side"
+headless = { agent_ops = "registered" }
+revision = 1
+
+[[entries]]
+id = "core.config_drift"
+kind = "collector"
+title = "Configuration drift"
+callable = "lib.config_drift:scan_config_drift"
+publishes = ["config_drift"]
+reads = ["repo_root"]
+stage = "read_side"
+network = true
+headless = { config_drift = "registered" }
+revision = 1
+  [entries.privacy]
+  "config_drift.reason" = "drop"
+  "config_drift.entries.key" = "token"
+  "config_drift.entries.tracked" = "drop"
+  "config_drift.entries.live" = "drop"
+  "config_drift.snapshots.kind" = "token"
+  "config_drift.snapshots.doc" = "drop"
+  "config_drift.snapshots.branch" = "drop"
+
+[[entries]]
+id = "core.merged_sample"
+kind = "collector"
+title = "Merged-change sample"
+issues = [715]
+callable = "lib.merged_sample:merged_sample"
+publishes = []
+reads = ["repo_root", "history_window", "run_date"]
+stage = "read_side"
+private = true
+network = true
+revision = 1
+
+[[entries]]
+id = "core.gitlab_note_facts"
+kind = "collector"
+title = "GitLab merge request notes"
+issues = [716]
+callable = "lib.gitlab_notes:gitlab_note_facts"
+publishes = []
+reads = ["merged_sample", "fleet_config"]
+stage = "read_side"
+private = true
+network = true
+revision = 1
+
+[[entries]]
+id = "core.review_reality"
+kind = "collector"
+title = "Review on merged changes"
+summary = "Review and approval shares over the sampled merged changes, read through gh or glab."
+callable = "lib.review_reality:review_reality_from_sample"
+publishes = ["review_reality"]
+reads = ["merged_sample", "gitlab_note_facts"]
+stage = "read_side"
+network = true
+platform_pass = true
+headless = { review_reality = "registered" }
+revision = 1
+  [entries.privacy]
+  "review_reality.reason" = "drop"
+
+[[entries]]
+id = "core.delivery"
+kind = "collector"
+title = "Delivery figures"
+issues = [715]
+callable = "lib.delivery:scan_delivery"
+publishes = ["delivery"]
+reads = ["merged_sample", "review_reality", "fleet_config", "gitlab_note_facts"]
+stage = "read_side"
+network = true
+platform_pass = true
+platform_only = true
+headless = { delivery = "registered" }
+shapes = [
+  { path = "delivery", type = "lib.delivery:DeliveryBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "delivery.reason" = "drop"
+
+[[entries]]
+id = "core.gate_cost_estimate"
+kind = "collector"
+title = "Gate cost estimate"
+callable = "lib.gate_cost:estimate_gate_cost"
+publishes = ["gate_cost_estimate"]
+reads = ["repo_root"]
+stage = "read_side"
+network = true
+headless = { gate_cost_estimate = "registered" }
+revision = 1
+  [entries.privacy]
+  "gate_cost_estimate.reason" = "drop"
+  "gate_cost_estimate.assumption" = "drop"
+
+[[entries]]
+id = "core.coverage_gate"
+kind = "collector"
+title = "Coverage gate"
+summary = "Finds coverage thresholds written in CI, task-runner and tool config, each with its file, line and threshold."
+issues = [488]
+callable = "lib.coverage_gate:detect_coverage_gate"
+publishes = ["coverage_gate"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "read_side"
+headless = { coverage_gate = "registered" }
+shapes = [
+  { path = "coverage_gate.gates", type = "lib.coverage_gate:CoverageGate" },
+]
+revision = 1
+  [entries.privacy]
+  "coverage_gate.gates.tool" = "token"
+  "coverage_gate.gates.form" = "drop"
+  "coverage_gate.gates.unit" = "token"
+  "coverage_gate.gates.metric" = "token"
+  "coverage_gate.not_detected" = "drop"
+
+[[entries]]
+id = "core.accretion_ratchet"
+kind = "collector"
+title = "Accretion ratchet"
+callable = "lib.core_scans:accretion_ratchet"
+publishes = ["accretion_ratchet"]
+reads = ["accretion_scan", "current"]
+stage = "read_side"
+headless = { accretion_ratchet = "unregistered" }
+revision = 1
+  [entries.privacy]
+  "accretion_ratchet.reason" = "drop"
+
+[[entries]]
+id = "core.keyhole"
+kind = "collector"
+title = "Keyhole integration"
+callable = "lib.core_scans:keyhole"
+publishes = []
+reads = ["repo_root", "current", "doc_staleness", "liveness_blocks", "structure_scan", "test_pressure", "promissory", "accretion_ratchet", "archetype", "excludes", "scope", "rename_map", "doc_join"]
+stage = "read_side"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+  [entries.privacy]
+  archived_finding_paths = "path"
+
+[[entries]]
+id = "core.keyhole_blocks"
+kind = "collector"
+title = "Keyhole blocks"
+callable = "lib.core_scans:keyhole_blocks"
+publishes = ["structure", "behaviour", "documentation", "understanding", "runtime", "derived_findings", "attention", "attention_low_signal", "findings_markdown", "keyhole_summary", "prescribed_actions"]
+reads = ["keyhole"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+headless = { structure = "headless_variant", behaviour = "unregistered", documentation = "unregistered", understanding = "unregistered", runtime = "unregistered", derived_findings = "unregistered" }
+headless_variants = [
+  { block = "structure", callable = "lib.headless_layers:structure", reads = ["structure_scan"], stage = "read_side" },
+]
+shapes = [
+  { path = "behaviour", type = "lib.run_context_types:BehaviourBlock" },
+  { path = "documentation", type = "lib.run_context_types:DocumentationBlock" },
+  { path = "documentation.stale_doc_on_complexity", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "documentation.unexplained_complexity", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "documentation.good_contracts", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "understanding", type = "lib.run_context_types:UnderstandingBlock" },
+  { path = "understanding.modules", type = "lib.understanding_analysis:UnderstandingModule" },
+  { path = "runtime", type = "lib.run_context_types:RuntimeBlock" },
+  { path = "derived_findings", type = "lib.run_context_types:DerivedFinding" },
+  { path = "attention", type = "lib.run_context_types:AttentionRow" },
+  { path = "prescribed_actions", type = "lib.run_context_types:PrescribedAction" },
+  { path = "keyhole_summary", type = "lib.run_context_types:KeyholeSummary" },
+  { path = "structure", type = "lib.structure_graph:StructureBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "runtime.reason" = "drop"
+  "runtime.static_reachability.caveat" = "drop"
+  "runtime.static_reachability.candidates.kind" = "token"
+  "runtime.static_reachability.candidates.symbol" = "drop"
+  "runtime.static_reachability.tools.language" = "token"
+  "runtime.static_reachability.tools.tool" = "token"
+  "runtime.static_reachability.tools.status" = "token"
+  "runtime.static_reachability.tools.reason" = "drop"
+  "runtime.static_reachability.tools.consent" = "drop"
+  "structure.reason" = "reason"
+  "structure.language" = "token"
+  "structure.modularity_reason" = "token"
+  "structure.footprints.module" = "path"
+  "structure.sccs" = "path"
+  "structure.breakup_candidates.package" = "path"
+  "structure.breakup_candidates.clusters" = "path"
+  "structure.internal_burrow_edges.importer" = "path"
+  "structure.internal_burrow_edges.imported" = "path"
+  "structure.name_collisions.name" = "path"
+  "structure.name_collisions.paths" = "path"
+  "behaviour.reason" = "drop"
+  "behaviour.static_modularity_projection" = "drop"
+  "behaviour.static_history_disagreement.finding" = "token"
+  "behaviour.static_history_disagreement.recommendation" = "drop"
+  "behaviour.hidden_coupling_findings.finding" = "token"
+  "behaviour.hidden_coupling_findings.recommendation" = "drop"
+  "behaviour.refactor_boundaries.finding" = "token"
+  "behaviour.refactor_boundaries.recommendation" = "drop"
+  "documentation.reason" = "drop"
+  "documentation.stale_doc_on_complexity.finding" = "token"
+  "documentation.stale_doc_on_complexity.confidence" = "token"
+  "documentation.stale_doc_on_complexity.recommendation" = "drop"
+  "documentation.unexplained_complexity.finding" = "token"
+  "documentation.unexplained_complexity.confidence" = "token"
+  "documentation.unexplained_complexity.recommendation" = "drop"
+  "documentation.good_contracts.finding" = "token"
+  "documentation.good_contracts.confidence" = "token"
+  "documentation.good_contracts.recommendation" = "drop"
+  "understanding.reason" = "drop"
+  "understanding.authorship_class_by_path.{}" = "token"
+  "understanding.orphaned_understanding" = "path"
+  "understanding.modules.authorship_class" = "token"
+  "understanding.modules.finding" = "token"
+  "understanding.modules.recommendation" = "drop"
+  "derived_findings.name" = "token"
+  "derived_findings.paths" = "path"
+  "derived_findings.action" = "drop"
+  "attention.findings" = "token"
+  "prescribed_actions.findings" = "token"
+  "prescribed_actions.action" = "drop"
+  findings_markdown = "drop"
+  "keyhole_summary.concerns.name" = "token"
+  "keyhole_summary.summary_text" = "drop"
+
+[[entries]]
+id = "core.gap_actions"
+kind = "collector"
+title = "Gap actions"
+callable = "lib.core_scans:gap_actions"
+publishes = ["gap_actions"]
+reads = ["coverage_report", "doc_graph", "current", "archetype"]
+stage = "read_side"
+headless = { gap_actions = "unregistered" }
+shapes = [
+  { path = "gap_actions", type = "lib.gap_actions:GapAction" },
+]
+revision = 1
+  [entries.privacy]
+  "gap_actions.signal" = "token"
+  "gap_actions.action" = "drop"
+  "gap_actions.paths" = "path"
+
+[[entries]]
+id = "core.exclusion_disclosures"
+kind = "collector"
+title = "Exclusion disclosures"
+callable = "lib.core_scans:exclusion_disclosures"
+publishes = ["excluded_by_config", "excluded_as_archive", "pruned_finding_paths"]
+reads = ["keyhole", "excludes"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  "excluded_by_config.affected_finding_paths" = "path"
+  "excluded_by_config.dirs" = "path"
+  "excluded_by_config.patterns" = "path"
+  "excluded_as_archive.affected_finding_paths" = "path"
+  "pruned_finding_paths.paths" = "path"
+
+[[entries]]
+id = "core.excluded_generated"
+kind = "collector"
+title = "Excluded generated files"
+callable = "lib.core_scans:generated_exclusions"
+publishes = ["excluded_generated"]
+reads = ["current"]
+stage = "read_side"
+shapes = [
+  { path = "excluded_generated", type = "lib.run_context_types:GeneratedExclusion" },
+]
+revision = 1
+  [entries.privacy]
+  "excluded_generated.reason" = "drop"
+
+[[entries]]
+id = "core.structure_drift_block"
+kind = "collector"
+title = "Structure drift"
+callable = "lib.core_scans:structure_drift"
+publishes = ["structure_drift"]
+reads = ["repo_root", "keyhole"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "self_degrading"
+headless = { structure_drift = "headless_variant" }
+headless_variants = [
+  { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
+]
+shapes = [
+  { path = "structure_drift.tier_0.empty_ownership_patterns", type = "lib.structure_drift:EmptyOwnershipPattern" },
+]
+revision = 1
+  [entries.privacy]
+  "structure_drift.tier_0.empty_ownership_patterns.pattern" = "drop"
+  "structure_drift.tier_0.empty_ownership_patterns.declared_in" = "drop"
+  "structure_drift.tier_0.empty_ownership_patterns.owners" = "drop"
+  "structure_drift.tier_1.static_lens_reason" = "token"
+
+[[entries]]
+id = "core.plugin_version"
+kind = "collector"
+title = "Plugin version"
+callable = "lib.run_setup:read_plugin_version"
+publishes = ["plugin_version"]
+reads = []
+stage = "read_side"
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+  [entries.privacy]
+  plugin_version = "token"
+
+[[entries]]
+id = "core.decline"
+kind = "collector"
+title = "Declined optional tools"
+callable = "lib.core_scans:decline_blocks"
+publishes = ["decline_markers", "reoffer_mutation", "decline_disclosures"]
+reads = ["assess_dir", "plugin_version"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  "decline_markers.tool" = "token"
+  "decline_markers.declined_by" = "drop"
+  "decline_markers.declined_at" = "token"
+  "decline_markers.version" = "token"
+  "decline_markers.reason" = "drop"
+  decline_disclosures = "drop"
+
+[[entries]]
+id = "core.offers_block"
+kind = "collector"
+title = "End-of-run offers"
+callable = "lib.core_scans:offers_blocks"
+publishes = ["interactive", "offers"]
+reads = ["non_interactive"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  "offers.type" = "token"
+  "offers.status" = "token"
+  "offers.reason" = "token"
+  "offers.tool" = "token"
+
+[[entries]]
+id = "core.uninstall_instructions_path"
+kind = "collector"
+title = "Uninstall instructions path"
+callable = "lib.core_scans:uninstall_instructions_path"
+publishes = ["uninstall_instructions_path"]
+reads = []
+stage = "read_side"
+revision = 1
+  [entries.privacy]
+  uninstall_instructions_path = "drop"
+
+[[entries]]
+id = "core.anomalies"
+kind = "collector"
+title = "Anomalies"
+callable = "lib.core_scans:anomalies"
+publishes = ["anomalies"]
+reads = ["run_header"]
+stage = "final"
+revision = 1
+  [entries.privacy]
+  "anomalies.code" = "token"
+  "anomalies.description" = "drop"
+  "anomalies.detail" = "drop"
+
+[[entries]]
+id = "core.instruction_claims"
+kind = "collector"
+title = "Instruction claims"
+callable = "lib.instruction_claims:scan_instruction_claims"
+publishes = ["instruction_claims"]
+reads = ["repo_root", "instruction_files"]
+stage = "post_offers"
+headless = { instruction_claims = "registered" }
+revision = 1
+  [entries.privacy]
+  "instruction_claims.failures.kind" = "token"
+  "instruction_claims.failures.version" = "drop"
+  "instruction_claims.failures.reason" = "drop"
+
+[[entries]]
+id = "core.claude_config"
+kind = "collector"
+title = "Claude Code configuration"
+callable = "lib.claude_config:scan_claude_config"
+publishes = ["claude_config"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+headless = { claude_config = "registered" }
+shapes = [
+  { path = "claude_config", type = "lib.claude_config:ClaudeConfigBlock" },
+  { path = "claude_config.findings", type = "lib.claude_config:ClaudeConfigFinding" },
+]
+revision = 1
+  [entries.privacy]
+  "claude_config.reason" = "drop"
+  "claude_config.snapshot_date" = "token"
+  "claude_config.source_urls" = "drop"
+  "claude_config.manifest_error" = "drop"
+  "claude_config.findings.kind" = "token"
+  "claude_config.findings.key" = "drop"
+  "claude_config.findings.value" = "drop"
+  "claude_config.findings.fix" = "drop"
+
+[[entries]]
+id = "core.nested_instructions"
+kind = "collector"
+title = "Nested instruction files"
+issues = [511]
+callable = "lib.instruction_files:nested_instruction_surface"
+publishes = ["nested_instructions"]
+reads = ["repo_root", "excludes"]
+stage = "post_offers"
+headless = { nested_instructions = "registered" }
+shapes = [
+  { path = "nested_instructions", type = "lib.run_context_types:NestedInstructionsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "nested_instructions.files.tool" = "token"
+  "nested_instructions.files.kind" = "token"
+  "nested_instructions.files.grade" = "token"
+  "nested_instructions.files.scope.directory" = "path"
+  "nested_instructions.files.scope.globs" = "path"
+  "nested_instructions.files.findings.kind" = "token"
+  "nested_instructions.files.findings.reference" = "drop"
+  "nested_instructions.files.findings.reason" = "drop"
+  "nested_instructions.findings.kind" = "token"
+  "nested_instructions.findings.detail" = "drop"
+  "nested_instructions.findings.pattern" = "path"
+  "nested_instructions.findings.parent" = "path"
+  "nested_instructions.budget.claude_code.files" = "path"
+  "nested_instructions.budget.claude_code.skipped_imports.source" = "path"
+  "nested_instructions.budget.claude_code.skipped_imports.target" = "path"
+  "nested_instructions.budget.claude_code.skipped_imports.reason" = "drop"
+  "nested_instructions.budget.codex.files" = "path"
+  "nested_instructions.budget.codex.deepest_chain.files" = "path"
+  "nested_instructions.budget.codex.deepest_chain.directory" = "path"
+
+[[entries]]
+id = "core.agent_harness"
+kind = "collector"
+title = "Committed agent harness"
+issues = [513]
+callable = "lib.agent_harness:scan_agent_harness"
+publishes = ["agent_harness"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+headless = { agent_harness = "registered" }
+shapes = [
+  { path = "agent_harness", type = "lib.agent_harness:AgentHarnessBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_harness.reason" = "drop"
+  "agent_harness.executes.kind" = "token"
+  "agent_harness.executes.name" = "drop"
+  "agent_harness.executes.detail" = "drop"
+  "agent_harness.findings.kind" = "token"
+  "agent_harness.findings.detail" = "drop"
+  "agent_harness.findings.fix" = "drop"
+
+[[entries]]
+id = "core.agent_environment"
+kind = "collector"
+title = "Agent working environment"
+summary = "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs."
+issues = [514]
+callable = "lib.agent_environment:scan_agent_environment"
+offline_callable = "lib.agent_environment:scan_agent_environment"
+publishes = ["agent_environment"]
+reads = ["repo_root", "instruction_files", "agent_harness", "excludes"]
+stage = "post_offers"
+network = true
+headless = { agent_environment = "registered" }
+shapes = [
+  { path = "agent_environment", type = "lib.agent_environment:AgentEnvironmentBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_environment.reason" = "drop"
+  "agent_environment.setup.sources.kind" = "token"
+  "agent_environment.setup.sources.detail" = "drop"
+  "agent_environment.check.entry_points.command" = "drop"
+  "agent_environment.check.entry_points.source" = "drop"
+  "agent_environment.check.named.command" = "drop"
+  "agent_environment.check.named.verdict" = "token"
+  "agent_environment.check.named.reason" = "drop"
+  "agent_environment.check.unresolved.command" = "drop"
+  "agent_environment.check.unresolved.verdict" = "token"
+  "agent_environment.check.unresolved.reason" = "drop"
+  "agent_environment.pinning.manifests.ecosystem" = "token"
+  "agent_environment.pinning.manifests.manifest" = "path"
+  "agent_environment.pinning.manifests.lockfile" = "path"
+  "agent_environment.ci_duration.reason" = "drop"
+  "agent_environment.ci_duration.branch" = "drop"
+  "agent_environment.ci_duration.workflows.workflow" = "drop"
+  "agent_environment.findings.kind" = "token"
+  "agent_environment.findings.detail" = "drop"
+  "agent_environment.findings.fix" = "drop"
+  "agent_environment.layer5_cap.ceiling" = "token"
+  "agent_environment.layer5_cap.unmet" = "token"
+  "agent_environment.layer5_cap.reason" = "drop"
+
+[[entries]]
+id = "core.shared_tooling"
+kind = "collector"
+title = "Shared tooling"
+issues = [566]
+callable = "lib.shared_tooling:scan_shared_tooling"
+publishes = ["shared_tooling"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { shared_tooling = "registered" }
+shapes = [
+  { path = "shared_tooling", type = "lib.shared_tooling:SharedToolingBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "shared_tooling.reason" = "drop"
+  "shared_tooling.ci_includes.kind" = "token"
+  "shared_tooling.ci_includes.source" = "drop"
+  "shared_tooling.ci_includes.id" = "id"
+  "shared_tooling.ci_includes.ref" = "token"
+  "shared_tooling.marketplaces.kind" = "token"
+  "shared_tooling.marketplaces.name" = "drop"
+  "shared_tooling.marketplaces.source" = "drop"
+  "shared_tooling.marketplaces.id" = "id"
+  "shared_tooling.ci_source_ids" = "id"
+  "shared_tooling.marketplace_ids" = "id"
+
+[[entries]]
+id = "core.review_automation"
+kind = "collector"
+title = "AI review committed in CI"
+issues = [696]
+callable = "lib.review_automation:scan_review_automation"
+publishes = ["review_automation"]
+reads = ["repo_root", "fleet_config", "ghsync_root"]
+stage = "post_offers"
+headless = { review_automation = "registered" }
+shapes = [
+  { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "review_automation.reason" = "drop"
+  "review_automation.kinds" = "token"
+  "review_automation.matches.kind" = "token"
+  "review_automation.matches.rule" = "token"
+  "review_automation.matches.reviewer" = "token"
+  "review_automation.matches.path" = "path"
+
+[[entries]]
+id = "core.review_evidence"
+kind = "collector"
+title = "Review evidence"
+summary = "An AI review step committed in CI, or a reviewed merged change."
+issues = [696]
+callable = "lib.review_automation:review_evidence"
+publishes = ["review_evidence"]
+reads = ["review_automation", "review_reality"]
+stage = "post_offers"
+platform_pass = true
+headless = { review_evidence = "registered" }
+shapes = [
+  { path = "review_evidence", type = "lib.review_automation:ReviewEvidenceBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "review_evidence.reason" = "drop"
+
+[[entries]]
+id = "core.ci_checks"
+kind = "collector"
+title = "CI runs a test or lint command"
+summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere."
+issues = [698]
+callable = "lib.ci_checks:scan_ci_checks"
+publishes = ["ci_checks"]
+reads = ["repo_root", "ghsync_root"]
+stage = "post_offers"
+headless = { ci_checks = "registered" }
+shapes = [
+  { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read." },
+]
+  [entries.privacy]
+  "ci_checks.reason" = "drop"
+  "ci_checks.basis" = "token"
+  "ci_checks.includes.kind" = "token"
+  "ci_checks.includes.id" = "id"
+  "ci_checks.includes.status" = "token"
+  "ci_checks.includes.ref_basis" = "token"
+
+[[entries]]
+id = "core.agent_building"
+kind = "collector"
+title = "Agent building"
+issues = [689]
+callable = "lib.agent_building:scan_agent_building"
+publishes = ["agent_building"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { agent_building = "registered" }
+shapes = [
+  { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_building.reason" = "drop"
+  "agent_building.agent_class" = "token"
+  "agent_building.sdks" = "token"
+  "agent_building.config" = "token"
+  "agent_building.ci_agents" = "token"
+  "agent_building.issue_trackers" = "token"
+  "agent_building.git_hosts" = "token"
+
+[[entries]]
+id = "core.layer_grades"
+kind = "collector"
+title = "Deterministic layer grades"
+summary = "The instruction-file grade republished as a block, so a maturity model can read it."
+issues = [620]
+callable = "lib.layer_grades:scan_layer_grades"
+publishes = ["layer_grades"]
+reads = ["instruction_grading"]
+stage = "post_offers"
+headless = { layer_grades = "registered" }
+shapes = [
+  { path = "layer_grades", type = "lib.layer_grades:LayerGradesBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "layer_grades.reason" = "drop"
+  "layer_grades.instructions_grade" = "token"
+
+[[entries]]
+id = "core.instruction_placement"
+kind = "collector"
+title = "Instruction placement"
+issues = [559]
+callable = "lib.instruction_placement:scan_instruction_placement"
+publishes = ["instruction_placement"]
+reads = ["repo_root", "instruction_files", "nested_instructions", "scope", "excludes"]
+stage = "post_offers"
+headless = { instruction_placement = "registered" }
+shapes = [
+  { path = "instruction_placement", type = "lib.instruction_placement:InstructionPlacementBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "instruction_placement.flagged" = "path"
+  "instruction_placement.files.kind" = "token"
+  "instruction_placement.files.relocatable.heading" = "drop"
+  "instruction_placement.files.relocatable.signals" = "token"
+  "instruction_placement.files.relocatable.home.kind" = "token"
+  "instruction_placement.files.relocatable.home.target" = "path"
+  "instruction_placement.loaded_in_full.kind" = "token"
+  "instruction_placement.loaded_in_full.relocatable.heading" = "drop"
+  "instruction_placement.loaded_in_full.relocatable.signals" = "token"
+  "instruction_placement.loaded_in_full.relocatable.home.kind" = "token"
+  "instruction_placement.loaded_in_full.relocatable.home.target" = "path"
+
+[[entries]]
+id = "core.ai_usage"
+kind = "collector"
+title = "AI-assisted change share"
+issues = [547]
+callable = "lib.ai_usage:scan_ai_usage"
+publishes = ["ai_usage"]
+reads = ["repo_root", "scope", "history_window", "fleet_config"]
+stage = "post_offers"
+headless = { ai_usage = "registered" }
+shapes = [
+  { path = "ai_usage", type = "lib.ai_usage:AiUsageBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "ai_usage.reason" = "drop"
+  "ai_usage.window" = "token"
+  "ai_usage.since" = "drop"
+  "ai_usage.merge_rule" = "token"
+  "ai_usage.covered_agents" = "drop"
+  "ai_usage.covered_author_agents" = "drop"
+  "ai_usage.limits" = "drop"
+
+[[entries]]
+id = "core.doc_claims"
+kind = "collector"
+title = "Doc claims"
+issues = [491]
+callable = "lib.doc_claims:scan_doc_claims"
+publishes = ["doc_claims"]
+reads = ["repo_root", "instruction_files", "scope", "excludes"]
+stage = "post_offers"
+headless = { doc_claims = "registered" }
+shapes = [
+  { path = "doc_claims", type = "lib.doc_claims:DocClaimsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "doc_claims.excluded_trees" = "path"
+  "doc_claims.failures.kind" = "token"
+  "doc_claims.failures.version" = "drop"
+  "doc_claims.failures.reason" = "drop"
+  "doc_claims.contradictions.kind" = "token"
+  "doc_claims.contradictions.sites.value" = "drop"
+  "doc_claims.contradictions.conflict_pair.value" = "drop"
+
+# -- signals: the run-context leaves the default maturity model reads ---------------
+[[entries]]
+id = "core:layer_grades.instruction_file_present"
+kind = "signal"
+title = "A committed instruction file exists"
+collector = "core.layer_grades"
+path = "layer_grades.instruction_file_present"
+type = "bool"
+evidence = "head_text"
+null_means = "never null; a missing layer_grades block is unknown"
+
+[[entries]]
+id = "core:agent_environment.check.named_total"
+kind = "signal"
+title = "Instruction files name a check command"
+collector = "core.agent_environment"
+path = "agent_environment.check.named_total"
+type = "number"
+evidence = "head_text"
+
+[[entries]]
+id = "core:instruction_claims.failed"
+kind = "signal"
+title = "Instruction claims that do not hold"
+collector = "core.instruction_claims"
+path = "instruction_claims.failed"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core:nested_instructions.budget.claude_code.lines"
+kind = "signal"
+title = "Always-loaded Claude Code instruction lines"
+collector = "core.nested_instructions"
+path = "nested_instructions.budget.claude_code.lines"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core:observability.rung"
+kind = "signal"
+title = "Observability rung"
+collector = "core.liveness_blocks"
+path = "observability.rung"
+type = "number"
+evidence = "head_text"
+
+[[entries]]
+id = "core:structure.modularity_q"
+kind = "signal"
+title = "Import-graph modularity"
+collector = "core.keyhole_blocks"
+path = "structure.modularity_q"
+type = "number"
+evidence = "head_structure"
+null_means = "no_import_edges: modules that never import each other have no community structure to measure"
+
+[[entries]]
+id = "core:structure.cross_package_edges"
+kind = "signal"
+title = "Cross-package imports"
+collector = "core.keyhole_blocks"
+path = "structure.cross_package_edges"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core:structure.front_door_ratio"
+kind = "signal"
+title = "Cross-package imports through a package's front door"
+collector = "core.keyhole_blocks"
+path = "structure.front_door_ratio"
+type = "number"
+evidence = "head_structure"
+null_means = "null when no import crosses a package boundary"
+
+[[entries]]
+id = "core:promissory_markers.families.suppression.total"
+kind = "signal"
+title = "Suppression comments"
+collector = "core.promissory_markers"
+path = "promissory_markers.families.suppression.total"
+type = "number"
+evidence = "head_text"
+null_means = "absent when no suppression was found"
+
+[[entries]]
+id = "core:promissory_markers.families.suppression.stale"
+kind = "signal"
+title = "Stale suppression comments"
+collector = "core.promissory_markers"
+path = "promissory_markers.families.suppression.stale"
+type = "number"
+evidence = "git_history"
+null_means = "absent when no suppression was found"
+
+[[entries]]
+id = "core:promissory_markers.aging_reliable"
+kind = "signal"
+title = "Marker aging is reliable"
+collector = "core.promissory_markers"
+path = "promissory_markers.aging_reliable"
+type = "bool"
+evidence = "git_history"
+
+[[entries]]
+id = "core:structure_drift.tier_0.matched_patterns"
+kind = "signal"
+title = "Ownership-map patterns matching a tracked file"
+collector = "core.structure_drift_block"
+path = "structure_drift.tier_0.matched_patterns"
+type = "number"
+evidence = "config_text"
+null_means = "the block is omitted with no ownership map"
+
+[[entries]]
+id = "core:stats_summary.loc.p95"
+kind = "signal"
+title = "File size at the 95th percentile"
+collector = "core.run_header"
+path = "stats_summary.loc.p95"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core:ci_checks.test_or_lint_runs"
+kind = "signal"
+title = "A CI line runs a test or lint command"
+collector = "core.ci_checks"
+path = "ci_checks.test_or_lint_runs"
+type = "bool"
+evidence = "head_text"
+null_means = "included_jobs: the check may live in an included file"
+
+[[entries]]
+id = "core:agent_environment.pinning.unlocked_total"
+kind = "signal"
+title = "Dependency manifests without a committed lockfile"
+collector = "core.agent_environment"
+path = "agent_environment.pinning.unlocked_total"
+type = "number"
+evidence = "head_text"
+
+[[entries]]
+id = "core:coverage_gate.enforced"
+kind = "signal"
+title = "A coverage threshold is set"
+collector = "core.coverage_gate"
+path = "coverage_gate.enforced"
+type = "bool"
+evidence = "config_text"
+null_means = "never null; a block that could not be read is available: false"
+
+[[entries]]
+id = "core:test_pressure.mutation_run"
+kind = "signal"
+title = "A mutation run completed"
+collector = "core.test_pressure"
+path = "test_pressure.mutation_run"
+type = "bool"
+evidence = "execution_artifact"
+
+[[entries]]
+id = "core:review_evidence.present"
+kind = "signal"
+title = "Review evidence exists"
+collector = "core.review_evidence"
+path = "review_evidence.present"
+type = "bool"
+evidence = "head_text"
+null_means = "no AI review step is committed and review_reality is unread"
+
+[[entries]]
+id = "core:review_reality.reviewed_share"
+kind = "signal"
+title = "Share of merged changes reviewed"
+collector = "core.review_reality"
+path = "review_reality.reviewed_share"
+type = "number"
+evidence = "platform"
+
+[[entries]]
+id = "core:review_reality.approved_share"
+kind = "signal"
+title = "Share of merged changes approved"
+collector = "core.review_reality"
+path = "review_reality.approved_share"
+type = "number"
+evidence = "platform"
+
+[[entries]]
+id = "core:agent_ops.summary.permissions_encoded"
+kind = "signal"
+title = "Agent permissions are committed"
+collector = "core.agent_ops"
+path = "agent_ops.summary.permissions_encoded"
+type = "bool"
+evidence = "config_text"
+
+[[entries]]
+id = "core:agent_ops.summary.hooks_present"
+kind = "signal"
+title = "Agent hooks are committed"
+collector = "core.agent_ops"
+path = "agent_ops.summary.hooks_present"
+type = "bool"
+evidence = "config_text"
+
+[[entries]]
+id = "core:agent_ops.summary.routines_present"
+kind = "signal"
+title = "Agent routines are committed"
+collector = "core.agent_ops"
+path = "agent_ops.summary.routines_present"
+type = "bool"
+evidence = "config_text"
+
+[[entries]]
+id = "core:doc_staleness.summary.stale_pct"
+kind = "signal"
+title = "Share of mapped docs outrun by their code"
+collector = "core.doc_staleness"
+path = "doc_staleness.summary.stale_pct"
+type = "number"
+evidence = "git_history"
+null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
+
+# -- conditions: display metadata for each default criterion -----------------------
+[[entries]]
+id = "core.cond.layer-0-instructions.1.instruction_file_present"
+kind = "condition"
+title = "An instruction file is committed"
+key = "layer-0-instructions.1:layer_grades.instruction_file_present"
+fix = "Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works."
+
+[[entries]]
+id = "core.cond.layer-0-instructions.2.named_total"
+kind = "condition"
+title = "An instruction file names a check command"
+key = "layer-0-instructions.2:agent_environment.check.named_total"
+fix = "Name the command that checks a change (for example make check) in your instruction file."
+
+[[entries]]
+id = "core.cond.layer-0-instructions.2.failed"
+kind = "condition"
+title = "Every checkable instruction claim holds"
+key = "layer-0-instructions.2:instruction_claims.failed"
+fix = "Update the instruction lines whose claims no longer match the repository."
+
+[[entries]]
+id = "core.cond.layer-0-instructions.2.lines"
+kind = "condition"
+title = "Always-loaded instructions fit in 200 lines"
+key = "layer-0-instructions.2:nested_instructions.budget.claude_code.lines"
+fix = "Move detail that is needed only sometimes into files the instructions point to."
+
+[[entries]]
+id = "core.cond.layer-1-liveness.1.rung"
+kind = "condition"
+title = "Some runtime telemetry is committed"
+key = "layer-1-liveness.1:observability.rung"
+fix = "Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run."
+
+[[entries]]
+id = "core.cond.layer-1-liveness.2.rung"
+kind = "condition"
+title = "Runtime telemetry reaches rung 3"
+key = "layer-1-liveness.2:observability.rung"
+fix = "Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill."
+
+[[entries]]
+id = "core.cond.layer-2-design.1.modularity_q"
+kind = "condition"
+title = "The import graph has module structure"
+key = "layer-2-design.1:structure.modularity_q"
+fix = "Group related modules into packages that mostly import within themselves."
+
+[[entries]]
+id = "core.cond.layer-2-design.2.cross_package_edges"
+kind = "condition"
+title = "Packages import one another"
+key = "layer-2-design.2:structure.cross_package_edges"
+fix = "Nothing to change on its own: this is met once one package imports another."
+
+[[entries]]
+id = "core.cond.layer-2-design.2.front_door_ratio"
+kind = "condition"
+title = "Cross-package imports use a package's front door"
+key = "layer-2-design.2:structure.front_door_ratio"
+fix = "Import other packages through their public API rather than their submodules."
+
+[[entries]]
+id = "core.cond.layer-3-linters.1.total"
+kind = "condition"
+title = "A linter or type checker leaves a footprint"
+key = "layer-3-linters.1:promissory_markers.families.suppression.total"
+fix = "Run a linter or type checker on the code; its suppression comments show it is in use."
+
+[[entries]]
+id = "core.cond.layer-3-linters.2.stale"
+kind = "condition"
+title = "Stale suppressions stay at 10 or fewer"
+key = "layer-3-linters.2:promissory_markers.families.suppression.stale"
+fix = "Revisit the oldest suppression comments and fix or remove them."
+
+[[entries]]
+id = "core.cond.layer-3-linters.2.aging_reliable"
+kind = "condition"
+title = "Suppression ages can be read from history"
+key = "layer-3-linters.2:promissory_markers.aging_reliable"
+fix = "Run on a full clone so suppression ages can be measured."
+
+[[entries]]
+id = "core.cond.layer-4-architecture.1.matched_patterns"
+kind = "condition"
+title = "A boundary or ownership map matches the code"
+key = "layer-4-architecture.1:structure_drift.tier_0.matched_patterns"
+fix = "Commit a CODEOWNERS or ARCHITECTURE.md whose patterns name real paths."
+
+[[entries]]
+id = "core.cond.layer-4-architecture.2.p95"
+kind = "condition"
+title = "95% of files are 500 lines or fewer"
+key = "layer-4-architecture.2:stats_summary.loc.p95"
+fix = "Split the largest files along their natural seams."
+
+[[entries]]
+id = "core.cond.layer-5-ci.1.test_or_lint_runs"
+kind = "condition"
+title = "CI runs your tests or linters"
+key = "layer-5-ci.1:ci_checks.test_or_lint_runs"
+fix = "Add a CI step that runs your test or lint command on pull requests."
+
+[[entries]]
+id = "core.cond.layer-5-ci.2.unlocked_total"
+kind = "condition"
+title = "Every dependency manifest has its lockfile"
+key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
+fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests."
+
+[[entries]]
+id = "core.cond.layer-6-coverage.1.enforced"
+kind = "condition"
+title = "A coverage gate is configured"
+key = "layer-6-coverage.1:coverage_gate.enforced"
+fix = "Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached."
+
+[[entries]]
+id = "core.cond.layer-6-coverage.2.mutation_run"
+kind = "condition"
+title = "A mutation run has completed"
+key = "layer-6-coverage.2:test_pressure.mutation_run"
+fix = "Run the opt-in mutation pass to see which tests pin behaviour."
+
+[[entries]]
+id = "core.cond.layer-7-review.1.present"
+kind = "condition"
+title = "Changes get reviewed"
+key = "layer-7-review.1:review_evidence.present"
+fix = "Commit an AI review step in CI, or review merged changes before they land."
+
+[[entries]]
+id = "core.cond.layer-7-review.2.reviewed_share"
+kind = "condition"
+title = "Most merged changes are reviewed"
+key = "layer-7-review.2:review_reality.reviewed_share"
+fix = "Aim for a review on at least four in five merged changes."
+
+[[entries]]
+id = "core.cond.layer-7-review.2.approved_share"
+kind = "condition"
+title = "Half of merged changes are approved"
+key = "layer-7-review.2:review_reality.approved_share"
+fix = "Approve changes explicitly when you review them."
+
+[[entries]]
+id = "core.cond.layer-8-agent-ops.1.permissions_encoded"
+kind = "condition"
+title = "Agent permissions are committed"
+key = "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded"
+fix = "Commit the agent permission allowlist your team uses, so every clone shares it."
+
+[[entries]]
+id = "core.cond.layer-8-agent-ops.2.hooks_present"
+kind = "condition"
+title = "Agent hooks are committed"
+key = "layer-8-agent-ops.2:agent_ops.summary.hooks_present"
+fix = "Commit the hooks that run checks around agent actions."
+
+[[entries]]
+id = "core.cond.layer-8-agent-ops.2.routines_present"
+kind = "condition"
+title = "Agent routines are committed"
+key = "layer-8-agent-ops.2:agent_ops.summary.routines_present"
+fix = "Commit the routines agents run on a schedule or trigger."
+
+[[entries]]
+id = "core.cond.doc-freshness.1.stale_pct"
+kind = "condition"
+title = "Most mapped docs keep pace with their code"
+key = "doc-freshness.1:doc_staleness.summary.stale_pct"
+fix = "Refresh the docs the report lists under doc freshness."
+
+[[entries]]
+id = "core.cond.doc-freshness.2.stale_pct"
+kind = "condition"
+title = "Four in five mapped docs keep pace"
+key = "doc-freshness.2:doc_staleness.summary.stale_pct"
+fix = "Refresh the docs the report lists under doc freshness, oldest first."
+
+# -- findings -----------------------------------------------------------------------
+[[entries]]
+id = "core.finding.hidden_coupling"
+kind = "finding"
+title = "Hidden coupling"
+name = "hidden_coupling"
+order = 0
+action = "investigate the seam"
+mode = "characterize_first"
+concern = true
+inputs = ["behaviour.hidden_coupling_findings", "structure_drift.tier_1"]
+derive = "lib.coupling_analysis:detect_hidden_coupling"
+suppressed_when = "doc_staleness.churn_degenerate == true"
+prune_missing_paths = true
+headless = "unregistered"
+  [entries.thresholds]
+  low_containment = 0.3
+  high_modularity_q = 0.3
+  high_front_door_ratio = 0.7
+
+[[entries]]
+id = "core.finding.lying_map"
+kind = "finding"
+title = "Lying map"
+name = "lying_map"
+order = 1
+action = "fix or delete the doc"
+mode = "verify_then_retire"
+concern = true
+inputs = ["documentation.stale_doc_on_complexity"]
+suppressed_when = "doc_staleness.churn_degenerate == true"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.unexplained_complexity"
+kind = "finding"
+title = "Unexplained complexity"
+name = "unexplained_complexity"
+order = 2
+action = "write the missing contract (do NOT auto-generate)"
+mode = "characterize_first"
+concern = true
+inputs = ["documentation.unexplained_complexity"]
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.untrusted_hotspot"
+kind = "finding"
+title = "Untrusted hotspot"
+name = "untrusted_hotspot"
+order = 3
+action = "strengthen tests to pin observable behaviour (not internal state)"
+mode = "characterize_first"
+concern = true
+inputs = ["current", "test_pressure"]
+derive = "lib.untrusted_hotspot:untrusted_hotspot_paths"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.self_referential_tests"
+kind = "finding"
+title = "Self-referential tests"
+name = "self_referential_tests"
+order = 4
+action = "request human review - tests verify internal consistency, not truth"
+mode = "verify_then_retire"
+concern = true
+inputs = ["current"]
+derive = "lib.keyhole_signals:_self_referential_test_paths"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.unactioned_intent"
+kind = "finding"
+title = "Unactioned intent"
+name = "unactioned_intent"
+order = 5
+action = "action the promise: fix it, ticket it, or delete the marker/skip"
+mode = "verify_then_retire"
+concern = true
+inputs = ["promissory"]
+derive = "lib.keyhole_signals:_unactioned_intent_paths"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.accretion_ratchet"
+kind = "finding"
+title = "Accretion ratchet"
+name = "accretion_ratchet"
+order = 6
+action = "refactor down: extract, delete dead code, or split the file"
+mode = "refactor_safe"
+concern = true
+inputs = ["accretion_ratchet"]
+derive = "lib.keyhole_signals:_accretion_ratchet_finding"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.orphaned_understanding"
+kind = "finding"
+title = "Orphaned understanding"
+name = "orphaned_understanding"
+order = 7
+action = "assign a human anchor before further change"
+mode = "characterize_first"
+concern = true
+inputs = ["understanding.orphaned_understanding"]
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.candidate_dead_weight"
+kind = "finding"
+title = "Candidate dead weight"
+name = "candidate_dead_weight"
+order = 8
+action = "verify liveness, then delete if dead"
+mode = "verify_then_retire"
+concern = true
+inputs = ["dead_code"]
+derive = "lib.keyhole_signals:candidate_dead_weight_paths"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.override_contradicts_signals"
+kind = "finding"
+title = "Archetype override contradicts the signals"
+name = "override_contradicts_signals"
+order = 9
+action = "Review archetype marker - deterministic signals suggest a different classification"
+mode = "characterize_first"
+concern = true
+inputs = ["archetype"]
+derive = "lib.keyhole_signals:_override_contradiction_paths"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.refactor_boundary"
+kind = "finding"
+title = "Refactor boundary"
+name = "refactor_boundary"
+order = 10
+action = "safe to hand an agent in isolation"
+mode = "refactor_safe"
+concern = false
+inputs = ["behaviour.refactor_boundaries"]
+prune_missing_paths = true
+headless = "unregistered"
