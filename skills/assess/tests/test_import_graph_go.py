@@ -9,6 +9,7 @@ import jsonschema
 import pytest
 
 import assess_signals
+from lib.import_graph import is_graph_source
 from lib.keyhole_signals import _graphed_dirs
 from lib.import_graph import select_graph
 from lib.import_graph_builders import BUILDERS
@@ -100,6 +101,23 @@ def test_the_surface_counts_exported_funcs_and_types_not_methods() -> None:
         "var tmpl = `\nfunc Fake() {}\ntype Fake int\n`\n"
     )
     assert exported_surface(src) == 4  # Exported, S, A, C
+
+
+def test_a_multi_line_func_type_member_does_not_end_its_group() -> None:
+    src = (
+        "package p\n\ntype (\n"
+        "\tHandler func(\n\t\tw io.Writer,\n\t\tr *Request,\n\t) error\n"
+        "\tStore struct{}\n"
+        "\tCache interface{ Get() }\n"
+        ")\n"
+    )
+    assert exported_surface(src) == 3
+
+
+def test_a_raw_string_opened_on_a_const_line_hides_its_contents() -> None:
+    fake = "package p\n\nconst sample = `\nfunc Fictional() {}\ntype Fiction int\n`\n"
+    assert exported_surface(fake) == 0
+    assert exported_surface(fake + "func Real() {}\n") == 1
 
 
 # -- the builder --------------------------------------------------------------
@@ -233,3 +251,22 @@ def test_static_metrics_project_only_onto_the_graphed_language() -> None:
     commits = [{Path("api/api.go"), Path("scripts/tool.py"), Path("docs/a.md")}]
     assert _graphed_dirs(commits, "go") == {"api"}
     assert _graphed_dirs(commits, "python") == {"scripts"}
+
+
+@pytest.mark.parametrize("rel, graphed", [
+    ("api/api.go", True),
+    ("checks/check_test.go", False),
+    ("api/testdata/t.go", False),
+    ("vendor/x/x.go", False),
+    ("_tools/t.go", False),
+    (".hidden/h.go", False),
+    ("scripts/tool.py", False),
+])
+def test_only_files_the_go_builder_graphs_count_for_go(rel: str, graphed: bool) -> None:
+    assert is_graph_source(Path(rel), "go") is graphed
+
+
+def test_a_test_only_go_directory_gets_no_static_projection() -> None:
+    commits = [{Path("api/api.go"), Path("checks/check_test.go")}]
+    assert _graphed_dirs(commits, "go") == {"api"}
+    assert _graphed_dirs([{Path("tests/test_x.py")}], "python") == {"tests"}

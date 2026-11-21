@@ -36,7 +36,7 @@ from lib.change_coupling import (
 from lib.coupling_analysis import (
     StaticModularity, detect_hidden_coupling, find_refactor_boundaries)
 from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
-from lib.import_graph import LANGUAGE_BY_EXTENSION
+from lib.import_graph import is_graph_source
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
 from lib.run_context_types import (
     AttentionRow, BehaviourBlock, BehaviourFields, CoChangePair, CouplingRow, DerivedFinding,
@@ -240,7 +240,7 @@ def _graphed_dirs(commit_sets: list[set[Path]], language: str) -> set[str]:
     out: set[str] = set()
     for files in commit_sets:
         for f in files:
-            if LANGUAGE_BY_EXTENSION.get(f.suffix.lower()) != language:
+            if not is_graph_source(f, language):
                 continue
             for parent in Path(f).parents:
                 s = parent.as_posix()

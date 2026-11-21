@@ -279,7 +279,9 @@ keeps one graph per language; the largest (most modules, then most internal edge
 the language token) is returned. With no graph the reason is the first builder failure in
 registration order, else `no_graph_reason`, which counts source files per language
 (`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
-`scope`) and names the dominant one. Imports no graph tool.
+`scope`) and names the dominant one. `is_graph_source(rel_path, language)` says whether a
+file could be in that language's graph (extension, plus Go's skipped test files and
+directories). Imports no graph tool.
 
 Worked example: a builder for a language whose package is a directory and whose front
 door is the directory's `index` file.
@@ -362,8 +364,9 @@ public surface is the package's exported top-level `func` (not method) and `type
 declarations. There is no `module_file` (a package is several files), so A1 size reads 0
 and structure-drift tier 1, whose static lens pairs files, reads unavailable
 (`no_static_file_map`) rather than reading every declared pair as split. The behaviour
-block projects the static metrics only onto directories holding a file in the graph's
-language (`structure.language`), so a Go graph never vouches for a Python tree. Skipped:
+block projects the static metrics only onto directories holding a file the graph's
+language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
+graph never vouches for a Python tree or a directory of `_test.go` files alone. Skipped:
 `_test.go` files, `testdata`, `vendor` and the other `EXCLUDE_DIRS`, and directories
 starting with `.` or `_`. Build constraints are not evaluated. No `go.mod` returns `None`,
 so the reason stays `no_import_graph_go`; the builder has no tool to miss and never

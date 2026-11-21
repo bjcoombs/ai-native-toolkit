@@ -128,7 +128,12 @@ def exported_surface(text: str) -> int:
 
 
 def _exported_group_members(rest: str) -> int:
-    """Exported names in a ``type ( ... )`` group, read up to its ``)``."""
+    """Exported names in a ``type ( ... )`` group, read up to its ``)``.
+
+    Braces and parentheses share one depth, so a member spanning lines (a
+    gofmt ``func(...)`` type whose ``) error`` sits on its own line) does not
+    end the group early.
+    """
     count = 0
     depth = 0
     for line in rest.splitlines():
@@ -137,7 +142,7 @@ def _exported_group_members(rest: str) -> int:
         member = _GROUP_MEMBER.match(line) if depth == 0 else None
         if member is not None and member.group(1)[:1].isupper():
             count += 1
-        depth += line.count("{") - line.count("}")
+        depth += line.count("{") + line.count("(") - line.count("}") - line.count(")")
     return count
 
 

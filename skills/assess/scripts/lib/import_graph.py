@@ -211,3 +211,20 @@ def no_graph_reason(
         return NO_PYTHON_PACKAGES
     return (f"no_import_graph_{language}: no import graph was built for {language}, "
             "the repository's dominant source language")
+
+
+def is_graph_source(rel_path: Path, language: str) -> bool:
+    """True when a repo-relative file could be in ``language``'s graph.
+
+    Its extension must map to ``language``. For Go, test files (``_test.go``),
+    ``testdata``, directories starting with ``.`` or ``_`` and ``EXCLUDE_DIRS``
+    are out, as the Go builder skips them (issue #710); other languages keep
+    the extension check alone.
+    """
+    if LANGUAGE_BY_EXTENSION.get(rel_path.suffix.lower()) != language:
+        return False
+    if language != "go":
+        return True
+    return not rel_path.name.endswith("_test.go") and not any(
+        part in EXCLUDE_DIRS or part == "testdata" or part.startswith((".", "_"))
+        for part in rel_path.parts[:-1])
