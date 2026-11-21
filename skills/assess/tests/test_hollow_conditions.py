@@ -134,6 +134,7 @@ def test_every_case_names_its_fixing_issue_or_none() -> None:
         for mark in case.marks:
             reason = mark.kwargs["reason"]
             assert mark.kwargs["strict"] is True
+            assert mark.kwargs.get("raises") is AssertionError, case.id
             assert reason == _NONE_FILED or reason.startswith(_ISSUES), case.id
 
 
