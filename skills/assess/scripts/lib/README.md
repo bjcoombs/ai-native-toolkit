@@ -758,6 +758,7 @@ that read `history_window` (`ai_usage`). Every git call runs inside `read_only_g
 forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
 before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
 the network.
+`FULL_RUN_ONLY_REASONS` (#697) is the set of reason codes (`lib.counts_only.reason_code` of `UNREGISTERED_REASON` and `NETWORK_REASON`: `not_registered`, `network`) that mark a block only a full `/assess` run produces; derived, never listed by hand.
 
 **`headless_layers.py`**
 The headless runner's entries for the four blocks the default maturity model's layer 2-4
@@ -877,6 +878,7 @@ repository, never a passing one) and `settings_signals` the normalised settings 
 the fragment's `scope` and `provider`. The CLI loads the maturity model with
 `level_signals.signal_path_validator()`.
 `write_groups` writes atomically with sorted keys.
+Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
@@ -900,6 +902,7 @@ maturity model titles are escaped (`text`), ids are code spans (`code`). `write_
 `page_path` refuses an id with an empty, dot or backslash segment. Golden pages:
 `tests/fixtures/fleet_next_steps/expected/` (regeneration command in the test
 module's docstring).
+A row with a floor (#697) reads "at least N of top" in the levels table and "Level at least N" in its section; a full-run-only signal gets `FULL_RUN_HINT` in place of a scan hint.
 
 **`next_step_guidance.py`**
 Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
@@ -985,6 +988,7 @@ without `--levels` is refused as such, before any version check), and
 `compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
 `delta` or `was`), marking the comparison not comparable across maturity-model versions (a run
 without a maturity model is named as having none, not as maturity model `None`).
+`floor` and `full_run_only` (#697) are optional: an older row without them loads; a present `floor` must be a whole number of at least 1 on an unknown row.
 
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
@@ -1000,6 +1004,7 @@ by character count, fixed number formatting: the same run gives the same bytes. 
 renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README). Its text,
 truncation, hatch pattern and document head come from `fleet_svg` with the heat map's own
 literal colours, so the goldens stayed byte-identical through the move.
+A floor cell (#697) is the floor's ramp colour under a transparent hatch (`fleet-floor`), printing `N+` and a key letter, with its own legend entry; the key says which missing signals need a full `/assess`. The pattern and legend entry appear only when a floor does, so runs without one render as before.
 
 **`fleet_svg.py`**
 Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
@@ -1029,6 +1034,7 @@ an unknown level or a missing top level (`None` when nothing is left, never 0);
 `known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single
 repository can be measured by, so the group charts use them too and the three read on one
 scale. Pure arithmetic.
+`floor_mean(cells)` (#697) over `(level, floor, top)` triples is the floor-inclusive lower bound printed beside the known-only mean as "at least"; `floor_shares` lists its shares and `has_floor` says whether any unknown row has a floor. Plotted positions stay on `mean_share`.
 
 **`fleet_quadrant.py`**
 The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
@@ -1041,6 +1047,7 @@ and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws
 the busy-and-immature quadrant (at or above the median commits, below half the top level,
 `at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
 never at zero, and every label that fit nowhere under the plot.
+A repository with a floored unknown row also gets `maturity_floor` (`fleet_maturity.floor_mean`, #697), shown as "at least" in the tooltip and on the not-plotted strip; the dot stays on the known-only mean.
 
 **`fleet_tooling_map.py`**
 The shared-tooling map (#674). `tooling_view(repos)` reads each scanned repository's
@@ -1065,6 +1072,7 @@ removed or with no row known in both runs is named on a hatched strip, never at 
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
 both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
 carries a `*` explained under the chart.
+With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
 The per-layer maturity bars (#675). `layer_bars(levels, repos)` evaluates every `team` row
@@ -1074,6 +1082,7 @@ stacks them pale to dark on the heat map's ramp (`fleet_svg.ramp_step`, so a row
 the darkest step whatever its level count), the unknown segment hatched and its repositories
 named, never counted as level 0; `org` rows, which have no per-repository level, are named
 under the bars.
+An unknown repository with a floor (#697) is named in `floored` and drawn first in the unknown part of the bar, in its floor's ramp colour under a hatch; the notes name it "(at least N)".
 
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
@@ -1109,6 +1118,7 @@ splits each line at an unknown or absent value and at a maturity-model version c
 (`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
 `fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
 (regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
+A run with floored unknown team rows carries `floor_means` (#697), printed in each point's tooltip and never drawn, so the line does not jump where floors first appear in the history.
 
 **`fleet_schema.py`**
 Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
@@ -1289,6 +1299,7 @@ row reads the group's settings, not its repositories, so on both sides it is `le
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
+A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -1783,6 +1794,7 @@ rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fle
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
 flag in `tests/test_fleet_legacy.py`.
+An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
@@ -2317,19 +2329,27 @@ The `delivery` platform block (#715, part of #702), reads `merged_sample`,
 `review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
-approved_share, self_merged_share}`. Hours rounded to 0.01; percentiles are
+approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
-`github-actions` and not a bot; an author-less event is skipped; an account of unknown
+`github-actions`, not a bot and not an `[[ai_usage.agent_identities]]` config match
+(a configured agent on a user login is AI review, never a human); an author-less event is skipped; an account of unknown
 type (a failed probe, or one left unprobed once the shared 20-login budget is spent)
 before the first known human on any change nulls the three comment figures. A
 person whose login equals a pinned AI App's name probes as that App (`gh` drops
 `[bot]` and gives comment authors no type). AI review (GitHub): a review or
-comment by an `[[ai_usage.agent_identities]]` config match (username, with and
-without `[bot]`), or by a bot account whose login is in `AI_REVIEWERS` or matches
-`agent_identity.AGENT_RULES` with `[bot]` re-appended; status bots never count,
-an unknown account that decides a change nulls the share. GitLab: time to merge, the
+comment by an `[[ai_usage.agent_identities]]` config match (username as given), or by a bot account whose login is in
+`AI_REVIEWERS` or matches `agent_identity.AGENT_RULES` or a config rule with
+`[bot]` re-appended (the `[bot]` form is tried only for a bot, so a loose rule
+never makes a person an agent); status bots never count,
+an unknown account that decides a change nulls the share. Agent-authored share
+(#717): changes whose author `AuthorMatcher.classify_username` puts in the `agent`
+bucket - a config rule or a pinned `AGENT_RULES`
+entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
+the author `username`, so access-token users count only under
+`token_users_as_agents` and dependency bots never; a deleted author is not an
+agent. Read from the sample's own listing, no extra call. GitLab: time to merge, the
 copied shares, and from the `gitlab_note_facts` spec (#716, `lib/gitlab_notes.py`) hours to
 the first human comment, `human_commented_share` and `ai_review_share` (null when the notes
 were undecided or refused, or no facts were passed). An unavailable

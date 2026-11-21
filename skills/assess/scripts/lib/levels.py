@@ -48,7 +48,11 @@ Semantics:
   or a false pass; when a definitely unmet level caps it, the level is known
   even with a higher-level signal missing. ``missing_signals`` names every
   signal whose criterion is unknown, unavailable or mistyped, either way, so a
-  non-empty list does not by itself mean ``unknown``. Every criterion at every level is evaluated, so the result does
+  non-empty list does not by itself mean ``unknown``. An ``unknown`` row whose
+  ``low`` is at least 1 also carries ``floor`` (that ``low``, #697): every
+  criterion up to it is met, and only a higher level's signal is unmeasured.
+  The key is absent otherwise (never null), so a known row and an unknown row
+  with nothing confirmed read exactly as before. Every criterion at every level is evaluated, so the result does
   not depend on criterion order and the unmet criteria of every level are
   exposed for next-step guidance.
   Consequence: a null that a scan means as "absent" (``instructions_grade:
@@ -63,7 +67,8 @@ Semantics:
   level reached by at least that share of the repositories passed in (the
   caller passes the active ones). Each unknown repository contributes its own
   bounds; the team level is reported only when the roll-up of the low bounds
-  equals the roll-up of the high bounds, otherwise the row is unknown. No
+  equals the roll-up of the high bounds, otherwise the row is unknown, with the
+  roll-up of the low bounds as its ``floor`` when that is at least 1. No
   repositories at all is unknown. A team row's ``missing_signals`` lists the
   signals unavailable in any repository, so it can be non-empty while
   ``status`` is ``level``; ``unknown_repos`` names the repositories whose own
@@ -194,6 +199,8 @@ class Evaluation(TypedDict):
     level: int | None
     # [low, high]: the reachable level range; equal when the level is known.
     bounds: list[int]
+    # The low bound of an unknown evaluation when it is at least 1 (#697); absent otherwise.
+    floor: NotRequired[int]
     missing_signals: list[str]
     levels: list[LevelOutcome]
 
@@ -204,6 +211,7 @@ class RowResult(TypedDict):
     scope: Scope
     status: Literal["level", "unknown"]
     level: int | None
+    floor: NotRequired[int]  # an unknown row's confirmed low bound, when at least 1 (#697)
     missing_signals: list[str]
     levels: NotRequired[list[LevelOutcome]]
     aggregation: NotRequired[Aggregation]
@@ -479,13 +487,29 @@ def evaluate_row(row: Row, data: JsonDict | None) -> Evaluation:
         elif met is False and high == len(row["levels"]):
             high = level["level"] - 1
     known = low == high
-    return {
+    evaluation: Evaluation = {
         "status": "level" if known else "unknown",
         "level": low if known else None,
         "bounds": [low, high],
         "missing_signals": sorted(missing),
         "levels": outcomes,
     }
+    if not known and low >= 1:
+        evaluation["floor"] = low
+    return evaluation
+
+
+def floor_of(entry: Mapping[str, Any]) -> int | None:
+    """The confirmed floor of an unknown row or evaluation, or None.
+
+    Reads the optional ``floor`` key (#697): a whole number of at least 1 on a
+    row whose status is ``unknown``. Absent (a row written before #697, a known
+    row, nothing confirmed) or malformed reads as None, never as a level.
+    """
+    floor = entry.get("floor")
+    if entry.get("status") == "level" or type(floor) is not int or floor < 1:
+        return None
+    return floor
 
 
 def _share_level(levels: list[int], share: Fraction, top: int) -> int:
@@ -508,7 +532,7 @@ def _team_result(row: Row, repos: dict[str, JsonDict]) -> RowResult:
     low = _share_level([ev["bounds"][0] for ev in evaluations.values()], share, top)
     high = _share_level([ev["bounds"][1] for ev in evaluations.values()], share, top)
     determined = bool(evaluations) and low == high
-    return {
+    result: RowResult = {
         "id": row["id"],
         "title": row["title"],
         "scope": "team",
@@ -519,11 +543,14 @@ def _team_result(row: Row, repos: dict[str, JsonDict]) -> RowResult:
         "repos": evaluations,
         "unknown_repos": unknown,
     }
+    if not determined and low >= 1:
+        result["floor"] = low
+    return result
 
 
 def _org_result(row: Row, settings: JsonDict | None) -> RowResult:
     evaluation = evaluate_row(row, settings)
-    return {
+    result: RowResult = {
         "id": row["id"],
         "title": row["title"],
         "scope": "org",
@@ -532,6 +559,9 @@ def _org_result(row: Row, settings: JsonDict | None) -> RowResult:
         "missing_signals": evaluation["missing_signals"],
         "levels": evaluation["levels"],
     }
+    if "floor" in evaluation:
+        result["floor"] = evaluation["floor"]
+    return result
 
 
 def evaluate(maturity_model: MaturityModel, group: Group) -> LevelsResult:
