@@ -53,6 +53,7 @@ from typing import Any, TypedDict
 from lib.fleet_activity import is_active
 from lib.platform_cli import CACHE_ENV
 from lib.run_context_types import JsonDict
+from lib.signals import offline_scans
 
 # Bumped when a row's envelope (the keys below) changes. Scan blocks carry
 # their own shapes, versioned by ``signals_schema_version``.
@@ -290,8 +291,9 @@ def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str
             command += ["--hash-salt", options.hash_salt]
     if options.window is not None:
         command += ["--window", options.window]
-    if options.scans is not None:
-        command += ["--scans", options.scans]
+    scans = options.scans if options.platform else offline_scans(options.scans)
+    if scans is not None:
+        command += ["--scans", scans]
     if options.fleet_config is not None:
         command += ["--fleet-config", str(options.fleet_config)]
     if options.platform:

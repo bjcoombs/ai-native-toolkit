@@ -95,6 +95,17 @@ def test_platform_only_block_is_absent_without_platform(fixture_repo, no_gh):
     assert not no_gh.exists()
 
 
+def test_scans_delivery_without_platform_exits_2_naming_platform(fixture_repo, tmp_path, no_gh, capsys):
+    """An explicit platform-only scan offline would write ``{}`` with no reason (#779)."""
+    out = tmp_path / "signals.json"
+    assert _run(fixture_repo, out, "--scans", "agent_ops,delivery") == 2
+    assert "--platform" in capsys.readouterr().err and not out.exists()
+    assert signals.platform_only_error(["delivery"], platform=True) is None
+    assert signals.platform_only_error(["agent_ops"], platform=False) is None
+    assert signals.offline_scans("agent_ops, delivery") == "agent_ops"
+    assert signals.offline_scans(None) is None
+
+
 def test_network_scans_are_unavailable_and_agent_environment_runs_offline(fixture_repo, tmp_path, no_gh):
     out = tmp_path / "signals.json"
     assert _run(fixture_repo, out) == 0

@@ -149,6 +149,24 @@ PLATFORM_SCANS: tuple[str, ...] = ("review_reality", "delivery", "review_evidenc
 # ``review_evidence`` is offline itself, so neither is listed.
 PLATFORM_ONLY_SCANS: tuple[str, ...] = ("delivery",)
 
+
+def platform_only_error(requested: Iterable[str] | None, platform: bool) -> str | None:
+    """The error for a ``--scans`` selection naming a ``PLATFORM_ONLY_SCANS`` block
+    without ``--platform`` (it would produce no block and no reason); None when fine."""
+    named = [name for name in (requested or ()) if name in PLATFORM_ONLY_SCANS]
+    if platform or not named:
+        return None
+    return f"--scans {', '.join(named)} needs --platform: the block exists only on the platform"
+
+
+def offline_scans(scans: str | None) -> str | None:
+    """A comma-separated ``--scans`` value without its ``PLATFORM_ONLY_SCANS`` names, for the
+    offline child of a fleet run (the platform pass reads them)."""
+    if scans is None:
+        return None
+    return ",".join(s.strip() for s in scans.split(",")
+                    if s.strip() and s.strip() not in PLATFORM_ONLY_SCANS)
+
 DEFAULT_WINDOW = "6mo"
 
 # skills/assess/scripts/lib/signals.py -> the toolkit checkout root.

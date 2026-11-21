@@ -16,7 +16,15 @@ import pytest
 from conftest import skip_without_posix_shell
 
 from lib import fleet_platform
-from lib.fleet import SCAN_TIMEOUT, STATUS_FAILED, STATUS_OK, FleetRow, ScanOptions, Target
+from lib.fleet import (
+    SCAN_TIMEOUT,
+    STATUS_FAILED,
+    STATUS_OK,
+    FleetRow,
+    ScanOptions,
+    Target,
+    signals_command,
+)
 from lib.fleet_platform import failure_reason, join, platform_scans, run_platform
 from lib.fleet_schema import build_schema, build_stamp_schema
 from lib.run_context_types import JsonDict
@@ -204,12 +212,11 @@ def test_platform_joins_the_read_and_stamps_the_run(world, tmp_path):
 
 def test_delivery_is_absent_offline_and_joined_by_the_platform_pass(world, tmp_path):
     """No ``--platform``: no ``delivery`` block at all, not a placeholder (#779); the pass adds it."""
-    scans = ("--scans", "agent_ops,review_reality,delivery")
-    rows, _ = _run(tmp_path, *scans)
+    rows, _ = _run(tmp_path)
     assert "delivery" not in rows[0]["scans"]
     assert rows[0]["scans"]["review_reality"]["available"] is False
     jsonschema.validate(rows[0], build_schema())
-    rows, _ = _run(tmp_path, *scans, "--platform")
+    rows, _ = _run(tmp_path, "--scans", "agent_ops,review_reality,delivery", "--platform")
     delivery = rows[0]["scans"]["delivery"]
     assert delivery["available"] is True and delivery["merged_count"] == 0
     jsonschema.validate(rows[0], build_schema())
@@ -222,6 +229,23 @@ def test_a_refused_pr_list_gives_both_platform_blocks_no_access(world, tmp_path)
     assert rows[0]["status"] == "ok"
     for name in ("review_reality", "delivery"):
         assert rows[0]["scans"][name] == {"available": False, "reason": "no_access"}, name
+
+
+def test_scans_delivery_without_platform_is_rejected(world, tmp_path, capsys):
+    """``--scans delivery`` alone would give no block and no reason (#779): exit 2."""
+    with pytest.raises(SystemExit) as exc:
+        fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "out"), "--scans", "delivery"])
+    assert exc.value.code == 2
+    assert "--platform" in capsys.readouterr().err
+    assert _calls(world) == []
+
+
+def test_the_offline_child_never_asks_for_a_platform_only_scan(tmp_path):
+    offline = signals_command(tmp_path, tmp_path / "o.json", ScanOptions(scans="agent_ops,delivery"))
+    assert offline[offline.index("--scans") + 1] == "agent_ops"
+    online = signals_command(tmp_path, tmp_path / "o.json",
+                             ScanOptions(scans="delivery", platform=True))
+    assert online[online.index("--scans") + 1] == "delivery"
 
 
 def test_a_hanging_host_never_turns_the_row_into_scan_timeout(world, tmp_path):

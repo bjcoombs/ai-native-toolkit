@@ -64,6 +64,7 @@ from lib.signals import (  # noqa: E402
     build_document,
     known_scans,
     parse_window,
+    platform_only_error,
     select_scans,
 )
 from lib.tool_lookup import warn_missing_packages  # noqa: E402
@@ -127,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         select_scans(requested)
         parse_window(args.window)
+        problem = platform_only_error(requested, args.platform)
+        if problem is not None:
+            raise ValueError(problem)
     except UnknownScanError as e:
         print(f"error: {e}. Known scans: {', '.join(known_scans())}", file=sys.stderr)
         return 2

@@ -825,7 +825,11 @@ completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
 both providers), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
-out of the document offline: absent, never a placeholder. `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+out of the document offline: absent, never a placeholder. `platform_only_error` makes
+`assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
+`offline_scans` strips those names from the `--scans` of a fleet run's offline child
+(`fleet.signals_command`); `fleet_groups.platform_only` reads such an absent block as a
+`--platform` gap only on a row that has scans. `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
 one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`,
 `delivery` and `review_evidence`, an offline block the pass rebuilds because it reads
 `review_reality`, #696), or a network spec one of them reads, runs its `fn`. Extension point:

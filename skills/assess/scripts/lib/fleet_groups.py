@@ -224,9 +224,10 @@ def full_run_only(data: Mapping[str, Any], signal: str) -> bool:
 
 def platform_only(data: Mapping[str, Any], signal: str) -> bool:
     """The signal's block is a ``PLATFORM_SCANS`` one left unmeasured for want of ``--platform``:
-    it reads ``network``, or it is a ``PLATFORM_ONLY_SCANS`` block absent from the row (#779)."""
+    it reads ``network``, or it is a ``PLATFORM_ONLY_SCANS`` block absent from a row that has
+    scans (#779); a failed row (no scans) claims no platform gap."""
     name = signal.split(".", 1)[0]
-    if name in PLATFORM_ONLY_SCANS and name not in data:
+    if data and name in PLATFORM_ONLY_SCANS and name not in data:
         return True
     return name in PLATFORM_SCANS and _unavailable_code(data, signal) == reason_code(NETWORK_REASON)
 

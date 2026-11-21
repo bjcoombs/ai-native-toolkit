@@ -570,7 +570,7 @@ remotes) logged in.
 - **Joined, never failing a row.** The pass's blocks replace the offline
   `network` placeholders in the row's `scans`, and add `delivery`, which a row
   read without `--platform` does not carry at all (absent, never zeros or a
-  placeholder). A refused read (HTTP 403 from `gh` or `glab`) gives
+  placeholder); `--scans delivery` without `--platform` exits 2. A refused read (HTTP 403 from `gh` or `glab`) gives
   `review_reality` and `delivery` `available: false` with code `no_access`. It never changes a row's
   `status` or `reason`: a slow or refusing host cannot turn an offline row into
   `scan_timeout`. A read that runs past `--platform-timeout`, exits non-zero or
