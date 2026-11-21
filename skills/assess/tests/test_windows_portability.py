@@ -84,14 +84,20 @@ def test_every_text_mode_subprocess_call_names_its_encoding():
 
 
 def _is_text_write(call: ast.Call) -> bool:
-    """``x.write_text(...)``, or ``open``/``os.fdopen`` with a constant ``"w"``/``"a"`` mode."""
+    """``x.write_text(...)``, or ``open``/``os.fdopen``/``Path.open`` with a constant ``"w"``/``"a"`` mode.
+
+    ``Path.open`` takes the mode first; ``open``, ``io.open`` and ``os.fdopen`` take it second.
+    """
     func = call.func
     name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else ""
     if name == "write_text":
         return True
     if name not in ("open", "fdopen"):
         return False
-    mode = call.args[1] if len(call.args) > 1 else next(
+    module_open = not isinstance(func, ast.Attribute) or name == "fdopen" or (
+        isinstance(func.value, ast.Name) and func.value.id in ("io", "codecs", "builtins"))
+    index = 1 if module_open else 0
+    mode = call.args[index] if len(call.args) > index else next(
         (k.value for k in call.keywords if k.arg == "mode"), None)
     return (isinstance(mode, ast.Constant) and isinstance(mode.value, str)
             and mode.value[:1] in "wa" and "b" not in mode.value)
@@ -152,6 +158,10 @@ def test_the_lf_guard_sees_text_writes_and_skips_binary_and_reads():
     assert _is_text_write(_first_call("os.fdopen(fd, 'w', encoding='utf-8')"))
     assert not _is_text_write(_first_call("os.fdopen(fd, 'wb')"))
     assert not _is_text_write(_first_call("open(p, encoding='utf-8')"))
+    assert _is_text_write(_first_call("p.open('w', encoding='utf-8')"))
+    assert _is_text_write(_first_call("io.open(p, 'a', encoding='utf-8')"))
+    assert not _is_text_write(_first_call("p.open('rb')"))
+    assert not _is_text_write(_first_call("p.open()"))
 
 
 def _relative_path_names(scope: ast.AST) -> set[str]:
