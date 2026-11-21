@@ -70,7 +70,7 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--hash-paths` | Counts-only paths hashed under one salt drawn for this run: hashes join within the run, but reruns are not byte-identical. |
 | `--hash-salt VALUE` | Hash paths under this salt; reruns stay byte-identical and join across runs. |
-| `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
+| `--delete-after` | Delete each clone once it is scanned, to keep disk use flat over a large estate. With `--platform` no clone is deleted until the whole offline scan is done, so peak disk use is the whole estate. Narrow and fail-closed; see [`--delete-after`](#--delete-after). |
 | `--compare [RUN_DIR]` | Compare this run with an earlier one and write `DIR/compare.json`. `RUN_DIR` is an `--out` directory or a history entry; a bare `--compare` takes the latest history entry whose stamp matches this run. See [Run history and comparison](#run-history-and-comparison). |
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
@@ -392,7 +392,11 @@ remotes) or `glab` (GitLab remotes) logged in.
   are not comparable (`platform pass changed ...`), and each gets its own
   history entry and trend line.
 - **With `--delete-after`.** A clone is deleted after its platform read, not
-  after its offline scan, so the pass can still read its remote.
+  after its offline scan, so the pass can still read its remote. The platform
+  pass starts only once the whole offline scan is done, so no clone is deleted
+  before then: peak disk use is the whole estate, not flat. On an estate too
+  large to hold at once, run without `--platform`, or in batches with
+  `--from-list`.
 - **Counts-only.** Every platform field is a count, share, flag or duration.
 
 ## `--delete-after`
