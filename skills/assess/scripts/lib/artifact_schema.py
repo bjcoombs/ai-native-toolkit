@@ -264,7 +264,13 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-# Unreleased (the next release PR sets the version):
+# Unreleased (bumped once by the 3.0.0 release PR):
+# - run-context.json layer_grades gains instruction_presence (issue #821): root,
+#   nested_only or none. instruction_file_present is true for nested_only, and
+#   instructions_grade there is the best nested grade, where both read as no
+#   instruction file before; both are null when there is no root file and the
+#   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
+#   nested_only and now sits after layer_grades in run-context.json.
 # - ci_checks basis, enforced_basis and lint_basis gain external_ci and
 #   external_ci_marker (issue #928): under --platform, more than half of the sampled
 #   merged pull requests carry a check of a known external CI system; offline, a root
