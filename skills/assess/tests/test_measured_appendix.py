@@ -24,7 +24,7 @@ def test_ran_and_skipped_with_reasons() -> None:
              behaviour={"available": False, "reason": "not_registered"})
     text = measured_section([a, b], NAMES)
     assert text.startswith(HEADING + "\n")
-    assert f"`docs/what-we-measure.md` in the toolkit repository, `{CATALOG_URL}`." in text
+    assert f"[docs/what-we-measure.md]({CATALOG_URL})" in text
     assert not banned_hits(text)
     ran, skipped = text.split("### Skipped")
     # agent_ops was skipped in one repository, so it is not measured everywhere either.

@@ -8,8 +8,10 @@ the team next-steps pages, the heat map, the layer bars and the /assess
 deterministic report from source and fails, naming the word and where it was
 found, when one of them reappears.
 
-Only prose is checked: fenced code, backticked spans and identifiers that contain
-an underscore are left out (``prose``), so machine field names, JSON keys, finding
+Only prose is checked: fenced code, backticked spans, URLs (bare or as a Markdown link
+target) and identifiers that contain an underscore are left out (``prose``), and the
+retired label "AI-Native" matches case-sensitively, never as part of the product name
+``ai-native-toolkit``, so machine field names, JSON keys, finding
 names and signal paths (``lying_map``, ``instruction_claims.failed``) stay as they
 are. Stdlib only.
 """
@@ -45,14 +47,22 @@ IN_PLACE = "In place:"
 _FENCE = re.compile(r"```.*?```", re.S)
 _TICKS = re.compile(r"`[^`\n]*`")
 _IDENT = re.compile(r"\S*_\S*")
+# A URL is an address, not prose: a bare one, or a Markdown link target ``](...)``.
+_URL = re.compile(r"\]\([^)\s]*\)|<?https?://[^\s)>]+>?")
+
+#: "AI-Native" is the product's own name in ``ai-native-toolkit``, so the retired label
+#: matches case-sensitively, as a whole token not followed by ``-toolkit``.
+_AI_NATIVE = re.compile(r"(?<![\w-])AI-Native(?!-toolkit)(?![\w-])")
 
 
 def prose(text: str) -> str:
-    """``text`` with fenced code, backticked spans and underscored identifiers blanked."""
-    return _IDENT.sub(" ", _TICKS.sub(" ", _FENCE.sub(" ", text)))
+    """``text`` with fenced code, backticked spans, URLs and underscored identifiers blanked."""
+    return _IDENT.sub(" ", _URL.sub(" ", _TICKS.sub(" ", _FENCE.sub(" ", text))))
 
 
 def _pattern(term: str) -> re.Pattern[str]:
+    if term == "AI-Native":
+        return _AI_NATIVE
     return re.compile(r"\b" + re.escape(term) + r"\b", re.I)
 
 

@@ -42,7 +42,7 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 27 scans were measured everywhere, 15 ran but were not measured everywhere, and 1 was skipped. Every check is described in `docs/what-we-measure.md` in the toolkit repository, `https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md`. A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 27 scans were measured everywhere, 15 ran but were not measured everywhere, and 1 was skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
 ### Ran (42)
 

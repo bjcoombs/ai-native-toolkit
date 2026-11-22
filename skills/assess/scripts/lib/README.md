@@ -128,9 +128,12 @@ source, a real fleet run with the shipped maturity model (`report.md`, every dia
 map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
 fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
 naming the word, the output and the line, when one of these words appears in the prose as a
-whole word, case-insensitive. Fenced code, backticked spans and identifiers containing an
-underscore are not prose (`prose`), so machine field names, JSON keys, finding names and
-signal paths (`lying_map`, `instruction_claims.failed`, `fail_under`) stay unchanged.
+whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
+target) and identifiers containing an underscore are not prose (`prose`), so machine field
+names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
+`fail_under`) and links into the toolkit repository stay unchanged. The retired label
+`AI-Native` matches case-sensitively, as a whole token not followed by `-toolkit`, because
+`ai-native-toolkit` is the product's own name (#794).
 
 | Word | Say instead |
 |------|-------------|
@@ -2075,9 +2078,7 @@ unavailable), else **Skipped** with why (full `/assess` only, needs the network 
 a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
 "this run wrote no block for it" for `assess_report.py`). Its first line starts `In place:`
 (`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
-measured everywhere, or were skipped. It names `docs/what-we-measure.md` with its absolute
-URL, both in code spans: the repository name in the URL would otherwise trip the vocabulary
-guard's retired band label. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
 Tests: `tests/test_measured_appendix.py`.
 
 ### Configuration
