@@ -244,7 +244,7 @@ constant each.
 # pointer line per unlinked system. nested_instructions also discovers the
 # Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-# Unreleased (the release PR assigns the version):
+# 1.42.0 (2.2.0 release): four changes since 1.41.0.
 # - two run-context.json fields that read configuration text are renamed so
 #   their names no longer claim a run (issue #783): ci_checks.test_or_lint_runs is
 #   test_or_lint_configured and coverage_gate.enforced is configured. Values and
@@ -264,7 +264,7 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-ARTIFACT_SCHEMA_VERSION = "1.41.0"
+ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -424,7 +424,7 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
-# Unreleased (the 2.2.0 release PR assigns the number):
+# 37 (2.2.0 release): four rule changes since 36.
 # - the empty-set rule and two requires (issue #906): a file-size condition
 #   reads not measured (no_scored_files) when no file is scored, layer-2-design.2
 #   requires layer-2-design.1 and layer-4-architecture.2 requires
@@ -441,4 +441,14 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #   coverage_gate.enforced_meets_minimum (issue #921): a threshold of at least 50
 #   percent that no enforced CI line runs is level 0, where it read 1, and CI the
 #   scan cannot read is unknown. A JaCoCo MISSEDCOUNT maximum reads unknown, not 0.
-ASSESS_METHOD_VERSION = 36
+# - ci_checks recognises common test runners and reads unread targets as unknown
+#   (issue #920): dotnet test, swift test, mix test, deno test, bazel test, ctest,
+#   phpunit, pest, rspec, Gradle test tasks, xcodebuild test, php artisan test and
+#   check-named make, just, task, rake, turbo and nx targets run a check, and a
+#   wrapper (docker compose run, bundle exec, uv run, poetry run, npx, pnpm exec,
+#   hatch run) is read by the program it runs, for Layer 3 lint runs as well as
+#   Layer 5. A target whose recipe is not read (make foo, npm run foo,
+#   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
+#   (check_target) where it read false; setup-named targets (make build) still
+#   read false. Layer 5 level 1 can move from 0 to met or unknown.
+ASSESS_METHOD_VERSION = 37

@@ -6,7 +6,7 @@
   "type": "object",
   "properties": {
     "level_result_version": {
-      "const": 1
+      "const": 2
     },
     "levels_version": {
       "type": "string"
@@ -69,7 +69,7 @@
       "type": "object",
       "properties": {
         "level_result_version": {
-          "const": 1
+          "const": 2
         },
         "levels_version": {
           "type": "string"
