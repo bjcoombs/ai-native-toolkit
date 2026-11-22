@@ -165,9 +165,10 @@
 #   with == is its own lock). A repository with no manifest has nothing to
 #   lock: the condition reads not measured (no_manifests, the count
 #   agent_environment.pinning.manifests_total is 0,
-#   signal_grades.EMPTY_DENOMINATORS, #927), never met. Committed setup does not stand in for a lockfile. Naming a check
-#   command that resolves is read once, by Layer 0 level 2, so a missing named
-#   check costs Layer 0 only (#786). A repository with locked dependencies but
+#   signal_grades.EMPTY_DENOMINATORS, #927), never met. Committed setup
+#   does not stand in for a lockfile. Naming a check command that resolves
+#   is read once, by Layer 0 level 2, so a missing named check costs Layer 0
+#   only (#786). A repository with locked dependencies but
 #   no CI check line is 0.
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
