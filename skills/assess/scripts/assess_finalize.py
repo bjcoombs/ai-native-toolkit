@@ -1,7 +1,9 @@
 """LLM write-back for /assess: fill placeholders left by the deterministic core.
 
 The deterministic core writes log.md and hotspots/*.md with placeholders for
-LLM-derived content (score, maturity label, top action, per-hotspot actions).
+LLM-derived content (the top action and per-hotspot actions). The readiness
+line is the deterministic headline summary the core writes (#747); the LLM never
+sets a score.
 After the LLM writes assess-report.md, it also writes finalize-input.json with
 its derived values and invokes this script to update the wiki files in place.
 
@@ -44,7 +46,8 @@ from pathlib import Path
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.badge import maturity_band
+from lib.action_conditions import condition_errors
+from lib.headline import as_headline
 from lib.evidence_check import check_evidence, describe
 from lib.keyhole_signals import mode_for_finding
 from lib.mutation_cap import layer6_cap_violation
@@ -70,20 +73,13 @@ class FinalizeValidationError(Exception):
     non-zero with the specific violation named.
 
     The invariants this guards (see ``_validate_finalize_input``) are the
-    contract that lets a downstream reader trust the finalised wiki: the score
-    fits its denominator, the maturity label matches the score band, every
-    hotspot action names a real hotspot, the input came from *this* run (run_id),
+    contract that lets a downstream reader trust the finalised wiki: every
+    hotspot action names a real hotspot, every action condition is one the
+    run's level result lists, the input came from *this* run (run_id),
     Layer 6 never claims proof (Present) the run never gathered (no mutation,
     or only partial mutation),
     and no layer verdict rests only on evidence that fails its re-check.
     """
-
-
-# Canonical maturity tier keywords, used to pull the tier the LLM claimed out of
-# a free-text ``maturity_label`` (which may be decorated, e.g.
-# "Knowledge Base · Solid (3 applicable layers)"). No pair is a substring of
-# another, so a single containment test per keyword is unambiguous.
-_MATURITY_KEYWORDS = ("AI-Native", "Not Ready", "Solid", "Basic")
 
 
 def _log_target(assess_dir: Path, run_id: str | None) -> int | None:
@@ -93,7 +89,7 @@ def _log_target(assess_dir: Path, run_id: str | None) -> int | None:
     (no entry carries a run id stamp) or a context with no run id falls back to
     the last entry still carrying placeholders, the pre-#355 behaviour. In a
     stamped log a missing entry refuses: falling back there would write this
-    run's score into another run's entry and re-sign it.
+    run's top action into another run's entry and re-sign it.
     """
     entries = read_log_entries(assess_dir)
     if run_id:
@@ -145,39 +141,31 @@ def _validate_no_earlier_same_date_placeholders(assess_dir: Path, target: int | 
             )
 
 
+# The log entry the core writes before #747 carried the layered-score placeholder;
+# finalize still fills such an entry, with the run's deterministic readiness line.
+_LEGACY_READINESS = r"\*\*AI Readiness:\*\* [\d.]+ / 8 \(\(LLM fills in\)\)"
+_LEGACY_TOP_ACTION = r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)"
+_TOP_ACTION = r"\*\*Top action:\*\* \(LLM fills in\)"
+
+
 def _finalize_log(
-    assess_dir: Path,
-    *,
-    target: int | None,
-    score: float,
-    maturity_label: str,
-    top_action: str,
-    denominator: int = 8,
+    assess_dir: Path, *, target: int | None, top_action: str, readiness: str,
 ) -> None:
     """Fill the placeholders of log entry ``target`` and re-chain the log.
 
     Only that entry is updated; other entries are immutable historical records.
     The rewrite recomputes the chain marker of the filled entry and every later
-    one, so ``verify_log_chain`` stays valid after finalize (#355).
-    ``denominator`` is 8 for a software repo and the applicable-layer count for
-    a knowledge base (#224), so the finalised line reads ``2.5 / 3`` rather
-    than ``2.5 / 8``.
+    one, so ``verify_log_chain`` stays valid after finalize (#355). The core
+    writes the readiness line itself (#747); ``readiness`` fills only the legacy
+    layered-score placeholder of an entry written before it.
     """
     if target is None:
         return
     text = read_log_entries(assess_dir)[target]
-    # The placeholder the core writes is always "/ 8"; the finalised
-    # denominator may differ for a knowledge base, so the replacement carries it.
-    text = _replace_last(
-        text,
-        pattern=r"\*\*AI Readiness:\*\* [\d.]+ / 8 \(\(LLM fills in\)\)",
-        replacement=f"**AI Readiness:** {score} / {denominator} ({maturity_label})",
-    )
-    text = _replace_last(
-        text,
-        pattern=r"\*\*Top action:\*\* Deterministic ranker not yet wired \(LLM picks Top 3\)",
-        replacement=f"**Top action:** {top_action}",
-    )
+    text = _replace_last(text, pattern=_LEGACY_READINESS,
+                         replacement=f"**Readiness:** {readiness}")
+    for pattern in (_TOP_ACTION, _LEGACY_TOP_ACTION):
+        text = _replace_last(text, pattern=pattern, replacement=f"**Top action:** {top_action}")
     rewrite_log_entry(assess_dir, target, text)
 
 
@@ -493,18 +481,6 @@ def _load_run_context(assess_dir: Path) -> JsonDict:
     return ctx
 
 
-def _claimed_maturity_tier(label: str) -> str | None:
-    """The canonical maturity tier named inside a (possibly decorated) label.
-
-    Returns None when no single recognised tier is present - a custom label with
-    zero or ambiguously many keywords carries too little structure to reconcile,
-    so that specific check is skipped rather than false-rejected.
-    """
-    low = label.lower()
-    hits = [k for k in _MATURITY_KEYWORDS if k.lower() in low]
-    return hits[0] if len(hits) == 1 else None
-
-
 def _layer_score(data: FinalizeInput, layer: int) -> float | None:
     """The LLM-supplied numeric score for one layer, or None if not carried.
 
@@ -543,52 +519,11 @@ def _validate_run_id_match(data: FinalizeInput, ctx: JsonDict) -> None:
         )
 
 
-def _validate_denominator(denominator: int, ctx: JsonDict) -> None:
-    """The finalize-input denominator must match the archetype's.
-
-    Skipped when the archetype scan degraded (no available block / no
-    denominator) - honest-degrade beats false-rejecting a run whose archetype
-    couldn't be determined.
-    """
-    archetype = ctx.get("archetype")
-    if not isinstance(archetype, dict) or not archetype.get("available"):
-        return
-    ctx_denominator = archetype.get("denominator")
-    if ctx_denominator is None:
-        return
-    if int(ctx_denominator) != denominator:
-        raise FinalizeValidationError(
-            f"denominator mismatch: finalize-input denominator {denominator} != "
-            f"run-context archetype.denominator {ctx_denominator}"
-        )
-
-
-def _validate_score(score: float, denominator: int) -> None:
-    """A layered score can never exceed its denominator (the display ceiling)."""
-    if score > denominator:
-        raise FinalizeValidationError(
-            f"score {score} exceeds denominator {denominator}"
-        )
-
-
-def _validate_maturity(score: float, denominator: int, label: str) -> None:
-    """The maturity label must name the tier the score actually earns.
-
-    Bands come from ``lib.badge.maturity_band`` (the single source of truth,
-    co-located with the badge colour ratios). A label that claims a different
-    tier than the score/denominator fraction earns is rejected - the guardrail
-    against a run that quietly overstates (or understates) its own readiness.
-    """
-    claimed = _claimed_maturity_tier(label)
-    if claimed is None:
-        return
-    expected = maturity_band(score, denominator)
-    if claimed != expected:
-        ratio = (score / denominator) if denominator else 0.0
-        raise FinalizeValidationError(
-            f"maturity_label {label!r} claims tier {claimed!r} but score "
-            f"{score}/{denominator} (ratio {ratio:.3f}) is tier {expected!r}"
-        )
+def _validate_action_conditions(data: FinalizeInput, ctx: JsonDict) -> None:
+    """Every action ``condition`` must be one this run's level result lists (#747)."""
+    errors = condition_errors(data.get("actions"), ctx.get("level"))
+    if errors:
+        raise FinalizeValidationError("; ".join(errors))
 
 
 def _validate_hotspot_actions(data: FinalizeInput, ctx: JsonDict) -> None:
@@ -686,7 +621,7 @@ def _validate_evidence(data: FinalizeInput, repo_root: Path) -> list[JsonDict]:
 
 
 def _validate_finalize_input(
-    data: FinalizeInput, ctx: JsonDict, *, denominator: int, repo_root: Path
+    data: FinalizeInput, ctx: JsonDict, *, repo_root: Path
 ) -> list[JsonDict]:
     """Run every finalize invariant. Raises FinalizeValidationError on the first
     violation, before any write - so a bad input reaches nothing.
@@ -695,10 +630,8 @@ def _validate_finalize_input(
     finalize but are reported as warnings.
     """
     _validate_run_id_match(data, ctx)
-    _validate_denominator(denominator, ctx)
-    _validate_score(float(data["score"]), denominator)
-    _validate_maturity(float(data["score"]), denominator, data["maturity_label"])
     _validate_hotspot_actions(data, ctx)
+    _validate_action_conditions(data, ctx)
     _validate_layer6_cap(data, ctx)
     return _validate_evidence(data, repo_root)
 
@@ -715,22 +648,14 @@ def finalize_run(*, assess_dir: Path) -> None:
     input_path = _locate_input(assess_dir)
     data: FinalizeInput = json.loads(input_path.read_text(encoding="utf-8"))
     ctx = _load_run_context(assess_dir)
-    # Denominator: 8 for a software repo (the display ceiling), or the count of
-    # applicable layers for a knowledge base (issue #224). Defaults to 8 so a
-    # pre-archetype finalize-input.json finalises exactly as before.
-    denominator = int(data.get("denominator", 8))
-    tolerated = _validate_finalize_input(
-        data, ctx, denominator=denominator, repo_root=assess_dir.parent
-    )
+    tolerated = _validate_finalize_input(data, ctx, repo_root=assess_dir.parent)
     target = _log_target(assess_dir, ctx.get("run_id") or data.get("run_id"))
     _validate_no_earlier_same_date_placeholders(assess_dir, target)
     _finalize_log(
         assess_dir,
         target=target,
-        score=data["score"],
-        maturity_label=data["maturity_label"],
         top_action=data["top_action"],
-        denominator=denominator,
+        readiness=as_headline(ctx.get("headline"))["summary"],
     )
     _finalize_hotspot_actions(assess_dir, hotspot_actions=data.get("hotspot_actions", {}))
     actions = data.get("actions")
@@ -742,11 +667,8 @@ def finalize_run(*, assess_dir: Path) -> None:
             f"its verified entries: {describe(e)} ({e['reason']})",
             file=sys.stderr,
         )
-    # The shipped badge stays deterministic: assess_core wrote the findings-count
-    # badge.json (linking to this report). Finalize deliberately does NOT
-    # overwrite it with the LLM-derived score - that grade appears inside
-    # assess-report.md instead, so the badge never claims a number a
-    # deterministic run cannot reproduce.
+    # The shipped badge stays deterministic: assess_core wrote it from the
+    # headline (the Step and the verified tally). Finalize never rewrites it.
     # Clean up: the input file is consumed - delete from both the cache and
     # the legacy in-tree location so a stale copy can't leak into a commit.
     try:

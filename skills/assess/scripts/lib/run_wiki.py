@@ -21,6 +21,7 @@ from lib.wiki_state import (
     sweep_superseded_history,
 )
 from lib.wiki_writer import (
+    LOG_PLACEHOLDER,
     UNFINALIZED_ACTIONS_POINTER,
     HotspotEntry,
     LogEntry,
@@ -232,7 +233,7 @@ def write_run_wiki(
     accretion_by_file: dict[str, dict[str, Any]], excluded_unfinalized: list[str],
     excluded_as_generated: Callable[[str], bool], scope_rel: str | None,
     instructions_grade: str | None, plugin_version: str,
-    hot_test_index: TestIndex | None,
+    hot_test_index: TestIndex | None, readiness: str = "Step not measured",
 ) -> RunWiki:
     """Write the hotspot pages, index.md and this run's log.md entry.
 
@@ -287,12 +288,13 @@ def write_run_wiki(
         excluded_as_generated=excluded_as_generated,
     )
 
-    top_action = "Deterministic ranker not yet wired (LLM picks Top 3)"
+    # The Top action is the one placeholder left for finalize (LOG_PLACEHOLDER);
+    # the readiness line is the deterministic headline summary (#747).
+    top_action = LOG_PLACEHOLDER
     log_entry = LogEntry(
         run_date=run_date,
         files_scored=current.get("files_scored", 0),
-        readiness_score=0.0,  # LLM produces the layered score
-        maturity_label="(LLM fills in)",
+        readiness=readiness,
         instructions_grade=instructions_grade,
         graduated_count=len(diff.graduated),
         regressed_count=len(diff.regressed),

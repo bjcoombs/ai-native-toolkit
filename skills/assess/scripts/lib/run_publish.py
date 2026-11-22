@@ -15,7 +15,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from lib.artifact_schema import ASSESS_METHOD_VERSION
-from lib.badge import write_findings_badge
+from lib.badge import write_headline_badge
+from lib.headline import as_headline
 from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.run_setup import read_plugin_version
 from lib.run_wiki import write_run_wiki
@@ -45,13 +46,14 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
         instructions_grade=state["instruction_grading"][1],
         plugin_version=read_plugin_version(),
         hot_test_index=state["hot_test_index"],
+        readiness=as_headline(ctx.get("headline"))["summary"],
     )
     ctx["pruned_hotspots"] = wiki.pruned_hotspots
     ctx["retired_excluded_hotspots"] = wiki.retired_excluded
     ctx["dropped_first_flagged"] = wiki.dropped_first_flagged
     ctx["log_integrity"] = {"valid": wiki.log_valid, "broken_at_entry": wiki.log_broken_at}
-    write_findings_badge(
-        assess_dir, promissory, ctx["derived_findings"], run_id=state["run_id"], scope=scope_rel,
+    write_headline_badge(
+        assess_dir, as_headline(ctx.get("headline")), run_id=state["run_id"], scope=scope_rel,
     )
     # The committed findings snapshot (#554): read the previous one back before
     # overwriting it, so the gate can explain a method-version change by the
