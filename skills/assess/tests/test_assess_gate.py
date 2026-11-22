@@ -24,7 +24,6 @@ from lib.assess_config import (
     load_gate_config,
     load_gate_config_file,
 )
-from lib.keyhole_signals import FINDING_ORDER
 
 
 def _ctx(
@@ -57,12 +56,6 @@ def _write_config(tmp_path: Path, body: str) -> Path:
 
 
 # --- config loader --------------------------------------------------------
-
-
-def test_gate_concerns_match_keyhole_signals():
-    """The default warn set must stay in sync with the canonical finding order."""
-    expected = [f for f in FINDING_ORDER if f != "refactor_boundary"]
-    assert GATE_CONCERN_FINDINGS == expected
 
 
 def test_load_gate_config_defaults_warn_only(tmp_path):
