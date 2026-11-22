@@ -1,0 +1,125 @@
+"""CI lines that run but cannot fail their job, or never run, earn no credit (#919).
+
+Five holes found by the #776 parent check: a version-only step, an exit-zero
+flag, a later ``exit 0``, a literal ``if: false`` and a workflow in a subfolder
+of ``.github/workflows/``. Each reads unmet for Layer 3 level 1 (``lint_runs``)
+and Layer 5 level 1 (``enforced_check_runs``).
+"""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from lib.check_command import is_info_invocation, is_lint_run
+from lib.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
+from lib.command_index import ci_config_files
+
+
+def _wf(run: str) -> str:
+    return f"on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: {run}\n"
+
+
+def _block(text: str) -> str:
+    body = "".join(f"          {line}\n" for line in text.splitlines())
+    return f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: |\n{body}"
+
+
+def _scan(tmp_path: Path, files: dict[str, str]) -> tuple[bool | None, bool | None]:
+    for rel, text in files.items():
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, encoding="utf-8", errors="replace")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, encoding="utf-8", errors="replace")
+    block = scan_ci_checks(tmp_path)
+    return block["enforced_check_runs"], block["lint_runs"]
+
+
+@pytest.mark.parametrize("text", [
+    "ruff --version", "pytest --version", "uv run tox --version", "ruff check --help", "ruff -V",
+    "python -m pytest -V",
+])
+def test_an_info_invocation_runs_no_check(text: str) -> None:
+    assert is_info_invocation(text)
+    assert check_commands(_wf(text)) == 0
+    assert not is_lint_run(text)
+
+
+@pytest.mark.parametrize("text", ["mvn -B -V verify", "pytest -v", "ruff check ."])
+def test_a_flag_that_is_not_a_version_query_still_counts(text: str) -> None:
+    assert not is_info_invocation(text)
+    assert check_commands(_wf(text)) == 1
+
+
+def test_ctest_v_is_verbose_not_a_version_query() -> None:
+    assert not is_info_invocation("ctest -V")
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param(_wf("ruff check . --exit-zero"), id="ruff_exit_zero"),
+    pytest.param(_wf("flake8 --exit-zero ."), id="flake8_exit_zero"),
+    pytest.param(_wf("golangci-lint run --issues-exit-code=0"), id="golangci_equals"),
+    pytest.param(_wf("golangci-lint run --issues-exit-code 0"), id="golangci_space"),
+    pytest.param(_wf("ruff check .; exit 0"), id="semicolon_exit_0"),
+    pytest.param(_wf("pytest; exit 0"), id="pytest_semicolon_exit_0"),
+    pytest.param(_block("pytest\necho done\nexit 0"), id="later_exit_0_in_block"),
+    pytest.param("test:\n  script:\n    - pytest\n    - exit 0\n", id="gitlab_later_exit_0"),
+    pytest.param("jobs:\n  t:\n    runs-on: x\n    steps:\n      - if: false\n        run: pytest\n",
+                 id="step_if_false"),
+    pytest.param("jobs:\n  t:\n    if: false\n    runs-on: x\n    steps:\n      - run: pytest\n",
+                 id="job_if_false"),
+    pytest.param("jobs:\n  t:\n    if: ${{ false }}\n    runs-on: x\n    steps:\n      - run: pytest\n",
+                 id="job_if_expression_false"),
+    pytest.param("jobs:\n  t:\n    runs-on: x\n    steps:\n      - run: pytest\n        if: \"${{false}}\"  # off\n",
+                 id="step_if_quoted_expression_false"),
+])
+def test_a_check_that_cannot_fail_or_never_runs_is_masked(text: str) -> None:
+    assert check_commands(text) == 1
+    assert enforced_check_commands(text) == (0, 1)
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param(_wf("pytest || exit 1; exit 0"), id="own_reraise_before_exit_0"),
+    pytest.param(_wf("pytest; echo exit 0"), id="exit_0_as_an_argument"),
+    pytest.param(_wf("pytest; [ -f x ] && exit 0"), id="conditional_exit_0"),
+    pytest.param(_block('if [ -z "$X" ]; then exit 0; fi\npytest'), id="early_exit_guard_one_line"),
+    pytest.param(_block('if [ -z "$X" ]; then\n  exit 0\nfi\npytest'), id="early_exit_guard_block"),
+    pytest.param(_block("cleanup() {\n  exit 0\n}\npytest"), id="exit_0_in_a_function"),
+    pytest.param("jobs:\n  t:\n    runs-on: x\n    steps:\n      - run: pytest\n      - run: exit 0\n",
+                 id="exit_0_in_another_step"),
+    pytest.param("jobs:\n  t:\n    if: github.event_name == 'pull_request'\n    runs-on: x\n"
+                 "    steps:\n      - run: pytest\n", id="job_if_condition"),
+    pytest.param("jobs:\n  t:\n    if: ${{ 'false' }}\n    runs-on: x\n    steps:\n      - run: pytest\n",
+                 id="job_if_non_empty_string_is_truthy"),
+])
+def test_a_check_that_can_fail_stays_enforced(text: str) -> None:
+    assert enforced_check_commands(text) == (1, 0)
+
+
+def test_an_exit_zero_flag_masks_only_its_own_segment() -> None:
+    assert enforced_check_commands(_wf("ruff check . --exit-zero && pytest")) == (1, 0)
+
+
+def test_a_workflow_in_a_subfolder_is_not_a_ci_file() -> None:
+    files = [".github/workflows/ci.yml", ".github/workflows/sub/ci.yml", ".github/workflows/a.yaml",
+             ".gitlab-ci.yml", ".github/workflows/x/y/z.yml"]
+    assert ci_config_files(files) == [".github/workflows/a.yaml", ".github/workflows/ci.yml", ".gitlab-ci.yml"]
+
+
+@pytest.mark.parametrize("files", [
+    pytest.param({".github/workflows/ci.yml": _wf("ruff --version")}, id="version_only"),
+    pytest.param({".github/workflows/ci.yml": _wf("ruff check . --exit-zero")}, id="exit_zero"),
+    pytest.param({".github/workflows/ci.yml": _wf("ruff check .; pytest; exit 0")}, id="exit_0"),
+    pytest.param({".github/workflows/ci.yml": (
+        "on: pull_request\njobs:\n  t:\n    if: false\n    runs-on: x\n    steps:\n"
+        "      - run: ruff check .\n      - run: pytest\n")}, id="if_false"),
+    pytest.param({".github/workflows/sub/ci.yml": _wf("ruff check . && pytest")}, id="subfolder"),
+])
+def test_each_hole_reads_unmet_for_layer_3_and_layer_5(tmp_path: Path, files: dict[str, str]) -> None:
+    assert _scan(tmp_path, files) == (False, False)
+
+
+def test_the_plain_checks_still_read_met(tmp_path: Path) -> None:
+    assert _scan(tmp_path, {".github/workflows/ci.yml": _block("ruff check .\npytest")}) == (True, True)

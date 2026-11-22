@@ -84,9 +84,18 @@ CASES = [
     }, _NONE_FILED),
     _case("l5-1-pytest-or-true", "layer-5-ci", 1,
           {".github/workflows/ci.yml": _workflow("pytest || true")}, None),
-    # #782 fixes this for lint_runs only, not for Layer 5.
     _case("l5-1-linter-version", "layer-5-ci", 1,
-          {".github/workflows/ci.yml": _workflow("ruff --version")}, _NONE_FILED),
+          {".github/workflows/ci.yml": _workflow("ruff --version")}, None),
+    # #919: a check that cannot fail its job, never runs, or sits where GitHub does not run it.
+    _case("l3-1-exit-zero", "layer-3-linters", 1,
+          {".github/workflows/ci.yml": _workflow("ruff check . --exit-zero")}, None),
+    _case("l5-1-semicolon-exit-0", "layer-5-ci", 1,
+          {".github/workflows/ci.yml": _workflow("pytest; exit 0")}, None),
+    _case("l5-1-if-false", "layer-5-ci", 1, {".github/workflows/ci.yml": (
+        "on: pull_request\njobs:\n  t:\n    if: false\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: pytest\n")}, None),
+    _case("l5-1-subfolder-workflow", "layer-5-ci", 1,
+          {".github/workflows/sub/ci.yml": _workflow("pytest")}, None),
     # Declared, not counted under #744.
     _case("l5-2-named-check-and-lockfile", "layer-5-ci", 2, {
         **_NOOP_CHECK, "uv.lock": "version = 1\n", ".github/workflows/ci.yml": _workflow("make test"),

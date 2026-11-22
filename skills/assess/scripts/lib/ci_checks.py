@@ -17,12 +17,17 @@ evidence is static, read from the files at HEAD:
   it did not find them absent. ``test_or_lint_configured`` keeps its meaning and stays
   false there. An empty ``Jenkinsfile`` reads the same (accepted: the scan
   cannot tell an empty pipeline from one it cannot parse).
+- Only workflow files directly under ``.github/workflows/`` are read: GitHub
+  does not run one in a subfolder (#919).
 - Each line with its ``- `` / ``run:`` / ``script:`` lead dropped
   (``command_index.ci_line_text``), split into shell segments and tokenised the
   way instruction-file commands are (``command_resolver.extract_commands``),
   and classified with ``check_command.is_check_command``: any test or
   check target of a modelled runner counts (``pytest``, ``make check``,
-  ``npm test``, ``uv run ruff check``, ``./scripts/test.sh``).
+  ``npm test``, ``uv run ruff check``, ``./scripts/test.sh``). A command that only
+  asks for a version or usage (``ruff --version``, ``pytest --version``, ``-V``;
+  ``check_command.is_info_invocation``, #919) runs no check, so it counts in no
+  signal.
 - ``is_check_command`` knows test and check targets but not lint ones
   (``make lint`` is not a check it credits in an instruction file), so a CI
   line also counts when ``check_command.is_lint_command`` credits it: a linter
@@ -85,7 +90,8 @@ configuration was read in full and holds none. ``basis`` names which case applie
 
 ``enforced_check_runs`` (issue #775) is the same test with masked checks left
 out: a check that runs but cannot fail its job (``pytest || true``,
-``continue-on-error: true``, ``allow_failure: true``, ``set +e``; the rules and
+``continue-on-error: true``, ``allow_failure: true``, ``set +e``, an exit-zero
+flag such as ``--exit-zero``, a later ``exit 0``, a literal ``if: false``; the rules and
 their known limits are in ``lib.ci_masking``), and with checks that do not
 run on ordinary changes left out too (a ``workflow_dispatch``- or
 ``schedule``-only workflow, a GitLab ``when: manual`` job; ``lib.ci_triggers``).
@@ -149,7 +155,8 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.check_command import (
-    ALWAYS_CHECK, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_lint_command, is_lint_run, may_lint)
+    ALWAYS_CHECK, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_info_invocation, is_lint_command,
+    is_lint_run, may_lint)
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
@@ -248,8 +255,9 @@ def _line_runs_check(line: str, *, script_item: bool = True) -> bool:
     commands = extract_commands(f"```bash\n{text}\n```\n")
     bare_item = _BARE_ITEM.match(line) is not None
     return any(
-        (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
-        or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text)))
+        not is_info_invocation(c.text) and (
+            (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
+            or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text))))
         for c in commands
     )
 
@@ -301,7 +309,8 @@ def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
     if _action(line) in MAY_LINT_ACTIONS:
         return True
     bare_item = _BARE_ITEM.match(line) is not None
-    return any(may_lint(c.text) and not (bare_item and not script_item and _lone_check(c.text))
+    return any(may_lint(c.text) and not is_info_invocation(c.text)
+               and not (bare_item and not script_item and _lone_check(c.text))
                for c in _line_commands(line))
 
 

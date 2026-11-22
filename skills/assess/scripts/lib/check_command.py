@@ -147,6 +147,24 @@ def is_lint_command(text: str) -> bool:
 
 # A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
 _INFO_FLAGS = frozenset({"--version", "--help", "-V"})
+# Programs whose ``-V`` runs the work: Maven prints its version and builds, ctest is verbose.
+_V_RUNS = frozenset({"mvn", "mvnw", "./mvnw", "ctest"})
+
+
+def is_info_invocation(text: str) -> bool:
+    """A command that asks only for a version or usage, so it runs no check (#919).
+
+    ``--version`` or ``--help`` anywhere, or ``-V`` unless the program it runs uses
+    ``-V`` for something else (``mvn -B -V verify``, ``ctest -V``). ``ruff --version``,
+    ``pytest --version`` and ``uv run tox --version`` are info invocations.
+    """
+    words = command_words(text)
+    if not words or not _INFO_FLAGS.intersection(words):
+        return False
+    if {"--version", "--help"}.intersection(words):
+        return True
+    program = _program(words)
+    return not program or program[0] not in _V_RUNS
 # Test programs that run tests and nothing else: no linter can hide inside them.
 _DIRECT_TESTS = (ALWAYS_CHECK - {"tox", "nox"}) | _JS_TEST_RUNNERS
 
@@ -253,7 +271,7 @@ def is_lint_run(text: str) -> bool:
     """
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
-    if not words or _INFO_FLAGS.intersection(words):
+    if not words or is_info_invocation(text):
         return False
     program = _exec_program(words)
     if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run

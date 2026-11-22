@@ -410,4 +410,10 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
+# Unreleased (the release PR assigns the version): ci_checks closes five false-credit
+#     holes (issue #919). A version or usage query (`ruff --version`) runs no check;
+#     an exit-zero flag (`--exit-zero`, `--issues-exit-code=0`), a later top-level
+#     `exit 0` in the same script body and a literal `if: false` step or job are
+#     masked; a workflow in a subfolder of .github/workflows/ is not a CI file.
+#     Layer 3 level 1 and Layer 5 level 1 can move from met to unmet.
 ASSESS_METHOD_VERSION = 36

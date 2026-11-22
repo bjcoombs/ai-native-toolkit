@@ -29,6 +29,22 @@ parser (the core has no YAML dependency). Only literal values count.
   ``runs-on:`` / ``script:``). A trailing ``# comment`` is ignored. An
   expression (``${{ matrix.experimental }}``), ``false`` or the GitLab map form
   (``allow_failure: {exit_codes: [...]}``) does not mask.
+- Exit-zero flags (#919). A segment run with ``--exit-zero`` (ruff, flake8,
+  pylint) or ``--issues-exit-code=0`` / ``--issues-exit-code 0`` (golangci-lint)
+  is masked on its own: ``ruff check . --exit-zero && pytest`` keeps ``pytest``.
+- A later ``exit 0`` (#919). A statement that is ``exit 0`` alone, at the top
+  level of a script body (not inside ``if`` / ``fi``, a loop, ``case`` or
+  ``{ }``), masks every statement before it in that body, unless the statement or
+  one between it and the ``exit 0`` re-raises a status (``pytest || exit 1;
+  exit 0`` keeps ``pytest``). ``x && exit 0``, ``echo exit 0`` and an early-exit
+  guard (``if nothing-changed; then exit 0; fi``) mask nothing. This is a
+  conservative reading: GitHub's default ``bash -e`` and GitLab's runner stop at
+  the failing check before ``exit 0``, but a step with another shell (``pwsh``,
+  a Windows runner) does not, and the line alone cannot tell which.
+- A literal never-true ``if:`` (#919): ``if: false``, ``if: 'false'`` or
+  ``if: ${{ false }}`` on a step or job masks that mapping and everything under
+  it, like ``continue-on-error: true``: it never runs. Any other ``if:``
+  expression (``${{ 'false' }}`` is a non-empty string, so true) is not read.
 - ``set +e`` in one script body (a block scalar such as ``run: |``, or one
   ``script:`` / ``before_script:`` list) masks the statements after it until a
   ``set -e``, unless a later statement of that body re-raises a status: it
@@ -57,6 +73,15 @@ _BLOCK_INDICATOR = re.compile(r"^[|>][-+0-9]*$")
 _MASK_KEYS = frozenset({"continue-on-error", "allow_failure"})
 _BODY_KEYS = frozenset({"run", "script", "before_script", "after_script"})
 _NOOPS = frozenset({"true", "/bin/true", ":", "exit 0"})
+# A literal never-true ``if:`` (``false``, ``'false'``, ``${{ false }}``): the step or job never runs.
+_NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORECASE)
+# Flags that make a linter exit 0 whatever it finds (``ruff check --exit-zero``,
+# ``golangci-lint run --issues-exit-code=0``): the check runs but cannot fail.
+_EXIT_ZERO_FLAG = re.compile(r"(?:^|\s)(?:--exit-zero|--issues-exit-code(?:=|\s+)0)(?=\s|$)")
+# Shell words that open and close a compound command, read at the start of a segment.
+_OPENERS = frozenset({"if", "while", "until", "for", "case", "select", "{", "("})
+_CLOSERS = frozenset({"fi", "done", "esac", "}", ")"})
+_PREFIXES = frozenset({"then", "do", "else", "!"})
 _EXIT_NONZERO = re.compile(r"\bexit\s+(?:[1-9]\d*|\"?\$\{?\w+\}?\"?)")
 # A status re-raised: ``exit`` / ``return`` with a non-zero literal, a variable or ``$?``
 # (``exit $?``, ``rc=$?; ... exit $rc``, ``[ $? -eq 0 ] || exit 1``). Reading ``$?`` alone
@@ -111,6 +136,13 @@ def strip_comment(value: str) -> str:
     return re.sub(r"(?:^|\s+)#.*$", "", value).strip()
 
 
+def _masks(line: YamlLine) -> bool:
+    """``continue-on-error: true`` / ``allow_failure: true``, or a never-true ``if:`` (#919)."""
+    if line.key in _MASK_KEYS:
+        return line.value.lower() == "true"
+    return line.key == "if" and _NEVER.match(line.value) is not None
+
+
 class IndentTree:
     """Indentation scopes over one file's parsed lines, built in one pass."""
 
@@ -146,8 +178,7 @@ class IndentTree:
         for mapping, keys in enumerate(self.siblings):
             parent = self.parent[mapping]
             inherited = parent is not None and self.masked[self.mapping_of[parent]]
-            self.masked.append(inherited or any(
-                parsed[k].key in _MASK_KEYS and parsed[k].value.lower() == "true" for k in keys))
+            self.masked.append(inherited or any(_masks(parsed[k]) for k in keys))
 
     def children(self, i: int) -> list[int]:
         """The key lines of the mappings directly under line ``i`` (each item of a sequence)."""
@@ -329,6 +360,67 @@ def _joined(lines: list[str], span: range) -> str:
     return " ".join(p.removesuffix("\\").strip() for p in parts)
 
 
+def _drop_exit_zero(statement: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """``statement`` without the segments run with an exit-zero flag (``ruff check . --exit-zero``)."""
+    kept = [(op, seg) for op, seg in statement if not _EXIT_ZERO_FLAG.search(seg)]
+    return [("", kept[0][1]), *kept[1:]] if kept else []
+
+
+def _depths(statements: list[list[tuple[str, str]]]) -> list[int]:
+    """Per statement of one script body: how many compound commands (``if``, loops,
+    ``case``, ``{ }``) it sits in, read from the first word of each segment."""
+    depth = 0
+    out: list[int] = []
+    for statement in statements:
+        out.append(depth)
+        for _, seg in statement:
+            words = seg.split()
+            while words and words[0] in _PREFIXES:
+                words = words[1:]
+            if not words:
+                continue
+            if words[0] in _CLOSERS:
+                depth = max(depth - 1, 0)
+            elif words[0] in _OPENERS or words[-1] == "{":
+                depth += 1
+    return out
+
+
+def _exit_zero(statement: list[tuple[str, str]]) -> bool:
+    """A statement that is ``exit 0`` alone: run unconditionally at the top level, it ends the
+    body with success."""
+    return len(statement) == 1 and " ".join(statement[0][1].split()) == "exit 0"
+
+
+def _masked_in_body(refs: list[tuple[int, int]],
+                    parsed: dict[int, list[list[tuple[str, str]]]]) -> list[tuple[int, int]]:
+    """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``.
+
+    ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
+    ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
+    """
+    errexit = True
+    state: list[bool] = []
+    for first, k in refs:
+        errexit = _errexit(parsed[first][k], errexit)
+        state.append(not errexit)
+    depths = _depths([parsed[first][k] for first, k in refs])
+    out: list[tuple[int, int]] = []
+    reraised = False
+    exited = False   # a later top-level ``exit 0`` ends the body with success
+    exit_reraised = False
+    for idx in range(len(refs) - 1, -1, -1):
+        first, k = refs[idx]
+        own = bool(_RERAISE.search(_join(parsed[first][k])))
+        if (state[idx] and not reraised) or (exited and not (exit_reraised or own)):
+            out.append((first, k))
+        if depths[idx] == 0 and _exit_zero(parsed[first][k]):
+            exited, exit_reraised = True, False
+        reraised = reraised or own
+        exit_reraised = exit_reraised or own
+    return out
+
+
 def unmasked_lines(text: str) -> list[str]:
     """``text``'s lines with every masked statement removed (an all-masked line is empty)."""
     lines = text.splitlines()
@@ -346,30 +438,23 @@ def unmasked_lines(text: str) -> list[str]:
             continue
         for k, statement in enumerate(statements):
             cut = _noop_cut(statement)
-            if cut < 0:
+            if cut >= 0:
+                targets = _capture_targets(statement[:cut])
+                later = [lines[j] for j in tree.job(first) if j > span[-1]]
+                if not (targets and _checked_later(targets, later)):
+                    statement = statement[cut + 1:]
+            left = _drop_exit_zero(statement)
+            if left == statements[k]:
                 continue
-            targets = _capture_targets(statement[:cut])
-            if targets and _checked_later(targets, [lines[j] for j in tree.job(first) if j > span[-1]]):
-                continue
-            tail = statement[cut + 1:]
             changed.add(first)
-            if tail:
-                statements[k] = [("", tail[0][1]), *tail[1:]]
+            if left:
+                statements[k] = left
             else:
                 masked.setdefault(first, set()).add(k)
         bodies.setdefault(tree.body(first), []).extend((first, k) for k in range(len(statements)))
     for refs in bodies.values():
-        errexit = True
-        state: list[bool] = []
-        for first, k in refs:
-            errexit = _errexit(parsed[first][k], errexit)
-            state.append(not errexit)
-        reraised = False
-        for idx in range(len(refs) - 1, -1, -1):
-            first, k = refs[idx]
-            if state[idx] and not reraised:
-                masked.setdefault(first, set()).add(k)
-            reraised = reraised or bool(_RERAISE.search(_join(parsed[first][k])))
+        for first, k in _masked_in_body(refs, parsed):
+            masked.setdefault(first, set()).add(k)
     out = list(lines)
     for span in spans:
         drop = masked.get(span[0], set())
