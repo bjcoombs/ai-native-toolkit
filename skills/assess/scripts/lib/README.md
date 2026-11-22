@@ -4196,7 +4196,8 @@ least 50 percent that an enforced CI line runs. `read_ci_runs(repo_root)` reads 
 GitHub workflows and `.gitlab-ci.yml` with #775's rules unchanged
 (`ci_masking.unmasked_lines`, `ci_triggers.workflow_trigger` / `resolve_workflows` /
 `gitlab_line_triggers`), one `Run` per command, a folded `run: >-` paragraph read as one
-command and `sh -c '...'` and a quoted `run:` value read through. A word holding
+command (masked as one line, so a `|| true` on a continuation line masks the head, and a
+paragraph with a line its step or body masks is dropped) and `sh -c '...'` and a quoted `run:` value read through. A word holding
 whitespace (a quoted argument) is dropped, so a flag inside an `echo` string is no flag.
 A gate written on a CI line must sit on an enforced command that carries its flag and
 whose program can run it (`runs_a_program`: not `echo` / `printf` and the like, not an

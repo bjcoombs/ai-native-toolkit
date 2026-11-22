@@ -147,11 +147,22 @@ def _command_groups(lines: list[str], unmasked: list[str]) -> list[tuple[range, 
                 paragraph.append(k)
                 continue
             if paragraph:
-                text = " ".join(unmasked[n].strip() for n in paragraph if unmasked[n].strip())
-                out.append((range(paragraph[0], paragraph[-1] + 1), text))
+                out.append((range(paragraph[0], paragraph[-1] + 1),
+                            _folded_text(lines, unmasked, paragraph)))
                 paragraph = []
         i = j
     return out
+
+
+def _folded_text(lines: list[str], unmasked: list[str], paragraph: list[int]) -> str:
+    """One folded paragraph as the shell runs it, masked as one line: a line blanked by
+    its step or body (``continue-on-error``, ``set +e``) drops the paragraph, and the
+    joined text is masked by #775's same-line rules, so a ``|| true`` on a continuation
+    line masks the head it follows."""
+    if any(not unmasked[n].strip() for n in paragraph):
+        return ""
+    joined = " ".join(lines[n].strip() for n in paragraph)
+    return ci_line_text(unmasked_lines(f"run: {joined}")[0])
 
 
 def _word_lists(text: str) -> list[tuple[tuple[str, ...], str]]:

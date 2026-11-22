@@ -169,6 +169,16 @@ JEST_COLLECTS = '{"jest":{"collectCoverage":true,"coverageThreshold":{"global":{
 
 
 @pytest.mark.parametrize("files", [
+    {".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
+     "      - run: >-\n          pytest --cov=pkg\n          --cov-report=xml || true\n",
+     "pyproject.toml": PYPROJECT_80},
+    {".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
+     "      - run: >-\n          pytest --cov=pkg\n          --cov-fail-under=80 || true\n"},
+    {".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
+     "      - run: |\n          pytest --cov=pkg \\\n            --cov-report=xml || true\n",
+     "pyproject.toml": PYPROJECT_80},
+    {".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
+     "      - run: |\n          pytest --cov=pkg \\\n            --cov-fail-under=80 || true\n"},
     {**_ci("pip install pytest pytest-cov"), "pyproject.toml": ADDOPTS_COV},
     {**_ci("pip install pytest --cov"), "pyproject.toml": PYPROJECT_80},
     {**_ci("echo pytest --cov"), "pyproject.toml": PYPROJECT_80},
@@ -182,12 +192,14 @@ JEST_COLLECTS = '{"jest":{"collectCoverage":true,"coverageThreshold":{"global":{
     {**_ci("uv pip install coverage report"), "pyproject.toml": PYPROJECT_80},
     {**_ci("mvn-wrapper-setup verify"),
      "pom.xml": _pom("<value>COVEREDRATIO</value><minimum>0.80</minimum>")},
-], ids=["pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "echo-unquoted-flag", "pytest-version",
+], ids=["folded-or-true-config", "folded-or-true-inline", "backslash-or-true-config",
+        "backslash-or-true-inline", "pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "echo-unquoted-flag", "pytest-version",
         "pytest-collect-only",
         "printf-flag", "pip-install-flag", "npm-install-jest",
         "npm-install-jest-coverage", "uv-pip-coverage", "not-maven"])
-def test_a_tool_named_as_an_argument_is_not_run(tmp_path: Path, files: dict[str, str]) -> None:
-    """Issue #921 review: the tool must be the program a command runs, never an argument."""
+def test_no_false_credit(tmp_path: Path, files: dict[str, str]) -> None:
+    """Issue #921 review: a masked continuation masks its head, and a tool must be the program
+    a command runs, never an argument."""
     assert _read(tmp_path, files)[0] is not True
 
 
