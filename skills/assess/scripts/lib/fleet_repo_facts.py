@@ -18,6 +18,14 @@ may remove a clone once it is scanned, and a counts-only scan drops owners):
 
 Read only: ``git config`` runs with ``GIT_OPTIONAL_LOCKS=0`` (``lib.fleet._git``),
 and a checkout that cannot be read gives None and no owners, never an error.
+
+What the units tree and `fleet-data.json` read from each checkout before any scan
+(#703): `web_url` normalises the `origin` remote (scp, `ssh://`, `http(s)://`) to
+`https://<host>/<path>`, dropping credentials, an ssh port and `.git` (an http(s) port
+is kept), and gives None for a local remote; `default_owners` takes the owners on the last catch-all rule of the first
+CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab section
+headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
+read gives no URL and no owners.
 """
 from __future__ import annotations
 

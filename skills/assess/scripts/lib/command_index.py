@@ -20,6 +20,14 @@ Files come from ``git ls-files`` when the root is a git repository (tracked
 files only - an untracked Makefile is not part of what the repo ships; a
 tracked symlink is listed under its own path), else from a walk that skips
 ``lib.doc_graph.EXCLUDE_DIRS``.
+
+The per-repo index `command_resolver.py` resolves against, read once from the files at
+HEAD (`git ls-files`, tracked symlinks as themselves; a walk outside git): package.json
+scripts and dependencies, Makefile targets, justfile recipes, pyproject names (dependencies,
+`[project.scripts]`, `[tool.*]` tables), pytest presence, tox environments, nox sessions
+and CI configuration lines. Config files are unioned across the repo and a computed target
+makes its family lenient, so a false `missing` stays rare. Tests:
+`tests/test_command_index.py`.
 """
 from __future__ import annotations
 

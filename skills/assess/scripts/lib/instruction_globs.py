@@ -8,6 +8,13 @@ pattern matches any tracked file, so a rule whose glob matches nothing can be
 reported. Matching is deliberately lenient - a pattern with no ``/`` matches a
 basename at any depth, and a pattern matches a directory prefix - because a
 false "dead glob" would send a maintainer to delete a working rule.
+
+The scope frontmatter line parser (`paths`, `applyTo`, `globs`, `alwaysApply`; no
+YAML dependency) and the glob matcher behind `dead_glob`: brace sets, `**`, a
+slashless pattern matching at any depth and a pattern matching a directory prefix.
+Lenient on purpose, since a false dead glob would send a maintainer to delete a
+working rule; a negated or uncompilable pattern never reads as dead. Tests:
+`tests/test_instruction_globs.py`.
 """
 
 from __future__ import annotations

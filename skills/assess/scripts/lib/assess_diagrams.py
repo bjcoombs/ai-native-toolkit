@@ -1,14 +1,19 @@
 """The /assess diagrams and the report section that links them (issue #942, parent #940).
 
-``build_diagrams(ctx)`` turns one run context into a list of ``AssessDiagram`` entries
-(``lib/run_context_types_diagrams.py``), each an SVG or the one-line reason it was not
-drawn. ``write_diagrams`` writes the drawn SVGs into the artifact directory beside
-``run-context.json`` and removes any diagram file this run did not draw, so a stale
-picture never sits beside new data; ``diagrams_section`` is the Markdown the
+``build_diagrams(ctx, model_rows=None)`` turns one run context into a list of
+``AssessDiagram`` entries (``lib/run_context_types_diagrams.py``), each an SVG or the
+one-line reason it was not drawn, in report order; it never raises (a renderer that
+raises becomes a "the renderer raised X" reason). ``write_diagrams`` writes the drawn
+SVGs into the artifact directory beside ``run-context.json`` and removes any diagram
+file this run did not draw, so a stale picture never sits beside new data; a symlink in
+a diagram's place is removed, never written through, and a path that cannot be written
+is named on stderr and skipped, so writing never stops a run either.
+``run_publish.publish_run`` calls it, and ``assess_core.run_opt_in_mutation`` again
+after it recounts the ``level`` block. ``diagrams_section`` is the Markdown the
 deterministic report embeds, one ``## `` section per diagram, each opening with an
-``In place:`` line (``lib/vocabulary.IN_PLACE``, #743). The publish step
-(``lib/run_publish.py``) and the report (``assess_report.py``) both call
-``build_diagrams``, so the report links a file exactly when the run wrote it.
+``In place:`` line (``lib/vocabulary.IN_PLACE``, #743), then the relative clickable
+image link and the caption, or ``Not drawn:`` and the reason. The publish step and the
+report (``assess_report.py``) both call ``build_diagrams`` on the same context.
 
 Diagrams:
 
@@ -21,10 +26,16 @@ Diagrams:
 
 A new diagram adds its ``FILE`` and heading to ``HEADINGS``, a builder returning an
 ``AssessDiagram``, and an entry in ``build_diagrams``; it draws its cells, legend and
-theme with the shared helpers here (``cell``, ``legend``, ``style``) over
+theme with the shared helpers here (``cell``, a square in a category's look;
+``legend``, swatches with labels and indented notes; ``wrap``, caption lines by
+character budget; ``style``, ``fleet_svg.theme_style`` plus ``ROLES``) over
 ``lib/fleet_svg.py``. Deterministic: model order, fixed formatting, no date, no set
 iteration; two renders of one context are byte-identical. Captions name no layer
-number: row labels drop a model title's ``Layer N:`` prefix.
+number: row labels drop a model title's ``Layer N:`` prefix (``row_label``).
+
+Golden renders: ``tests/fixtures/assess_diagrams/`` (``make regen``, or
+``uv run --locked python tests/assess_diagrams_fixture.py`` from ``skills/assess``).
+Tests: ``tests/test_assess_diagrams.py``.
 """
 from __future__ import annotations
 

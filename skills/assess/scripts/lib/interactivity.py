@@ -1,5 +1,4 @@
-"""Decide whether an /assess run may prompt a human, and record the offer
-lifecycle when it may not.
+"""Decide whether an /assess run may prompt a human, and record the offer lifecycle when it may not.
 
 /assess makes several consent offers across its run - installing analysis tools,
 running the code-modifying mutation pass, opening a PR, tracking findings,
@@ -27,6 +26,16 @@ signal into the core keeps Phases 2/3 consistent with Phase 1.
 Pure stdlib; no side effects. The orchestrator reads `interactive` /`offers`
 from run-context.json and honours the same contract for the offers it makes by
 hand (AskUserQuestion), which a script cannot make for it.
+
+Decides whether a run may prompt a human. Interactive is the default; the run is
+non-interactive only on an explicit signal - the orchestrator's `--non-interactive`
+flag, `ASSESS_NON_INTERACTIVE`, or `CI` set in the environment. `isatty()` is
+deliberately not consulted: the core always runs as a tool subprocess with no
+controlling terminal. `build_offers_block` returns the run-context `interactive` flag
+and `offers` list - empty when interactive (the orchestrator asks live), otherwise
+every type in `OFFER_TYPES` recorded as `skipped`, so a headless run completes with
+no prompts and an audit trail. Pure stdlib, no side effects. Called by
+`assess_core.py`; the consent contract is in `references/consent-lifecycle.md`.
 """
 from __future__ import annotations
 

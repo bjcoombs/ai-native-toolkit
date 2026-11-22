@@ -133,7 +133,7 @@ A stats sidecar (`complexity-stats.json`) accompanies the report with percentile
 
 ### What else the deterministic core checks
 
-The per-module detail is in [`skills/assess/scripts/lib/README.md`](skills/assess/scripts/lib/README.md). Among the checks and behaviours there:
+The per-module detail is in each module's docstring under [`skills/assess/scripts/lib/`](skills/assess/scripts/lib/README.md). Among the checks and behaviours there:
 
 - **Scan registry.** Every run-context block is declared once in `scan_registry.py`. A scan that cannot run (no remote, no `gh`, an unreadable endpoint) reports itself as unavailable with a reason instead of stopping the run.
 - **Headless signals.** `assess_signals.py` runs the scans with no model and writes one JSON document ([schema](skills/assess/references/signals.schema.json)). With `--counts-only` it keeps numbers and a fixed list of path and token fields and drops all other text ([field list](skills/assess/references/counts-only.md)); `--hash-paths` replaces paths with salted hashes. `/fleet` is built on this entry point.

@@ -10,6 +10,15 @@ at ``project_doc_max_bytes`` (32 KiB by default). This module measures both
 sets in lines, words, bytes and estimated tokens. Read-only: imports resolve
 relative to the importing file and are followed only into tracked files
 inside the repository.
+
+The always-loaded instruction text per tool for the root context, in lines, words,
+bytes and estimated tokens (4 characters per token, as the treemap). Claude Code:
+the root `CLAUDE.md` and `.claude/CLAUDE.md` (else the root `AGENTS.md`), their
+`@imports` resolved relative to the importing file (outside code, four hops,
+cycle-guarded, tracked files inside the repo only; the rest listed in
+`skipped_imports`), and root `.claude/rules` files with no `paths`. Codex: the
+root `AGENTS.override.md` or `AGENTS.md` against 32 KiB, plus the heaviest
+root-down chain (`deepest_chain`). Tests: `tests/test_instruction_budget.py`.
 """
 
 from __future__ import annotations

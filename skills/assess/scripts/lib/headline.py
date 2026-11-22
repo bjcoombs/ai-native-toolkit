@@ -29,6 +29,29 @@ The per-tag strip is a later third line (#844); the model carries no tags yet.
 (``Step 3 · 4 of 4 measured``). A run whose ``level`` block is missing or
 unavailable gets ``available: false`` and a headline that says the Step was not
 measured, never a guessed Step.
+
+The deterministic `/assess` headline (#747): `headline(level, model)` words a
+`LevelResult` under the model that produced it, and `run_context_headline(level)`
+(the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
+default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
+Unattended agent PRs · contracts in place"), the Next line naming the next Step and
+the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
+count still falls short once the gates hold and their counted conditions join the
+tally, "N more verified practices are met, for example `<first unmet counted
+condition>`"; a not-measured gate says
+so with its reason, and a gate whose condition the owner excluded says "excluded by
+owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
+Step holds while its gates hold), and "Verified practices: N of M measured · K not
+measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes), with
+"E not applicable (excluded by owner)" before the model when the level lists exclusions,
+E counting the excluded conditions and those whose `requires` names one (#910). Also `markdown` (the lines, the
+first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
+badge message and the `log.md` readiness line), `step`, `next_step`,
+`levels_version` and `headline_version`. A missing or degraded `level` block gives
+`available: false` and "Step not measured", never a guessed Step; `as_headline`
+returns that form for a degraded `headline` block. Shape: `Headline` in
+`level_result_types.py`; under counts-only the text fields are dropped and the
+numbers kept. The per-tag strip is a later line (#844). Tests: `tests/test_headline.py`.
 """
 from __future__ import annotations
 
@@ -64,6 +87,7 @@ REASON_WORDS = {
     "no_ownership_map": "no ownership map",
     "scan_failed": "scan did not complete",
     "no_scored_files": "no files scored",
+    "no_manifests": "no manifests read",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
 _SUPPORTIVE = (("failed", "did not complete"), ("missing", "not found"))

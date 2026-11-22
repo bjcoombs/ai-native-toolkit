@@ -49,6 +49,24 @@ shas appear only under ``--full``; with ``--hash-paths`` the doc and scope
 paths are hashed like the scans' paths. The standalone ``/assess`` view is
 ``assess_config.declared_block``: the declared mappings listed as not measured
 outside fleet mode, nothing guessed.
+
+Cross-repo doc freshness (issue #664), opt-in: a docs repository's `[[describes]]`
+mappings (`assess_config.load_describes`: `path` here, `repo` in the fleet, `scope`
+required) are joined in `/fleet` by `freshness_rows`, one row per mapping in
+`<out>/doc_freshness.jsonl` with method `cross-repo-explicit`. The doc side is
+`git_churn.content_commit_clock` over `doc_staleness.discover_doc_files` (newest doc for a
+folder); the service side is one `git log --full-diff` per mapping, counting commits to the
+scope authored (`%at`) after the doc's last content change, skipping merges, automation
+bots (`agent_identity.is_ai_assistant` keeps AI-assistant commits), lockfile/manifest-only
+commits and bulk commits by `git_churn.bulk_commit_need` over the service's tracked files.
+`BEHIND_THRESHOLD` (3) separates `behind` from `minor_drift`/`current`. A missing doc or
+scope path is `broken`; a repository absent from the run, a shallow boundary newer than
+the doc edit, or a git failure is `unknown` with a reason token. Counts-only rows carry no
+subjects or shas (`--full` adds up to five); `--hash-paths` hashes doc and scope paths with
+`counts_only.hash_path`. `assess_config.declared_block` gives standalone `/assess` the
+`doc_staleness.declared_cross_repo` list (declared, not measured); `fleet.py` calls the join
+before any scan so `--delete-after` cannot remove a checkout it needs. Tests:
+`tests/test_fleet_doc_freshness.py`.
 """
 from __future__ import annotations
 

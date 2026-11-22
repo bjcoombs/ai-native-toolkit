@@ -38,6 +38,8 @@ Ids: a collector is ``<owner>.<scan key>`` (``core.ci_checks``), a signal
 finding ``<owner>.finding.<name>``. Grades are never authored: a signal carries its
 producer ``evidence`` class (``level_signals.SIGNAL_INPUTS``, #783), and its grade
 follows from that class.
+
+Full reference: lib/docs/check_manifest.md.
 """
 from __future__ import annotations
 

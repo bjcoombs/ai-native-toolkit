@@ -1,5 +1,4 @@
-"""Parse an *existing* coverage report into the shape ``scan_test_pressure``
-already consumes - no coverage run, no third-party library, read-only.
+"""Parse an *existing* coverage report into the shape ``scan_test_pressure`` already consumes - no coverage run, no third-party library, read-only.
 
 `/assess` never runs the test suite (it stays read-only and fast), so the only
 honest source of line-coverage truth is a report the project already generated
@@ -25,6 +24,22 @@ take), so it degrades as if absent.
 
 Inward-only imports: this module imports stdlib only and is imported by the
 orchestrator (`assess_core.py`); it never imports an orchestrator itself.
+
+Parses an *existing* coverage report into the shape the `test_pressure` scan's
+`coverage_data=` param consumes (`{_overall, per_file: {relpath: line_rate}}`).
+Two formats: Cobertura `coverage.xml` (`_overall` from the root `line-rate`,
+per-file from each `<class>` element's `filename`/`line-rate`; one `iter("class")`
+walk handles both the flat and nested `<packages>` schemas) and `lcov.info`
+(per-file `LH/LF`, overall `sum(LH)/sum(LF)`; `SF:` paths, absolute or `./`-prefixed,
+are normalised to repo-relative POSIX keys so `test_focus` lookups match). `/assess` never runs the suite, so a
+report the project already generated is the only honest line-coverage source - the
+parser reads it without taking a coverage.py runtime dependency. `detect_coverage_report`
+searches the repo root, `./coverage/`, and `./.coverage/` (a `.coverage` SQLite *file*
+is out of scope - reading it needs the coverage.py lib). Honest-degrade is the hard
+contract: a missing or malformed report returns `None`, never raises, never blocks the
+assessment; `assess_core.py` records provenance ("none found" vs. the file/format read)
+separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
+`tests/test_coverage_report.py` alongside any change to a parse rule.
 """
 from __future__ import annotations
 

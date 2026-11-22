@@ -49,6 +49,14 @@ and never imports an orchestrator (the inward-only contract). Timestamps come
 from ``lib.git_churn`` (git commit time when tracked) and fall back to the
 filesystem mtime, so both the doc and its source are compared on the same axis
 (epoch seconds).
+
+Provenance-aware staleness for generated docs (issue #178). Parses a doc's YAML
+frontmatter `source:` / `generated_by:` (no YAML dependency - a minimal stdlib parser),
+resolves the `[[generated]]` folder->source config mapping, and computes `source_newer`
+(is any declared source's last change - git commit time, else mtime - more recent than
+the doc?). `doc_staleness.py` carries that verdict and `doc_complexity_join.py` signs
+freshness from it, so an accurate generated doc is never a `lying_map`. Co-changes with
+`doc_staleness.py` (its consumer) and its test `tests/test_doc_provenance.py`.
 """
 from __future__ import annotations
 
