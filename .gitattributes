@@ -20,6 +20,7 @@ skills/fleet/references/*.schema.json linguist-generated
 skills/assess/tests/fixtures/fleet_data/*.json linguist-generated
 skills/assess/tests/fixtures/fleet_diagrams/repos.jsonl linguist-generated
 skills/assess/tests/fixtures/fleet_diagrams/expected-* linguist-generated
+skills/assess/tests/fixtures/assess_diagrams/expected-* linguist-generated
 skills/assess/tests/fixtures/fleet_trends/history/** linguist-generated
 skills/assess/tests/fixtures/fleet_trends/expected-* linguist-generated
 skills/assess/tests/fixtures/fleet_heatmap/groups.jsonl linguist-generated

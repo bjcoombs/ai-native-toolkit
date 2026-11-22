@@ -60,7 +60,7 @@ yet", never implied credit. The guard checks it on every rendered page.
 levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as
 "stale doc over complex code" (`keyhole_signals.FINDING_DISPLAY_NAMES`); and the headline words a
 reason code it has no entry for with "did not complete" and "not found" in place of "failed" and
-"missing" (`headline._reason_word`).
+"missing" (`headline.reason_word`).
 
 **Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, heat map and layer bars) is the
 ColorBrewer YlGn growth palette, pale yellow to deep green, in place of the red OrRd ramp;

@@ -10,6 +10,14 @@ Next: Step 2 · Supervised agent PRs unlocks when 1 more verified practice is me
 
 Verified practices: 0 of 3 measured · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
+## Evidence behind the level
+
+In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from config or a declaration.
+
+[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)
+
+Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
+
 ## Metrics Dashboard
 
 - **Files scored:** 3
