@@ -2,7 +2,7 @@
 
 Generated from ``FleetLevels`` (``lib/fleet/fleet_level.py``) and ``LevelResult``
 (``lib/level_result_types.py``) with the ``groups.jsonl`` schema's type mapping
-(``lib/fleet_group_schema.type_schema``). ``$defs.level_result`` is also the shape of
+(``fleet_group_schema.type_schema``). ``$defs.level_result`` is also the shape of
 the ``/assess`` run context's ``level`` block. ``tests/test_level_tally.py`` fails
 when ``SCHEMA_PATH`` differs from ``render()``. Regenerate after changing a shape:
 

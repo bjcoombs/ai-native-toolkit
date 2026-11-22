@@ -1,7 +1,7 @@
 """The published JSON schema of ``achievements.json`` (issue #704).
 
 Generated from the ``Achievements`` TypedDict in ``lib/fleet/fleet_achievements.py`` with the
-``groups.jsonl`` schema's type mapping (``lib/fleet_group_schema.type_schema``), so the
+``groups.jsonl`` schema's type mapping (``fleet_group_schema.type_schema``), so the
 checked-in file cannot drift from the type mypy checks: ``tests/test_fleet_achievements.py``
 fails when ``SCHEMA_PATH`` differs from ``render()``. Regenerate after changing a shape:
 

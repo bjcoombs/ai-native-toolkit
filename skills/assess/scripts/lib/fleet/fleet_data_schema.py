@@ -1,7 +1,7 @@
 """The published JSON schema of ``fleet-data.json`` (issue #703).
 
 Generated from the ``FleetData`` TypedDict in ``lib/fleet/fleet_data.py`` with the
-``groups.jsonl`` schema's type mapping (``lib/fleet_group_schema.type_schema``),
+``groups.jsonl`` schema's type mapping (``fleet_group_schema.type_schema``),
 so the checked-in file cannot drift from the type mypy checks:
 ``tests/test_fleet_data.py`` fails when ``SCHEMA_PATH`` differs from ``render()``.
 Regenerate after changing a ``fleet_data`` shape:
