@@ -3914,7 +3914,10 @@ pipeline: `true`, `false`, `varies` (which branch, which merge request) or `unkn
 walks `Rule` items in order: the first match decides, `never` / `manual` /
 `on_failure` do not run, `changes:` varies, `exists:` and an unread rule key (an
 anchor merge, `!reference`) are unknown, and a rule that may match with an unknown
-result makes the answer `unknown`, never `no`. Imports nothing from `lib`. Tests:
+result makes the answer `unknown`, never `no`; so does a varying rule that runs after a
+varying rule that stopped the job (the two are not compared). A `CI_PIPELINE_SOURCE`
+`!=` against `parent_pipeline` is `unknown` too, so a child-pipeline-only job never
+reads `no`. Imports nothing from `lib`. Tests:
 `tests/test_gitlab_rules.py`.
 
 **`unread_ci.py`**

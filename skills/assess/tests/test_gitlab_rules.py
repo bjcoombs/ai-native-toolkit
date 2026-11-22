@@ -88,6 +88,9 @@ _MR = '$CI_PIPELINE_SOURCE == "merge_request_event"'
     (_rules({"if": '$CI_COMMIT_BRANCH == "main"', "when": "never"}, {"when": "always"}), "push", "yes"),
     (_rules({"if": '$CI_COMMIT_BRANCH == "main"', "when": "never"}, {"if": "$CI_COMMIT_BRANCH =~ /main/"}),
      "push", "unknown"),
+    # A child-pipeline-only job: never read as running in neither ordinary pipeline.
+    (_rules({"if": '$CI_PIPELINE_SOURCE != "parent_pipeline"', "when": "never"}, {"when": "always"}),
+     "push", "unknown"),
     (_rules({"if": _MR, "changes": "[src/**]"}), "merge_request", "yes"),
     (_rules({"if": _MR, "exists": "[Dockerfile]"}), "merge_request", "unknown"),
     # A rule this reader cannot read (an anchor merge, a !reference) is unknown.

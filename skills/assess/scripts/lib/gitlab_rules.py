@@ -34,7 +34,9 @@ and the commit message, title and SHA variables. Any other variable is unknown. 
 ``external_pull_request_event``, ``external`` or a value GitLab does not list reads
 unknown: a child or downstream pipeline can run for an ordinary change.
 
-Known limits: two varying conditions are taken as independent (``$CI_COMMIT_BRANCH ==
+Known limits: a varying rule that runs the job after a varying rule that stopped it reads
+``unknown`` (``$CI_COMMIT_BRANCH == "main"`` with ``never``, then ``$CI_COMMIT_BRANCH =~
+/feat/``), since this reader does not compare the two; two varying conditions are taken as independent (``$CI_COMMIT_BRANCH ==
 "a" && $CI_COMMIT_BRANCH == "b"`` reads varies), regexes are read with Python ``re``
 (GitLab uses RE2), ``exists:`` reads unknown, and rule ``variables:`` are not applied.
 """
@@ -172,7 +174,13 @@ def _truthy(value: _Value) -> Truth:
 
 
 def _source_guard(left: _Value, right: _Value) -> bool:
-    """A ``CI_PIPELINE_SOURCE`` comparison against a source this reader cannot settle."""
+    """A ``CI_PIPELINE_SOURCE`` comparison against a source this reader cannot settle.
+
+    It guards ``!=`` as well as ``==``: ``- if: $CI_PIPELINE_SOURCE != "parent_pipeline"`` with
+    ``when: never``, then ``- when: always``, is a child-pipeline job, and a true ``!=`` would
+    read it as running in neither ordinary pipeline. The cost is ``unknown`` where a running
+    ``!=`` rule is true.
+    """
     for a, b in ((left, right), (right, left)):
         if a.name == "CI_PIPELINE_SOURCE" and b.kind == "str" and b.text not in _EXACT_SOURCES:
             return True
