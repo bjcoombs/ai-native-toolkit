@@ -21,8 +21,9 @@ name: Windows
 # fails (`!cancelled()`), and -ra lists every skip and failure, so one log read
 # per leg shows it all. The suites run on
 # every core with pytest-xdist (`-n auto --dist loadfile`: one file per worker,
-# so cross-file state, #831, cannot interleave), added with `--with` so the lockfiles
-# and the serial Linux jobs are unchanged. Serial, the job took over an hour.
+# so cross-file state, #831, cannot interleave), as the Linux jobs in tests.yml
+# do. pytest-xdist comes from each package's locked dev group; tests/ has no
+# lockfile and adds it with `--with`. Serial, the job took over an hour.
 # No coverage gate here: the Linux jobs own the floors.
 #
 # Tests that need POSIX-only machinery carry one of the Windows skip markers
@@ -147,15 +148,24 @@ jobs:
       - name: skills/assess pytest
         if: ${{ !cancelled() && matrix.suite == 'assess' }}
         run: >-
-          uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
+          uv run --locked --python 3.11
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
           --ignore=tests/test_fleet_golden.py
+        working-directory: skills/assess
+
+      # The cpu_budget tests skip in the xdist pool above (tests/conftest.py,
+      # CPU_BUDGET_SKIP) and run here, serially, as in tests.yml.
+      - name: skills/assess CPU-budget tests
+        if: ${{ !cancelled() && matrix.suite == 'assess' }}
+        run: >-
+          uv run --locked --python 3.11
+          pytest -ra -p no:cacheprovider -p no:xdist -m cpu_budget --no-cov
         working-directory: skills/assess
 
       - name: scripts/ pytest
         if: ${{ !cancelled() && matrix.suite == 'scripts-contract' }}
         run: >-
-          uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
+          uv run --locked --python 3.11
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
         working-directory: scripts
 

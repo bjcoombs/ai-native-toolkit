@@ -41,6 +41,23 @@ web URL is written, so the file holds no repository, group or host name.
 
 Deterministic: every list sorted, keys sorted, no timing. The same inputs (and,
 with hashing, the same ``--hash-salt``) give the same bytes.
+
+`fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
+#704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
+the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
+repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
+or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
+per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it
+(the lowest Step's stand-in until #744). Version 2 (#772) holds no average and names no
+repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
+`Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
+names and owners and writes a non-token value as `set`; with a salt every unit and
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written;
+`Privacy.key` keeps an id that is already hashed (`counts_only.is_hashed`), so the re-score
+joins a stored `repos.jsonl` row hashed at the output boundary (#909).
+`write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
+Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
+without a model).
 """
 from __future__ import annotations
 

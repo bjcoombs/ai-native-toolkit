@@ -34,6 +34,30 @@ A documented **AI maintenance workflow** - the Karpathy LLM-wiki pattern
 query-as-filing, periodic lint/consolidation) - is both a detection signal and
 a scored read-side (Layer 0) quality signal. Best-practice pointer:
 https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+
+Repository archetype detection (issue #224). Classifies a repo as `software` or
+`knowledge-base` from the code-file ratio + the absence of a runtime surface
+(`package.json`/`pyproject.toml`/`go.mod`/`Dockerfile`/...), with an
+`assess-archetype:` marker in any instruction file that **forces or suppresses**
+the verdict. A knowledge base has no code surface for the write-side layers, so
+the block names L2-L7 as `na_layers` (rendered N/A, excluded from the
+denominator) and renormalises the denominator over the applicable layers (L0,
+L1, L8 → 3). Also detects the Karpathy LLM-wiki maintenance pattern
+(`kb_maintenance` - immutable sources, schema-as-product, ingest, query-as-filing,
+periodic consolidation) as a Layer 0 read-side signal and always carries the
+gist pointer. When an `assess-archetype:` marker forces a classification the
+deterministic signals disagree with, the override still wins but the block sets
+`override_contradicts_signals` + `contradiction_details` (and records the marker's
+`override_source` file) so `keyhole_signals` can fire the visible
+`override_contradicts_signals` finding rather than swallowing the override
+silently. The IO-free `classify_archetype` is the tested core; `analyze_archetype`
+gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
+(`tracked_files`), never an orchestrator. Structured as an extensible dispatch
+(one archetype today, YAGNI on a general framework). Read by `assess_core`
+(writes the `archetype` block to `run-context.json`), the `assess-layer-scorer`
+agent (N/A verdicts), and the `assess-findings` skill (renders N/A rows). The
+`denominator` field is kept for compatibility; nothing reads it since the layered
+score was retired (#747). Co-changes with its test `tests/test_archetype.py`.
 """
 from __future__ import annotations
 

@@ -21,6 +21,30 @@ The salt itself is never written to the output.
 Pure: the input is never mutated, and nothing here reads the filesystem. The
 CLI helpers at the bottom give ``assess_core`` (and the headless entry point
 of #545) one set of flags.
+
+The content-free run-context mode for scans of repositories you do not own (#546).
+`counts_only(ctx, hash_paths=, salt=)` returns a copy that keeps every number, boolean
+and null and only the strings whose field `counts_only_rules` classifies as a path or a
+short token (kind, grade, band, date, version); free text, commands, commit subjects,
+program names and identities are dropped, and a dropped list of strings becomes its
+length. A string field with no rule is dropped too (allow-list, not deny-list). Path
+hashing is opt-in: HMAC-SHA256 under a random per-call salt, or a fixed `--hash-salt`
+so hashes join across runs. `unclassified_strings` lists the string fields a
+run-context holds with no rule. A block that degraded to the scan table's unavailable marker is read as a record even where its key is path-keyed or dropped, so it survives as `{"available": false}` (#623). `add_cli_arguments` / `validate_cli_args` /
+`apply_cli` give `assess_core.py --counts-only` (which writes
+`run-context.counts-only.json` beside `run-context.json`) and the headless entry point
+one set of flags. `counts_only_scans` applies the filter to the `scans` map of an
+`assess_signals.py --counts-only` document and keeps each unavailable block listed with
+its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
+reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
+allow-list `import_graph.STRUCTURE_REASON_CODES` or `reason_codes.BLOCK_REASON_CODES` (`no_ownership_map`, the `structure_drift.reason` marker, #908) names it (so a path or a name never leaks), the code of
+a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
+so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
+Tests: `tests/test_counts_only_reason.py`. `render_doc`
+generates `references/counts-only.md`, the per-block field list (plus the
+`fleet-data.json` table). `hash_value` hashes one key the way a kept path is hashed, for
+the fleet's unit and repository keys (#703). Tests:
+`tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 """
 from __future__ import annotations
 

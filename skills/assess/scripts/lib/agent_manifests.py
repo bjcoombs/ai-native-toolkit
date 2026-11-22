@@ -12,6 +12,13 @@ dependencies), ``requirements*.txt``, ``Pipfile``, ``go.mod``, ``pom.xml``,
 ``build.gradle`` / ``build.gradle.kts``, ``Cargo.toml``, ``Gemfile`` and
 ``*.csproj``. Names are returned as written; ``agent_building_vocab.lookup``
 normalises them.
+
+Dependency names declared in one manifest file (issue #689), stdlib only: one reader
+per format (`package_json`, `pyproject`, `requirements`, `pipfile`, `go_mod`,
+`pom_xml`, `gradle`, `cargo_toml`, `gemfile`, `csproj`), and `reader_for(basename)`
+picking one. A file a reader cannot parse yields no names. Tests:
+`tests/test_agent_building.py`.
+Tests: `tests/test_shared_tooling.py`.
 """
 from __future__ import annotations
 

@@ -45,6 +45,23 @@ jobs (``.name:``) are read like any job; GitHub branch and path filters and
 ``lib.ci_masking``, #919). Only a workflow file directly under
 ``.github/workflows/`` is read: GitHub does not run one in a subfolder
 (``command_index.ci_config_files``).
+
+Does a CI line run on ordinary changes (issue #775)? It makes
+`ci_checks.enforced_check_runs` a `ci_executed` signal. `workflow_events(text)` lists a
+GitHub workflow's top-level `on` events (scalar, flow list or mapping, block list or
+mapping; `"on"` and YAML 1.1 `true` too), or None when it cannot; `workflow_trigger`
+maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
+`merge_group`), `called` (`workflow_call` / `workflow_run` only), `not_ordinary`
+(`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
+called workflow as `ordinary` when an ordinary workflow of the repository calls it
+(`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
+one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
+and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
+web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
+outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
+so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
+anchors and `workflow: rules:` are not resolved; branch and path filters are not
+read. Tests: `tests/test_ci_triggers.py`.
 """
 from __future__ import annotations
 

@@ -3,6 +3,15 @@
 A leaf module so the orchestrator and the lib modules that write artifacts
 (the hotspot wiki pages, the index, the log, the findings snapshot) read one
 constant each.
+
+`ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
+writes (run-context.json, the badge, the wiki pages); the version history is in the
+module comment. `complexity-treemap.py` carries a copy that
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
+It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
+independent of plugin releases, bumped by one in any change that moves which findings
+a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
+`findings.json`.
 """
 
 # Artifact schema version, stamped on every artifact the run produces
@@ -281,6 +290,16 @@ constant each.
 # - run-context.json delivery gains sample_page_size (issue #995): the changes per
 #   heavy read the merged sample finished at, or null when none was made. Additive:
 #   no existing key moves.
+# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
+#   #926), both with lint_runs null: a CI .NET build whose committed project files
+#   turn on the analysers, and a compiler run with warnings as errors as the only
+#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
+#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
+#   --exit-code in its job counts, and a target whose recipe is not read reads
+#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
+# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
+#   the number of dependency manifests the lockfile check reads. Additive: no
+#   existing key moves, and complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -481,4 +500,7 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
 #   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
 #   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
+# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
+#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
+#   read met. Fewer conditions count on repositories with no dependency manifest.
 ASSESS_METHOD_VERSION = 37

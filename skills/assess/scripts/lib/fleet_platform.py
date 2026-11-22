@@ -28,6 +28,25 @@ Extension point (#715, #716): a new platform block is a registry scan whose
 name is appended to ``PLATFORM_SCANS``; a sample of merged changes shared by
 several blocks is a private ``network`` registry spec they ``read``. This module
 needs no change for either.
+
+The fleet platform pass, `fleet.py --platform` (issue #714). `run_platform(rows, targets,
+options, jobs=, timeout=, names=, after=)` runs after the offline scan: one more
+`assess_signals.py --platform --scans <names>` child per `ok` row (`fleet.run_signals`,
+the offline scan's output mode and salt, `--platform-jobs` workers, `--platform-timeout`
+each, stderr tails in `<logs>/<repo>.platform.stderr`) and `join`s its blocks into the
+row's `scans` by repository. It never changes `status` or `reason`, so a slow host cannot
+make an offline row `scan_timeout`: a child that times out, exits non-zero, raises or
+omits a block gives that block `available: false` with `platform_timeout`,
+`platform_exit_<code>`, `platform_error` or `platform_invalid_output` (the code only in
+counts-only output). Such a failed block never replaces an offline block that is
+available (`join`, #696): `review_evidence` credits an AI review step offline, and a slow
+host keeps that credit. Failed rows are not read. `names` is `platform_scans(--scans)`:
+`signals.PLATFORM_SCANS` narrowed by `--scans` (`review_automation` and `ci_checks` are
+listed because they read GitLab's merged CI configuration, #796). All children share one response cache
+directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
+`--delete-after` hook) runs on each row after its platform read, so a clone outlives the
+read of its remote. A new platform block (#715, #716) needs no change here: see
+`signals.py`. Tests: `tests/test_fleet_platform.py`.
 """
 from __future__ import annotations
 

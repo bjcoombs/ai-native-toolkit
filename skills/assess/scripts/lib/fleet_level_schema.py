@@ -7,6 +7,10 @@ the ``/assess`` run context's ``level`` block. ``tests/test_level_tally.py`` fai
 when ``SCHEMA_PATH`` differs from ``render()``. Regenerate after changing a shape:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_level_schema.py
+
+Generates `skills/fleet/references/level.schema.json` from `FleetLevels` and `LevelResult`
+(`fleet_group_schema.type_schema`); `tests/test_level_tally.py` fails when the checked-in
+file drifts. Regenerate: `cd skills/assess && uv run --locked python scripts/lib/fleet_level_schema.py`.
 """
 from __future__ import annotations
 
@@ -61,7 +65,8 @@ def build_schema() -> JsonDict:
     commit["properties"]["head_sha"]["description"] = "the HEAD commit measured; null when the checkout has none"
     commit["properties"]["dirty"]["description"] = (
         "true when tracked files differed from HEAD (untracked files and .assess/ outputs are left out, "
-        ".assess/config.toml is not); the result is then scored from HEAD's committed tree")
+        ".assess/config.toml is not); the result is then scored from HEAD's committed tree. null when the "
+        "state is unknown (repos.jsonl dirty_reason says why), and then a checkout with a HEAD was scored from its committed tree too")
     schema["properties"]["commits"] = {"type": "object", "additionalProperties": commit,
                                        "description": "the commit each repos entry measured, under the same ids"}
     return {

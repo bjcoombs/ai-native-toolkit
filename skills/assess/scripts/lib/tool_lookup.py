@@ -17,6 +17,22 @@ run covers the Windows branches:
   exits 1 before the first third-party import, so no traceback reaches the user.
 
 Standard library only, so it imports in every entry point.
+
+Finds the external tools the headless scans need, Windows included (#711). `find_rg`
+resolves ripgrep from `RG_PATH` (when it names a file), then `shutil.which`, then on
+Windows only the WinGet package folder
+`%LOCALAPPDATA%\\Microsoft\\WinGet\\Packages\\BurntSushi.ripgrep*` (searched recursively
+for `rg.exe`, last path in sorted order), since a user-scope winget install may not create the
+`Links` alias. `RG_MISSING_REASON` names the three lookups and keeps the substring
+`rg not on PATH` that `headless_layers.promissory_markers` maps to `no_rg`.
+`missing_packages` lists the layer 2-4 packages (networkx, grimp, `lizard==1.23.0`) that
+do not import, and `warn_missing_packages` prints the `pip_hint` no-uv install line to
+stderr; `assess_signals.py` and `fleet.py` call it once before scanning. Advisory only:
+exit codes do not change. `require_packages` is the hard form (#752): `complexity-treemap.py`
+and `doc-graph-svg.py` call it before their first third-party import, so a run without uv
+and without their PEP 723 dependencies prints the `require_hint` install line (no `--user`
+inside a virtualenv) and exits 1 with no traceback. A module already in `sys.modules`
+counts as present. Standard library only. Tests: `tests/test_tool_lookup.py`.
 """
 from __future__ import annotations
 

@@ -2,6 +2,22 @@
 
 Shared by the default read-only scan and the opt-in mutation re-run, so both
 write the same block shape and derive the cap from it the same way.
+
+The run-context `test_pressure` block shape and the Layer 6 cap derived from it.
+`normalize_test_pressure` passes a well-formed `scan_test_pressure` result through and
+turns a failed or malformed one into an explicit `available: False` block with a null
+`mutation_config_present` and empty `cheap_heuristics` buckets, so a failed scan never
+reads as "no mutation setup". `mutation_not_run_cap` sets `applies` unless the block
+claims `mutation_run` *and* carries at least one parsed record in `per_file` (#317);
+while it applies, Layer 6 is capped at Partial and must carry
+`MUTATION_NOT_RUN_ANNOTATION`. Its `partial` flag is set when mutation ran but every
+`mutation_groups` entry with records is `partial` (stopped at the budget); `applies`
+stays False, and Layer 6 is still held at Partial with `MUTATION_PARTIAL_ANNOTATION`.
+One complete group lifts the hold. `layer6_cap_violation` turns the cap into the
+refusal `assess_finalize` raises. Both the default run and
+`assess_core --opt-in-mutation` call it, so the two write one shape. Tests:
+`tests/test_mutation_cap.py`, `tests/test_mutation_cap_partial.py`, `tests/test_assess_core.py`
+(opt-in pass).
 """
 
 from __future__ import annotations

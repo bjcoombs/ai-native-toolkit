@@ -6,6 +6,14 @@ mutation data, which only the consent-gated opt-in mutation pass produces, so
 the default read-only run reports no untrusted hotspot. ``keyhole_signals``
 folds the result into ``derived_findings``; ``mutation_refresh`` recomputes it
 after the opt-in pass. A leaf module: it imports no other ``lib`` module.
+
+The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity
+`top_hotspots` with the per-file mutation survivor density in `test_pressure.per_file`
+and returns the hotspots at or over `DEFAULT_SURVIVOR_DENSITY_THRESHOLD` (0.3);
+`untrusted_hotspot_paths` wraps it so a malformed block degrades to `[]`. Silent without
+per-file mutation data, so the default read-only run never fires it. `keyhole_signals`
+re-exports `find_untrusted_hotspots` and `DEFAULT_SURVIVOR_DENSITY_THRESHOLD`. Tests: `tests/test_keyhole_untrusted_hotspot.py` (E1 cases) and
+`tests/test_mutation_refresh.py`.
 """
 
 from __future__ import annotations

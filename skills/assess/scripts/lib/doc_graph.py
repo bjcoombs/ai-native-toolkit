@@ -28,7 +28,7 @@ required. If ``networkx`` is unavailable the module degrades to an
 
 Link syntax, resolution and the link pass live in ``lib.doc_links``; the
 render-side helpers (radial shells, node classes, ghost grouping) live in
-``lib.doc_graph_layout``.
+``lib.doc_graph_layout``. Full reference: lib/docs/doc_graph.md.
 """
 from __future__ import annotations
 

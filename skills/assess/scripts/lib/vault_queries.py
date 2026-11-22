@@ -33,6 +33,13 @@ The module is pure: it parses text and resolves predicates against a
 caller-supplied doc list and frontmatter accessor. Filesystem discovery and
 exclude handling stay in ``lib.doc_graph`` (which owns the repo walk), so this
 module imports no sibling that imports it back.
+
+Static parser for Obsidian dynamic-navigation hubs: `.base` view files and
+`dataview` query blocks. Resolves the folder / tag / frontmatter-field
+predicates it can evaluate from the committed files alone (no running Obsidian) into the
+set of notes a hub surfaces. Pure - no filesystem walk, no `doc_graph` import - so
+`doc_graph.py` owns discovery/excludes and consumes this module's parse + selection. Add
+a fixture-backed test here alongside any predicate change.
 """
 from __future__ import annotations
 

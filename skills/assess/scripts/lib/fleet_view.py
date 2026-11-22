@@ -22,6 +22,23 @@ reads that output back, and holds what both views need:
 
 Pure stdlib, no orchestrator import, deterministic: no set iteration reaches
 output order.
+
+The shared reader for the views built on one fleet run's output (#553): the
+heat map (#570) and the per-team pages (#571) read the run through it and never rescan.
+`read_jsonl` reads one file, each line a JSON object at the expected envelope version,
+and raises `FleetViewError` naming `file:line` otherwise; `read_repos` returns the
+`repos.jsonl` rows sorted by repository id (a row needs `repo` and `group` ids).
+`load_groups` takes the file or the run directory, checks the maturity model entry fields a view
+reads (`FleetViewError` names the line), refuses a duplicate
+group and sorts by group; an empty file (no repository scanned) is `[]`, and the heat
+map exits 2 on it while the team pages write an empty index. `level_columns` gives the maturity model row ids in maturity model order (the
+same for every group; a run without `--levels` is refused), `run_levels_version` the one
+version, `check_levels` matches a maturity model file (titles, top levels) to the run (a run
+without `--levels` is refused as such, before any version check), and
+`compare_levels` pairs each cell with an earlier run's `groups.jsonl` (`Change`: `new`,
+`delta` or `was`), marking the comparison not comparable across maturity-model versions (a run
+without a maturity model is named as having none, not as maturity model `None`).
+`floor` and `full_run_only` (#697) are optional: an older row without them loads; a present `floor` must be a whole number of at least 1 on an unknown row.
 """
 from __future__ import annotations
 

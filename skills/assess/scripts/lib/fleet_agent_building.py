@@ -33,6 +33,21 @@ members appear only when the caller passes ``name=True`` (``fleet.py
 ordered by size (largest first), then SDK union, pairing, groups spanned and
 shared SDKs, so the order of unnamed clusters never depends on a repository
 name (clusters equal on all of these print identically); ids (``c1``, ``c2`` ...) follow that order.
+
+The fleet roll-up of the `agent_building` block (issue #689), read from `repos.jsonl`
+rows (counts-only rows carry every field it reads). `group_counts` gives a group's
+scanned repositories per class, the `groups.jsonl` `agent_building` field (`null` with
+no available block, never a false 0). `clusters(rows, name=False)` links two
+`builds-agent` repositories when they have the same class, a Jaccard similarity of
+their `sdks` sets of at least 0.5 (two empty sets are not similar), and the same
+`pairing` value; clusters are the connected components of that relation with two or
+more members (union-find). Each cluster carries `id`, `agent_class`, `size`, `groups`
+(distinct groups spanned), `sdks` (union), `shared_sdks` (intersection) and `pairing`;
+`repo_ids` and `group_ids` only with `name=True` (`fleet.py --name-agent-clusters`).
+Clusters sort by size, then SDK union, then pairing, never by a repository name.
+`write_clusters` writes `agent_clusters.json` atomically on every run, so a rerun
+without the naming flag replaces a named file. The file is not kept in the run
+history. Tests: `tests/test_fleet_agent_building.py`.
 """
 from __future__ import annotations
 
