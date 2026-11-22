@@ -22,6 +22,7 @@ from assess_report import render_report
 from lib import assess_diagrams as ad
 from lib import assess_diagrams_review as rd
 from lib.counts_only import counts_only
+from lib.doc_complexity_join import is_stale
 from lib.review_reality import summarize
 from lib.vocabulary import IN_PLACE, banned_hits
 from svg_cascade import overridden_text_attributes
@@ -42,9 +43,9 @@ def _rects(content: str, attr: str) -> list[ET.Element]:
     return [r for r in root.iter(f"{SVG_NS}rect") if attr in r.attrib]
 
 
-def _bots(content: str) -> int:
+def _bots(content: str, mark: str = "true") -> int:
     root = ET.fromstring(content.encode("utf-8"))
-    return sum(1 for c in root.iter(f"{SVG_NS}circle") if c.attrib.get("data-bot") == "true")
+    return sum(1 for c in root.iter(f"{SVG_NS}circle") if c.attrib.get("data-bot") == mark)
 
 
 def _prose(content: str) -> str:
@@ -71,10 +72,16 @@ def test_stylesheet_never_overrides_a_text_attribute(file: str) -> None:
 # --- doc drift ------------------------------------------------------------------
 
 
-def test_drift_order_is_the_doc_staleness_order_top_15() -> None:
+def test_drift_order_is_the_doc_staleness_order_behind_first_top_15() -> None:
+    """The doc_staleness order, with the docs behind their code moved ahead (a generated doc
+    behind its newer source sits at ratio 0), so "furthest behind" holds."""
     bars = _rects(_svg(CTX, rd.DRIFT_FILE), "data-ratio")
-    mapped = [d for d in DOCS if d["subject_method"] != "repo-baseline"]
+    block_order = [d for d in DOCS if d["subject_method"] != "repo-baseline"]
+    mapped = ([d for d in block_order if is_stale(dict(d))]
+              + [d for d in block_order if not is_stale(dict(d))])
+    assert mapped != block_order  # the fixture's generated doc moves up
     assert len(mapped) > rd.DRIFT_TOP and len(bars) == rd.DRIFT_TOP
+    assert [b.attrib["data-behind"] for b in bars].index("false") == 8
     assert [float(b.attrib["data-ratio"]) for b in bars] == [d["ratio"] for d in mapped[:rd.DRIFT_TOP]]
     titles = [b.find(f"{SVG_NS}title").text or "" for b in bars]  # type: ignore[union-attr]
     assert [t.rsplit(":", 1)[0] for t in titles] == [d["path"] for d in mapped[:rd.DRIFT_TOP]]
@@ -150,6 +157,9 @@ def test_strip_ticks_are_the_sequence_in_merge_order() -> None:
     content = _svg(CTX, rd.STRIP_FILE)
     assert _ticks(content) == REVIEW["sequence"]
     assert _bots(content) == REVIEW["bot_sequence"].count("bot")
+    assert _bots(content, "unknown") == REVIEW["bot_sequence"].count("unknown") == 1
+    assert "Review-bot output (3 known)" in content
+    assert "Not known whether a review bot commented (1)" in content
     unknown = [r for r in _rects(content, "data-state") if r.attrib["data-state"] == "unknown"]
     assert [r.attrib["fill"] for r in unknown] == ["url(#fleet-hatch)"]
 
@@ -220,9 +230,25 @@ def test_strip_reads_an_unexpected_token_as_unknown() -> None:
     assert "odd" not in content and "f-rv-unknown" not in content
 
 
-def test_strip_ignores_a_bot_list_of_another_length() -> None:
+def test_strip_reads_a_bot_list_of_another_length_as_unknown() -> None:
     content = _svg({"review_reality": {**REVIEW, "bot_sequence": ["bot"]}}, rd.STRIP_FILE)
-    assert _bots(content) == 0
+    assert _bots(content) == 0 and _bots(content, "unknown") == len(REVIEW["sequence"])
+
+
+def test_all_unknown_bot_marks_never_read_as_zero() -> None:
+    block = {**REVIEW, "bot_review_share": None, "bot_sequence": ["unknown"] * 10}
+    content = _svg({"review_reality": block}, rd.STRIP_FILE)
+    assert _bots(content) == 0 and _bots(content, "unknown") == 10
+    assert "Review-bot output (0)" not in content
+    assert "Review-bot output (0 known)" in content
+    assert "Not known whether a review bot commented (10)" in content
+
+
+def test_known_bot_marks_show_a_bare_count() -> None:
+    block = {**REVIEW, "bot_sequence": ["bot"] + ["none"] * 9}
+    content = _svg({"review_reality": block}, rd.STRIP_FILE)
+    assert "Review-bot output (1)" in content and "Not known whether" not in content
+    assert rd.bot_marks({"bot_sequence": ["odd"]}, 1) == ["unknown"]
 
 
 # --- captions, report and wiring -------------------------------------------------

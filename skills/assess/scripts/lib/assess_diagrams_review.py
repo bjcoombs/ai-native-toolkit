@@ -16,8 +16,10 @@ The report section is ``assess_diagrams.diagrams_section``, one ``## `` section 
 Diagrams:
 
 - **Doc drift** (``doc-drift.svg``): ranked horizontal bars for the first ``DRIFT_TOP`` docs
-  with a code subject of their own, in ``doc_staleness.docs`` order (by ``ratio``, ties in
-  scan order; never re-sorted here). Each bar is labelled with the doc and its first subject
+  with a code subject of their own: the docs behind their code first, then the rest, each
+  group in ``doc_staleness.docs`` order (by ``ratio``, ties in scan order), so a generated
+  doc behind its newer declared source at ratio 0 still ranks among the most behind
+  (``ranked_docs``). Each bar is labelled with the doc and its first subject
   root; its length is the ``ratio`` and it reads "behind" (amber) where
   ``doc_complexity_join.is_stale`` holds, the same test as ``summary.stale_docs``. A dashed
   line marks ``STALENESS_RATIO_THRESHOLD``. Docs past the top are stated ("and K more");
@@ -27,7 +29,9 @@ Diagrams:
   ``review_reality.sequence`` (``lib/review_reality.py``), oldest merge first, in three
   states: approved, reviewed and merged without review; an ``unknown`` change (GitLab notes
   that decide nothing) is hatched. A dot over a tick marks review-bot output
-  (``bot_sequence``). The approved ticks over ``merged_count`` equal ``approved_share`` and
+  (``bot_sequence``) and a hollow dot a change where that is not known (an ``unknown`` mark,
+  or a ``bot_sequence`` whose length differs from the sequence: every mark is then unknown),
+  so an unknown mark never reads as no bot; the key then counts both. The approved ticks over ``merged_count`` equal ``approved_share`` and
   approved plus reviewed ticks equal ``reviewed_share``; a token outside the four reads
   unknown (``strip_tokens``). An unavailable block draws nothing
   and names its reason; nothing names a change, title, author or reviewer.
@@ -49,7 +53,7 @@ from lib.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
 from lib.doc_ownership import REPO_BASELINE
 from lib.headline import reason_word
 from lib.reason_codes import reason_code
-from lib.review_reality import APPROVED, BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
+from lib.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
 from lib.run_context_types_diagrams import AssessDiagram
 from lib.run_context_types_diagrams_review import DriftBar
 from lib.vocabulary import IN_PLACE
@@ -143,10 +147,17 @@ def mapped_docs(block: Mapping[str, Any]) -> list[Mapping[str, Any]]:
             and r.get("subject_method") != REPO_BASELINE]
 
 
+def ranked_docs(block: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The mapped docs behind their code first, then the rest, each in block order."""
+    mapped = mapped_docs(block)
+    behind = [is_stale(dict(r)) for r in mapped]
+    return ([r for r, b in zip(mapped, behind) if b] + [r for r, b in zip(mapped, behind) if not b])
+
+
 def drift_bars(block: Mapping[str, Any]) -> list[DriftBar]:
-    """The first ``DRIFT_TOP`` mapped docs as bars, in ``doc_staleness.docs`` order."""
+    """The first ``DRIFT_TOP`` ranked docs as bars (``ranked_docs``)."""
     bars: list[DriftBar] = []
-    for row in mapped_docs(block)[:DRIFT_TOP]:
+    for row in ranked_docs(block)[:DRIFT_TOP]:
         roots = [str(r) for r in row.get("subject_roots") or []]
         bars.append({"path": str(row.get("path", "")), "subject": roots[0] if roots else "",
                      "more_roots": max(0, len(roots) - 1), "ratio": float(row.get("ratio") or 0.0),
@@ -272,11 +283,25 @@ def strip_counts(sequence: Sequence[str]) -> dict[str, int]:
     return {state: sum(t == state for t in sequence) for state in SEQUENCE_STATES}
 
 
-def _bots(block: Mapping[str, Any], n: int) -> list[bool]:
+def bot_marks(block: Mapping[str, Any], n: int) -> list[str]:
+    """One mark per tick: ``bot``, ``none`` or ``unknown``. Any other token, or a list of
+    another length, reads unknown, never as no bot."""
     marks = block.get("bot_sequence")
     if not isinstance(marks, list) or len(marks) != n:
-        return [False] * n
-    return [m == BOT for m in marks]
+        return [UNKNOWN] * n
+    return [m if m in (BOT, NO_BOT) else UNKNOWN for m in marks]
+
+
+def _bot_key(marks: Sequence[str]) -> list[tuple[str, str]]:
+    known, unknown = marks.count(BOT), marks.count(UNKNOWN)
+    if not unknown:
+        return [(_DOT, f"Review-bot output ({known})")]
+    return [(_DOT, f"Review-bot output ({known} known)"),
+            (_HOLLOW, f"Not known whether a review bot commented ({unknown})")]
+
+
+_DOT = '<circle cx="{cx}" cy="{cy}" r="3.5" class="f-fg"/>'
+_HOLLOW = '<circle cx="{cx}" cy="{cy}" r="3.5" class="f-bg s-fg" stroke-width="1.2"/>'
 
 
 def strip_caption() -> str:
@@ -301,7 +326,7 @@ def _tick_paint(state: str) -> str:
 def render_strip(block: Mapping[str, Any]) -> str:
     """The review strip SVG for one available ``review_reality`` block with a sequence."""
     sequence = strip_tokens(block["sequence"])
-    bots = _bots(block, len(sequence))
+    bots = bot_marks(block, len(sequence))
     n = len(sequence)
     width = max(MIN_W, 2 * PAD + n * (TICK_W + TICK_GAP))
     body = [svg.text(PAD, 28, HEADINGS[STRIP_FILE], size=15, weight="600", cls="fg"),
@@ -310,12 +335,16 @@ def render_strip(block: Mapping[str, Any]) -> str:
     y = 70.0
     for index, (state, bot) in enumerate(zip(sequence, bots)):
         x = PAD + index * (TICK_W + TICK_GAP)
-        tip = LABELS.get(state, state) + (", with review-bot output" if bot else "")
+        tip = LABELS.get(state, state) + {BOT: ", with review-bot output",
+                                          UNKNOWN: ", review-bot output not known"}.get(bot, "")
         body.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{TICK_W:.1f}" height="{TICK_H:.1f}" rx="2" '
                     f'{_tick_paint(state)} data-state="{svg.esc(state)}"><title>{svg.esc(tip)}</title></rect>')
-        if bot:
+        if bot == BOT:
             body.append(f'<circle cx="{x + TICK_W / 2:.1f}" cy="{y - 7:.1f}" r="3.5" class="f-fg" '
                         'data-bot="true"/>')
+        elif bot == UNKNOWN:
+            body.append(f'<circle cx="{x + TICK_W / 2:.1f}" cy="{y - 7:.1f}" r="3.5" class="f-bg s-fg" '
+                        'stroke-width="1.2" data-bot="unknown"/>')
     y += TICK_H
     body.append(svg.text(PAD, y + 16, "oldest", size=11, cls="muted"))
     body.append(svg.text(PAD + n * (TICK_W + TICK_GAP) - TICK_GAP, y + 16, "newest", size=11,
@@ -324,8 +353,7 @@ def render_strip(block: Mapping[str, Any]) -> str:
     entries = [(('<rect x="{x}" y="{y}" width="14.0" height="14.0" rx="2" '
                  + _tick_paint(state) + "/>"), f"{label} ({counts[state]})")
                for state, label in STATES if state != UNKNOWN or counts[UNKNOWN]]
-    entries.append(('<circle cx="{cx}" cy="{cy}" r="3.5" class="f-fg"/>',
-                    f"Review-bot output ({sum(bots)})"))
+    entries += _bot_key(bots)
     key, key_h = _key(PAD, y + 30, entries)
     body += key
     caption = strip_caption()

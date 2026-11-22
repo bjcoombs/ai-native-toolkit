@@ -38,38 +38,38 @@
 <text x="16.0" y="330.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-06/src</text>
 <rect x="312.0" y="310.0" width="43.5" height="12.0" class="f-dr-behind" data-ratio="2.5" data-behind="true"><title>packages/module-06/docs/a-rather-long-document-name.md: 2.5</title></rect>
 <text x="361.5" y="320.0" font-size="11" text-anchor="start" class="t-fg">2.5</text>
-<text x="16.0" y="351.0" font-size="12" text-anchor="start" class="t-fg">…-07/docs/a-rather-long-document-name.md<title>packages/module-07/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="366.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-07/src</text>
-<rect x="312.0" y="346.0" width="34.8" height="12.0" class="f-dr-current" data-ratio="2" data-behind="false"><title>packages/module-07/docs/a-rather-long-document-name.md: 2</title></rect>
-<text x="352.8" y="356.0" font-size="11" text-anchor="start" class="t-fg">2</text>
-<text x="16.0" y="387.0" font-size="12" text-anchor="start" class="t-fg">…-08/docs/a-rather-long-document-name.md<title>packages/module-08/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="402.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-08/src</text>
-<rect x="312.0" y="382.0" width="26.1" height="12.0" class="f-dr-current" data-ratio="1.5" data-behind="false"><title>packages/module-08/docs/a-rather-long-document-name.md: 1.5</title></rect>
-<text x="344.1" y="392.0" font-size="11" text-anchor="start" class="t-fg">1.5</text>
-<text x="16.0" y="423.0" font-size="12" text-anchor="start" class="t-fg">…-09/docs/a-rather-long-document-name.md<title>packages/module-09/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="438.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-09/src</text>
-<rect x="312.0" y="418.0" width="17.4" height="12.0" class="f-dr-current" data-ratio="1" data-behind="false"><title>packages/module-09/docs/a-rather-long-document-name.md: 1</title></rect>
-<text x="335.4" y="428.0" font-size="11" text-anchor="start" class="t-fg">1</text>
-<text x="16.0" y="459.0" font-size="12" text-anchor="start" class="t-fg">…-10/docs/a-rather-long-document-name.md<title>packages/module-10/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="474.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-10/src</text>
-<rect x="312.0" y="454.0" width="13.1" height="12.0" class="f-dr-current" data-ratio="0.75" data-behind="false"><title>packages/module-10/docs/a-rather-long-document-name.md: 0.75</title></rect>
-<text x="331.1" y="464.0" font-size="11" text-anchor="start" class="t-fg">0.75</text>
-<text x="16.0" y="495.0" font-size="12" text-anchor="start" class="t-fg">…-11/docs/a-rather-long-document-name.md<title>packages/module-11/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="510.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-11/src</text>
-<rect x="312.0" y="490.0" width="8.7" height="12.0" class="f-dr-current" data-ratio="0.5" data-behind="false"><title>packages/module-11/docs/a-rather-long-document-name.md: 0.5</title></rect>
-<text x="326.7" y="500.0" font-size="11" text-anchor="start" class="t-fg">0.5</text>
-<text x="16.0" y="531.0" font-size="12" text-anchor="start" class="t-fg">…-12/docs/a-rather-long-document-name.md<title>packages/module-12/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="546.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-12/src</text>
-<rect x="312.0" y="526.0" width="8.7" height="12.0" class="f-dr-current" data-ratio="0.5" data-behind="false"><title>packages/module-12/docs/a-rather-long-document-name.md: 0.5</title></rect>
+<text x="16.0" y="351.0" font-size="12" text-anchor="start" class="t-fg">docs/api/generated.md</text>
+<text x="16.0" y="366.0" font-size="11" text-anchor="start" class="t-muted">describes api</text>
+<rect x="312.0" y="346.0" width="3.0" height="12.0" class="f-dr-behind" data-ratio="0" data-behind="true"><title>docs/api/generated.md: 0</title></rect>
+<text x="321.0" y="356.0" font-size="11" text-anchor="start" class="t-fg">0</text>
+<text x="16.0" y="387.0" font-size="12" text-anchor="start" class="t-fg">…-07/docs/a-rather-long-document-name.md<title>packages/module-07/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="402.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-07/src</text>
+<rect x="312.0" y="382.0" width="34.8" height="12.0" class="f-dr-current" data-ratio="2" data-behind="false"><title>packages/module-07/docs/a-rather-long-document-name.md: 2</title></rect>
+<text x="352.8" y="392.0" font-size="11" text-anchor="start" class="t-fg">2</text>
+<text x="16.0" y="423.0" font-size="12" text-anchor="start" class="t-fg">…-08/docs/a-rather-long-document-name.md<title>packages/module-08/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="438.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-08/src</text>
+<rect x="312.0" y="418.0" width="26.1" height="12.0" class="f-dr-current" data-ratio="1.5" data-behind="false"><title>packages/module-08/docs/a-rather-long-document-name.md: 1.5</title></rect>
+<text x="344.1" y="428.0" font-size="11" text-anchor="start" class="t-fg">1.5</text>
+<text x="16.0" y="459.0" font-size="12" text-anchor="start" class="t-fg">…-09/docs/a-rather-long-document-name.md<title>packages/module-09/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="474.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-09/src</text>
+<rect x="312.0" y="454.0" width="17.4" height="12.0" class="f-dr-current" data-ratio="1" data-behind="false"><title>packages/module-09/docs/a-rather-long-document-name.md: 1</title></rect>
+<text x="335.4" y="464.0" font-size="11" text-anchor="start" class="t-fg">1</text>
+<text x="16.0" y="495.0" font-size="12" text-anchor="start" class="t-fg">…-10/docs/a-rather-long-document-name.md<title>packages/module-10/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="510.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-10/src</text>
+<rect x="312.0" y="490.0" width="13.1" height="12.0" class="f-dr-current" data-ratio="0.75" data-behind="false"><title>packages/module-10/docs/a-rather-long-document-name.md: 0.75</title></rect>
+<text x="331.1" y="500.0" font-size="11" text-anchor="start" class="t-fg">0.75</text>
+<text x="16.0" y="531.0" font-size="12" text-anchor="start" class="t-fg">…-11/docs/a-rather-long-document-name.md<title>packages/module-11/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="546.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-11/src</text>
+<rect x="312.0" y="526.0" width="8.7" height="12.0" class="f-dr-current" data-ratio="0.5" data-behind="false"><title>packages/module-11/docs/a-rather-long-document-name.md: 0.5</title></rect>
 <text x="326.7" y="536.0" font-size="11" text-anchor="start" class="t-fg">0.5</text>
-<text x="16.0" y="567.0" font-size="12" text-anchor="start" class="t-fg">…-13/docs/a-rather-long-document-name.md<title>packages/module-13/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="582.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-13/src</text>
-<rect x="312.0" y="562.0" width="4.4" height="12.0" class="f-dr-current" data-ratio="0.25" data-behind="false"><title>packages/module-13/docs/a-rather-long-document-name.md: 0.25</title></rect>
-<text x="322.4" y="572.0" font-size="11" text-anchor="start" class="t-fg">0.25</text>
-<text x="16.0" y="603.0" font-size="12" text-anchor="start" class="t-fg">…-14/docs/a-rather-long-document-name.md<title>packages/module-14/docs/a-rather-long-document-name.md</title></text>
-<text x="16.0" y="618.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-14/src</text>
-<rect x="312.0" y="598.0" width="0.0" height="12.0" class="f-dr-current" data-ratio="0" data-behind="false"><title>packages/module-14/docs/a-rather-long-document-name.md: 0</title></rect>
-<text x="318.0" y="608.0" font-size="11" text-anchor="start" class="t-fg">0</text>
+<text x="16.0" y="567.0" font-size="12" text-anchor="start" class="t-fg">…-12/docs/a-rather-long-document-name.md<title>packages/module-12/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="582.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-12/src</text>
+<rect x="312.0" y="562.0" width="8.7" height="12.0" class="f-dr-current" data-ratio="0.5" data-behind="false"><title>packages/module-12/docs/a-rather-long-document-name.md: 0.5</title></rect>
+<text x="326.7" y="572.0" font-size="11" text-anchor="start" class="t-fg">0.5</text>
+<text x="16.0" y="603.0" font-size="12" text-anchor="start" class="t-fg">…-13/docs/a-rather-long-document-name.md<title>packages/module-13/docs/a-rather-long-document-name.md</title></text>
+<text x="16.0" y="618.0" font-size="11" text-anchor="start" class="t-muted">describes packages/module-13/src</text>
+<rect x="312.0" y="598.0" width="4.4" height="12.0" class="f-dr-current" data-ratio="0.25" data-behind="false"><title>packages/module-13/docs/a-rather-long-document-name.md: 0.25</title></rect>
+<text x="322.4" y="608.0" font-size="11" text-anchor="start" class="t-fg">0.25</text>
 <text x="16.0" y="638.0" font-size="12" text-anchor="start" class="t-muted">And 3 more mapped docs, not drawn</text>
 <rect x="16.0" y="654.0" width="14.0" height="14.0" rx="2" class="f-dr-behind"/>
 <text x="38.0" y="665.0" font-size="12" text-anchor="start" class="t-fg">Behind its code: above 2, or a newer declared source</text>
