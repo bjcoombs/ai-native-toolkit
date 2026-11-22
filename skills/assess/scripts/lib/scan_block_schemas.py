@@ -93,7 +93,9 @@ CI_CHECKS: JsonDict = {
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
         "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
         "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
-        "lines left out."),
+        "lines left out. Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and "
+        "Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no "
+        "readable check one makes basis unread_ci_system and enforced_check_runs null."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -139,27 +141,33 @@ CI_CHECKS: JsonDict = {
             "the check."),
         "basis": _field(
             {"enum": ["check_command", "merged_config", "included_jobs", "merged_config_partial",
-                      "no_check_command", "no_ci"]},
+                      "unread_ci_system", "no_check_command", "no_ci"]},
             "The reason for test_or_lint_runs: check_command or merged_config (true; the second "
             "when only the merged configuration ran a check), included_jobs or "
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
-            "pipeline), no_check_command or no_ci (false)."),
+            "pipeline), unread_ci_system (false: no readable check, but a CI file of a system "
+            "the scan does not parse is tracked), no_check_command or no_ci (false)."),
         "enforced_check_runs": _field(
             {"type": ["boolean", "null"]},
             "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
-            "changes, null when none does but included jobs or unsettled triggers may hold one, "
-            "else false."),
+            "changes, null when none does but included jobs, unsettled triggers or a CI system the "
+            "scan does not parse may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "not_enforced",
-                      "no_check_command", "no_ci"]},
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "unread_ci_system",
+                      "not_enforced", "no_check_command", "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs or "
-            "unknown_trigger (null), not_enforced, no_check_command or no_ci (false)."),
+            "unknown_trigger or unread_ci_system (null), not_enforced, no_check_command or no_ci "
+            "(false)."),
         "masked_check_commands": _field(
             _INT, "CI lines that run a check whose failure cannot fail the job."),
         "off_trigger_check_commands": _field(
             _INT, "Unmasked CI check lines whose workflow or job does not run on ordinary changes "
             "(workflow_dispatch or schedule only, a manual GitLab job)."),
+        "unread_ci_files": _field(
+            _INT, "Tracked root CI files of systems the scan does not parse (Jenkinsfile, "
+            ".circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, "
+            ".buildkite/pipeline.yml)."),
     },
 }
 

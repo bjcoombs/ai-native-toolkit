@@ -466,6 +466,19 @@ def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -
     assert row["level"] == 1
 
 
+def test_layer_five_is_unknown_on_a_ci_system_the_scanner_cannot_read(tmp_path: Path) -> None:
+    """Issue #787: a Jenkins-only repository is not measured at Layer 5, never level 0."""
+    scans = _ci_repo(tmp_path / "jenkins", None, instructions=False,
+                     extra={"Jenkinsfile": "pipeline { stages { stage('t') { steps { sh 'pytest' } } } }\n"})
+    assert (scans["ci_checks"]["basis"], scans["ci_checks"]["unread_ci_files"]) == ("unread_ci_system", 1)
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+    both = _ci_repo(tmp_path / "both", _CI_WORKFLOW.replace("make check", "make test"),
+                    instructions=False, extra={"Jenkinsfile": "sh 'pytest'\n"})
+    assert _row(_run({"r": both}), "layer-5-ci")["repos"]["r"]["levels"][0]["met"] is True
+
+
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:
     """The accepted regression: a named check alone no longer reaches any Layer 5 level."""
     deploy = _CI_WORKFLOW.replace("make check", "make deploy")

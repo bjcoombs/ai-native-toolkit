@@ -3168,7 +3168,7 @@ selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include fil
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
-enforced_basis, masked_check_commands, off_trigger_check_commands}`. Each line,
+enforced_basis, masked_check_commands, off_trigger_check_commands, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3215,6 +3215,14 @@ null with `enforced_basis: unknown_trigger`), else null under the
 same `included_jobs` rule, else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
 still describes `test_or_lint_runs`, which keeps its meaning.
+CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
+`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
+`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
+`.buildkite/pipeline.yml`). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). Their commands are not read; an empty `Jenkinsfile` reads the same.
 Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
 

@@ -89,7 +89,8 @@ def test_no_ci_files_is_false_with_basis_no_ci(tmp_path: Path) -> None:
                      "includes": [], "merged_config": "not_read", "merged_config_reason": None,
                      "merged_check_commands": 0, "test_or_lint_runs": False, "basis": "no_ci",
                      "enforced_check_runs": False, "enforced_basis": "no_ci",
-                     "masked_check_commands": 0, "off_trigger_check_commands": 0}
+                     "masked_check_commands": 0, "off_trigger_check_commands": 0,
+                     "unread_ci_files": 0}
 
 
 def test_a_workflow_running_a_test_is_true(tmp_path: Path) -> None:
@@ -339,3 +340,38 @@ def _is_checkout(root: Path) -> bool:
 @pytest.mark.skipif(not _is_checkout(REPO_ROOT), reason="needs this repository's checkout")
 def test_this_repository_reads_enforced() -> None:
     assert scan_ci_checks(REPO_ROOT)["enforced_check_runs"] is True
+
+
+_GH_PYTEST = "on: [pull_request]\njobs:\n  t:\n    steps:\n      - run: pytest\n"
+_GH_DEPLOY = "on: [pull_request]\njobs:\n  d:\n    steps:\n      - run: make deploy\n"
+_GH_MASKED = "on: [pull_request]\njobs:\n  t:\n    steps:\n      - run: pytest || true\n"
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({"Jenkinsfile": "pipeline { agent any; stages { stage('t') { steps { sh 'pytest' } } } }\n"},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    ({".circleci/config.yml": "version: 2.1\njobs:\n  test:\n    steps:\n      - run: pytest\n"},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    ({"azure-pipelines.yml": "steps:\n- script: echo hi\n"},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    ({"Jenkinsfile": "", "bitbucket-pipelines.yml": "", ".travis.yml": "",
+      ".buildkite/pipeline.yml": ""},
+     (None, False, "unread_ci_system", "unread_ci_system", 4)),
+    ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_PYTEST},
+     (True, True, "check_command", "enforced_check", 1)),
+    ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_DEPLOY},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    # A masked check beside an unread system: the unread system may run it unmasked.
+    ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_MASKED},
+     (None, True, "check_command", "unread_ci_system", 1)),
+    ({"README.md": "x\n"}, (False, False, "no_ci", "no_ci", 0)),
+    # Only root files are markers: a nested Jenkinsfile is not the repository's pipeline.
+    ({"tools/Jenkinsfile": "sh 'pytest'\n"}, (False, False, "no_ci", "no_ci", 0)),
+])
+def test_unread_ci_system_is_not_measured(
+        tmp_path: Path, files: dict[str, str],
+        expected: tuple[bool | None, bool, str, str, int]) -> None:
+    """Issue #787: a CI system the scan does not parse is not measured, never 0."""
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["enforced_check_runs"], block["test_or_lint_runs"], block["basis"],
+            block["enforced_basis"], block["unread_ci_files"]) == expected

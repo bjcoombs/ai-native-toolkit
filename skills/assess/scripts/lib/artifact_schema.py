@@ -203,7 +203,11 @@ constant each.
 # continue-on-error: true, allow_failure: true, set +e) and checks off the
 # ordinary triggers left out. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.32.0"
+# 1.33.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
+# system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.33.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -327,4 +331,9 @@ ARTIFACT_SCHEMA_VERSION = "1.32.0"
 #     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
 #     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
 #     Layer 5 evidence can move.
-ASSESS_METHOD_VERSION = 28
+# 29: a repository with no readable CI check whose tree tracks a CI file of a
+#     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
+#     Bitbucket Pipelines, Travis CI, Buildkite) reads
+#     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
+#     its Layer 5 row moves from level 0 to unknown (issue #787).
+ASSESS_METHOD_VERSION = 29
