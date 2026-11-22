@@ -32,7 +32,14 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
     ccn = stats.get("ccn", {})
     hotspots = stats.get("top_hotspots", [])
 
-    if files_scored == 0:
+    if files_scored is None:  # no complexity-stats.json: the treemap step wrote nothing (#959)
+        found.append(Anomaly(
+            code="ZERO_FILES_SCORED",
+            description="Treemap wrote no complexity-stats.json, so no file was scored.",
+            detail="files_scored=null",
+        ))
+        files_scored = 0
+    elif files_scored == 0:
         found.append(Anomaly(
             code="ZERO_FILES_SCORED",
             description="Treemap reported 0 files scored.",

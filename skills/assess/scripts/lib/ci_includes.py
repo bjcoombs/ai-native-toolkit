@@ -36,8 +36,8 @@ and a clone that resolves outside the root (a symlink) is ``not_cloned``.
 
 Each include item gets one ``IncludeRecord``: ``kind``, ``id`` (the
 ``shared_tooling`` id: ``gitlab_project:<path>`` for a project,
-``gitlab_component:<path>`` for a component; null for local, template and remote), ``status`` (``resolved`` or the token
-saying why not), ``ref_basis`` (``ref``, ``head``, ``worktree``; null when not
+``gitlab_component:<path>`` for a component; null for the other kinds), ``status`` (``resolved`` or the token
+saying why not; an entry this reader cannot parse is kind ``unknown``, status ``unparsed``), ``ref_basis`` (``ref``, ``head``, ``worktree``; null when not
 resolved) and ``depth``. An item is resolved only when every file it names was
 read. ``ci_checks`` publishes the records as ``includes`` with the counts
 ``resolved_includes`` / ``unresolved_includes``; ``review_automation`` reads
@@ -64,7 +64,10 @@ GITLAB_CI = ".gitlab-ci.yml"
 MAX_DEPTH = 5
 MAX_FILES = 50
 
-IncludeKind = Literal["local", "project", "component", "template", "remote"]
+# ``unknown``: an ``include:`` entry naming no item this reader parses (status ``unparsed``);
+# its kind is not known, so it never counts as a local file.
+IncludeKind = Literal["local", "project", "component", "template", "remote", "unknown"]
+KINDS: tuple[IncludeKind, ...] = ("local", "project", "component", "template", "remote", "unknown")
 RefBasis = Literal["ref", "head", "worktree"]
 IncludeStatus = Literal[
     "resolved", "no_root", "not_cloned", "file_missing", "not_offline", "glob", "bad_path",
@@ -80,7 +83,7 @@ class IncludeRecord(TypedDict):
     """One include item of the repository's CI or of a file it includes."""
 
     kind: IncludeKind
-    id: str | None  # gitlab_project:<path> / gitlab_component:<path>; None for local, template, remote
+    id: str | None  # gitlab_project:<path> / gitlab_component:<path>; None for the other kinds
     status: IncludeStatus
     ref_basis: RefBasis | None  # how the file was read; None when not resolved
     depth: int  # 1: the repository's own .gitlab-ci.yml names it
@@ -187,6 +190,8 @@ def _scalar_item(value: str, line: int) -> IncludeItem | None:
     raw, value = value.strip(), _unquote(value)
     if not value or (raw == value and re.match(r"^[\w.-]+\s*:(?:\s|$)", value)):
         return None  # empty, or an unquoted mapping with a key this reader does not know
+    if raw == value and value[0] in "!&*":
+        return None  # a YAML tag, anchor or alias (``!reference [x]``, ``*shared``): not a path
     kind: IncludeKind = "remote" if re.match(r"^[a-z]+://", value, re.IGNORECASE) else "local"
     return IncludeItem(kind, value, (), None, line)
 
@@ -422,7 +427,7 @@ class _Walk:
     def walk(self, text: str, here: _Source, depth: int, top_line: int | None) -> None:
         items, _has_section, dropped = include_items(text)
         for _ in range(dropped):
-            self.records.append({"kind": "local", "id": None, "status": "unparsed",
+            self.records.append({"kind": "unknown", "id": None, "status": "unparsed",
                                  "ref_basis": None, "depth": depth})
         for item in items:
             self.one(item, here, depth, item.line if top_line is None else top_line)

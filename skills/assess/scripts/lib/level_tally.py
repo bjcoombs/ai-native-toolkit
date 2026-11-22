@@ -44,7 +44,9 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
   criterion as unknown, so the row level and the condition agree, and a real
   unmet sibling criterion still makes the condition unmet;
 - ``needs_full_run``: the block is ``not_registered`` in a headless run;
-- ``needs_platform``: the block needs GitHub or GitLab (``network``);
+- ``needs_platform``: the block needs GitHub or GitLab (``network``). A remote
+  on a host no platform read supports (Bitbucket, GitHub Enterprise) is the
+  block's own ``unsupported_host`` instead, since ``--platform`` cannot read it (#959);
 - the block's own reason code (``lib.counts_only.reason_code``, or the code a
   known reason sentence maps to, ``reason_token``), when a block on
   the path reports ``available: false``;

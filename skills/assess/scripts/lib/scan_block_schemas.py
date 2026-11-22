@@ -19,7 +19,7 @@ a field of the block's TypedDict, and that real documents validate.
 """
 from __future__ import annotations
 
-from lib.ci_includes import STATUSES
+from lib.ci_includes import KINDS, STATUSES
 from lib.merged_ci import MERGED_STATUSES
 from lib.run_context_types import JsonDict
 
@@ -118,10 +118,12 @@ CI_CHECKS: JsonDict = {
         "unresolved_includes": _field(_INT, "Include items not read (status other than resolved)."),
         "includes": _field(
             {"type": ["array", "integer"], "items": {"type": "object", "properties": {
-                "kind": {"enum": ["local", "project", "component", "template", "remote"]},
+                "kind": _field({"enum": list(KINDS)},
+                               "local, project, component, template, remote, or unknown (an "
+                               "include entry this reader cannot parse; status unparsed)."),
                 "id": _field({"type": ["string", "null"]},
-                             "gitlab_project:<path> or gitlab_component:<path>; null for local, "
-                             "template and remote."),
+                             "gitlab_project:<path> or gitlab_component:<path>; null for the "
+                             "other kinds."),
                 "status": _field({"enum": list(STATUSES)},
                                  "resolved, or why not: no_root, not_cloned, file_missing, "
                                  "not_offline (template, remote), glob, bad_path, depth_limit, "

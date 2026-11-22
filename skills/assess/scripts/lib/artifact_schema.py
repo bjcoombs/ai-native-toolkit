@@ -271,6 +271,11 @@ constant each.
 #   instruction file before; both are null when there is no root file and the
 #   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
 #   nested_only and now sits after layer_grades in run-context.json.
+# - issue #959: an unparsed GitLab include record is kind unknown (was local), and
+#   an unquoted YAML tag, anchor or alias entry is unparsed (was a local glob);
+#   stats_summary with no complexity-stats.json is available: false
+#   (no_complexity_stats) with files_scored null (was 0); review_reality and
+#   delivery on a host no platform read supports read unsupported_host (was network).
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.

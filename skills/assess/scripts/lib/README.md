@@ -1718,7 +1718,9 @@ producer modules:
 
 1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
    stored scans lack while the other run holds it. This is measured-set movement, never level
-   movement; the achievements replay already treats an unknown side as neutral.
+   movement; the achievements replay already treats an unknown side as neutral. A path under
+   any block or sub-block reporting `available: false` (`agent_environment.ci_duration`, walked
+   as `levels.resolve_signal` walks it, #959) is a degraded scan, never an absent signal.
 2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
    `notes` line saying the scanner diff was unavailable.
 3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
@@ -2150,8 +2152,12 @@ Tests: `tests/test_measured_appendix.py`.
 path and the artifact-directory slug, raising `ValueError` for a missing or
 outside-repo path; a whole-repo run returns `(None, None, "")`. `assess_dir_for` names
 `.assess/` or `.assess/<slug>/`, and `load_current_stats` reads that directory's
-`complexity-stats.json`, or an empty snapshot when none was written. Tests:
-`tests/test_scope.py`.
+`complexity-stats.json`, or an empty snapshot when none was written. The empty snapshot
+carries `available: false` and `NO_STATS_REASON` (`no_complexity_stats`, #959), and
+`run_setup.run_header` turns it into an unavailable `stats_summary` with `files_scored`
+null, so a run whose treemap step wrote nothing reads not measured
+(`no_complexity_stats`), never the measured empty set (`no_scored_files`). Tests:
+`tests/test_scope.py`, `tests/test_run_setup.py`.
 
 **`assess_config.py`**
 Reads the optional per-repo `.assess/config.toml`: `exclude_dirs` / `exclude_patterns`
@@ -2512,7 +2518,8 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
 is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906); an
 `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
-`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+`needs_platform` for a `network` one; another unavailable block's own code, such as
+`unsupported_host` or `no_complexity_stats` (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
@@ -3169,11 +3176,16 @@ blocks and they describe the same changes. Both reads classify the remote with
 `remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
 `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
 `gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
-`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
-without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
-`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
-`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
-so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
+`unsupported` (a `UNSUPPORTED_HOSTS` host: Bitbucket, Azure DevOps, Codeberg, Gitea, sourcehut,
+or a `*.visualstudio.com` host), or `platform` (any other host). Its `offline_fn`,
+`offline_merged_sample` (a headless run without `--platform`), gives `NO_REMOTE_REASON`
+(`no_remote`) for `none`, `UNSUPPORTED_HOST_REASON` (`unsupported_host`) for `unsupported`
+and `NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too,
+`unsupported_host` for `unsupported` without probing glab, and `unsupported_host` for a
+`platform` host that glab does not reach (GitHub Enterprise, a GitLab glab is not signed in
+to): no scan option reads it, so the tally names the host limit instead of `needs_platform`
+and its advice never says to rerun with `--platform` (#959). A `platform` host reads
+`network` offline because only the platform pass can settle it. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
@@ -3860,9 +3872,9 @@ published), and `Resolution.includes` one `IncludeRecord` per item, published as
 
 | field | value |
 |-------|-------|
-| `kind` | `local`, `project`, `component`, `template`, `remote` |
+| `kind` | `local`, `project`, `component`, `template`, `remote`, `unknown` (an `unparsed` entry: its kind is not known, so it never counts as `local`, #959) |
 | `id` | `gitlab_project:<path>` / `gitlab_component:<path>` (lowercased, the `shared_tooling` id); null for the other kinds. Kept in counts-only output (ID rule) |
-| `status` | `resolved`, or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses), `ref_missing` |
+| `status` | `resolved`, or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses, including an unquoted YAML tag, anchor or alias such as `!reference [x]`), `ref_missing` |
 | `ref_basis` | `ref`, `head`, `worktree`; null unless resolved |
 | `depth` | 1 for the repository's own include; nested records follow their parent |
 
@@ -4124,6 +4136,8 @@ CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts a
 grades only, no paths or code) so they are safe to include in self-feedback issues.
 `COMPLEXITY_UNRELIABLE` fires when `stats_summary.complexity_unreliable` is non-empty
 (`scc_coverage.py`); its detail counts files and languages and gives the largest NLOC.
+`ZERO_FILES_SCORED` fires on `files_scored` 0 and on a null `files_scored` (no
+`complexity-stats.json`, detail `files_scored=null`, #959).
 
 **`coverage_report.py`**
 Parses an *existing* coverage report into the shape the `test_pressure` scan's

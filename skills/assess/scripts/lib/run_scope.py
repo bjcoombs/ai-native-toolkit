@@ -36,9 +36,21 @@ def assess_dir_for(repo_root: Path, scope_slug: str) -> Path:
     return repo_root / ".assess" / scope_slug if scope_slug else repo_root / ".assess"
 
 
+# The reason the run context's ``stats_summary`` gives when no sidecar was written (#959).
+NO_STATS_REASON = ("no_complexity_stats: the run wrote no complexity-stats.json, so it is not "
+                   "known how many files would be scored")
+
+
 def load_current_stats(assess_dir: Path) -> dict[str, Any]:
-    """This run's complexity stats, or an empty snapshot when none was written."""
+    """This run's complexity stats, or an empty snapshot when none was written.
+
+    The empty snapshot is marked ``available: false`` with ``NO_STATS_REASON``, so the
+    run context reads "not measured" rather than a measured zero: a missing sidecar is
+    not a repository with no source (``files_scored`` 0 would fire the empty-set rule,
+    ``no_scored_files``). Its ``files_scored`` stays 0 for the readers that count it
+    (the wiki log)."""
     return load_stats(assess_dir / "complexity-stats.json") or {
+        "available": False, "reason": NO_STATS_REASON,
         "files_scored": 0, "top_hotspots": [], "top_complex": [], "top_large": [],
         "loc": {}, "ccn": {},
     }

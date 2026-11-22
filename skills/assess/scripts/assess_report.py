@@ -590,7 +590,7 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
         headline=as_headline(ctx.get("headline"))["markdown"],
-        files_scored=stats.get("files_scored", 0),
+        files_scored=_fmt(stats.get("files_scored", 0)),
         loc_total=_fmt(loc.get("total")),
         loc_p95=_fmt(loc.get("p95")),
         loc_max=_fmt(loc.get("max")),

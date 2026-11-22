@@ -252,6 +252,13 @@ def test_a_network_block_needs_the_platform():
     assert result["not_measured"] == [{"id": "rev.1", "reason": "needs_platform"}]
 
 
+def test_an_unsupported_host_names_the_limit_not_the_platform():
+    model = _model(_row("rev", [{"signal": "review_reality.reviewed_share", "op": "gte", "value": 0.8}]))
+    reason = "unsupported_host: the remote's host is not GitHub or a GitLab host glab reaches"
+    result = lt.level_result(model, {"review_reality": {"available": False, "reason": reason}})
+    assert result["not_measured"] == [{"id": "rev.1", "reason": "unsupported_host"}]
+
+
 def test_a_condition_reads_its_own_criteria_not_the_level_below():
     model = _model(_row("fresh", [{"signal": DOC, "op": "lte", "value": 10}],
                         [{"signal": "stats_summary.loc.p95", "op": "lte", "value": 500}]))
