@@ -178,7 +178,7 @@ Review and approval shares over the sampled merged changes, read through gh or g
 - Collector: `core.review_reality`, reading `merged_sample`, `gitlab_note_facts`.
 - Network: yes, GitHub or GitLab (with --platform).
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.reason` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `review_reality.bot_sequence` token, `review_reality.reason` drop, `review_reality.sequence` token.
 - Used by: row `layer-7-review`.
 - Evidence: `review_reality.reviewed_share` platform (verified), `review_reality.approved_share` platform (verified).
 - Not measured when:

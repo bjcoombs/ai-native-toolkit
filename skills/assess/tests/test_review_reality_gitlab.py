@@ -298,6 +298,9 @@ def test_gitlab_review_reality_is_available(world: World) -> None:
     world.policy([{"rule_type": "regular", "approvals_required": 1, "protected_branches": []}])
     block = scan_review_reality(world.root)
     del block["oldest_merged_days_ago"]
+    sequence = block.pop("sequence")
+    assert sorted(sequence) == ["approved"] * 3 + ["unreviewed"] * 7
+    assert block.pop("bot_sequence") == ["none"] * 10
     assert block == {
         "available": True, "merged_count": 10, "reviewed_share": 0.3,
         "approved_share": 0.3, "bot_review_share": 0.0, "self_merged_share": 0.7,
@@ -484,6 +487,8 @@ def test_gitlab_token_user_ai_review_on_every_mr(world: World, tmp_path: Path,
     assert block["approved_share"] == 0.0
     assert block["hollow_required_review"] is False
     assert block["required_approval_bypassed"] is True
+    # AI review counts as review on GitLab: reviewed, with the bot marker (#943).
+    assert block["sequence"] == ["reviewed"] * 5 and block["bot_sequence"] == ["bot"] * 5
     text = json.dumps(block)
     assert "SECRET" not in text and "project_42" not in text and "bob" not in text
     # Notes are read in memory only: never written to the response cache.
@@ -522,6 +527,8 @@ def test_gitlab_full_notes_pages_without_a_decision_are_unknown(world: World) ->
     assert block["available"] is True
     assert block["bot_review_share"] is None
     assert block["reviewed_share"] is None
+    # An undecided merge request is an unknown tick, never unreviewed (#943).
+    assert block["sequence"] == ["unknown"] and block["bot_sequence"] == ["unknown"]
     assert len([c for c in world.calls() if "/notes" in c]) == 3  # NOTES_MAX_PAGES, no more
 
 
@@ -548,7 +555,8 @@ def test_gitlab_approval_decides_reviewed_despite_full_pages(world: World) -> No
     world.merged([_mr(1)], {1: _approvals(BOB)}, {1: [_note(ALICE, "rebased")] * 100})
     _full_pages(world, 1, 3)
     world.policy([])
-    assert scan_review_reality(world.root)["reviewed_share"] == 1.0
+    block = scan_review_reality(world.root)
+    assert block["reviewed_share"] == 1.0 and block["sequence"] == ["approved"]
 
 
 @pytest.mark.parametrize("code,reason", [("403", "no_access"), ("404", "not_found")])

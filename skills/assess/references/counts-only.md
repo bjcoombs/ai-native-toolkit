@@ -317,6 +317,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `review_reality.reason` | dropped |
+| `review_reality.sequence` | token |
+| `review_reality.bot_sequence` | token |
 
 ## delivery
 
