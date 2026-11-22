@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import re
 import shlex
-from itertools import takewhile
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
@@ -627,27 +626,37 @@ def _script_verdict(words: list[str]) -> bool | None:
     return _target_verdict([PurePosixPath(path).name])
 
 
+_SHELL_VALUED = frozenset({"-o", "-O", "+o", "+O"})
+# A tool a CI step installs into the tree (``install.sh -b ./bin``) is not a committed script.
+_KNOWN_TOOLS = LINT_PROGRAMS | TYPE_PROGRAMS | BARE_RUN_PROGRAMS | ANALYSER_PROGRAMS
+
+
 def script_path(text: str) -> str | None:
     """The repository file a command runs as a committed script (#937): ``./ci.sh`` ->
     ``ci.sh``, ``bash scripts/test.sh`` -> ``scripts/test.sh``, ``bin/test``. None when it
-    runs no script (``bash -c '...'``, ``pytest``), a modelled runner (``./gradlew``), or a
-    path the tree cannot settle: absolute, home, variable or outside the checkout."""
+    runs no script (``bash -c '...'``, ``pytest``), a modelled runner (``./gradlew``), a
+    known tool installed into the tree (``./bin/golangci-lint``, ``./node_modules/.bin/jest``),
+    or a path the tree cannot settle: absolute, home, variable or outside the checkout."""
     words = command_words(text)
     if not words:
         return None
     head = words[0]
     if head in ("bash", "sh", "zsh"):
-        # Only the shell's own flags, before the script: ``bash x.sh --ci`` runs ``x.sh``.
-        flags = list(takewhile(lambda w: w.startswith("-"), words[1:]))
-        rest = words[1 + len(flags):]
-        if not rest or any("c" in w[1:] for w in flags if not w.startswith("--")):
+        # Only the shell's own flags, before the script: ``bash x.sh --ci`` runs ``x.sh``;
+        # ``-o`` / ``-O`` / ``+o`` / ``+O`` take the next word (``bash -o pipefail x.sh``).
+        i, flags = 1, []
+        while i < len(words) and words[i][:1] in ("-", "+"):
+            flags.append(words[i])
+            i += 2 if words[i] in _SHELL_VALUED else 1
+        rest = words[i:]
+        if not rest or any("c" in w[1:] for w in flags if w.startswith("-") and not w.startswith("--")):
             return None
         path = rest[0]
     elif head in RUNNERS or not (head.startswith(("./", "bin/")) or head.endswith(".sh")):
         return None
     else:
         path = head
-    if path.startswith(("/", "~")) or "$" in path:
+    if path.startswith(("/", "~")) or "$" in path or program_name(path) in _KNOWN_TOOLS:
         return None
     norm = str(PurePosixPath(path.removeprefix("./")))
     return None if norm.split("/")[0] == ".." else norm

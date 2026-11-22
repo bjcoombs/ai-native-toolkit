@@ -3762,7 +3762,9 @@ lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
 (`ci_checks._lone_check`). `script_path(text)` (#937) names the repository file a
 command runs as a committed script (`./ci.sh` is `ci.sh`, `bash scripts/test.sh` is
 `scripts/test.sh`, `bin/test`), or None for no script (`bash -c`, `pytest`), a modelled
-runner (`./gradlew`) and a path the tree cannot settle (absolute, `~`, `$VAR`, `../`);
+runner (`./gradlew`), a known tool installed into the tree (`_KNOWN_TOOLS`:
+`./bin/golangci-lint`, `bin/phpunit`) and a path the tree cannot settle (absolute, `~`,
+`$VAR`, `../`); a shell's `-o` / `+o` takes its next word (`bash -o pipefail ./ci.sh`).
 `ci_checks` reads it against the tracked files. Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
 analysers of `lint_vocabulary.ANALYSER_PROGRAMS`, and `is_lint_command` and `is_lint_run`
 also accept `lint_vocabulary.ecosystem_lint` (a formatter in its check mode, `mix credo`,

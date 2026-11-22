@@ -597,12 +597,19 @@ def test_lint_runs_on_an_unread_ci_system_is_not_measured(
     pytest.param(_gha("./ci.sh || true"), (False, "not_enforced"), id="masked-missing-script"),
     pytest.param(_gha("./gradlew test"), (True, "enforced_check"), id="modelled-runner"),
     pytest.param(_gha("./vendor/bin/phpunit"), (True, "enforced_check"), id="installed-tool"),
+    pytest.param(_gha("./bin/phpunit"), (True, "enforced_check"), id="tool-installed-into-bin"),
     pytest.param(_gha("./build/test.sh"), (True, "enforced_check"), id="excluded-build-tree"),
 ])
 def test_a_missing_check_script_is_not_credited(tmp_path: Path, files: dict[str, str],
                                                 expected: tuple[bool | None, str]) -> None:
     block = scan_ci_checks(_write(tmp_path, files))
     assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
+
+
+def test_an_installed_linter_binary_is_still_a_lint_run(tmp_path: Path) -> None:
+    """``install.sh -b ./bin`` then ``./bin/golangci-lint run``: a tool, not a committed script."""
+    block = scan_ci_checks(_write(tmp_path, _gha("./bin/golangci-lint run")))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
 
 
 def test_a_missing_lint_script_is_not_credited(tmp_path: Path) -> None:
