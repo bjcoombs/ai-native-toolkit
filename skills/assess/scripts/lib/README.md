@@ -4164,7 +4164,10 @@ action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known lim
 GitHub step and job `if:`, branch filters, matrix values and composite-action
 internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
 phase reads null. A run whose own flag overrides the config threshold
-(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate. On a scoped run,
+any enforced run of the tool anywhere in the repository credits the scope's config gate
+(`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
+runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
 `lib.command_index`, `lib.command_resolver`, `lib.check_command` and
 `lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
 Tests: `tests/test_coverage_ci.py`.
