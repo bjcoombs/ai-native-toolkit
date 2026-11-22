@@ -5,6 +5,24 @@ liveness, coverage, the keyhole signals) into the block shape the report,
 gate and anomaly detector read, degrading to an explicit unavailable block
 rather than a false negative. No helper runs a scan of its own except
 ``attach_structure_drift``, which runs the Tier 0 ownership check.
+
+Serialises scan results into run-context blocks for `build_run_context`, each
+degrading to an explicit unavailable block rather than a false negative.
+`accretion_block` keeps the accretion files already in the top complexity/size band,
+worst first, capped at `MAX_ACCRETION_FILES` (12); `accretion_lookup` gives the hotspot
+pages a per-path view of the same scan. `excluded_generated` and `generated_exclusion`
+read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
+0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
+Tier 1 counts `keyhole_signals` computed. With no ownership map the block is
+`no_ownership_map()`, the bare marker the headless runner writes too (reason
+`NO_OWNERSHIP_MAP_REASON`, #908), so `/assess` and fleet give the level the same
+reason; a raising scan still omits the block. `structure_drift_tier_0` builds the
+same block with Tier 1 unavailable, or None with no map, for the headless runner
+(`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+baseline entries rank at half weight). `attach_liveness_blocks`,
+`coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
+copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
+Runs no scan of its own besides Tier 0. Tests: `tests/test_context_blocks.py`.
 """
 
 from __future__ import annotations

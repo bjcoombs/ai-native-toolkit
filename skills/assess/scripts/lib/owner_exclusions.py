@@ -33,6 +33,22 @@ denominator, never earns, and never holds a Step gate, so the Step it gates
 stays unreachable while it is excluded (#744 decision). The fleet side
 (``--fleet-config``) waits on the method stamp (#952), so this reads the
 repository's own file only.
+
+Reads the owner's condition exclusions from `.assess/config.toml` (#910):
+`[checks] exclude = [{id, reason, kind?, excluded_by?, excluded_at?, plugin_version?}]`.
+`id` is a default-model condition id (`<row id>.<level>`) and `reason` is required;
+`kind` is one of `KINDS` (`not_applicable`, `measured_elsewhere`, `tool_unsupported`,
+`false_positive`, `other`, the default when the key is left out; a written kind that is not
+one of them is skipped). The provenance keys are named as a decline marker's.
+`parse_exclusions(config, known)` returns the run-context `owner_exclusions` block
+(`OwnerExclusionsBlock`): the `exclusions` in force (with `source: "repo"`), the `skipped`
+entries with a `PROBLEMS` code (`not_a_list` for a `[checks]` or `exclude` of the wrong type, `not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
+`unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
+line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
+reads the repository's config and warns on stderr per skipped entry; never raises. A
+`scan_registry` entry (`core_scans.owner_exclusions`), core-only, so the headless runner and
+`/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
+ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 """
 from __future__ import annotations
 

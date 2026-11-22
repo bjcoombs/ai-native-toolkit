@@ -43,6 +43,22 @@ A GitLab sample, an empty sample, a sample that could not be read, or any
 refused call (other than ``not_found``) returns a reading that does not apply, so
 the offline result stands. A ``not_found`` head (a merged fork pull request whose
 commit the remote no longer holds) counts that change as not external. GitLab external pipelines are not read.
+
+The `--platform` external-CI reading.
+The private `network` spec `external_ci` (#928), read by `ci_checks`:
+`read_external_ci(merged_sample)`; offline the runner calls `no_external_ci`, which reads
+nothing. Under `--platform` it runs because `ci_checks` is in `signals.PLATFORM_SCANS`; a
+full `/assess` run reads it too. For each sampled merged pull request
+(`merged_sample.py`, up to `SAMPLE_CAP` = 30) with a `headRefOid`, at most
+`CALLS_PER_CHANGE` = 2 calls, both GET: `gh api repos/<o>/<r>/commits/<sha>/check-runs`
+(the app slug of each check run on the first page), then
+`gh api repos/<o>/<r>/commits/<sha>/status` (each status context), skipped when the check
+runs already name a known system. Both are made with `cache=False` (check-run output and
+status descriptions are free text); only the two counts leave the module. `external_ci`
+in `ci_checks` means an external check context on merged changes under `--platform`: more
+than half of the sampled merges carry a known external CI system. A GitLab sample, an
+empty or unread sample and any refused call (`GhUnavailable`) read `NOT_READ`, so the
+offline result stands; a `not_found` head counts that change as not external instead. Tests: `tests/test_external_ci.py`.
 """
 from __future__ import annotations
 

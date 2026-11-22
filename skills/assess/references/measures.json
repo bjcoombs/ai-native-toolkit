@@ -1396,7 +1396,7 @@
         },
         {
           "code": "unread_ci_system",
-          "means": "No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; lib/README.md lists the paths); unread_ci_files counts them.",
+          "means": "No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; the lib/unread_ci.py docstring lists the paths); unread_ci_files counts them.",
           "next_step": "Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.",
           "carried_in": "basis"
         },

@@ -30,6 +30,17 @@ down the alarm colour, flat muted; the signed change is printed, so colour is
 never the only channel. End labels are spread to a minimum gap
 (``fleet_svg.spread_vertical``). Deterministic: groups sorted by name, fixed
 number formatting.
+
+The before/after slope chart (#675), from the `--compare` result (`fleet_compare.Comparison`)
+and the maturity model alone. `slope_view(levels, comparison)` gives each group its mean level
+share (`fleet_maturity.mean_share`, team rows only, #684) then and now, taken only over the team
+rows with a known level in both runs (org rows are out of the mean, the counts and the mover), so a row going unknown to known never moves a line, and its biggest mover
+(largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
+removed or with no row known in both runs is named on a hatched strip, never at zero.
+`end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
+both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
+`scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
+With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 """
 from __future__ import annotations
 

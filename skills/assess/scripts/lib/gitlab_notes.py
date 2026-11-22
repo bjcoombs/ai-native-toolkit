@@ -48,6 +48,37 @@ share; ``delivery`` takes ``ai_review`` and
 that reads every sampled merge request's notes once for both.
 
 Pure except :func:`read_notes`; imports no orchestrator.
+
+GitLab merge-request notes as facts (#716), for `review_reality` and `delivery` (#715). `read_notes(project, iid)` reads
+`projects/<id>/merge_requests/<iid>/notes?sort=asc&order_by=created_at&per_page=100`
+(`&page=N` after the first; `--hostname` and the project in argv) with `cache=False`;
+`mr_note_facts` reads up to `NOTES_MAX_PAGES` (3) pages, stopping at a short page or once
+a human comment and AI review are both found, so no note body reaches
+the `--platform` response cache. `note_facts(notes, mr_author, classifier, complete)`
+returns `NoteFacts(human_comment, ai_review, first_human_comment_at)`; nothing
+else of a note leaves the module. System notes are skipped. A note is, first rule first:
+nothing when the merge request's author posted it (an agent on its own change is not
+review); AI review
+when its body (cut to `MAX_BODY`) carries a `PINNED_MARKERS` marker (a line-start "AI Code
+Review" / "AI Review" heading, plain or bold, emoji allowed, or an HTML comment naming AI
+review or CodeRabbit; prose mentioning AI review does not match) or a `[review]
+ai_review_markers` string (case-insensitive substring), whoever else posted it; AI review when
+its author is in the `agent` bucket of `agent_identity.AuthorMatcher.classify_username` or
+its username is in `delivery.AI_REVIEWERS` (`[bot]` dropped); nothing for automation, a
+dependency bot or a `project_<id>_bot_<hash>` / `group_<id>_bot_<hash>` access-token user
+(recognised by that form, never a display name) that is not an agent: an unmarked token
+note is a coverage reporter, Danger or semantic-release as often as an AI reviewer, so it
+counts as AI review only with a marker, an `[ai_usage]` identity rule or `[ai_usage]
+token_users_as_agents`; else a human comment, the first giving `first_human_comment_at`.
+GitLab's note author is a basic user object with no bot flag, so none is read. With
+`complete` False (still a full last page) an undecided fact is None. `NoteFacts` is
+`(human_comment, ai_review, first_human_comment_at)`. `classifier_from_config(config)` builds the
+classifier from the merged `[ai_usage]` and `[review]` sections. `gitlab_note_facts(sample,
+fleet_config)` is the private registry spec (`network=True`, reads `merged_sample` and
+`fleet_config`): one `NoteFacts` per sampled merge request in sample order, None off GitLab,
+or an unavailable block on a refused read. `review_reality` and `delivery` both read it, so
+notes are read once per run; `delivery` fills `first_human_comment_hours_p50/p90`,
+`human_commented_share` and `ai_review_share` on GitLab from it. Tests: `tests/test_gitlab_notes.py`, `tests/test_review_reality_gitlab.py`.
 """
 from __future__ import annotations
 

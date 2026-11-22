@@ -17,6 +17,27 @@ with no stated cause.
 
 The file carries no run id or date: a run whose findings did not move leaves it
 byte-identical, so it only shows in a diff when a finding moved.
+
+The committed findings snapshot (#554). `build_snapshot` reduces `derived_findings` to
+names and sorted paths plus `ASSESS_METHOD_VERSION`; `write_snapshot` writes it to
+`findings.json` in the run's artifact directory, with no run id or date so an unchanged
+finding set leaves the file byte-identical. `read_snapshot` reads the previous file back
+before the run overwrites it as `(snapshot, reason)` and never raises on file content: a
+hand-edited file that cannot establish a method version (bad encoding, invalid or too deeply
+nested JSON, wrong top-level type, a missing or non-integer version, missing or non-list
+findings) is `None` with a fixed reason token, and unusable entries (non-object, no string
+name, non-list `paths`, non-string paths) are skipped under
+`malformed_entries` (#668). A numeric-string version is read as its integer and a UTF-8
+BOM is accepted. A name or path that is not valid UTF-8 (a lone surrogate, from a hand edit or a non-UTF-8 filename) is escaped (`\\xff`, `\\ud800`) the same way on the write, read and compare paths, so it stays tracked and the gate can print it. Deep nesting reads as `too_deep` or `invalid_json` depending on the Python build. `load_snapshot` returns the snapshot alone and prints one stderr line
+naming any reason (an absent file is silent), and `run_publish` records it as
+`prior_findings_snapshot`. `committed_prior` picks the snapshot the gate compares
+against: the `findings.json` on disk when its method version differs from this run's
+(the gate run directly on a committed snapshot, #661), else the recorded prior. `method_change` compares that snapshot with
+the current findings: on a method-version mismatch it lists the paths that appeared and
+cleared per finding, the snapshot path and the re-freeze command (on a downgrade, when
+this run's method is older than the snapshot's, the toolkit pin to raise instead),
+which `assess_gate` prints as an explanation (it never fails the gate by itself). Tests:
+`tests/test_findings_snapshot.py`, `tests/test_findings_snapshot_malformed.py`.
 """
 from __future__ import annotations
 

@@ -26,6 +26,38 @@ file or network access.
   null reason ``compiler_gate_only`` when it is the only static gate.
 - ``dotnet_build``: a ``dotnet build`` / ``dotnet msbuild`` / ``msbuild`` line, which runs the
   Roslyn analysers a committed project file configures (``analysers_in_build``).
+
+The lint, analyser and formatter-check words of .NET, Gradle, PHP, Elixir, Dart, Swift
+and C++ (issue #926), split from `check_command.py` for the size ratchet; it imports no
+other lib module. `program_name(word)` is the basename with a `.phar`, `.exe` or numeric
+version suffix dropped (`vendor/bin/phpstan`, `clang-tidy-18`). `ANALYSER_PROGRAMS`
+(`phpstan`, `psalm`, `phpcs`, `detekt`, `swiftlint`, `clang-tidy`, `cppcheck`) lint in any
+mode. `formatter_mode(words)` is `check` for a formatter's check mode (`pint --test`,
+`php-cs-fixer fix --dry-run` or `check`, `swift-format lint`, `dotnet format
+--verify-no-changes`, `dotnet-format --check`, `clang-format --dry-run --Werror` or `-n
+--Werror`, `mix format --check-formatted`, `dart` / `flutter format --set-exit-if-changed`),
+`rewrite` when it rewrites in place, and None otherwise (`clang-format a.cc` and `dart
+format -o none` only print); formatter checks count as lint (maintainer decision 2).
+`subcommand_lint(words)`: `mix credo`, `mix dialyzer` (not `--plt`), `dart analyze`,
+`flutter analyze`, and Gradle tasks (`gradle_tasks` drops the `:project:` prefix and the
+task after `-x`) named `lint*`, `ktlint*Check`, `detekt*`, `spotless*Check` or
+`checkstyle*`, never one that fixes, formats, applies or records a baseline (`lintFix`,
+`ktlintFormat`, `spotlessApply`, `detektBaseline`). `ecosystem_lint(words)` is any of the
+three, with `php <program>` read as the program, and never a run `runs_no_analysis(words)`
+names: a formatter's rewrite mode, `swiftlint --fix` / `autocorrect`, or a per-program mode
+in `_NO_ANALYSIS` that configures, lists, explains or records a baseline and exits 0
+(`phpcs --config-set`, `phpcs -i`, `phpstan analyse --generate-baseline`, `phpstan
+clear-result-cache`, `psalm --init` / `--set-baseline`, `detekt --create-baseline` /
+`--generate-config`, `swiftlint version` / `rules`, `clang-tidy --list-checks` / `-fix`,
+`mix credo gen.config` / `explain`). `check_command` checks it ahead of `LINT_PROGRAMS`, on the
+command and on the program a wrapper or package bin runs (`_no_analysis`: `npx phpcs
+--config-set`, `uv run clang-tidy -fix`, `yarn phpstan --generate-baseline`), so those
+read false at Layer 5 too. `compiler_gate(words)` is a compiler run
+with warnings as errors (`mix compile --warnings-as-errors`, `-Werror` after a compiler,
+`make`, `ninja` or `cmake`, `-DCMAKE_COMPILE_WARNING_AS_ERROR=ON`, `dotnet build
+-warnaserror` or `-p:TreatWarningsAsErrors=true`), never a lint run (decision 1).
+`dotnet_build(words)` is `dotnet build`, `dotnet msbuild` or `msbuild`. Tests:
+`tests/test_lint_vocabulary.py`.
 """
 from __future__ import annotations
 

@@ -23,6 +23,14 @@ same way, here:
   only because floors appeared.
 
 Pure arithmetic: no I/O, no ordering dependence.
+
+The one maturity mean the quadrant, the slope chart and the trend lines share (#684).
+`mean_share(cells)` averages each known `(level, top)` pair's share of top level, leaving out
+an unknown level or a missing top level (`None` when nothing is left, never 0);
+`known_shares` lists them. `SCOPE` is the row set, `team` rows: the only rows a single
+repository can be measured by, so the group charts use them too and the three read on one
+scale. Pure arithmetic.
+`floor_mean(cells)` (#697) over `(level, floor, top)` triples is the floor-inclusive lower bound printed beside the known-only mean as "at least"; `floor_shares` lists its shares and `has_floor` says whether any unknown row has a floor. Plotted positions stay on `mean_share`.
 """
 from __future__ import annotations
 

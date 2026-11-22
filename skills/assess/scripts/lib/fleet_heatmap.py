@@ -34,6 +34,21 @@ The canvas has its own white background, so it reads the same on light and
 dark pages. Text is escaped with ``html.escape``; labels are sized and
 truncated by character count (no font metrics), and every number is formatted
 with a fixed precision, so the same run renders byte-identical files.
+
+The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
+`treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and maturity model
+rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer YlGn 9-class growth
+ramp (`LEVEL_RAMP`; `ramp_step` scales a level by its row's top level when a maturity model file
+gives one, else indexes the ramp), text colour from the per-step `STEP_TEXT` table, and
+every known cell prints its level. `unknown` is the hatched `UNKNOWN_FILL`, never a ramp
+colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in reading
+order) and the key names the missing signals in visible text. A comparison adds
+`change_text` under the level. White background, `html.escape`d text, labels truncated
+by character count, fixed number formatting: the same run gives the same bytes. Golden
+renders: `tests/fixtures/fleet_heatmap/` (regeneration command in its README). Its text,
+truncation, hatch pattern and document head come from `fleet_svg` with the heat map's own
+literal colours, so the goldens stayed byte-identical through the move.
+A floor cell (#697) is the floor's ramp colour under a transparent hatch (`fleet-floor`), printing `N+` and a key letter, with its own legend entry; the key says which missing signals need a full `/assess`. The pattern and legend entry appear only when a floor does, so runs without one render as before.
 """
 from __future__ import annotations
 

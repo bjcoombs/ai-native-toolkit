@@ -20,6 +20,11 @@ hashed under the run's salt when paths are hashed). The engine emits ``target_hi
 the run a unit's level (or its mean share of top level) on the row crosses from below
 the target to at or above it, and reports every target's distance: in levels for a
 level target, in share for a share target.
+
+The `--targets` TOML file (`[[target]]`: `view`, `unit`, `row`, and exactly one of
+`level` or a mean `share` of top level, #780), the stand-in for
+the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming the entry;
+`resolve` keys each target as `fleet-data.json` does (hashed under the run's salt).
 """
 from __future__ import annotations
 

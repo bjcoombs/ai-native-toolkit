@@ -43,6 +43,37 @@ subject can be checked.
 
 Churn comes from ``lib.git_churn`` -- the same machinery the complexity treemap
 uses, so churn is computed one way across the whole skill.
+
+Doc-staleness metric for Layer 0. Associates each doc with the code it describes through
+`doc_ownership.py`, computes code churn relative to doc maintenance, and
+emits a signed ratio (high = decaying map). `ratio` is the whole-window ratio
+(`window_ratio`, subject churn over doc edits) capped by `code_churn_since_doc_change`,
+the distinct subject commits authored after the doc's last content change, so a doc is a
+decaying map only while it is behind its subject: one corrected after its subject's last
+change scores 0 however busy the window was, and new churn after the fix raises it again.
+Both `stale_hubs` and the `lying_map` join read this capped `ratio`. The association logic
+reuses `doc_graph`'s code-link edges. For *generated* docs it reads `doc_provenance`
+(per-doc and via the `[[generated]]` config map) and replaces the churn ratio with a
+source-vs-doc verdict. `last_commit_days` and the instruction grader's `freshness_days`
+(via `content_clock`) both read `git_churn.content_commit_clock`, and the skipped bulk
+commits are reported as `bulk_commits_skipped` (newest first, capped) with
+`bulk_commits_skipped_total`. A doc dated by the creation fallback carries
+`last_change_basis: "creation"` and confidence `low`, which keeps it out of the stale-hub
+finding; `creation_date_fallback_count` counts them. On a shallow clone the block
+carries `history_truncated: true` and `history_boundary_date`, every row is confidence
+`low`, and a doc whose newest visible change is the boundary carries
+`last_commit_days_bound: "lower"` (copied onto its `stale_hubs` entry): its age is a
+floor. Its ratio still rests only on subject commits after the boundary, so the
+boundary listing every code file does not make it stale. `summary` (#699) carries the integer
+counts a maturity model reads: `measured_docs` (rows with a code subject of their own,
+every method but `repo-baseline`), `stale_docs` (those `doc_complexity_join.is_stale`
+marks: ratio above `STALENESS_RATIO_THRESHOLD`, or a newer declared source) and
+`stale_pct` (their share, a whole percent rounded up). Both counts are null on a truncated
+or degenerate history, or with no measured doc, so the doc-freshness row reads unknown.
+Paths are repo-relative POSIX (`as_posix`) on every platform. The `modularity` block's `base_doc_dir_ratio`
+is code directories holding a base doc over all code directories; a base doc in a
+directory with no code (`docs/`, `agents/`) counts in neither, so the ratio stays
+within 0-1 (tests: `tests/test_doc_modularity.py`).
 """
 from __future__ import annotations
 

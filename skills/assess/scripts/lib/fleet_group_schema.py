@@ -9,6 +9,13 @@ changing ``GroupRow`` or ``RowLevel``:
 
 Objects are strict except ``settings``, whose keys are ghreport's setting
 names: each one is ``{value, reason}`` or ``{available: false, reason}``.
+
+Generates `skills/fleet/references/groups.schema.json` from `GroupRow` and
+`RowLevel` (lists and floats included, `settings` values as `{value, reason}` or
+`{available: false, reason}`; a `NotRequired` key, such as `top_level`, is left out of
+`required`). `tests/test_fleet_groups.py` fails when the checked-in
+file differs; regenerate with `uv run --locked python scripts/lib/fleet_group_schema.py`
+from `skills/assess`.
 """
 from __future__ import annotations
 

@@ -42,6 +42,29 @@ Output is deterministic: rows in maturity model order, repositories sorted, no d
 ``<out>/teams/<group>.md`` (a group id's segments as directories; a hashed id, #909,
 is ``teams/h-<hex>.md``), after
 removing the ``*.md`` pages a previous run left under ``<out>/teams/``.
+
+The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
+(issue #571). Every heading opens with an `In place:` line (`vocabulary.IN_PLACE`, #743). `build_pages` re-runs `levels.evaluate` per group on exactly the inputs
+`fleet_groups` evaluated (`repo_signals`, `settings_for`, `settings_signals`), then
+checks each row's status and level against `groups.jsonl` and raises
+`NextStepsError` on any difference (a different `--levels` or `--settings`, or files
+from two runs). Each page: a levels table, then per row the next level's unmet
+criteria, collected cumulatively over levels 1..next (under `share` a repository can
+sit below the group level), one numbered step per criterion. A team step lists the
+repositories where that criterion is definitely unmet, with the current value; a
+repository below the next level with no unmet criterion is listed apart as not
+measured (a failed scan with its reason token). An org step names the settings scope.
+An `unknown` row (keyed on `status`, not on `missing_signals`) names each missing
+signal, how many repositories lack it and how to measure it, the rolled-up bounds,
+and the criteria measured repositories already fail above the high bound. Values
+print counts-only (`scalar`: numbers, booleans, `TOKEN_RE` tokens, else `set`);
+maturity model titles are escaped (`text`), ids are code spans (`code`). `write_pages` writes
+`teams.md` and `teams/<group>.md` after `clear_pages` removes the previous run's
+`*.md` pages, and refuses a path that resolves outside the output directory;
+`page_path` refuses an id with an empty, dot or backslash segment. Golden pages:
+`tests/fixtures/fleet_next_steps/expected/` (regeneration command in the test
+module's docstring).
+A row with a floor (#697) reads "at least N of top" in the levels table and "Level at least N" in its section; a full-run-only signal gets `FULL_RUN_HINT` in place of a scan hint.
 """
 from __future__ import annotations
 

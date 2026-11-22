@@ -3,6 +3,15 @@
 Compares the plugin version, the stats schema version and each complexity
 backend's version stamped on the prior and current ``complexity-stats.json``.
 Stdlib only.
+
+Decides whether the cross-run diff can be trusted. `compute_diff_reliability` returns
+`(diff_reliable, diff_version_note, diff_trend_reset)`: a first run is reliable; a
+missing or unparseable plugin version, a changed stats schema or a MAJOR plugin bump
+voids the diff (MAJOR also resets the trend); a MINOR/PATCH bump keeps it armed unless a
+complexity backend's version moved (`stats_tool_versions` reads the `<tool>_version`
+stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snapshot's
+plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
+`tests/test_complexity_treemap_schema_versions.py`.
 """
 
 from __future__ import annotations

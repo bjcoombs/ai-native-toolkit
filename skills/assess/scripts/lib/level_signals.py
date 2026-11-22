@@ -101,6 +101,50 @@ Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 
 Tests: ``tests/test_signal_inputs.py`` (one case per default criterion signal,
 so an unclassified one names itself).
+
+The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
+segment must be a block name the published headless schema lists
+(`references/signals.schema.json`, `scans.propertyNames`, generated from
+`signals.known_scans`), so one maturity model reads a headless document's `scans` or a full
+`run-context.json`; run-context keys outside the schema (`instructions_grade`) are
+rejected, and the deterministic layer grades are read through the `layer_grades` block
+instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
+name a field and end on a scalar (no list, no object); an untyped block is open.
+Every block a default criterion reads is typed (#793), so **a misspelt sub-path under
+`agent_ops`, `coverage_gate`, `instruction_claims`, `promissory_markers`,
+`review_reality` or `structure_drift` in a `--levels` file now fails at load**
+(`agent_ops.summary.permissions_encodd`, `coverage_gate.enforcd`) where it used to load
+and evaluate `unknown`; the default model loads unchanged and its results do not move. An
+`org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
+`<setting>.value` / `.reason`). `load_default_levels` loads
+`skills/assess/levels/default.toml`: one team row per layer 0-8, level 1 for
+Partial and 2 for Present. Layers 2-4 have no deterministic grade, so their rows read
+proxies from the `structure`, `promissory_markers`, `structure_drift` and `stats_summary`
+blocks, which full and headless runs both produce (import-graph modularity and front doors; lint
+suppressions; an ownership map and file size), each starting from positive evidence
+so an absent signal is never credited (the practice /assess looks for can still be
+absent: the header says where). It can disagree with the `/assess` layer verdicts (the file header lists
+where); no instruction file reads level 0 through the never-null
+`layer_grades.instruction_file_present`, not `unknown`. Tests:
+`tests/test_level_signals.py`, on headless runs of the golden fixture repositories
+and the golden `run-context.json`.
+
+Signal classification (#783): `SIGNAL_INPUTS` gives every signal a default criterion reads
+its producer input class (`InputClass`: `config_text`, `head_text`, `head_structure`,
+`ci_executed`, `git_history`, `execution_artifact`, `platform`), keyed by exact path;
+`input_class` raises `UnclassifiedSignal` naming an unclassified one. `INPUT_GRADES` maps
+each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
+returns the signal's class grade whatever the operator (the #789 grades design: no
+threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
+conditions #744 lists without counting. The module doc records the rulings (platform
+reads are their own class; instruction files stay declared but still gate Steps).
+`level_tally.py` reads it to count conditions; `levels.py` does not.
+`counts_toward_level(grade)` is that rule for a grade (`measured` and `verified` count;
+`lib/catalog.py` reads it). `UNMEASURED_VALUES`
+names the values that mean "could not be measured" with the tally's reason code
+(`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
+false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 """
 from __future__ import annotations
 
