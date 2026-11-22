@@ -6,7 +6,9 @@ check target of a runner ``lib.command_resolver`` models (``make test``,
 committed script named for a check (``./scripts/test.sh``). An install command
 such as ``npm ci`` or ``uv sync --extra test`` is never a check.
 ``lib.agent_environment`` applies it to the commands instruction files name,
-``lib.ci_checks`` to the lines of CI configuration. Pure: no file or network
+``lib.ci_checks`` to the lines of CI configuration. ``is_lint_run`` and
+``may_lint`` (#782) feed ``ci_checks.lint_runs``: a linter that runs, and a
+check whose recipe may run one. Pure: no file or network
 access, so a scan that only classifies commands stays offline.
 """
 from __future__ import annotations
@@ -141,3 +143,164 @@ def is_lint_command(text: str) -> bool:
     if head not in RUNNERS and not head.startswith("./") and head not in LINT_PROGRAMS:
         return False
     return _check_target(words, LINT_WORDS, LINT_PROGRAMS)
+
+
+# A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
+_INFO_FLAGS = frozenset({"--version", "--help", "-V"})
+# Test programs that run tests and nothing else: no linter can hide inside them.
+_DIRECT_TESTS = (ALWAYS_CHECK - {"tox", "nox"}) | _JS_TEST_RUNNERS
+
+
+def _program(words: list[str]) -> list[str]:
+    """The program a wrapper runs: ``uv run`` / ``poetry run`` / ``uvx`` / ``npx`` / ``python -m``."""
+    head = words[0]
+    if head in ("uv", "poetry") and "run" in words:
+        rest = _drop_leading_flags(words[words.index("run") + 1:])
+        return _program(rest) if rest else []
+    if head in ("uvx", "npx", "bunx"):
+        rest = _drop_leading_flags(words[1:])
+        return _program(rest) if rest else []
+    if head in ("python", "python3") and "-m" in words:
+        return words[words.index("-m") + 1:]
+    return words
+
+
+def _task_target(words: list[str], names: frozenset[str]) -> bool:
+    """A go-task target (``task lint``): ``task`` is not a modelled runner, so it is read here."""
+    pos = _positionals(words[1:])
+    return words[0] == "task" and bool(pos) and is_check_name(pos[0], names)
+
+
+# Type checkers Layer 3 credits as lint runs (#782), local to ``is_lint_run`` so
+# ``is_lint_command`` (Layer 5, ``test_or_lint_runs``) keeps its vocabulary.
+TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
+_RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
+# Package-manager forms that run a named program: ``npm exec``, ``pnpm dlx``, ``bun x``.
+_EXEC_SUBCOMMANDS = frozenset({"exec", "dlx", "x"})
+
+
+def _exec_program(words: list[str]) -> list[str] | None:
+    """The program a package-manager runner form runs (``pnpm exec eslint .`` -> ``eslint .``).
+
+    ``npx`` / ``bunx``, and ``exec`` / ``dlx`` / ``x`` under npm, pnpm, yarn or bun. None
+    for any other command, including a package script (``npm run lint``).
+    """
+    head = words[0]
+    if head in ("npx", "bunx"):
+        return _drop_leading_flags(words[1:])
+    if head in ("npm", "pnpm", "yarn", "bun"):
+        pos = _positionals(words[1:])
+        if pos[:1] and pos[0] in _EXEC_SUBCOMMANDS:
+            return _drop_leading_flags(words[words.index(pos[0]) + 1:])
+    return None
+_RUN_WORDS = LINT_WORDS | TYPE_PROGRAMS | {"typecheck", "typechecks"}
+_TYPE_CHECK = re.compile(r"type[-_]check", re.IGNORECASE)
+
+
+def _lint_target(words: list[str]) -> bool:
+    """``is_lint_command``'s anchoring over the Layer 3 vocabulary (linters and type checkers)."""
+    head = words[0]
+    if head not in RUNNERS and not head.startswith("./") and head not in _RUN_PROGRAMS:
+        return False
+    return _check_target(words, _RUN_WORDS, _RUN_PROGRAMS)
+
+
+def _js_lint(head: str, pos: list[str]) -> bool:
+    """A package-manager or ``npx`` command that runs a linter or a lint script.
+
+    ``_js_check`` credits ``npm test`` and ``npx jest`` whatever the names, which is
+    right for a check but not for a lint run.
+    """
+    if not pos:
+        return False
+    if head in ("npx", "bunx"):
+        return is_check_name(pos[0], _RUN_WORDS)
+    if pos[0] in ("run", "run-script"):
+        return len(pos) > 1 and is_check_name(pos[1], _RUN_WORDS)
+    if head == "npm" or pos[0] in _PM_INSTALL or pos[0] in _PM_TEST:
+        return False
+    return is_check_name(pos[0], _RUN_WORDS)
+
+
+def _hatch_run(words: list[str]) -> list[str] | None:
+    """What ``hatch run`` runs (``hatch run lint`` -> ``["lint"]``), None for another command.
+
+    ``hatch`` is not a modelled runner, so it is read here (#782): the first word after
+    ``run`` is a script name (``lint``, ``test:cov``) or a program (``ruff check``).
+    """
+    if words[0] != "hatch":
+        return None
+    pos = _positionals(words[1:])
+    if pos[:1] != ["run"]:
+        return None
+    return _drop_leading_flags(words[words.index("run") + 1:])
+
+
+def _hatch_fmt_check(words: list[str]) -> bool:
+    """``hatch fmt --check``: Hatch's ruff lint and format check, failing on a finding."""
+    return words[0] == "hatch" and _positionals(words[1:])[:1] == ["fmt"] and "--check" in words
+
+
+def is_lint_run(text: str) -> bool:
+    """``is_lint_command`` that also runs the lint (#782): not ``--version`` / ``--help`` / ``-V``.
+
+    Type checkers count as linters here (``pyright``, ``tsc --noEmit``, ``npx vue-tsc``,
+    ``npm run typecheck``, ``make type-check``). A go-task lint target (``task lint``),
+    ``hatch fmt --check`` and ``hatch run``
+    of a linter program (``hatch run ruff check .``) count too, and a package-manager test
+    alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
+    meaning: ``lib.ci_checks.test_or_lint_runs`` and Layer 5 read it unchanged.
+    """
+    # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
+    words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
+    if not words or _INFO_FLAGS.intersection(words):
+        return False
+    program = _exec_program(words)
+    if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run
+        return bool(program) and is_check_name(program[0], _RUN_WORDS)
+    if words[0] in ("npm", "pnpm", "yarn", "bun"):
+        return _js_lint(words[0], _positionals(words[1:]))
+    hatch = _hatch_run(words)
+    if hatch is not None:   # hatch run ruff check .: a linter program; a script name may lint
+        return bool(hatch) and hatch[0] in _RUN_PROGRAMS
+    return _hatch_fmt_check(words) or _lint_target(words) or _task_target(words, _RUN_WORDS)
+
+
+def may_lint(text: str) -> bool:
+    """A check that may run a linter inside it, which a CI line alone cannot show (#782).
+
+    A check target of a runner or a script (``make check``, ``npm test``, ``tox``,
+    ``./scripts/test.sh``, ``task check``), ``pre-commit run``, a program run through
+    a package-manager runner that is neither a linter nor a test runner (``npx
+    prettier --check``, ``pnpm dlx some-tool``), or any ``hatch run``
+    script (``hatch run lint``, ``hatch run test:cov``), whose recipe is not read. A direct test-program
+    call (``pytest``, ``uv run pytest``, ``go test``, ``cargo test``, ``bun test``, ``npx jest``) runs
+    tests only, so it is not one.
+    """
+    words = command_words(text)
+    if not words:
+        return False
+    runner = _exec_program(words)
+    if runner is not None:
+        # npx / pnpm exec / yarn dlx <program>: a linter is a lint run and a test runner runs
+        # tests; any other program may lint, so it reads null, never false.
+        if not runner or runner[0] in _JS_TEST_RUNNERS:
+            return False
+        if runner[0] == "playwright" and _positionals(runner[1:])[:1] == ["test"]:
+            return False
+        return not is_check_name(_TYPE_CHECK.sub("typecheck", runner[0]), _RUN_WORDS)
+    program = _program(words)
+    if program[:2] == ["pre-commit", "run"]:
+        return True
+    hatch = _hatch_run(words)
+    if hatch is not None:   # hatch run <script>: like tox -e, its recipe is not read
+        return bool(hatch) and hatch[0] not in _DIRECT_TESTS | LINT_PROGRAMS
+    if _task_target(words, CHECK_WORDS):
+        return True
+    if not is_check_command(text) or not program:
+        return False
+    if program[0] in _DIRECT_TESTS:
+        return False
+    if program[0] in ("go", "cargo", "bun"):   # go test, cargo test, bun test: built-in runners
+        return _positionals(program[1:])[:1] != ["test"]
+    return not (program[0] == "playwright" and _positionals(program[1:])[:1] == ["test"])

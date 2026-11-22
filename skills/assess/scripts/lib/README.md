@@ -3289,18 +3289,39 @@ splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
 `mypy` ... run directly), so `make lint` and `npx eslint` count and an install
 naming a linter does not; instruction-file classification does not use it. Used by
 `agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
-lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
-(`test_is_check_command`).
+lines). `is_lint_run(text)` (issue #782) is the lint test `ci_checks.lint_runs`
+reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
+--version` runs no lint) and without the package-manager test aliases
+`is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
+(`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
+ruff check .`). Type checkers count as linters there, in a vocabulary local to
+`is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
+`type-check` targets such as `npm run typecheck` or `make type-check`), so
+`is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
+`npm exec`, `pnpm exec` / `dlx`, `yarn exec` / `dlx`) is read by the program it runs:
+a linter or type checker is a lint run, a test runner (`jest`, `vitest`, `playwright
+test`) is neither, and any other program is `may_lint` (null, never false). A lone
+type-checker item (`- tsc` under `needs:`) is a value like a lone linter. `may_lint(text)` is a check that may run a linter the line cannot
+show: a check target of a runner or script (`make check`, `npm test`, `tox`,
+`./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
+(`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
+call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
+jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
+`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
+(`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
-Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
+Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
+it run a linter (#782)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
+the instruction file; Layer 3 level 1 reads `lint_runs`.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
-enforced_basis, masked_check_commands, off_trigger_check_commands}`. Each line,
+enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
+lint_basis}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3347,7 +3368,27 @@ null with `enforced_basis: unknown_trigger`), else null under the
 same `included_jobs` rule, else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
 still describes `test_or_lint_runs`, which keeps its meaning.
-Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
+`lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
+and trigger rules, the same own, included and merged files, with
+`count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
+per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
+mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
+`lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
+`merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
+triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+target or script that may lint inside it; recipes are not read), `not_enforced`
+(false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
+`no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
+caps the row; a stored scan without the key reads unknown there.
+Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
 
 **`ci_masking.py`**
