@@ -43,8 +43,8 @@ parser (the core has no YAML dependency). Only literal values count.
   {0}``), a custom ``bash`` / ``sh`` / ``dash`` / ``zsh`` command without ``-e``
   (``bash {0}``), or on a Windows ``runs-on`` with no ``shell:`` (``pwsh`` is the
   default there). Nesting is read with bash grammar only in a bash or sh body; in
-  a pwsh, powershell, cmd or python body any ``exit 0`` statement after a check
-  masks it; the step's ``shell:``, then
+  a pwsh, powershell, cmd or python body only the ``{ }`` / ``( )`` nesting is
+  read, so an ``exit 0`` inside ``if (...) { }`` masks nothing; the step's ``shell:``, then
   the job's and the workflow's ``defaults.run.shell`` are read (``run_errexit``).
   GitHub's default ``bash -e`` and ``sh -e`` stop at the failing check before
   ``exit 0``, so ``pytest; exit 0`` there is enforced. GitLab checks each
@@ -377,13 +377,15 @@ def _drop_exit_zero(statement: list[tuple[str, str]]) -> list[tuple[str, str]]:
     return [("", kept[0][1]), *kept[1:]] if kept else []
 
 
-def _depths(statements: list[list[tuple[str, str]]]) -> list[int]:
-    """Per statement of one bash or sh body: how many compound commands it sits in.
+def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> list[int]:
+    """Per statement of one script body: how many compound commands it sits in.
 
     ``if`` / loops / ``case`` open on their first word and ``fi`` / ``done`` / ``esac``
     close; ``{ }`` and ``( )`` are counted across the whole segment, so a group that
     closes on the same line (``{ echo; }``, ``( cd sub && make build )``) nets to zero.
-    Inside ``case`` a pattern's ``)`` is not counted.
+    Inside ``case`` a pattern's ``)`` is not counted. With ``keywords`` false (a pwsh,
+    powershell, cmd or python body) only the ``{ }`` / ``( )`` delta is read, so
+    ``if ($env:X) {`` ... ``}`` nests and a one-line ``if (...) { ... }`` nets to zero.
     """
     stack: list[str] = []
     out: list[int] = []
@@ -393,9 +395,9 @@ def _depths(statements: list[list[tuple[str, str]]]) -> list[int]:
             words = seg.split()
             while words and words[0] in _PREFIXES:
                 words = words[1:]
-            if words and words[0] in _CLOSERS and stack:
+            if keywords and words and words[0] in _CLOSERS and stack:
                 stack.pop()
-            elif words and words[0] in _OPENERS:
+            elif keywords and words and words[0] in _OPENERS:
                 stack.append(words[0])
             delta = seg.count("{") - seg.count("}")
             if not stack or stack[-1] != "case":
@@ -529,8 +531,9 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: dict[int, list[list[tup
     ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
     ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
     ``run_shell`` is ``(errexit, bash grammar)`` for a GitHub ``run:`` body, None for any
-    other body. In a pwsh, powershell, cmd or python body nesting is not read, so any
-    ``exit 0`` statement after a check masks it. Otherwise only a ``run:`` body read with errexit off (``set +e``, ``pwsh``, a Windows
+    other body. In a pwsh, powershell, cmd or python body only ``{ }`` / ``( )`` nesting is
+    read (no bash keywords): GitHub's pwsh wrapper ends with ``exit $LASTEXITCODE``, so an
+    ``exit 0`` inside ``if (...) { }`` is a guard, not a mask. Otherwise only a ``run:`` body read with errexit off (``set +e``, ``pwsh``, a Windows
     runner, ``shell: bash {0}``) is masked by a later ``exit 0``. With errexit on the failing
     check stops the step first, and GitLab checks each ``script:`` item's status.
     """
@@ -546,8 +549,8 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: dict[int, list[list[tup
         off.append(run_shell is not None and not shell_errexit)
     data = dict(zip(texts, _not_code(list(texts.values())), strict=True))
     code = [not data.get(first, False) for first, _ in refs]
-    depths = (_depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
-              if bash else [0] * len(refs))
+    depths = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)],
+                     keywords=bash)
     out: list[tuple[int, int]] = []
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success

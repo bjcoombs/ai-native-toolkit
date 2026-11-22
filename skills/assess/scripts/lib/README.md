@@ -3702,7 +3702,8 @@ word, a custom `bash` / `sh` / `dash` / `zsh` command without `-e` such as `bash
 a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
 step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
 statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
-grammar read only in a bash or sh body; `_depths`, `_not_code`) masks the statements
+grammar read only in a bash or sh body and only `{ }` / `( )` nesting in a pwsh,
+powershell, cmd or python body; `_depths`, `_not_code`) masks the statements
 before it, unless one of them or a statement between
 re-raises a status. The default `bash -e` stops at the failing check first, so
 `pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
