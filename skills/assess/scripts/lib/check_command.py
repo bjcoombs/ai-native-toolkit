@@ -146,32 +146,47 @@ def is_lint_command(text: str) -> bool:
 
 
 # A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
-# Flags that ask a program for its version, usage or test list and run no check (#919):
-# ``ruff --version``, ``dart test --help``, ``dotnet test --list-tests``,
-# ``pytest --collect-only`` (``--co``).
-_INFO_FLAGS = frozenset({"--version", "--help", "-h", "--list-tests", "--collect-only", "--co"})
+# Flags that ask any program for its version or usage and run no check (#919).
+_INFO_FLAGS = frozenset({"--version", "--help"})
+# Runners whose ``-h`` is help (``_H_HELP`` adds the linters, type checkers, pytest, tox
+# and nox). A committed script is never one: ``./scripts/test.sh -h db`` names a host.
+_H_RUNNERS = frozenset({
+    "dart", "flutter", "dotnet", "go", "cargo", "ctest", "rspec", "make", "just", "bazel",
+    "jest", "vitest", "mocha",
+})
+# Programs that list their tests without running them: ``pytest --collect-only`` /
+# ``--co``, ``dotnet test --list-tests``.
+_LIST_FLAGS: dict[str, frozenset[str]] = {
+    "pytest": frozenset({"--collect-only", "--co"}),
+    "py.test": frozenset({"--collect-only", "--co"}),
+    "dotnet": frozenset({"--list-tests"}),
+    "vstest.console": frozenset({"--list-tests", "/ListTests"}),
+}
 
 
 def is_info_invocation(text: str) -> bool:
     """A command that asks only for a version, usage or a test list, so it runs no check (#919).
 
-    Any ``_INFO_FLAGS`` word (``--version``, ``--help``, ``-h``, ``--list-tests``,
-    ``--collect-only``, ``--co``); ``rspec --init``, which writes a config and runs no
-    spec; or ``-V`` when the program it runs is one whose ``-V`` is its version flag
-    (``_V_VERSION``: the linters, type checkers, ``pytest``, ``tox``, ``nox``). Elsewhere
-    ``-V`` can run the work (``mvn -B -V verify``, ``./gradlew -V test``, ``ctest -V``),
-    so it is not read. ``ruff --version``, ``uv run tox --version``, ``flutter test
-    --help`` and ``bundle exec rspec --init`` are info invocations.
+    ``--version`` or ``--help`` anywhere; ``rspec --init``, which writes a config and runs
+    no spec; and flags read only for the program they belong to (``_program`` unwraps
+    ``uv run`` / ``npx`` / ``python -m``): ``-V`` for a program in ``_V_VERSION`` (the
+    linters, type checkers, ``pytest``, ``tox``, ``nox``; elsewhere it can run the work,
+    as in ``mvn -B -V verify`` or ``./gradlew -V test``), ``-h`` for those and the runners
+    in ``_H_RUNNERS``, never for a script (``./scripts/test.sh -h db``), and the
+    test-listing flags in ``_LIST_FLAGS`` (``pytest --co``, ``dotnet test --list-tests``).
     """
     words = command_words(text)
     if not words:
         return False
     if _INFO_FLAGS.intersection(words) or ("rspec" in words and "--init" in words):
         return True
-    if "-V" not in words:
-        return False
     program = _program(words)
-    return bool(program) and program[0] in _V_VERSION
+    if not program:
+        return False
+    head = program[0]
+    rest = set(program[1:])
+    return (("-V" in rest and head in _V_VERSION) or ("-h" in rest and head in _H_HELP)
+            or bool(rest & _LIST_FLAGS.get(head, frozenset())))
 
 
 # Test programs that run tests and nothing else: no linter can hide inside them.
@@ -204,6 +219,7 @@ TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "
 _RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
 # Programs whose ``-V`` prints the version and exits (``is_info_invocation``).
 _V_VERSION = _RUN_PROGRAMS | ALWAYS_CHECK
+_H_HELP = _V_VERSION | _H_RUNNERS
 # Package-manager forms that run a named program: ``npm exec``, ``pnpm dlx``, ``bun x``.
 _EXEC_SUBCOMMANDS = frozenset({"exec", "dlx", "x"})
 

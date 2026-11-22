@@ -82,7 +82,12 @@ def test_a_runner_asked_for_usage_or_a_test_list_is_an_info_invocation(text: str
     assert enforced_check_commands(_wf(text)) == (0, 0)
 
 
-@pytest.mark.parametrize("text", ["rspec", "dotnet test", "flutter test", "rspec spec/init_spec.rb"])
+@pytest.mark.parametrize("text", [
+    "rspec", "dotnet test", "flutter test", "rspec spec/init_spec.rb",
+    "./scripts/test.sh -h db", "./scripts/integration-test.sh -h localhost", "bash scripts/test.sh -h db",
+    "./scripts/test.sh --co", "./scripts/test.sh --list-tests", "./scripts/test.sh --collect-only",
+    "mvn -B -V verify", "./gradlew -V test", "tox -e py -- --co",
+])
 def test_the_same_runners_running_tests_are_not_info_invocations(text: str) -> None:
     assert not is_info_invocation(text)
 
@@ -205,3 +210,8 @@ def test_each_hole_reads_unmet_for_layer_3_and_layer_5(tmp_path: Path, files: di
 
 def test_the_plain_checks_still_read_met(tmp_path: Path) -> None:
     assert _scan(tmp_path, {".github/workflows/ci.yml": _block("ruff check .\npytest")}) == (True, True)
+
+
+def test_a_script_with_a_host_flag_is_still_a_check() -> None:
+    assert check_commands(_wf("./scripts/test.sh -h db")) == 1
+    assert enforced_check_commands(_wf("./scripts/test.sh -h db")) == (1, 0)

@@ -3556,9 +3556,12 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 `is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
 (`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
 ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
-on its own: `--version`, `--help`, `-h`, `--list-tests`, `--collect-only` or `--co`
-anywhere, `rspec --init`, or `-V` when the program is a linter, type checker, `pytest`,
-`tox` or `nox` (elsewhere `-V` can run the work: `mvn -B -V verify`,
+on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
+program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
+`nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha), never a script
+(`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest and
+`--list-tests` for `dotnet test` (elsewhere `-V` can run the work: `mvn -B -V verify`,
 `./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
 `pytest --version` is no Layer 5 check and a version-only step makes
 `test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
