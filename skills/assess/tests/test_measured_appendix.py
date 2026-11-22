@@ -25,8 +25,9 @@ def test_ran_and_skipped_with_reasons() -> None:
     assert text.startswith(HEADING + "\n")
     assert f"[docs/what-we-measure.md]({CATALOG_URL})" in text
     ran, skipped = text.split("### Skipped")
-    assert ("Over 2 repositories, 2 scans were measured everywhere, 1 ran but could not read "
-            "its input somewhere, and 4 were skipped.") in ran
+    # agent_ops was skipped in one repository, so it is not measured everywhere either.
+    assert ("Over 2 repositories, 1 scan was measured everywhere, 2 ran but were not measured "
+            "everywhere, and 4 were skipped.") in ran
     assert "### Ran (3)" in ran
     assert "- `ci_checks`\n" in ran
     assert "- `structure`: not measured in 1 of 2 (no_python_packages)" in ran
@@ -43,6 +44,8 @@ def test_absent_reason_and_partial_lines() -> None:
     text = measured_section([doc, _doc()], ["ci_checks", "agent_ops"], absent="not here")
     assert "- `ci_checks`: not measured in 1 of 2 (x); skipped in 1 of 2" in text
     assert "- `agent_ops`: not here." in text
+    partial = measured_section([_doc(agent_ops={}), _doc()], ["agent_ops"])
+    assert "0 scans were measured everywhere, 1 ran but was not measured everywhere" in partial
     assert "Over 1 repository, 0 scans were measured everywhere, 1 ran" in measured_section([doc], ["ci_checks"])
     assert "### Skipped (0)\n\n- none" in measured_section([doc], ["ci_checks"])
 

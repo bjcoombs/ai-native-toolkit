@@ -64,7 +64,7 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         return "\n".join([HEADING, "", f"No repository was scanned, so no scan ran. {link}"])
     ran: list[str] = []
     skipped: list[str] = []
-    unread = 0  # scans that ran but could not read their input in at least one repository
+    unread = 0  # scans that ran but were unavailable or skipped in at least one repository
     for name in names:
         states = [_state(doc[name]) if name in doc else "absent" for doc in documents]
         run = [s for s in states if s not in SKIP_CODES and s != "absent"]
@@ -76,15 +76,16 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         missing = sum(1 for s in run if s is not None)
         line = f"- `{name}`"
         if missing:
-            unread += 1
             line += f": not measured in {missing} of {total} ({', '.join(unmeasured)})"
         if len(run) < total:
             line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total}"
+        if missing or len(run) < total:
+            unread += 1
         ran.append(line)
     scope = "1 repository" if total == 1 else f"{total} repositories"
     measured = len(ran) - unread
     headline = (f"Over {scope}, {measured} {_scans(measured)} measured everywhere, {unread} "
-                f"ran but could not read {'its' if unread == 1 else 'their'} input somewhere, and "
+                f"ran but {'was' if unread == 1 else 'were'} not measured everywhere, and "
                 f"{len(skipped)} {'was' if len(skipped) == 1 else 'were'} skipped.")
     lines = [HEADING, "", f"{headline} {link}",
              "", f"### Ran ({len(ran)})", "", *(ran or ["- none"]),
