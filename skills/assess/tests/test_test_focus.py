@@ -456,7 +456,7 @@ def test_skill_md_mutation_scope_jq_mirrors_test_path_rule() -> None:
     the core never disagree about which hot files are tests."""
     from lib.sibling_tests import IS_TEST_RE
 
-    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text()
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
     focus_line = next(line for line in skill.splitlines() if line.startswith("FOCUS_FILES="))
     assert IS_TEST_RE.pattern.replace("\\", "\\\\") in focus_line
     assert '"__tests__"' in focus_line
@@ -479,7 +479,7 @@ def test_mutation_scope_skips_credited_files_no_tool_can_mutate(tmp_path: Path) 
     Python files but must not take one of the capped mutation slots."""
     for rel in ("scripts/run.sh", "tests/run.bats", "pkg/a.py", "pkg/test_a.py"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text("x\n")
+        (tmp_path / rel).write_text("x\n", encoding="utf-8")
     block = compute_test_focus(["scripts/run.sh", "pkg/a.py"], None, None,
                                repo_root=tmp_path)
     signals = {e["path"]: e["test_signal"] for e in block["entries"]}

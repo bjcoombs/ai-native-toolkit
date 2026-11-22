@@ -114,7 +114,7 @@ def test_write_stats_carries_complexity_unreliable(tmp_path):
     out = tmp_path / "stats.json"
     treemap.write_stats(files, None, None, tmp_path, out, fn_ccn_by_path={},
                         languages_by_path=langs)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert [r["path"] for r in stats["complexity_unreliable"]] == ["scripts/doctor.sh"]
     assert treemap.STATS_SCHEMA_VERSION >= 7
 
@@ -124,7 +124,7 @@ def test_lizard_only_sidecar_has_empty_list(tmp_path):
     out = tmp_path / "stats.json"
     treemap.write_stats([(tmp_path / "a.py", 100, 5.0, "lizard")], None, None,
                         tmp_path, out, fn_ccn_by_path={tmp_path / "a.py": [5.0]})
-    assert json.loads(out.read_text())["complexity_unreliable"] == []
+    assert json.loads(out.read_text(encoding="utf-8"))["complexity_unreliable"] == []
 
 
 def _unreliable_ctx():
@@ -216,9 +216,9 @@ def _plain_script(n_blocks: int) -> str:
 @pytest.mark.skipif(shutil.which("scc") is None, reason="scc not installed")
 def test_real_scc_undercount_is_flagged(tmp_path):
     treemap = _load_treemap()
-    (tmp_path / "doctor.sh").write_text(_undercounted_script(280))
-    (tmp_path / "plain.sh").write_text(_plain_script(60))
-    (tmp_path / "other.sh").write_text(_plain_script(40))
+    (tmp_path / "doctor.sh").write_text(_undercounted_script(280), encoding="utf-8")
+    (tmp_path / "plain.sh").write_text(_plain_script(60), encoding="utf-8")
+    (tmp_path / "other.sh").write_text(_plain_script(40), encoding="utf-8")
     langs: dict[Path, str] = {}
     scores = treemap.scc_scores(tmp_path, languages=langs)
     doctor = (tmp_path / "doctor.sh").resolve()

@@ -62,19 +62,19 @@ def test_write_index_creates_file(tmp_assess_dir: Path) -> None:
     write_index(tmp_assess_dir, entries, last_updated="2026-05-22")
     index = tmp_assess_dir / "index.md"
     assert index.exists()
-    content = index.read_text()
+    content = index.read_text(encoding="utf-8")
     assert "src/foo.go" in content
     assert "active" in content
 
 
 def test_write_index_overwrites(tmp_assess_dir: Path) -> None:
-    (tmp_assess_dir / "index.md").write_text("OLD")
+    (tmp_assess_dir / "index.md").write_text("OLD", encoding="utf-8")
     entries = [HotspotEntry(
         path="src/new.go", first_flagged="2026-05-22", last_seen="2026-05-22",
         status="active", ccn=20, loc=300,
     )]
     write_index(tmp_assess_dir, entries, last_updated="2026-05-22")
-    content = (tmp_assess_dir / "index.md").read_text()
+    content = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     assert "OLD" not in content
     assert "src/new.go" in content
 
@@ -89,7 +89,7 @@ def test_write_index_renders_none_metrics_as_dash(tmp_assess_dir: Path) -> None:
         status="graduated", ccn=None, loc=None,
     )]
     write_index(tmp_assess_dir, entries, last_updated="2026-05-29")
-    content = (tmp_assess_dir / "index.md").read_text()
+    content = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     # `-` appears in the row's metric cells; `0` must not.
     row = [line for line in content.splitlines() if "src/grad.go" in line][0]
     assert "| - | - |" in row
@@ -100,7 +100,7 @@ def test_write_index_renders_none_metrics_as_dash(tmp_assess_dir: Path) -> None:
         status="graduated", ccn=0, loc=0,
     )]
     write_index(tmp_assess_dir, entries, last_updated="2026-05-29")
-    content = (tmp_assess_dir / "index.md").read_text()
+    content = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     row = [line for line in content.splitlines() if "src/empty.go" in line][0]
     assert "| 0 | 0 |" in row
 
@@ -114,7 +114,7 @@ def test_write_index_legend_defines_every_status_token(tmp_assess_dir: Path) -> 
         status="new", ccn=30, loc=600,
     )]
     write_index(tmp_assess_dir, entries, last_updated="2026-06-07")
-    content = (tmp_assess_dir / "index.md").read_text()
+    content = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     legend = content.split("## Legend", 1)[1]
     for status in ("active", "new", "graduated", "regressed", "restructured", "persistent"):
         assert f"- **{status}**" in legend, f"legend missing status {status!r}"
@@ -130,19 +130,19 @@ def test_append_log_entry_creates_file_if_missing(tmp_assess_dir: Path) -> None:
     append_log_entry(tmp_assess_dir, entry)
     log = tmp_assess_dir / "log.md"
     assert log.exists()
-    assert "2026-05-22" in log.read_text()
+    assert "2026-05-22" in log.read_text(encoding="utf-8")
 
 
 def test_append_log_entry_renders_restructured_count(tmp_assess_dir: Path) -> None:
     """The log line names restructured hotspots beside regressed ones."""
     append_log_entry(tmp_assess_dir, _log_entry(regressed_count=1,
                                                 restructured_count=4))
-    log = (tmp_assess_dir / "log.md").read_text()
+    log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "1 regressed, 4 restructured, 0 new" in log
 
 
 def test_append_log_entry_appends(tmp_assess_dir: Path) -> None:
-    (tmp_assess_dir / "log.md").write_text("# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n")
+    (tmp_assess_dir / "log.md").write_text("# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n", encoding="utf-8")
     entry = LogEntry(
         run_date="2026-05-22", files_scored=100,
         readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
@@ -150,7 +150,7 @@ def test_append_log_entry_appends(tmp_assess_dir: Path) -> None:
         top_action="Action X",
     )
     append_log_entry(tmp_assess_dir, entry)
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "2026-05-01" in content  # old entry preserved
     assert "2026-05-22" in content  # new entry appended
     assert content.index("2026-05-01") < content.index("2026-05-22")
@@ -167,7 +167,7 @@ def test_log_heading_includes_plugin_version(tmp_assess_dir: Path) -> None:
         top_action="X", plugin_version="1.13.0",
     )
     append_log_entry(tmp_assess_dir, entry)
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "## 2026-05-29 (v1.13.0)" in content
 
 
@@ -184,7 +184,7 @@ def test_log_heading_disambiguates_same_date_same_version(tmp_assess_dir: Path) 
     append_log_entry(tmp_assess_dir, LogEntry(**base))
     append_log_entry(tmp_assess_dir, LogEntry(**base))
 
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     headings = [line for line in content.splitlines() if line.startswith("## ")]
     assert len(headings) == 2
     # First heading has no time; second has a HH:MM stamp inside the parens.
@@ -207,7 +207,7 @@ def test_log_heading_same_date_different_versions_each_unique(tmp_assess_dir: Pa
     append_log_entry(tmp_assess_dir, LogEntry(**base, plugin_version="1.12.0"))
     append_log_entry(tmp_assess_dir, LogEntry(**base, plugin_version="1.13.0"))
 
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "## 2026-05-29 (v1.12.0)" in content
     assert "## 2026-05-29 (v1.13.0)" in content
 
@@ -222,7 +222,7 @@ def test_log_heading_omits_version_when_none(tmp_assess_dir: Path) -> None:
         top_action="X",
     )
     append_log_entry(tmp_assess_dir, entry)
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "## 2026-05-29" in content
     assert "(v" not in content
 
@@ -357,7 +357,7 @@ def test_write_index_stamps_run_id_comment(tmp_assess_dir: Path) -> None:
         tmp_assess_dir, entries, last_updated="2026-07-07",
         run_id="20260707120000-abcdef01", schema_version="1.0.0",
     )
-    content = (tmp_assess_dir / "index.md").read_text()
+    content = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     assert "<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->" in content
 
 
@@ -368,7 +368,7 @@ def test_write_index_no_run_id_is_byte_identical(tmp_assess_dir: Path) -> None:
         status="active", ccn=30, loc=600,
     )]
     write_index(tmp_assess_dir, entries, last_updated="2026-07-07")
-    content = (tmp_assess_dir / "index.md").read_text()
+    content = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     assert "<!-- assess:run_id" not in content
 
 
@@ -381,7 +381,7 @@ def test_append_log_entry_stamps_run_id_per_entry(tmp_assess_dir: Path) -> None:
         run_id="20260707120000-abcdef01", schema_version="1.0.0",
     )
     append_log_entry(tmp_assess_dir, entry)
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "<!-- assess:run_id=20260707120000-abcdef01 artifact_schema_version=1.0.0 -->" in content
 
 
@@ -404,7 +404,7 @@ def test_write_hotspot_page_stamps_run_id(tmp_assess_dir: Path) -> None:
 def test_log_entry_carries_chain_marker(tmp_assess_dir: Path) -> None:
     """Every appended entry gets a 16-hex-char chain marker."""
     append_log_entry(tmp_assess_dir, _log_entry())
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     import re
     markers = re.findall(r"<!-- chain:([0-9a-f]{16}) -->", content)
     assert len(markers) == 1
@@ -443,8 +443,8 @@ def test_log_chain_hash_is_deterministic(tmp_path: Path) -> None:
     b.mkdir()
     append_log_entry(a, _log_entry())
     append_log_entry(b, _log_entry())
-    marker_a = re.search(r"<!-- chain:([0-9a-f]{16}) -->", (a / "log.md").read_text())
-    marker_b = re.search(r"<!-- chain:([0-9a-f]{16}) -->", (b / "log.md").read_text())
+    marker_a = re.search(r"<!-- chain:([0-9a-f]{16}) -->", (a / "log.md").read_text(encoding="utf-8"))
+    marker_b = re.search(r"<!-- chain:([0-9a-f]{16}) -->", (b / "log.md").read_text(encoding="utf-8"))
     assert marker_a is not None and marker_b is not None
     assert marker_a.group(1) == marker_b.group(1)
 
@@ -457,8 +457,8 @@ def test_log_chain_detects_edited_prior_entry(tmp_assess_dir: Path) -> None:
     log_path = tmp_assess_dir / "log.md"
 
     # Tamper with the first entry's body after the fact.
-    tampered = log_path.read_text().replace("First", "Tampered")
-    log_path.write_text(tampered)
+    tampered = log_path.read_text(encoding="utf-8").replace("First", "Tampered")
+    log_path.write_text(tampered, encoding="utf-8")
 
     valid, broken_at = verify_log_chain(tmp_assess_dir)
     assert valid is False
@@ -466,7 +466,7 @@ def test_log_chain_detects_edited_prior_entry(tmp_assess_dir: Path) -> None:
 
     # Next run discloses the break in the log itself.
     append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-03", top_action="Third"))
-    content = log_path.read_text()
+    content = log_path.read_text(encoding="utf-8")
     assert "History integrity broken at entry 1" in content
 
 
@@ -474,11 +474,11 @@ def test_log_chain_disclosure_added_once(tmp_assess_dir: Path) -> None:
     """A persistent break is disclosed once, not re-spammed on every later run."""
     append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-01", top_action="First"))
     log_path = tmp_assess_dir / "log.md"
-    log_path.write_text(log_path.read_text().replace("First", "Tampered"))
+    log_path.write_text(log_path.read_text(encoding="utf-8").replace("First", "Tampered"), encoding="utf-8")
 
     append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-02"))
     append_log_entry(tmp_assess_dir, _log_entry(run_date="2026-07-03"))
-    content = log_path.read_text()
+    content = log_path.read_text(encoding="utf-8")
     assert content.count("History integrity broken at entry 1") == 1
 
 
@@ -487,7 +487,7 @@ def test_log_chain_legacy_entry_without_marker_is_valid(tmp_assess_dir: Path) ->
     chained entry appended after it still verifies."""
     (tmp_assess_dir / "log.md").write_text(
         "# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n"
-    )
+    , encoding="utf-8")
     valid, broken_at = verify_log_chain(tmp_assess_dir)
     assert valid is True and broken_at is None
 
@@ -508,7 +508,7 @@ def test_log_heading_unique_within_minute(tmp_assess_dir: Path) -> None:
     )
     for rid in ("20260914101010-aaaa1111", "20260914101010-bbbb2222", "r7e8f9"):
         append_log_entry(tmp_assess_dir, LogEntry(**base, run_id=rid))
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     headings = [line for line in content.splitlines() if line.startswith("## ")]
     assert len(headings) == 3
     assert len(set(headings)) == 3
@@ -526,7 +526,7 @@ def test_log_heading_unique_within_minute_no_version(tmp_assess_dir: Path) -> No
         top_action="none", run_id="20260914101010-cccc3333",
     )
     append_log_entry(tmp_assess_dir, entry)
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert "## 2026-09-14 (run cccc3333)" in content
 
 
@@ -542,7 +542,7 @@ def test_log_heading_unique_within_minute_short_id_collision(tmp_assess_dir: Pat
     for rid in ("20260914101010-abcd1234", "20260914101011-abcd1234",
                 "20260914101011-abcd1234", "20260914101012-abcd1234"):
         append_log_entry(tmp_assess_dir, LogEntry(**base, run_id=rid))
-    content = (tmp_assess_dir / "log.md").read_text()
+    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     headings = [line for line in content.splitlines() if line.startswith("## ")]
     assert headings == [
         "## 2026-09-14 (v9.9.9, run abcd1234)",
@@ -556,7 +556,7 @@ def test_log_heading_unique_within_minute_short_id_collision(tmp_assess_dir: Pat
 
 
 def _history(tmp_assess_dir: Path, path: str = "src/foo.go") -> list[str]:
-    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path(path)}.md").read_text()
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path(path)}.md").read_text(encoding="utf-8")
     section = page.split("## History across runs", 1)[1].split("##", 1)[0]
     return [r for r in section.splitlines() if r.startswith("| 20")]
 
@@ -600,7 +600,7 @@ def test_sweep_superseded_rows_reaches_pages_not_rewritten(tmp_assess_dir: Path)
     assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == [
         f"{slug_for_path('src/foo.go')}.md"]
     assert [r.split(" | ")[1] for r in _history(tmp_assess_dir)] == ["11111111"]
-    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text()
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text(encoding="utf-8")
     assert "| 2026 | 22222222 | kept |" in page
     assert sweep_superseded_history_rows(tmp_assess_dir, "r-22222222") == []
     assert [r.split(" | ")[1] for r in _history(tmp_assess_dir, "b.go")] == ["11111111"]
@@ -624,8 +624,8 @@ def test_hotspot_page_worst_function_row_omitted_when_null(tmp_assess_dir: Path)
     write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
         path="b.py", max_fn_ccn=8.0, max_fn_name="parse_line"))
     hot = tmp_assess_dir / "hotspots"
-    a = (hot / f"{slug_for_path('a.py')}.md").read_text()
-    b = (hot / f"{slug_for_path('b.py')}.md").read_text()
+    a = (hot / f"{slug_for_path('a.py')}.md").read_text(encoding="utf-8")
+    b = (hot / f"{slug_for_path('b.py')}.md").read_text(encoding="utf-8")
     assert "| Cyclomatic complexity (file aggregate) | 30 |\n| Commits" in a
     assert "Worst function" not in a and "file max" not in a
     assert "| Worst function | `parse_line` (8) |\n| Commits" in b
@@ -635,7 +635,7 @@ def test_hotspot_page_renders_integral_ccn_as_integer(tmp_assess_dir: Path) -> N
     """Sidecar floats render as whole numbers when integral, fractional ones
     unchanged, in the metrics table and the history row."""
     write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(ccn=159.0, run_id="r-11111111"))
-    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text()
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('src/foo.go')}.md").read_text(encoding="utf-8")
     assert "| Cyclomatic complexity (file aggregate) | 159 |" in page
     assert _history(tmp_assess_dir)[0].split(" | ")[3] == "159"
     assert format_ccn(12.5) == "12.5" and format_ccn(7) == "7" and format_ccn(8.0) == "8"
@@ -648,7 +648,7 @@ def test_hotspot_page_worst_function_escapes_pipe_and_flags_excess(
     aggregate (Dart: scc aggregate, Dart-scanner function) shows unclamped."""
     write_hotspot_page(tmp_assess_dir, **_hotspot_kwargs(
         path="a.dart", ccn=6.0, max_fn_ccn=9.0, max_fn_name="operator |"))
-    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('a.dart')}.md").read_text()
+    page = (tmp_assess_dir / "hotspots" / f"{slug_for_path('a.dart')}.md").read_text(encoding="utf-8")
     row = next(line for line in page.splitlines() if line.startswith("| Worst function"))
     assert row == ("| Worst function | `operator \\|` (9) - above the file aggregate: "
                    "the two are counted by different tools |")
@@ -674,7 +674,7 @@ def test_write_index_carries_prior_rows_forward(tmp_assess_dir: Path) -> None:
                 last_updated="2026-07-01")
     write_index(tmp_assess_dir, [_entry("a.go", "persistent", last_seen="2026-07-08")],
                 last_updated="2026-07-08")
-    index = (tmp_assess_dir / "index.md").read_text()
+    index = (tmp_assess_dir / "index.md").read_text(encoding="utf-8")
     assert "| `a.go` | 2026-01-01 | 2026-07-08 | persistent | 10 | 100 |" in index
     assert "| `b.go` | 2026-01-01 | 2026-07-01 | graduated | 12.5 | 100 |" in index
     assert index.index("`a.go`") < index.index("`b.go`")
@@ -687,7 +687,7 @@ def test_write_index_marks_carried_row_retired(tmp_assess_dir: Path) -> None:
     write_index(tmp_assess_dir, [_entry("gone.go", "graduated")], last_updated="2026-07-01")
     prune_orphan_hotspots(tmp_assess_dir, tmp_assess_dir)  # gone.go is not on disk
     write_index(tmp_assess_dir, [], last_updated="2026-07-08")
-    row = next(r for r in (tmp_assess_dir / "index.md").read_text().splitlines()
+    row = next(r for r in (tmp_assess_dir / "index.md").read_text(encoding="utf-8").splitlines()
                if "`gone.go`" in r)
     assert "| retired - file deleted |" in row
 
@@ -700,7 +700,7 @@ def test_write_index_backfills_orphaned_live_page_as_graduated(tmp_assess_dir: P
     write_index(tmp_assess_dir, [_entry("was_new.go", "new")], last_updated="2026-07-01")
     write_index(tmp_assess_dir, [_entry("a.go")], last_updated="2026-07-08")
     rows = {e.path: e.status for e in parse_index_rows(
-        (tmp_assess_dir / "index.md").read_text())}
+        (tmp_assess_dir / "index.md").read_text(encoding="utf-8"))}
     assert rows == {"a.go": "active", "was_new.go": "graduated", "orphan.go": "graduated"}
 
 
@@ -715,7 +715,7 @@ def test_write_index_drops_never_assessed_and_generated_paths(tmp_assess_dir: Pa
                 never_assessed=["unstamped.go"],
                 excluded_as_generated=lambda p: p.startswith("gen/"))
     rows = {e.path: e.status for e in parse_index_rows(
-        (tmp_assess_dir / "index.md").read_text())}
+        (tmp_assess_dir / "index.md").read_text(encoding="utf-8"))}
     assert rows == {"a.go": "active", "b.go": "graduated"}
 
 
@@ -725,7 +725,7 @@ def test_write_index_legend_names_aggregate_rise_larger_than_worst_fall(
     """A file whose worst function fell but whose sum rose by more is
     `regressed`; the legend must say so, and bound `restructured` the same way."""
     write_index(tmp_assess_dir, [], last_updated="2026-07-07")
-    legend = (tmp_assess_dir / "index.md").read_text().split("## Legend", 1)[1]
+    legend = (tmp_assess_dir / "index.md").read_text(encoding="utf-8").split("## Legend", 1)[1]
     regressed = next(ln for ln in legend.splitlines() if ln.startswith("- **regressed**"))
     restructured = next(ln for ln in legend.splitlines() if ln.startswith("- **restructured**"))
     assert "aggregate rise larger than the worst-function fall" in regressed

@@ -421,7 +421,7 @@ def test_a_root_run_resolves_gitlab_includes_from_sibling_clones(tmp_path, monke
     make_repo(root, "grp/gone", files=ci("grp/not-cloned", "/t.yml"))
     assert fleet_cli.main([str(root), "--out", "o", "--scans", "ci_checks,review_automation",
                            "--no-diagrams", "--no-history"]) == 0
-    rows = {r["repo"]: r["scans"] for r in map(json.loads, (tmp_path / "o" / "repos.jsonl").read_text().splitlines())}
+    rows = {r["repo"]: r["scans"] for r in map(json.loads, (tmp_path / "o" / "repos.jsonl").read_text(encoding="utf-8").splitlines())}
     assert rows["grp/app"]["ci_checks"]["test_or_lint_configured"] is True
     assert rows["grp/gone"]["ci_checks"]["test_or_lint_configured"] is None
     assert rows["grp/rev"]["review_automation"]["present"] is True

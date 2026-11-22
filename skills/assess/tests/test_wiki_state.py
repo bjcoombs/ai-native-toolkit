@@ -26,11 +26,11 @@ def test_first_flagged_unknown_when_prior_seeded_without_history(tmp_path: Path)
     (assess_dir / "complexity-stats.prior.json").write_text(json.dumps({
         "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/old.go", "loc": 500, "ccn": 20, "commits": 5}],
-    }))
+    }), encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/old.go", "loc": 510, "ccn": 21, "commits": 6}],
-    }))
+    }), encoding="utf-8")
     # No first-flagged.json on disk.
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     page = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
@@ -47,11 +47,11 @@ def test_first_flagged_stamps_today_for_genuinely_new_hotspot(tmp_path: Path) ->
     (assess_dir / "complexity-stats.prior.json").write_text(json.dumps({
         "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/old.go", "loc": 500, "ccn": 20, "commits": 5}],
-    }))
+    }), encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/fresh.go", "loc": 400, "ccn": 18, "commits": 4}],
-    }))
+    }), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     fresh_page = next(p for p in (assess_dir / "hotspots").iterdir()
                       if p.name.startswith("src-fresh-go-"))
@@ -67,16 +67,16 @@ def test_first_flagged_rekeyed_through_rename_map(git_repo) -> None:
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "first-flagged.json").write_text(json.dumps(
-        {"old/x.py": "2026-01-01", "other/z.py": "2026-02-02"}))
+        {"old/x.py": "2026-01-01", "other/z.py": "2026-02-02"}), encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 2, "loc": {"total": 12}, "ccn": {"max": 6, "mean": 6},
         "top_hotspots": [{"path": "new/x.py", "loc": 6, "ccn": 6, "commits": 7},
                          {"path": "other/z.py", "loc": 6, "ccn": 6, "commits": 6}],
         "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     build_and_publish_run(repo_root=repo, run_date="2026-09-18")
-    assert json.loads((assess_dir / "first-flagged.json").read_text()) == {
+    assert json.loads((assess_dir / "first-flagged.json").read_text(encoding="utf-8")) == {
         "new/x.py": "2026-01-01", "other/z.py": "2026-02-02",
     }
 

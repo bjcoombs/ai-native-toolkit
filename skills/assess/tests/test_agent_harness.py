@@ -366,7 +366,7 @@ def test_hook_line_points_at_the_hook_for_a_command_with_arguments(tmp_path: Pat
         {"matcher": "Bash", "hooks": [{"type": "command", "command": "./a.sh --x"},
                                       {"type": "command", "command": "./b.sh --y"}]}]}})
     lines = [i["line"] for i in scan_agent_harness(tmp_path)["executes"]]
-    text = (tmp_path / ".claude/settings.json").read_text().splitlines()
+    text = (tmp_path / ".claude/settings.json").read_text(encoding="utf-8").splitlines()
     assert [text[n - 1].strip()[:20] for n in lines] == ['"command": "./a.sh -', '"command": "./b.sh -']
 
 

@@ -210,7 +210,7 @@ def test_words_in_relocatable_sections_do_not_count_as_always_on() -> None:
 def test_monolith_fixture_is_flagged_and_capped(fixtures_dir: Path) -> None:
     """The 625-line monolith is all always-on: flagged, the full size penalty,
     and capped at B whether or not skills sit beside it."""
-    text = (fixtures_dir / "monolithic_instructions.md").read_text()
+    text = (fixtures_dir / "monolithic_instructions.md").read_text(encoding="utf-8")
     grade = grade_instructions(text, 10, repo=None)
     assert grade.subscores["always_on_flagged"] == 1
     assert grade.subscores["always_on_penalty"] == ALWAYS_ON_MAX_PENALTY
@@ -220,7 +220,7 @@ def test_monolith_fixture_is_flagged_and_capped(fixtures_dir: Path) -> None:
 
 def test_lean_fixture_repo_detects_skills_and_avoids_penalty(fixtures_dir: Path) -> None:
     repo = fixtures_dir / "lean_with_skills"
-    text = (repo / "CLAUDE.md").read_text()
+    text = (repo / "CLAUDE.md").read_text(encoding="utf-8")
     skills = detect_skills_dir(repo)
     assert skills["skills_dirs_present"] is True
     assert skills["skills_count"] == 2

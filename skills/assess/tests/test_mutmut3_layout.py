@@ -423,8 +423,8 @@ def test_ancestors_are_mirrored_one_level_down(tmp_path: Path) -> None:
     assert not (tool / "tool").exists()
     # the root into pkgs/, nothing overwritten, VCS and tool state left out
     assert (pkgs / "docs" / "a.md").is_file()
-    assert (pkgs / "shared.txt").read_text() == "pkgs/shared.txt"
-    assert (tool / "README.md").read_text() == "pkgs/tool/README.md"
+    assert (pkgs / "shared.txt").read_text(encoding="utf-8") == "pkgs/shared.txt"
+    assert (tool / "README.md").read_text(encoding="utf-8") == "pkgs/tool/README.md"
     assert not (pkgs / ".git").exists() and not (pkgs / ".assess").exists()
     # nearest level first: the package holds the parent's entries, not the root's
     assert not (tool / "docs").exists()

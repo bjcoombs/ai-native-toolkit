@@ -15,7 +15,7 @@ def _minimal_repo(tmp_path: Path) -> Path:
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     return repo
 
 
@@ -27,7 +27,7 @@ _EMPTY_STATS = json.dumps({
 
 def _seed_assess(repo: Path) -> None:
     (repo / ".assess").mkdir(exist_ok=True)
-    (repo / ".assess" / "complexity-stats.json").write_text(_EMPTY_STATS)
+    (repo / ".assess" / "complexity-stats.json").write_text(_EMPTY_STATS, encoding="utf-8")
 
 
 # --- renamed and deleted history (rename map, pruned_finding_paths) ----------
@@ -63,4 +63,4 @@ def _write_min_stats(assess_dir: Path) -> None:
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")

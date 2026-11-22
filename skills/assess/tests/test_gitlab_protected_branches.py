@@ -44,7 +44,7 @@ def _rule(name: str, push: int = 40, merge: int = 30, force: bool = False) -> di
 def _track(world: World, rel: str, doc: object) -> None:
     path = world.root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(doc))
+    path.write_text(json.dumps(doc), encoding="utf-8")
     _git(world.root, "add", rel)
 
 

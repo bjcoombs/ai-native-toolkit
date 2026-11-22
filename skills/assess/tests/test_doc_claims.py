@@ -22,7 +22,7 @@ PIN_312 = "# Setup\n\nRead this first.\n\nPython 3.12 is pinned in `.python-vers
 
 def _write(root: Path, rel: str, text: str) -> None:
     (root / rel).parent.mkdir(parents=True, exist_ok=True)
-    (root / rel).write_text(text)
+    (root / rel).write_text(text, encoding="utf-8")
 
 
 def _sites(contradiction: dict) -> list[list]:
@@ -360,5 +360,5 @@ def test_build_run_context_carries_the_block(tmp_path: Path) -> None:
     _write(tmp_path, "docs/b.md", PIN_312)
     ctx = build_and_publish_run(repo_root=tmp_path, run_date="2026-11-20")
     assert ctx["doc_claims"]["contradictions_total"] == 1
-    written = json.loads((tmp_path / ".assess" / "run-context.json").read_text())
+    written = json.loads((tmp_path / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     assert written["doc_claims"]["files_scanned"] == 2

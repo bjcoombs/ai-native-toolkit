@@ -253,7 +253,7 @@ def test_write_svg_token_tooltip_and_label_pluralise(render_lib, tmp_path, token
     rects = [(0.0, 0.0, 1600.0, 1000.0, node)]
     out = tmp_path / "tok.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, True, "ccn")
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     assert text in svg
     label = text.split(" · ")[0]
     assert f">{label}</text>" in svg

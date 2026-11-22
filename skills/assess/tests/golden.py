@@ -121,7 +121,7 @@ def normalize_report(text: str) -> str:
 def load_golden_run_context() -> dict[str, Any]:
     """Load the normalized golden ``run-context`` baseline."""
     path = Path(__file__).parent / "fixtures" / "golden" / "run-context-baseline.json"
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_golden_report() -> str:

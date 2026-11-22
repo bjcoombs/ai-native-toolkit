@@ -18,7 +18,7 @@ from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 def _write(root: Path, rel: str, text: str) -> None:
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
 
 
 def _only_gate(root: Path) -> dict:

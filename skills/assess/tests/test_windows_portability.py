@@ -299,3 +299,35 @@ def test_a_failure_other_than_deletion_is_not_retried(tmp_path):
 
     with pytest.raises(PermissionError):
         fleet_cleanup._clear_read_only(scandir, str(tmp_path), PermissionError(13, "denied"))
+
+
+# --- the tests themselves read and write UTF-8 (#754) ------------------------
+
+
+def _bare_text_io(tree: ast.Module) -> list[int]:
+    """Lines of ``x.read_text()`` / ``x.write_text(data)`` calls with no encoding."""
+    lines = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if any(kw.arg in ("encoding", None) for kw in node.keywords):
+            continue
+        attr, nargs = node.func.attr, len(node.args)
+        if (attr == "read_text" and nargs == 0) or (attr == "write_text" and nargs == 1):
+            lines.append(node.lineno)
+    return lines
+
+
+def test_the_bare_text_io_guard_sees_a_bare_call():
+    assert _bare_text_io(ast.parse("p.read_text()\np.write_text(s)\n")) == [1, 2]
+    assert _bare_text_io(ast.parse("p.read_text(encoding='utf-8')\np.write_text(s, 'utf-8')\n")) == []
+
+
+def test_assess_tests_name_utf8_for_text_io():
+    """A test that reads a fixture holding "·" through the Windows code page
+    fails there only (#754: test_golden_baseline, test_headline)."""
+    tests = Path(__file__).resolve().parent
+    bare = [f"{path.relative_to(REPO).as_posix()}:{line}"
+            for path in sorted(tests.rglob("*.py")) if "fixtures" not in path.parts
+            for line in _bare_text_io(ast.parse(path.read_text(encoding="utf-8")))]
+    assert not bare, "read_text()/write_text() without encoding=\"utf-8\": " + ", ".join(bare)

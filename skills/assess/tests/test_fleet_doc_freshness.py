@@ -44,7 +44,7 @@ def _commit(repo: Path, files: dict[str, str], msg: str, at: int, **kw: object) 
     for rel, text in files.items():
         p = repo / rel
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(text)
+        p.write_text(text, encoding="utf-8")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", msg, at=at, **kw)  # type: ignore[arg-type]
 
@@ -180,7 +180,7 @@ def test_rot_missing_doc_path_is_broken(tmp_path):
 def test_missing_scope_fails_validation_with_remediation(tmp_path):
     (tmp_path / ".assess").mkdir()
     (tmp_path / ".assess" / "config.toml").write_text(
-        '[[describes]]\npath = "services/billing.md"\nrepo = "grp/billing"\n')
+        '[[describes]]\npath = "services/billing.md"\nrepo = "grp/billing"\n', encoding="utf-8")
 
     cfg = load_describes(tmp_path)
 
@@ -194,7 +194,7 @@ def test_missing_scope_fails_validation_with_remediation(tmp_path):
 def test_invalid_scopes_are_rejected(tmp_path, bad):
     (tmp_path / ".assess").mkdir()
     (tmp_path / ".assess" / "config.toml").write_text(
-        f'[[describes]]\npath = "a.md"\nrepo = "g/r"\nscope = {bad}\n')
+        f'[[describes]]\npath = "a.md"\nrepo = "g/r"\nscope = {bad}\n', encoding="utf-8")
 
     cfg = load_describes(tmp_path)
 
@@ -206,7 +206,7 @@ def test_valid_entries_normalise_and_bad_entries_report(tmp_path):
     (tmp_path / ".assess" / "config.toml").write_text(
         '[[describes]]\npath = "./docs/svc/"\nrepo = "g/r/"\nscope = "./api/"\n'
         '[[describes]]\nrepo = "g/r"\nscope = ["."]\n'
-        '[[describes]]\npath = "a.md"\nscope = ["."]\n')
+        '[[describes]]\npath = "a.md"\nscope = ["."]\n', encoding="utf-8")
 
     cfg = load_describes(tmp_path)
 
@@ -216,7 +216,7 @@ def test_valid_entries_normalise_and_bad_entries_report(tmp_path):
 
 def test_describes_not_an_array_is_reported(tmp_path):
     (tmp_path / ".assess").mkdir()
-    (tmp_path / ".assess" / "config.toml").write_text('describes = "x"\n')
+    (tmp_path / ".assess" / "config.toml").write_text('describes = "x"\n', encoding="utf-8")
 
     assert load_describes(tmp_path).errors
 
@@ -256,7 +256,7 @@ def test_shallow_service_checkout_newer_than_doc_is_unknown(tmp_path):
     subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{svc}", str(shallow)],
                    check=True, capture_output=True)
     config = DESCRIBES.replace("grp/billing", "grp/shallow")
-    (root / "grp/docs/docs-main/.assess/config.toml").write_text(config)
+    (root / "grp/docs/docs-main/.assess/config.toml").write_text(config, encoding="utf-8")
 
     row = _only(root, slugs=("grp/docs", "grp/shallow"))
 
@@ -306,7 +306,7 @@ def test_no_describes_writes_nothing(tmp_path):
     _commit(svc, {"a.py": "x\n"}, "init", DOC_EDIT)
     stale = tmp_path / "out"
     stale.mkdir()
-    (stale / fdf.FRESHNESS_FILE).write_text("{}\n")
+    (stale / fdf.FRESHNESS_FILE).write_text("{}\n", encoding="utf-8")
 
     result = freshness_rows(_targets(root, "grp/billing"), full=False, hash_salt=None)
 
@@ -358,13 +358,13 @@ def test_fleet_cli_writes_doc_freshness_before_delete_after(tmp_path, capsys):
                            "--history-dir", str(hist), "--jobs", "1", "--delete-after"])
 
     assert code == 0
-    rows = [json.loads(ln) for ln in (out / fdf.FRESHNESS_FILE).read_text().splitlines()]
+    rows = [json.loads(ln) for ln in (out / fdf.FRESHNESS_FILE).read_text(encoding="utf-8").splitlines()]
     assert [(r["repo"], r["status"], r["commits_since_doc_change"], r["commits"]) for r in rows] == [
         ("grp/billing", fdf.BEHIND, 5, None)]
     assert "doc freshness: 1 declared mappings: 1 behind" in capsys.readouterr().err
     assert not svc.exists() and not _docs.exists()  # deleted after the join read them
     kept = list(hist.glob(f"*/*/{fdf.FRESHNESS_FILE}"))
-    assert len(kept) == 1 and kept[0].read_text() == (out / fdf.FRESHNESS_FILE).read_text()
+    assert len(kept) == 1 and kept[0].read_text(encoding="utf-8") == (out / fdf.FRESHNESS_FILE).read_text(encoding="utf-8")
 
 
 def test_summary_line_orders_statuses():
@@ -393,7 +393,7 @@ def test_shallow_service_checkout_older_than_doc_is_measured(tmp_path):
     subprocess.run(["git", "clone", "-q", "--depth", "4", f"file://{svc}", str(shallow)],
                    check=True, capture_output=True)
     (root / "grp/docs/docs-main/.assess/config.toml").write_text(
-        DESCRIBES.replace("grp/billing", "grp/shallow"))
+        DESCRIBES.replace("grp/billing", "grp/shallow"), encoding="utf-8")
 
     row = _only(root, slugs=("grp/docs", "grp/shallow"))
 
@@ -415,7 +415,7 @@ def test_shallow_docs_checkout_cannot_vouch_for_current(tmp_path):
 
 def test_doc_without_history_is_unknown(tmp_path):
     root, docs, _svc = _fleet(tmp_path, config=DESCRIBES.replace("billing.md", "new.md"))
-    (docs / "services" / "new.md").write_text("draft\n")  # on disk, never committed
+    (docs / "services" / "new.md").write_text("draft\n", encoding="utf-8")  # on disk, never committed
 
     row = _only(root)
 
@@ -473,14 +473,14 @@ def test_every_row_shape_validates_against_the_schema(tmp_path):
 
 def _run_files(out: Path, freshness: bool) -> None:
     out.mkdir(exist_ok=True)
-    (out / "repos.jsonl").write_text('{"repo": "org/a"}\n')
-    (out / "groups.jsonl").write_text("{}\n")
+    (out / "repos.jsonl").write_text('{"repo": "org/a"}\n', encoding="utf-8")
+    (out / "groups.jsonl").write_text("{}\n", encoding="utf-8")
     (out / "run.json").write_text(json.dumps(
         {"fleet_stamp_version": 1, "levels_version": None, "window": "6mo", "counts_only": True,
-         "scans": None, "paths_hashed": False}))
+         "scans": None, "paths_hashed": False}), encoding="utf-8")
     path = out / fdf.FRESHNESS_FILE
     if freshness:
-        path.write_text('{"status": "behind"}\n')
+        path.write_text('{"status": "behind"}\n', encoding="utf-8")
     else:
         path.unlink(missing_ok=True)
 
@@ -491,7 +491,7 @@ def test_history_keeps_doc_freshness_and_drops_a_stale_same_day_copy(tmp_path):
     out, entry = tmp_path / "out", tmp_path / "hist" / "org" / "2026-11-20"
     _run_files(out, freshness=True)
     persist(out, entry, stamp, frozenset({"org/a"}))
-    assert (entry / fdf.FRESHNESS_FILE).read_text() == '{"status": "behind"}\n'
+    assert (entry / fdf.FRESHNESS_FILE).read_text(encoding="utf-8") == '{"status": "behind"}\n'
 
     _run_files(out, freshness=False)  # a same-day rerun with no mappings
     persist(out, entry, stamp, frozenset({"org/a"}))

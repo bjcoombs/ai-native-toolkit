@@ -24,7 +24,7 @@ from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
 def test_degrades_when_grimp_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(igp, "_GRIMP_AVAILABLE", False)
     (tmp_path / "pkg").mkdir()
-    (tmp_path / "pkg" / "__init__.py").write_text("")
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
     result = sg.analyze_structure(tmp_path)
     assert result.available is False
     assert "grimp" in result.reason
@@ -40,7 +40,7 @@ def test_degrades_when_networkx_missing(monkeypatch, tmp_path):
 
 
 def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
-    (tmp_path / "loose.py").write_text("x = 1\n")  # no __init__.py anywhere
+    (tmp_path / "loose.py").write_text("x = 1\n", encoding="utf-8")  # no __init__.py anywhere
     result = sg.analyze_structure(tmp_path)
     assert result.available is False
     assert result.footprints == []
@@ -53,7 +53,7 @@ def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
 def test_an_unavailable_block_emits_null_modularity(monkeypatch, tmp_path, module, flag):
     monkeypatch.setattr(module, flag, False)
     (tmp_path / "pkg").mkdir()
-    (tmp_path / "pkg" / "__init__.py").write_text("")
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
     block = sg.analyze_structure(tmp_path).as_dict()
     assert block["available"] is False
     assert block["modularity_q"] is None
@@ -64,7 +64,7 @@ def test_an_edgeless_graph_has_no_modularity_not_zero(tmp_path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     for name in ("__init__", "a", "b"):
-        (pkg / f"{name}.py").write_text("x = 1\n")
+        (pkg / f"{name}.py").write_text("x = 1\n", encoding="utf-8")
     block = sg.analyze_structure(tmp_path).as_dict()
     assert block["available"] is True and block["module_count"] == 3
     assert block["edge_count"] == 0
@@ -75,9 +75,9 @@ def test_an_edgeless_graph_has_no_modularity_not_zero(tmp_path):
 def test_a_graph_with_edges_measures_modularity_with_no_reason(tmp_path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg import b\n")
-    (pkg / "b.py").write_text("x = 1\n")
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "a.py").write_text("from pkg import b\n", encoding="utf-8")
+    (pkg / "b.py").write_text("x = 1\n", encoding="utf-8")
     block = sg.analyze_structure(tmp_path).as_dict()
     assert block["edge_count"] > 0
     assert isinstance(block["modularity_q"], float)
@@ -98,7 +98,7 @@ def test_a_crossed_boundary_still_measures_the_front_door_ratio(tmp_path):
     _pkg(tmp_path, "pkga", {"x": "from pkgb import y\n", "z": "from pkga import x\n"})
     pkgb = _pkg(tmp_path, "pkgb", {"y": "def f():\n    return 1\n",
                                    "w": "from pkgb import y\n"})
-    (pkgb / "__init__.py").write_text("from pkgb.y import f\n")
+    (pkgb / "__init__.py").write_text("from pkgb.y import f\n", encoding="utf-8")
     block = sg.analyze_structure(tmp_path).as_dict()
     # pkga.x reaches the pkgb.y submodule: a measured burrow, not a null.
     assert block["cross_package_edges"] > 0
@@ -106,7 +106,7 @@ def test_a_crossed_boundary_still_measures_the_front_door_ratio(tmp_path):
 
 
 def test_an_unavailable_block_emits_null_front_door_ratio(tmp_path):
-    (tmp_path / "loose.py").write_text("x = 1\n")
+    (tmp_path / "loose.py").write_text("x = 1\n", encoding="utf-8")
     block = sg.analyze_structure(tmp_path).as_dict()
     assert block["available"] is False and block["cross_package_edges"] == 0
     assert block["front_door_ratio"] is None
@@ -294,7 +294,7 @@ def test_keyhole_budget_read_from_config(tmp_path):
     assess.mkdir()
     (assess / "config.toml").write_text(
         "[structure]\nkeyhole_budget = 1500\n"
-    )
+    , encoding="utf-8")
     cfg = load_structure_config(tmp_path)
     assert cfg["keyhole_budget"] == 1500
 
@@ -306,7 +306,7 @@ def test_keyhole_budget_rejects_malformed_value(tmp_path):
     # A non-positive / wrong-typed value falls back to the default.
     (assess / "config.toml").write_text(
         '[structure]\nkeyhole_budget = "lots"\n'
-    )
+    , encoding="utf-8")
     cfg = load_structure_config(tmp_path)
     assert cfg["keyhole_budget"] == DEFAULT_KEYHOLE_BUDGET
 
@@ -320,8 +320,8 @@ def test_discover_packages_finds_top_level_only(tmp_path):
     sub = pkg / "sub"
     pkg.mkdir()
     sub.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (sub / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (sub / "__init__.py").write_text("", encoding="utf-8")
     found = igp.discover_packages(tmp_path)
     assert found == [pkg.resolve()]  # sub is a subpackage, not top-level
 
@@ -329,10 +329,10 @@ def test_discover_packages_finds_top_level_only(tmp_path):
 def test_discover_packages_skips_excluded_dirs(tmp_path):
     real = tmp_path / "real"
     real.mkdir()
-    (real / "__init__.py").write_text("")
+    (real / "__init__.py").write_text("", encoding="utf-8")
     venv_pkg = tmp_path / ".venv" / "junk"
     venv_pkg.mkdir(parents=True)
-    (venv_pkg / "__init__.py").write_text("")
+    (venv_pkg / "__init__.py").write_text("", encoding="utf-8")
     found = igp.discover_packages(tmp_path)
     assert found == [real.resolve()]
 
@@ -374,9 +374,9 @@ def _pkg(root, name, modules):
     """Write package ``root/name`` with ``modules`` ({stem: source})."""
     pkg = root / name
     pkg.mkdir(parents=True)
-    (pkg / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
     for stem, src in modules.items():
-        (pkg / f"{stem}.py").write_text(src)
+        (pkg / f"{stem}.py").write_text(src, encoding="utf-8")
     return pkg
 
 

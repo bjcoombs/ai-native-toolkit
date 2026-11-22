@@ -672,7 +672,7 @@ def test_cli_reports_offenders_and_writes_json(tmp_path: Path, capsys, monkeypat
     assert "accreting files:" in printed
     assert "grow.py" in printed
 
-    data = json.loads(out_json.read_text())
+    data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data["available"] is True
     assert data["total_accreting"] >= 1
     assert any(f["path"] == "grow.py" for f in data["top_offenders"])
@@ -706,7 +706,7 @@ def test_accretion_skips_documentation_append_only_markdown(tmp_path: Path) -> N
         _commit(repo, "notes/PLAN.md", _lines(1000 * i), clock)
         _commit(repo, "src/big.py", _lines(100 * i, start=50000), clock)
 
-    assert (repo / "notes" / "PLAN.md").read_text().count("\n") == 3000
+    assert (repo / "notes" / "PLAN.md").read_text(encoding="utf-8").count("\n") == 3000
     flagged = _flagged_paths(repo)
     assert "notes/PLAN.md" not in flagged
     assert "src/big.py" in flagged

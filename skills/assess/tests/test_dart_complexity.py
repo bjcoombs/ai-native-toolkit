@@ -63,7 +63,7 @@ def test_dart_scanner_scores_route_order_fixture(tmp_path: Path) -> None:
     assert scan_dart_functions(ROUTE_ORDER) == [
         ("helper", 1.0), ("routeOrder", 12.0)]
     f = tmp_path / "order.dart"
-    f.write_text(ROUTE_ORDER)
+    f.write_text(ROUTE_ORDER, encoding="utf-8")
     assert dart_function_scores(f) == ([1.0, 12.0], "routeOrder")
 
 
@@ -153,7 +153,7 @@ def test_dart_scanner_reads_a_bounded_prefix(tmp_path: Path,
     monkeypatch.setattr(dart_complexity, "_READ_BYTES", 64)
     f = tmp_path / "big.dart"
     f.write_text("int a() { return 1; }\n" + " " * 100
-                 + "int b(x) { if (x) {} }\n")
+                 + "int b(x) { if (x) {} }\n", encoding="utf-8")
     assert dart_function_scores(f) == ([1.0], "a")
 
 
@@ -161,5 +161,5 @@ def test_dart_scanner_unreadable_or_empty_file_has_no_functions(
         tmp_path: Path) -> None:
     assert dart_function_scores(tmp_path / "missing.dart") == ([], None)
     empty = tmp_path / "empty.dart"
-    empty.write_text("// only a comment\n")
+    empty.write_text("// only a comment\n", encoding="utf-8")
     assert dart_function_scores(empty) == ([], None)

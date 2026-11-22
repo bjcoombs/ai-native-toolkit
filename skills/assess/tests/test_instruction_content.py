@@ -137,7 +137,7 @@ def test_git_repo_symbols_and_gitignored_paths(git_repo) -> None:
     commit("init")
     ctx = build_repo_context(repo)
     assert ctx.git
-    text = (repo / "CLAUDE.md").read_text()
+    text = (repo / "CLAUDE.md").read_text(encoding="utf-8")
     stale_symbols = check_symbols(text, ctx, "CLAUDE.md")
     assert [(s["reference"], s["line"]) for s in stale_symbols] == [("removed_function", 1)]
     existing, stale = check_paths(text + "`link`\n", ctx, "CLAUDE.md")

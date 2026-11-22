@@ -28,18 +28,18 @@ def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
     assess_dir.mkdir()
     # A small history so the change-coupling / containment / authorship signals
     # have real git data to chew on.
-    (repo / "README.md").write_text("# Project\nsee [code](src/app.py)\n")
+    (repo / "README.md").write_text("# Project\nsee [code](src/app.py)\n", encoding="utf-8")
     (repo / "src").mkdir()
-    (repo / "src" / "app.py").write_text("def f():\n    return 1\n")
+    (repo / "src" / "app.py").write_text("def f():\n    return 1\n", encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 1, "loc": {"p50": 2, "p95": 2, "max": 2},
         "ccn": {"p50": 1, "p95": 1, "max": 1},
         "top_hotspots": [{"path": "src/app.py", "loc": 2, "ccn": 1, "commits": 2}],
         "top_complex": [{"path": "src/app.py", "ccn": 1}],
         "top_large": [{"path": "src/app.py", "loc": 2}],
-    }))
+    }), encoding="utf-8")
     commit("init")
-    (repo / "src" / "app.py").write_text("def f():\n    return 2\n")
+    (repo / "src" / "app.py").write_text("def f():\n    return 2\n", encoding="utf-8")
     commit("change")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-29")
@@ -82,9 +82,9 @@ def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
 def test_stale_hubs_join_centrality_and_staleness(tmp_path: Path) -> None:
     """stale_hubs ranks central docs by pagerank x staleness ratio."""
     repo = _minimal_repo(tmp_path)
-    (repo / "hub.md").write_text("hub")
+    (repo / "hub.md").write_text("hub", encoding="utf-8")
     for i in range(3):
-        (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
+        (repo / f"leaf{i}.md").write_text("see [hub](hub.md)", encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     # Each stale-hub row carries both the centrality and staleness factors,
@@ -104,9 +104,9 @@ def test_stale_hubs_confidence_low_for_repo_baseline(tmp_path: Path) -> None:
     it isn't. The confidence flag lets the report discount accordingly.
     """
     repo = _minimal_repo(tmp_path)
-    (repo / "hub.md").write_text("hub with no association")
+    (repo / "hub.md").write_text("hub with no association", encoding="utf-8")
     for i in range(3):
-        (repo / f"leaf{i}.md").write_text("see [hub](hub.md)")
+        (repo / f"leaf{i}.md").write_text("see [hub](hub.md)", encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
     # All docs here are floating (no co-location, no parallel docs/, no explicit
@@ -231,7 +231,7 @@ def _accreting_history(repo: Path, commit, rel_path: str, *, commits: int = 5) -
     body = ""
     for i in range(commits):
         body += "".join(f"line_{i}_{j} = {j}\n" for j in range(10))
-        src.write_text(body)
+        src.write_text(body, encoding="utf-8")
         commit(f"grow {rel_path} step {i}", days_ago=commits - i)
 
 
@@ -249,7 +249,7 @@ def test_accretion_ratchet_block_present_and_well_formed(git_repo) -> None:
         "top_hotspots": [{"path": "src/grower.py", "loc": 50, "ccn": 1, "commits": 5}],
         "top_complex": [{"path": "src/grower.py", "ccn": 1}],
         "top_large": [{"path": "src/grower.py", "loc": 50}],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
 
@@ -284,7 +284,7 @@ def test_accretion_ratchet_noise_budget_filters_non_hotspots(git_repo) -> None:
         "top_hotspots": [{"path": "src/in_band.py", "loc": 50, "ccn": 1, "commits": 5}],
         "top_complex": [{"path": "src/in_band.py", "ccn": 1}],
         "top_large": [{"path": "src/in_band.py", "loc": 50}],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     paths = [f["path"] for f in ctx["accretion_ratchet"]["files"]]
@@ -322,7 +322,7 @@ def test_accretion_ratchet_files_sorted_worst_first(git_repo) -> None:
         ],
         "top_complex": [{"path": "src/big.py", "ccn": 1}],
         "top_large": [{"path": "src/big.py", "loc": 80}, {"path": "src/small.py", "loc": 40}],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     files = ctx["accretion_ratchet"]["files"]
@@ -353,7 +353,7 @@ def test_accretion_skips_documentation_and_archive_paths_excluded_end_to_end(git
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 3, "loc": {"total": 3100}, "ccn": {"max": 5},
         "top_hotspots": rows, "top_complex": rows, "top_large": rows,
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     acc_paths = [f["path"] for f in ctx["accretion_ratchet"]["files"]]
@@ -376,7 +376,7 @@ def test_archive_paths_excluded_block_empty_without_archive(git_repo) -> None:
     repo, commit = git_repo
     (repo / ".assess").mkdir()
     _write_min_stats(repo / ".assess")
-    (repo / "README.md").write_text("# Repo\n")
+    (repo / "README.md").write_text("# Repo\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
@@ -415,7 +415,7 @@ def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
     repo, commit = git_repo
     (repo / ".assess").mkdir()
     _write_min_stats(repo / ".assess")
-    (repo / "README.md").write_text("# Repo\n")
+    (repo / "README.md").write_text("# Repo\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
@@ -434,7 +434,7 @@ def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
     """
     repo, commit = git_repo
     _seed_assess(repo)
-    (repo / "a.py").write_text("x = 1\n")
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
@@ -451,8 +451,8 @@ def test_structure_drift_block_present_with_codeowners(git_repo) -> None:
     repo, commit = git_repo
     _seed_assess(repo)
     (repo / "src").mkdir()
-    (repo / "src" / "a.py").write_text("x = 1\n")
-    (repo / "CODEOWNERS").write_text("src/** @team\nghost/** @nobody\n")
+    (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "CODEOWNERS").write_text("src/** @team\nghost/** @nobody\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
@@ -511,7 +511,7 @@ def test_excluded_by_config_block_present_and_empty_without_excludes(git_repo) -
     repo, commit = git_repo
     (repo / ".assess").mkdir()
     _write_min_stats(repo / ".assess")
-    (repo / "README.md").write_text("# Repo\n")
+    (repo / "README.md").write_text("# Repo\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
@@ -533,13 +533,13 @@ def test_excluded_by_config_discloses_suppressed_finding(git_repo) -> None:
     repo, commit = git_repo
     (repo / ".assess").mkdir()
     _write_min_stats(repo / ".assess")
-    (repo / ".assess" / "config.toml").write_text('exclude_dirs = ["island"]\n')
+    (repo / ".assess" / "config.toml").write_text('exclude_dirs = ["island"]\n', encoding="utf-8")
     island = repo / "island"
     island.mkdir()
-    (island / "a.py").write_text("x = 1\n")
+    (island / "a.py").write_text("x = 1\n", encoding="utf-8")
     commit("c1")
     for i in range(2, 7):
-        (island / "a.py").write_text(f"x = {i}\n")
+        (island / "a.py").write_text(f"x = {i}\n", encoding="utf-8")
         commit(f"c{i}")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
@@ -568,8 +568,8 @@ def test_excluded_generated_header_list_copied_from_stats(git_repo) -> None:
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
         "excluded_generated": rows + [{"path": "x"}, "junk"],
-    }))
-    (repo / "README.md").write_text("# Repo\n")
+    }), encoding="utf-8")
+    (repo / "README.md").write_text("# Repo\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
@@ -580,7 +580,7 @@ def test_excluded_generated_header_list_empty_for_old_stats(git_repo) -> None:
     repo, commit = git_repo
     (repo / ".assess").mkdir()
     _write_min_stats(repo / ".assess")
-    (repo / "README.md").write_text("# Repo\n")
+    (repo / "README.md").write_text("# Repo\n", encoding="utf-8")
     commit("init")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["excluded_generated"] == []

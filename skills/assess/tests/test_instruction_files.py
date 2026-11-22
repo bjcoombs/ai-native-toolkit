@@ -18,7 +18,7 @@ def test_untracked_instruction_file_flagged_not_graded(git_repo, fixtures_dir: P
     """Issue #34 Gap 1: an on-disk-but-untracked instruction file isn't credited
     to the grade, and is surfaced as a finding."""
     repo, commit = git_repo
-    good = (fixtures_dir / "good_instructions.md").read_text()
+    good = (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
     _seed_assess(repo)
     (repo / ".github").mkdir()
     (repo / ".github" / "copilot-instructions.md").write_text(good, encoding="utf-8")
@@ -62,7 +62,7 @@ def test_sensitive_content_surfaced_for_committed_file(git_repo, fixtures_dir: P
     """Issue #56: a committed instruction file carrying an IP / home path is
     surfaced (redacted) so the remediation can warn before any further commit."""
     repo, commit = git_repo
-    good = (fixtures_dir / "good_instructions.md").read_text()
+    good = (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
     _seed_assess(repo)
     (repo / "CLAUDE.md").write_text(
         good + "\n\n## Demo\nServer 203.0.113.7, ssh root@demo.example.com\n"
@@ -85,7 +85,7 @@ def test_sensitive_content_surfaced_for_untracked_file(git_repo, fixtures_dir: P
     """Issue #56: the file the remediation might tell you to commit (an
     untracked CLAUDE.md) is scanned even though it isn't graded."""
     repo, commit = git_repo
-    good = (fixtures_dir / "good_instructions.md").read_text()
+    good = (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
     _seed_assess(repo)
     (repo / "README.md").write_text("# Repo", encoding="utf-8")
     commit("init")
@@ -105,7 +105,7 @@ def test_agents_md_symlink_alias_inherits_claude_grade(git_repo, fixtures_dir: P
     truth shape - it inherits CLAUDE.md's grade, not a standalone score."""
     import os
     repo, commit = git_repo
-    good = (fixtures_dir / "good_instructions.md").read_text()
+    good = (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
     _seed_assess(repo)
     (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
     os.symlink("CLAUDE.md", repo / "AGENTS.md")
@@ -122,7 +122,7 @@ def test_agents_md_thin_stub_alias_inherits_grade(git_repo, fixtures_dir: Path) 
     """Issue #57: a thin AGENTS.md stub pointing at CLAUDE.md inherits its grade
     instead of scoring low as a bespoke doc the remediation would rewrite."""
     repo, commit = git_repo
-    good = (fixtures_dir / "good_instructions.md").read_text()
+    good = (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
     _seed_assess(repo)
     (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
     (repo / "AGENTS.md").write_text(
@@ -148,14 +148,14 @@ def test_ancestor_instruction_files_key_present(tmp_path: Path) -> None:
 def test_build_run_context_with_claude_md(tmp_path: Path, fixtures_dir: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "CLAUDE.md").write_text((fixtures_dir / "good_instructions.md").read_text())
+    (repo / "CLAUDE.md").write_text((fixtures_dir / "good_instructions.md").read_text(encoding="utf-8"), encoding="utf-8")
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
         "ccn": {"p50": 1, "p95": 3, "max": 5},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "CLAUDE.md" in ctx["instruction_files"]
@@ -171,14 +171,14 @@ def test_build_run_context_with_agents_md(tmp_path: Path, fixtures_dir: Path) ->
     """The grader is filename-agnostic - works for AGENTS.md too."""
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "AGENTS.md").write_text((fixtures_dir / "good_instructions.md").read_text())
+    (repo / "AGENTS.md").write_text((fixtures_dir / "good_instructions.md").read_text(encoding="utf-8"), encoding="utf-8")
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
         "ccn": {"p50": 1, "p95": 3, "max": 5},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "AGENTS.md" in ctx["instruction_files"]
@@ -189,18 +189,18 @@ def test_build_run_context_with_multiple_instruction_files(tmp_path: Path, fixtu
     """A repo can have CLAUDE.md AND AGENTS.md AND GEMINI.md (all pointing at the same content)."""
     repo = tmp_path / "repo"
     repo.mkdir()
-    good = (fixtures_dir / "good_instructions.md").read_text()
-    bad = (fixtures_dir / "bad_instructions.md").read_text()
-    (repo / "CLAUDE.md").write_text(good)
-    (repo / "AGENTS.md").write_text(good)
-    (repo / "GEMINI.md").write_text(bad)
+    good = (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
+    bad = (fixtures_dir / "bad_instructions.md").read_text(encoding="utf-8")
+    (repo / "CLAUDE.md").write_text(good, encoding="utf-8")
+    (repo / "AGENTS.md").write_text(good, encoding="utf-8")
+    (repo / "GEMINI.md").write_text(bad, encoding="utf-8")
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 10, "loc": {"p50": 10, "p95": 30, "max": 50},
         "ccn": {"p50": 1, "p95": 3, "max": 5},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     keys = set(ctx["instruction_files"].keys())
@@ -224,7 +224,7 @@ def test_instructions_grade_is_None_when_no_files(tmp_path: Path) -> None:
         "files_scored": 0,
         "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["instructions_grade"] is None
@@ -242,15 +242,15 @@ def test_scans_github_claude_instructions(tmp_path: Path, fixtures_dir: Path) ->
     github_dir = repo / ".github"
     github_dir.mkdir()
     (github_dir / "claude-instructions.md").write_text(
-        (fixtures_dir / "good_instructions.md").read_text()
-    )
+        (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
+    , encoding="utf-8")
 
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ".github/claude-instructions.md" in ctx["instruction_files"]
@@ -263,15 +263,15 @@ def test_scans_github_claude_review_instructions(tmp_path: Path, fixtures_dir: P
     github_dir = repo / ".github"
     github_dir.mkdir()
     (github_dir / "claude-review-instructions.md").write_text(
-        (fixtures_dir / "good_instructions.md").read_text()
-    )
+        (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
+    , encoding="utf-8")
 
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ".github/claude-review-instructions.md" in ctx["instruction_files"]
@@ -284,15 +284,15 @@ def test_scans_docs_subdirectory(tmp_path: Path, fixtures_dir: Path) -> None:
     docs_dir = repo / "docs"
     docs_dir.mkdir()
     (docs_dir / "CLAUDE.md").write_text(
-        (fixtures_dir / "good_instructions.md").read_text()
-    )
+        (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
+    , encoding="utf-8")
 
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "docs/CLAUDE.md" in ctx["instruction_files"]

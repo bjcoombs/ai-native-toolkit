@@ -183,7 +183,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def _run(tmp_path: Path, *extra: str) -> tuple[list[FleetRow], JsonDict]:
     assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "out"), "--no-history",
                            "--no-diagrams", "--scans", "agent_ops,review_reality", *extra]) == 0
-    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
     return rows, stamp
 
@@ -378,7 +378,7 @@ def test_no_github_review_or_comment_body_is_written_to_disk(tmp_path, monkeypat
     for name in ("gha", "ghb"):
         assert any(c.startswith(f"pr list --repo org/{name} ") and c.endswith(PR_FIELDS)
                    for c in calls), name
-    rows = [json.loads(line) for line in (out / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (out / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 2
     assert all(r["scans"]["delivery"]["available"] is True for r in rows)
     assert all(r["scans"]["delivery"]["merged_count"] == 3 for r in rows)

@@ -172,7 +172,7 @@ def test_boundary_of_another_shallow_ref_is_ignored(tmp_path: Path) -> None:
     _git(clone, "fetch", "-q", "--depth=1", "origin", "other:other")
     other_tip = _git(clone, "rev-parse", "other").strip()
     shallow_file = clone / _git(clone, "rev-parse", "--git-path", "shallow").strip()
-    assert other_tip in shallow_file.read_text().split()  # the newer, unreachable boundary
+    assert other_tip in shallow_file.read_text(encoding="utf-8").split()  # the newer, unreachable boundary
 
     block = analyze_doc_staleness(clone)
     boundary = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=100)).date()

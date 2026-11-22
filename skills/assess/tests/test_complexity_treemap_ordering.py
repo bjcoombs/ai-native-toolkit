@@ -83,7 +83,7 @@ def test_scc_only_hint_skipped_under_include_artifacts(
     paths = []
     for i in range(treemap.SCC_ONLY_HINT_TOP_N):
         p = tmp_path / f"d{i}.json"
-        p.write_text('{"k": 1}\n' * 50)
+        p.write_text('{"k": 1}\n' * 50, encoding="utf-8")
         paths.append(p)
 
     def fake_collect(root, **kw):
@@ -122,7 +122,7 @@ def _tied_rows(root: Path) -> list[tuple[Path, int, float, str]]:
     rows = []
     for i in range(1, 13):
         path = src / f"f{i}.py"
-        path.write_text(f"def a{i:02d}(a):\n    return a\n")
+        path.write_text(f"def a{i:02d}(a):\n    return a\n", encoding="utf-8")
         rows.append((path, 2, 1.0, "lizard"))
     return rows
 
@@ -147,7 +147,7 @@ def test_write_stats_tie_break_by_path_takes_first_ten_in_path_order(
     treemap.write_stats(rows, None, None, tmp_path, out,
                         fn_ccn_by_path={p: [1.0] for p, *_ in rows})
 
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     for key in ("top_hotspots", "top_complex", "top_large"):
         assert [r["path"] for r in stats[key]] == _TIED_FIRST_TEN, key
     # Every row in this fixture ties, which is what makes the list above
@@ -170,7 +170,7 @@ def test_write_stats_primary_key_outranks_tie_break_by_path(treemap, tmp_path):
         "def big(a):\n"
         + "".join(f"    if a == {i}:\n        return {i}\n" for i in range(1, 41))
         + "    return 0\n"
-    )
+    , encoding="utf-8")
     rows.append((dominant, 82, 41.0, "lizard"))
     # The file aggregate is the sum of its per-function values, so a lizard
     # file's worst function is the largest term of it and can equal it. Giving
@@ -183,7 +183,7 @@ def test_write_stats_primary_key_outranks_tie_break_by_path(treemap, tmp_path):
     out = tmp_path / "stats.json"
     treemap.write_stats(rows, None, None, tmp_path, out, fn_ccn_by_path=fn_ccn)
 
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert {r["path"]: r["max_fn_ccn"] for r in stats["top_complex"]}[
         "src/zbig.py"] == 41.0
     for key in ("top_hotspots", "top_complex", "top_large"):
@@ -212,8 +212,8 @@ def test_write_stats_tie_break_by_path_is_input_order_independent(
     treemap.write_stats(list(reversed(rows)), None, None, tmp_path,
                         reversed_out, fn_ccn_by_path=fn_ccn)
 
-    first = json.loads(as_built.read_text())
-    second = json.loads(reversed_out.read_text())
+    first = json.loads(as_built.read_text(encoding="utf-8"))
+    second = json.loads(reversed_out.read_text(encoding="utf-8"))
     for key in ("top_hotspots", "top_complex", "top_large"):
         assert first[key] == second[key], key
         assert [r["path"] for r in first[key]] == _TIED_FIRST_TEN, key

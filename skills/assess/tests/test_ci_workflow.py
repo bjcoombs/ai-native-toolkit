@@ -110,8 +110,8 @@ def test_checkout_pin_matches_repo_workflow_and_readme():
         return found.group(0)
 
     emitted = checkout_pin(render_ci_workflow(plugin_version="1.23.0"))
-    workflow = (repo / ".github" / "workflows" / "assess-gate.yml").read_text()
-    readme = (repo / "README.md").read_text()
+    workflow = (repo / ".github" / "workflows" / "assess-gate.yml").read_text(encoding="utf-8")
+    readme = (repo / "README.md").read_text(encoding="utf-8")
     assert emitted == checkout_pin(workflow), (
         "actions/checkout pin drifted: update skills/assess/templates/"
         "assess-gate.yml.template to match .github/workflows/assess-gate.yml"
@@ -183,7 +183,7 @@ def test_emit_writes_workflow_file(tmp_path):
     path = emit_ci_workflow(tmp_path, ["scc"], "1.23.0", default_branch="main")
     assert path == tmp_path / ".github" / "workflows" / "assess-gate.yml"
     assert path.is_file()
-    assert "Assess Gate" in path.read_text()
+    assert "Assess Gate" in path.read_text(encoding="utf-8")
 
 
 def test_emit_creates_nested_dirs(tmp_path):
@@ -224,7 +224,7 @@ def _workflows(tmp_path, files: dict[str, str]):
     wf = tmp_path / ".github" / "workflows"
     wf.mkdir(parents=True)
     for name, body in files.items():
-        (wf / name).write_text(body)
+        (wf / name).write_text(body, encoding="utf-8")
     return wf
 
 

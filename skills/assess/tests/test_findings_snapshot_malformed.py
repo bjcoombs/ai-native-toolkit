@@ -109,7 +109,7 @@ def test_absent_and_clean_snapshots_are_silent(
     assert read_snapshot(tmp_path) == (None, None)
     (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(json.dumps(
         {"assess_method_version": 2, "findings": [{"name": "lying_map", "paths": ["a.py"]},
-                                                  {"name": "x"}]}))
+                                                  {"name": "x"}]}), encoding="utf-8")
     assert read_snapshot(tmp_path) == (
         {"assess_method_version": 2, "findings": [{"name": "lying_map", "paths": ["a.py"]},
                                                   {"name": "x", "paths": []}]}, None)
@@ -165,7 +165,7 @@ def test_gate_passes_on_a_hand_edited_committed_snapshot(
     (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     commit("init")
     assert assess_core.main([str(repo), "--non-interactive"]) == 0
     capsys.readouterr()

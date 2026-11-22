@@ -494,11 +494,11 @@ def test_scorer_doc_names_every_dead_code_status() -> None:
     import re
 
     lib_dir = Path(liveness.__file__).resolve().parent
-    source = (lib_dir / "liveness_scan.py").read_text()
+    source = (lib_dir / "liveness_scan.py").read_text(encoding="utf-8")
     emitted = set(re.findall(r'"(?:absent_)?status":\s*"(\w+)"', source))
     emitted |= set(re.findall(r'get\("absent_status",\s*"(\w+)"\)', source))
     assert {"not_applicable", "honest_degrade", "tool_absent"} <= emitted
     repo_root = lib_dir.parents[3]
-    doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text()
+    doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text(encoding="utf-8")
     missing = sorted(s for s in emitted if f"`{s}`" not in doc)
     assert not missing, f"assess-layer-scorer.md does not name: {missing}"

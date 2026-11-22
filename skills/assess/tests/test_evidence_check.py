@@ -33,9 +33,9 @@ def repo(tmp_path: Path) -> Path:
     (tmp_path / "docs").mkdir()
     (tmp_path / "scripts").mkdir()
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
-    (tmp_path / "docs" / "guide.md").write_text("# guide\n")
-    (tmp_path / "scripts" / "check-x.sh").write_text("echo ok\n")
-    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW)
+    (tmp_path / "docs" / "guide.md").write_text("# guide\n", encoding="utf-8")
+    (tmp_path / "scripts" / "check-x.sh").write_text("echo ok\n", encoding="utf-8")
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW, encoding="utf-8")
     return tmp_path
 
 
@@ -140,7 +140,7 @@ def test_named_path_through_a_symlinked_directory_out_of_the_repo_is_rejected(
     repo: Path, tmp_path_factory
 ) -> None:
     outside = tmp_path_factory.mktemp("outside")
-    (outside / "notes.md").write_text("scripts/secret.sh\n")
+    (outside / "notes.md").write_text("scripts/secret.sh\n", encoding="utf-8")
     (repo / "docs" / "ext").symlink_to(outside, target_is_directory=True)
     entries = [
         {"layer": 0, "kind": "path_exists", "path": "docs/ext/notes.md"},
@@ -177,7 +177,7 @@ def test_is_referenced_in_searches_a_directory_or_a_single_file(repo: Path) -> N
     assert is_referenced_in(repo, "scripts/check-x.sh", ".github/missing") is False
     nested = repo / ".github" / "workflows" / "sub"
     nested.mkdir()
-    (nested / "deep.yml").write_text("run: scripts/deep.sh\n")
+    (nested / "deep.yml").write_text("run: scripts/deep.sh\n", encoding="utf-8")
     assert is_referenced_in(repo, "scripts/deep.sh", ".github/workflows") is True
 
 
@@ -188,7 +188,7 @@ def test_cli_writes_both_lists_to_the_json_out_file(repo: Path, tmp_path_factory
     ev.write_text(json.dumps([
         {"layer": 0, "kind": "path_exists", "path": "docs/guide.md"},
         {"layer": 0, "kind": "path_absent", "path": "docs/guide.md"},
-    ]))
+    ]), encoding="utf-8")
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out)],
@@ -196,7 +196,7 @@ def test_cli_writes_both_lists_to_the_json_out_file(repo: Path, tmp_path_factory
     )
     assert proc.returncode == 1
     assert "path_absent" in proc.stdout
-    data = json.loads(out.read_text())
+    data = json.loads(out.read_text(encoding="utf-8"))
     assert [e["kind"] for e in data["evidence"]] == ["path_exists"]
     assert [e["kind"] for e in data["evidence_rejected"]] == ["path_absent"]
 
@@ -204,7 +204,7 @@ def test_cli_writes_both_lists_to_the_json_out_file(repo: Path, tmp_path_factory
 def test_cli_refuses_input_that_is_not_a_flat_array(repo: Path, tmp_path_factory) -> None:
     out_dir = tmp_path_factory.mktemp("out")
     ev = out_dir / "ev.json"
-    ev.write_text(json.dumps({"evidence": []}))
+    ev.write_text(json.dumps({"evidence": []}), encoding="utf-8")
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "out.json")],
@@ -227,7 +227,7 @@ def test_path_with_nul_is_rejected_not_raised(repo: Path) -> None:
 
 def test_reference_search_does_not_enter_git_metadata(repo: Path) -> None:
     (repo / ".git").mkdir()
-    (repo / ".git" / "config").write_text("scripts/check-x.sh\n")
+    (repo / ".git" / "config").write_text("scripts/check-x.sh\n", encoding="utf-8")
     assert is_referenced_in(repo, "scripts/check-x.sh", ".git") is False
     assert is_referenced_in(repo, "scripts/check-x.sh", ".git/config") is False
     for kind in ("referenced_in", "not_referenced_in"):
@@ -242,9 +242,9 @@ def test_reference_search_does_not_enter_git_metadata(repo: Path) -> None:
 def test_not_referenced_in_is_rejected_when_the_search_is_incomplete(repo: Path) -> None:
     hidden = repo / ".github" / "workflows" / "locked"
     hidden.mkdir()
-    (hidden / "ci.yml").write_text("run: scripts/other.sh\n")
+    (hidden / "ci.yml").write_text("run: scripts/other.sh\n", encoding="utf-8")
     unreadable = repo / ".github" / "workflows" / "unreadable.yml"
-    unreadable.write_text("run: scripts/third.sh\n")
+    unreadable.write_text("run: scripts/third.sh\n", encoding="utf-8")
     hidden.chmod(0)
     unreadable.chmod(0)
     try:
@@ -269,7 +269,7 @@ def _not_referenced(needle: str, path: str = ".github/workflows") -> dict:
 
 def test_walk_skips_symlinks_out_of_the_repo(repo: Path, tmp_path_factory) -> None:
     outside = tmp_path_factory.mktemp("outside")
-    (outside / "hosts").write_text("scripts/secret.sh\n")
+    (outside / "hosts").write_text("scripts/secret.sh\n", encoding="utf-8")
     (repo / ".github" / "workflows" / "link.yml").symlink_to(outside / "hosts")
     (repo / ".github" / "workflows" / "linkdir").symlink_to(outside, target_is_directory=True)
     (repo / ".github" / "workflows" / "dangling.yml").symlink_to(repo / "no-such-file")
@@ -302,7 +302,7 @@ def test_fifo_under_the_path_makes_a_negative_claim_incomplete(repo: Path) -> No
 
 def test_symlinked_file_inside_the_repo_is_searched_at_its_target(repo: Path) -> None:
     (repo / "ci-shared").mkdir()
-    (repo / "ci-shared" / "deploy.yml").write_text("run: scripts/deploy.sh\n")
+    (repo / "ci-shared" / "deploy.yml").write_text("run: scripts/deploy.sh\n", encoding="utf-8")
     (repo / ".github" / "workflows" / "shared.yml").symlink_to(
         repo / "ci-shared" / "deploy.yml")
     assert is_referenced_in(repo, "scripts/deploy.sh", ".github/workflows") is True
@@ -314,7 +314,7 @@ def test_symlinked_directory_inside_the_repo_makes_a_negative_claim_incomplete(
     repo: Path,
 ) -> None:
     (repo / "ci-shared").mkdir()
-    (repo / "ci-shared" / "deploy.yml").write_text("run: scripts/deploy.sh\n")
+    (repo / "ci-shared" / "deploy.yml").write_text("run: scripts/deploy.sh\n", encoding="utf-8")
     (repo / ".github" / "workflows" / "shared").symlink_to(
         repo / "ci-shared", target_is_directory=True)
     result = check_evidence(repo, [_not_referenced("scripts/deploy.sh")])
@@ -330,7 +330,7 @@ def test_symlinked_directory_inside_the_repo_makes_a_negative_claim_incomplete(
 
 def test_walk_does_not_read_previous_assess_output(repo: Path) -> None:
     (repo / ".assess").mkdir()
-    (repo / ".assess" / "assess-report.md").write_text("scripts/stale.sh is not wired\n")
+    (repo / ".assess" / "assess-report.md").write_text("scripts/stale.sh is not wired\n", encoding="utf-8")
     entry = _not_referenced("scripts/stale.sh", ".")
     assert check_evidence(repo, [entry])["evidence"] == [entry]
     # Naming .assess directly still searches it.
@@ -342,7 +342,7 @@ def test_needle_spanning_a_read_chunk_boundary_is_found(repo: Path) -> None:
 
     needle = "scripts/boundary.sh"
     pad = "x" * (evidence_check._CHUNK - 5)
-    (repo / "docs" / "big.txt").write_text(pad + needle + "\n")
+    (repo / "docs" / "big.txt").write_text(pad + needle + "\n", encoding="utf-8")
     assert is_referenced_in(repo, needle, "docs") is True
     assert is_referenced_in(repo, needle, "docs/big.txt") is True
 
@@ -357,7 +357,7 @@ def test_root_that_is_not_a_directory_verifies_nothing(tmp_path: Path) -> None:
 
 def test_cli_refuses_a_root_that_is_not_a_directory(tmp_path: Path) -> None:
     ev = tmp_path / "ev.json"
-    ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "x"}]))
+    ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "x"}]), encoding="utf-8")
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(tmp_path / "nope"), str(ev),
          "--json", str(tmp_path / "out.json")],
@@ -383,7 +383,7 @@ def test_cli_refuses_evidence_that_is_not_utf8(repo: Path, tmp_path_factory) -> 
 
 def test_symlinks_into_git_metadata_are_not_searched(repo: Path) -> None:
     (repo / ".git").mkdir()
-    (repo / ".git" / "config").write_text("scripts/hidden.sh\n")
+    (repo / ".git" / "config").write_text("scripts/hidden.sh\n", encoding="utf-8")
     (repo / "docs" / "gitlink").symlink_to(repo / ".git", target_is_directory=True)
     (repo / "config-link").symlink_to(repo / ".git" / "config")
     (repo / ".github" / "workflows" / "cfg.yml").symlink_to(repo / ".git" / "config")
@@ -402,7 +402,7 @@ def test_symlinks_into_git_metadata_are_not_searched(repo: Path) -> None:
 def test_cli_exits_2_when_the_json_output_cannot_be_written(repo: Path, tmp_path_factory) -> None:
     out_dir = tmp_path_factory.mktemp("out")
     ev = out_dir / "ev.json"
-    ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}]))
+    ev.write_text(json.dumps([{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}]), encoding="utf-8")
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "missing-dir" / "out.json")],

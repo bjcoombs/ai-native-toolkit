@@ -70,10 +70,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     bindir.mkdir()
     ghdir.mkdir()
     gh = bindir / "gh"
-    gh.write_text(FAKE_GH)
+    gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-    (ghdir / "log").write_text("")
-    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n")
+    (ghdir / "log").write_text("", encoding="utf-8")
+    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n", encoding="utf-8")
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_GH", str(ghdir))
 
@@ -81,13 +81,13 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         root = repo
 
         def serve(self, name: str, doc: object) -> None:
-            (ghdir / name).write_text(json.dumps(doc))
+            (ghdir / name).write_text(json.dumps(doc), encoding="utf-8")
 
         def fail_with(self, line: str) -> None:
-            (ghdir / "fail").write_text(line + "\n")
+            (ghdir / "fail").write_text(line + "\n", encoding="utf-8")
 
         def calls(self) -> list[str]:
-            return (ghdir / "log").read_text().splitlines()
+            return (ghdir / "log").read_text(encoding="utf-8").splitlines()
 
     w = World()
     w.serve("apirepo.json", {"full_name": "acme/widget", "default_branch": "main"})
@@ -303,7 +303,7 @@ def test_no_cached_record_carries_a_body(world, tmp_path, monkeypatch) -> None:
     world.serve("prs-light.json", [{"mergedAt": pr["mergedAt"]} for pr in prs])
     block = scan_review_reality(world.root)
     assert block["available"] is True and block["merged_count"] == 6
-    cached = [f.read_text() for f in cache.iterdir() if f.is_file()]
+    cached = [f.read_text(encoding="utf-8") for f in cache.iterdir() if f.is_file()]
     assert cached, "other platform reads are cached"
     assert not any("SECRET-BODY" in c for c in cached)
     for text in cached:
