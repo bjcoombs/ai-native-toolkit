@@ -24,8 +24,11 @@ the report section reads it from this run's ``level_up`` achievements
 (``lib/fleet_achievements.py``), which come from the run history. It is never written into
 ``fleet-data.json``, the achievements engine's own input, and never feeds a level.
 
-Privacy follows ``fleet-data.json``: repository keys and shared-source ids are written with
-the run's ``Privacy.key`` (in clear in counts-only output, hashed under ``--hash-paths``);
+Privacy follows ``fleet-data.json``: repository keys are written with the run's
+``Privacy.key`` (in clear in counts-only output, hashed under ``--hash-paths``). A shared-source
+id is written as the scan wrote it: in clear in counts-only output, already hashed by the
+scan under the run's salt with ``--hash-paths`` (so it joins ``repos.jsonl``'s
+``ci_source_ids``);
 ``text`` lines hold counts and maturity-model titles only. Deterministic: lists sorted.
 """
 from __future__ import annotations
@@ -148,19 +151,29 @@ def _biggest_lift(model: MaturityModel, team_rows: Sequence[Row], lifts: Mapping
             "done_when": words["done_when"] if words else None, "text": text}
 
 
-def _sources(row: FleetRow) -> list[str]:
+def _sources(row: FleetRow) -> dict[str, str]:
+    """The repository's shared CI source ids, each with its kind (from ``ci_includes``, since
+    a hashed id carries no prefix), as the scan wrote them."""
     block = (row["scans"] or {}).get("shared_tooling")
     if not isinstance(block, dict) or block.get("available") is not True:
-        return []
-    return sorted({i for i in block.get("ci_source_ids") or [] if isinstance(i, str)})
+        return {}
+    kinds = {e.get("id"): e.get("kind") for e in block.get("ci_includes") or [] if isinstance(e, dict)}
+    out: dict[str, str] = {}
+    for i in block.get("ci_source_ids") or []:
+        if isinstance(i, str):
+            kind = kinds.get(i)
+            out[i] = kind if isinstance(kind, str) else i.partition(":")[0]
+    return out
 
 
 def _templates(team_rows: Sequence[Row], ok: Sequence[FleetRow], next_of: Mapping[str, list[Candidate]],
                key: Key) -> list[TemplateLift]:
     includers: dict[str, list[str]] = {}
+    kinds: dict[str, str] = {}
     for scanned in ok:
-        for source in _sources(scanned):
+        for source, kind in sorted(_sources(scanned).items()):
             includers.setdefault(source, []).append(scanned["repo"])
+            kinds.setdefault(source, kind)
     titles = {row["id"]: row["title"] for row in team_rows}
     order = {row["id"]: i for i, row in enumerate(team_rows)}
     out: list[TemplateLift] = []
@@ -176,7 +189,7 @@ def _templates(team_rows: Sequence[Row], ok: Sequence[FleetRow], next_of: Mappin
             text = (f"If this shared CI source ran tests or another enforced check, {len(repos)} of the "
                     f"{len(members)} repositories that include it would reach level {level} on "
                     f"{titles[row_id]}.")
-            out.append({"source": key(source), "kind": source.partition(":")[0], "includers": len(members),
+            out.append({"source": source, "kind": kinds[source], "includers": len(members),
                         "row": row_id, "level": level, "signal": signal, "repo_count": len(repos),
                         "repos": sorted(key(r) for r in repos), "text": text})
     return sorted(out, key=lambda t: (t["source"], order[t["row"]], t["level"], t["signal"]))

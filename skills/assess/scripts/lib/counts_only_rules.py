@@ -201,7 +201,7 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.rows.value": TOKEN,
     "repos.rows.reason": TOKEN,
     # #746: the repositories an opportunity lifts, and the shared CI source id (kept
-    # readable in counts-only like shared_tooling ids, hashed with the keys under a salt)
+    # readable in counts-only like shared_tooling ids; under a salt the scan's own hash)
     "opportunities.biggest_lift.repos": PATH,
     "opportunities.shared_templates.repos": PATH,
     "opportunities.shared_templates.source": PATH,

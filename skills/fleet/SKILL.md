@@ -368,7 +368,8 @@ order), and no insight names a person.
 | `shared_templates` | One entry per shared CI source (a `shared_tooling.ci_source_ids` id at least 2 repositories include) and row level it would unlock: `source` (the id, such as `gitlab_project:grp/ci-templates`), `kind`, `includers`, `row`, `level`, `signal`, `repo_count`, `repos` and `text`. Its `repos` are the including repositories whose one unmet next-level criterion reads a `ci_checks.` signal: what the template would lift if it ran tests or another enforced check. Sorted by `source`, then row order. |
 
 Privacy follows the keys: `repos` and `source` are in clear in counts-only output (shared
-tooling ids stay readable) and hashed under `--hash-paths` or `--hash-salt`; `text` holds
+tooling ids stay readable) and hashed under `--hash-paths` or `--hash-salt`. A hashed
+`source` is the scan's own hash, so it matches `ci_source_ids` in `repos.jsonl`; `text` holds
 counts and maturity-model titles only. Recent progress, the units that reached a new level
 since the previous run, is not in this file: it comes from the run history, is display
 only and appears only in `report.md`. Logic: `lib/fleet_opportunities.py`.

@@ -50,16 +50,17 @@ def _row(repo: str, *, instr: bool = False, ci: bool | None = False, sources: tu
         "layer_grades": {"available": True, "instruction_file_present": instr},
         "ci_checks": ({"available": True, "enforced_check_runs": ci} if ci is not None
                       else {"available": False, "reason": "unavailable"}),
-        "shared_tooling": {"available": True, "ci_source_ids": list(sources), "marketplace_ids": []},
+        "shared_tooling": {"available": True, "ci_source_ids": list(sources), "marketplace_ids": [],
+                           "ci_includes": [{"id": i, "kind": "gitlab_project", "tracked": True} for i in sources]},
     }
     return {"fleet_row_version": FLEET_ROW_VERSION, "repo": repo, "group": "grp", "status": "ok",
             "reason": None, "signals_schema_version": 1, "scans": scans, "active": True}
 
 
-def fleet() -> list[FleetRow]:
+def fleet(source: str = SOURCE) -> list[FleetRow]:
     """The I746-1 shape: four repositories include the template, d runs tests, d and e have instructions."""
-    return [*(_row(f"grp/{x}", sources=(SOURCE,)) for x in "abc"),
-            _row("grp/e", instr=True, sources=(SOURCE,)),
+    return [*(_row(f"grp/{x}", sources=(source,)) for x in "abc"),
+            _row("grp/e", instr=True, sources=(source,)),
             _row("grp/d", instr=True, ci=True),
             _row("grp/ci-templates")]
 
@@ -168,10 +169,12 @@ def test_counts_only_keeps_every_opportunity_field_and_names_no_rank() -> None:
 
 def test_a_hashed_run_names_no_repository_or_source() -> None:
     privacy = Privacy(salt="s")
-    dumped = dumps_fleet_data(_data(fleet(), privacy))
+    hashed = privacy.key(SOURCE)  # the scan already hashed the id under the run's salt
+    dumped = dumps_fleet_data(_data(fleet(hashed), privacy))
     opps = json.loads(dumped)["opportunities"]
     assert "grp/" not in dumped and "ci-templates" not in dumped
-    assert opps["shared_templates"][0]["source"] == privacy.key(SOURCE)
+    (template,) = opps["shared_templates"]
+    assert template["source"] == hashed and template["kind"] == "gitlab_project"  # joins repos.jsonl, no rehash
     assert opps["biggest_lift"]["repos"] == sorted(privacy.key(r) for r in
                                                    ["grp/a", "grp/b", "grp/c", "grp/ci-templates", "grp/e"])
     section = opportunities_section(json.loads(dumped), None)

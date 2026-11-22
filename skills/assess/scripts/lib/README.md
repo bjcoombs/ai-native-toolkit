@@ -1149,8 +1149,10 @@ holding the most such repositories (ties: row order, level, signal), worded by
 `next_step_guidance.guidance`, with its Step gate (`[[steps]]`) when it is one.
 `shared_templates`: per `shared_tooling.ci_source_ids` id with at least `MIN_INCLUDERS`
 includers, the includers whose sole unmet criterion reads a `ci_checks.` signal, by row and
-level. Repository keys and source ids go through the run's `Privacy.key`
-(`FLEET_DATA_RULES` classes them `path`); `text` holds counts and model titles only. No
+level. Repository keys go through the run's `Privacy.key`; a source id is kept as the scan
+wrote it (clear, or the scan's salted hash, which joins `repos.jsonl`), and its `kind` comes
+from `ci_includes` (`FLEET_DATA_RULES` classes both ids `path`); `text` holds counts and
+model titles only. No
 rank or position field. Tests: `tests/test_fleet_opportunities.py`.
 
 **`fleet_opportunities_section.py`**
