@@ -40,6 +40,7 @@ from lib.doc_claims import DocClaimsBlock
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
+from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
@@ -122,6 +123,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ai_usage", AiUsageBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
+    ("guardrails", GuardrailsBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),

@@ -515,7 +515,8 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
-def _gates_something(gate: CoverageGate) -> bool:
+def gates_something(gate: CoverageGate) -> bool:
+    """A gate `enforced` counts: a non-zero threshold, or a null one from nyc/c8."""
     if gate["threshold"] is None:
         return gate["tool"] in _NULL_THRESHOLD_GATES
     return gate["threshold"] != 0
@@ -536,7 +537,7 @@ def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     null ``threshold_percent`` (a template, an nyc/c8 default, an uncovered-line
     count), since it could be 50 or more; otherwise False.
     """
-    counted = [g for g in gates if _gates_something(g)]
+    counted = [g for g in gates if gates_something(g)]
     percents = [g["threshold_percent"] for g in counted]
     if any(p is not None and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
         return True
@@ -574,7 +575,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
             gates.extend(scan(rel, lines))
     return {
         "available": True,
-        "enforced": any(_gates_something(g) for g in gates),
+        "enforced": any(gates_something(g) for g in gates),
         "gates": gates,
         "max_threshold_percent": max_threshold_percent(gates),
         "threshold_meets_minimum": threshold_meets_minimum(gates),

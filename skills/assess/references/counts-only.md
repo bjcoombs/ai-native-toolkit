@@ -675,6 +675,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_claims.contradictions.sites.value` | dropped |
 | `doc_claims.contradictions.conflict_pair.value` | dropped |
 
+## guardrails
+
+| Field | Kept as |
+|---|---|
+| `guardrails.gates.kind` | token |
+| `guardrails.gates.tool` | token |
+| `guardrails.gates.rule` | token |
+| `guardrails.gates.stated_in` | path (hashed when hashing is on) |
+| `guardrails.gates.snippet` | dropped |
+| `guardrails.not_read` | dropped |
+
 ## fleet-data.json (the fleet skill)
 
 Patterns from the top of `fleet-data.json`, not of a run-context. A

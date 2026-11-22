@@ -1585,6 +1585,29 @@ revision = 1
   "doc_claims.contradictions.sites.value" = "drop"
   "doc_claims.contradictions.conflict_pair.value" = "drop"
 
+[[entries]]
+id = "core.guardrails"
+kind = "collector"
+title = "Guardrails stated"
+summary = "Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet."
+issues = [767]
+callable = "lib.guardrails:scan_guardrails"
+publishes = ["guardrails"]
+reads = ["repo_root", "instruction_files", "coverage_gate"]
+stage = "post_offers"
+headless = { guardrails = "registered" }
+shapes = [
+  { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "guardrails.gates.kind" = "token"
+  "guardrails.gates.tool" = "token"
+  "guardrails.gates.rule" = "token"
+  "guardrails.gates.stated_in" = "path"
+  "guardrails.gates.snippet" = "drop"
+  "guardrails.not_read" = "drop"
+
 # -- signals: the run-context leaves the default maturity model reads ---------------
 [[entries]]
 id = "core:layer_grades.instruction_file_present"
@@ -1812,6 +1835,16 @@ type = "number"
 evidence = "git_history"
 null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
 
+[[entries]]
+id = "core:guardrails.stated_pct"
+kind = "signal"
+title = "Share of configured gates an instruction file states"
+collector = "core.guardrails"
+path = "guardrails.stated_pct"
+type = "number"
+evidence = "head_structure"
+null_means = "no gate found: nothing to state"
+
 # -- conditions: display metadata for each default criterion -----------------------
 [[entries]]
 id = "core.cond.layer-0-instructions.1.instruction_file_present"
@@ -1994,6 +2027,20 @@ kind = "condition"
 title = "Four in five mapped docs keep pace"
 key = "doc-freshness.2:doc_staleness.summary.stale_pct"
 fix = "Refresh the docs the report lists under doc freshness, oldest first."
+
+[[entries]]
+id = "core.cond.guardrails-stated.1.stated_pct"
+kind = "condition"
+title = "Half the configured gates are stated"
+key = "guardrails-stated.1:guardrails.stated_pct"
+fix = "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it."
+
+[[entries]]
+id = "core.cond.guardrails-stated.2.stated_pct"
+kind = "condition"
+title = "Every configured gate is stated"
+key = "guardrails-stated.2:guardrails.stated_pct"
+fix = "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing."
 
 # -- findings -----------------------------------------------------------------------
 [[entries]]

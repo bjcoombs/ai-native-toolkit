@@ -4,8 +4,8 @@
 blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
-here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781)
-and ``delivery`` (#715).
+here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
+``delivery`` (#715) and ``guardrails`` (#767).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -232,9 +232,48 @@ DELIVERY: JsonDict = {
 }
 
 # Block name -> the block's described fields (no ``type``; each generator adds its own rules).
+GUARDRAILS: JsonDict = {
+    "description": (
+        "Guardrails stated (lib/guardrails.py): the gates the repository configures at HEAD "
+        "(a ruff or flake8 complexity limit, the coverage floor from coverage_gate, pre-commit "
+        "hooks, mypy strict) and whether a graded instruction file states each one's rule and "
+        "threshold on one line."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "reason": _field({"type": "string"}, "Why the block is unavailable."),
+        "gates": _field(
+            {"type": "array", "items": {"type": "object", "properties": {
+                "kind": {"enum": ["complexity_limit", "coverage_floor", "pre_commit",
+                                  "type_strictness"]},
+                "tool": {"type": "string"},
+                "rule": {"type": "string"},
+                "threshold": _field(_NUM_OR_NULL, "The limit or floor; null for a gate with "
+                                                  "none (pre-commit, mypy strict)."),
+                "file": {"type": "string"},
+                "line": {"type": ["integer", "null"]},
+                "stated": {"type": "boolean"},
+                "stated_in": _field({"type": ["string", "null"]},
+                                    "The first instruction file that states the gate."),
+                "snippet": _field({"type": ["string", "null"]},
+                                  "A ready one-line sentence for an unstated gate; null when "
+                                  "stated. Dropped from counts-only output."),
+            }}},
+            "Each gate found, one per configuring file."),
+        "enforced": _field(_INT, "Gates found."),
+        "stated": _field(_INT, "Gates a graded instruction file states."),
+        "unstated": _field(_INT, "Gates no graded instruction file states."),
+        "stated_pct": _field(
+            _NUM_OR_NULL, "The guardrails-stated row's signal: stated as a percentage of "
+                          "enforced; null when no gate is found."),
+        "instruction_files_read": _field(_INT, "Graded instruction files read."),
+        "not_read": _STRINGS,
+    },
+}
+
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
     "coverage_gate": COVERAGE_GATE,
     "delivery": DELIVERY,
+    "guardrails": GUARDRAILS,
 }

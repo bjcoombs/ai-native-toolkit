@@ -957,7 +957,7 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. The `ai_usage`, `ci_checks`, `coverage_gate` and `delivery` blocks (`scan_block_schemas.py`, #779, #781)
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery` and `guardrails` blocks (`scan_block_schemas.py`, #779, #781, #767)
 also name and describe their fields (`described_block`), loosely: no required field, and a
 string list may be its counts-only length. Each block's `reason` description is generated
 from the check manifest (`reason_description`, #795): the codes its collector declares in
@@ -970,8 +970,8 @@ every other block names no code. `fleet_schema` uses the same blocks for `repos.
 
 **`scan_block_schemas.py`**
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
-of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781)
-and `delivery` (#779), read
+of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
+`delivery` (#779) and `guardrails` (#767), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -3603,7 +3603,7 @@ from `unit` alone by `threshold_percent()`: as written for `percent`, times 100 
 `ratio` (rounded to 6 places, so `0.55` is `55.0`), and null for `uncovered_count` or
 a null threshold. `threshold` and `unit` stay as written. `max_threshold_percent` is the
 highest non-null `threshold_percent` across all gates, null when none has one.
-`threshold_meets_minimum` reads only the gates `enforced` counts (`_gates_something`),
+`threshold_meets_minimum` reads only the gates `enforced` counts (`gates_something`),
 in this order: true when one has `threshold_percent >= MINIMUM_THRESHOLD_PERCENT` (50);
 null (not measured) when none does but one has a null `threshold_percent` (a templated
 value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
@@ -3620,6 +3620,36 @@ result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
 Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
 Tests: `tests/test_coverage_gate.py`.
+
+**`guardrails.py`**
+Guardrails stated (#767): does an instruction file tell an agent what the gates
+enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate)` runs from the
+scan table (`guardrails`, post-offers stage, headless `registered`) and returns the
+`guardrails` block (`GuardrailsBlock`): `{available, gates, enforced, stated, unstated,
+stated_pct, instruction_files_read, not_read}`. Each gate (`Guardrail`) is `{kind, tool,
+rule, threshold, file, line, stated, stated_in, snippet}`, one per configuring file:
+`complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, ruff's
+default 10 when unset, in `pyproject.toml`, `ruff.toml` or `.ruff.toml`; flake8
+`max-complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (the
+`coverage_gate` block's counted gate with the highest `threshold_percent`, through
+`coverage_gate.gates_something`, never re-parsed), `pre_commit` (a root
+`.pre-commit-config.yaml` with at least one `- id:` hook, one gate whatever its hook
+count) and `type_strictness` (mypy `strict = true` in `[tool.mypy]`, `mypy.ini` or
+`setup.cfg`). A gate is stated (`states`) when one line of a graded instruction file
+(the keys of `instruction_files`, an aliased file read once) names its rule and its
+threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
+`coverage` plus the floor (with no readable floor, `coverage` beside `fail_under`,
+`threshold`, `floor` or `minimum`), `pre-commit`, or `mypy` plus `strict`. The local
+command is not required. An unstated gate carries `snippet`, a one-line sentence built
+from a template and the gate's own figures (never from file text) naming the rule, the
+threshold, the configuring file and the command that checks it. `stated_pct` is
+`stated / enforced` as a percentage, one decimal; null with no gate, so the default
+model's `guardrails-stated` row (level 1 at 50, level 2 at 100; `head_structure`, graded
+measured) reads unknown, never 0. `not_read` names the gate forms not read yet (eslint
+`complexity`, TypeScript `strict`, file-size ratchets, architecture tests, required CI
+checks and branch protection, sign-off rules). Counts-only keeps `kind`, `tool`, `rule`,
+the numbers, `file` and `stated_in` as paths, and drops `snippet` (and `not_read` to its
+length). Stdlib plus `lib.coverage_gate`. Tests: `tests/test_guardrails.py`.
 
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,

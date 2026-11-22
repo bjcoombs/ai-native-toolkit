@@ -101,6 +101,7 @@
           "documentation",
           "gap_actions",
           "gate_cost_estimate",
+          "guardrails",
           "instruction_claims",
           "instruction_placement",
           "layer_grades",
@@ -630,6 +631,126 @@
                 "null"
               ],
               "description": "Share (0 to 1) of changes an agent identity authored; null when nothing was counted."
+            }
+          }
+        },
+        "guardrails": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Guardrails stated (lib/guardrails.py): the gates the repository configures at HEAD (a ruff or flake8 complexity limit, the coverage floor from coverage_gate, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold on one line.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the block is unavailable."
+            },
+            "gates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "complexity_limit",
+                      "coverage_floor",
+                      "pre_commit",
+                      "type_strictness"
+                    ]
+                  },
+                  "tool": {
+                    "type": "string"
+                  },
+                  "rule": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "The limit or floor; null for a gate with none (pre-commit, mypy strict)."
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "stated": {
+                    "type": "boolean"
+                  },
+                  "stated_in": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "The first instruction file that states the gate."
+                  },
+                  "snippet": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "A ready one-line sentence for an unstated gate; null when stated. Dropped from counts-only output."
+                  }
+                }
+              },
+              "description": "Each gate found, one per configuring file."
+            },
+            "enforced": {
+              "type": "integer",
+              "description": "Gates found."
+            },
+            "stated": {
+              "type": "integer",
+              "description": "Gates a graded instruction file states."
+            },
+            "unstated": {
+              "type": "integer",
+              "description": "Gates no graded instruction file states."
+            },
+            "stated_pct": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The guardrails-stated row's signal: stated as a percentage of enforced; null when no gate is found."
+            },
+            "instruction_files_read": {
+              "type": "integer",
+              "description": "Graded instruction files read."
+            },
+            "not_read": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "A list of strings; counts-only output keeps only its length."
             }
           }
         },

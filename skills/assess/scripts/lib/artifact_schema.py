@@ -203,7 +203,12 @@ constant each.
 # continue-on-error: true, allow_failure: true, set +e) and checks off the
 # ordinary triggers left out. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.32.0"
+# 1.33.0: run-context.json gains the guardrails block (issue #767): the gates
+# the repository configures (complexity limit, coverage floor, pre-commit hooks,
+# mypy strict), whether an instruction file states each, a snippet for each
+# unstated one, and stated_pct. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.33.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -327,4 +332,8 @@ ARTIFACT_SCHEMA_VERSION = "1.32.0"
 #     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
 #     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
 #     Layer 5 evidence can move.
-ASSESS_METHOD_VERSION = 28
+# 29: the guardrails block and its stated_pct signal (issue #767): the default
+#     maturity model gains the guardrails-stated row (half of the configured
+#     gates stated is level 1, all of them level 2, none found is unknown).
+#     Existing rows are unchanged.
+ASSESS_METHOD_VERSION = 29
