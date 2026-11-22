@@ -4130,8 +4130,11 @@ GitHub workflows and `.gitlab-ci.yml` with #775's rules unchanged
 command and `sh -c '...'` and a quoted `run:` value read through. A word holding
 whitespace (a quoted argument) is dropped, so a flag inside an `echo` string is no flag.
 A gate written on a CI line must sit on an enforced command that carries its flag. A
-config gate needs an enforced command that runs its tool (`runs_tool`, `gate_family`):
-`pytest --cov` (or a pytest `addopts` holding `--cov`) or `coverage
+config gate needs an enforced command whose program is its tool (`program` resolves the
+wrappers `check_command._program` and `_exec_program` read, so `pip install pytest --cov`
+and `npm install jest` run neither; `runs_tool`, `gate_family`):
+`pytest --cov` (or a pytest `addopts` holding `--cov`, on one line, in a TOML list or on
+INI continuation lines) or `coverage
 report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
 nothing), any `pytest` for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
 `collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`

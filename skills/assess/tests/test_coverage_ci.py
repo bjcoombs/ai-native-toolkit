@@ -90,6 +90,12 @@ def test_issue_acceptance(tmp_path: Path, files: dict[str, str],
      (True, "ci_run")),
     ({**_ci("pytest"), "tox.ini": "[testenv]\ncommands = pytest --cov --cov-fail-under=80\n"},
      (False, "not_run_in_ci")),
+    ({**_ci("pytest"), "pyproject.toml": "[tool.pytest.ini_options]\naddopts = [\n  \"-v\",\n"
+      "  \"--cov=app\",\n]\n[tool.coverage.report]\nfail_under = 80\n"}, (True, "ci_run")),
+    ({**_ci("pytest"), "pytest.ini": "[pytest]\naddopts =\n    -v\n    --cov=app\n",
+      ".coveragerc": "[report]\nfail_under = 80\n"}, (True, "ci_run")),
+    ({**_ci("pnpm exec jest --coverage"),
+      "package.json": '{"jest":{"coverageThreshold":{"global":{"lines":80}}}}\n'}, (True, "ci_run")),
     (_ci('"pytest --cov-fail-under=80"'), (True, "ci_run")),
     (_ci("sh -c 'pytest --cov --cov-fail-under=80'"), (True, "ci_run")),
     (_ci("cd pkg && pytest --cov --cov-fail-under=80; echo done"), (True, "ci_run")),
@@ -114,7 +120,8 @@ def test_issue_acceptance(tmp_path: Path, files: dict[str, str],
     ({**_ci("cargo llvm-cov --fail-under-lines 90")}, (True, "ci_run")),
 ], ids=["no-ci", "coverage-run-only", "coverage-report", "python-m-pytest", "addopts-cov",
         "addopts-threshold", "tox-pytest-section", "setup-cfg-tool-pytest",
-        "tox-testenv-commands", "quoted-run", "sh-c", "compound", "folded-scalar", "gitlab",
+        "tox-testenv-commands", "addopts-toml-list", "addopts-ini-continuation",
+        "pnpm-exec-jest", "quoted-run", "sh-c", "compound", "folded-scalar", "gitlab",
         "mvn-verify", "mvn-compile", "jest-coverage", "jest-collect-coverage", "vitest-no-flag",
         "go-test-coverage", "llvm-cov"])
 def test_what_counts_as_a_run(tmp_path: Path, files: dict[str, str],
@@ -148,6 +155,27 @@ def test_what_counts_as_a_run(tmp_path: Path, files: dict[str, str],
 def test_unread_ci_reads_unknown(tmp_path: Path, files: dict[str, str],
                                  expected: tuple[bool | None, str]) -> None:
     assert _read(tmp_path, files) == expected
+
+
+ADDOPTS_COV = ("[tool.pytest.ini_options]\naddopts = \"--cov=app\"\n"
+               "[tool.coverage.report]\nfail_under = 80\n")
+JEST_COLLECTS = '{"jest":{"collectCoverage":true,"coverageThreshold":{"global":{"lines":80}}}}\n'
+
+
+@pytest.mark.parametrize("files", [
+    {**_ci("pip install pytest pytest-cov"), "pyproject.toml": ADDOPTS_COV},
+    {**_ci("pip install pytest --cov"), "pyproject.toml": PYPROJECT_80},
+    {**_ci("echo pytest --cov"), "pyproject.toml": PYPROJECT_80},
+    {**_ci("npm install --save-dev jest"), "package.json": JEST_COLLECTS},
+    {**_ci("npm install --save-dev jest --coverage"), "package.json": JEST_COLLECTS},
+    {**_ci("uv pip install coverage report"), "pyproject.toml": PYPROJECT_80},
+    {**_ci("mvn-wrapper-setup verify"),
+     "pom.xml": _pom("<value>COVEREDRATIO</value><minimum>0.80</minimum>")},
+], ids=["pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "npm-install-jest",
+        "npm-install-jest-coverage", "uv-pip-coverage", "not-maven"])
+def test_a_tool_named_as_an_argument_is_not_run(tmp_path: Path, files: dict[str, str]) -> None:
+    """Issue #921 review: the tool must be the program a command runs, never an argument."""
+    assert _read(tmp_path, files)[0] is not True
 
 
 def test_jacoco_missed_counter_is_a_gate_with_no_percent(tmp_path: Path) -> None:
@@ -199,6 +227,12 @@ def test_folded_paragraphs_are_one_command_each() -> None:
     (("./gradlew", "jacocoTestCoverageVerification"), "gradle-jacoco", True),
     (("./gradlew", "check"), "gradle-jacoco", False),
     (("npx", "c8", "npm", "test"), "nyc", True),
+    (("uv", "run", "--locked", "pytest", "--cov"), "coverage.py", True),
+    (("python", "-m", "pytest", "--cov"), "coverage.py", True),
+    (("yarn", "jest", "--coverage"), "jest", True),
+    (("pip", "install", "pytest", "--cov"), "coverage.py", False),
+    (("echo", "pytest", "--cov"), "coverage.py", False),
+    (("npm", "install", "jest"), "jest", False),
 ])
 def test_runs_tool(words: tuple[str, ...], family: str, expected: bool | None) -> None:
     assert runs_tool(words, family) is expected

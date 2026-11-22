@@ -18,7 +18,9 @@ How a gate is run, by where it is written:
   so ``echo 'use --cov-fail-under=90 locally'`` runs nothing; ``sh -c '...'``
   and a quoted ``run: "..."`` value are read through, and a folded block scalar
   (``run: >-``) is read as one command.
-- A tool config (coverage.py ``fail_under``, Jest ``coverageThreshold``, Vitest
+- A tool config (the tool must be the command's program, through ``uv run``,
+  ``python -m``, ``npx`` and the like, never an argument such as ``pip install
+  pytest``; coverage.py ``fail_under``, Jest ``coverageThreshold``, Vitest
   ``thresholds``, nyc/c8 ``check-coverage``, JaCoCo, go-test-coverage): an
   enforced CI line must run the tool that reads it. coverage.py: ``pytest`` with
   a ``--cov`` flag (or a pytest ``addopts`` holding one), or ``coverage report``
@@ -59,7 +61,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from lib.check_command import may_lint
+from lib.check_command import _exec_program, _program, may_lint
 from lib.ci_checks import UNREAD_CI_FILES
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
@@ -196,38 +198,55 @@ def _line(gate: Gate) -> int:
     return line if isinstance(line, int) else 0
 
 
-def _names(words: Iterable[str]) -> list[str]:
-    return [w.rsplit("/", 1)[-1] for w in words]
+# Package managers that run a project binary by name (``yarn jest``, ``pnpm vitest``).
+_BIN_RUNNERS = frozenset({"yarn", "pnpm", "bun"})
+_BIN_TOOLS = frozenset({"jest", "vitest", "nyc", "c8"})
+
+
+def program(words: tuple[str, ...]) -> tuple[str, list[str]]:
+    """``(program name, its arguments)`` for one command, through the wrappers
+    ``check_command`` reads (``uv run``, ``poetry run``, ``uvx``, ``npx``, ``python -m``,
+    ``pnpm exec``, ``yarn dlx``) and ``yarn jest`` / ``pnpm vitest``. The name is the
+    basename (``./mvnw`` is ``mvnw``). ``pip install pytest`` names ``pip``, and ``echo
+    pytest --cov`` names ``echo``: a tool named as an argument is not run."""
+    if not words:
+        return "", []
+    run = _exec_program(list(words))
+    rest = _program(run if run is not None else list(words))
+    if rest and rest[0] in _BIN_RUNNERS and len(rest) > 1 and rest[1] in _BIN_TOOLS:
+        rest = rest[1:]
+    if not rest:
+        return "", []
+    return rest[0].rsplit("/", 1)[-1], rest[1:]
 
 
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False) -> bool | None:
-    """Does this command run ``family``'s coverage check? None: it runs the tool, but
+    """Does this command run ``family``'s coverage check? The tool must be the program
+    the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config)."""
-    names = _names(words)
-    flags = set(words)
+    name, args = program(words)
     if family in ("coverage.py", "pytest"):
-        if "pytest" in names or "py.test" in names:
+        if name in ("pytest", "py.test"):
             return (family == "pytest" or pytest_cov
-                    or any(w == "--cov" or w.startswith(("--cov=", "--cov-")) for w in words))
-        return family == "coverage.py" and any(
-            n == "coverage" and i + 1 < len(names) and names[i + 1] in _COVERAGE_REPORTS
-            for i, n in enumerate(names))
+                    or any(w == "--cov" or w.startswith(("--cov=", "--cov-")) for w in args))
+        return (family == "coverage.py" and name == "coverage"
+                and bool(args) and args[0] in _COVERAGE_REPORTS)
     if family in ("jest", "vitest"):
-        if family not in names:
+        if name != family:
             return False
-        if any(w == "--coverage" or w.startswith("--coverage") for w in words) or jest_collects:
+        if any(w.startswith("--coverage") for w in args) or (family == "jest" and jest_collects):
             return True
         return None
     if family == "nyc":
-        return "nyc" in names or "c8" in names
+        return name in ("nyc", "c8")
     if family == "maven-jacoco":
-        return bool({"mvn", "mvnw"} & set(names)) and bool(_MAVEN_PHASES & flags)
+        return name in ("mvn", "mvnw") and bool(_MAVEN_PHASES & set(args))
     if family == "gradle-jacoco":
-        return bool({"gradle", "gradlew"} & set(names)) and any(
-            "jacocoTestCoverageVerification" in w for w in words)
+        return name in ("gradle", "gradlew") and any(
+            "jacocoTestCoverageVerification" in w for w in args)
     if family == "go-test-coverage":
-        return "go-test-coverage" in names
+        return name == "go-test-coverage"
     return False
 
 

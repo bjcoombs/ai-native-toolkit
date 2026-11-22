@@ -164,7 +164,8 @@ _POM_VALUE_RE = re.compile(r"<value>\s*(\w+)\s*</value>")
 _GRADLE_MAXIMUM_RE = re.compile(r"\bmaximum\s*=\s*[^0-9\n]{0,20}?" + _NUM)
 _GRADLE_VALUE_RE = re.compile(r"\bvalue\s*=\s*[\"'](\w+)[\"']")
 # pytest ``addopts`` holding a ``--cov`` flag: a plain ``pytest`` runs coverage.
-_ADDOPTS_COV_RE = re.compile(r"^\s*addopts\s*=.*--cov\b")
+_ADDOPTS_RE = re.compile(r"^\s*addopts\s*=(.*)$")
+_COV_FLAG_RE = re.compile(r"--cov\b")
 _PYTEST_CONFIG_FILES = {"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
 _PYTEST_SECTIONS = {"pytest", "tool:pytest", "tool.pytest.ini_options"}
 _JEST_COLLECTS_RE = re.compile(r"[\"']?collectCoverage[\"']?\s*:\s*true\b")
@@ -650,6 +651,30 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
+def _addopts_cov(lines: list[str]) -> bool:
+    """A pytest ``addopts`` in a pytest config section holds a ``--cov`` flag, on its own
+    line, in a TOML list (``addopts = [`` ... ``]``) or on INI continuation lines."""
+    section = set(_pytest_section_lines(lines))
+    for idx, line in enumerate(lines, 1):
+        match = _ADDOPTS_RE.match(line) if idx in section else None
+        if match is None:
+            continue
+        value = [match.group(1)]
+        listed = match.group(1).strip().startswith("[") and "]" not in match.group(1)
+        for nxt in lines[idx:]:
+            if listed:
+                value.append(nxt)
+                if "]" in nxt:
+                    break
+            elif nxt[:1].isspace() and nxt.strip():
+                value.append(nxt)
+            else:
+                break
+        if any(_COV_FLAG_RE.search(v) for v in value):
+            return True
+    return False
+
+
 def _pytest_section_lines(lines: list[str]) -> list[int]:
     """1-based lines inside a pytest config section (``[pytest]``, ``[tool:pytest]``,
     ``[tool.pytest.ini_options]``), where a flag is ``addopts``, not a task command."""
@@ -730,7 +755,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         if path.name in _PYTEST_CONFIG_FILES:
             pytest_lines.update((rel, n) for n in _pytest_section_lines(lines))
         pytest_cov = pytest_cov or (path.name in _PYTEST_CONFIG_FILES
-                                    and any(_ADDOPTS_COV_RE.match(x) for x in lines))
+                                    and _addopts_cov(lines))
         jest_collects = jest_collects or any(_JEST_COLLECTS_RE.search(x) for x in lines)
     walk_excludes = excludes or (set(), [])
     unmeasured = (GO_RUST_UNMEASURED if not gates
