@@ -78,7 +78,8 @@ def _rewrites(line: str) -> bool:
 # A ``||`` after a ``git diff`` on its line: what follows handles the diff's failure.
 _OR_AFTER_DIFF = re.compile(r"\bgit\s+diff\b[^|]*\|\|(.*)$")
 # A handler that still fails the step: ``|| exit 1``, ``|| (echo x; exit 1)``, ``|| false``.
-_RERAISE = re.compile(r"\bexit\s+(?:[1-9]|\$\?)|\bfalse\b")
+# ``false`` counts only as a command, never inside echoed text (``|| echo "false alarm"``).
+_RERAISE = re.compile(r"\bexit\s+(?:[1-9]|\$\?)|(?:^|[;&|({])\s*false\b")
 
 
 def _diff_gate(line: str) -> bool:

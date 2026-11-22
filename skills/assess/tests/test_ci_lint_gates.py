@@ -69,6 +69,10 @@ def _props(*props: str) -> str:
                  (False, "no_lint_command"), id="REWRITE-DIFF-OR-COMMIT-PUSH"),
     pytest.param(_wf(_step("mix format\ngit diff --quiet || echo changed")),
                  (False, "no_lint_command"), id="REWRITE-DIFF-OR-ECHO"),
+    pytest.param(_wf(_step("mix format\ngit diff --exit-code || echo \"false alarm, ignoring\"")),
+                 (False, "no_lint_command"), id="REWRITE-DIFF-OR-ECHO-FALSE"),
+    pytest.param(_wf(_step("mix format\ngit diff --quiet || false")),
+                 (True, "lint_command"), id="REWRITE-DIFF-OR-FALSE"),
     pytest.param(_wf(_step("mix format\ngit diff --exit-code || (echo 'run mix format'; exit 1)")),
                  (True, "lint_command"), id="REWRITE-DIFF-OR-EXIT-1"),
     pytest.param({".gitlab-ci.yml": "fmt:\n  script:\n    - dart format .\n"
