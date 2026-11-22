@@ -244,7 +244,11 @@ constant each.
 # pointer line per unlinked system. nested_instructions also discovers the
 # Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.41.0"
+# 1.42.0: run-context.json structure_drift is the unavailable marker
+# {"available": false, "reason": "no_ownership_map: ..."} when the repository
+# commits no ownership or boundary map, where it was omitted (issue #908), so the
+# level block reads the same reason as fleet. A scan failure still omits it.
+ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

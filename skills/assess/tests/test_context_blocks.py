@@ -17,7 +17,7 @@ from assess_core_helpers import (
     _seed_assess,
     _write_min_stats,
 )
-from lib import context_blocks, core_scans
+from lib import context_blocks, core_scans, headless_layers
 
 
 def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
@@ -425,12 +425,12 @@ def test_pruned_finding_paths_block_empty_without_dead_paths(git_repo) -> None:
 
 # --- structure_drift block (Tier 0 + Tier 1 orchestration) -------------------
 
-def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
-    """A repo with no CODEOWNERS / boundary doc emits no structure_drift block.
+def test_structure_drift_block_is_the_no_ownership_map_marker_without_one(git_repo) -> None:
+    """A repo with no CODEOWNERS / boundary doc gets the headless runner's marker (#908).
 
-    Tier 0 degrades to "no ownership map", so the orchestrator omits the block
-    entirely rather than emitting a half-block - the contract that absence means
-    "nothing to drift against", never "no drift".
+    Tier 0 degrades to "no ownership map": the block is the bare unavailable
+    marker, never a half-block, and the level reads ``no_ownership_map`` as fleet
+    does, not ``block_absent``.
     """
     repo, commit = git_repo
     _seed_assess(repo)
@@ -438,6 +438,20 @@ def test_structure_drift_block_omitted_without_ownership_map(git_repo) -> None:
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-28")
+    assert ctx["structure_drift"] == headless_layers.structure_drift(repo) == {
+        "available": False, "reason": "no_ownership_map: no supported ownership or boundary map"}
+    layer_4 = next(c for c in ctx["level"]["conditions"] if c["id"] == "layer-4-architecture.1")
+    assert (layer_4["state"], layer_4["reason"]) == ("not_measured", "no_ownership_map")
+
+
+def test_structure_drift_block_omitted_when_the_scan_raises(git_repo, monkeypatch) -> None:
+    """A scan failure still omits the block: it is not relabelled ``no_ownership_map``."""
+    def boom(*_args: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(context_blocks, "_structure_drift_block", boom)
+    ctx: dict[str, object] = {}
+    context_blocks.attach_structure_drift(ctx, git_repo[0], {"available": False})
     assert "structure_drift" not in ctx
 
 

@@ -57,6 +57,7 @@ REASON_WORDS = {
     "no_value": "no value read",
     "type_mismatch": "value of another type",
     "no_remote": "no remote",
+    "no_ownership_map": "no ownership map",
     "scan_failed": "scan did not complete",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.

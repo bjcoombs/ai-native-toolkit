@@ -63,7 +63,7 @@ from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
 from lib.level_tally import DEFAULT_BLOCKS
-from lib.merged_sample import merged_sample
+from lib.merged_sample import merged_sample, offline_merged_sample
 from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
 from lib.review_automation import review_evidence, scan_review_automation
@@ -443,14 +443,16 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("config_drift", scan_config_drift, ("repo_root",), STAGE_READ_SIDE, network=True),
     # The shared sample of merged changes (#715): up to 30 merged in the run
     # window, newest merge first. Private; review_reality and delivery read it,
-    # so one listing serves both and they describe the same changes.
+    # so one listing serves both and they describe the same changes. Offline it reads
+    # the remote only: no_remote with none, else network (#908).
     ScanSpec("merged_sample", merged_sample, ("repo_root", "history_window", "run_date"),
-             STAGE_READ_SIDE, private=True, network=True),
+             STAGE_READ_SIDE, private=True, network=True, offline_fn=offline_merged_sample),
     # Every sampled GitLab merge request's notes, read once, kept as facts (#716).
     ScanSpec("gitlab_note_facts", gitlab_note_facts, ("merged_sample", "fleet_config"),
              STAGE_READ_SIDE, private=True, network=True),
+    # Offline the sample is a reason, which the block passes through (#908).
     ScanSpec("review_reality", review_reality_from_sample, ("merged_sample", "gitlab_note_facts"),
-             STAGE_READ_SIDE, network=True),
+             STAGE_READ_SIDE, network=True, offline_fn=review_reality_from_sample),
     # Delivery figures (#715): time to merge, first human comment, AI review;
     # review_reality's approved and self-merged shares are copied, not recomputed.
     ScanSpec("delivery", scan_delivery,

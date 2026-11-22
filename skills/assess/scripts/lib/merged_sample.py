@@ -59,8 +59,11 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 from lib.fleet_activity import window_start
-from lib.gh_cli import GhUnavailable, GithubRepo, gh_api, gh_json, open_github, unavailable
-from lib.gitlab_cli import GitlabProject, glab_api, open_gitlab
+from lib.gh_cli import (
+    NETWORK_REASON, GhUnavailable, GithubRepo, gh_api, gh_json, git_remote_url, open_github,
+    parse_github_remote, unavailable,
+)
+from lib.gitlab_cli import GitlabProject, glab_api, open_gitlab, parse_remote
 
 # Changes in the sample: the most recently merged in the window.
 SAMPLE_CAP = 30
@@ -237,3 +240,22 @@ def merged_sample(repo_root: Path, history_window: str | None, run_date: str) ->
         return MergedSample("github", tuple(github_changes(repo, since)), since, github=repo)
     except GhUnavailable as e:
         return unavailable(e.reason)
+
+
+NO_REMOTE_REASON = "no_remote: no GitHub or GitLab remote to read merged changes from"
+
+
+def offline_merged_sample(repo_root: Path, history_window: str | None, run_date: str) -> SampleOrReason:
+    """The ``merged_sample`` value of a headless run without ``--platform`` (#908).
+
+    Pure git, no ``gh`` or ``glab``. A repository with no remote, or one whose
+    URL neither parser reads, gets ``no_remote``: :func:`merged_sample` reaches
+    the same answer (``open_gitlab`` returns None, ``open_github`` raises
+    ``no_remote``), so ``/assess``, fleet and ``fleet --platform`` give one
+    reason. Any other remote needs the platform to read: ``network``.
+    """
+    del history_window, run_date  # the offline value reads the remote only
+    url = git_remote_url(repo_root)
+    if url is None or (parse_github_remote(url) is None and parse_remote(url) is None):
+        return unavailable(NO_REMOTE_REASON)
+    return unavailable(NETWORK_REASON)

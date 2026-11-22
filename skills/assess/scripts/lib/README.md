@@ -828,9 +828,12 @@ worst first, capped at `MAX_ACCRETION_FILES` (12); `accretion_lookup` gives the 
 pages a per-path view of the same scan. `excluded_generated` and `generated_exclusion`
 read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
 0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
-Tier 1 counts `keyhole_signals` computed, omitting the block when no ownership map
-exists; `structure_drift_tier_0` builds the same block with Tier 1 unavailable, or
-None with no map, for the headless runner (`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+Tier 1 counts `keyhole_signals` computed. With no ownership map the block is
+`no_ownership_map()`, the bare marker the headless runner writes too (reason
+`NO_OWNERSHIP_MAP_REASON`, #908), so `/assess` and fleet give the level the same
+reason; a raising scan still omits the block. `structure_drift_tier_0` builds the
+same block with Tier 1 unavailable, or None with no map, for the headless runner
+(`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
@@ -929,7 +932,9 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
-both providers), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
+both providers; defined in `gh_cli.py`, re-exported here). Offline, `merged_sample`
+runs `offline_merged_sample` and `review_reality` passes that value through, so a
+repository with no remote reads `no_remote` as `/assess` and `--platform` do (#908), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
 out of the document offline: absent, never a placeholder. `platform_only_error` makes
 `assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
 `offline_scans` strips those names from the `--scans` of a fleet run's offline child
@@ -973,9 +978,9 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
 `code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
-and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
-map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
-lizard's languages only. Tests:
+and a maturity model row reads `unknown`. No ownership map reads `no_ownership_map`,
+the same marker the full run writes (`context_blocks.no_ownership_map`, #908). It
+diverges from the full run in one place: `stats_summary` covers lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
 **`headless_static.py`**
@@ -3043,7 +3048,11 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+blocks and they describe the same changes. Its `offline_fn`, `offline_merged_sample`
+(a headless run without `--platform`, #908), reads the remote with git only: no
+remote, or a URL neither `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote`
+reads, is `NO_REMOTE_REASON` (`no_remote`, the answer the full read reaches), and any
+other remote is `NETWORK_REASON`. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
