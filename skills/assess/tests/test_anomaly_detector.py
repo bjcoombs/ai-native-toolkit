@@ -42,6 +42,12 @@ def test_zero_files_scored() -> None:
     assert "ZERO_FILES_SCORED" in {a.code for a in anomalies}
 
 
+def test_no_stats_sidecar_is_named_not_counted_as_zero() -> None:
+    anomalies = detect_anomalies(_ctx(stats_summary={"files_scored": None}))
+    zero = [a for a in anomalies if a.code == "ZERO_FILES_SCORED"]
+    assert len(zero) == 1 and zero[0].detail == "files_scored=null"
+
+
 def test_zero_complexity_with_files() -> None:
     anomalies = detect_anomalies(_ctx(stats_summary={
         "files_scored": 50, "ccn": {"p50": 0, "p95": 0, "max": 0},

@@ -201,6 +201,8 @@ def fold_counter(lines: list[str], name: str, notes: list[Note], release: str, n
         insert = closing[0]
     start, end = match.span("value")
     assigned = lines[at][:start] + new + lines[at][end:]
+    if not counter.assignment.match(assigned):
+        raise FoldError(f"--set {name}={new} is not a value {name} takes ({counter.assignment.pattern})")
     return lines[:insert] + entry + lines[insert:at] + [assigned] + lines[at + 1:]
 
 
@@ -213,6 +215,9 @@ def fold(root: Path, release: str, date: datetime.date, overrides: dict[str, str
     by_counter: dict[str, list[Note]] = {}
     for note in notes:
         by_counter.setdefault(note.counter, []).append(note)
+    unused = sorted(set(overrides) - set(by_counter))
+    if unused:
+        raise FoldError(f"--set names counters with no notes to fold: {', '.join(unused)}")
     texts: dict[Path, list[str]] = {}
     for name, group in by_counter.items():
         path = COUNTERS[name].path

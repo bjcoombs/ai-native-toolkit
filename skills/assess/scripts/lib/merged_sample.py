@@ -67,7 +67,10 @@ and the two blocks never disagree about who is a bot. A remote that is not
 GitHub or GitLab, a missing or logged-out CLI, or any refused or malformed
 listing returns ``{"available": False, "reason"}`` (``no_access`` on 403,
 ``not_found`` on 404), which each reader passes through as its own block;
-a refusal is never an empty sample.
+a refusal is never an empty sample. A remote on a host neither read supports
+(Bitbucket, Azure DevOps, or a host glab does not reach: GitHub Enterprise, an
+unsigned GitLab) is ``unsupported_host``, never ``network``: no scan option reads it
+as things stand. For a GitLab host the remedy is glab, so the reason sentence says so.
 
 The value holds titles, logins and comment text in memory only. It is private:
 no run-context block, counts-only document or fleet row carries it. Nor does
@@ -84,12 +87,17 @@ blocks and they describe the same changes; the private `external_ci` spec (#928)
 too. Both reads classify the remote with
 `remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
 `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
-`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
-`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
-without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
-`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
-`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
-so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
+`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`,
+`unsupported` (a `UNSUPPORTED_HOSTS` host: Bitbucket, Azure DevOps, Codeberg, Gitea,
+or a `*.visualstudio.com` host), or `platform` (any other host). Its `offline_fn`,
+`offline_merged_sample` (a headless run without `--platform`), gives `NO_REMOTE_REASON`
+(`no_remote`) for `none`, `UNSUPPORTED_HOST_REASON` (`unsupported_host`) for `unsupported`
+and `NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too,
+`unsupported_host` for `unsupported` without probing glab, and `unsupported_host` for a
+`platform` host that glab does not reach (GitHub Enterprise, a GitLab glab is not signed in
+to): no scan option reads it, so the tally names the host limit instead of `needs_platform`
+and its advice never says to rerun with `--platform` (#959). A `platform` host reads
+`network` offline because only the platform pass can settle it. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub: `gh pr list --repo <slug> --state merged
@@ -384,14 +392,18 @@ def merged_sample(repo_root: Path, history_window: str | None, run_date: str) ->
     """The ``merged_sample`` registry value (see the module docstring)."""
     since = sample_since(history_window, run_date)
     try:
+        kind = remote_kind(git_remote_url(repo_root))
+        if kind == "unsupported":  # no read supports the host: never probe glab for it
+            return unavailable(UNSUPPORTED_HOST_REASON)
         project = open_gitlab(repo_root)
         if project is not None:
             mrs, size = gitlab_changes(project, since)
             return MergedSample("gitlab", tuple(mrs), since, gitlab=project, page_size=size)
-        if remote_kind(git_remote_url(repo_root)) == "platform":
-            # A host that is neither GitHub nor a GitLab glab reaches: the remote
-            # exists, so this is a platform gap, as the offline read says (#908).
-            return unavailable(UNREACHED_HOST_REASON)
+        if kind == "platform":
+            # A host that is neither GitHub nor a GitLab glab reaches (GitHub
+            # Enterprise, a GitLab glab is not signed in to): the platform pass
+            # cannot read it either, so the reason names the host limit (#959).
+            return unavailable(UNSUPPORTED_HOST_REASON)
         repo = open_github(repo_root)
         prs, read_at = github_changes(repo, since)
         return MergedSample("github", tuple(prs), since, github=repo, page_size=read_at)
@@ -400,10 +412,18 @@ def merged_sample(repo_root: Path, history_window: str | None, run_date: str) ->
 
 
 NO_REMOTE_REASON = "no_remote: no GitHub or GitLab remote to read merged changes from"
-UNREACHED_HOST_REASON = ("network: the remote's host is not GitHub, and glab does not reach it "
-                         "as a GitLab host")
+UNSUPPORTED_HOST_REASON = ("unsupported_host: the remote's host is not GitHub or a GitLab host glab "
+                           "reaches; merged changes are read from GitHub and GitLab only (if the "
+                           "host is a GitLab, install glab and sign it in to the host)")
 
-RemoteKind = Literal["none", "github", "platform"]
+# Hosts no merged-changes read supports, known from the URL alone (#959). Any other
+# non-GitHub host may be a self-managed GitLab, which only a glab probe settles.
+UNSUPPORTED_HOSTS = frozenset({
+    "bitbucket.org", "dev.azure.com", "ssh.dev.azure.com", "codeberg.org", "gitea.com",
+})
+UNSUPPORTED_HOST_SUFFIXES = (".visualstudio.com",)
+
+RemoteKind = Literal["none", "github", "platform", "unsupported"]
 
 
 def remote_kind(url: str | None) -> RemoteKind:
@@ -411,8 +431,10 @@ def remote_kind(url: str | None) -> RemoteKind:
 
     ``github``: a URL ``parse_github_remote`` reads. ``none``: no URL, one neither
     parser reads, or a GitHub host whose path ``parse_github_remote`` rejects;
-    :func:`merged_sample` ends at ``no_remote`` for each. ``platform``: any other
-    host, a GitLab candidate only a ``glab`` probe can settle.
+    :func:`merged_sample` ends at ``no_remote`` for each. ``unsupported``: a
+    host in ``UNSUPPORTED_HOSTS`` (Bitbucket, Azure DevOps, ...), which no read
+    supports. ``platform``: any other host, a GitLab candidate only a ``glab``
+    probe can settle.
     """
     if url is None:
         return "none"
@@ -421,6 +443,9 @@ def remote_kind(url: str | None) -> RemoteKind:
     parsed = parse_remote(url)
     if parsed is None or parsed[0] in GITHUB_HOSTS:
         return "none"
+    host = parsed[0].split(":", 1)[0]
+    if host in UNSUPPORTED_HOSTS or host.endswith(UNSUPPORTED_HOST_SUFFIXES):
+        return "unsupported"
     return "platform"
 
 
@@ -429,12 +454,15 @@ def offline_merged_sample(repo_root: Path, history_window: str | None, run_date:
 
     Pure git, no ``gh`` or ``glab``. A :func:`remote_kind` of ``none`` gets
     ``no_remote``, the answer :func:`merged_sample` reaches (``open_gitlab``
-    returns None, ``open_github`` raises ``no_remote``). Any other remote needs
-    the platform to read: ``network``, the code :func:`merged_sample` also gives
-    a host glab does not reach. So ``/assess``, fleet and ``fleet --platform``
-    give one reason for one remote.
+    returns None, ``open_github`` raises ``no_remote``). An ``unsupported`` host
+    gets ``unsupported_host``, as the full read does, so the advice never says to
+    rerun with ``--platform`` for a host it cannot read (#959). Any other remote
+    needs the platform to settle: ``network``.
     """
     del history_window, run_date  # the offline value reads the remote only
-    if remote_kind(git_remote_url(repo_root)) == "none":
+    kind = remote_kind(git_remote_url(repo_root))
+    if kind == "none":
         return unavailable(NO_REMOTE_REASON)
+    if kind == "unsupported":
+        return unavailable(UNSUPPORTED_HOST_REASON)
     return unavailable(NETWORK_REASON)
