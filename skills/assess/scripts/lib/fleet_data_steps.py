@@ -23,8 +23,14 @@ average and no repository named):
   in model order and with zero counts kept, gives ``held``: the repositories the gate holds
   back, and of those ``not_measured`` (the gate's condition could not be measured) and
   ``excluded`` (the owner excluded it, so the Step stays unreached while the exclusion
-  stands). ``below_threshold`` counts the held repositories whose met tally is below the
+  stands). A gate condition that is ``unmet``, or ``not_applicable`` through a
+  ``requires:<id>`` on an excluded condition, counts in ``held`` and in neither
+  sub-count, so ``held`` minus the two is not always "unmet". ``below_threshold`` counts the held repositories whose met tally is below the
   Step's ``threshold``.
+
+Exclusions apply where the fleet's model shares condition ids with the default model:
+``.assess/config.toml`` entries are checked against the default model, and the engine
+ignores an id the ``--levels`` model does not define.
 
 Every count comes from the level results, so the page computes no Step.
 """

@@ -988,11 +988,13 @@ diverges from the full run in one place: `stats_summary` covers lizard's languag
 `tests/test_headless_layers.py`.
 
 **`headless_static.py`**
-The headless runner's entries for the four static blocks the core publishes from
+The headless runner's entries for the five static blocks the core publishes from
 `core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
 directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
 `doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
-doc->code edges; needs a git work tree: `not_git_root`) and `archetype`. A scan that
+doc->code edges; needs a git work tree: `not_git_root`), `archetype` and `owner_exclusions`
+(#944: `owner_exclusions.owner_exclusions_block`, so a fleet row's level applies the
+owner's exclusions). A scan that
 raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
 maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
 `signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
@@ -2207,8 +2209,10 @@ entries with a `PROBLEMS` code (`not_a_list` for a `[checks]` or `exclude` of th
 `unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
 line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
 reads the repository's config and warns on stderr per skipped entry; never raises. A
-`scan_registry` entry (`core_scans.owner_exclusions`), core-only, so the headless runner and
-`/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
+`scan_registry` entry (`core_scans.owner_exclusions`); the headless runner reports it too
+(`headless_static.owner_exclusions`, #944), so `/fleet` applies a repository's own exclusions
+in `level.json` and `fleet-data.json`. Fleet-wide `--fleet-config` exclusions wait on the
+method stamp (#952). Counts-only keeps
 ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 
 **`interactivity.py`**
@@ -2626,8 +2630,10 @@ The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocke
 import cycle. Tests: `tests/test_level_tally.py`.
 
 **`fleet_level.py`**
-`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
-over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `repo_level`
+(`level_tally.level_result` with the owner exclusions of the row's `owner_exclusions` scan,
+`level_tally.run_exclusions`, #944; `fleet_data.step_fields` calls it too) over each scanned
+row's `scans` (a failed row has no entry), keyed by repository id, in an
 envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
 plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a

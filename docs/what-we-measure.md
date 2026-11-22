@@ -491,6 +491,18 @@ Each doc's last content change against its code subject's churn, following renam
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `owner_exclusions`: Owner exclusions
+
+The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.
+
+- Collector: `core.owner_exclusions`, reading `repo_root`.
+- Network: no.
+- Headless: reported by headless and fleet runs (built by the headless runner's own scan).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
 ### `diff`: Run header: diff
 
 - Collector: `core.run_header`, reading `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized`.

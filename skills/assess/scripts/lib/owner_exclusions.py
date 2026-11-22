@@ -30,9 +30,10 @@ list (a single inline table, say), is one skipped entry with index 0 and code
 ``lib.level_tally`` reads the exclusions in force: an excluded condition reads
 ``not_applicable`` with ``disposition: excluded_by_owner``, leaves the
 denominator, never earns, and never holds a Step gate, so the Step it gates
-stays unreachable while it is excluded (#744 decision). The fleet side
-(``--fleet-config``) waits on the method stamp (#952), so this reads the
-repository's own file only.
+stays unreachable while it is excluded (#744 decision). The headless runner
+reports this block too (``lib.headless_static``), so ``/fleet`` applies a
+repository's own exclusions (#944). Fleet-wide exclusions (``--fleet-config``)
+wait on the method stamp (#952), so this reads the repository's own file only.
 """
 from __future__ import annotations
 
