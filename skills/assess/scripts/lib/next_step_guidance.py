@@ -334,6 +334,13 @@ _WORDING: dict[str, Wording] = {
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
         "lint command, is not masked and runs on ordinary changes "
         "(`ci_checks.masked_check_commands` and `off_trigger_check_commands` count the others)."),
+    "ci_checks.lint_runs": _flag(
+        "Run a linter or type checker in CI so a finding fails the job: a GitHub Actions or "
+        "`.gitlab-ci.yml` step that calls it (`ruff check .`, `npx eslint .`, `mypy src`, "
+        "`golangci-lint run`, `make lint`) on pull requests or pushes, without `|| true`, "
+        "`continue-on-error` or `allow_failure`.",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a linter "
+        "command (`ruff check .`, `eslint`, `mypy`, `make lint`), not only `--version`."),
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,
@@ -430,8 +437,17 @@ _MEASURE_HINTS = {
                  "(`enforced_basis: unknown_trigger`: no `on:` key, a `workflow_call` nobody "
                  "calls, a GitLab `rules: if:` on a custom variable): say when the workflow "
                  "runs, by adding `push` or `pull_request` triggers (or a merge request rule). "
+                 "It is unknown too when no GitHub Actions or GitLab CI line runs a check but "
+                 "the repository commits a Jenkins, CircleCI, Azure Pipelines, Bitbucket "
+                 "Pipelines, Travis CI or Buildkite file (`basis: unread_ci_system`, "
+                 "`unread_ci_files` counts them): the scanner cannot read those systems, so "
+                 "their checks are not measured; nothing in the repository needs to change. "
                  "A scan stored before `enforced_check_runs` existed has no such key: re-run "
-                 "the scan to measure it.",
+                 "the scan to measure it. `lint_runs` (Layer 3) is unknown for the same "
+                 "reasons, and when no CI line calls a linter but one runs a check target "
+                 "or script that may (`lint_basis: check_target`: `make check`, `npm test`, "
+                 "`tox`, `pre-commit run`): the scan does not read recipes, so call the "
+                 "linter in its own CI step (`ruff check .`, `make lint`) to measure it.",
     "coverage_gate": "The `coverage_gate` scan reads the threshold unknown when none of at "
                      "least 50 percent is committed but a gate's threshold is not a readable "
                      "percentage: a variable (`--cov-fail-under=${{ env.COV_MIN }}`), an nyc/c8 "

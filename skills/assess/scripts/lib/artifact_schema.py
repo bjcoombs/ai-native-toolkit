@@ -219,13 +219,21 @@ constant each.
 # 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-# 1.37.0: run-context.json gains the headline block (issue #747): the Step, its next
+# 1.37.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
+# #782): whether an unmasked CI line on ordinary triggers runs a linter (null
+# when a check target or script may lint inside it). Additive: no existing
+# key moves, and complexity-stats.json is unchanged.
+# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
+# system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+# 1.39.0: run-context.json gains the headline block (issue #747): the Step, its next
 # unlock and "Verified practices: N of M measured" worded from the level block
 # (lib/headline.py); badge.json carries its summary (the Step and the tally) instead
 # of the findings count, and the log.md entry's readiness line is that summary, with
 # no layered score. finalize-input.json drops score, maturity_label and denominator,
 # and an action may carry a condition id. Additive to run-context.json.
-ARTIFACT_SCHEMA_VERSION = "1.37.0"
+ARTIFACT_SCHEMA_VERSION = "1.39.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -364,8 +372,17 @@ ARTIFACT_SCHEMA_VERSION = "1.37.0"
 #     or person never does. The same matcher serves ``delivery`` and the GitLab
 #     note classifier (``gitlab_notes``) under --platform, so a confirmed account
 #     moves their agent counts too. Without the section nothing changes.
-# 32: the displayed headline changes (issue #747): the layered "X / 8" score and
+# 32: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
+#     in CI, not a suppression comment. One suppression comment no longer earns the row,
+#     and a clean repository that lints in CI reads at least 1 where it was
+#     unknown, so the Layer 3 row can move.
+# 33: a repository with no readable CI check whose tree tracks a CI file of a
+#     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
+#     Bitbucket Pipelines, Travis CI, Buildkite) reads
+#     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
+#     its Layer 5 row moves from level 0 to unknown (issue #787).
+# 34: the displayed headline changes (issue #747): the layered "X / 8" score and
 #     its band names are retired for the deterministic Step, its next unlock and
 #     "Verified practices: N of M measured"; the badge and the log.md entry carry
 #     the Step and the tally, and the scorer returns per-layer verdicts only.
-ASSESS_METHOD_VERSION = 32
+ASSESS_METHOD_VERSION = 34
