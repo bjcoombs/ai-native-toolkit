@@ -25,8 +25,10 @@ Both are read with ``cache=False``: check-run output and status descriptions
 are free text, and they stay in memory. Only two counts leave this module.
 
 The allowlist (``lib/external_ci_rules.py``). A change carries a known external CI
-system when a check run's app slug is in ``EXTERNAL_CI_APPS``, or a status context equals or starts with
-an entry of ``EXTERNAL_CI_CONTEXTS`` (case-insensitive). An app or context that
+system when a check run's app slug is in ``EXTERNAL_CI_APPS``, or a status context
+equals an entry of ``EXTERNAL_CI_CONTEXTS`` or is the entry followed by a separator
+(``/``, ``:``, a space or ``-``; case-insensitive), so ``tide`` never matches
+``tidelift``. An app or context that
 is on neither list (``github-actions``, ``codecov``, ``coderabbitai``, a CLA
 bot) is not CI evidence and changes nothing.
 
