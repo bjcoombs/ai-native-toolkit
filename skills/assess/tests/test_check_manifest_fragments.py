@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from lib import check_manifest as cm
+from lib.check_validation import ValidationError
 
 ROOT = ('manifest_version = 1\nowner = "core"\nfragments = [{names}]\n')
 SCAN_A = '''[[entries]]
@@ -177,3 +178,70 @@ def test_the_core_manifest_is_one_fragment_per_collector() -> None:
     on_disk = sorted(p.stem for p in cm.CORE_MANIFEST.with_suffix("").glob("*.toml"))
     assert on_disk == sorted(listed)
     assert root["entries"] == m["entries"]
+
+
+SIGNAL_A = SCAN_A[SCAN_A.index('[[entries]]\nid = "core:scan_a.flag"'):SCAN_A.index('[[entries]]\nid = "core.cond')]
+CONDITION_A = SCAN_A[SCAN_A.index('[[entries]]\nid = "core.cond'):]
+FINDING_B = SCAN_B[SCAN_B.index('[[entries]]\nid = "core.finding.thing"'):]
+
+
+def _owner_errors(root: Path) -> list[ValidationError]:
+    with pytest.raises(cm.CheckManifestError) as info:
+        cm.load_manifest(root)
+    return [e for e in info.value.errors if e["code"] == "FRAGMENT_OWNER"]
+
+
+@pytest.mark.parametrize(("moved", "into", "entry_id", "expected"), [
+    (SIGNAL_A, "scan_b", "core:scan_a.flag", "core/scan_a.toml"),
+    (FINDING_B, "scan_a", "core.finding.thing", "core/scan_b.toml"),
+], ids=["signal", "finding"])
+def test_an_entry_in_the_wrong_fragment_fails_with_fragment_owner(
+        tmp_path: Path, moved: str, into: str, entry_id: str, expected: str) -> None:
+    fragments = {"scan_a": SCAN_A.replace(moved, ""), "scan_b": SCAN_B.replace(moved, "")}
+    fragments[into] += "\n" + moved
+    [error] = _owner_errors(_layout(tmp_path, fragments))
+    assert error["path"] == f"core/{into}.toml"
+    assert entry_id in error["message"] and expected in error["message"]
+
+
+def test_a_condition_belongs_with_the_signal_it_reads(tmp_path: Path) -> None:
+    root = _layout(tmp_path, {"scan_a": SCAN_A.replace(CONDITION_A, ""),
+                              "scan_b": SCAN_B + "\n" + CONDITION_A})
+    [error] = _owner_errors(root)
+    assert "core.cond.row-a.1.flag" in error["message"] and "core/scan_a.toml" in error["message"]
+
+
+def test_a_finding_whose_first_input_is_a_scan_key_belongs_to_that_collector(tmp_path: Path) -> None:
+    private_b = SCAN_B.replace('publishes = ["scan_b"]', "publishes = []\nprivate = true").replace(
+        'privacy = {"scan_b.reason" = "reason"}\n', "").replace('"scan_b.rows"', '"scan_b"')
+    (tmp_path / "ok").mkdir()
+    (tmp_path / "moved").mkdir()
+    assert cm.load_manifest(_layout(tmp_path / "ok", {"scan_a": SCAN_A, "scan_b": private_b}))
+    moved = {"scan_a": SCAN_A + "\n" + FINDING_B.replace('"scan_b.rows"', '"scan_b"'),
+             "scan_b": private_b[:private_b.index('[[entries]]\nid = "core.finding')]}
+    [error] = _owner_errors(_layout(tmp_path / "moved", moved))
+    assert "core/scan_b.toml" in error["message"]
+
+
+def test_an_unresolvable_owner_is_left_to_validation(tmp_path: Path) -> None:
+    root = _layout(tmp_path, {"scan_a": SCAN_A.replace('collector = "core.scan_a"', 'collector = "core.nope"'),
+                              "scan_b": SCAN_B})
+    assert "FRAGMENT_OWNER" not in _codes(root)
+
+
+def test_the_core_manifest_rejects_a_signal_moved_to_another_collector(tmp_path: Path) -> None:
+    src = cm.CORE_MANIFEST.with_suffix("")
+    (tmp_path / "core").mkdir()
+    (tmp_path / "core.toml").write_text(cm.CORE_MANIFEST.read_text(encoding="utf-8"), encoding="utf-8")
+    texts = {p.name: p.read_text(encoding="utf-8") for p in src.glob("*.toml")}
+    consistency = texts["agent_consistency.toml"]
+    start = consistency.index('[[entries]]\nid = "core:agent_consistency.conflicts"')
+    block = consistency[start:consistency.index("[[entries]]", start + 1)]
+    texts["agent_consistency.toml"] = consistency.replace(block, "")
+    texts["working_notes.toml"] += "\n" + block
+    for name, text in texts.items():
+        (tmp_path / "core" / name).write_text(text, encoding="utf-8")
+    [error] = _owner_errors(tmp_path / "core.toml")
+    assert error["path"] == "core/working_notes.toml"
+    assert "core:agent_consistency.conflicts" in error["message"]
+    assert "core/agent_consistency.toml" in error["message"]

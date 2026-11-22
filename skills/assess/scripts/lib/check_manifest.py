@@ -607,6 +607,41 @@ def _fragment(path: Path, label: str, name: str, owner: Any,
     return entries
 
 
+def _owners(loaded: Sequence[tuple[str, list[Any]]],
+            out: list[ValidationError]) -> None:
+    """``FRAGMENT_OWNER`` for each entry outside the fragment of its owning collector (#994):
+    a signal's ``collector``, a condition's signal (its key after ``:``), a finding's first
+    input (the collector that publishes that block, or the collector with that scan key).
+    An owner that cannot be resolved, or an id declared twice, is left to validation, which
+    names the bad reference or both declarations."""
+    entries = [(label, e) for label, es in loaded for e in es if isinstance(e, dict)]
+    seen = [e.get("id") for _, e in entries]
+    home: dict[str, str] = {}  # collector id, published block, scan key -> fragment label
+    for label, e in entries:
+        if e.get("kind") == "collector" and isinstance(e.get("id"), str):
+            home[e["id"]] = label
+            home.setdefault("." + e["id"].split(".", 1)[-1], label)
+            for block in e.get("publishes", []) if isinstance(e.get("publishes"), list) else []:
+                home.setdefault(f"block:{block}", label)
+    signal_home = {e["path"]: home[e["collector"]] for _, e in entries
+                   if e.get("kind") == "signal" and isinstance(e.get("path"), str)
+                   and isinstance(e.get("collector"), str) and e["collector"] in home}
+    for label, e in entries:
+        kind, expected = e.get("kind"), None
+        if kind == "signal" and isinstance(e.get("collector"), str):
+            expected = home.get(e["collector"])
+        elif kind == "condition" and isinstance(e.get("key"), str) and ":" in e["key"]:
+            expected = signal_home.get(e["key"].split(":", 1)[1])
+        elif kind == "finding" and isinstance(e.get("inputs"), list) and e["inputs"] \
+                and isinstance(e["inputs"][0], str):
+            first = e["inputs"][0].split(".")[0]
+            expected = home.get(f"block:{first}") or home.get(f".{first}")
+        if expected is not None and expected != label and seen.count(e.get("id")) == 1:
+            out.append(finding(label, "FRAGMENT_OWNER",
+                               f"{e.get('id')!r} belongs in {expected}, the fragment of its "
+                               f"collector, not {label}"))
+
+
 def _read(path: Path) -> tuple[dict[str, Any], list[str]]:
     """The parsed document, fragments merged, and each entry's origin label."""
     data = _toml(path, "manifest")
@@ -631,6 +666,8 @@ def _read(path: Path) -> tuple[dict[str, Any], list[str]]:
     for extra in sorted({p.stem for p in folder.glob("*.toml")} - set(names)):
         out.append(finding(f"{folder.name}/{extra}.toml", "UNLISTED_FRAGMENT",
                            f"fragment {extra!r} is not in {path.name} fragments, so it would not load"))
+    if not out:
+        _owners(loaded, out)
     if out:
         raise CheckManifestError(path.as_posix(), out)
     placed = [(_merge_kind(entry), f"{label} entries[{j}]", entry)
