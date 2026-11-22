@@ -317,6 +317,8 @@ def may_lint(text: str) -> bool:
         return False
     if program[0] in _DIRECT_TESTS or PurePosixPath(program[0]).name in TEST_PROGRAMS:
         return False
+    if program[0] == "php" and _toolchain_test(program):   # php artisan test, php phpunit
+        return False
     if PurePosixPath(program[0]).name in _TEST_ONLY_SUBCOMMANDS:   # dotnet test, mix test: tests only
         return _positionals(program[1:])[:1] != ["test"]
     if program[0] in ("go", "cargo", "bun"):   # go test, cargo test, bun test: built-in runners
@@ -366,7 +368,10 @@ _NX_TARGET_FLAGS = ("-t", "--target", "--targets")
 _GRADLE = frozenset({"gradle", "gradlew", "./gradlew"})
 # A Gradle test task: ``test``, ``testDebugUnitTest``, ``:app:testReleaseUnitTest``,
 # ``connectedAndroidTest`` (Android variants and instrumented tests).
-_GRADLE_TEST = re.compile(r"^(?!compile)(?:test[A-Z0-9]\w*|\w*Test)$")
+# Build-only tasks that compile, package or install the tests without running them
+# (``assembleAndroidTest``, ``compileTestJava``, ``testClasses``) are not.
+_GRADLE_TEST = re.compile(
+    r"^(?!compile|assemble|bundle|package|install)(?:test[A-Z0-9]\w*|\w*Test)$")
 # xcodebuild options that take a value (``-scheme App``); its actions are bare words.
 _XCODE_FLAGS = frozenset({
     "-scheme", "-project", "-workspace", "-destination", "-configuration", "-sdk", "-target",

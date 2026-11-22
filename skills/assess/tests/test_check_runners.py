@@ -34,7 +34,7 @@ _ISSUE_RUNNERS = [
     "bin/test", "bin/rails test", "flutter test", "xcodebuild test -scheme App",
     "xcodebuild -workspace App.xcworkspace -scheme App -destination 'platform=iOS' test",
     "dart test", "php artisan test", "docker compose run --pull always app pytest",
-    "nx run app:test:ci", "php vendor/bin/phpunit", "./gradlew testDemoDebug",
+    "nx run app:test:ci", "nx run app:test:production", "./gradlew connectedDebugAndroidTest", "php vendor/bin/phpunit", "./gradlew testDemoDebug",
 ])
 def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
     assert check_verdict(text) is True
@@ -69,7 +69,9 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     # container is read by its entrypoint, and a detached one cannot fail its step.
     "./ci/deploy.sh", "bash ci/deploy.sh", "test-results/junit.xml", "coverage/lcov.info", "scripts/foo",
     "docker run -v a:b img ./scripts/deploy.sh", "./gradlew testClasses",
-    "./gradlew compileTestJava", "docker run -d img pytest", "docker compose run -d app pytest",
+    "./gradlew compileTestJava", "./gradlew assembleAndroidTest",
+    "./gradlew assembleDebugAndroidTest", "./gradlew bundleDebugAndroidTest",
+    "./gradlew installDebugAndroidTest", "nx run app:build:test", "docker run -d img pytest", "docker compose run -d app pytest",
     "docker run --entrypoint echo img pytest", "npm ci", "uv sync --extra test",
     "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",
@@ -90,6 +92,7 @@ def test_a_wrapper_is_read_by_the_program_it_runs_for_lint(text: str, lint: bool
 @pytest.mark.parametrize(("text", "maybe"), [
     # Direct test programs run tests only: Layer 3 reads no linter in them.
     ("dotnet test", False), ("swift test", False), ("mix test", False), ("deno test", False),
+    ("php artisan test", False), ("php vendor/bin/phpunit", False),
     ("hatch test", False), ("flutter test", False), ("bin/rails test", False), ("ctest", False), ("vendor/bin/phpunit", False),
     ("bundle exec rspec", False), ("docker compose run app pytest", False),
     ("pnpm exec vitest run", False),
