@@ -56,3 +56,17 @@ class LevelResult(TypedDict):
     conditions: list[ConditionResult]
     step: int | None  # None: the model defines no Steps
     next_step: NextStep | None  # None: no Steps, or the top Step is held
+
+
+class Headline(TypedDict):
+    """The run context's ``headline`` block (``lib/headline.py``, #747)."""
+
+    headline_version: int
+    available: bool
+    levels_version: str | None
+    step: int | None  # None: not measured, or the model defines no Steps
+    next_step: int | None  # None: at the top Step, no Steps, or not measured
+    lines: list[str]
+    markdown: str  # the lines as Markdown, pasted verbatim into the report
+    summary: str  # the one-line form: badge message and log entry
+    reason: NotRequired[str]  # why the headline is unavailable

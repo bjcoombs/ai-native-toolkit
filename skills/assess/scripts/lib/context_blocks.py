@@ -335,7 +335,7 @@ def attach_keyhole_blocks(ctx: dict[str, Any], keyhole: KeyholeIntegration) -> N
     ctx["attention_low_signal"] = keyhole["attention_low_signal"]
     # Deterministic report-skeleton products (assess-dogfooded Part 1): the
     # pre-rendered findings section the LLM copies verbatim, the keyhole
-    # readiness summary reported alongside (never merged into) the 0-8 score, and
+    # readiness summary reported beside (never merged into) the headline, and
     # the mandatory attention-derived Top-3 actions.
     ctx["findings_markdown"] = keyhole["findings_markdown"]
     ctx["keyhole_summary"] = keyhole["keyhole_summary"]

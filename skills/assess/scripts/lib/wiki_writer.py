@@ -85,8 +85,9 @@ class HotspotEntry:
 class LogEntry:
     run_date: str
     files_scored: int
-    readiness_score: float
-    maturity_label: str
+    # The run's deterministic headline summary (lib/headline.py, #747):
+    # "Step 3 · 4 of 4 measured". Written by the core, never by the LLM.
+    readiness: str
     # Optional[str]: None means no instruction file was found at any known
     # location (the schema convention in CLAUDE.md). The log template renders it
     # via str.format, so a None prints as "None" - unchanged from prior runtime
@@ -659,8 +660,7 @@ def append_log_entry(assess_dir: Path, entry: LogEntry) -> None:
     snippet = _load_template("log_entry.md.template").format(
         heading=heading,
         files_scored=entry.files_scored,
-        readiness_score=entry.readiness_score,
-        maturity_label=entry.maturity_label,
+        readiness=entry.readiness,
         instructions_grade=entry.instructions_grade,
         graduated_count=entry.graduated_count,
         regressed_count=entry.regressed_count,

@@ -7,6 +7,7 @@ placeholders the LLM fills later through ``assess_finalize``.
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,11 @@ from lib.wiki_state import (
     sweep_superseded_history,
 )
 from lib.wiki_writer import (
+    LOG_PLACEHOLDER,
     UNFINALIZED_ACTIONS_POINTER,
+    find_log_entry,
+    read_log_entries,
+    rewrite_log_entry,
     HotspotEntry,
     LogEntry,
     append_log_entry,
@@ -232,7 +237,7 @@ def write_run_wiki(
     accretion_by_file: dict[str, dict[str, Any]], excluded_unfinalized: list[str],
     excluded_as_generated: Callable[[str], bool], scope_rel: str | None,
     instructions_grade: str | None, plugin_version: str,
-    hot_test_index: TestIndex | None,
+    hot_test_index: TestIndex | None, readiness: str = "Step not measured",
 ) -> RunWiki:
     """Write the hotspot pages, index.md and this run's log.md entry.
 
@@ -287,12 +292,13 @@ def write_run_wiki(
         excluded_as_generated=excluded_as_generated,
     )
 
-    top_action = "Deterministic ranker not yet wired (LLM picks Top 3)"
+    # The Top action is the one placeholder left for finalize (LOG_PLACEHOLDER);
+    # the readiness line is the deterministic headline summary (#747).
+    top_action = LOG_PLACEHOLDER
     log_entry = LogEntry(
         run_date=run_date,
         files_scored=current.get("files_scored", 0),
-        readiness_score=0.0,  # LLM produces the layered score
-        maturity_label="(LLM fills in)",
+        readiness=readiness,
         instructions_grade=instructions_grade,
         graduated_count=len(diff.graduated),
         regressed_count=len(diff.regressed),
@@ -320,3 +326,29 @@ def write_run_wiki(
         log_valid=log_valid,
         log_broken_at=log_broken_at,
     )
+
+
+_READINESS_LINE = re.compile(r"^- \*\*Readiness:\*\* .*$", re.MULTILINE)
+
+
+def refresh_log_readiness(assess_dir: Path, run_id: str | None, readiness: str) -> bool:
+    """Rewrite the readiness line of this run's ``log.md`` entry (#747).
+
+    The opt-in mutation pass recounts the level, so the headline summary the core
+    wrote into the entry can move; the entry is found by its ``assess:run_id``
+    stamp and re-chained through ``rewrite_log_entry``. Returns False (nothing
+    written) when the run has no id, no stamped entry, no readiness line, or the
+    line already reads ``readiness``.
+    """
+    if not run_id:
+        return False
+    idx = find_log_entry(assess_dir, run_id)
+    if idx is None:
+        return False
+    text = read_log_entries(assess_dir)[idx]
+    new = _READINESS_LINE.sub(lambda _m: f"- **Readiness:** {readiness}", text, count=1)
+    if new == text:
+        return False
+    rewrite_log_entry(assess_dir, idx, new)
+    return True
+

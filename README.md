@@ -72,14 +72,14 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
 
 <table>
   <tr>
-    <th width="33%"><a href="https://github.com/ktorio/ktor">ktor</a> (Kotlin) - 5.5/8 Solid</th>
-    <th width="33%"><a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (C/C++) - 4.0/8 Basic</th>
-    <th width="33%"><a href="https://github.com/huggingface/candle">candle</a> (Rust) - 2.5/8 Basic</th>
+    <th width="33%"><a href="https://github.com/ktorio/ktor">ktor</a> (Kotlin)</th>
+    <th width="33%"><a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> (C/C++)</th>
+    <th width="33%"><a href="https://github.com/huggingface/candle">candle</a> (Rust)</th>
   </tr>
   <tr>
-    <td><a href="docs/example-heatmap-ktor.svg"><img alt="Complexity hotspot heatmap of the ktor Kotlin web framework: a calm treemap, worst file cyclomatic complexity 141" title="ktor (Kotlin), 5.5/8: calm treemap, worst file ccn 141" src="docs/example-heatmap-ktor.svg"></a></td>
-    <td><a href="docs/example-heatmap-llamacpp.svg"><img alt="Complexity hotspot heatmap of the llama.cpp C/C++ inference engine: ggml-vulkan.cpp dominates as a large vivid-red block, cyclomatic complexity 4,123" title="llama.cpp (C/C++), 4.0/8: ggml-vulkan.cpp ccn 4,123 across 14k LOC, 289 commits" src="docs/example-heatmap-llamacpp.svg"></a></td>
-    <td><a href="docs/example-heatmap-candle.svg"><img alt="Complexity hotspot heatmap of the candle Rust ML framework: concentrated complexity in tensor_tests.rs and the backend modules" title="candle (Rust), 2.5/8: worst file tensor_tests.rs ccn 833" src="docs/example-heatmap-candle.svg"></a></td>
+    <td><a href="docs/example-heatmap-ktor.svg"><img alt="Complexity hotspot heatmap of the ktor Kotlin web framework: a calm treemap, worst file cyclomatic complexity 141" title="ktor (Kotlin): calm treemap, worst file ccn 141" src="docs/example-heatmap-ktor.svg"></a></td>
+    <td><a href="docs/example-heatmap-llamacpp.svg"><img alt="Complexity hotspot heatmap of the llama.cpp C/C++ inference engine: ggml-vulkan.cpp dominates as a large vivid-red block, cyclomatic complexity 4,123" title="llama.cpp (C/C++): ggml-vulkan.cpp ccn 4,123 across 14k LOC, 289 commits" src="docs/example-heatmap-llamacpp.svg"></a></td>
+    <td><a href="docs/example-heatmap-candle.svg"><img alt="Complexity hotspot heatmap of the candle Rust ML framework: concentrated complexity in tensor_tests.rs and the backend modules" title="candle (Rust): worst file tensor_tests.rs ccn 833" src="docs/example-heatmap-candle.svg"></a></td>
   </tr>
 </table>
 
@@ -121,13 +121,13 @@ The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can 
 
 The Layer 0 navigability model - treating the docs as a link graph an agent must traverse - adapts the **"Lint"** health-check from [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (hubs, orphans, connectivity, an `index.md` catalog and `log.md`), making its *structural* checks deterministic. The semantic ones it also lists stay out of the deterministic core: contradictions between pages are what [`/doc-contradictions`](skills/doc-contradictions/SKILL.md) looks for, and concepts lacking a page are not checked.
 
-The report's "What this score unlocks" section maps the maturity band onto the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - Gated → Assisted → Parallel → Supervised autonomy → AI-native. The mapping works because Cherny's per-step guardrails are these layers seen from the org side (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded permissions/routines = L8): the score bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. Layer 8's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
+The report's headline leads with the **Step**: how much agent autonomy the repo's contracts support, on the adoption ladder from [Boris Cherny's *Steps of AI Adoption*](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-) (July 2026) - 1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops - with the one change that unlocks the next Step, then "Verified practices: N of M measured" with the maturity-model version. Both are computed deterministically from the commit, never by the model. The Steps work because Cherny's per-step guardrails are these layers seen from the org side (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded permissions/routines = L8): the Step bounds how far up his ladder a team can safely operate this repo, without claiming anything about how the team actually works. Layer 8's `agent_ops` signals (committed permission allowlists, hooks, sandbox rules, routine definitions) score the repo-observable subset of those guardrails.
 
 **Traditional tooling, applied to an AI-era question.** The assessment itself runs on conventional static analysis - `lizard`/`scc`, git history, and graph metrics over the docs and code - not the model. The LLM only writes the prose around the numbers. So a full run is fast and spends almost no model tokens, and the structural findings are reproducible run-to-run.
 
-A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The score tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
+A codebase can hold Step 4 and still be on fire (strong contracts, legacy debt) or Step 1 with a calm treemap (small codebase, no enforcement needed yet). The headline tells you whether the system will catch the next class of pain before it lands; the SVG tells you where today's pain already is. The report's **Top 3 Actions** table names specific files, always - "improve code quality" is the failure mode `/assess` exists to prevent; "Add `cyclop` rule (threshold 15) to `.golangci.yml`. Current p95 ccn is 23; immediate offenders: `internal/import/parser.go` (ccn 67)" is what makes the report actionable.
 
-**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the score upward; each layer you add closes a recurring cost.
+**The compounding payoff.** Contracts are front-loaded - types, lint rules, architecture tests, agent instructions all take time to write. The payoff compounds: every new service, feature, and contributor inherits the contracts that already exist. Skip them and you lose 15-45 minutes per AI session to convention drift, rework, and false signals - forever. Run `/assess` periodically to ratchet the verified practices upward; each layer you add closes a recurring cost.
 
 A stats sidecar (`complexity-stats.json`) accompanies the report with percentiles and ranked file lists that feed the treemap and the report's hotspot callouts.
 
@@ -164,7 +164,7 @@ steps:
       config: .assess/config.toml   # optional; warn-only defaults without it
 ```
 
-Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness score badge served from the committed `.assess/badge.json` via shields.io (written by every assess run; deterministic findings-count fallback when no scored run exists):
+Two badges come with it - GitHub's native status badge for the gate workflow, and a live AI-readiness badge served from the committed `.assess/badge.json` via shields.io (written by every assess run: the Step and the verified tally, e.g. `Step 3 · 4 of 4 measured`):
 
 ```markdown
 [![Assess Gate](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/assess-gate.yml)
@@ -266,7 +266,7 @@ If a skill only fires on `/skill-name` and not on natural language, the frontmat
 
 Runs against the current directory (or pass a path). Produces:
 
-- `.assess/assess-report.md` - layered score, top 3 leverage actions, hotspot callouts
+- `.assess/assess-report.md` - the Step and verified-practices headline, per-layer scorecard, top 3 leverage actions, hotspot callouts
 - `.assess/doc-graph.svg` - the doc-navigability graph shown above
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
 - `.assess/complexity-stats.json` - percentiles and ranked file lists that feed the report

@@ -227,7 +227,13 @@ constant each.
 # enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
 # system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.38.0"
+# 1.39.0: run-context.json gains the headline block (issue #747): the Step, its next
+# unlock and "Verified practices: N of M measured" worded from the level block
+# (lib/headline.py); badge.json carries its summary (the Step and the tally) instead
+# of the findings count, and the log.md entry's readiness line is that summary, with
+# no layered score. finalize-input.json drops score, maturity_label and denominator,
+# and an action may carry a condition id. Additive to run-context.json.
+ARTIFACT_SCHEMA_VERSION = "1.39.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -375,4 +381,8 @@ ARTIFACT_SCHEMA_VERSION = "1.38.0"
 #     Bitbucket Pipelines, Travis CI, Buildkite) reads
 #     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
 #     its Layer 5 row moves from level 0 to unknown (issue #787).
-ASSESS_METHOD_VERSION = 33
+# 34: the displayed headline changes (issue #747): the layered "X / 8" score and
+#     its band names are retired for the deterministic Step, its next unlock and
+#     "Verified practices: N of M measured"; the badge and the log.md entry carry
+#     the Step and the tally, and the scorer returns per-layer verdicts only.
+ASSESS_METHOD_VERSION = 34

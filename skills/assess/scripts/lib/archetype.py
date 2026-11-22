@@ -1,18 +1,17 @@
 """Repository archetype detection for /assess.
 
-The 0-8 layered model assumes a software repo: read-side foundation (L0-L1),
+The layered model (layers 0-8) assumes a software repo: read-side foundation (L0-L1),
 write-side enforcement (L2-L7), and a meta capstone (L8). For a **knowledge /
 document base** - markdown sources, an LLM-maintained wiki, a ``CLAUDE.md``
 schema, and no application code or runtime - the write-side layers have no code
-surface to enforce. They are *not applicable*, not *failing*. Leaving them in
-the denominator makes a well-run KB score ~2.5/8 and read as "Not Ready", which
-is a lying score: it penalises the repo for not having tests on code it doesn't
-contain.
+surface to enforce. They are *not applicable*, not *failing*. Marking them
+Missing makes a well-run KB read as mostly missing, which is a lying verdict: it
+reports a gap for tests on code the repo doesn't contain.
 
 This module turns "what kind of repo is this?" into a deterministic signal so
-the scorer can mark the inapplicable layers **N/A** (excluded from the
-denominator) rather than **Missing** (a real gap). The headline then
-renormalises over the layers that actually apply.
+the scorer can mark the inapplicable layers **N/A** rather than **Missing** (a
+real gap). The headline (``lib/headline.py``) reads maturity-model conditions,
+not layers, so it is unchanged by the archetype.
 
 Detection is **dispatch-friendly**: ``classify_archetype`` evaluates one
 archetype today (knowledge-base) and falls through to ``software``. Adding a
@@ -58,9 +57,8 @@ ALL_LAYERS: list[int] = list(range(0, 9))  # 0..8
 WRITE_SIDE_LAYERS: list[int] = [2, 3, 4, 5, 6, 7]
 KB_APPLICABLE_LAYERS: list[int] = [0, 1, 8]  # read-side foundation + meta
 
-# The software display denominator caps at 8 (nine layers, ceiling 8 - see
-# assess-findings score derivation). A knowledge base renormalises over only
-# its applicable layers.
+# The applicable-layer count, kept in the block for compatibility. Nothing reads
+# it since the layered score was retired for the Step headline (#747).
 SOFTWARE_DENOMINATOR = 8
 
 # Heuristic thresholds. Conservative by design: a repo is only called a

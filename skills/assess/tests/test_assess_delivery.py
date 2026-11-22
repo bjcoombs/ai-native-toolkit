@@ -78,5 +78,5 @@ def test_compound_actions_are_split_before_filing():
 
 def test_findings_never_narrate_a_score_correction():
     findings = FINDINGS_SKILL.read_text(encoding="utf-8")
-    assert "**State the final score only.**" in findings
+    assert "**State the headline only.**" in findings
     assert "scorer's draft" not in GOLDEN_REPORT.read_text(encoding="utf-8")

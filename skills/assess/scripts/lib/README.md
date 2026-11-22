@@ -848,7 +848,8 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 The run's side effects, applied after every scan (#557) by
 `assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
-keys the run header reserved in place, writes `badge.json`, reads the previous
+keys the run header reserved in place, writes `badge.json` from the `headline` block
+(`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 
@@ -1726,9 +1727,9 @@ with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reop
 action that matches a done `completed` entry: the finding came back into the Top 3, so the
 old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
 sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
-rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
-gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a
-reviewed path neither counts nor fails the gate. The committed `findings.json` snapshot
+rebuild. The CI gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) reads open
+paths only, so a reviewed path does not fail the gate (the badge counts no findings since
+#747: it carries the Step and the verified tally). The committed `findings.json` snapshot
 and the method-change diff keep the full `paths`, so a review never reads as a finding
 that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
 `.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
@@ -1774,7 +1775,8 @@ A run-context with no `derived_findings` list is left untouched (returns `False`
 `assess_core` hands it this run's `complexity-stats.json` (the scoped one under
 `--scope`) and the excludes from `recorded_excludes` (the `excluded_by_config` dirs
 and patterns the default run applied and disclosed, or `load_excludes` when the
-block is absent), then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
+block is absent). The badge is no longer rebuilt here: `assess_core` recounts the `level`
+block, rewords the `headline` and rewrites `badge.json` from it before this runs (#747). Tests:
 `tests/test_mutation_refresh.py`.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
@@ -2341,7 +2343,7 @@ Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
 **`level_result_types.py`**
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`) and the run context's `Headline` (#747), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 
 **`fleet_level.py`**
@@ -3050,26 +3052,48 @@ gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
 (`tracked_files`), never an orchestrator. Structured as an extensible dispatch
 (one archetype today, YAGNI on a general framework). Read by `assess_core`
 (writes the `archetype` block to `run-context.json`), the `assess-layer-scorer`
-agent (N/A scoring + denominator), and the `assess-findings` skill (renders N/A
-+ renormalised headline). Co-changes with `badge.py`/`assess_finalize.py` (the
-denominator) and its test `tests/test_archetype.py`.
+agent (N/A verdicts), and the `assess-findings` skill (renders N/A rows). The
+`denominator` field is kept for compatibility; nothing reads it since the layered
+score was retired (#747). Co-changes with its test `tests/test_archetype.py`.
 
 **`badge.py`**
-Shields.io endpoint badge for the wiki (`.assess/badge.json`). The shipped badge
-is deterministic by default: `assess_core` always writes the findings-count form
-through `write_findings_badge` (`fallback_badge`, "2 findings · 0 stale markers",
-colour banded from the counts), which stamps a `link` to `assess-report.md`, so a
-badge-clicker lands on the full report; the opt-in mutation pass rewrites it the
-same way once the refreshed findings are in. The LLM-derived headline
-(`score_badge`, "7.0/8 · AI-Native",
-renormalised over its `denominator` - 8 for software, the applicable-layer count
-for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
-written to the badge; it appears inside `assess-report.md`, so the badge never
-claims a grade a deterministic run cannot reproduce. Pure threshold functions,
-fixture-tested. Also exposes `maturity_band`
-(the same score/denominator fraction mapped to the named tier ladder), the
-single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
-against. Both producers accept an optional `run_id` provenance stamp.
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). The message is the
+run's deterministic headline summary (`headline.summary` from `headline.py`, #747:
+"Step 3 · 4 of 4 measured"), the colour a pure function of the Step (`step_color`:
+blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
+"Step not measured" when the level result is unavailable). `assess_core` writes
+it through `write_headline_badge` on every run, stamping a `link` to
+`assess-report.md` and the `run_id`, and rewrites it after the opt-in mutation
+recount; `assess_finalize` never touches it. The layered "X / 8" score badge and
+its band ladder are retired. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
+
+**`headline.py`**
+The deterministic `/assess` headline (#747): `headline(level, model)` words a
+`LevelResult` under the model that produced it, and `run_context_headline(level)`
+(the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
+default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
+Unattended agent PRs · contracts in place"), the Next line naming the next Step and
+the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
+count still falls short once the gates hold and their counted conditions join the
+tally, "N more verified practices are met, for example `<first unmet counted
+condition>`"; a not-measured gate says
+so with its reason; at the top Step it says the Step holds while its gates hold),
+and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
+model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
+badge message and the `log.md` readiness line), `step`, `next_step`,
+`levels_version` and `headline_version`. A missing or degraded `level` block gives
+`available: false` and "Step not measured", never a guessed Step; `as_headline`
+returns that form for a degraded `headline` block. Shape: `Headline` in
+`level_result_types.py`; under counts-only the text fields are dropped and the
+numbers kept. The per-tag strip is a later line (#844). Tests: `tests/test_headline.py`.
+
+**`action_conditions.py`**
+The condition an action moves (#747): `condition_errors(actions, level)` returns one
+message per `finalize-input.json` action whose optional `condition` is not an id the
+run's `level.conditions` lists (or when the run has no level result to check it
+against). `assess_finalize` raises on any, before writing, so `actions.json` is
+unchanged; a met condition is accepted. Tests: `tests/test_headline.py`.
 
 **`evidence_check.py`**
 Deterministic re-check of the evidence a layer verdict cites (issue #360). The

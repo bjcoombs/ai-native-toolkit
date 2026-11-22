@@ -625,5 +625,9 @@ SCANS: tuple[ScanSpec, ...] = (
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
 SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
+# The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
+# "Verified practices: N of M measured", worded from the level block. The report
+# pastes it verbatim and the badge and log entry carry its summary.
+SCANS = (*SCANS, ScanSpec("headline", cs.headline, ("level",), STAGE_POST_OFFERS))
 
 validate(SCANS)

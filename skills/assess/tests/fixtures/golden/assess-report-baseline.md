@@ -2,9 +2,15 @@
 
 _Generated <<normalized>>._
 
-**Score: 6.0 / 8 - Solid** - a readiness snapshot, not a verdict · Keyhole: 5 structural concerns (5 hidden coupling), 1 safe zone.
+**Step 3 · Unattended agent PRs · contracts in place**
 
-The write-side here is genuinely enforced, not decorative: a ruff complexity ratchet, a mypy type gate, and three blocking pytest jobs under branch protection catch a bad change before it merges, and per-function complexity actually sits under the bar (p95 9 against a 15 cap). The clearest opportunity is behaviour-constraint - 26 tests run in CI but no coverage or mutation gate yet proves they pin behaviour - which is exactly what would carry this from Solid toward AI-Native.
+Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced
+
+Verified practices: 9 of 12 measured · 4 not measured (needs a full run: 1, no remote: 3) · model <<normalized>>
+
+_A readiness snapshot, not a verdict._ · Keyhole: 5 structural concerns (5 hidden coupling), 1 safe zone.
+
+The write-side here is genuinely enforced, not decorative: a ruff complexity ratchet, a mypy type gate, and three blocking pytest jobs under branch protection catch a bad change before it merges, and per-function complexity actually sits under the bar (p95 9 against a 15 cap). The clearest opportunity is behaviour-constraint - 26 tests run in CI but no coverage or mutation gate yet proves they pin behaviour - which is exactly the change that unlocks Step 4.
 
 _Note: Mutation testing was not run. Layer 6 (Coverage) is capped at Partial and truth-pressure remains unproven._
 
@@ -110,22 +116,9 @@ The two headline metrics measure **different things and are never combined.** Th
 | 7: Code Review Bots | Is there design-level feedback on every change? | write | Present | `claude-review.yml` runs automated Claude PR review with repo-specific guidelines in `.github/claude-review-instructions.md` (graded A); CodeRabbit also reviews PRs | - |
 | 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Partial | Task Master (`.taskmaster/`) drives multi-task marathons; dated plan files under `docs/superpowers/plans/` capture intent; issue-driven contract evolution traced in code comments (#58, #59, #62) - learnings feed back into contracts | No dedicated in-repo retro/learnings log (retro path is per-machine under `~/.claude/`); Task Master state isn't committed |
 
-### Score derivation (worked)
+### The headline (deterministic)
 
-Present = 1, Partial = 0.5, Missing = 0:
-
-`L0 0.5 + L1 0.5 + L2 1 + L3 1 + L4 0.5 + L5 1 + L6 0 + L7 1 + L8 0.5 = 6.0` raw → `min(6.0, 8)` = **6.0 / 8**.
-
-### Maturity Level
-
-| Score | Level | Description |
-|-------|-------|-------------|
-| 0-2 | Not Ready | Agent will produce inconsistent, unvalidated code |
-| 3-4 | Basic | Norms exist but aren't enforced. Agent works but drifts |
-| 5-6 | **Solid** | Contracts catch most issues. Agent is productive |
-| 7-8 | AI-Native | System self-improves. Agents work reliably at scale |
-
-This repo sits at the top of **Solid**. The write-side enforcement (types, linting, CI, review bots) is genuinely strong - the thing holding it back from AI-Native is a coverage/behaviour-constraint gate (L6) and two read-side gaps that are mostly benign for a plugin repo (L1 has no runtime to instrument; L0's doc-link fragmentation is curation, not inaccessibility).
+The Step and the verified tally above come from the run context's `headline` block, computed from the maturity model's conditions at this commit; the layer rows are the detail underneath. Step 3 holds because the instruction file and CI running the tests both hold their gates. Step 4 waits on one change: an enforced coverage gate (L6), which is also the clearest behaviour-constraint gap. The two read-side partials are mostly benign for a plugin repo (L1 has no runtime to instrument; L0's doc-link fragmentation is curation, not inaccessibility).
 
 </details>
 
