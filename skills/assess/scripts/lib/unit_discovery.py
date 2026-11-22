@@ -32,7 +32,10 @@ minus the doc graph's ``EXCLUDE_DIRS`` and the ``.assess/config.toml`` excludes:
    A member pattern may be a glob (``crates/*``, ``packages/**``); a glob match
    counts only when the folder holds a manifest. A literal member that no
    tracked file sits under is skipped as ``missing``, and one that resolves
-   outside the repository as ``outside_repo``.
+   outside the repository as ``outside_repo``; a member inside a unit found earlier
+   is skipped as ``claimed``. A manifest folder above units already claimed (a
+   ``packages/package.json`` over the ``packages/*`` members) is a unit of the
+   source files no nested manifest owns, so units never nest.
 3. A unit with no source file below it (``doc_graph.CODE_EXTENSIONS``) is a
    manifest-only aggregator (a BOM, a parent POM) and is skipped as
    ``manifest_only``.
@@ -96,8 +99,8 @@ SECTION = "units"
 SOURCES = ("discovered", "config")
 # Why a unit candidate or a [[units]] entry was skipped, as SkippedUnit.problem holds it.
 PROBLEMS = (
-    "manifest_only", "missing", "outside_repo", "not_a_list", "not_a_table", "no_path",
-    "duplicate",
+    "manifest_only", "missing", "outside_repo", "claimed", "not_a_list", "not_a_table",
+    "no_path", "duplicate",
 )
 _GLOB_CHARS = frozenset("*?[")
 
@@ -414,8 +417,12 @@ def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
     claimed: list[str] = []  # unit folders: nothing below one is a new candidate
 
     def add(path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None) -> None:
-        claimed.append(path)
-        if path not in source_dirs:
+        # A folder above units already claimed (a non-member manifest over workspace
+        # members) is a unit of its own files only and claims nothing, so units never nest.
+        holds = any(c != path and _is_under(c, path) for c in claimed)
+        if not holds:
+            claimed.append(path)
+        if path not in (owning if holds else source_dirs):
             skipped.append({"path": path, "problem": "manifest_only"})
             return
         units.append({"path": path, "origin": origin, "ecosystem": eco,
@@ -447,6 +454,7 @@ def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
                 skipped.append({"path": folder, "problem": "manifest_only"})
         for member in members:
             if any(_is_under(member, c) for c in claimed):
+                skipped.append({"path": member, "problem": "claimed"})
                 continue
             add(member, "workspace_member", ws.ecosystem, folder)
 

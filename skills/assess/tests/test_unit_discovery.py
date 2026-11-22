@@ -216,6 +216,35 @@ def test_a_root_member_with_no_source_of_its_own_is_manifest_only(tmp_path: Path
     assert _paths(block) == ["tools"] and _skipped(block) == {".": "manifest_only"}
 
 
+@pytest.mark.parametrize("files, expected", [
+    ({"package.json": '{"workspaces": ["packages/*"]}', "packages/package.json": "{}",
+      "packages/a/package.json": "{}", "packages/a/i.js": "",
+      "packages/b/package.json": "{}", "packages/b/i.js": ""},
+     ["packages/a", "packages/b"]),
+    ({"Cargo.toml": '[workspace]\nmembers = ["crates/*"]\n',
+      "crates/Cargo.toml": "[package]\n", "crates/src/lib.rs": "",
+      "crates/a/Cargo.toml": "", "crates/a/src/lib.rs": ""},
+     ["crates", "crates/a"]),
+], ids=["no-own-source", "own-source"])
+def test_a_manifest_above_claimed_members_never_nests_units(tmp_path: Path, files: dict[str, str],
+                                                            expected: list[str]):
+    block = scan_units(_write(tmp_path, files))
+    assert _paths(block) == expected
+    if "crates" in expected:  # it owns src/, so it is a unit of those files beside crates/a
+        assert block["units"][0]["origin"] == "manifest"
+    else:
+        assert _skipped(block) == {"packages": "manifest_only"}
+
+
+def test_a_member_inside_an_earlier_unit_is_skipped_as_claimed(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "lib/go.mod": "m", "lib/l.go": "",
+        "tools/go.work": "use (\n\t.\n\t../lib\n)\n", "tools/go.mod": "m", "tools/t.go": "",
+    }))
+    assert _paths(block) == ["lib", "tools"]
+    assert _skipped(block) == {"lib": "claimed"}
+
+
 def test_a_maven_member_that_aggregates_is_one_unit(tmp_path: Path):
     block = scan_units(_write(tmp_path, {
         "pom.xml": "<project><modules><module>webserver</module></modules></project>",

@@ -2216,7 +2216,9 @@ manifest owns. A `pnpm-workspace.yaml` without `packages` holds settings only an
 workspace; Gradle `include` is read over several lines. Glob members (`*`, `**`) match only
 folders that hold a manifest; a workspace-excluded folder is found later as a plain unit.
 A candidate with no `doc_graph.CODE_EXTENSIONS` file below it is skipped as `manifest_only`;
-a literal member with no tracked file is `missing`, one above the root `outside_repo`. An
+a literal member with no tracked file is `missing`, one above the root `outside_repo`, one inside
+an earlier unit `claimed`. A manifest folder above claimed members is a unit of its own files
+only, so units never nest. An
 unparseable workspace manifest is listed in `unreadable_manifests` and its folder is a plain
 unit. `[[units]]` (`path`, optional `name`) in `.assess/config.toml` replaces discovery when
 at least one entry is valid; a bad entry is skipped with a `PROBLEMS` code (`not_a_list`,
