@@ -118,14 +118,41 @@ class A<T> extends B<T> {
         ("size", 2.0), ("size", 2.0), ("load", 2.0), ("label", 2.0)]
 
 
+@pytest.mark.parametrize(("src", "expected"), [
+    # A raw string at a token start: its `${` and braces are text.
+    ("void f() { var s = r'${if (a) {}'; g(); }", [("f", 1.0)]),
+    # An `r` or a digit run directly before a quote is not a raw prefix.
+    ("void f() { var s = bar'x'; if (a) {} }", [("f", 2.0)]),
+    ("void f() { x = 1r'{'; }", [("f", 1.0)]),
+    # A ternary `?` after a comment counts; after a word it does not.
+    ("void f() { a /* c */ ? b : c; a/*c*/? b : c; }", [("f", 3.0)]),
+    # Whitespace before `?` is any Unicode whitespace, a newline included.
+    ("void f() { a = b\n? c : d; e = f\u00a0? g : h; }", [("f", 3.0)]),
+    # A lone `/` is division; `??=` and `??` count, `?.` does not.
+    ("void f() { x = a / b; y ??= z; w = v?.u ?? 0; }", [("f", 3.0)]),
+    # Code inside `${...}`, braces included, belongs to the enclosing function.
+    ("void f() { var s = 'x ${m.map((e) { if (e) {} return e; })} y'; }",
+     [("f", 2.0)]),
+    # Functions closed out of order still come back in source order.
+    ("void a() { void b() => c ? 1 : 2; } void d() {}",
+     [("a", 1.0), ("b", 2.0), ("d", 1.0)]),
+], ids=["raw-string", "not-raw-after-word", "not-raw-after-digit",
+        "ternary-after-comment", "ternary-after-unicode-space",
+        "division-and-null-ops", "interpolation-closure", "source-order"])
+def test_dart_scanner_run_boundaries_keep_the_token_rules(
+        src: str, expected: list[tuple[str, float]]) -> None:
+    """The fast path stops at quotes, `/`, `?` and raw prefixes (#967); each
+    boundary scores as the one-token-at-a-time scanner did before it."""
+    assert scan_dart_functions(src) == expected
+
+
 # pytest-cov's line tracing (CI runs this suite under --cov) slows the scanner
 # past the 1s budget; no_cover pauses tracing for this test so the budget stays
 # exact instead of being widened to fit the tracer.
 @pytest.mark.no_cover
 @pytest.mark.parametrize("text", [
     "void f() {" + "{" * 200_000,
-    # 1.5 s of CPU on a Windows runner, fastest of 3; linear, just slower there (#762).
-    pytest.param("void f() {" * 100_000, marks=pytest.mark.windows_followup),
+    "void f() {" * 100_000,
     "void f() {" * 50_000 + "}" * 50_000,
     "void f() { var s = '" + "if (x) " * 50_000,
     "void f() { var s = '''" + "${" * 50_000,
@@ -164,3 +191,4 @@ def test_dart_scanner_unreadable_or_empty_file_has_no_functions(
     empty = tmp_path / "empty.dart"
     empty.write_text("// only a comment\n", encoding="utf-8")
     assert dart_function_scores(empty) == ([], None)
+
