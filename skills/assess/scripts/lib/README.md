@@ -1057,7 +1057,8 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+`run_salt` draws one salt per run for `--hash-paths`; under a salt a failed scan's
+stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
 `fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
@@ -1177,6 +1178,18 @@ CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab 
 headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
 read gives no URL and no owners.
 
+**`fleet_hashed.py`**
+Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
+(#909). `public_rows` hashes each row's `repo` with `counts_only.hash_value` under the
+run's salt and re-sorts by the new id; `public_groups` hashes each team row's
+`unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
+hashed id set the history entry is chosen and compared by. The ids equal the
+`fleet-data.json` repository keys, so every file joins on them. The scan, the coverage
+reconcile and `build_fleet_data` keep the real ids. Without a salt every function is the
+identity, so default counts-only output is unchanged. Group names stay in clear. Tests:
+`tests/test_fleet_hashed.py` (every file under `--out`, SVGs and team pages included,
+holds no repository id; the joins; fixed-salt reruns are byte-identical).
+
 **`fleet_data.py`**
 `fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
 #704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
@@ -1188,7 +1201,9 @@ per team row, `measured` of `repos` and `lowest_level`, the lowest known level b
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
-repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written;
+`Privacy.key` keeps an id that is already hashed (`counts_only.is_hashed`), so the re-score
+joins a stored `repos.jsonl` row hashed at the output boundary (#909).
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
 Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
 without a model).

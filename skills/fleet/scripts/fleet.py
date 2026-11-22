@@ -181,6 +181,7 @@ from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy
 from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
 from lib.fleet_groups import GroupRow, SettingsError, load_settings, roll_up, write_groups  # noqa: E402
+from lib.fleet_hashed import public_freshness, public_groups, public_ids, public_rows  # noqa: E402
 from lib.fleet_repo_facts import collect_facts  # noqa: E402
 from lib.fleet_units import (  # noqa: E402
     Tree,
@@ -286,10 +287,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--full", action="store_true",
                         help="Keep full signal blocks (free text included) instead of counts-only.")
     parser.add_argument("--hash-paths", action="store_true",
-                        help="Hash repo-relative paths under one salt drawn for this run "
+                        help="Hash repo-relative paths and repository ids under one salt drawn for this run "
                              "(hashes join within the run; reruns are not byte-identical).")
     parser.add_argument("--hash-salt", metavar="VALUE",
-                        help="Hash paths under this salt (implies --hash-paths); reruns stay identical.")
+                        help="Hash paths and repository ids under this salt (implies --hash-paths); "
+                             "reruns stay identical.")
     parser.add_argument(
         "--delete-after", action="store_true",
         help="Delete each ghsync clone (<repo>-main) once it is scanned ok, only when it has no "
@@ -421,7 +423,7 @@ def _history_org_dir(args: argparse.Namespace, targets: list[Target]) -> Path:
 
 
 def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Path | None, scan_date: str,
-                   planned: JsonDict) -> Path | None:
+                   planned: JsonDict, repos: frozenset[str]) -> Path | None:
     """The history directory this run will be kept in, created; None when it is not kept.
 
     Raises ``HistoryError`` or ``OSError`` when the location cannot be used.
@@ -432,8 +434,7 @@ def _history_entry(args: argparse.Namespace, targets: list[Target], org_dir: Pat
         print("fleet: history: --full output is not kept in the run history", file=sys.stderr)
         return None
     assert org_dir is not None  # resolved by main whenever the history is kept
-    entry, passed = choose_entry(org_dir.parent, org_dir.name, scan_date, planned,
-                                 frozenset(t.repo for t in targets))
+    entry, passed = choose_entry(org_dir.parent, org_dir.name, scan_date, planned, repos)
     inside = out_inside_target(entry, targets)
     if inside is not None:
         raise HistoryError(f"history directory {entry} is inside target {inside.repo}")
@@ -683,12 +684,13 @@ def main(argv: list[str] | None = None) -> int:
         "platform": platform_ran,
     }
     keeps_history = not args.no_history and not args.full
+    ids = public_ids((t.repo for t in targets), hash_salt)  # the ids every output file names (#909)
     try:
         # <org> is resolved only when the history is used: kept, or searched by a bare --compare
         org_dir = (_history_org_dir(args, targets) if keeps_history or args.compare == LATEST
                    else None)
         # read before any scan: the same-day history entry may be replaced
-        earlier = _load_earlier(args.compare, org_dir, planned, frozenset(t.repo for t in targets))
+        earlier = _load_earlier(args.compare, org_dir, planned, ids)
     except HistoryError as e:
         print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
               file=sys.stderr)
@@ -714,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: cannot write to --out {args.out}: {e.strerror}", file=sys.stderr)
         return 2
     try:
-        entry = _history_entry(args, targets, org_dir, today.isoformat(), planned)
+        entry = _history_entry(args, targets, org_dir, today.isoformat(), planned, ids)
     except (HistoryError, OSError) as e:
         print(f"error: run history: {e} (use --history-org, --history-dir or --no-history)",
               file=sys.stderr)
@@ -726,35 +728,36 @@ def main(argv: list[str] | None = None) -> int:
     freshness = freshness_rows(targets, full=args.full, hash_salt=hash_salt)
     for message in freshness.errors:
         print(f"fleet: describes: {message}", file=sys.stderr)
-    freshness_path = write_freshness(out_dir, freshness.rows)
+    freshness_path = write_freshness(out_dir, public_freshness(freshness.rows, hash_salt))
     # Each scan runs with this interpreter: one hint here, not one per repository.
     warn_missing_packages()
     platform = _platform_pass(args, targets, fleet_config, scans, deleter)
     rows = _scan_all(targets, options, args.jobs, deleter, fleet_config_text, platform)
-    path = write_rows(out_dir, rows)
-    groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
+    public = public_rows(rows, hash_salt)  # fleet-data.json and the coverage read the real ids
+    path = write_rows(out_dir, public)
+    groups = public_groups(roll_up(rows, maturity_model, settings, counts_only=not args.full), hash_salt)
     groups_path = write_groups(out_dir, groups)
     coverage = (None if discovered is None else
                 reconcile(discovered, rows, Path(args.root).resolve(), frozenset(t.repo for t in targets)))
-    agent_clusters = clusters(rows, name=args.name_agent_clusters)
+    agent_clusters = clusters(public, name=args.name_agent_clusters)
     write_clusters(out_dir, agent_clusters)
     stamp = build_stamp(
-        rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
+        public, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
         fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
     )
     write_stamp(out_dir, stamp)
-    write_fleet_levels(out_dir, rows, maturity_model, toolkit_commit=stamp["toolkit_commit"],
+    write_fleet_levels(out_dir, public, maturity_model, toolkit_commit=stamp["toolkit_commit"],
                        plugin_version=stamp["plugin_version"])
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
-    comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups, row_signals(data)), earlier)
+    comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, public, groups, row_signals(data)), earlier)
     credit, achieved = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
-                           frozenset(row["repo"] for row in rows), level_targets,
+                           ids, level_targets,
                            privacy_for(args.full, hash_salt).key, args.first_achievements)
-    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
-    _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
+    history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, public, maturity_model)
+    _diagrams(out_dir, args.no_diagrams, maturity_model, public, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
               opportunities=lambda: opportunities_section(data, achieved))
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
