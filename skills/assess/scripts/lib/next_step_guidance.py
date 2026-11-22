@@ -326,6 +326,14 @@ _WORDING: dict[str, Wording] = {
         "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
         "lint command."),
+    "ci_checks.enforced_check_runs": _flag(
+        "Run the test suite or linter in CI so a failure fails the job (`make test`, `pytest`, "
+        "`npm test`, `uv run ruff check`) on pull requests or pushes. Remove `|| true` / "
+        "`continue-on-error` / `allow_failure` from the step that runs the tests, or re-raise "
+        "the status after `set +e`.",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
+        "lint command, is not masked and runs on ordinary changes "
+        "(`ci_checks.masked_check_commands` and `off_trigger_check_commands` count the others)."),
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,
@@ -412,11 +420,17 @@ _MEASURE_HINTS = {
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
-                 "but a CI file pulls jobs from a file the run could not read (`basis: "
+                 "that can fail its job but a CI file pulls jobs from a file the run could not read (`basis: "
                  "included_jobs`: a GitLab `include:` whose template is not cloned in the "
                  "fleet root, or a `template:` or `remote:` include, a reusable workflow from "
                  "another repository): the check may live there. Cloning the template into "
-                 "the same ghsync root lets the fleet read it.",
+                 "the same ghsync root lets the fleet read it. `enforced_check_runs` is also "
+                 "unknown when the check's workflow or job has triggers the scan cannot settle "
+                 "(`enforced_basis: unknown_trigger`: no `on:` key, a `workflow_call` nobody "
+                 "calls, a GitLab `rules: if:` on a custom variable): say when the workflow "
+                 "runs, by adding `push` or `pull_request` triggers (or a merge request rule). "
+                 "A scan stored before `enforced_check_runs` existed has no such key: re-run "
+                 "the scan to measure it.",
     "coverage_gate": "The `coverage_gate` scan reads the threshold unknown when none of at "
                      "least 50 percent is committed but a gate's threshold is not a readable "
                      "percentage: a variable (`--cov-fail-under=${{ env.COV_MIN }}`), an nyc/c8 "

@@ -97,7 +97,11 @@ CI_CHECKS: JsonDict = {
         "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
         "says which. Under --platform, a repository with an unresolved GitLab include also gets "
         "GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted "
-        "apart in merged_check_commands; a template resolved offline wins."),
+        "apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with "
+        "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
+        "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
+        "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
+        "lines left out."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -149,6 +153,21 @@ CI_CHECKS: JsonDict = {
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
             "pipeline), no_check_command or no_ci (false)."),
+        "enforced_check_runs": _field(
+            {"type": ["boolean", "null"]},
+            "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
+            "changes, null when none does but included jobs or unsettled triggers may hold one, "
+            "else false."),
+        "enforced_basis": _field(
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "not_enforced",
+                      "no_check_command", "no_ci"]},
+            "The reason for enforced_check_runs: enforced_check (true), included_jobs or "
+            "unknown_trigger (null), not_enforced, no_check_command or no_ci (false)."),
+        "masked_check_commands": _field(
+            _INT, "CI lines that run a check whose failure cannot fail the job."),
+        "off_trigger_check_commands": _field(
+            _INT, "Unmasked CI check lines whose workflow or job does not run on ordinary changes "
+            "(workflow_dispatch or schedule only, a manual GitLab job)."),
     },
 }
 

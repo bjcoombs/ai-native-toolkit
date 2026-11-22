@@ -197,10 +197,16 @@ constant each.
 # signal (true at 50 percent or more, null when a counted gate's percentage is not
 # read). Additive: threshold and unit stay as written, and complexity-stats.json is
 # unchanged.
-# 1.32.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# 1.32.0: run-context.json ci_checks gains enforced_check_runs,
+# enforced_basis, masked_check_commands and off_trigger_check_commands
+# (issue #775): the CI check test with masked checks (|| true,
+# continue-on-error: true, allow_failure: true, set +e) and checks off the
+# ordinary triggers left out. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+# 1.33.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.32.0"
+ARTIFACT_SCHEMA_VERSION = "1.33.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -318,10 +324,16 @@ ARTIFACT_SCHEMA_VERSION = "1.32.0"
 #     offline (issue #796): ``ci_checks.test_or_lint_runs`` reads true or false
 #     where it was null, and ``review_automation`` credits a review component the
 #     merge pulled in. Offline headless runs are unchanged.
-# 28: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+# 28: a masked CI check (``|| true``, ``continue-on-error: true``,
+#     ``allow_failure: true``, ``set +e`` without a re-raise) or one that does
+#     not run on ordinary changes (a ``workflow_dispatch``-only workflow, a
+#     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
+#     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
+#     Layer 5 evidence can move.
+# 29: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
 #     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
 #     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
 #     or person never does. The same matcher serves ``delivery`` and the GitLab
 #     note classifier (``gitlab_notes``) under --platform, so a confirmed account
 #     moves their agent counts too. Without the section nothing changes.
-ASSESS_METHOD_VERSION = 28
+ASSESS_METHOD_VERSION = 29
