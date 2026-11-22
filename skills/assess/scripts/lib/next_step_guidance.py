@@ -361,7 +361,8 @@ _WORDING: dict[str, Wording] = {
         "percent (a JaCoCo ratio of at least `0.50`).",
         "A committed coverage threshold of at least 50 percent (`fail_under = 50` in "
         "`pyproject.toml`, `--cov-fail-under=50`, Jest `coverageThreshold`, JaCoCo `<minimum>0.50"
-        "</minimum>`, or similar) is in the repository as a number, not a variable. A threshold "
+        "</minimum>`, go-test-coverage `threshold: total: 50`, `cargo tarpaulin --fail-under 50`, "
+        "or similar) is in the repository as a number, not a variable. A threshold "
         "below 50 does not count, even when measured coverage is higher."),
     "test_pressure.mutation_run": _flag(
         "Run mutation testing against the test suite.",
@@ -435,7 +436,11 @@ _MEASURE_HINTS = {
                      "least 50 percent is committed but a gate's threshold is not a readable "
                      "percentage: a variable (`--cov-fail-under=${{ env.COV_MIN }}`), an nyc/c8 "
                      "default, or a Jest uncovered-line count. Write the threshold as a number "
-                     "to measure it. The block is unavailable when the scan did not run: check "
+                     "to measure it. A Go or Rust repository with no gate found also reads "
+                     "unknown (`unmeasured_reason` `go_rust_gate_form_not_read`): a script "
+                     "comparing `go tool cover` to a number is not read, while go-test-coverage's "
+                     "`.testcoverage.yml`, `cargo tarpaulin --fail-under` and `cargo llvm-cov "
+                     "--fail-under-lines` are. The block is unavailable when the scan did not run: check "
                      "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",

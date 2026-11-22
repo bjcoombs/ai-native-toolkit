@@ -273,9 +273,10 @@ def render_doc() -> str:
     lines = [
         "# Counts-only output: fields kept per block",
         "",
-        "Generated from `scripts/lib/counts_only_rules.py` (in the assess skill) by",
-        "`lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
-        "and the table disagree. Regenerate with:",
+        "Generated from each collector's `privacy` table in `checks/core.toml` and",
+        "the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)",
+        "by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
+        "and the table disagree. Each section below is one collector. Regenerate with:",
         "",
         "```bash",
         "# from the assess skill directory",

@@ -67,7 +67,7 @@
           "properties": {
             "reason": {
               "type": "string",
-              "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+              "description": "Why the block is unavailable: a sentence, or 'code: sentence' for a block whose codes are listed under its own entry. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
             }
           },
           "required": [
@@ -137,7 +137,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
@@ -265,7 +265,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
@@ -445,7 +445,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
@@ -525,7 +525,14 @@
                 "boolean",
                 "null"
               ],
-              "description": "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at least 50; null (unknown) when none is but a counted gate's percentage was not read; false otherwise. Gates counted are those enforced counts."
+              "description": "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at least 50; null (unknown) when none is but a counted gate's percentage was not read, or when no gate is found in a repository holding a go.mod or Cargo.toml (see unmeasured_reason); false otherwise. Gates counted are those enforced counts."
+            },
+            "unmeasured_reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Why threshold_meets_minimum is null with no gate found: go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml and its gate may be a script this scan does not read; null otherwise."
             },
             "not_detected": {
               "type": [
@@ -552,7 +559,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
@@ -635,6 +642,30 @@
               ],
               "description": "Share (0 to 1) of changes an agent identity authored; null when nothing was counted."
             }
+          }
+        },
+        "structure": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: no_grimp (grimp, the Python import-graph builder, is not installed); no_networkx (networkx, which the structure metrics need, is not installed); grimp_failed (grimp could not build the Python import graph); no_python_packages (a Python repository with no importable package); no_import_graph_<language> (no import graph builder exists yet for the dominant source language, for example no_import_graph_rust); invalid_import_graph (a builder returned a graph that breaks the module-graph contract); no_source_files (the scope holds no source file in a language the assess skill recognises). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
           }
         }
       }

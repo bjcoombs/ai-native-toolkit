@@ -1,8 +1,9 @@
 # Counts-only output: fields kept per block
 
-Generated from `scripts/lib/counts_only_rules.py` (in the assess skill) by
-`lib.counts_only.render_doc`; `test_counts_only.py` fails when this file
-and the table disagree. Regenerate with:
+Generated from each collector's `privacy` table in `checks/core.toml` and
+the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)
+by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file
+and the table disagree. Each section below is one collector. Regenerate with:
 
 ```bash
 # from the assess skill directory
@@ -77,7 +78,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `stats_summary.fn_ccn.backend_by_language`
 - `tool_versions`
 
-## run identity
+## run_header
 
 | Field | Kept as |
 |---|---|
@@ -85,7 +86,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `artifact_schema_version` | token |
 | `schema_version` | token |
 | `prior_schema_version` | token |
-| `plugin_version` | token |
 | `prior_plugin_version` | token |
 | `run_date` | token |
 | `scope` | path (hashed when hashing is on) |
@@ -93,22 +93,11 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `tool_versions.*` | token |
 | `prior_tool_versions.*` | token |
 | `diff_version_note` | dropped |
-| `uninstall_instructions_path` | dropped |
-
-## measured_commit
-
-| Field | Kept as |
-|---|---|
 | `measured_commit.committed_date` | token |
 | `measured_commit.head_sha` | dropped |
 | `measured_commit.head_short` | dropped |
 | `measured_commit.subject` | dropped |
 | `measured_commit.upstream` | dropped |
-
-## stats_summary
-
-| Field | Kept as |
-|---|---|
 | `stats_summary.ccn.basis` | token |
 | `stats_summary.fn_ccn.basis` | token |
 | `stats_summary.fn_ccn.source.name` | token |
@@ -125,92 +114,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `stats_summary.top_large.max_fn_name` | dropped |
 | `stats_summary.complexity_unreliable.path` | path (hashed when hashing is on) |
 | `stats_summary.complexity_unreliable.language` | token |
-
-## hotspot wiki
-
-| Field | Kept as |
-|---|---|
 | `pruned_hotspots` | path (hashed when hashing is on) |
 | `retired_excluded_hotspots` | path (hashed when hashing is on) |
 | `dropped_first_flagged` | path (hashed when hashing is on) |
 | `provisional_first_flagged` | path (hashed when hashing is on) |
-| `excluded_generated.reason` | dropped |
-
-## instruction files
-
-| Field | Kept as |
-|---|---|
 | `instructions_grade` | token |
 | `instruction_files.{}.grade` | token |
 | `instruction_files.{}.findings.kind` | token |
 | `instruction_files.{}.findings.reference` | dropped |
 | `instruction_files.{}.findings.reason` | dropped |
-| `skill_files` | path (hashed when hashing is on) |
-| `untracked_instruction_files` | path (hashed when hashing is on) |
-| `ancestor_instruction_files` | dropped |
-| `broken_instruction_refs` | path (hashed when hashing is on) |
-| `sensitive_instruction_content.{}.category` | token |
-| `sensitive_instruction_content.{}.evidence` | dropped |
-
-## instruction_placement
-
-| Field | Kept as |
-|---|---|
-| `instruction_placement.flagged` | path (hashed when hashing is on) |
-| `instruction_placement.files.kind` | token |
-| `instruction_placement.files.relocatable.heading` | dropped |
-| `instruction_placement.files.relocatable.signals` | token |
-| `instruction_placement.files.relocatable.home.kind` | token |
-| `instruction_placement.files.relocatable.home.target` | path (hashed when hashing is on) |
-| `instruction_placement.loaded_in_full.kind` | token |
-| `instruction_placement.loaded_in_full.relocatable.heading` | dropped |
-| `instruction_placement.loaded_in_full.relocatable.signals` | token |
-| `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
-| `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
-
-## nested_instructions
-
-| Field | Kept as |
-|---|---|
-| `nested_instructions.files.tool` | token |
-| `nested_instructions.files.kind` | token |
-| `nested_instructions.files.grade` | token |
-| `nested_instructions.files.scope.directory` | path (hashed when hashing is on) |
-| `nested_instructions.files.scope.globs` | path (hashed when hashing is on) |
-| `nested_instructions.files.findings.kind` | token |
-| `nested_instructions.files.findings.reference` | dropped |
-| `nested_instructions.files.findings.reason` | dropped |
-| `nested_instructions.findings.kind` | token |
-| `nested_instructions.findings.detail` | dropped |
-| `nested_instructions.findings.pattern` | path (hashed when hashing is on) |
-| `nested_instructions.findings.parent` | path (hashed when hashing is on) |
-| `nested_instructions.budget.claude_code.files` | path (hashed when hashing is on) |
-| `nested_instructions.budget.claude_code.skipped_imports.source` | path (hashed when hashing is on) |
-| `nested_instructions.budget.claude_code.skipped_imports.target` | path (hashed when hashing is on) |
-| `nested_instructions.budget.claude_code.skipped_imports.reason` | dropped |
-| `nested_instructions.budget.codex.files` | path (hashed when hashing is on) |
-| `nested_instructions.budget.codex.deepest_chain.files` | path (hashed when hashing is on) |
-| `nested_instructions.budget.codex.deepest_chain.directory` | path (hashed when hashing is on) |
-
-## instruction_claims
-
-| Field | Kept as |
-|---|---|
-| `instruction_claims.failures.kind` | token |
-| `instruction_claims.failures.version` | dropped |
-| `instruction_claims.failures.reason` | dropped |
-
-## doc_claims
-
-| Field | Kept as |
-|---|---|
-| `doc_claims.excluded_trees` | path (hashed when hashing is on) |
-| `doc_claims.failures.kind` | token |
-| `doc_claims.failures.version` | dropped |
-| `doc_claims.failures.reason` | dropped |
-| `doc_claims.contradictions.kind` | token |
-| `doc_claims.contradictions.sites.value` | dropped |
-| `doc_claims.contradictions.conflict_pair.value` | dropped |
+| `prior_findings_snapshot.findings.name` | token |
+| `prior_findings_snapshot.findings.paths` | path (hashed when hashing is on) |
 
 ## doc_graph
 
@@ -254,6 +168,11 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.declared_cross_repo.scope` | path (hashed when hashing is on) |
 | `doc_staleness.declared_cross_repo.status` | token |
 | `doc_staleness.declared_cross_repo.reason` | token |
+
+## stale_hubs
+
+| Field | Kept as |
+|---|---|
 | `stale_hubs.subject_method` | token |
 | `stale_hubs.subject_roots` | path (hashed when hashing is on) |
 | `stale_hubs.subject_paths` | path (hashed when hashing is on) |
@@ -265,6 +184,25 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `stale_hubs.provenance.sources` | path (hashed when hashing is on) |
 | `stale_hubs.provenance.generated_by` | dropped |
 
+## untracked_instruction_files
+
+| Field | Kept as |
+|---|---|
+| `untracked_instruction_files` | path (hashed when hashing is on) |
+
+## broken_instruction_refs
+
+| Field | Kept as |
+|---|---|
+| `broken_instruction_refs` | path (hashed when hashing is on) |
+
+## sensitive_instruction_content
+
+| Field | Kept as |
+|---|---|
+| `sensitive_instruction_content.{}.category` | token |
+| `sensitive_instruction_content.{}.evidence` | dropped |
+
 ## archetype
 
 | Field | Kept as |
@@ -274,7 +212,19 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `archetype.reason` | dropped |
 | `archetype.kb_maintenance.gist` | dropped |
 
-## dead_code / runtime
+## ancestor_instruction_files
+
+| Field | Kept as |
+|---|---|
+| `ancestor_instruction_files` | dropped |
+
+## skills
+
+| Field | Kept as |
+|---|---|
+| `skill_files` | path (hashed when hashing is on) |
+
+## liveness_blocks
 
 | Field | Kept as |
 |---|---|
@@ -286,36 +236,19 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `dead_code.tools.status` | token |
 | `dead_code.tools.reason` | dropped |
 | `dead_code.tools.consent` | dropped |
-| `runtime.reason` | dropped |
-| `runtime.static_reachability.caveat` | dropped |
-| `runtime.static_reachability.candidates.kind` | token |
-| `runtime.static_reachability.candidates.symbol` | dropped |
-| `runtime.static_reachability.tools.language` | token |
-| `runtime.static_reachability.tools.tool` | token |
-| `runtime.static_reachability.tools.status` | token |
-| `runtime.static_reachability.tools.reason` | dropped |
-| `runtime.static_reachability.tools.consent` | dropped |
-
-## observability
-
-| Field | Kept as |
-|---|---|
 | `observability.boundary` | dropped |
 | `observability.instrumented.signals` | dropped |
 | `observability.discoverable.signals` | dropped |
 | `observability.reachable.signals` | dropped |
+| `capability_offers.build_system` | token |
+| `capability_offers.build_files` | path (hashed when hashing is on) |
 
-## coverage
+## coverage_report
 
 | Field | Kept as |
 |---|---|
 | `coverage_report.source` | path (hashed when hashing is on) |
 | `coverage_report.format` | token |
-| `coverage_gate.gates.tool` | token |
-| `coverage_gate.gates.form` | dropped |
-| `coverage_gate.gates.unit` | token |
-| `coverage_gate.gates.metric` | token |
-| `coverage_gate.not_detected` | dropped |
 
 ## test_pressure
 
@@ -340,8 +273,18 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `test_pressure.cheap_heuristics.duplicate_truth.field_name` | dropped |
 | `test_pressure.cheap_heuristics.duplicate_truth.derives_from` | dropped |
 | `test_pressure.cheap_heuristics.duplicate_truth.confidence` | token |
+
+## mutation_not_run_cap
+
+| Field | Kept as |
+|---|---|
 | `mutation_not_run_cap.max_layer6_band` | token |
 | `mutation_not_run_cap.annotation` | dropped |
+
+## test_focus
+
+| Field | Kept as |
+|---|---|
 | `test_focus.entries.risk_band` | token |
 | `test_focus.entries.test_signal` | token |
 | `test_focus.entries.suggested_action` | token |
@@ -357,7 +300,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `promissory_markers.top_offenders.commit` | dropped |
 | `promissory_markers.stale_by_file.{}.families` | dropped |
 
-## agent_ops / config_drift / review
+## config_drift
 
 | Field | Kept as |
 |---|---|
@@ -368,13 +311,264 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `config_drift.snapshots.kind` | token |
 | `config_drift.snapshots.doc` | dropped |
 | `config_drift.snapshots.branch` | dropped |
+
+## review_reality
+
+| Field | Kept as |
+|---|---|
 | `review_reality.reason` | dropped |
+
+## delivery
+
+| Field | Kept as |
+|---|---|
 | `delivery.reason` | dropped |
+
+## gate_cost_estimate
+
+| Field | Kept as |
+|---|---|
 | `gate_cost_estimate.reason` | dropped |
 | `gate_cost_estimate.assumption` | dropped |
-| `capability_offers.build_system` | token |
-| `capability_offers.build_files` | path (hashed when hashing is on) |
+
+## coverage_gate
+
+| Field | Kept as |
+|---|---|
+| `coverage_gate.gates.tool` | token |
+| `coverage_gate.gates.form` | dropped |
+| `coverage_gate.gates.unit` | token |
+| `coverage_gate.gates.metric` | token |
+| `coverage_gate.unmeasured_reason` | token |
+| `coverage_gate.not_detected` | dropped |
+
+## accretion_ratchet
+
+| Field | Kept as |
+|---|---|
 | `accretion_ratchet.reason` | dropped |
+
+## keyhole
+
+| Field | Kept as |
+|---|---|
+| `archived_finding_paths` | path (hashed when hashing is on) |
+
+## keyhole_blocks
+
+| Field | Kept as |
+|---|---|
+| `runtime.reason` | dropped |
+| `runtime.static_reachability.caveat` | dropped |
+| `runtime.static_reachability.candidates.kind` | token |
+| `runtime.static_reachability.candidates.symbol` | dropped |
+| `runtime.static_reachability.tools.language` | token |
+| `runtime.static_reachability.tools.tool` | token |
+| `runtime.static_reachability.tools.status` | token |
+| `runtime.static_reachability.tools.reason` | dropped |
+| `runtime.static_reachability.tools.consent` | dropped |
+| `structure.reason` | reason code |
+| `structure.language` | token |
+| `structure.modularity_reason` | token |
+| `structure.footprints.module` | path (hashed when hashing is on) |
+| `structure.sccs` | path (hashed when hashing is on) |
+| `structure.breakup_candidates.package` | path (hashed when hashing is on) |
+| `structure.breakup_candidates.clusters` | path (hashed when hashing is on) |
+| `structure.internal_burrow_edges.importer` | path (hashed when hashing is on) |
+| `structure.internal_burrow_edges.imported` | path (hashed when hashing is on) |
+| `structure.name_collisions.name` | path (hashed when hashing is on) |
+| `structure.name_collisions.paths` | path (hashed when hashing is on) |
+| `behaviour.reason` | dropped |
+| `behaviour.static_modularity_projection` | dropped |
+| `behaviour.static_history_disagreement.finding` | token |
+| `behaviour.static_history_disagreement.recommendation` | dropped |
+| `behaviour.hidden_coupling_findings.finding` | token |
+| `behaviour.hidden_coupling_findings.recommendation` | dropped |
+| `behaviour.refactor_boundaries.finding` | token |
+| `behaviour.refactor_boundaries.recommendation` | dropped |
+| `documentation.reason` | dropped |
+| `documentation.stale_doc_on_complexity.finding` | token |
+| `documentation.stale_doc_on_complexity.confidence` | token |
+| `documentation.stale_doc_on_complexity.recommendation` | dropped |
+| `documentation.unexplained_complexity.finding` | token |
+| `documentation.unexplained_complexity.confidence` | token |
+| `documentation.unexplained_complexity.recommendation` | dropped |
+| `documentation.good_contracts.finding` | token |
+| `documentation.good_contracts.confidence` | token |
+| `documentation.good_contracts.recommendation` | dropped |
+| `understanding.reason` | dropped |
+| `understanding.authorship_class_by_path.{}` | token |
+| `understanding.orphaned_understanding` | path (hashed when hashing is on) |
+| `understanding.modules.authorship_class` | token |
+| `understanding.modules.finding` | token |
+| `understanding.modules.recommendation` | dropped |
+| `derived_findings.name` | token |
+| `derived_findings.paths` | path (hashed when hashing is on) |
+| `derived_findings.action` | dropped |
+| `attention.findings` | token |
+| `prescribed_actions.findings` | token |
+| `prescribed_actions.action` | dropped |
+| `findings_markdown` | dropped |
+| `keyhole_summary.concerns.name` | token |
+| `keyhole_summary.summary_text` | dropped |
+
+## gap_actions
+
+| Field | Kept as |
+|---|---|
+| `gap_actions.signal` | token |
+| `gap_actions.action` | dropped |
+| `gap_actions.paths` | path (hashed when hashing is on) |
+
+## exclusion_disclosures
+
+| Field | Kept as |
+|---|---|
+| `excluded_by_config.affected_finding_paths` | path (hashed when hashing is on) |
+| `excluded_by_config.dirs` | path (hashed when hashing is on) |
+| `excluded_by_config.patterns` | path (hashed when hashing is on) |
+| `excluded_as_archive.affected_finding_paths` | path (hashed when hashing is on) |
+| `pruned_finding_paths.paths` | path (hashed when hashing is on) |
+
+## excluded_generated
+
+| Field | Kept as |
+|---|---|
+| `excluded_generated.reason` | dropped |
+
+## structure_drift_block
+
+| Field | Kept as |
+|---|---|
+| `structure_drift.tier_0.empty_ownership_patterns.pattern` | dropped |
+| `structure_drift.tier_0.empty_ownership_patterns.declared_in` | dropped |
+| `structure_drift.tier_0.empty_ownership_patterns.owners` | dropped |
+| `structure_drift.tier_1.static_lens_reason` | token |
+
+## plugin_version
+
+| Field | Kept as |
+|---|---|
+| `plugin_version` | token |
+
+## decline
+
+| Field | Kept as |
+|---|---|
+| `decline_markers.tool` | token |
+| `decline_markers.declined_by` | dropped |
+| `decline_markers.declined_at` | token |
+| `decline_markers.version` | token |
+| `decline_markers.reason` | dropped |
+| `decline_disclosures` | dropped |
+
+## offers_block
+
+| Field | Kept as |
+|---|---|
+| `offers.type` | token |
+| `offers.status` | token |
+| `offers.reason` | token |
+| `offers.tool` | token |
+
+## uninstall_instructions_path
+
+| Field | Kept as |
+|---|---|
+| `uninstall_instructions_path` | dropped |
+
+## anomalies
+
+| Field | Kept as |
+|---|---|
+| `anomalies.code` | token |
+| `anomalies.description` | dropped |
+| `anomalies.detail` | dropped |
+
+## instruction_claims
+
+| Field | Kept as |
+|---|---|
+| `instruction_claims.failures.kind` | token |
+| `instruction_claims.failures.version` | dropped |
+| `instruction_claims.failures.reason` | dropped |
+
+## claude_config
+
+| Field | Kept as |
+|---|---|
+| `claude_config.reason` | dropped |
+| `claude_config.snapshot_date` | token |
+| `claude_config.source_urls` | dropped |
+| `claude_config.manifest_error` | dropped |
+| `claude_config.findings.kind` | token |
+| `claude_config.findings.key` | dropped |
+| `claude_config.findings.value` | dropped |
+| `claude_config.findings.fix` | dropped |
+
+## nested_instructions
+
+| Field | Kept as |
+|---|---|
+| `nested_instructions.files.tool` | token |
+| `nested_instructions.files.kind` | token |
+| `nested_instructions.files.grade` | token |
+| `nested_instructions.files.scope.directory` | path (hashed when hashing is on) |
+| `nested_instructions.files.scope.globs` | path (hashed when hashing is on) |
+| `nested_instructions.files.findings.kind` | token |
+| `nested_instructions.files.findings.reference` | dropped |
+| `nested_instructions.files.findings.reason` | dropped |
+| `nested_instructions.findings.kind` | token |
+| `nested_instructions.findings.detail` | dropped |
+| `nested_instructions.findings.pattern` | path (hashed when hashing is on) |
+| `nested_instructions.findings.parent` | path (hashed when hashing is on) |
+| `nested_instructions.budget.claude_code.files` | path (hashed when hashing is on) |
+| `nested_instructions.budget.claude_code.skipped_imports.source` | path (hashed when hashing is on) |
+| `nested_instructions.budget.claude_code.skipped_imports.target` | path (hashed when hashing is on) |
+| `nested_instructions.budget.claude_code.skipped_imports.reason` | dropped |
+| `nested_instructions.budget.codex.files` | path (hashed when hashing is on) |
+| `nested_instructions.budget.codex.deepest_chain.files` | path (hashed when hashing is on) |
+| `nested_instructions.budget.codex.deepest_chain.directory` | path (hashed when hashing is on) |
+
+## agent_harness
+
+| Field | Kept as |
+|---|---|
+| `agent_harness.reason` | dropped |
+| `agent_harness.executes.kind` | token |
+| `agent_harness.executes.name` | dropped |
+| `agent_harness.executes.detail` | dropped |
+| `agent_harness.findings.kind` | token |
+| `agent_harness.findings.detail` | dropped |
+| `agent_harness.findings.fix` | dropped |
+
+## agent_environment
+
+| Field | Kept as |
+|---|---|
+| `agent_environment.reason` | dropped |
+| `agent_environment.setup.sources.kind` | token |
+| `agent_environment.setup.sources.detail` | dropped |
+| `agent_environment.check.entry_points.command` | dropped |
+| `agent_environment.check.entry_points.source` | dropped |
+| `agent_environment.check.named.command` | dropped |
+| `agent_environment.check.named.verdict` | token |
+| `agent_environment.check.named.reason` | dropped |
+| `agent_environment.check.unresolved.command` | dropped |
+| `agent_environment.check.unresolved.verdict` | token |
+| `agent_environment.check.unresolved.reason` | dropped |
+| `agent_environment.pinning.manifests.ecosystem` | token |
+| `agent_environment.pinning.manifests.manifest` | path (hashed when hashing is on) |
+| `agent_environment.pinning.manifests.lockfile` | path (hashed when hashing is on) |
+| `agent_environment.ci_duration.reason` | dropped |
+| `agent_environment.ci_duration.branch` | dropped |
+| `agent_environment.ci_duration.workflows.workflow` | dropped |
+| `agent_environment.findings.kind` | token |
+| `agent_environment.findings.detail` | dropped |
+| `agent_environment.findings.fix` | dropped |
+| `agent_environment.layer5_cap.ceiling` | token |
+| `agent_environment.layer5_cap.unmet` | token |
+| `agent_environment.layer5_cap.reason` | dropped |
 
 ## shared_tooling
 
@@ -423,13 +617,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ci_checks.merged_config` | token |
 | `ci_checks.merged_config_reason` | token |
 
-## layer_grades
-
-| Field | Kept as |
-|---|---|
-| `layer_grades.reason` | dropped |
-| `layer_grades.instructions_grade` | token |
-
 ## agent_building
 
 | Field | Kept as |
@@ -441,6 +628,29 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_building.ci_agents` | token |
 | `agent_building.issue_trackers` | token |
 | `agent_building.git_hosts` | token |
+
+## layer_grades
+
+| Field | Kept as |
+|---|---|
+| `layer_grades.reason` | dropped |
+| `layer_grades.instructions_grade` | token |
+
+## instruction_placement
+
+| Field | Kept as |
+|---|---|
+| `instruction_placement.flagged` | path (hashed when hashing is on) |
+| `instruction_placement.files.kind` | token |
+| `instruction_placement.files.relocatable.heading` | dropped |
+| `instruction_placement.files.relocatable.signals` | token |
+| `instruction_placement.files.relocatable.home.kind` | token |
+| `instruction_placement.files.relocatable.home.target` | path (hashed when hashing is on) |
+| `instruction_placement.loaded_in_full.kind` | token |
+| `instruction_placement.loaded_in_full.relocatable.heading` | dropped |
+| `instruction_placement.loaded_in_full.relocatable.signals` | token |
+| `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
+| `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
 
 ## ai_usage
 
@@ -454,165 +664,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ai_usage.covered_author_agents` | dropped |
 | `ai_usage.limits` | dropped |
 
-## agent_harness
+## doc_claims
 
 | Field | Kept as |
 |---|---|
-| `agent_harness.reason` | dropped |
-| `agent_harness.executes.kind` | token |
-| `agent_harness.executes.name` | dropped |
-| `agent_harness.executes.detail` | dropped |
-| `agent_harness.findings.kind` | token |
-| `agent_harness.findings.detail` | dropped |
-| `agent_harness.findings.fix` | dropped |
-
-## agent_environment
-
-| Field | Kept as |
-|---|---|
-| `agent_environment.reason` | dropped |
-| `agent_environment.setup.sources.kind` | token |
-| `agent_environment.setup.sources.detail` | dropped |
-| `agent_environment.check.entry_points.command` | dropped |
-| `agent_environment.check.entry_points.source` | dropped |
-| `agent_environment.check.named.command` | dropped |
-| `agent_environment.check.named.verdict` | token |
-| `agent_environment.check.named.reason` | dropped |
-| `agent_environment.check.unresolved.command` | dropped |
-| `agent_environment.check.unresolved.verdict` | token |
-| `agent_environment.check.unresolved.reason` | dropped |
-| `agent_environment.pinning.manifests.ecosystem` | token |
-| `agent_environment.pinning.manifests.manifest` | path (hashed when hashing is on) |
-| `agent_environment.pinning.manifests.lockfile` | path (hashed when hashing is on) |
-| `agent_environment.ci_duration.reason` | dropped |
-| `agent_environment.ci_duration.branch` | dropped |
-| `agent_environment.ci_duration.workflows.workflow` | dropped |
-| `agent_environment.findings.kind` | token |
-| `agent_environment.findings.detail` | dropped |
-| `agent_environment.findings.fix` | dropped |
-| `agent_environment.layer5_cap.ceiling` | token |
-| `agent_environment.layer5_cap.unmet` | token |
-| `agent_environment.layer5_cap.reason` | dropped |
-
-## claude_config
-
-| Field | Kept as |
-|---|---|
-| `claude_config.reason` | dropped |
-| `claude_config.snapshot_date` | token |
-| `claude_config.source_urls` | dropped |
-| `claude_config.manifest_error` | dropped |
-| `claude_config.findings.kind` | token |
-| `claude_config.findings.key` | dropped |
-| `claude_config.findings.value` | dropped |
-| `claude_config.findings.fix` | dropped |
-
-## structure
-
-| Field | Kept as |
-|---|---|
-| `structure.reason` | reason code |
-| `structure.language` | token |
-| `structure.modularity_reason` | token |
-| `structure.footprints.module` | path (hashed when hashing is on) |
-| `structure.sccs` | path (hashed when hashing is on) |
-| `structure.breakup_candidates.package` | path (hashed when hashing is on) |
-| `structure.breakup_candidates.clusters` | path (hashed when hashing is on) |
-| `structure.internal_burrow_edges.importer` | path (hashed when hashing is on) |
-| `structure.internal_burrow_edges.imported` | path (hashed when hashing is on) |
-| `structure.name_collisions.name` | path (hashed when hashing is on) |
-| `structure.name_collisions.paths` | path (hashed when hashing is on) |
-
-## structure_drift
-
-| Field | Kept as |
-|---|---|
-| `structure_drift.tier_0.empty_ownership_patterns.pattern` | dropped |
-| `structure_drift.tier_0.empty_ownership_patterns.declared_in` | dropped |
-| `structure_drift.tier_0.empty_ownership_patterns.owners` | dropped |
-| `structure_drift.tier_1.static_lens_reason` | token |
-
-## behaviour
-
-| Field | Kept as |
-|---|---|
-| `behaviour.reason` | dropped |
-| `behaviour.static_modularity_projection` | dropped |
-| `behaviour.static_history_disagreement.finding` | token |
-| `behaviour.static_history_disagreement.recommendation` | dropped |
-| `behaviour.hidden_coupling_findings.finding` | token |
-| `behaviour.hidden_coupling_findings.recommendation` | dropped |
-| `behaviour.refactor_boundaries.finding` | token |
-| `behaviour.refactor_boundaries.recommendation` | dropped |
-
-## documentation
-
-| Field | Kept as |
-|---|---|
-| `documentation.reason` | dropped |
-| `documentation.stale_doc_on_complexity.finding` | token |
-| `documentation.stale_doc_on_complexity.confidence` | token |
-| `documentation.stale_doc_on_complexity.recommendation` | dropped |
-| `documentation.unexplained_complexity.finding` | token |
-| `documentation.unexplained_complexity.confidence` | token |
-| `documentation.unexplained_complexity.recommendation` | dropped |
-| `documentation.good_contracts.finding` | token |
-| `documentation.good_contracts.confidence` | token |
-| `documentation.good_contracts.recommendation` | dropped |
-
-## understanding
-
-| Field | Kept as |
-|---|---|
-| `understanding.reason` | dropped |
-| `understanding.authorship_class_by_path.{}` | token |
-| `understanding.orphaned_understanding` | path (hashed when hashing is on) |
-| `understanding.modules.authorship_class` | token |
-| `understanding.modules.finding` | token |
-| `understanding.modules.recommendation` | dropped |
-
-## findings and attention
-
-| Field | Kept as |
-|---|---|
-| `prior_findings_snapshot.findings.name` | token |
-| `prior_findings_snapshot.findings.paths` | path (hashed when hashing is on) |
-| `derived_findings.name` | token |
-| `derived_findings.paths` | path (hashed when hashing is on) |
-| `derived_findings.action` | dropped |
-| `attention.findings` | token |
-| `prescribed_actions.findings` | token |
-| `prescribed_actions.action` | dropped |
-| `findings_markdown` | dropped |
-| `keyhole_summary.concerns.name` | token |
-| `keyhole_summary.summary_text` | dropped |
-| `gap_actions.signal` | token |
-| `gap_actions.action` | dropped |
-| `gap_actions.paths` | path (hashed when hashing is on) |
-| `excluded_by_config.affected_finding_paths` | path (hashed when hashing is on) |
-| `excluded_by_config.dirs` | path (hashed when hashing is on) |
-| `excluded_by_config.patterns` | path (hashed when hashing is on) |
-| `excluded_as_archive.affected_finding_paths` | path (hashed when hashing is on) |
-| `pruned_finding_paths.paths` | path (hashed when hashing is on) |
-| `archived_finding_paths` | path (hashed when hashing is on) |
-
-## decline markers and offers
-
-| Field | Kept as |
-|---|---|
-| `decline_markers.tool` | token |
-| `decline_markers.declined_by` | dropped |
-| `decline_markers.declined_at` | token |
-| `decline_markers.version` | token |
-| `decline_markers.reason` | dropped |
-| `decline_disclosures` | dropped |
-| `offers.type` | token |
-| `offers.status` | token |
-| `offers.reason` | token |
-| `offers.tool` | token |
-| `anomalies.code` | token |
-| `anomalies.description` | dropped |
-| `anomalies.detail` | dropped |
+| `doc_claims.excluded_trees` | path (hashed when hashing is on) |
+| `doc_claims.failures.kind` | token |
+| `doc_claims.failures.version` | dropped |
+| `doc_claims.failures.reason` | dropped |
+| `doc_claims.contradictions.kind` | token |
+| `doc_claims.contradictions.sites.value` | dropped |
+| `doc_claims.contradictions.conflict_pair.value` | dropped |
 
 ## fleet-data.json (the fleet skill)
 

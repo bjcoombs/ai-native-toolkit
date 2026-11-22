@@ -18,8 +18,6 @@ a field of the block's TypedDict, and that real documents validate.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from lib.ci_includes import STATUSES
 from lib.merged_ci import MERGED_STATUSES
 from lib.run_context_types import JsonDict
@@ -205,7 +203,14 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
-            "read; false otherwise. Gates counted are those enforced counts."),
+            "read, or when no gate is found in a repository holding a go.mod or Cargo.toml "
+            "(see unmeasured_reason); false otherwise. Gates counted are those enforced "
+            "counts."),
+        "unmeasured_reason": _field(
+            {"type": ["string", "null"]},
+            "Why threshold_meets_minimum is null with no gate found: "
+            "go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml "
+            "and its gate may be a script this scan does not read; null otherwise."),
         "not_detected": _STRINGS,
     },
 }
@@ -240,7 +245,7 @@ DELIVERY: JsonDict = {
 }
 
 # Block name -> the block's described fields (no ``type``; each generator adds its own rules).
-BLOCK_SCHEMAS: dict[str, Any] = {
+BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
     "coverage_gate": COVERAGE_GATE,

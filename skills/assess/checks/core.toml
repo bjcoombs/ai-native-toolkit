@@ -1,8 +1,11 @@
 # The core check manifest (#789): every collector, signal, condition and finding the
 # toolkit ships, declared once. Contract: skills/assess/references/check-manifest.schema.json;
-# loader: skills/assess/scripts/lib/check_manifest.py; agreement with the scan registry,
-# the finding tables, the counts-only rules and the default maturity model:
-# skills/assess/tests/test_check_manifest.py. Collectors are in scan-table order.
+# loader: skills/assess/scripts/lib/check_manifest.py. The finding tables, the coupling
+# thresholds, the counts-only rules (each collector's privacy table) and the per-block
+# reason descriptions of the published schemas are generated from this file at import
+# (#795). Agreement with the scan registry, the headless tables, the typed roots and the
+# default maturity model: skills/assess/tests/test_check_manifest.py. Collectors are in
+# scan-table order.
 
 manifest_version = 1
 owner = "core"
@@ -924,12 +927,16 @@ headless = { coverage_gate = "registered" }
 shapes = [
   { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
-revision = 1
+revision = 2
+unknown_reasons = [
+  { code = "go_rust_gate_form_not_read", carried_in = "unmeasured_reason", means = "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.", next_step = "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines." },
+]
   [entries.privacy]
   "coverage_gate.gates.tool" = "token"
   "coverage_gate.gates.form" = "drop"
   "coverage_gate.gates.unit" = "token"
   "coverage_gate.gates.metric" = "token"
+  "coverage_gate.unmeasured_reason" = "token"
   "coverage_gate.not_detected" = "drop"
 
 [[entries]]
@@ -991,6 +998,15 @@ shapes = [
   { path = "structure", type = "lib.structure_graph:StructureBlock" },
 ]
 revision = 1
+unknown_reasons = [
+  { code = "no_grimp", block = "structure", means = "grimp, the Python import-graph builder, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "no_networkx", block = "structure", means = "networkx, which the structure metrics need, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "grimp_failed", block = "structure", means = "grimp could not build the Python import graph.", next_step = "Check that the packages import cleanly; the sentence after the code names grimp's error." },
+  { code = "no_python_packages", block = "structure", means = "A Python repository with no importable package.", next_step = "Nothing to change if the code is scripts; a package with an __init__.py is measured." },
+  { code = "no_import_graph_<language>", block = "structure", means = "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.", next_step = "Nothing to change: structure reads as not measured for this language." },
+  { code = "invalid_import_graph", block = "structure", means = "A builder returned a graph that breaks the module-graph contract.", next_step = "Report it against the toolkit; structure reads as not measured meanwhile." },
+  { code = "no_source_files", block = "structure", means = "The scope holds no source file in a language the assess skill recognises.", next_step = "Nothing to change if the scope has no code; check the scope and the excludes otherwise." },
+]
   [entries.privacy]
   "runtime.reason" = "drop"
   "runtime.static_reachability.caveat" = "drop"
@@ -1724,7 +1740,7 @@ collector = "core.coverage_gate"
 path = "coverage_gate.threshold_meets_minimum"
 type = "bool"
 evidence = "config_text"
-null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count)"
+null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count), or no gate is found in a repository holding a go.mod or Cargo.toml (unmeasured_reason go_rust_gate_form_not_read)"
 
 [[entries]]
 id = "core:test_pressure.mutation_run"

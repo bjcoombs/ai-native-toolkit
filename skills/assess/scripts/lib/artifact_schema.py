@@ -203,10 +203,14 @@ constant each.
 # continue-on-error: true, allow_failure: true, set +e) and checks off the
 # ordinary triggers left out. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-# 1.33.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# 1.33.0: run-context.json coverage_gate gains unmeasured_reason (issue #788):
+# go_rust_gate_form_not_read when no gate is found in a repository holding a
+# go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
+# the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
+# 1.34.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.33.0"
+ARTIFACT_SCHEMA_VERSION = "1.34.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -330,10 +334,14 @@ ARTIFACT_SCHEMA_VERSION = "1.33.0"
 #     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
 #     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
 #     Layer 5 evidence can move.
-# 29: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+# 29: coverage_gate reads go-test-coverage's .testcoverage.yml, cargo tarpaulin
+#     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
+#     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
+#     level 1 as not measured (threshold_meets_minimum null) where it read 0.
+# 30: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
 #     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
 #     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
 #     or person never does. The same matcher serves ``delivery`` and the GitLab
 #     note classifier (``gitlab_notes``) under --platform, so a confirmed account
 #     moves their agent counts too. Without the section nothing changes.
-ASSESS_METHOD_VERSION = 29
+ASSESS_METHOD_VERSION = 30

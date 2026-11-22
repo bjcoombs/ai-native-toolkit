@@ -19,8 +19,9 @@ Several repositories aggregate by account (commits summed, evidence merged,
 ``repositories`` counted), the /fleet form. ``--confirm CLASS=ACCOUNT`` (CLASS:
 ``agent``, ``bot`` or ``person``; ACCOUNT: the listed account) writes the answer
 into the ``[identities]`` section of ``--config`` (default: the single repo's
-``.assess/config.toml``), moving it out of any other class. The rest of the file
-is kept as written.
+``.assess/config.toml``), moving it out of any other class. The section is
+regenerated at the end of the file, so comments inside it are not kept; the rest
+of the file is kept as written.
 
 Exit codes:
     0  listed, or answers written
@@ -87,7 +88,10 @@ def _toml_list(values: list[str]) -> str:
 
 
 def write_answers(config: Path, answers: list[tuple[str, str]]) -> None:
-    """Merge ``answers`` (class key, account) into ``config``'s ``[identities]``."""
+    """Merge ``answers`` (class key, account) into ``config``'s ``[identities]``.
+
+    The section is regenerated at the end of the file: its entries are kept, its
+    comments are not. Every other line is kept as written."""
     text = config.read_text(encoding="utf-8") if config.is_file() else ""
     section = tomllib.loads(text).get("identities", {}) if text else {}
     if not isinstance(section, dict):

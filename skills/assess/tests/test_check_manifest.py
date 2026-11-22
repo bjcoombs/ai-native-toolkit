@@ -2,15 +2,19 @@
 
 ``skills/assess/checks/core.toml`` is checked against the scan registry
 (``scan_registry.SCANS``), the headless runner's tables (``signals``), the typed roots
-(``counts_only_schema.ROOTS``), the counts-only rules (``counts_only_rules.RULES``),
-the finding tables (``keyhole_signals``, ``assess_config``), the default maturity
-model and the signal classes of ``level_signals``. Each failure names the scan,
-signal, condition or finding that disagrees. Until later #789 steps generate these
-tables from the manifest, a new scan, criterion, finding or counts-only rule needs a
-manifest entry too, and these tests say which one is missing.
+(``counts_only_schema.ROOTS``), the default maturity model and the signal classes of
+``level_signals``. Each failure names the scan, signal, condition or finding that
+disagrees. Until later #789 steps generate those tables from the manifest, a new scan or
+criterion needs a manifest entry too, and these tests say which one is missing.
+
+The finding tables, the ``hidden_coupling`` thresholds and the counts-only ``RULES``
+are generated from the manifest (#795), so they agree by construction; the tests here
+pin the builders (an edited manifest changes the table) and the loader rules the
+generated tables rely on.
 """
 from __future__ import annotations
 
+import copy
 import importlib
 import json
 import tomllib
@@ -26,11 +30,11 @@ import pytest
 from lib import check_manifest as cm
 from lib import scan_registry as sr
 from lib import signals as sg
+from lib import coupling_analysis as ca
 from lib.assess_config import GATE_CONCERN_FINDINGS
-from lib.coupling_analysis import (DEFAULT_HIGH_FRONT_DOOR_RATIO, DEFAULT_HIGH_MODULARITY_Q,
-                                   DEFAULT_LOW_CONTAINMENT)
 from lib.counts_only_rules import RULES, FieldClass
 from lib.counts_only_schema import ROOTS
+from lib.import_graph import STRUCTURE_REASON_CODES
 from lib.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)
 from lib.level_signals import SIGNAL_INPUTS, InputClass, load_default_levels
@@ -194,21 +198,28 @@ def test_finding_inputs_under_a_typed_root_name_its_fields(manifest: cm.CheckMan
     assert not _names_a_field("structure_drift.tier_2")
 
 
-def test_privacy_matches_counts_only_rules(manifest: cm.CheckManifest) -> None:
-    want = {pattern: cls for group in RULES.values() for pattern, cls in group.items()}
-    got: dict[str, str] = {}
-    problems = []
-    for c in cm.collectors(manifest):
-        for pattern, cls in c.get("privacy", {}).items():
-            if pattern in got:
-                problems.append(f"{pattern}: classified by two collectors")
-            got[pattern] = cls
-    problems += [f"{p}: in counts_only_rules.RULES, in no collector's privacy table"
-                 for p in want if p not in got]
-    problems += [f"{p}: in a privacy table, not in counts_only_rules.RULES" for p in got if p not in want]
-    problems += [f"{p}: {got[p]!r} in the manifest, {want[p]!r} in RULES"
-                 for p in want.keys() & got.keys() if got[p] != want[p]]
-    _clean(problems)
+def _entry(m: cm.CheckManifest, entry_id: str) -> Any:
+    return next(e for e in m["entries"] if e["id"] == entry_id)
+
+
+def test_rules_are_the_privacy_tables(manifest: cm.CheckManifest) -> None:
+    """RULES is each collector's privacy table, keyed by scan key in scan-table order."""
+    assert RULES == cm.privacy_rules(manifest)
+    assert list(RULES) == [cm.scan_key(c) for c in cm.collectors(manifest) if c.get("privacy")]
+
+
+def test_an_edited_privacy_table_changes_the_rules(manifest: cm.CheckManifest) -> None:
+    edited = copy.deepcopy(manifest)
+    _entry(edited, "core.ci_checks")["privacy"]["ci_checks.basis"] = "drop"
+    assert cm.privacy_rules(manifest)["ci_checks"]["ci_checks.basis"] == "token"
+    assert cm.privacy_rules(edited)["ci_checks"]["ci_checks.basis"] == "drop"
+
+
+def test_a_pattern_classified_by_two_collectors_is_rejected(manifest: cm.CheckManifest) -> None:
+    edited = copy.deepcopy(manifest)
+    _entry(edited, "core.ai_usage")["privacy"]["ci_checks.basis"] = "drop"
+    codes = [e["code"] for e in cm.validate_manifest(cast(dict[str, Any], edited))]
+    assert codes == ["DUPLICATE_PRIVACY"]
 
 
 def _criteria() -> list[tuple[str, int, str, object]]:
@@ -246,26 +257,87 @@ def test_conditions_match_default_model(manifest: cm.CheckManifest) -> None:
     assert len(set(want)) == len(want), "a condition key is not unique in default.toml"
 
 
-def test_findings_match_finding_tables(manifest: cm.CheckManifest) -> None:
-    entries = cm.findings(manifest)
-    assert [f["name"] for f in entries] == FINDING_ORDER
-    problems = []
-    for f in entries:
-        name = f["name"]
-        checks = {
-            "action": (f["action"], FINDING_ACTIONS[name]),
-            "mode": (f["mode"], FINDING_MODES[name]),
-            "concern": (f["concern"], name in GATE_CONCERN_FINDINGS),
-            "prune_missing_paths": (f.get("prune_missing_paths", False), name in GIT_HISTORY_FINDINGS),
-            "suppressed_when": ("suppressed_when" in f, name in _CHURN_DERIVED_FINDINGS),
-        }
-        problems += [f"{name}: {field} is {got!r} in the manifest, {want!r} in code"
-                     for field, (got, want) in checks.items() if got != want]
-    _clean(problems)
-    hidden = next(f for f in entries if f["name"] == "hidden_coupling")
-    assert hidden["thresholds"] == {"low_containment": DEFAULT_LOW_CONTAINMENT,
-                                    "high_modularity_q": DEFAULT_HIGH_MODULARITY_Q,
-                                    "high_front_door_ratio": DEFAULT_HIGH_FRONT_DOOR_RATIO}
+def test_finding_tables_are_generated_from_the_manifest(manifest: cm.CheckManifest) -> None:
+    tables = cm.finding_tables(manifest)
+    assert FINDING_ORDER == tables["order"] == [f["name"] for f in cm.findings(manifest)]
+    assert FINDING_ACTIONS == tables["actions"] and FINDING_MODES == tables["modes"]
+    assert GATE_CONCERN_FINDINGS == tables["concern"]
+    assert GIT_HISTORY_FINDINGS == tables["prune_missing_paths"] == {"hidden_coupling",
+                                                                     "refactor_boundary"}
+    assert _CHURN_DERIVED_FINDINGS == tables["churn_suppressed"] == {"hidden_coupling", "lying_map"}
+
+
+def test_every_finding_has_a_path_derivation() -> None:
+    """The manifest's finding names are the derivation's keys (a missing key would read empty)."""
+    from lib.keyhole_signals import _finding_path_inputs
+    inputs = _finding_path_inputs(
+        behaviour={}, documentation={}, understanding={}, drift_hidden_dirs=[],  # type: ignore[typeddict-item]
+        churn_degenerate=False, untrusted=[], self_ref_paths=[], unactioned=[],
+        accreting_paths=[], dead_weight=[], override_contradiction_paths=[])
+    assert list(inputs) == FINDING_ORDER
+
+
+def test_an_edited_finding_order_reorders_the_tables(manifest: cm.CheckManifest) -> None:
+    edited = copy.deepcopy(manifest)
+    hidden = _entry(edited, "core.finding.hidden_coupling")
+    lying = _entry(edited, "core.finding.lying_map")
+    hidden["order"], lying["order"] = lying["order"], hidden["order"]
+    lying["concern"] = False
+    tables = cm.finding_tables(edited)
+    assert tables["order"][:2] == ["lying_map", "hidden_coupling"]
+    assert "lying_map" not in tables["concern"]
+    assert cm.finding_tables(manifest)["order"][:2] == ["hidden_coupling", "lying_map"]
+
+
+def test_only_the_churn_expression_is_accepted(manifest: cm.CheckManifest) -> None:
+    edited = copy.deepcopy(manifest)
+    _entry(edited, "core.finding.lying_map")["suppressed_when"] = "doc_staleness.churn_degenerate"
+    codes = [e["code"] for e in cm.validate_manifest(cast(dict[str, Any], edited))]
+    assert codes == ["UNSUPPORTED_EXPRESSION"]
+
+
+def test_coupling_thresholds_come_from_the_manifest(manifest: cm.CheckManifest) -> None:
+    """Every threshold is read (none is documentary) and the defaults are the manifest's."""
+    thresholds = cm.finding_thresholds(manifest, "hidden_coupling")
+    assert thresholds == {"low_containment": ca.DEFAULT_LOW_CONTAINMENT,
+                          "high_modularity_q": ca.DEFAULT_HIGH_MODULARITY_Q,
+                          "high_front_door_ratio": ca.DEFAULT_HIGH_FRONT_DOOR_RATIO}
+    assert [f["name"] for f in cm.findings(manifest) if "thresholds" in f] == ["hidden_coupling"]
+    assert cm.finding_thresholds(manifest, "lying_map") == {}
+
+
+def test_finding_headless_status_is_the_derived_findings_block(manifest: cm.CheckManifest) -> None:
+    """A finding is reported headless exactly as the derived_findings block is."""
+    owner = next(c for c in cm.collectors(manifest) if "derived_findings" in c["publishes"])
+    status = owner.get("headless", {}).get("derived_findings", "registered")
+    _clean([f"{f['name']}: headless {f.get('headless')!r}, derived_findings is {status!r}"
+            for f in cm.findings(manifest) if f.get("headless", "registered") != status])
+
+
+def test_structure_reason_codes_match_import_graph(manifest: cm.CheckManifest) -> None:
+    """The declared structure codes are STRUCTURE_REASON_CODES (a <name> family by prefix)."""
+    declared = [r["code"] for r in cm.reason_codes(manifest, "structure")]
+    families = [c.split("<")[0] for c in declared if "<" in c]
+    exact = {c for c in declared if "<" not in c}
+
+    def covered(code: str) -> bool:
+        return code in exact or any(code.startswith(f) for f in families)
+    _clean([f"{c}: a structure reason code with no manifest entry"
+            for c in sorted(STRUCTURE_REASON_CODES) if not covered(c)]
+           + [f"{c}: declared, not in import_graph.STRUCTURE_REASON_CODES"
+              for c in sorted(exact - STRUCTURE_REASON_CODES)]
+           + [f"{f}<...>: a family no code belongs to" for f in families
+              if not any(c.startswith(f) for c in STRUCTURE_REASON_CODES - exact)])
+    assert cm.reason_codes(manifest, "behaviour") == []
+    assert cm.reason_codes(manifest, "ci_checks") == []  # included_jobs is carried in basis
+
+
+def test_a_reason_for_an_unpublished_block_is_rejected(manifest: cm.CheckManifest) -> None:
+    edited = copy.deepcopy(manifest)
+    _entry(edited, "core.keyhole_blocks")["unknown_reasons"][0]["block"] = "structur"
+    errors = cm.validate_manifest(cast(dict[str, Any], edited))
+    assert [e["code"] for e in errors] == ["UNPUBLISHED_BLOCK"]
+    assert errors[0].get("suggestion") == "structure"
 
 
 def test_loader_vocabularies_match_the_code() -> None:
