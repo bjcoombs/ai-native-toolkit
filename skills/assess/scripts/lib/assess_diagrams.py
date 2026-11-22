@@ -29,13 +29,14 @@ number: row labels drop a model title's ``Layer N:`` prefix.
 from __future__ import annotations
 
 import re
+import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 from lib import fleet_svg as svg
-from lib.headline import _reason_word
+from lib.headline import reason_word
 from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import default_model
 from lib.run_context_types_diagrams import AssessDiagram, WaffleSquare
@@ -166,7 +167,7 @@ def _reason_text(code: str, titles: Mapping[str, str]) -> str:
     if code.startswith("requires:"):
         row, _, number = code.split(":", 1)[1].rpartition(".")
         return f"waits on {titles.get(row, row)} level {number}"
-    return _reason_word(code)
+    return reason_word(code)
 
 
 def _counts(squares: Sequence[WaffleSquare]) -> Counter[str]:
@@ -288,15 +289,20 @@ def diagrams_section(diagrams: Sequence[AssessDiagram]) -> str:
 
 def write_diagrams(assess_dir: Path, diagrams: Sequence[AssessDiagram]) -> list[Path]:
     """Write each drawn SVG (LF line endings) and remove every diagram file not drawn this run;
-    a symlink in a diagram's place is removed, never written through. Returns the paths written."""
+    a symlink in a diagram's place is removed, never written through. A file that cannot be
+    written (``OSError``) is named on stderr and skipped, so writing never stops the run either.
+    Returns the paths written."""
     written: list[Path] = []
     drawn = {d["file"]: d["svg"] for d in diagrams if d["svg"] is not None}
     for name in DIAGRAM_FILES:
         path = assess_dir / name
-        if path.is_symlink() or (path.is_file() and name not in drawn):
-            path.unlink()
-        content = drawn.get(name)
-        if content is not None:
-            path.write_text(content, encoding="utf-8", newline="\n")
-            written.append(path)
+        try:
+            if path.is_symlink() or (path.is_file() and name not in drawn):
+                path.unlink()
+            content = drawn.get(name)
+            if content is not None:
+                path.write_text(content, encoding="utf-8", newline="\n")
+                written.append(path)
+        except OSError as e:  # a diagram never stops a completed run
+            print(f"/assess: {name} not written ({type(e).__name__}: {e})", file=sys.stderr)
     return written

@@ -166,7 +166,7 @@ yet", never implied credit. The guard checks it on every rendered page.
 levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as
 "stale doc over complex code" (`keyhole_signals.FINDING_DISPLAY_NAMES`); and the headline words a
 reason code it has no entry for with "did not complete" and "not found" in place of "failed" and
-"missing" (`headline._reason_word`).
+"missing" (`headline.reason_word`).
 
 **Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, heat map and layer bars) is the
 ColorBrewer YlGn growth palette, pale yellow to deep green, in place of the red OrRd ramp;
@@ -2215,7 +2215,8 @@ The `/assess` diagrams and the report section that links them (#942, parent #940
 order, and never raises (a renderer that raises becomes a "the renderer raised X" skip).
 `write_diagrams(assess_dir, diagrams)` writes the drawn SVGs beside `run-context.json` and
 removes every file in `DIAGRAM_FILES` this run did not draw (a symlink in its place is
-removed, never written through); `run_publish.publish_run` calls it, and
+removed, never written through; a path that cannot be written is named on stderr and
+skipped, so writing never stops a run); `run_publish.publish_run` calls it, and
 `assess_core.run_opt_in_mutation` again after it recounts the `level` block.
 `diagrams_section(diagrams)` is the deterministic report's Markdown, one `## ` section per
 diagram opening with its `In place:` line, then the relative clickable image link and the

@@ -195,3 +195,9 @@ def test_report_links_the_waffle_the_run_wrote(tmp_path: Path) -> None:
     report = render_report(build_and_publish_run(repo_root=repo, run_date="2026-01-01"), "r")
     assert "[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)" in report
     assert (repo / ".assess" / ad.WAFFLE_FILE).is_file()
+
+
+def test_a_path_that_cannot_be_written_is_skipped_not_raised(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / ad.WAFFLE_FILE).mkdir()
+    assert ad.write_diagrams(tmp_path, ad.build_diagrams({"level": LEVEL}, MODEL_ROWS)) == []
+    assert f"{ad.WAFFLE_FILE} not written" in capsys.readouterr().err
