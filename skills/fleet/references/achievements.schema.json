@@ -9,7 +9,7 @@
       "const": 4
     },
     "fleet_data_version": {
-      "const": 2
+      "const": 3
     },
     "run": {
       "type": "string"
