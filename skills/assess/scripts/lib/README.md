@@ -3705,7 +3705,7 @@ the manifest and in its parents; `Package.swift` with a `.package(` dependency (
 `*.xcworkspace/xcshareddata/swiftpm/` in its directory, also inside an `.xcodeproj`);
 `*.csproj` / `*.fsproj` with a `PackageReference` (`packages.lock.json` beside the
 project); `build.gradle(.kts)` with a `dependencies` block outside `buildscript`
-(`gradle.lockfile` beside it, or `gradle/verification-metadata.xml`; `settings-gradle.lockfile`
+(`gradle.lockfile` beside it, or `gradle/verification-metadata.xml` in its directory or a parent; `settings-gradle.lockfile`
 locks the settings classpath only, so it does not count); `vcpkg.json`
 with dependencies (a `builtin-baseline` in the manifest itself). `note` is
 `skipped_library` for an unlocked Composer library (`type` `library` or absent), Pub
@@ -3713,7 +3713,7 @@ package (no `publish_to: none`) or SwiftPM library (a `.library(` product and no
 `.executable(` / `.executableTarget(`, comments not read): listed, not
 counted, so a repository of such libraries reads `no_manifests` until #827 gives not
 applicable. `direct_pins_only` marks an unlocked Gradle project beside
-`gradle/libs.versions.toml` or .NET project under a `Directory.Packages.props`: unlocked,
+`gradle/libs.versions.toml` (in its directory or a parent) or .NET project under a `Directory.Packages.props`: unlocked,
 and the condition's fix says to turn on dependency locking. The manifest text read for
 these decisions is never kept. Tests: `tests/test_pinning.py`,
 `tests/test_agent_environment.py`.

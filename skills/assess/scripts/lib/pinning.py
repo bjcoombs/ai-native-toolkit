@@ -17,7 +17,7 @@ excludes, with the lockfile found for it. Read from the files at HEAD
 | ``pubspec.yaml`` | ``pubspec.lock`` | ``dart`` |
 | ``Package.swift`` (with a ``.package(`` dependency) | ``Package.resolved`` beside it, or under ``<name>.xcworkspace/xcshareddata/swiftpm/`` (also inside an ``.xcodeproj``) in its directory | ``swift`` |
 | ``*.csproj``, ``*.fsproj`` (with a ``PackageReference``) | ``packages.lock.json`` beside the project | ``dotnet`` |
-| ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block outside ``buildscript``) | ``gradle.lockfile`` beside it, or ``gradle/verification-metadata.xml`` | ``jvm`` |
+| ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block outside ``buildscript``) | ``gradle.lockfile`` beside it, or ``gradle/verification-metadata.xml`` in its directory or a parent (the build root) | ``jvm`` |
 | ``vcpkg.json`` (with dependencies) | a ``builtin-baseline`` key in the manifest itself | ``cpp`` |
 | ``conanfile.py``, ``conanfile.txt`` | ``conan.lock`` | ``cpp`` |
 
@@ -38,7 +38,7 @@ Each row carries a ``note``:
   until a not-applicable state exists (#827). A library that commits its lock
   counts as locked as normal.
 - ``direct_pins_only``: an unlocked Gradle project beside a version catalog
-  (``gradle/libs.versions.toml``) or an unlocked .NET project under central
+  (``gradle/libs.versions.toml`` in its directory or a parent) or an unlocked .NET project under central
   package management (``Directory.Packages.props`` in its directory or a
   parent). Both pin direct versions, not the transitive set, so the row reads
   unlocked; the note lets the advice say to turn on dependency locking.
@@ -87,7 +87,7 @@ _LOCKS: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 _GRADLE = frozenset({"build.gradle", "build.gradle.kts"})
 _DOTNET_SUFFIXES = (".csproj", ".fsproj")
-_GRADLE_ROOT_LOCKS = ("gradle/verification-metadata.xml",)
+_GRADLE_VERIFICATION = "gradle/verification-metadata.xml"
 _GRADLE_CATALOG = "gradle/libs.versions.toml"
 _NUGET_CPM = "Directory.Packages.props"
 _SWIFT_RESOLVED = re.compile(
@@ -97,7 +97,8 @@ _PUBLISH_NONE = re.compile(r"""^publish_to:\s*["']?none["']?\s*(?:#.*)?$""", re.
 _SWIFT_LIBRARY = re.compile(r"\.library\s*\(")
 _SWIFT_EXECUTABLE = re.compile(r"\.executable(?:Target)?\s*\(")
 _SWIFT_DEPENDENCY = re.compile(r"\.package\s*\(")
-_C_COMMENTS = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+# A string literal is matched first and kept, so `"**/*IT.class"` never opens a comment.
+_C_COMMENTS = re.compile(r"""("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|/\*.*?\*/|//[^\n]*""", re.DOTALL)
 _BUILDSCRIPT = re.compile(r"\bbuildscript\s*\{")
 _GRADLE_DEPS = re.compile(r"^\s*dependencies\s*\{", re.MULTILINE)
 _PACKAGE_REFERENCE = re.compile(r"<PackageReference\b")
@@ -134,7 +135,7 @@ def _json(root: Path, rel: str) -> object:
 
 def _code(root: Path, rel: str) -> str:
     """A Swift or Gradle manifest's text without ``//`` and ``/* */`` comments."""
-    return _C_COMMENTS.sub("", _read(root, rel))
+    return _C_COMMENTS.sub(lambda m: m.group(1) or "", _read(root, rel))
 
 
 def _without_buildscript(text: str) -> str:
@@ -275,9 +276,9 @@ def _lock_for(index: RepoIndex, rel: str, name: str) -> tuple[str, str | None, P
         data = _json(index.root, rel)
         return "cpp", rel if isinstance(data, dict) and data.get("builtin-baseline") else None, None
     if name in _GRADLE:
-        lock = _beside(index, rel, "gradle.lockfile") or next(
-            (f for f in _GRADLE_ROOT_LOCKS if f in index.files), None)
-        pins_only = lock is None and _GRADLE_CATALOG in index.files
+        # The build root (with its gradle/ directory) may sit below the repository root.
+        lock = _beside(index, rel, "gradle.lockfile") or _lock_near(index, rel, (_GRADLE_VERIFICATION,))
+        pins_only = lock is None and _lock_near(index, rel, (_GRADLE_CATALOG,)) is not None
         return "jvm", lock, "direct_pins_only" if pins_only else None
     lock = _beside(index, rel, "packages.lock.json")  # a .csproj or .fsproj
     return "dotnet", lock, "direct_pins_only" if lock is None and _cpm_above(index, rel) else None

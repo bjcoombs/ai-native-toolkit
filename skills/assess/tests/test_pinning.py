@@ -156,6 +156,28 @@ def test_a_buildscript_classpath_is_not_a_dependency_block(tmp_path: Path) -> No
     assert _rows(both) == {"build.gradle": (False, None, None)}
 
 
+def test_a_glob_string_does_not_open_a_comment(tmp_path: Path) -> None:
+    """A `/*` inside a string literal is text, so the dependencies block after it is read."""
+    build = ('tasks.test { exclude("**/*IT.class") }\n' + GRADLE_DEPS
+             + 'sourceSets { main { java.srcDir("build/**/generated/**") } }\n')
+    pinning = _pinning(tmp_path, {"build.gradle.kts": build})
+    assert _rows(pinning) == {"build.gradle.kts": (False, None, None)}
+    assert _condition(pinning) == ("unmet", None)
+
+
+def test_a_gradle_build_below_the_root_reads_its_own_gradle_directory(tmp_path: Path) -> None:
+    """A Flutter or React Native android/ build keeps gradle/ beside its settings file."""
+    verified = _pinning(tmp_path / "a", {"android/app/build.gradle": GRADLE_DEPS,
+                                         "android/gradle/verification-metadata.xml": "x\n"})
+    assert _rows(verified) == {"android/app/build.gradle": (True, "android/gradle/verification-metadata.xml", None)}
+    catalog = _pinning(tmp_path / "b", {"android/app/build.gradle": GRADLE_DEPS,
+                                        "android/gradle/libs.versions.toml": "[versions]\n"})
+    assert _rows(catalog) == {"android/app/build.gradle": (False, None, "direct_pins_only")}
+    sibling = _pinning(tmp_path / "c", {"web/build.gradle": GRADLE_DEPS,
+                                        "android/gradle/verification-metadata.xml": "x\n"})
+    assert _rows(sibling) == {"web/build.gradle": (False, None, None)}
+
+
 @pytest.mark.parametrize("products, note", [
     pytest.param('[.executable(name: "app", targets: ["App"]), .library(name: "Core", targets: ["Core"])]',
                  None, id="executable-and-library"),
