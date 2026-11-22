@@ -247,6 +247,7 @@ sibling worktrees.
 - **Windows:** the script is bash, so run it under Git Bash, which ships with
   Git for Windows (Claude Code on Windows already needs it). Install `jq`
   separately (`winget install jqlang.jq`); Git Bash does not include it.
+  Installs and PATH notes: the [Windows setup guide](../../docs/windows.md).
   `timeout` is part of Git Bash.
 - **GitHub Enterprise:** `gh` uses its configured host. Target a GHE instance by
   setting `GH_HOST=github.example.com` or running
