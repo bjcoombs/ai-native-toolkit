@@ -53,17 +53,41 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 1493
 reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
 
+[ceilings."skills/assess/scripts/lib/coverage_gate.py"]
+lines = 874
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
 [ceilings."skills/assess/scripts/lib/doc_graph.py"]
-lines = 1107
-reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
+lines = 1171
+reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet); raised to 1171 by #981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
+[ceilings."skills/assess/scripts/lib/git_churn.py"]
+lines = 801
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
-lines = 1556
-reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py) and #795 (finding tables load from checks/core.toml)"
+lines = 1614
+reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py) and #795 (finding tables load from checks/core.toml); raised to 1614 by #981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
+[ceilings."skills/assess/scripts/lib/liveness_scan.py"]
+lines = 806
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
+[ceilings."skills/assess/scripts/lib/promissory_markers.py"]
+lines = 812
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
+[ceilings."skills/assess/scripts/lib/run_context_types.py"]
+lines = 812
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
+[ceilings."skills/assess/scripts/lib/structure_drift.py"]
+lines = 813
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]
-lines = 1016
-reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet)"
+lines = 1065
+reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet); raised to 1065 by #981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 
 [ceilings."skills/assess/tests/test_assess_finalize.py"]
 lines = 1243

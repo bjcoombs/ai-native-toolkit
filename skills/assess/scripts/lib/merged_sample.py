@@ -49,6 +49,43 @@ and comments with their bodies) and the GitLab merged list (titles and
 descriptions) are read with ``cache=False``; only the light ``--json mergedAt``
 listing, timestamps alone, may be cached. GitLab notes are never cached either
 (``lib/gitlab_notes.py``, #716).
+
+The shared sample of merged changes (#715), registered as the private
+`network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
+`run_date`; `review_reality` and `delivery` read it, so one listing serves both
+blocks and they describe the same changes. Both reads classify the remote with
+`remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
+`gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
+`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
+`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
+without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
+`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
+`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
+so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
+on or after `fleet_activity.window_start(history_window, run_date)`, newest
+`merged_at` first; `history_window` None (interactive `/assess` with no churn
+window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
+--search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
+(an update is never before its merge, so the newest merges are among the most
+recently updated), then the same search from the 30th newest `mergedAt` with
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
+for the heavy fields. GitLab, one read:
+`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
+then filtered and ordered by `merged_at` client-side (works on GitLab versions
+without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
+with `cache=False`: reviews, comments, titles and descriptions are read in memory only and
+never reach the `--platform` response cache; only the light `--json mergedAt` read is
+cached (#778). A change with no readable merge time is
+`<tool>_bad_json`. The value is a `MergedSample` (provider, `changes` as raw provider
+dicts, `since`, `github` or `gitlab`, and one `BotClassifier` every reader shares,
+so an account is probed once); any refusal is `{"available": false, "reason"}`,
+which each reader returns as its own block. `BotClassifier` (moved from
+`review_reality`): an author object with `is_bot`/`type` is classified from it, a
+`[bot]` login is a bot, any other login is probed once with `gh api
+users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
+person, anything else unknown. The value holds logins and text in memory only and
+never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an app author, so the author compares equal to the same app as a commenter. Tests: `tests/test_delivery.py`,
+`tests/test_platform_argv_contract.py`.
 """
 from __future__ import annotations
 

@@ -91,25 +91,67 @@ def test_core_does_not_import_orchestrators() -> None:
     )
 
 
-def test_every_lib_module_has_a_readme_entry() -> None:
-    """`lib/README.md` is the per-module reference `CLAUDE.md` points agents at.
-    A module merged without an entry is invisible to an agent that trusts the
-    map (issue #412: `decline_markers.py` and `interactivity.py` were missing).
-    Every top-level ``lib/*.py`` except ``__init__.py`` must have an entry
-    heading in the README's form: a line of its own reading **`name.py`**,
-    optionally followed by an italic note such as *(co-change hotspot)*. A
-    mention in prose, a bullet or a code example, or a name inside a longer
-    filename (``stats.py`` in ``complexity_stats.py``), does not count."""
-    readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
-    # A fenced code example is not the map, even when a line in it looks like
-    # an entry heading.
-    readme = re.sub(r"^```.*?^```", "", readme, flags=re.MULTILINE | re.DOTALL)
-    entries = set(
-        re.findall(r"^\*\*`([\w.]+\.py)`\*\*(?:[ \t]+\*\([^)\n]*\)\*)?[ \t]*$",
-                   readme, flags=re.MULTILINE)
-    )
-    missing = [
-        p.name for p in sorted(LIB_DIR.glob("*.py"))
-        if p.name != "__init__.py" and p.name not in entries
-    ]
-    assert not missing, f"lib/README.md has no entry for: {missing}"
+# A summary line is one sentence: it ends a sentence (optionally followed by a
+# parenthesised issue reference) and no sentence ends before that.
+_ONE_SENTENCE = re.compile(r"^[^\s].*[.?!](?: \([^()]*\))?$")
+_SENTENCE_BREAK = re.compile(r"[.?!] +[A-Z]")
+
+
+def _docstring_problem(path: Path) -> str | None:
+    """Why ``path`` fails the docstring rule, or None when it passes. An
+    ``__init__.py`` holding nothing but a docstring marks a package and is exempt."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    doc = ast.get_docstring(tree)
+    if path.name == "__init__.py" and all(
+        (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
+        or (isinstance(n, ast.ImportFrom) and n.module == "__future__")
+        for n in tree.body
+    ):
+        return None
+    if not doc or not doc.strip():
+        return "no module docstring"
+    first = doc.splitlines()[0]
+    if not _ONE_SENTENCE.match(first) or _SENTENCE_BREAK.search(first[:-1]):
+        return f"first line is not a single sentence: {first!r}"
+    return None
+
+
+def test_every_lib_module_has_a_docstring() -> None:
+    """Each ``lib/`` module documents itself in its module docstring (issue #981,
+    replacing the per-module index once kept in ``lib/README.md``, which every
+    feature PR edited and so serialised merges). Every module at any depth needs a
+    non-empty docstring whose first line is a one-sentence summary, followed by
+    the details. An agent that trusts the map finds a module's contract beside
+    its code (issue #412 was two modules merged with no entry)."""
+    modules = _lib_modules()
+    assert any(len(p.relative_to(LIB_DIR).parts) > 1 for p in modules), "the scan must reach lib subpackages"
+    problems = [f"{p.relative_to(LIB_DIR).as_posix()}: {why}" for p in modules
+                if (why := _docstring_problem(p)) is not None]
+    assert not problems, "lib modules need a one-sentence docstring summary:\n  " + "\n  ".join(problems)
+
+
+def test_the_docstring_check_fails_on_a_missing_or_run_on_summary(tmp_path: Path) -> None:
+    """The rule bites: no docstring, an empty one, a wrapped summary and two
+    sentences on the first line each fail; a package marker passes."""
+    cases = {
+        "none.py": "x = 1\n",
+        "empty.py": '""" """\nx = 1\n',
+        "wrapped.py": '"""Parse a report into the shape\nthe scan reads."""\n',
+        "two.py": '"""Parse a report. Then grade it."""\n',
+    }
+    for name, body in cases.items():
+        (tmp_path / name).write_text(body, encoding="utf-8")
+        assert _docstring_problem(tmp_path / name) is not None, name
+    good = {
+        "ok.py": '"""Parse a report into the shape the scan reads.\n\nDetails."""\n',
+        "question.py": '"""Does CI run the coverage gate? (issue #921)"""\n',
+    }
+    for name, body in good.items():
+        (tmp_path / name).write_text(body, encoding="utf-8")
+        assert _docstring_problem(tmp_path / name) is None, name
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    assert _docstring_problem(pkg / "__init__.py") is None
+    (pkg / "__init__.py").write_text("X = 1\n", encoding="utf-8")
+    assert _docstring_problem(pkg / "__init__.py") == "no module docstring"

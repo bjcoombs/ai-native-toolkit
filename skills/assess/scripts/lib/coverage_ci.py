@@ -52,6 +52,61 @@ reasons above; ``not_run_in_ci`` (false: CI is read and runs none of the
 gates); ``no_ci`` (false: no CI file at all).
 
 Inward-only imports: stdlib and ``lib`` CI readers; never an orchestrator.
+
+Does CI run the coverage gate? (#921, the maintainer decision on the Step 4 gate).
+`enforced_meets_minimum(gates, threshold, ci, line_gates, ...)` returns the
+`coverage_gate` block's `enforced_meets_minimum` and `enforced_basis`, which Layer 6
+level 1 of the default maturity model, and so the Step 4 `coverage_gate` gate, reads.
+A false or null `threshold_meets_minimum` stays false or null (`no_gate`,
+`threshold_below_minimum`, `threshold_not_read`); a true one needs a counted gate of at
+least 50 percent that an enforced CI line runs. `read_ci_runs(repo_root)` reads the
+GitHub workflows and `.gitlab-ci.yml` with #775's rules unchanged
+(`ci_masking.unmasked_lines`, `ci_triggers.workflow_trigger` / `resolve_workflows` /
+`gitlab_line_triggers`), one `Run` per command, a folded `run: >-` paragraph read as one
+command (masked as one line, so a `|| true` on a continuation line masks the head, and a
+paragraph with a line its step or body masks is dropped) and `sh -c '...'` and a quoted `run:` value read through. A word holding
+whitespace (a quoted argument) is dropped, so a flag inside an `echo` string is no flag.
+A gate written on a CI line must sit on an enforced command that carries its flag and
+whose program can run it (`runs_a_program`: not `echo` / `printf` and the like, not an
+install such as `pip install` or `npm install`), so `echo --cov-fail-under=90` runs nothing. A
+config gate needs an enforced command whose program is its tool (`program` resolves the
+wrappers `check_command._exec_program` and `_info_program` read, `bundle exec` and `docker
+compose run` included, and `check_command.is_info_invocation` (#919) makes `pytest
+--version` or `pytest --co` no run, so `pip install pytest --cov`
+and `npm install jest` run neither; `runs_tool`, `gate_family`):
+`pytest --cov` (or a pytest `addopts` holding `--cov`, on one line, in a TOML list or on
+INI continuation lines) or `coverage
+report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
+nothing), any `pytest` with pytest-cov on (`--cov` on the line or in `addopts`) for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
+`collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
+or `jacoco:check`, Gradle `jacocoTestCoverageVerification` (and `build` / `check` when the
+build file wires `check.dependsOn jacocoTestCoverageVerification`; any other Gradle task
+reads `indirect_run`, null), the go-test-coverage
+program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)
+is reached only through a target. pytest-cov is on only with `--cov` or `--cov=<source>` on the line or in `addopts`
+(`--cov-report` or `--cov-fail-under` alone turns nothing on), and an inline
+`--cov-fail-under` on a `pytest` line needs it too. Jest and Vitest `--coverage` is read
+with its value (`--coverage=false` runs no gate; `--coverageDirectory` is not the flag), and
+`collectCoverage: true` is read with comments stripped. A coverage action step
+(go-test-coverage) is masked like a `run:` line. A CI file read as empty that is not empty
+on disk (over the size cap, unreadable) is unread. Null, never false: `unknown_trigger`,
+`indirect_run` (an enforced `check_command.may_lint` line such as `make test`, `npm
+test`, `tox`, `mvn test`, a target or script named for coverage such as `make coverage`,
+`make cov`, `npm run coverage` or `just coverage`, or a Jest / Vitest run with no
+`--coverage`),
+`included_jobs` (`shared_tooling.pulls_jobs_from_elsewhere`), `unread_ci_system`
+(`ci_checks.UNREAD_CI_FILES` tracked, or the gate written in one or in a composite
+action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:
+GitHub step and job `if:`, branch filters, matrix values and composite-action
+internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
+phase reads null. A run whose own flag overrides the config threshold
+(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate. On a scoped run,
+any enforced run of the tool anywhere in the repository credits the scope's config gate
+(`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
+runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+`lib.command_index`, `lib.command_resolver`, `lib.check_command` and
+`lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
+Tests: `tests/test_coverage_ci.py`.
 """
 from __future__ import annotations
 

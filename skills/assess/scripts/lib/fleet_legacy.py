@@ -19,6 +19,21 @@ A stamp key added later with a default that is not None goes in
 it, so an earlier run still matches and compares. ``platform`` (#714) reads as
 ``False`` in a stamp written before ``--platform`` existed (a key that defaults
 to None, such as ``fleet_config_sha256``, needs no entry: ``.get`` gives None).
+
+Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
+moves each pre-rename key in a `run.json` stamp or `groups.jsonl` line to its new name
+(`RENAMED_KEYS`: the version key to `levels_version`, the row list to `levels`); a key
+already under its new name wins, and the input is never mutated. `fleet_view._check_row`,
+`fleet_compare.load_run`, `fleet_history.entry_conflict` and `fleet_trends` (history
+entries) call it. A pre-rename run then loads, matches as a same-day or baseline history
+entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
+from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
+never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714); every comparability
+check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
+reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
+stay at 1 for this reason: their readers reject any other version. Tests:
+`tests/test_fleet_legacy.py`, over a pre-rename run in `tests/fixtures/fleet_legacy/`.
 """
 from __future__ import annotations
 

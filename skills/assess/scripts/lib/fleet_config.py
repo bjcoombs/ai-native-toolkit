@@ -55,6 +55,45 @@ JSON with empty sections left out: comments, whitespace, key order and a newly
 defined empty section do not change it; list order does (it is meaningful).
 ``UNHASHED_KEYS`` (how a run goes, not what it measures: ``[platform] jobs`` and
 ``timeout``) are left out of it too.
+
+The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
+`[ai_usage]`, `[review]`, `[platform]` and `[identities]` (empty allowed; their keys are added by #695,
+#696 and #714; `[review]` has `ai_review_components`, a string list read by
+`review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
+--platform-jobs` and `--platform-timeout`). API:
+- `load_fleet_config(path)` / `parse_fleet_config(text)` validate against `SECTION_KEYS`
+  and raise `FleetConfigError` naming the key (`review.foo`) and expected kind, never the
+  value; both CLIs exit 2 on it.
+- `ai_usage_section` / `review_section` / `platform_section` return the typed section
+  (`AiUsageSection`, `ReviewSection`, `PlatformSection`; `total=False` TypedDicts).
+- `merge_repo_sections(fleet, repo_config)` and `repo_fleet_config(repo_root, fleet)`: the
+  merge rule. A repository's `.assess/config.toml` sections extend the fleet file: list
+  keys are the fleet entries in order then the repository's new ones (fleet indices are
+  stable); a scalar the fleet sets keeps the fleet value (a differing repository value is
+  ignored with a warning); an unset scalar takes the repository value. Repository input
+  that does not validate is skipped with a stderr warning, never raised.
+- `config_sha256` (sorted-key JSON of the validated config: comments and key order do not
+  count, list order does; `UNHASHED_KEYS`, settings of how a run goes such as `[platform]
+  jobs` and `timeout`, are left out so they never break comparability) and `section_entries` (a list counts its items, else 1) feed
+  the run stamp.
+
+Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`,
+required) and `field` (`one_of("email", "username", "name")`)) and
+`token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
+classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
+`gitlab_notes` (#716); `[identities]` `agents`, `bots` and `people` (`string_list`
+of literal accounts, #765), read through `identities_section` by `ai_usage.matcher_from_config`
+(so also `delivery` and `gitlab_notes`) and counted in `section_entries`.
+Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
+(`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
+`regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+A scan reads the merged config through the registry input `fleet_config` (a private setup
+spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
+the fleet file in the headless run). The value is private, never a run-context block, so it
+needs no counts-only rule; a consumer reports counts only. Comparability: `fleet_compare`,
+`fleet_history._MATCH_KEYS` and `fleet_trends.MATCH_KEYS` all key on
+`fleet_config_sha256`. Tests: `tests/test_fleet_config.py`.
 """
 from __future__ import annotations
 

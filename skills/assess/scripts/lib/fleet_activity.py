@@ -12,6 +12,16 @@ the platform's activity and head-commit dates and counts 30-day months and
 few days. The window grammar itself is the shared one in lib/history_window.py
 (#601). Each ``ok`` fleet row carries it as ``active``; the run stamp counts
 those rows as ``qualifying``.
+
+Whether a fleet repository is active (issue #569): `is_active` compares the checkout's
+`HEAD` committer date (`head_commit_date`, UTC, read
+from git with optional locks off) with `window_start(window, today)`, which counts back
+in whole days, months and years by calendar (clamped to month end), validating the
+window with `history_window.split_window`; a window reaching back before year 1 starts at
+`date.min`. Close to `ghsync --active-since`, not identical:
+ghsync counts 30-day months from now on platform dates. `scan_target` sets
+each ok row's `active` from `ScanOptions.active_since`, so it is read before
+`--delete-after` can remove the clone. An unreadable `HEAD` is not active.
 """
 from __future__ import annotations
 

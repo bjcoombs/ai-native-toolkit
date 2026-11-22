@@ -11,6 +11,20 @@ instead of being dropped silently (or, worse, kept by a looser rule).
 Fixture runs leave many blocks empty (``agent_harness.executes``,
 ``decline_markers``, ``claude_config.findings``); the type walk covers them
 whether or not a run populated them.
+
+Derives the string fields the allow-list must cover from the block TypedDicts in
+`run_context_types.py` and beside their builders (`ROOTS` places each shape in
+run-context.json). `typed_field_names` supplies the record keys `counts_only` keeps,
+`typed_identifier_maps` the typed maps that must be declared, and `typed_string_fields`
+walks them, so a typed shape that gains a
+string field fails `tests/test_counts_only.py` until the field is classified, even when
+no fixture run populates the block. `delivery.DeliveryBlock` is a root (#769), so counts-only output keeps
+every delivery figure (`tests/test_delivery.py` checks a full block on both providers).
+The blocks a default criterion reads are all roots since #793 (their shapes are in
+`block_shapes.py`), which added one field name to the counts-only keys:
+`promissory_markers.stale_by_file.{}.max_survived`, an integer, now survives reduction.
+The newly typed string field `promissory_markers.stale_by_file.{}.families` is classified
+`drop`, so it stays a count.
 """
 from __future__ import annotations
 

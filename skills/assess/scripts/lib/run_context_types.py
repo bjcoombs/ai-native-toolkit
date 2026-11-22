@@ -18,6 +18,21 @@ serialised run-context is byte-identical to the untyped version.
 mypy runs with ``disallow_any_generics`` on for every script (``[tool.mypy]`` in
 ``pyproject.toml``), so a bare ``dict`` fails the gate: a known shape belongs
 here or beside its builder, and ``JsonDict`` names a block whose keys vary.
+
+`TypedDict` shapes for run-context records a second `lib/` module builds or reads
+(broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
+and working-notes classifier signals, bulk commits, co-change pairs, B3 coupling rows,
+the keyhole blocks, derived findings and attention rows that `context_blocks` and
+`mutation_refresh` read back from `keyhole_signals`, and the `test_pressure` block),
+plus the other row shapes of the blocks those belong to: the `doc_graph`, `dead_code`,
+keyhole and `test_pressure` blocks keep all their rows here. The orchestrators' file
+shapes live here too, so those scripts stay under their file-size ceilings: the stats
+sidecar rows and blocks `complexity-treemap.py` writes, and the `finalize-input.json`
+and action-lifecycle shapes `assess_finalize.py` reads. `JsonDict` (`dict[str, Any]`)
+names a block whose keys are genuinely dynamic. Any other shape stays in the module
+that builds it. Annotations only: no runtime behaviour, so the serialised run-context
+is unchanged. mypy runs with `disallow_any_generics` on for every script
+(`pyproject.toml` `[tool.mypy]`), so a bare `dict` fails the gate.
 """
 from __future__ import annotations
 

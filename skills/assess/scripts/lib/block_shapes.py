@@ -19,6 +19,15 @@ names it. Every block may also degrade to ``{"available": false, "reason"}``, wh
 - ``review_reality`` (``lib.review_reality.summarize`` and its GitLab twin)
 - ``structure_drift`` (``lib.context_blocks._structure_drift_block``; the headless
   runner marks tier 1 ``{"available": false, "reason"}``)
+
+TypedDicts for the run-context blocks a default maturity-model criterion reads that are
+built as dict literals (#793): `AgentOpsBlock`, `CoverageGateBlock`,
+`InstructionClaimsBlock`, `PromissoryMarkersBlock`, `ReviewRealityBlock` and
+`StructureDriftBlock`, each a `counts_only_schema.ROOTS` entry and a `shapes` entry of
+its collector in `checks/core.toml`. The builders are unchanged; the shapes record what
+they write. Tests: `tests/test_block_shapes.py` runs each builder on a small repository
+and checks every key and leaf type against its shape, checks the fleet golden's blocks,
+and fails if a default criterion reads a block with no typed root.
 """
 from __future__ import annotations
 

@@ -8,6 +8,12 @@ pages, change the sets, move the date). Claude Code ignores a frontmatter field
 it does not recognise without reporting an error, which is why a stale set here
 shows up as a false ``unknown_key`` finding rather than a crash; the report
 prints the snapshot date beside the findings for that reason.
+
+The documented frontmatter field sets `claude_config` checks against: skill and
+command fields, agent fields, the agent `experimental` keys, the fields plugin
+agents ignore, the closed-value fields and the `model` pattern, with
+`SOURCE_URLS` and `SNAPSHOT_DATE`. Data only, never fetched at run time: updating
+it is one reviewed edit (re-read the pages, change the sets, move the date).
 """
 from __future__ import annotations
 

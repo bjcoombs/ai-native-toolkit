@@ -27,6 +27,40 @@ in its directory without importing it (with the count of differing lines), and
 a nested file that mostly repeats its parent. A ``CLAUDE.md`` identical to its
 ``AGENTS.md`` below the header (H1 and leading HTML comments) is reported as an
 informational ``mirrored_instruction_files`` instead (issue #589). Deterministic and read-only: no network, no model.
+
+Finds the instruction files agent tools load below the root or through path-scoped
+rules (#511), no model: nested `CLAUDE.md` / `AGENTS.md` / `AGENTS.override.md` /
+`GEMINI.md` (and `.claude/CLAUDE.md`), `.claude/rules/**/*.md` (`paths`),
+`.github/instructions/**/*.instructions.md` (`applyTo`) and `.cursor/rules/**/*.mdc`
+(`globs`, `alwaysApply`). One pruned walk honours the built-in excludes (minus
+`.claude`, where rules live) and `.assess/config.toml`; only tracked files count.
+Each file not already graded at an `INSTRUCTION_FILE_PATHS` location gets a
+`grade_instructions` entry with its scope (`directory`, `globs`, `always_loaded`).
+Findings: `dead_glob` (a rule, not always loaded, none of whose scope patterns
+matches a tracked file or names a directory on disk; a nested rule's patterns are
+also tried relative to its own directory), `ignored_cursor_md`, `claude_shadows_agents`
+(a directory's `CLAUDE.md` differs from its `AGENTS.md` once the header comments
+they account for are set aside, and does not import it; `diff_lines` counts the differing lines, body plus any header
+comment only one file carries, one changed line counting once) and `repeats_parent` (at least half of a nested file's distinct
+lines, over five or more, copy the nearest ancestor's). The two files are compared
+below their headers (`mirror_lines`: leading blank lines, one H1 and leading HTML
+comments dropped, whitespace collapsed, blank lines dropped), so a pair that
+matches there is reported as the informational `mirrored_instruction_files`, a
+hand-maintained mirror, not as shadowing (#589); a symlink or an import is
+neither. Agents read header comments too, so `mirror_pair` drops only the
+comments both files carry and at most one per-file note on each side (paired in order);
+a comment only one file carries stays in the comparison, so an instruction
+hidden there makes the pair `claude_shadows_agents`, and a mirror whose paired
+notes differ says so in its detail (#632). Text after a header comment's `-->`
+ends the header unless it opens another comment, so an H1 there is body. Files and findings are capped with `_total` counts, informational
+mirrors last so the cap never drops a defect for one. The root files of the systems
+`agent_systems.py` classifies (Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
+Zed, #768) are discovered and graded the same way, `tool` naming the system;
+`.cursorrules` and `.github/copilot-instructions.md` are collected but graded only at their
+`INSTRUCTION_FILE_PATHS` entries. `collect_instruction_files(repo_root, tracked, dirs,
+patterns)` returns every discovered file (`InstructionCandidate`: path, kind, tool,
+directory, globs, always_loaded, body) and the paths `.aider.conf.yml` reads, for
+`agent_consistency.py`. Tests: `tests/test_instruction_discovery.py`.
 """
 
 from __future__ import annotations

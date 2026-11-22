@@ -58,6 +58,45 @@ only shrink the disagreement set, never inflate it), so owned cohesion never
 reads as drift. The tier degrades to ``available: False`` when there is no
 ownership map to ground the human grouping, or when the static / historical
 lenses are unavailable - it never crashes the assessment.
+
+The Layer 0 structure-drift signal, built entirely on `ownership_parser`'s parse + resolve
+primitives (it re-implements no parsing). A declaration is a self-description under no
+pressure to stay true: a directory is renamed, a module's files scatter, a pattern is
+typo'd - and the map becomes a *lying map of ownership*, the same defect as a stale doc
+(behaviour) or an aged TODO (intent). **Tier 0** - `detect_path_existence_drift()` - is the
+zero-threshold cut: the enumerate-both-sides shape `doc_graph.py` uses for broken links,
+where side A is every declared boundary (CODEOWNERS globs + architecture-doc path
+references) and side B the tracked, non-excluded file set, and the finding is the
+declarations whose match set is empty. Binary, no statistics; a pattern matching only
+excluded files counts as empty (the excludes are not part of the navigable repo). It emits
+a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
+coverage ratio, `boundary_patterns` - the matched architecture-doc references plus the
+CODEOWNERS lines `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at
+least one matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`,
+`README.md` and `docs/` are left out); Layer 4 level 1 reads it (#785) - and
+legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
+sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
+is the next cut up: not "does the boundary still match any file?" but "do the files a
+boundary groups still belong together?". Three lenses each induce a grouping - the declared
+one (an owner / architecture module groups its files), the static one (an import-graph
+community groups co-dependent modules), and the historical one (files that keep co-changing).
+A grouping is reported as its **co-membership equivalence relation** over canonical file-pairs
+`(min(a, b), max(a, b))`, so disagreement is set algebra over pairs and **invariant to
+community relabeling by construction** - relabel or reorder the groups and nothing changes,
+because the relation carries pairs, never labels. The six metrics are set differences /
+intersections of the three relations (human-vs-static splits/fuses, human-vs-cochange, and
+the two agreement sets). Known-good architectural seams (the lib<->tests and standalone-build
+<->skills seams documented above) are an allowlist subtracted from the *denominator* - correct
+by construction, a seam can only suppress an owned boundary, never manufacture drift. Tier 1
+degrades to `available: False` reason `"no ownership map"` and emits its own `tier_1_available`
+field. `keyhole_signals.py` orchestrates Tier 1 (feeding it the behaviour block's already-parsed
+co-change pairs) and folds the hidden-seam direction (`human_split_but_cochange`) into the
+existing `hidden_coupling` finding - a recurring directory pair, not the version hot-file's
+repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the
+`structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
+`structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
+`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its tests
+`tests/test_structure_drift.py` and `tests/test_structure_drift_boundaries.py`.
 """
 from __future__ import annotations
 

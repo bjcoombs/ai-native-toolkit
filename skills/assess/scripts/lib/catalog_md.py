@@ -5,6 +5,16 @@ count, each maturity-model row with its conditions in plain words, each scan the
 headless runner reports, the derived findings, and every registry scan. Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
 manifest, so an edit there shows here once ``make catalog`` regenerates the file.
+
+`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, each row's
+conditions in plain words, each scan, the findings and the registry, linking `measures.json`
+relatively.
+
+**Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
+root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
+`tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
+so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+`make check` runs it through `test-assess`.
 """
 from __future__ import annotations
 

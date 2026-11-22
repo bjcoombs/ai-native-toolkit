@@ -56,6 +56,43 @@ moved with cause ``level`` or ``set_and_level``:
 A ``set_and_level`` row given one of these causes also carries ``set_moved: true``,
 so the measured-set movement stays reported. Org rows read the group's settings,
 not scans, and keep their cause.
+
+Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
+
+Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
+signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
+earlier run then reads the new signal as absent (unknown), never as a false repository move.
+A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
+
+The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
+`toolkit_commit`. Equal commits are `same`, and git never runs (two null commits only at one
+`plugin_version`). One null commit, or two null commits at different `plugin_version`s, is
+`unavailable`. Two different commits run `git diff --name-only`
+over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
+result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
+producer modules:
+
+- the defining module of `fn` / `offline_fn` and its static `lib` import closure (a package
+  such as `lib/test_pressure/` included, with its relative imports);
+- for a dispatch module (one defining several specs), the modules its function body names;
+- the producers of every spec it `reads`;
+- `run_context_types` is left out.
+
+`changed_blocks` intersects the map with the diff. `attribute` orders a moved team row's cause:
+
+1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
+   stored scans lack while the other run holds it. This is measured-set movement, never level
+   movement; the achievements replay already treats an unknown side as neutral.
+2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
+   `notes` line saying the scanner diff was unavailable.
+3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
+   reads (`row_signals`, else any) changed producers and a repository in the group changed a
+   signal in it.
+
+A `set_and_level` row given one of these causes also carries `set_moved: true`, so the
+measured-set movement stays reported. Org rows keep their cause. Limits: the map comes from the running code, a change outside
+`lib/` is not seen, and the import closure over-attributes rather than misses.
+Tests: `tests/test_fleet_scanner_diff.py`.
 """
 from __future__ import annotations
 

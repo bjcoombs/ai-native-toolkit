@@ -24,6 +24,18 @@ maturity model's rows for them read proxies from other blocks instead.
 
 Grades are short tokens and the flag a boolean, so the counts-only filter keeps
 the block whole. Pure: it reads the setup grading the core already ran.
+
+Deterministic layer grades as one registered block (issue #620), so the headless
+signals document carries them and a maturity model can name them.
+`scan_layer_grades(instruction_grading)` reads the setup grading
+(`run_setup.instruction_grading`) and writes `{instructions_grade,
+instruction_file_present}`: the best letter grade of the tracked, present instruction
+files (null with none, the top-level `instructions_grade` value, which stays) and
+whether one exists, so a maturity model can score "no instruction file" as level 0 rather
+than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
+default maturity model's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
+counts-only filter. Tests: `tests/test_layer_grades.py`, and the maturity model rows in
+`tests/test_level_signals.py`.
 """
 from __future__ import annotations
 

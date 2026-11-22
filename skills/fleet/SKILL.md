@@ -982,7 +982,7 @@ Every `## ` section opens with a line that starts `In place:` and says what this
 has (what is measured, reached or earned) before the section's question and any next step;
 the team next-steps pages open every heading the same way. The wording rules, the words
 user-facing output leaves out and the guard test that enforces both are in the
-"Supportive vocabulary" section of `skills/assess/scripts/lib/README.md`.
+module docstring of `skills/assess/scripts/lib/vocabulary.py`.
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows
@@ -1170,5 +1170,4 @@ so a label leans mostly on the repository's name. Present them as such.
 The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`,
 `lib/fleet_history.py`, `lib/fleet_compare.py`,
 `lib/fleet_activity.py`, `lib/fleet_cleanup.py`, `lib/fleet_diagrams.py` and
-`skills/assess/scripts/lib/fleet_labels.py` (see that package's
-`lib/README.md`).
+`skills/assess/scripts/lib/fleet_labels.py` (each module's docstring documents it).

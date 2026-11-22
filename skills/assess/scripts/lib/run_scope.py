@@ -1,4 +1,12 @@
-"""Resolve a run's ``--scope`` and the artifact directory it writes to."""
+"""Resolve a run's ``--scope`` and the artifact directory it writes to.
+
+`resolve_scope` turns a `--scope` argument into the absolute path, the repo-relative
+path and the artifact-directory slug, raising `ValueError` for a missing or
+outside-repo path; a whole-repo run returns `(None, None, "")`. `assess_dir_for` names
+`.assess/` or `.assess/<slug>/`, and `load_current_stats` reads that directory's
+`complexity-stats.json`, or an empty snapshot when none was written. Tests:
+`tests/test_scope.py`.
+"""
 
 from __future__ import annotations
 

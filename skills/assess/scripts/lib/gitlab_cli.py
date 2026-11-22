@@ -53,6 +53,44 @@ Typical use::
         return unavailable(e.reason)
 
 Pure subprocess + stdlib; imports no orchestrator.
+
+The GitLab side of the platform seam, with `gh_cli`'s contract: the `glab` binary as a
+subprocess with `--hostname` on every call, no token read, JSON parsed in Python, every
+call capped (`GLAB_TIMEOUT_SECONDS`, 20; the self-managed probe
+`GLAB_PROBE_TIMEOUT_SECONDS`, 8). Failures raise `gh_cli.GhUnavailable`: `glab_not_installed`,
+`not_authenticated`, `unreachable` (ghsync's network patterns, or a probe timeout),
+`no_access` (HTTP 401/403), `not_found` (HTTP 404), `rate_limited` (HTTP 429 after the
+backoff), `glab_timeout`, `glab_error` (any other non-zero exit), `glab_bad_json`. `glab`
+runs through `platform_cli.run_cli`. `open_gitlab` detects the provider from the
+remote: github.com or no remote returns None without invoking `glab`; a `gitlab.com`
+remote is GitLab and must pass `glab auth status --hostname gitlab.com` (else it
+raises); any other host is GitLab only when that probe passes for it, and any probe
+failure returns None so the caller degrades exactly as before. `parse_remote` reads
+https/http (port kept), scp-like and `ssh://` (port dropped) remotes with nested
+groups, and rejects a host or path segment outside a strict character set (the remote
+comes from the assessed repository and reaches argv). `normalize_host` ports
+`ghsync.sh`'s `--host` normalisation. `branch_protection(project, branch, rules=None)` returns the
+protected-branch rules covering a branch: the rule of that exact name and every `*`
+wildcard rule matching it via `branch_pattern`, combined, since GitLab applies every
+matching rule and an exact name does not override a wildcard (issue #648; a name holding
+`*` is answered only by its own rule). Covering rules (`main` and `m*` on `main`, or
+`release/*` and `*-stable` on `release/1-stable`) are merged
+by `merge_rules` as GitLab applies them, never one picked by order: each `*_access_levels`
+list is the union of the rules' grants with the role grants collapsed to the most
+permissive (lowest non-zero `access_level`, `0` only when every role grant is `0`),
+`allow_force_push` and `code_owner_approval_required` are True when any rule sets them
+(force push follows the most permissive rule, code-owner approval the most restrictive),
+and `name` joins the rule names in name order with `", "`, except that a merge with an
+exact rule keeps the exact rule's `name`, so a config_drift snapshot of that rule sees
+the wildcards' settings, never a renamed rule. It reuses a
+`protected_branches(project)` read when given one (config_drift reads the list once per
+scan). `protected_branches` reads `PROTECTED_PAGE` (100) rules a page until a short page
+ends the list (as `ghreport.sh` does with `--paginate`), so an exact rule and every
+wildcard on any page merge; a refused or malformed later page raises, never a partial
+merge, and a list still full after `PROTECTED_MAX_PAGES` (20) pages raises `truncated`.
+None comes only from that complete list with no cover. A 403 or 404 raises
+like any refusal, never "unprotected". Tests: `tests/test_review_reality_gitlab.py`,
+`tests/test_gitlab_protected_branches.py` (stubbed `glab`/`gh` as the whole `PATH`, offline).
 """
 from __future__ import annotations
 

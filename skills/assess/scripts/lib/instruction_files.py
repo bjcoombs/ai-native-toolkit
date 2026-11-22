@@ -6,6 +6,27 @@ lets an alias inherit its canonical file's grade, and reports the instruction
 surface's integrity: untracked or dangling files, broken links to an
 instruction file, sensitive content, and the ancestor cascade a clone never
 sees. Read-only.
+
+Finds and grades the instruction files at `INSTRUCTION_FILE_PATHS` through
+`agent_instructions_grader`. `grade_instruction_files` grades each committed file with
+its content-clock freshness, lets an alias (a symlink or thin stub pointing at a
+canonical file) inherit the target's grade, and returns the untracked and dangling
+files, the skills-directory info and the redacted sensitive-content findings alongside
+the best grade (`None` when no committed file exists, distinct from `F`).
+`broken_instruction_refs` adds doc links to a missing instruction file;
+`detect_ancestor_instructions` names the ancestor and global files a clone never sees
+(#57); `instruction_file_size` feeds the size signal (line and word counts, always-on
+lines, `bloat_penalty`). Files are graded against `instruction_placement.skill_texts`, so
+a grade rests on the same always-on split as the file's `instruction_placement` record. Each graded entry carries the
+grader's `findings` (unresolved commands, stale paths and symbols), graded against an
+`instruction_content.RepoContext`; `grade_instruction_files` and `nested_instruction_surface`
+each build one from the same tree. Tests:
+`tests/test_instruction_files.py`, `tests/test_doc_staleness.py`.
+`nested_instruction_surface(repo_root, excludes)` builds the `nested_instructions`
+block from `instruction_discovery` with the same tracked set, clock and skill texts,
+and runs from the `scan_registry` table. A nested file is graded on its body after any
+frontmatter, so a rule file's always-on lines leave out the frontmatter lines its
+placement record counts.
 """
 
 from __future__ import annotations

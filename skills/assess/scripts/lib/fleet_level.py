@@ -11,6 +11,13 @@ removed, never left from an earlier run. ``commits`` holds, under the same ids, 
 commit each result measured and whether the checkout was dirty (#907; a dirty one is
 scored from its committed tree, ``lib/fleet.py`` ``committed_tree``). Schema:
 ``skills/fleet/references/level.schema.json`` (``lib/fleet_level_schema.py``).
+
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
+over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
+plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
+nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
+stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
 

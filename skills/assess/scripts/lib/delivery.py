@@ -73,6 +73,36 @@ undecided after up to ``NOTES_MAX_PAGES`` (3) pages / 300 notes makes it None; s
 (``review_reality`` then carries the reason).
 
 Privacy: counts, shares and durations only; no title, login or comment text.
+
+The `delivery` platform block (#715, part of #702), reads `merged_sample`,
+`review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
+time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
+first_human_comment_hours_p90, human_commented_share, ai_review_share,
+approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
+nearest-rank. `approved_share` and `self_merged_share` are copied from
+`review_reality` (null when it is unavailable). First human comment (GitHub): the
+earliest comment or review by an account that is not the author, not
+`github-actions`, not a bot and not an `[[ai_usage.agent_identities]]` config match
+(a configured agent on a user login is AI review, never a human); an author-less event is skipped; an account of unknown
+type (a failed probe, or one left unprobed once the shared 20-login budget is spent)
+before the first known human on any change nulls the three comment figures. A
+person whose login equals a pinned AI App's name probes as that App (`gh` drops
+`[bot]` and gives comment authors no type). AI review (GitHub): a review or
+comment by an `[[ai_usage.agent_identities]]` config match (username as given), or by a bot account whose login is in
+`AI_REVIEWERS` or matches `agent_identity.AGENT_RULES` or a config rule with
+`[bot]` re-appended (the `[bot]` form is tried only for a bot, so a loose rule
+never makes a person an agent); status bots never count,
+an unknown account that decides a change nulls the share. Agent-authored share
+(#717): changes whose author `AuthorMatcher.classify_username` puts in the `agent`
+bucket - a config rule or a pinned `AGENT_RULES`
+entry, with `[bot]` re-appended only when the GitHub author is `is_bot`; on GitLab
+the author `username`, so access-token users count only under
+`token_users_as_agents` and dependency bots never; a deleted author is not an
+agent. Read from the sample's own listing, no extra call. GitLab: time to merge, the
+copied shares, and from the `gitlab_note_facts` spec (#716, `lib/gitlab_notes.py`) hours to
+the first human comment, `human_commented_share` and `ai_review_share` (null when the notes
+were undecided or refused, or no facts were passed). An unavailable
+sample is returned as the block. Tests: `tests/test_delivery.py`.
 """
 from __future__ import annotations
 

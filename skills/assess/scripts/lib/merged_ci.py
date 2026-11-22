@@ -4,6 +4,14 @@ The value type of the private ``gitlab_merged_ci`` registry spec. It lives apart
 ``lib/gitlab_ci_lint.py``, which reads it through ``glab``, so ``ci_checks`` and
 ``review_automation`` stay offline modules: they import this type, never a platform
 client. ``text`` is held in memory only and is never published.
+
+The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
+reason, text, include_sources)`, `NOT_READ`, `NOT_NEEDED`, `MERGED_STATUSES` and
+`as_merged(value)` (anything other than a `MergedCi`, such as a degraded spec's dict, is
+`NOT_READ`). Apart from `gitlab_ci_lint.py` so `ci_checks` and `review_automation` stay
+offline modules (`tests/test_signals.py` checks that a scan is `network` exactly when its
+module reaches a platform client). `text` is held in memory only. Tests:
+`tests/test_gitlab_ci_lint.py`.
 """
 from __future__ import annotations
 

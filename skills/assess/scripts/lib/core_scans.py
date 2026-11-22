@@ -10,6 +10,19 @@ The scans that ran through ``safe`` before the migration still degrade, with
 the same reason label (``ScanSpec.label``); the integrations that wrap their own
 pieces (the keyhole integrate, the liveness fallback blocks, structure drift)
 are declared gates in the table.
+
+Read-side adapters for the scan table (#557): one callable per registered block,
+taking its reads positionally and calling the scan module or `context_blocks`
+serialiser that owns the block's shape (doc graph, liveness, structure, coverage,
+test pressure and focus, promissory markers, accretion, the keyhole integration and
+its disclosures, decline markers, offers, anomalies), plus the doc-staleness entries
+(#558): `doc_staleness` (over the doc graph's doc->code edges, degrading under its own
+label), `stale_hubs`, `churn_degenerate` and the private `doc_join`
+(`analyze_doc_complexity_join`), which the keyhole integration reads for its
+`documentation` block; a failed join degrades that block with reason
+`documentation scan failed: ...`. `anomalies` reads the run header
+only, which holds every key `detect_anomalies` inspects. No logic of its own. Tests:
+`tests/test_run_setup.py`, and the run-context tests that patch a scan here.
 """
 from __future__ import annotations
 

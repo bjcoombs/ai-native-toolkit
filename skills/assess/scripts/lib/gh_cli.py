@@ -34,6 +34,21 @@ Typical use::
         return unavailable(e.reason)
 
 Pure subprocess + stdlib; imports no orchestrator.
+
+The one way the core reaches GitHub, shared by every scan that reads live
+platform state. Runs the `gh` binary on `PATH` as a subprocess (no direct HTTP,
+no token read, JSON parsed in Python, never `--jq`/`--template`). Order of work:
+`resolve_github_remote` (pure git; `origin`, else the sole remote; github.com
+only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
+`gh_json(args)` calls. Every failure raises `GhUnavailable` with a reason that
+`unavailable()` turns into `{"available": False, "reason"}`: `no_remote`,
+`gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403, in both forms `gh`
+prints it: REST `(HTTP 403)` and GraphQL `HTTP 403: ...`, as GitLab's 403 does; #779), `not_found`
+(HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
+`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
+never report a clean result. Tests fake `gh` with a script first on `PATH`
+(`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
+lives here and is shared with `gitlab_cli`.
 """
 from __future__ import annotations
 

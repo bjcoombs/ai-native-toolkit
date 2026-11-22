@@ -3,6 +3,15 @@
 A leaf module so the orchestrator and the lib modules that write artifacts
 (the hotspot wiki pages, the index, the log, the findings snapshot) read one
 constant each.
+
+`ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
+writes (run-context.json, the badge, the wiki pages); the version history is in the
+module comment. `complexity-treemap.py` carries a copy that
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
+It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
+independent of plugin releases, bumped by one in any change that moves which findings
+a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
+`findings.json`.
 """
 
 # Artifact schema version, stamped on every artifact the run produces
