@@ -1408,7 +1408,6 @@ def _out_path_and_title(root: Path, scope: Path | None,
 
 
 def main() -> int:
-    sys.exit(1)  # TEMPORARY (#968): prove the Windows SVG smoke step bites
     ap = _build_parser()
     args = ap.parse_args()
 
