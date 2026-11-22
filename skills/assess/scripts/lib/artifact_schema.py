@@ -207,10 +207,15 @@ constant each.
 # go_rust_gate_form_not_read when no gate is found in a repository holding a
 # go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
 # the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
-# 1.34.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# 1.34.0: run-context.json gains the level block (issue #744): the default maturity
+# model's conditions with state, grade and reason, the verified tally (met, measured,
+# not_measured), the autonomy Step and the next Step's blockers
+# (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+# 1.35.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.34.0"
+ARTIFACT_SCHEMA_VERSION = "1.35.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

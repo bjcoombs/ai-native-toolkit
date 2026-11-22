@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/level.schema.json",
+  "title": "fleet level results",
+  "description": "level.json written by skills/fleet/scripts/fleet.py --levels: each scanned repository's conditions with their state and grade, the verified tally (counted conditions met, of those measured, and the conditions not measured with a reason) and its autonomy Step with what blocks the next. $defs.level_result is also the /assess run context's level block. Generated from lib/fleet_level.py and lib/level_result_types.py by lib/fleet_level_schema.py.",
+  "type": "object",
+  "properties": {
+    "level_result_version": {
+      "const": 1
+    },
+    "levels_version": {
+      "type": "string"
+    },
+    "toolkit_commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plugin_version": {
+      "type": "string"
+    },
+    "repos": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/level_result"
+      }
+    }
+  },
+  "required": [
+    "level_result_version",
+    "levels_version",
+    "plugin_version",
+    "repos",
+    "toolkit_commit"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "level_result": {
+      "type": "object",
+      "properties": {
+        "level_result_version": {
+          "const": 1
+        },
+        "levels_version": {
+          "type": "string"
+        },
+        "tally": {
+          "type": "object",
+          "properties": {
+            "met": {
+              "type": "integer"
+            },
+            "measured": {
+              "type": "integer"
+            },
+            "not_measured": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "measured",
+            "met",
+            "not_measured"
+          ],
+          "additionalProperties": false
+        },
+        "counted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "listed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "not_measured": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "row": {
+                "type": "string"
+              },
+              "level": {
+                "type": "integer"
+              },
+              "grade": {
+                "enum": [
+                  "config_only",
+                  "declared",
+                  "measured",
+                  "verified",
+                  null
+                ]
+              },
+              "counted": {
+                "type": "boolean",
+                "description": "true when the grade is one of measured, verified"
+              },
+              "state": {
+                "enum": [
+                  "met",
+                  "unmet",
+                  "not_applicable",
+                  "not_measured",
+                  "declined"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "counted",
+              "grade",
+              "id",
+              "level",
+              "row",
+              "state"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "step": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "next_step": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "step": {
+                  "type": "integer"
+                },
+                "threshold": {
+                  "type": "integer"
+                },
+                "blockers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "gate",
+                          "threshold"
+                        ]
+                      },
+                      "gate": {
+                        "type": "string"
+                      },
+                      "condition": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "threshold": {
+                        "type": "integer"
+                      },
+                      "met": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "blockers",
+                "step",
+                "threshold"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "conditions",
+        "counted",
+        "level_result_version",
+        "levels_version",
+        "listed",
+        "next_step",
+        "not_measured",
+        "step",
+        "tally"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

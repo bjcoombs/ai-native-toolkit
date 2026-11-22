@@ -11,7 +11,7 @@ written into a run artifact, counts-only output or the fleet history.
 
 Run:
     uv run identity_candidates.py <repo> [<repo> ...] [--window 6mo] [--fleet-config FILE] [--json]
-    uv run identity_candidates.py <repo> --confirm agent=cursor@example.com --confirm bot=codecov[bot]
+    uv run identity_candidates.py <repo> --confirm agent=cursor@example.com --confirm 'bot=codecov[bot]'
     uv run identity_candidates.py --from-list repos.txt --fleet-config FILE [--json]
     uv run identity_candidates.py --from-list repos.txt --confirm bot=ci-runner --config FILE
 

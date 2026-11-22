@@ -213,11 +213,14 @@ def test_co_authors_gitlab_tokens_and_automation_names_are_candidates() -> None:
         HistoryCommit("ann@example.com", "Ann", "x", "Release Bot <release@corp.example>\x1d"
                       "Claude <noreply@anthropic.com>"),
         HistoryCommit("project_7_bot_ab12@noreply.gitlab.example", "token", "y", ""),
+        HistoryCommit("release@corp.example", "Release Bot", "z", ""),
     ]
     rows = {r["account"]: r for r in discover(commits, AuthorMatcher())}
     assert set(rows) == {"release@corp.example", "project_7_bot_ab12"}
     assert rows["release@corp.example"]["evidence"] == ["automation_name_hint", "co_author_trailer"]
-    assert rows["release@corp.example"]["commits"] == 0
+    assert rows["release@corp.example"]["commits"] == 1
+    trailer_only = [HistoryCommit("ann@example.com", "Ann", "x", "coderabbitai[bot] <c@example.com>")]
+    assert discover(trailer_only, AuthorMatcher()) == []  # authored nothing: no count would move
     assert rows["project_7_bot_ab12"]["evidence"] == ["gitlab_token_user", "automation_name_hint",
                                                          "noreply_address"]
     assert set(EVIDENCE) >= {e for r in rows.values() for e in r["evidence"]}

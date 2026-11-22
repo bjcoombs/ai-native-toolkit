@@ -26,14 +26,16 @@ too (a GitHub privacy address, a run of same-shaped commit subjects):
   which is why it is only a hint;
 - ``automation_name_hint``: ``bot``, ``robot`` or ``automation`` is a word of
   the display name, login or e-mail local part;
-- ``co_author_trailer``: the account appears as a ``Co-authored-by`` trailer
-  (supporting);
+- ``co_author_trailer``: the account also appears as a ``Co-authored-by``
+  trailer (supporting);
 - ``noreply_address``: a platform noreply address (supporting);
 - ``uniform_subjects``: at least ``UNIFORM_MIN_COMMITS`` commits and one subject
   shape (digits and hex runs folded, first four words) covers at least
   ``UNIFORM_SHARE`` of them (supporting).
 
-Not a candidate: an account the matcher already counts as an agent (a pinned
+Not a candidate: an account that authored no commit in the window (one seen only
+in a trailer: confirming it would move no count, since trailers are read by the
+AI-assistant matcher, not ``[identities]``), an account the matcher already counts as an agent (a pinned
 agent rule or an ``[[ai_usage.agent_identities]]`` rule), an account classified
 in ``[identities]``, and an account with supporting evidence only.
 
@@ -181,7 +183,7 @@ def discover(commits: Iterable[HistoryCommit], matcher: AuthorMatcher) -> list[C
         if matcher.classify(s.email, s.name).bucket == AGENT:
             continue
         evidence = evidence_for(s.email, s.name, s.subjects, s.co_author[0])
-        if not STRONG_EVIDENCE.intersection(evidence):
+        if not STRONG_EVIDENCE.intersection(evidence) or not authored.get(key):
             continue
         out.append({"account": username_from_email(s.email) or s.email, "name": s.name,
                     "email": s.email, "commits": authored.get(key, 0), "evidence": evidence})

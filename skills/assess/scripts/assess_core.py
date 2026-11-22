@@ -43,6 +43,7 @@ from lib.counts_only import COUNTS_ONLY_FILE
 from lib.counts_only import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.coverage_report import load_coverage_data
+from lib.level_tally import run_context_level
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
@@ -120,7 +121,7 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     test evidence from the ``test_focus`` block (``lib.test_focus.mutation_scope``),
     runs ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites the
     ``test_pressure`` block in place along with every block derived from it: the
-    Layer 6 ``mutation_not_run_cap``, the E1 ``untrusted_hotspot`` finding in
+    Layer 6 ``mutation_not_run_cap``, the ``level`` tally, the E1 ``untrusted_hotspot`` finding in
     ``derived_findings``, and the products ranked or rendered from the findings
     (``attention``, ``attention_low_signal``, ``findings_markdown``,
     ``keyhole_summary``, ``prescribed_actions``, the archive and config-exclude
@@ -168,6 +169,9 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     # Refresh the Layer 6 cap: the mutation tier may have run this pass, lifting
     # the ceiling to Present. Written back so a subsequent finalize sees it.
     ctx["mutation_not_run_cap"] = mutation_not_run_cap(ctx["test_pressure"])
+    # The tally reads mutation_run (Layer 6 level 2, #744): recount it in place.
+    if "level" in ctx:
+        ctx["level"] = run_context_level(ctx)
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention, report products and badge are rebuilt from it.
     if refresh_mutation_findings(

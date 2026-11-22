@@ -467,6 +467,9 @@ def _reads_graph(cols: Sequence[tuple[str, CollectorEntry]], out: list[Validatio
                                    f"{block!r} is also published by {written[block]}"))
             written[block] = name
         produced[name] = stage
+        # as scan_registry.validate: a spread entry's keys are readable from its stage on
+        if c.get("spread"):
+            produced.update({block: stage for block in c["publishes"]})
 
 
 def _references(m: CheckManifest, where_of: Mapping[str, str], out: list[ValidationError]) -> None:
