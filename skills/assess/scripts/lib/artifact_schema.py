@@ -469,6 +469,11 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
 # Unreleased (bumped once by the 3.0.0 release PR):
+# - agent_consistency drops a leading heading or list ordinal before reading
+#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
+#   conflict, so agent-consistency level 1 can move from unmet to met. A
+#   next step for an unlinked system names its primary file (CLAUDE.md) before
+#   a supplementary rule file.
 # - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
 #   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
 #   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.

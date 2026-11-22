@@ -2772,12 +2772,14 @@ effective text (its files, plus the canonical text where a file imports or point
 it): `command`, a test or lint command (`check_command.is_check_command` or
 `is_lint_command`, plus a one-word inline `pytest`, `tox`, `nox` or linter) named by
 some systems and not others; `threshold`, two systems whose numbers on lines naming
-`coverage`, `complexity` or `line length` share none (a stray second number is no conflict). `conflicts` (divergences)
+`coverage`, `complexity` or `line length` share none (a stray second number is no conflict;
+a leading heading or list ordinal such as `## 2. Coverage` or `1. ` is dropped first, #960). `conflicts` (divergences)
 and `unlinked` (systems not linked) are the default model's `agent-consistency` row
 signals, level 1 `conflicts == 0` and level 2 `unlinked == 0` with `requires` level 1,
 both `head_structure` (graded measured). With fewer than two systems `applicable` is
 false and `conflicts`, `unlinked` and `consistent` are null, so the row reads unknown,
-never 0. `next_steps` holds one `ConsistencyStep` per unlinked system: `pointer`, the
+never 0. `next_steps` holds one `ConsistencyStep` per unlinked system, on the system's own
+single-file location (`CLAUDE.md`) when it has one, else its first unlinked file (#960): `pointer`, the
 exact line for its tool (`pointer_line`: `@AGENTS.md` relative to the file for Claude
 Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: AGENTS.md` in
 `.aider.conf.yml` for Aider, `Follow the project instructions in
