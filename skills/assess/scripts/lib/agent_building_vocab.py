@@ -25,7 +25,8 @@ fleet roll-up can compare repositories by it.
   host slugs whose clients use that call form. A host whose source calls both
   is its own issue tracker (issue #731). A call form two clients share (the
   ``issues`` manager of python-gitlab and Octokit, the ``Issues`` service of
-  go-gitlab and go-github) names both hosts, and the scan credits it only when
+  go-gitlab and go-github, the ``getIssues`` method of gitlab4j and the Kohsuke
+  GitHub API) names both hosts, and the scan credits it only when
   exactly one of those hosts is in the repository's ``git_hosts``: an
   ambiguous call never pairs.
 - ``CI_AGENT_PATTERNS``: a CI job that runs an agent.
@@ -217,7 +218,7 @@ ISSUE_API_PATTERNS: tuple[tuple[tuple[str, ...], re.Pattern[str]], ...] = tuple(
         (("gitlab",), r"\bgetIssuesApi[(]"),                        # gitlab4j
         (("gitlab",), r"/project[s]/[^\s\"'`]*/issues\b"),          # REST v4
         (("github",), r"[.](?:get_issues?|create_issue)[(]"),       # PyGithub
-        (("github",), r"[.]getIssues?[(]"),                         # Kohsuke GitHub API
+        (("gitlab", "github"), r"[.]getIssues?[(]"),                # gitlab4j IssuesApi; Kohsuke GitHub API
         (("github",), r"/repo[s]/[^\s\"'`]*/issues\b"),             # REST
     ))
 # A call to the host's merge-request or pull-request API.

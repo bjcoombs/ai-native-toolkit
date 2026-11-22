@@ -208,6 +208,36 @@ def test_an_issues_call_two_declared_hosts_share_is_not_the_pairing(tmp_path: Pa
     assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == ([], False, "none")
 
 
+POM_BOTH_HOSTS = """<project><dependencies>
+<dependency><groupId>com.anthropic</groupId><artifactId>anthropic-java</artifactId></dependency>
+<dependency><groupId>org.gitlab4j</groupId><artifactId>gitlab4j-api</artifactId></dependency>
+<dependency><groupId>org.kohsuke</groupId><artifactId>github-api</artifactId></dependency>
+</dependencies></project>
+"""
+
+
+@pytest.mark.parametrize("issues_call", [
+    "List<Issue> issues = issuesApi.getIssues(projectId);",  # gitlab4j or Kohsuke: ambiguous
+    "GHIssue issue = repo.getIssue(1);",                     # the same form, singular
+])
+def test_a_java_issues_call_two_declared_hosts_share_is_not_the_pairing(tmp_path: Path, issues_call: str) -> None:
+    files = {"pom.xml": POM_BOTH_HOSTS,
+             "src/main/java/Bot.java": f"{issues_call}\nrepo.createPullRequest(\"t\", \"b\", \"main\", \"x\");\n"}
+    block = scan_agent_building(_repo(tmp_path, "java", files))
+    assert block["git_hosts"] == ["github", "gitlab"]
+    assert block["llm_sdk"] is True
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == ([], False, "none")
+
+
+def test_a_java_issues_call_pairs_with_one_declared_host(tmp_path: Path) -> None:
+    pom = POM_BOTH_HOSTS.replace(
+        "<dependency><groupId>org.gitlab4j</groupId><artifactId>gitlab4j-api</artifactId></dependency>\n", "")
+    files = {"pom.xml": pom,
+             "src/main/java/Bot.java": "GHIssue i = repo.getIssue(1);\nrepo.createPullRequest(\"t\", \"b\", \"main\", \"x\");\n"}
+    block = scan_agent_building(_repo(tmp_path, "java1", files))
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == (["github"], True, "builds-agent")
+
+
 def test_an_unambiguous_issues_call_still_pairs_with_two_hosts_declared(tmp_path: Path) -> None:
     files = {"requirements.txt": "openai\npython-gitlab\nPyGithub\n",
              "bot.py": "issue = repo.get_issue(1)\nrepo.create_pull(title='t', head='b', base='main')\n"}
