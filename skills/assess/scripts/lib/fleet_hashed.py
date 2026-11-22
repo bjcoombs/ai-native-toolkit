@@ -13,7 +13,7 @@ trees, CODEOWNERS owners and web URLs are keyed by them, and ``fleet_data.Privac
 hashes its own keys. A hashed group id is one segment, so it no longer derives from the
 hashed ``repo`` by dropping the last segment.
 
-- ``public_rows``: the rows with ``repo`` and ``group`` hashed, re-sorted by the new id.
+- ``public_rows``: the rows with ``repo``, ``group`` and ``head_sha`` (#907) hashed, re-sorted by the new id.
 - ``public_groups``: ``group`` and ``settings_scope`` hashed, and each team row's
   ``unknown_repos`` hashed and sorted; re-sorted by the new group id.
 - ``public_freshness``: ``docs_repo`` and ``repo`` hashed.
@@ -42,10 +42,16 @@ def public_ids(repos: Iterable[str], salt: str | None) -> frozenset[str]:
     return frozenset(public_id(repo, salt) for repo in repos)
 
 
+def _hashed_sha(sha: str | None, salt: str) -> str | None:
+    return None if sha is None else hash_value(sha, salt)
+
+
 def public_rows(rows: Sequence[FleetRow], salt: str | None) -> list[FleetRow]:
     if salt is None:
         return list(rows)
-    hashed: list[FleetRow] = [{**row, "repo": hash_value(row["repo"], salt), "group": hash_value(row["group"], salt)}
+    # A commit sha finds its repository by search, so it is hashed like the id (#907).
+    hashed: list[FleetRow] = [{**row, "repo": hash_value(row["repo"], salt), "group": hash_value(row["group"], salt),
+                               "head_sha": _hashed_sha(row.get("head_sha"), salt)}
                               for row in rows]
     return sorted(hashed, key=lambda r: r["repo"])
 

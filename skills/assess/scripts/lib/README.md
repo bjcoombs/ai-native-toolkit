@@ -1190,7 +1190,7 @@ read gives no URL and no owners.
 
 **`fleet_hashed.py`**
 Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
-(#909). `public_rows` hashes each row's `repo` and `group` with `counts_only.hash_value`
+(#909). `public_rows` hashes each row's `repo`, `group` and `head_sha` (#907: a sha finds its repository) with `counts_only.hash_value`
 under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
 `settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
 hashed id set the history entry is chosen and compared by. The ids equal the
