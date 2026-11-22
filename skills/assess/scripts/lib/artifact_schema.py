@@ -271,6 +271,10 @@ constant each.
 #   instruction file before; both are null when there is no root file and the
 #   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
 #   nested_only and now sits after layer_grades in run-context.json.
+# - run-context.json gains units (issue #862), after owner_exclusions: the monorepo
+#   units (shallowest build-manifest folders, workspace members in place of their
+#   aggregator, or the [[units]] of .assess/config.toml), the aggregators and the
+#   candidates skipped with a code. Additive.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.

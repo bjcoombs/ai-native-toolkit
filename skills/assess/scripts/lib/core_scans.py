@@ -52,6 +52,7 @@ from lib.level_result_types import LevelResult, OwnerExclusionsBlock
 from lib.level_tally import LEVEL_READS, run_context_level
 from lib.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
+from lib.unit_discovery import UnitsBlock, scan_units
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
 from lib.run_context_types import DocGraphBlock, KeyholeIntegration
@@ -322,6 +323,11 @@ def decline_blocks(assess_dir: Path, plugin_version: str) -> dict[str, Any]:
 def owner_exclusions(repo_root: Path) -> OwnerExclusionsBlock:
     """The owner's ``[checks] exclude`` entries from .assess/config.toml (#910)."""
     return owner_exclusions_block(repo_root)
+
+
+def units(repo_root: Path, excludes: tuple[set[str], list[str]]) -> UnitsBlock:
+    """The monorepo units (#862). Core-only: the headless runner and /fleet scope in #866."""
+    return scan_units(repo_root, excludes)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:

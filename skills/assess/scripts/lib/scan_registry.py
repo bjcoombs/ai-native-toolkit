@@ -500,6 +500,9 @@ SCANS: tuple[ScanSpec, ...] = (
     # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
     ScanSpec("owner_exclusions", cs.owner_exclusions, ("repo_root",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SELF_DEGRADING),
+    # Monorepo units (#862): the shallowest build-manifest folders, a workspace root's
+    # declared members in its place, or the [[units]] of .assess/config.toml. Core-only.
+    ScanSpec("units", cs.units, ("repo_root", "excludes"), STAGE_READ_SIDE),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     ScanSpec("offers_block", cs.offers_blocks, ("non_interactive",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=("interactive", "offers")),

@@ -1,0 +1,267 @@
+"""Monorepo unit discovery (lib/unit_discovery.py, issue #862).
+
+Units are the shallowest build-manifest folders; a workspace root is an
+aggregator whose declared members are the units; manifest-only folders are
+skipped; ``[[units]]`` in .assess/config.toml overrides. Counts-only output
+carries counts and tokens, never a unit path.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from lib.counts_only import counts_only
+from lib.scan_registry import SCANS
+from lib.unit_discovery import PROBLEMS, SOURCES, scan_units
+
+
+def _write(root: Path, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return root
+
+
+def _paths(block: dict[str, object]) -> list[str]:
+    return [u["path"] for u in block["units"]]  # type: ignore[attr-defined,index]
+
+
+def _skipped(block: dict[str, object]) -> dict[str | None, str]:
+    return {s["path"]: s["problem"] for s in block["skipped"]}  # type: ignore[attr-defined,index]
+
+
+# --- the acceptance fixtures --------------------------------------------------
+
+THREE_UNITS = {
+    "services/billing/go.mod": "module billing\n",
+    "services/billing/main.go": "package main\n",
+    "services/billing/CLAUDE.md": "# Billing\n",
+    "services/search/pom.xml": "<project/>\n",
+    "services/search/src/main/java/App.java": "class App {}\n",
+    "web/package.json": '{"name": "web"}\n',
+    "web/src/index.ts": "export {}\n",
+    # manifest-only aggregator: a BOM with no sources
+    "bom/pom.xml": "<project><packaging>pom</packaging></project>\n",
+    # a manifest inside a unit is part of that unit
+    "web/tools/package.json": '{"name": "tools"}\n',
+    "web/tools/run.js": "1\n",
+    "README.md": "# Repo\n",
+}
+
+
+def test_a_three_unit_repository_has_three_units_and_skips_the_bom(tmp_path: Path):
+    block = scan_units(_write(tmp_path, THREE_UNITS))
+    assert block["source"] == "discovered"
+    assert _paths(block) == ["services/billing", "services/search", "web"]
+    assert block["unit_count"] == 3
+    assert [u["ecosystem"] for u in block["units"]] == ["go", "maven", "npm"]
+    assert {u["origin"] for u in block["units"]} == {"manifest"}
+    assert _skipped(block) == {"bom": "manifest_only"}
+    assert block["aggregators"] == [] and block["aggregator_count"] == 0
+
+
+def _codex_shaped(root: Path) -> Path:
+    """openai/codex: a root pnpm workspace plus a Cargo workspace in codex-rs."""
+    crates = ["core", "tui", "exec-server", "code-mode-host", "rollout-trace"]
+    files = {
+        "package.json": '{"name": "codex-monorepo", "private": true}\n',
+        "pnpm-workspace.yaml": "packages:\n  - codex-cli\n  - 'sdk/*'\n  - '!sdk/old'\n",
+        "codex-cli/package.json": '{"name": "@openai/codex"}\n',
+        "codex-cli/bin/codex.js": "1\n",
+        "sdk/typescript/package.json": "{}\n",
+        "sdk/typescript/src/index.ts": "1\n",
+        "sdk/old/package.json": "{}\n",
+        "sdk/old/index.js": "1\n",
+        "codex-rs/Cargo.toml": (
+            '[workspace]\nmembers = ["core", "tui", "exec-server", "code-mode-host", "rollout-trace",'
+            ' "utils/*", "gone"]\nexclude = ["utils/skip"]\nresolver = "2"\n'
+        ),
+        "codex-rs/utils/pty/Cargo.toml": "[package]\nname='pty'\n",
+        "codex-rs/utils/pty/src/lib.rs": "\n",
+        "codex-rs/utils/skip/Cargo.toml": "[package]\nname='skip'\n",
+        "codex-rs/utils/skip/src/lib.rs": "\n",
+        "codex-rs/exec-server/src/sandbox_integrity/AGENTS.md": "# nested\n",
+        "AGENTS.md": "# root\n",
+    }
+    for crate in crates:
+        files[f"codex-rs/{crate}/Cargo.toml"] = f"[package]\nname = '{crate}'\n"
+        files[f"codex-rs/{crate}/src/lib.rs"] = "\n"
+    files["codex-rs/code-mode-host/AGENTS.md"] = "# crate\n"
+    return _write(root, files)
+
+
+def test_a_codex_shaped_repository_makes_each_workspace_member_a_unit(tmp_path: Path):
+    block = scan_units(_codex_shaped(tmp_path))
+    rust = [u for u in block["units"] if u["workspace"] == "codex-rs"]
+    assert [u["path"] for u in rust] == [
+        "codex-rs/code-mode-host", "codex-rs/core", "codex-rs/exec-server",
+        "codex-rs/rollout-trace", "codex-rs/tui", "codex-rs/utils/pty",
+    ]
+    assert {u["workspace"] for u in rust} == {"codex-rs"}
+    assert {u["origin"] for u in rust} == {"workspace_member"}
+    node = [u for u in block["units"] if u["workspace"] == "."]
+    assert [(u["path"], u["ecosystem"]) for u in node] == [
+        ("codex-cli", "pnpm"), ("sdk/typescript", "pnpm"),
+    ]
+    # a folder a workspace excludes is a package of its own: a plain unit
+    plain = {u["path"]: u["ecosystem"] for u in block["units"] if u["origin"] == "manifest"}
+    assert plain == {"codex-rs/utils/skip": "cargo", "sdk/old": "npm"}
+    assert block["unit_count"] == 10
+    assert block["aggregators"] == [
+        {"path": ".", "ecosystem": "pnpm", "member_count": 2},
+        {"path": "codex-rs", "ecosystem": "cargo", "member_count": 6},
+    ]
+    assert _skipped(block) == {"codex-rs/gone": "missing"}
+    # nested instruction files are scopes inside a unit, not units
+    assert "codex-rs/exec-server/src/sandbox_integrity" not in _paths(block)
+
+
+# --- each workspace declaration ----------------------------------------------
+
+@pytest.mark.parametrize("files, members", [
+    ({"package.json": '{"workspaces": ["packages/*"]}', "packages/a/package.json": "{}",
+      "packages/a/i.js": "1"}, ["packages/a"]),
+    ({"package.json": '{"workspaces": {"packages": ["apps/web"]}}', "apps/web/package.json": "{}",
+      "apps/web/i.ts": "1"}, ["apps/web"]),
+    ({"go.work": "go 1.22\n\nuse (\n\t./api // the api\n\t./worker\n)\nuse ./cli\n",
+      "api/go.mod": "m", "api/a.go": "p", "worker/go.mod": "m", "worker/w.go": "p",
+      "cli/go.mod": "m", "cli/c.go": "p"}, ["api", "cli", "worker"]),
+    ({"pyproject.toml": '[tool.uv.workspace]\nmembers = ["packages/*"]\nexclude = ["packages/x"]\n',
+      "packages/a/pyproject.toml": "", "packages/a/a.py": "", "packages/x/pyproject.toml": "",
+      "packages/x/x.py": ""}, ["packages/a", "packages/x"]),
+    ({"settings.gradle.kts": 'rootProject.name = "r"\ninclude(":app", ":lib:core")\nincludeBuild("b")\n',
+      "app/build.gradle.kts": "", "app/src/A.kt": "", "lib/core/build.gradle.kts": "",
+      "lib/core/src/C.kt": "", "b/build.gradle": "", "b/B.java": ""}, ["app", "b", "lib/core"]),
+    ({"pom.xml": "<project><modules><module>web</module><!-- <module>old</module> -->"
+      "<module>bom</module></modules></project>",
+      "web/pom.xml": "<project/>", "web/src/W.java": "", "bom/pom.xml": "<project/>"}, ["web"]),
+    ({"Cargo.toml": '[workspace]\nmembers = ["crates/**"]\n',
+      "crates/a/Cargo.toml": "", "crates/a/src/lib.rs": "", "crates/group/b/Cargo.toml": "",
+      "crates/group/b/src/lib.rs": ""}, ["crates/a", "crates/group/b"]),
+], ids=["npm", "npm-packages", "go-work", "uv", "gradle", "maven", "cargo-globstar"])
+def test_each_workspace_kind_makes_its_members_units(tmp_path: Path, files: dict[str, str],
+                                                     members: list[str]):
+    block = scan_units(_write(tmp_path, files))
+    assert _paths(block) == members
+    assert [a["path"] for a in block["aggregators"]] == ["."]
+
+
+def test_gradle_include_build_is_a_separate_shallowest_unit_not_a_member(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "settings.gradle": "include 'app'\nincludeBuild 'b'\n",
+        "app/build.gradle": "", "app/A.java": "", "b/build.gradle": "", "b/B.java": "",
+    }))
+    origins = {u["path"]: u["origin"] for u in block["units"]}
+    assert origins == {"app": "workspace_member", "b": "manifest"}
+
+
+def test_a_maven_member_that_aggregates_is_one_unit(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "pom.xml": "<project><modules><module>webserver</module></modules></project>",
+        "webserver/pom.xml": "<project><modules><module>http</module></modules></project>",
+        "webserver/http/pom.xml": "<project/>", "webserver/http/src/H.java": "",
+    }))
+    assert _paths(block) == ["webserver"]
+
+
+def test_a_single_package_repository_is_one_root_unit(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "pyproject.toml": "[project]\nname='x'\n", "src/x/__init__.py": "",
+        "tests/fixtures/demo/package.json": "{}", "tests/fixtures/demo/i.js": "",
+    }))
+    assert _paths(block) == ["."]
+    assert block["units"][0]["ecosystem"] == "python"
+
+
+def test_a_repository_without_a_manifest_has_no_units(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {"README.md": "# docs\n", "notes/a.md": "x"}))
+    assert block["unit_count"] == 0 and block["units"] == [] and block["skipped"] == []
+
+
+def test_a_member_outside_the_repository_is_skipped(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "Cargo.toml": '[workspace]\nmembers = ["../elsewhere", "a"]\n',
+        "a/Cargo.toml": "", "a/src/lib.rs": "",
+    }))
+    assert _paths(block) == ["a"]
+    assert _skipped(block) == {"../elsewhere": "outside_repo"}
+
+
+def test_an_unparseable_workspace_manifest_is_named_and_its_folder_is_a_plain_unit(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "svc/Cargo.toml": "[workspace\nmembers = [", "svc/src/main.rs": "",
+        "web/package.json": "{not json", "web/i.js": "",
+    }))
+    assert _paths(block) == ["svc", "web"]
+    assert block["unreadable_manifests"] == ["svc/Cargo.toml", "web/package.json"]
+
+
+def test_excluded_folders_hold_no_units(tmp_path: Path):
+    root = _write(tmp_path, {
+        "node_modules/dep/package.json": "{}", "node_modules/dep/i.js": "",
+        "vendored/lib/go.mod": "m", "vendored/lib/l.go": "",
+        "app/go.mod": "m", "app/a.go": "",
+    })
+    assert _paths(scan_units(root, ({"vendored"}, []))) == ["app"]
+
+
+# --- [[units]] override -------------------------------------------------------
+
+def test_declared_units_replace_discovery(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    root = _write(tmp_path, dict(THREE_UNITS) | {
+        ".assess/config.toml": (
+            '[[units]]\npath = "./services/"\nname = "Services"\n'
+            '[[units]]\npath = "web"\n'
+            '[[units]]\npath = "web"\n'
+            '[[units]]\npath = "gone"\n'
+            '[[units]]\nname = "no path"\n'
+            '[[units]]\npath = "../up"\n'
+        ),
+    })
+    block = scan_units(root)
+    assert block["source"] == "config"
+    assert [(u["path"], u["name"], u["origin"]) for u in block["units"]] == [
+        ("services", "Services", "config"), ("web", None, "config"),
+    ]
+    assert [s["problem"] for s in block["skipped"]] == ["duplicate", "missing", "no_path", "no_path"]
+    assert block["aggregators"] == []
+    assert capsys.readouterr().err.count("[[units]] entry skipped") == 4
+
+
+def test_no_valid_declared_unit_falls_back_to_discovery(tmp_path: Path):
+    root = _write(tmp_path, dict(THREE_UNITS) | {".assess/config.toml": "units = 'web'\n"})
+    block = scan_units(root)
+    assert block["source"] == "discovered" and block["unit_count"] == 3
+    assert block["skipped"][0] == {"path": None, "problem": "not_a_list"}
+
+
+# --- registry and counts-only -------------------------------------------------
+
+def test_the_units_block_is_a_core_scan_reading_the_excludes():
+    spec = next(s for s in SCANS if s.key == "units")
+    assert spec.reads == ("repo_root", "excludes") and not spec.network
+
+
+def test_counts_only_never_carries_a_unit_path_or_name(tmp_path: Path):
+    root = _codex_shaped(tmp_path)
+    (root / ".assess").mkdir()
+    block = scan_units(root)
+    for salted in (False, True):
+        out = counts_only({"units": block}, hash_paths=salted, salt="s")["units"]
+        text = json.dumps(out)
+        assert "codex" not in text and "sdk/" not in text and "gone" not in text
+        assert out["unit_count"] == 10 and out["aggregator_count"] == 2
+        assert out["source"] == "discovered"
+        assert [u["ecosystem"] for u in out["units"]].count("cargo") == 7
+        assert {u["origin"] for u in out["units"]} == {"workspace_member", "manifest"}
+        assert out["aggregators"][1] == {"ecosystem": "cargo", "member_count": 6}
+        assert out["skipped"] == [{"problem": "missing"}]
+        assert out["unreadable_manifests"] == 0
+
+
+def test_codes_are_tokens():
+    assert set(SOURCES) == {"discovered", "config"}
+    assert all(code.isidentifier() for code in PROBLEMS)

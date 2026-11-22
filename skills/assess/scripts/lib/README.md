@@ -2200,6 +2200,28 @@ reads the repository's config and warns on stderr per skipped entry; never raise
 `/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
 ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 
+**`unit_discovery.py`**
+Monorepo units, step 1 of #800 (#862). `scan_units(repo_root, excludes)` returns the
+run-context `units` block (`UnitsBlock`) from the tracked files (`command_index.repo_files`)
+minus the doc graph's `EXCLUDE_DIRS` and the config excludes. A folder holding a build
+manifest (`MANIFESTS`: Cargo, Go, pnpm, npm, Gradle, Maven, Python) is a candidate, taken
+shallowest first, so a manifest inside a unit is part of it. A candidate that declares a
+workspace (Cargo `[workspace] members`/`exclude`, `pnpm-workspace.yaml` `packages` with `!`
+excludes, npm/Yarn `workspaces`, `go.work` `use`, uv `[tool.uv.workspace]`, Gradle
+`settings.gradle[.kts]` `include`, Maven `<module>`) is an aggregator: its members are the
+units (`origin: workspace_member`, `workspace` naming the aggregator), expanded one level,
+and the search continues below it outside the members. Glob members (`*`, `**`) match only
+folders that hold a manifest; a workspace-excluded folder is found later as a plain unit.
+A candidate with no `doc_graph.CODE_EXTENSIONS` file below it is skipped as `manifest_only`;
+a literal member with no tracked file is `missing`, one above the root `outside_repo`. An
+unparseable workspace manifest is listed in `unreadable_manifests` and its folder is a plain
+unit. `[[units]]` (`path`, optional `name`) in `.assess/config.toml` replaces discovery when
+at least one entry is valid; a bad entry is skipped with a `PROBLEMS` code (`not_a_list`,
+`not_a_table`, `no_path`, `missing`, `duplicate`) and a stderr warning. A `scan_registry`
+entry (`core_scans.units`), core-only until #866. Counts-only drops every path and name,
+keeping counts, the `origin`/`ecosystem` tokens and the skip codes. Tests:
+`tests/test_unit_discovery.py`.
+
 **`interactivity.py`**
 Decides whether a run may prompt a human. Interactive is the default; the run is
 non-interactive only on an explicit signal - the orchestrator's `--non-interactive`

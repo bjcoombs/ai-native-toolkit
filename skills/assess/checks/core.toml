@@ -80,6 +80,7 @@ fragments = [
   "plugin_version",
   "decline",
   "owner_exclusions",
+  "units",
   "offers_block",
   "uninstall_instructions_path",
   "anomalies",
