@@ -105,7 +105,10 @@ def _is_main_guard(node: ast.stmt) -> bool:
 
 def _import_binds(node: ast.stmt, target: str) -> set[str] | None:
     """The names a top-level shim import binds to ``target``, or None when the
-    statement imports anything else. ``sys`` and ``runpy`` bind no alias."""
+    statement imports anything else. ``sys``, ``runpy`` and ``from __future__ import
+    annotations`` (a compiler directive, as in a package ``__init__.py``) bind no alias."""
+    if ast.unparse(node) == "from __future__ import annotations":
+        return set()
     if isinstance(node, ast.Import):
         if all(a.name in {"sys", "runpy"} and a.asname is None for a in node.names):
             return set()
@@ -124,9 +127,10 @@ def _runpy_call(target: str) -> str:
 
 def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
     """A shim holds the documented form and nothing else: a docstring naming the
-    new dotted path and the removal release, imports of ``sys``, ``runpy`` and the
-    new module only, ``sys.modules[__name__]`` set to that module at top level (the
-    normal import path), and at most one ``__main__`` branch whose whole body is
+    new dotted path and the removal release, imports of ``sys``, ``runpy``, the
+    new module and ``__future__`` annotations only, ``sys.modules[__name__]`` set
+    to that module at top level (the normal import path), and at most one
+    ``__main__`` branch whose whole body is
     ``runpy.run_module(target, run_name="__main__")``. That branch is required
     when the new module has a ``__main__`` block."""
     rel = path.relative_to(LIB_DIR.parent).as_posix()
