@@ -1067,7 +1067,9 @@ hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 `fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
 no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
 `git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
-when failed. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
+when failed (`dirty` is also `null` on an ok row with no commit or a failed `git status`).
+`_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
 `git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
 (no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
 copy that cannot be made is the `committed_tree_error` row. The platform pass goes through

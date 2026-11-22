@@ -79,7 +79,8 @@ def build_schema() -> JsonDict:
             "has a reason token and null signals_schema_version, scans, active, head_sha and dirty. An ok "
             "row's active says whether its HEAD was committed inside the run's window; head_sha is the "
             "HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's "
-            "committed tree was scanned (untracked files and .assess/ outputs never count). Generated from "
+            "committed tree was scanned (untracked files and .assess/ outputs never count); dirty is null on an ok "
+            "row when the checkout has no commit or git status fails. Generated from "
             "lib/fleet.py by lib/fleet_schema.py."
         ),
         **schema,

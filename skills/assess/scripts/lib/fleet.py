@@ -151,10 +151,25 @@ ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
 AfterFn = Callable[[Target, FleetRow], None]
 
 
+# The repository-local variables git itself clears for a subprocess on another repository
+# (``git rev-parse --local-env-vars``). Inherited from a hook or CI step, any of them would
+# point every git call, the scratch clone and the scan child at that repository, not the
+# target (#907).
+REPO_LOCAL_GIT_ENV = frozenset({
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX",
+    "GIT_INTERNAL_SUPER_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR",
+})
+
+
 def _read_only_env(cache_dir: Path | None = None) -> dict[str, str]:
     # PYTHONUTF8: the scan child reads and writes UTF-8 whatever the host locale
     # (a Windows code page would otherwise garble or reject non-ASCII text).
-    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"}
+    env = {key: value for key, value in os.environ.items()
+           if key not in REPO_LOCAL_GIT_ENV and not key.startswith("GIT_CONFIG_KEY_")
+           and not key.startswith("GIT_CONFIG_VALUE_")}
+    env.update({"GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"})
     env.pop(CACHE_ENV, None)  # only the platform pass caches, and only in its own directory
     if cache_dir is not None:
         env[CACHE_ENV] = str(cache_dir)

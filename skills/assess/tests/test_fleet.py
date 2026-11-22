@@ -346,6 +346,27 @@ def test_commit_state_uses_the_assess_definition_of_dirty(tmp_path, change, dirt
     assert fleet.commit_state(repo) == {"head_sha": _git(repo, "rev-parse", "HEAD").strip(), "dirty": dirty}
 
 
+def test_an_inherited_repository_env_never_redirects_the_reads(tmp_path, monkeypatch):
+    """A run from a hook or CI step inherits GIT_DIR and friends; fleet reads the target anyway."""
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    other = make_checkout(tmp_path / "other", {"x.txt": "other\n"})
+    (repo / "CLAUDE.md").unlink()
+    for key, value in {"GIT_DIR": other / ".git", "GIT_WORK_TREE": other, "GIT_INDEX_FILE": other / ".git" / "index",
+                       "GIT_OBJECT_DIRECTORY": other / ".git" / "objects", "GIT_CONFIG_COUNT": "1",
+                       "GIT_CONFIG_KEY_0": "core.bare", "GIT_CONFIG_VALUE_0": "true"}.items():
+        monkeypatch.setenv(key, str(value))
+    commit = fleet.commit_state(repo)
+    assert commit["dirty"] is True
+    with fleet.committed_tree(repo, tmp_path, commit) as tree:
+        assert tree is not None and (tree / "CLAUDE.md").exists() and not (tree / "x.txt").exists()
+    env = fleet._read_only_env()
+    assert not {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_CONFIG_COUNT",
+                "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"} & env.keys()
+    for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_CONFIG_COUNT"):
+        monkeypatch.delenv(key)
+    assert commit["head_sha"] == _git(repo, "rev-parse", "HEAD").strip()  # the target's, not other's
+
+
 def test_commit_state_without_a_commit(tmp_path):
     repo = tmp_path / "r"
     repo.mkdir()
