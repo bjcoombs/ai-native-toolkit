@@ -77,13 +77,13 @@ def test_reports_behind_count_vs_upstream(git_repo, tmp_path):
     # upstream at it while leaving HEAD one commit back.
     def _g(*args, cwd=repo):
         subprocess.run(["git", "-C", str(cwd), *args],
-                       check=True, capture_output=True, text=True)
+                       check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape")
 
     remote = tmp_path / "remote.git"
     _g("clone", "--bare", str(repo), str(remote), cwd=tmp_path)
     branch = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"],
-        check=True, capture_output=True, text=True).stdout.strip()
+        check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape").stdout.strip()
     _g("remote", "add", "origin", str(remote))
     _g("fetch", "-q", "origin")
     _g("branch", f"--set-upstream-to=origin/{branch}", branch)
@@ -147,9 +147,9 @@ def test_dirty_excludes_assess_by_pathspec_not_status_code(git_repo):
 
     (assess / "notes.md").write_text("staged edit\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", ".assess/notes.md"],
-                   check=True, capture_output=True, text=True)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape")
     subprocess.run(["git", "-C", str(repo), "rm", "-q", ".assess/log.md"],
-                   check=True, capture_output=True, text=True)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape")
 
     assert git_churn.git_commit_info(repo)["dirty"] is False
 
