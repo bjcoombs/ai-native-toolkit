@@ -57,7 +57,7 @@
               "properties": {
                 "reason": {
                   "type": "string",
-                  "description": "Why the block is unavailable: a sentence, or 'code: sentence' for a block whose codes are listed under its own entry. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  "description": "Why the block is unavailable, usually 'code: sentence'; only blocks with a named entry list their codes. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                 }
               },
               "required": [

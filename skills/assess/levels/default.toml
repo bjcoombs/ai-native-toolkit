@@ -67,9 +67,11 @@
 #   check, npm test, tox, ./scripts/test.sh, pre-commit run or the
 #   pre-commit/action step) is unknown when
 #   no lint line shows, since recipes are not read; a direct test run
-#   (pytest, go test, cargo test) is not a linter. No CI file, or CI with no
-#   lint line, is level 0, whatever the suppression comments say: a
-#   suppression only caps the row, never grants it, and the level 2
+#   (pytest, go test, cargo test) is not a linter. With no lint line, a
+#   tracked CI file of a system the scan does not parse (lib/unread_ci.py)
+#   is unknown too (lint_basis unread_ci_system), never 0. Otherwise no CI
+#   file, or CI with no lint line, is level 0, whatever the suppression
+#   comments say: a suppression only caps the row, never grants it, and the level 2
 #   condition requires layer-3-linters.1, so the tally never credits
 #   suppressions with no linter running. Level 2 holds the stale
 #   bare suppressions to 10 or fewer, the erosion cap /assess applies. The
@@ -94,7 +96,7 @@
 #   measured (no_scored_files, signal_grades.EMPTY_DENOMINATORS), never met,
 #   and the row level reads unknown there too. Neither level proves an
 #   architecture test runs in CI, which is what /assess looks for. With no
-#   map the structure_drift block is omitted (a headless run reports it unavailable), so the row is
+#   map the structure_drift block reads no_ownership_map in both /assess and a headless run, so the row is
 #   unknown rather than 0.
 # - Layer 0 level 1 reads layer_grades.instruction_file_present: a committed
 #   instruction file at any location in
@@ -159,9 +161,9 @@
 #   commands, or a lint target or linter: make lint, ruff, eslint). Branch and
 #   path filters are not read: a check in a push-only workflow counts the same
 #   as one on pull requests. Other CI systems are not parsed (issue #787):
-#   with no readable check line, a tracked Jenkinsfile, .circleci/config.yml,
-#   azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml or
-#   .buildkite/pipeline.yml makes the row unknown (basis unread_ci_system),
+#   with no readable check line, a tracked CI file of a system the scan does
+#   not parse (Jenkinsfile, .circleci/config.yml, azure-pipelines.yml, the
+#   full list in lib/unread_ci.py) makes the row unknown (unread_ci_system),
 #   never 0, since the check may run there. A CI file with no check line that
 #   pulls its jobs from elsewhere (a GitLab include: or component, a GitHub
 #   job-level uses: of another repository's reusable workflow) is unknown,

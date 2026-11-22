@@ -237,9 +237,10 @@ instead of editing the history comment; the release PR folds the notes in with
 # #782): whether an unmasked CI line on ordinary triggers runs a linter (null
 # when a check target or script may lint inside it). Additive: no existing
 # key moves, and complexity-stats.json is unchanged.
-# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis and
-# enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
-# system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
+# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis,
+# enforced_basis and lint_basis gain unread_ci_system (issue #787): a tracked CI
+# file of a system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...)
+# makes Layer 5 level 1 and Layer 3 level 1 unknown, not 0.
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
 # 1.39.0: run-context.json gains the headline block (issue #747): the Step, its next
 # unlock and "Verified practices: N of M measured" worded from the level block
