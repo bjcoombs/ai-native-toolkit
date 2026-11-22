@@ -75,7 +75,7 @@ CASES = [
     _case("l3-1-one-noqa", "layer-3-linters", 1, {"app.py": "import os  # noqa: F401\n"}, _ISSUES + "782"),
     _case("l4-1-codeowners-star", "layer-4-architecture", 1, {
         ".github/CODEOWNERS": "* @x\n", "src/a.py": "x = 1\n",
-    }, _ISSUES + "785"),
+    }, None),
     # The Layer 4 recovery step is as cheap as `* @x`.
     _case("l4-1-architecture-one-path", "layer-4-architecture", 1, {
         "ARCHITECTURE.md": "# Architecture\n\nThe entry point is `src/a.py`.\n", "src/a.py": "x = 1\n",

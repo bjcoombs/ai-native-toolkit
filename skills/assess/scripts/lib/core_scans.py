@@ -14,7 +14,6 @@ are declared gates in the table.
 from __future__ import annotations
 
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
 from lib.accretion_ratchet import AccretionScan, scan_accretion_ratchet
@@ -48,6 +47,8 @@ from lib.instruction_files import (
 )
 from lib.interactivity import build_offers_block
 from lib.keyhole_signals import integrate
+from lib.level_result_types import LevelResult
+from lib.level_tally import DEFAULT_BLOCKS, run_context_level
 from lib.liveness_scan import scan_liveness
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
@@ -333,21 +334,7 @@ def anomalies(header: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def level_scan(blocks: tuple[tuple[str, tuple[str, ...]], ...],
-               compute: Callable[[dict[str, Any]], Any]) -> Callable[..., Any]:
-    """The run context's ``level`` block (#744): ``compute`` over the blocks published so far.
-
-    ``blocks`` pairs each read with the run-context keys it holds: ``()`` for a
-    published block (its own key), or a spread entry's keys, whose value is the
-    mapping it spread (or one degraded marker for all of them). ``compute`` is
-    ``lib.level_tally.run_context_level``, passed in by the registry.
-    """
-    def level(*values: Any) -> Any:
-        ctx: dict[str, Any] = {}
-        for (key, spread), value in zip(blocks, values):
-            if not spread:
-                ctx[key] = value
-            for name in spread:
-                ctx[name] = value.get(name) if isinstance(value, dict) and name in value else value
-        return compute(ctx)
-    return level
+def level(*blocks: Any) -> LevelResult:
+    """The run context's ``level`` block (#744): the tally over ``level_tally.DEFAULT_BLOCKS``,
+    which the registry entry reads in that order."""
+    return run_context_level(dict(zip(DEFAULT_BLOCKS, blocks)))

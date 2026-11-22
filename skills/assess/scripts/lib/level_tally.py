@@ -59,15 +59,11 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from lib.counts_only import reason_code, reason_token
+from lib.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, LevelResult, NextStep
 from lib.levels import CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef, condition_id, evaluate_row
-from lib.level_signals import (
-    INPUT_GRADES,
-    SIGNAL_INPUTS,
-    UNMEASURED_VALUES,
-    load_default_levels,
-)
+from lib.levels import load_levels
+from lib.signal_grades import DEFAULT_LEVELS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
 LEVEL_RESULT_VERSION = 1
@@ -213,9 +209,25 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None) -> LevelR
     }
 
 
+def default_model() -> MaturityModel:
+    """The shipped model, read without the path validator (``level_signals`` applies it
+    in the tests), so the run context's entry never imports the scanners."""
+    return load_levels(DEFAULT_LEVELS)
+
+
+def model_blocks(model: MaturityModel) -> tuple[str, ...]:
+    """The blocks a model's criteria read (each signal's first segment), sorted."""
+    return tuple(sorted({c["signal"].split(".")[0] for row in model["rows"]
+                         for level in row["levels"] for c in level["criteria"]}))
+
+
+# The run-context blocks the ``level`` entry reads (lib/scan_registry.py).
+DEFAULT_BLOCKS = model_blocks(default_model())
+
+
 def run_context_level(ctx: Mapping[str, Any]) -> LevelResult:
     """The run context's ``level`` block: the default maturity model over the run context."""
-    return level_result(load_default_levels(), ctx)
+    return level_result(default_model(), ctx)
 
 
 def dumps_level(result: Any) -> str:

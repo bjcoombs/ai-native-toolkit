@@ -34,7 +34,7 @@ LAYER_SIGNALS = (
     "promissory_markers.aging_reliable",
     "promissory_markers.families.suppression.total",
     "promissory_markers.families.suppression.stale",
-    "structure_drift.tier_0.matched_patterns",
+    "structure_drift.tier_0.boundary_patterns",
     "stats_summary.loc.p95",
 )
 

@@ -38,7 +38,6 @@ import inspect
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
 from functools import partial
-from pathlib import Path
 from typing import Any
 
 from lib import core_scans as cs
@@ -62,6 +61,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
+from lib.level_tally import DEFAULT_BLOCKS
 from lib.merged_sample import merged_sample
 from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
@@ -135,7 +135,8 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
 
     Stages run in ``STAGES`` order, so a read must name a provided input or a
     key whose producer is declared earlier *and* runs at the same or an earlier
-    stage. The run-context keys the table writes (published keys and spread
+    stage; a key a spread entry copies into the run context counts as produced by it,
+    and reads None when that entry leaves it out. The run-context keys the table writes (published keys and spread
     keys) must be distinct.
     """
     produced_at: dict[str, int] = {name: -1 for name in provided}
@@ -180,13 +181,19 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
             raise ScanRegistryError(f"scan {spec.key!r} writes run-context key(s) {clash} written elsewhere")
         written.update(keys)
         produced_at[spec.key] = stage_index
+        # a spread key is readable too: it is in the run context from that stage on
+        for name in spec.spread:
+            produced_at[name] = stage_index
 
 
-def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any]) -> Any:
+def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any],
+             spread: frozenset[str] = frozenset()) -> Any:
     if name in inputs:
         return inputs[name]
     if name in ctx:
         return ctx[name]
+    if name in spread:  # a spread entry may leave one of its keys out (an omitted block)
+        return None
     raise ScanRegistryError(
         f"scan {spec.key!r} reads {name!r}, which is neither in the inputs the core "
         f"passed nor in the run context yet"
@@ -240,10 +247,11 @@ def run_scans(
         for each in STAGES:
             run_scans(ctx, inputs, each, table)
         return
+    spread = frozenset(name for each in table for name in each.spread)
     for spec in table:
         if spec.stage != stage:
             continue
-        args = tuple(_resolve(spec, name, inputs, ctx) for name in spec.reads)
+        args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
         value, degraded = _call(spec, args)
         if spec.spread:
             _spread(spec, ctx, value, degraded)
@@ -601,34 +609,9 @@ SCANS: tuple[ScanSpec, ...] = (
 )
 
 
-DEFAULT_LEVELS_PATH = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
-
-
-def _run_context_level(ctx: dict[str, Any]) -> Any:
-    # imported here: lib.level_signals reaches this module through lib.signals_schema
-    from lib.level_tally import run_context_level
-
-    return run_context_level(ctx)
-
-
-def _level_spec(specs: tuple[ScanSpec, ...]) -> ScanSpec:
-    """The ``level`` block (#744): it reads the blocks the default maturity model names
-    (a spread block through the entry that spreads it), and runs last of post-offers."""
-    from lib.levels import load_levels
-
-    model = load_levels(DEFAULT_LEVELS_PATH)
-    named = {c["signal"].split(".")[0] for row in model["rows"] for lv in row["levels"] for c in lv["criteria"]}
-    order = {stage: i for i, stage in enumerate(STAGES)}
-    earlier = [s for s in specs if not s.private and order[s.stage] <= order[STAGE_POST_OFFERS]
-               and named & (set(s.spread) if s.spread else {s.key})]
-    blocks = tuple((s.key, s.spread) for s in earlier)
-    return ScanSpec("level", cs.level_scan(blocks, _run_context_level), tuple(s.key for s in earlier),
-                    STAGE_POST_OFFERS)
-
-
 # The verified tally and the autonomy Step (lib/level_tally.py, #744): the
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
-SCANS = (*SCANS, _level_spec(SCANS))
+SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
 
 validate(SCANS)

@@ -155,6 +155,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_level_tally.py` | `lib/level_tally.py`, `lib/fleet_level.py`, `lib/fleet_level_schema.py` - the verified tally, condition states, Steps and their gates, `requires` and `[[steps]]` loading, `level.json` and the run context's `level` block, and the #744 contract fixtures through `/fleet` and `/assess` |
 | `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
 | `test_signal_inputs.py` | `lib/level_signals.py` - the producer input class of every default criterion signal, its grade and the declared predicate (#783) |
+| `test_check_manifest.py` | `checks/core.toml` against the scan registry, the headless tables, `ROOTS`, the counts-only `RULES`, the finding tables, the default maturity model and `level_signals.SIGNAL_INPUTS`, in both directions; the manifest against `references/check-manifest.schema.json`. The agreement test: each failure names the scan, signal, condition or finding that disagrees (`test_registry_matches_manifest` for a scan) |
+| `test_check_manifest_loader.py` | `lib/check_manifest.py` (the strict loader: allowed keys, types, ids, the registry rules and cross-references) and `lib/check_validation.py` (structured errors and the Levenshtein suggestion, with Meridian's test tables) |
 | `test_hollow_conditions.py` | `levels/default.toml` - hollow cases: the cheapest committed change that meets each condition must not be credited; a case the model still credits is `xfail(strict=True)` naming its fixing issue, and that fix removes the mark (#784) |
 | `test_layer_grades.py` | `lib/layer_grades.py` - deterministic layer grades as a registered signals block, with a counts-only rule |
 | `test_history_window.py` | `lib/history_window.py` - the one history-window grammar shared by `lib/git_churn.py`, `lib/ai_usage.py`, `lib/fleet_activity.py` and `lib/signals.py`, and the shallow-boundary reachability check |
@@ -177,6 +179,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_legacy.py` | `lib/fleet_legacy.py` - a run written before the 2.0.0 maturity-model rename (`fixtures/fleet_legacy/`) loads, compares and counts in the history and trend |
 | `test_fleet_history.py` | `lib/fleet_history.py` + `skills/fleet/scripts/fleet.py` + `skills/fleet/scripts/fleet_compare.py` - the dated run history, the `--compare` wiring and the compare CLI |
 | `test_fleet_compare.py` | `lib/fleet_compare.py` - comparing two fleet runs without rescanning: level movement apart from measured-set movement, and the not-comparable reasons |
+| `test_fleet_scanner_diff.py` | `lib/fleet_scanner_diff.py` - attributing a fleet comparison move to a scanner change (`scanner_changed`), an unavailable scanner diff (`toolkit_changed_unknown_scope`) or a signal one run lacks (`set`), and the CLI wiring (#774) |
 
 ### Infrastructure suites
 

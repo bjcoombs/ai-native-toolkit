@@ -24,7 +24,8 @@ line's tooltip as "at least". The line itself stays on the known-only mean.
 The label names the row with the largest change in share (ties to the lower
 row id) as ``title then→now``; when its move was not a pure level change
 (``cause`` ``set`` or ``set_and_level``: the measured set of repositories moved
-too) it carries a ``*`` explained under the chart. Up is the accent colour,
+too; ``scanner_changed`` or ``toolkit_changed_unknown_scope``: the scanner changed, #774)
+it carries a ``*`` explained under the chart. Up is the accent colour,
 down the alarm colour, flat muted; the signed change is printed, so colour is
 never the only channel. End labels are spread to a minimum gap
 (``fleet_svg.spread_vertical``). Deterministic: groups sorted by name, fixed
@@ -245,8 +246,8 @@ def render_slope(view: SlopeView) -> str:
         starred = starred or (mover is not None and mover["cause"] not in (None, CAUSE_LEVEL))
     cursor += 24
     if starred:
-        body.append(svg.text(PAD, cursor, "* the group's measured set of repositories moved too, "
-                             "so that change is not a level change alone", size=11.5, cls="muted"))
+        body.append(svg.text(PAD, cursor, "* not a level change alone: the group's measured set of "
+                             "repositories moved too, or the scanner changed", size=11.5, cls="muted"))
         cursor += LINE_H + 4
     floored = [f"{g['group']}\u00a0{_floor_span(g)}" for g in view["groups"] if _floor_span(g)]
     if floored:

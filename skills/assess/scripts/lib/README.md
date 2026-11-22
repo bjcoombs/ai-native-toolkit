@@ -713,7 +713,11 @@ names, keyed `<doc>::<header>` so two docs declaring the same section don't coll
 keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
 patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
 left behind - and `parse_ownership` runs both with the module-shape degradation contract
-(`available: False`, reason `"no ownership map"` when neither map exists). It mirrors
+(`available: False`, reason `"no ownership map"` when neither map exists).
+`is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line declares a module
+boundary: a literal path segment and at least one matched file with a `CODE_EXTENSIONS`
+suffix under a non-dot directory, so `*`, `*.py`, `/.github/`, root files and docs-only
+paths do not (#785; tests in `tests/test_structure_drift_boundaries.py`). It mirrors
 `doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
 `tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
 sorted at the boundary for byte-identical output. The one inversion is that it *reads*
@@ -733,8 +737,11 @@ references) and side B the tracked, non-excluded file set, and the finding is th
 declarations whose match set is empty. Binary, no statistics; a pattern matching only
 excluded files counts as empty (the excludes are not part of the navigable repo). It emits
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
-coverage ratio, and legacy-shape `empty_globs` mirrors for the orchestrator's
-enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
+coverage ratio, `boundary_patterns` - the matched architecture-doc references plus the
+CODEOWNERS lines `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at
+least one matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`,
+`README.md` and `docs/` are left out); Layer 4 level 1 reads it (#785) - and
+legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a
 boundary groups still belong together?". Three lenses each induce a grouping - the declared
@@ -755,8 +762,8 @@ existing `hidden_coupling` finding - a recurring directory pair, not the version
 repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the
 `structure_drift` run-context block. Co-changes with `ownership_parser.py` (its parse foundation),
 `structure_graph.py` and `change_coupling.py` (the static and historical lenses it consumes),
-`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its test
-`tests/test_structure_drift.py`.
+`keyhole_signals.py` / `assess_core.py` (its orchestrator and serialiser), and its tests
+`tests/test_structure_drift.py` and `tests/test_structure_drift_boundaries.py`.
 
 ### Signal integration
 
@@ -1291,8 +1298,8 @@ rows with a known level in both runs (org rows are out of the mean, the counts a
 (largest share change, ties to the lower row id) with the comparison's `cause`. A group added,
 removed or with no row known in both runs is named on a hatched strip, never at zero.
 `end_labels` spreads the end labels `LABEL_GAP` apart (`fleet_svg.spread_vertical`), read by
-both `render_slope` and its gap test. A mover whose `cause` is `set` or `set_and_level`
-carries a `*` explained under the chart.
+both `render_slope` and its gap test. A mover whose `cause` is anything but `level` (`set`, `set_and_level`, or the #774
+`scanner_changed` / `toolkit_changed_unknown_scope`) carries a `*` explained under the chart.
 With a floor on either side (#697) a group also gets `floor_then` / `floor_now`, the floor-inclusive bound over rows with a level or floor in both runs, printed in the line's tooltip.
 
 **`fleet_layer_bars.py`**
@@ -1521,13 +1528,54 @@ gives `comparable: false` with no deltas. `compare` reports the measured-set mov
 (`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
 the row's `active`) apart from level movement: each group's maturity model rows then and now with
 a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
-team row's set moved) or `set_and_level` (a team row's set and evidence moved). An org
+team row's set moved) or `set_and_level` (a team row's set and evidence moved), plus the #774 causes below. An org
 row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
 `write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
 only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
 `heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
 plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
 A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
+`compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
+passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
+
+**`fleet_scanner_diff.py`**
+Delta attribution for scanner changes (issue #774), read by `fleet_compare.compare`.
+
+Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
+signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
+earlier run then reads the new signal as absent (unknown), never as a false repository move.
+A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
+
+The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
+`toolkit_commit`. Equal commits are `same`, and git never runs (two null commits only at one
+`plugin_version`). One null commit, or two null commits at different `plugin_version`s, is
+`unavailable`. Two different commits run `git diff --name-only`
+over `skills/assess/scripts/lib` in the running toolkit checkout; when git cannot answer, the
+result is `unavailable`. `producers` maps each block in `lib.signals.SIGNAL_SCANS` to its
+producer modules:
+
+- the defining module of `fn` / `offline_fn` and its static `lib` import closure (a package
+  such as `lib/test_pressure/` included, with its relative imports);
+- for a dispatch module (one defining several specs), the modules its function body names;
+- the producers of every spec it `reads`;
+- `run_context_types` is left out.
+
+`changed_blocks` intersects the map with the diff. `attribute` orders a moved team row's cause:
+
+1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
+   stored scans lack while the other run holds it. This is measured-set movement, never level
+   movement; the achievements replay already treats an unknown side as neutral.
+2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
+   `notes` line saying the scanner diff was unavailable.
+3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
+   reads (`row_signals`, else any) changed producers and a repository in the group changed a
+   signal in it.
+
+A `set_and_level` row given one of these causes also carries `set_moved: true`, so the
+measured-set movement stays reported. Org rows keep their cause. Limits: the map comes from the running code, a change outside
+`lib/` is not seen, and the import closure over-attributes rather than misses.
+Tests: `tests/test_fleet_scanner_diff.py`.
 
 **`fleet_labels.py`**
 The deterministic half of the optional fleet label step (issue #572), driven by
@@ -1714,6 +1762,91 @@ source (is there an externalised spec/doc?), authorship class, and the velocity 
 committer time, issue #773, rather than calendar age; None without a HEAD). Primary finding: orphaned understanding - high complexity with no human
 anchor and no externalised spec. Reuses `change_coupling.authorship_analysis` so the
 conservative agent/human classification is defined one way.
+
+### Check manifest
+
+**`check_manifest.py`** *(#789 step 1, #792)*
+The strict loader for the check manifest, `skills/assess/checks/core.toml` (owner
+`core`), which declares every check once. Its published contract is
+`skills/assess/references/check-manifest.schema.json` (JSON Schema 2020-12, one manifest
+per owner). `load_manifest(path=CORE_MANIFEST)` reads the TOML with stdlib `tomllib`,
+checks it with allowed-key sets per entry kind and the cross-reference rules below, and
+returns the document itself as a `CheckManifest` TypedDict (no defaults filled, nothing
+re-keyed, so `json.dumps` of it validates against the schema). Any error raises
+`CheckManifestError`, whose `errors` lists every structured finding
+(`check_validation.ValidationError`); `validate_manifest(data)` returns them without
+raising, and `parse_manifest(data)` validates an already-parsed document. Helpers:
+`collectors`, `signals`, `conditions`, `findings` (by `order`), `scan_key` (a collector
+id minus its owner), `block_collectors` (run-context block to publishing collector id)
+and `condition_key(row, level, signal)`.
+
+The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
+`[[entries]]` of four kinds:
+
+- `collector`: one `scan_registry.ScanSpec`, id `core.<scan key>`, in scan-table order.
+  `callable` (`module:function`), `offline_callable`, `publishes` (the run-context keys
+  written: `[key]`, the spread keys with `spread = true`, or `[]` with `private = true`),
+  `reads`, `stage`, `degrade`, `gate_reason` (a token for one of
+  `scan_registry.GATE_REASONS`: `setup`, `bad_scope`, `self_degrading`, `serialiser`),
+  `label`, `network`, `platform_pass` (`signals.PLATFORM_SCANS`), `platform_only`
+  (`signals.PLATFORM_ONLY_SCANS`), `headless` (published block to `registered`,
+  `headless_variant` or `unregistered`; an unlisted block is not reported headless),
+  `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
+  `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots
+  under its blocks), `privacy` (its `counts_only_rules.RULES` patterns and classes;
+  `archived_finding_paths` sits with the private `keyhole` collector that produces it),
+  `unknown_reasons` (`code`, `carried_in` `reason` or `basis`, `means`, `next_step`),
+  `revision` (1 for every collector; bumped when a published value changes meaning,
+  #774) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
+  signals carry it now.
+- `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
+  (`bool` or `number` here), `collector` (the collector publishing its first segment),
+  `evidence` (the producer input class, `level_signals.SIGNAL_INPUTS`, #783) and
+  `null_means`. No grade is authored: it follows from the class
+  (`level_signals.INPUT_GRADES`).
+- `condition`: display metadata for one default criterion, keyed
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
+  supportive `fix`. The criterion itself stays in
+  `levels/default.toml`; a custom `--levels` file needs no entries.
+- `finding`: a derived finding, id `core.finding.<name>`, with `order`, `action`,
+  `mode`, `concern` (in `assess_config.GATE_CONCERN_FINDINGS`), `inputs`, `derive`,
+  `thresholds`, `suppressed_when` (the churn suppression, a #789 rule expression in
+  source form) and `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`).
+
+Loader rules beyond types: an id has its kind's form; a private collector publishes
+nothing and is not spread; a plain collector publishes `[key]`; opting out of degrading
+names a `gate_reason`; `offline_callable` needs `network`, `platform_only` needs
+`platform_pass`; a `headless` block or `shapes` path is published by the collector, and a
+block is `headless_variant` exactly when a variant names it; every read is a core input
+or an earlier collector at the same or an earlier stage, and no key shadows a core
+input or publishes a block another collector publishes (the `scan_registry.validate`
+rules); a signal's collector exists and publishes its block; a condition key is unique and names a
+declared signal; finding orders are distinct and every finding input names a block or collector.
+An unknown key or reference carries a "did you mean" `suggestion` and the `available`
+names. The module imports none of the tables it describes, because later steps make
+them load from it.
+
+Nothing reads the manifest at runtime yet. **Agreement test:**
+`tests/test_check_manifest.py` checks it in both directions against `scan_registry.SCANS`
+(`test_registry_matches_manifest`: one collector per scan key, equal `callable`, `reads`,
+`stage`, `publishes`, `private`, `spread`, `degrade`, `gate_reason`, `label`, `network`
+and `offline_callable`, in table order; a failure names the scan key), the headless
+tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the default
+model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
+against the schema. Until later steps generate those tables from the manifest, adding a
+scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+Loader tests: `tests/test_check_manifest_loader.py`.
+
+**`check_validation.py`**
+Structured validation findings ported from meridianhub/meridian
+`services/control-plane/internal/validator/manifest_validator.go` (`ValidationError`,
+`findClosestMatch`, `levenshteinDistance`): a `ValidationError` TypedDict (`severity`
+`error` or `warning`, `path`, `code`, `message`, optional `suggestion` and `available`),
+`finding(...)` to build one, `format_error` (`[severity] path: message (suggestion: x)`),
+`errors_only`, `levenshtein` and `closest` (the nearest candidate within half the
+target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
+Meridian's distance and closest-match tables.
 
 ### Configuration
 
@@ -2066,11 +2199,24 @@ Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registere
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
-the `level` block, a `scan_registry` entry (`core_scans.level_scan`, which reads every block
-published before it) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads the blocks the default
+model names, `level_tally.DEFAULT_BLOCKS`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
 byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
 `$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
 fixtures through `/fleet` and `/assess` on the same commit.
+
+**`signal_grades.py`**
+The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES` and the `DEFAULT_LEVELS`
+path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
+`tests/test_level_tally.py`.
+
+**`reason_codes.py`**
+`reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
+(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+which re-exports both, so the tally reads the same codes as counts-only output (#744).
+Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
 **`level_result_types.py`**
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
