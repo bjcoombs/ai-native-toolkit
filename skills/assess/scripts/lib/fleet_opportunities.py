@@ -30,6 +30,21 @@ id is written as the scan wrote it: in clear in counts-only output, already hash
 scan under the run's salt with ``--hash-paths`` (so it joins ``repos.jsonl``'s
 ``ci_source_ids``);
 ``text`` lines hold counts and maturity-model titles only. Deterministic: lists sorted.
+
+The `opportunities` object of `fleet-data.json` (#746, parent #740), from one run's rows and
+the maturity model with no history. `in_place`: per team row, measured repositories at its
+top level. `_sole_unmet` re-evaluates each row (`levels.evaluate_row`) and keeps a
+repository only when its level is known and exactly one criterion, status `unmet`, stands
+before its next level (unknown never counts). `biggest_lift` is the (row, level, signal)
+holding the most such repositories (ties: row order, level, signal), worded by
+`next_step_guidance.guidance`, with its Step gate (`[[steps]]`) when it is one.
+`shared_templates`: per `shared_tooling.ci_source_ids` id with at least `MIN_INCLUDERS`
+includers, the includers whose sole unmet criterion reads a `ci_checks.` signal, by row and
+level. Repository keys go through the run's `Privacy.key`; a source id is kept as the scan
+wrote it (clear, or the scan's salted hash, which joins `repos.jsonl`), and its `kind` comes
+from `ci_includes` (`FLEET_DATA_RULES` classes both ids `path`); `text` holds counts and
+model titles only. No
+rank or position field. Tests: `tests/test_fleet_opportunities.py`.
 """
 from __future__ import annotations
 
@@ -145,7 +160,8 @@ def _biggest_lift(model: MaturityModel, team_rows: Sequence[Row], lifts: Mapping
     row_id, level, signal, index = best
     row = team_rows[order[row_id]]
     criterion = _criteria(row, level)[index]
-    words = guidance(signal, criterion["op"], criterion["value"])
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    words = None if "eq_signal" in criterion else guidance(signal, criterion["op"], criterion["value"])
     gate, step = _gate(model, row_id, level)
     repos = lifts[best]
     unlock = f" It is the `{gate}` gate for Step {step}." if gate is not None else ""

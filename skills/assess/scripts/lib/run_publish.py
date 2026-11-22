@@ -7,6 +7,14 @@ chain, first-flagged.json), the findings badge, the committed findings snapshot
 (findings.json) and ``run-context.json``. The
 wiki's results fill the four keys the run header reserved for them
 (``run_setup.WIKI_KEYS``) in place, so their position in the file is unchanged.
+
+The run's side effects, applied after every scan (#557) by
+`assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
+artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
+keys the run header reserved in place, writes `badge.json` from the `headline` block
+(`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
+`findings.json` into `prior_findings_snapshot` and rewrites it
+(`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 """
 from __future__ import annotations
 

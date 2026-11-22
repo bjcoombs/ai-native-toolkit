@@ -10,6 +10,41 @@ through this module, so the grammar is defined once.
 ``anchored_since`` turns a window into the absolute ``git log --since=@<epoch>``
 bound counted back from the assessed commit's committer time (issue #773), so a
 window never resolves against the clock of whoever runs the scan.
+
+The one history-window grammar (issue #601): `<n>d`, `<n>w`, `<n>mo`, `<n>y`.
+`split_window` returns `(count, unit)` or raises `ValueError`; it matches the whole
+string (`re.fullmatch`), so `"6mo\\n"` is rejected as the ECMA-262 schema pattern rejects it; `WINDOW_PATTERN` is the
+unanchored regex fragment. `signals.parse_window`, `ai_usage.resolve_window`,
+`fleet_activity.window_start`, `git_churn.window_from_churn_label` and the
+`run.schema.json` window pattern (`fleet_schema`) all read it.
+`anchored_since(window, anchor_epoch)` is the absolute `"@<epoch>"` start of a window
+counted back from an epoch (days and weeks exactly, months and years by calendar,
+clamped to the month end, time of day kept); None for all history, or for a start git
+cannot read as an epoch (fewer than nine digits, before 1973-03-03). Tests:
+`tests/test_history_window.py`, `tests/test_commit_anchor.py`.
+`git_commit_info`'s `dirty` flag runs `git status` under the `ASSESS_EXCLUDE_PATHSPEC`
+pathspec (issue #414), so the `.assess/` wiki the run has just rewritten - including a
+scoped `.assess/<slug>/` - never counts as an uncommitted edit, while a modified tracked
+file anywhere else still does. The line is whether a path moves what a scan *measures*,
+not whether anything reads it back: a later run does read the wiki (`complexity-stats.prior.json`
+for the cross-run diff, `first-flagged.json` for hotspot ages), but that shapes what the
+report says about figures already computed. `.assess/config.toml` is the exception -
+`assess_config.load_config` reads it before any scan and its excludes decide which files
+get measured - so it is checked by a second status call under `ASSESS_CONFIG_PATHSPEC`
+and OR-ed back in. That is the seam to keep in step if the config ever grows a second
+file or a scope-local path. Both pathspecs are built from `assess_config.ASSESS_DIR` and
+`CONFIG_FILE`, the same two constants `load_config` resolves its own path from, so
+renaming the directory or the file cannot leave the check pointing at a path that no
+longer exists (`test_assess_pathspecs_derive_from_assess_config` pins that).
+`content_commit_clock` is the last-content-change clock (issue #333): one `git log` pass
+over the docs' history that skips bulk mechanical commits (more than
+`BULK_COMMIT_DOC_SHARE` of the docs and at least `BULK_COMMIT_MIN_DOCS` of them, such as
+a licence-header sweep), so one sweep cannot reset every doc's staleness. A doc whose
+every commit is bulk falls back to its oldest commit and is flagged (`creation_fallback`),
+since that is a creation date rather than a content age. Historical paths are mapped
+through `change_coupling.build_rename_map`, so a mass rename keeps each doc's earlier
+content dates. On a git failure the clock is marked incomplete and degrades to the plain
+newest-commit read; a shallow clone is also marked incomplete.
 """
 from __future__ import annotations
 

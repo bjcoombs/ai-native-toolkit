@@ -26,17 +26,63 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    ``command``: a test or lint command (``check_command.is_check_command`` /
    ``is_lint_command``, including a bare inline ```pytest```) one system names
    and another does not; ``threshold``: two systems whose numbers on lines
-   naming ``coverage``, ``complexity`` or ``line length`` share none.
+   naming ``coverage``, ``complexity`` or ``line length`` share none (a
+   leading heading or list ordinal, ``## 2. Coverage``, is no number).
 
 ``conflicts`` (divergences, the level 1 signal of the ``agent-consistency``
 row) and ``unlinked`` (systems not linked, level 2) are null, and
 ``applicable`` false, when fewer than two systems are present: one system has
 nothing to agree with, so the row reads not measured, never 0. Each unlinked
-system gets a ``next_steps`` entry with the exact pointer line for its tool
+system gets a ``next_steps`` entry, on its own single-file location (``CLAUDE.md``)
+before a supplementary rule file, with the exact pointer line for its tool
 (``@AGENTS.md`` for an import-capable tool, ``#[[file:AGENTS.md]]`` for Kiro,
 ``read: AGENTS.md`` in ``.aider.conf.yml`` for Aider, a markdown pointer line
 otherwise) and, for the system's own single-file location only, a symlink
 command, both built from templates and paths, never from file text. Read-only, no network, no model.
+
+Cross-agent instruction consistency (#768): does every agent system get the same map?
+`scan_agent_consistency(repo_root, excludes)` runs from the scan table
+(`agent_consistency`, post-offers stage, headless `registered`) and returns the
+`agent_consistency` block (`AgentConsistencyBlock`): `{available, systems,
+systems_total, applicable, canonical, files, divergences, conflicts, unlinked,
+consistent, next_steps, not_read}`. It reads each system's root-context files (scope
+`always_loaded` at directory `.`, empty files dropped; Aider when `.aider.conf.yml`
+reads a file, as `config_read` when it reads the canonical file directly). The canonical
+file is the root `AGENTS.md`, else the first root file in `SYSTEMS` order, then path
+order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
+it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `pointer` (a
+line naming the canonical file's name, as a markdown link or Kiro's
+`#[[file:AGENTS.md]]` does; never for Claude Code or Gemini CLI, which load only
+imports, so a prose mention there links nothing, matching `claude_shadows_agents`), `mirror` (identical below the header, through
+`instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
+A system is linked when one of its files links (its other always-loaded files are
+supplementary rules, still compared for divergence). Each
+`Divergence` is `{kind, value, named_in, missing_from, stated}` over each system's
+effective text (its files, plus the canonical text where a file imports or points to
+it): `command`, a test or lint command (`check_command.is_check_command` or
+`is_lint_command`, plus a one-word inline `pytest`, `tox`, `nox` or linter) named by
+some systems and not others; `threshold`, two systems whose numbers on lines naming
+`coverage`, `complexity` or `line length` share none (a stray second number is no conflict;
+a leading heading or list ordinal such as `## 2. Coverage` or `1. ` is dropped first, #960). `conflicts` (divergences)
+and `unlinked` (systems not linked) are the default model's `agent-consistency` row
+signals, level 1 `conflicts == 0` and level 2 `unlinked == 0` with `requires` level 1,
+both `head_structure` (graded measured). With fewer than two systems `applicable` is
+false and `conflicts`, `unlinked` and `consistent` are null, so the row reads unknown,
+never 0. `next_steps` holds one `ConsistencyStep` per unlinked system, on the system's own
+single-file location (`CLAUDE.md`) when it has one, else its first unlinked file (#960): `pointer`, the
+exact line for its tool (`pointer_line`: `@AGENTS.md` relative to the file for Claude
+Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: AGENTS.md` in
+`.aider.conf.yml` for Aider, `Follow the project instructions in
+[AGENTS.md](AGENTS.md).` otherwise) and `symlink` (`ln -sf`, only for the system's own single-file location: null for
+Aider and for a supplementary rule file, which a symlink would overwrite), built from
+templates and paths, never file text; written into the file, each passes the link check.
+`not_read` names the forms not compared (thresholds without a keyword, Aider `--read`
+on the command line, user-level rules, scoped and nested files). Counts-only keeps the
+systems, links, kinds and counts, paths as paths, and drops `value`, `pointer`,
+`symlink` and `not_read`. Known limit: for a system that follows text, any line naming the canonical file's name counts
+as a pointer. Stdlib plus `lib.check_command`, `lib.command_resolver`,
+`lib.instruction_budget` and `lib.instruction_discovery`. Tests:
+`tests/test_agent_consistency.py`.
 """
 from __future__ import annotations
 
@@ -63,6 +109,13 @@ THRESHOLD_KEYWORDS: dict[str, re.Pattern[str]] = {
     "line_length": re.compile(r"\bline[ -]length\b|\bmax-line-length\b", re.IGNORECASE),
 }
 _NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?!\w|\.\d)")
+# A heading or list ordinal (``## 2. Coverage``, ``### 3.1 Coverage``, ``1. ``,
+# ``2) ``) numbers the line, it states no threshold (issue #960). A heading
+# number needs a ``.``/``)`` or a dotted form, so ``## 90 percent coverage``
+# keeps its 90. A dotted heading number (``### 3.1``) is read as a section
+# number, so a heading opening with a decimal threshold (``## 85.5``) states none.
+_ORDINAL = re.compile(
+    r"^\s*(?:#{1,6}[ \t]+(?:\d+(?:\.\d+)+[.)]?|\d+[.)])|\d+[.)])(?=\s|$)")
 _INLINE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 _FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 NOT_READ = [
@@ -148,10 +201,14 @@ def check_commands(text: str) -> set[str]:
 
 
 def thresholds(text: str) -> dict[str, set[float]]:
-    """Numbers stated on lines naming a threshold keyword, per keyword."""
+    """Numbers stated on lines naming a threshold keyword, per keyword.
+
+    A leading heading or list ordinal is dropped first, so ``## 2. Coverage``
+    states no number.
+    """
     out: dict[str, set[float]] = {}
     for line in text.splitlines():
-        numbers = {float(n) for n in _NUMBER.findall(line)}
+        numbers = {float(n) for n in _NUMBER.findall(_ORDINAL.sub("", line, count=1))}
         if not numbers:
             continue
         for key, pattern in THRESHOLD_KEYWORDS.items():
@@ -288,8 +345,11 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
     unlinked = [s for s in systems if not linked[s]] if applicable else []
     steps: list[ConsistencyStep] = []
     for system in unlinked:
-        path = next(r["path"] for r in rows
-                    if r["system"] == system and r["link"] not in LINKED)
+        # The system's own single-file location (CLAUDE.md) takes the pointer
+        # before a supplementary rule file (.claude/rules/x.md) that sorts first.
+        candidates = [r["path"] for r in rows
+                      if r["system"] == system and r["link"] not in LINKED]
+        path = next((c for c in candidates if _primary(system, c)), candidates[0])
         assert canon is not None  # two or more systems hold at least one file
         steps.append({
             "system": system,

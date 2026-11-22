@@ -54,6 +54,10 @@ class TestAssessBuild:
     def test_skill_md_present(self, assess_zip):
         assert "assess/SKILL.md" in assess_zip.namelist()
 
+    def test_version_notes_not_shipped(self, assess_zip):
+        # skills/assess/changes/ is release tooling input (#1011), not skill content.
+        assert not any(n.startswith("assess/changes/") for n in assess_zip.namelist())
+
     def test_scripts_present(self, assess_zip):
         names = assess_zip.namelist()
         assert any(n.startswith("assess/scripts/") for n in names)

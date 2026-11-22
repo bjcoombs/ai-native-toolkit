@@ -5,7 +5,7 @@ keyed by its repository id (a failed scan has no entry), in an envelope of
 `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`.
 `commits` holds, under the same ids, `{head_sha, dirty}`: the commit each result measured
 and whether the checkout was dirty (its committed tree was then scored, as in
-`repos.jsonl`). The
+`repos.jsonl`); `dirty` is `null` when unknown, and the row's `dirty_reason` says why. The
 result (`scripts/lib/level_tally.py` in the assess skill, #744) treats each row level of
 the maturity model as one condition, `<row id>.<level>`, and reports:
 
@@ -13,7 +13,8 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
   `not_measured`; `not_applicable` and `declined` are reserved) and a `reason` code when
   not measured (`needs_full_run`, `needs_platform`, a block's own code, `block_absent`,
   `no_value`, `type_mismatch`, `degenerate_history`, `no_scored_files` (no file scored,
-  so the file-size percentile is not a measurement), or `requires:<id>`);
+  so the file-size percentile is not a measurement), `no_manifests` (no dependency manifest
+  read, so there is nothing to lock), or `requires:<id>`);
 - `tally`: `met` is the level, the count of counted conditions met (graded measured or
   verified); `measured` counts the counted conditions met or unmet; `not_measured` counts
   every condition not measured. An unknown never counts;

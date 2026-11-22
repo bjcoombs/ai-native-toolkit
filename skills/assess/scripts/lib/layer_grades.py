@@ -46,6 +46,28 @@ maturity model's rows for them read proxies from other blocks instead.
 Grades and the presence value are short tokens and the flag a boolean, so the
 counts-only filter keeps the block whole; no path is carried. Pure: it reads the
 setup grading and the nested block the core already built.
+
+Deterministic layer grades as one registered block (issue #620), so the headless
+signals document carries them and a maturity model can name them.
+`scan_layer_grades(instruction_grading, nested_instructions)` reads the setup grading
+(`run_setup.instruction_grading`) and the `nested_instructions` block and writes
+`{instructions_grade, instruction_file_present, instruction_presence}`.
+`instruction_presence` (issue #821) is three-way: `root` (a tracked file at a root
+location, or a discovered file its tool loads at session start, `scope.always_loaded`:
+always loaded), `nested_only` (no root file, but `nested_instructions.files` lists one,
+such as `pkg/AGENTS.md`: present, loaded on demand) or `none` (no instruction file at any
+known location); null only when there is no root file and the nested block is
+unavailable, so a nested file was not looked for. `instructions_grade` is the best letter
+grade of the files that value counts (the root grading, the top-level
+`instructions_grade` value, which stays root-only; else the always-loaded or nested
+grades), null only for `none`. `instruction_file_present` is true for `root` and
+`nested_only` and false for `none` (null with the presence), so a maturity model scores
+"no instruction file" as level 0 rather than unknown and a nested-only repository meets
+Layer 0 level 1 (maintainer decision on #821); its advice is the `gap_actions`
+`layer_grades` entry. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
+default maturity model's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
+counts-only filter. Tests: `tests/test_layer_grades.py`, and the maturity model rows in
+`tests/test_level_signals.py`.
 """
 from __future__ import annotations
 

@@ -78,6 +78,25 @@ never read. Row titles and signal names come from the caller's maturity model.
 
 Deterministic: achievements sorted by run, kind (``KINDS`` order), view, unit, row;
 canonical JSON. The same history gives the same bytes.
+
+The deterministic achievements engine (#704, `ACHIEVEMENTS_VERSION`; #705 and #744 build
+on its evidence model). `build_achievements` replays comparable runs' `fleet-data.json`
+oldest first: `subjects` gives every unit and repository its level per team row, the row's
+roll-up rule (`levels.share_level`) over measured members, with the measured set;
+`clean` is the one gate on a move (known both sides, same measured set), and
+`known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
+emits `level_up`, `first` (only with `firsts=True`, `fleet.py --first-achievements`; off
+by default since #772), `target_hit` (a level target on the row's level, a share target
+on its mean share of top level, `RowState.share`, worked out from the cells, #780) and
+`streak` (#772 retired `personal_best`), each with
+`moves` evidence (repository, row, from and to level, the criterion that became met) and
+a Markdown `credit` line. On a step from a re-scored entry (#771) `unknown_move` counts a
+repository's own move to unknown as a slip and from unknown to a level above 0 as a streak
+step; `build_achievements` sets `recount` (`fleet_rescore.recount`) when the newest earlier
+run was re-scored, and `rescored_runs` (every re-scored replayed run, which
+`fleet_credit` reads for the report's opening rule). `nearest_level_up` picks per subject and row the next-level
+criterion most of its one-below members share, worded by `next_step_guidance.guidance`.
+Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py`.
 """
 from __future__ import annotations
 
@@ -483,7 +502,8 @@ def _wording(row: Row, level: int, signal: str) -> tuple[str, str]:
         if 0 < level <= len(row["levels"]) else []
     if not criteria:
         return f"Meet {code(signal)}.", f"the next fleet run reads {code(signal)} met."
-    words = guidance(signal, criteria[0]["op"], criteria[0]["value"])
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    words = None if "eq_signal" in criteria[0] else guidance(signal, criteria[0]["op"], criteria[0]["value"])
     if words is None:
         return f"Meet {expression(criteria[0])}.", f"the next fleet run reads {expression(criteria[0])}."
     return words["change"], words["done_when"]

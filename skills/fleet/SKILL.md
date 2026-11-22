@@ -394,5 +394,4 @@ so a label leans mostly on the repository's name. Present them as such.
 The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`,
 `lib/fleet_history.py`, `lib/fleet_compare.py`,
 `lib/fleet_activity.py`, `lib/fleet_cleanup.py`, `lib/fleet_diagrams.py` and
-`skills/assess/scripts/lib/fleet_labels.py` (see that package's
-`lib/README.md`).
+`skills/assess/scripts/lib/fleet_labels.py` (each module's docstring documents it).

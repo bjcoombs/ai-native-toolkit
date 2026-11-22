@@ -5,6 +5,16 @@ count, each maturity-model row with its conditions in plain words, each scan the
 headless runner reports, the derived findings, and every registry scan. Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
 manifest, so an edit there shows here once ``make catalog`` regenerates the file.
+
+`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, each row's
+conditions in plain words, each scan, the findings and the registry, linking `measures.json`
+relatively.
+
+**Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
+root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
+`tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
+so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml` or `level_signals.py` regenerates the catalog.
+`make check` runs it through `test-assess`.
 """
 from __future__ import annotations
 
@@ -61,15 +71,17 @@ def _grades(catalog: Catalog) -> list[str]:
 def _rows(catalog: Catalog) -> list[str]:
     lines = ["## Maturity-model rows", "",
              "Each row holds conditions in order. A condition holds when all of its criteria "
-             "hold, and its key is `<row>.<n>:<signal>`.", ""]
+             "hold, and its key is `<row>.<n>:<signal>`. Truth names the truth tags the condition "
+             "keeps honest; a condition with several counts once.", ""]
     for row in catalog["rows"]:
         lines += [f"### {row['title']}", "",
                   f"Row `{row['id']}`, {row['scope']} scope, aggregated by `{row['aggregation']}`.", "",
-                  "| Condition | Criterion | Grade | Counts | Next step |", "|---|---|---|---|---|"]
+                  "| Condition | Truth | Criterion | Grade | Counts | Next step |", "|---|---|---|---|---|---|"]
         for level in row["levels"]:
             for c in level["criteria"]:
                 lines.append(
-                    f"| `{row['id']}.{level['level']}` {_cell(c['title'])} | {_cell(c['text'])} "
+                    f"| `{row['id']}.{level['level']}` {_cell(c['title'])} | "
+                    f"{', '.join(f'`{t}`' for t in level['truth'])} | {_cell(c['text'])} "
                     f"(`{_cell(c['signal'] + ' ' + c['op'] + ' ' + json.dumps(c['value']))}`) | "
                     f"`{c['grade']}` | "
                     f"{'yes' if c['counts'] else 'no, listed'} | {_cell(c['fix'])} |")

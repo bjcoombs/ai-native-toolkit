@@ -47,6 +47,19 @@ complexity treemap (``complexity-stats.json``) and ``analyze_doc_staleness`` and
 returns a JSON-serialisable dict. Integration into ``assess_core`` /
 ``run-context.json`` is a separate task's job -- nothing here imports or edits
 the core.
+
+Signal C: crosses the complexity treemap against doc staleness to produce a signed
+`doc_value` per unit. Positive = the doc relieves load on the agent's context window;
+negative = the doc is a lying map over complex code (worse than no doc). The join
+multiplies complexity by a signed freshness score so trivial code generates near-zero
+signal regardless of doc state. When a doc carries a `doc_provenance` verdict, freshness
+comes from the source-vs-doc comparison (a direct, high-confidence signal that bypasses
+the churn-ratio confidence guards) instead of the ratio. Which code a doc covers comes
+from the staleness rows through `doc_subjects` (the `doc_ownership.py` rule), and each
+unit's `subject_code_count` is the staleness row's value, so both blocks report one count
+per document. That count covers discovered code files only, while `complexity_summarised`
+sums the join subject over the scored files, so a base doc owning only files discovery
+skips (Lua, say) can report `subject_code_count` 0 with non-zero complexity. `_extract_file_ccn` is the single read of the stats' per-file CCN.
 """
 from __future__ import annotations
 

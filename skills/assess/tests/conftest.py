@@ -59,6 +59,53 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
                 break
 
 
+@pytest.hookimpl(hookwrapper=True, trylast=True)
+def pytest_runtest_call(item: pytest.Item) -> Iterator[None]:
+    """Pause every running coverage for a ``no_cover`` test, not only pytest-cov's own.
+
+    In a pytest-xdist worker pytest-cov 7 starts two controllers (a DistMaster
+    when it reads ``-n``, then a DistWorker), and its ``no_cover`` hook stops
+    only the DistWorker; coverage then resumes the other, which keeps tracing.
+    trylast puts this hook inside pytest-cov's, so it runs after that pause and
+    stops whatever ``Coverage.current()`` still returns. Serially nothing is
+    left running and the loop is a no-op (#930).
+    """
+    coverage = sys.modules.get("coverage")
+    # pytest-cov's own condition: the marker, or a request for its no_cover fixture.
+    wants_pause = item.get_closest_marker("no_cover") or "no_cover" in getattr(item, "fixturenames", ())
+    if coverage is None or not wants_pause:
+        yield
+        return
+    paused = []
+    while (running := coverage.Coverage.current()) is not None:
+        running.stop()
+        paused.append(running)
+    try:
+        yield
+    finally:
+        for cov in reversed(paused):
+            cov.start()
+
+
+# Absolute CPU-time budgets cannot run in the xdist pool. A GitHub Linux runner's
+# 4 vCPUs are 2 cores with 2 hardware threads each, so with 4 workers a test
+# shares its core with a busy sibling and its CPU seconds roughly double: on
+# PR #973 the dart scanner's ``unclosed-functions`` case took 0.57 s per scan
+# serially on main and 1.01 s under ``-n auto``, past its 1 s budget, with
+# coverage paused. Widening the budget would hide the next regression, so these
+# tests skip in a worker and the serial ``-p no:xdist -m cpu_budget`` pass that
+# follows each parallel run executes them (tests.yml, windows.yml, Makefile).
+# #929 replaces the absolute budget with a time(n)/time(n/4) ratio, which
+# contention does not move; the marker can go with it.
+CPU_BUDGET_SKIP = "absolute CPU-time budget: runs in the serial `-p no:xdist -m cpu_budget` pass (#930)"
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip a ``cpu_budget`` test inside a pytest-xdist worker (see above)."""
+    if os.environ.get("PYTEST_XDIST_WORKER") and item.get_closest_marker("cpu_budget"):
+        pytest.skip(CPU_BUDGET_SKIP)
+
+
 def skip_without_posix_shell() -> None:
     """Call first in a fixture that puts a ``#!/bin/sh`` stub (fake gh/glab) on PATH.
 

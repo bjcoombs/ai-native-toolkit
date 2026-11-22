@@ -21,6 +21,31 @@ every returned collection is sorted at the boundary and no set/dict iteration
 order leaks out. The drift signals that consume this module (tasks 9/10) and the
 orchestrator wiring (task 11) are deliberately not here - this is the parser and
 empty-glob detector only.
+
+Parse half for Layer 0 structure-drift. Ownership is *declared* in two places an LLM
+contributor reads as authoritative boundaries: a GitHub `CODEOWNERS` (glob -> owner,
+honoured at the root, `.github/`, or `docs/` by GitHub's precedence) and a
+boundary-declaring `ARCHITECTURE.md` / `DESIGN.md` - or a seam-mapping `README.md`
+admitted only when its prose carries the ownership/seam vocabulary, so a generic project
+README is skipped. `parse_codeowners` resolves each glob against the git-tracked,
+non-excluded file set into `{glob_pattern: {matched_files}}`; `parse_architecture_md`
+sections each doc by markdown header and attributes the path references in a section's
+body (read from inline code, wikilinks, and bare prose paths) to the module the header
+names, keyed `<doc>::<header>` so two docs declaring the same section don't collide, and
+keeping only references that resolve to real files. `find_empty_globs` flags the CODEOWNERS
+patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
+left behind - and `parse_ownership` runs both with the module-shape degradation contract
+(`available: False`, reason `"no ownership map"` when neither map exists).
+`is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line or an architecture-doc
+reference declares a module boundary: a literal path segment and at least one matched file with a `CODE_EXTENSIONS`
+suffix under a non-dot directory, so `*`, `*.py`, `/.github/`, root files and docs-only
+paths do not (#785, #874; tests in `tests/test_structure_drift_boundaries.py`). It mirrors
+`doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
+`tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
+sorted at the boundary for byte-identical output. The one inversion is that it *reads*
+inline-code path spans (a path written as code is the boundary declaration we want) where
+the doc graph strips them. This is the parsing foundation the structure-drift signals
+consume; it owns no drift logic itself.
 """
 from __future__ import annotations
 

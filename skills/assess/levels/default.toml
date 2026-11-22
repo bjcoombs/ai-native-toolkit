@@ -110,8 +110,7 @@
 #   when there is no root file and nested_instructions did not run, and a
 #   missing layer_grades block is unknown. A nested-only repository's advice
 #   is the gap_actions layer_grades entry: add a root file that names the
-#   check command. Unreleased: this comment changed with #821 and the
-#   criterion did not; the 3.0.0 release PR bumps "version".
+#   check command.
 #   layer_grades.instructions_grade (the letter grade, null with no
 #   file) is available to a maturity model too; this one does not grade on the
 #   letter, since /assess weighs it with the instruction text. Level 2 reads
@@ -170,10 +169,13 @@
 #   never 0: the check may live in the included file. Level 2 is pinned
 #   dependencies: agent_environment.pinning.unlocked_total is 0, so every
 #   dependency manifest has its lockfile committed (a requirements*.txt pinned
-#   with == is its own lock); a repository with no manifest has nothing to
-#   lock. Committed setup does not stand in for a lockfile. Naming a check
-#   command that resolves is read once, by Layer 0 level 2, so a missing named
-#   check costs Layer 0 only (#786). A repository with locked dependencies but
+#   with == is its own lock). A repository with no manifest has nothing to
+#   lock: the condition reads not measured (no_manifests, the count
+#   agent_environment.pinning.manifests_total is 0,
+#   signal_grades.EMPTY_DENOMINATORS, #927), never met. Committed setup
+#   does not stand in for a lockfile. Naming a check command that resolves
+#   is read once, by Layer 0 level 2, so a missing named check costs Layer 0
+#   only (#786). A repository with locked dependencies but
 #   no CI check line is 0.
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
@@ -232,6 +234,14 @@
 # coverage_gate (layer 6), added one per Step. The thresholds are provisional
 # until the calibration corpus sets them (#842).
 #
+# Truth tags (lib/levels_fields.py, #843): every condition carries "truth",
+# one or more of behaviour, contracts, docs, structure, agent_context,
+# agent_runtime, governance and supply_chain: the truth it keeps honest. Tags
+# replace layers as the organising frame; the row ids keep their layer
+# numbers only so the legacy layer alias resolves models written before
+# #843. A condition with several tags counts once. Tags change no level, no
+# tally and no Step.
+#
 # Changing a criterion changes results: bump "version" with every edit.
 
 version = "default-2026.11.22"
@@ -244,12 +254,14 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["agent_context"]
   criteria = [
     { signal = "layer_grades.instruction_file_present", op = "eq", value = true },
   ]
 
   [[rows.levels]]
   level = 2
+  truth = ["agent_context", "docs"]
   criteria = [
     { signal = "agent_environment.check.named_total", op = "gt", value = 0 },
     { signal = "instruction_claims.failed", op = "eq", value = 0 },
@@ -264,10 +276,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["agent_runtime"]
   criteria = [{ signal = "observability.rung", op = "gte", value = 1 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["agent_runtime"]
   criteria = [{ signal = "observability.rung", op = "gte", value = 3 }]
 
 [[rows]]
@@ -278,10 +292,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["structure"]
   criteria = [{ signal = "structure.modularity_q", op = "gte", value = 0.3 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["structure"]
   criteria = [
     { signal = "structure.cross_package_edges", op = "gt", value = 0 },
     { signal = "structure.front_door_ratio", op = "gte", value = 0.9 },
@@ -296,10 +312,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["structure"]
   criteria = [{ signal = "ci_checks.lint_runs", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
+  truth = ["structure"]
   criteria = [
     { signal = "promissory_markers.families.suppression.stale", op = "lte", value = 10 },
     { signal = "promissory_markers.aging_reliable", op = "eq", value = true },
@@ -314,10 +332,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["structure"]
   criteria = [{ signal = "structure_drift.tier_0.boundary_patterns", op = "gt", value = 0 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["structure"]
   criteria = [{ signal = "stats_summary.loc.p95", op = "lte", value = 500 }]
   requires = ["layer-4-architecture.1"]
 
@@ -329,10 +349,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["behaviour"]
   criteria = [{ signal = "ci_checks.enforced_check_runs", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
+  truth = ["agent_runtime", "supply_chain"]
   criteria = [{ signal = "agent_environment.pinning.unlocked_total", op = "eq", value = 0 }]
 
 [[rows]]
@@ -343,10 +365,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["behaviour"]
   criteria = [{ signal = "coverage_gate.enforced_meets_minimum", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
+  truth = ["behaviour"]
   criteria = [{ signal = "test_pressure.mutation_run", op = "eq", value = true }]
   requires = ["layer-5-ci.1"]
 
@@ -358,10 +382,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["governance"]
   criteria = [{ signal = "review_evidence.present", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
+  truth = ["governance"]
   criteria = [
     { signal = "review_reality.reviewed_share", op = "gte", value = 0.8 },
     { signal = "review_reality.approved_share", op = "gte", value = 0.5 },
@@ -375,10 +401,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["governance"]
   criteria = [{ signal = "agent_ops.summary.permissions_encoded", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
+  truth = ["agent_runtime"]
   criteria = [
     { signal = "agent_ops.summary.hooks_present", op = "eq", value = true },
     { signal = "agent_ops.summary.routines_present", op = "eq", value = true },
@@ -392,10 +420,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["docs"]
   criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 50 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["docs"]
   criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 20 }]
 
 [[rows]]
@@ -406,10 +436,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["agent_context"]
   criteria = [{ signal = "guardrails.stated_pct", op = "gte", value = 50 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["agent_context"]
   requires = ["guardrails-stated.1"]
   criteria = [{ signal = "guardrails.stated_pct", op = "gte", value = 100 }]
 
@@ -421,10 +453,12 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["agent_context"]
   criteria = [{ signal = "agent_consistency.conflicts", op = "eq", value = 0 }]
 
   [[rows.levels]]
   level = 2
+  truth = ["agent_context"]
   requires = ["agent-consistency.1"]
   criteria = [{ signal = "agent_consistency.unlinked", op = "eq", value = 0 }]
 

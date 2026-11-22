@@ -3,6 +3,10 @@
 Kept apart from the engine so ``lib.counts_only_schema`` can walk it without an
 import cycle (the engine reads ``lib.level_signals``, which reads the counts-only
 shapes). String fields hold condition ids, states, grades and reason codes only.
+
+The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
+`NextStep`) and the run context's `Headline` (#747), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+import cycle. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
 
@@ -19,6 +23,7 @@ class ConditionResult(TypedDict):
     reason: NotRequired[str]  # not_measured, or a requires that is not met
     disposition: NotRequired[str]  # "excluded_by_owner": the owner excluded this condition (#910)
     exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
+    polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
 
 
 class NotMeasured(TypedDict):

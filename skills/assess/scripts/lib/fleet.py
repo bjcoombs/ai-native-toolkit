@@ -40,9 +40,64 @@ at that sha in the scratch directory (``committed_tree``), with the
 ``origin`` URL copied over, so the row is a function of the commit, the same
 as a clean checkout of it. A clean checkout is scanned in place.
 
+``dirty`` is null on an ok row only when the state is unknown, and ``dirty_reason``
+then names why (#932, ``DIRTY_UNKNOWN_REASONS``): no commit (scanned in place, there
+is no sha to check out), ``git status`` or ``git ls-files`` failing, or index entries
+``git status`` never compares (a sparse checkout, skip-worktree or assume-unchanged
+entries). Unknown is never read as clean: with a ``HEAD`` such a checkout is scanned
+from its committed tree too. A modified submodule's own content never marks the
+checkout dirty (``--ignore-submodules=dirty``): the copy's submodule directory is
+empty either way, so a moved submodule commit still does.
+
 Read only: every git call here and in the scan runs with
 ``GIT_OPTIONAL_LOCKS=0``, scans run with the scratch directory as their working
 directory, and their output lands in that scratch directory, never in a target.
+
+The core of `skills/fleet/scripts/fleet.py` (issue #567): headless signals across a
+ghsync root or a list, one JSONL row per repository. `discover_root` walks
+`<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
+checkout is reported rather than skipped), never descending into a found repository,
+`worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
+directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
+expanded is a `ValueError`, a usage error, and so is one whose expanded home directory
+does not exist, since Windows expands `~name` without checking the account, #965); `layout_id` gives both inputs the
+same `repo` id (the path under the root, prefixed with the root's name when one
+segment), a listed path outside the root falling back to `remote_path` (the `origin`
+URL's path) and then to its last two directory names. `scan_target` checks
+`checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0` and `PYTHONUTF8=1` (#712), counts-only unless
+told otherwise, from a scratch directory, with a timeout; every failure becomes a
+`failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
+message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
+(`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row;
+`run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
+`remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
+and treats a host-less URL (`file:///...`) as no remote, so no local path becomes an id.
+A list entry repeating an earlier id is skipped with a note on stderr. `run_fleet` maps targets over a thread pool of those processes, isolates
+a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
+`repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
+its schema version - no stamp field, path or timing - so reruns are byte-identical.
+`run_salt` draws one salt per run for `--hash-paths`; under a salt a failed scan's
+stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
+hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
+(`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
+`fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
+no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
+`git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
+when failed. On an ok row `dirty` is `null` only when unknown, with `dirty_reason` naming why
+(#932, `DIRTY_UNKNOWN_REASONS`): `no_commit`, `status_error`, `index_read_error`, or, after a
+clean status, index entries `git status` never compares (`_hidden_entries` reads `git ls-files -v`:
+`sparse_checkout`, `skip_worktree`, `assume_unchanged`). `commit_state` returns `CommitState`
+(`RepoCommit` plus `dirty_reason`). Status runs with `--ignore-submodules=dirty`, so a submodule's
+own edits never mark the checkout dirty (unlike `/assess`); a moved submodule commit still does.
+`_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when known clean or without a commit, else (dirty or unknown) a
+`git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
+(no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
+copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
+`run_signals` too, so it reads the same tree. The row shape is the `FleetRow`
+TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
+readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 """
 from __future__ import annotations
 
@@ -95,6 +150,16 @@ FAILURE_REASONS = (MISSING_CHECKOUT, NOT_A_WORK_TREE, SCAN_TIMEOUT, INVALID_OUTP
                    COMMITTED_TREE_ERROR)
 # Plus ``scan_exit_<code>`` for a scan process that exits non-zero.
 
+# Why an ok row's ``dirty`` is null (#932): its dirty state is unknown, never clean.
+NO_COMMIT = "no_commit"  # the checkout has no HEAD; scanned in place
+STATUS_ERROR = "status_error"  # ``git status`` failed
+INDEX_READ_ERROR = "index_read_error"  # ``git ls-files -v`` failed
+SPARSE_CHECKOUT = "sparse_checkout"  # skip-worktree entries under core.sparseCheckout
+SKIP_WORKTREE = "skip_worktree"  # skip-worktree entries without a sparse checkout
+ASSUME_UNCHANGED = "assume_unchanged"  # entries marked assume-unchanged
+DIRTY_UNKNOWN_REASONS = (NO_COMMIT, STATUS_ERROR, INDEX_READ_ERROR, SPARSE_CHECKOUT, SKIP_WORKTREE,
+                         ASSUME_UNCHANGED)
+
 _SKIP_DIRS = frozenset({"worktree"})
 _HOSTLESS_URL = re.compile(r"^[a-z][a-z0-9+.-]*://(?:/|$)", re.IGNORECASE)
 _REMOTE_PATH = re.compile(r"^(?:[a-z+]+://[^/]+/|[^@/:]+@[^:/]+:|[^@/:]+:)(?P<path>.+?)(?:\.git)?/?$")
@@ -110,7 +175,8 @@ class FleetRow(TypedDict):
     scans: dict[str, JsonDict] | None  # assess_signals ``scans``; None when failed
     active: bool | None  # HEAD committed inside the window; None when failed or not checked
     head_sha: str | None  # the commit measured (#907); None when failed or no commit
-    dirty: bool | None  # tracked files differed from HEAD, so HEAD's tree was scanned; None as head_sha
+    dirty: bool | None  # tracked files differed from HEAD, so HEAD's tree was scanned; None when unknown
+    dirty_reason: str | None  # why ``dirty`` is None on an ok row (DIRTY_UNKNOWN_REASONS); else None
 
 
 class RepoCommit(TypedDict):
@@ -118,6 +184,12 @@ class RepoCommit(TypedDict):
 
     head_sha: str | None
     dirty: bool | None
+
+
+class CommitState(RepoCommit):
+    """``RepoCommit`` plus ``dirty_reason``, the token for a None ``dirty`` (#932)."""
+
+    dirty_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -307,7 +379,7 @@ def targets_from_list(entries: Iterable[str], root: Path | None, base: Path) -> 
 
 
 def _row(target: Target, *, reason: str | None = None, document: JsonDict | None = None,
-         active: bool | None = None, commit: RepoCommit | None = None) -> FleetRow:
+         active: bool | None = None, commit: CommitState | None = None) -> FleetRow:
     return {
         "fleet_row_version": FLEET_ROW_VERSION,
         "repo": target.repo,
@@ -319,6 +391,7 @@ def _row(target: Target, *, reason: str | None = None, document: JsonDict | None
         "active": active if document else None,
         "head_sha": commit["head_sha"] if document and commit else None,
         "dirty": commit["dirty"] if document and commit else None,
+        "dirty_reason": commit["dirty_reason"] if document and commit else None,
     }
 
 
@@ -336,20 +409,51 @@ def checkout_problem(checkout: Path) -> str | None:
     return None
 
 
-def commit_state(checkout: Path) -> RepoCommit:
-    """``HEAD`` and whether tracked files differ from it, both None when there is no commit.
+def _commit(head: str | None, dirty: bool | None, reason: str | None = None) -> CommitState:
+    return {"head_sha": head, "dirty": dirty, "dirty_reason": reason}
+
+
+def _hidden_entries(checkout: Path) -> str | None:
+    """The token for index entries ``git status`` never compares, ``""`` when there are
+    none, or None when the index cannot be read.
+
+    ``git ls-files -v`` tags a skip-worktree entry ``S`` (a sparse checkout sets it on
+    every path outside the sparse set) and an assume-unchanged one in lower case.
+    """
+    listing = _git_output(checkout, "ls-files", "-v")
+    if listing is None:
+        return None
+    tags = {line[0] for line in listing.splitlines() if line}
+    if "S" in tags or "s" in tags:
+        sparse = _git(checkout, "config", "--bool", "core.sparseCheckout") == "true"
+        return SPARSE_CHECKOUT if sparse else SKIP_WORKTREE
+    return ASSUME_UNCHANGED if any(tag.islower() for tag in tags) else ""
+
+
+def commit_state(checkout: Path) -> CommitState:
+    """``HEAD``, whether tracked files differ from it, and why that is unknown when it is.
 
     ``dirty`` is ``/assess``'s ``measured_commit.dirty`` (``lib/git_churn.py``): untracked
-    files and ``.assess/`` outputs are left out, ``.assess/config.toml`` is not. Read
-    with optional locks off, so ``git status`` never rewrites the target's index.
+    files and ``.assess/`` outputs are left out, ``.assess/config.toml`` is not. Unlike
+    ``/assess``, a submodule's own modified content is left out too
+    (``--ignore-submodules=dirty``, #932). Read with optional locks off, so ``git
+    status`` never rewrites the target's index. A clean status with entries git never
+    compares (``_hidden_entries``) reads as unknown: None, with a ``dirty_reason``.
     """
     head = _git(checkout, "rev-parse", "--verify", "--quiet", "HEAD")
     if head is None:
-        return {"head_sha": None, "dirty": None}
-    states = [_git_output(checkout, "status", "--porcelain", "--untracked-files=no", "--", spec)
+        return _commit(None, None, NO_COMMIT)
+    states = [_git_output(checkout, "status", "--porcelain", "--untracked-files=no",
+                          "--ignore-submodules=dirty", "--", spec)
               for spec in (ASSESS_EXCLUDE_PATHSPEC, ASSESS_CONFIG_PATHSPEC)]
-    dirty = None if None in states else any(states)
-    return {"head_sha": head, "dirty": dirty}
+    if None in states:
+        return _commit(head, None, STATUS_ERROR)
+    if any(states):
+        return _commit(head, True)
+    hidden = _hidden_entries(checkout)
+    if hidden is None:
+        return _commit(head, None, INDEX_READ_ERROR)
+    return _commit(head, None, hidden) if hidden else _commit(head, False)
 
 
 def _clone_at(checkout: Path, copy: Path, sha: str, timeout: int) -> bool:
@@ -379,11 +483,11 @@ def _clone_at(checkout: Path, copy: Path, sha: str, timeout: int) -> bool:
 @contextmanager
 def committed_tree(checkout: Path, scratch: Path, commit: RepoCommit,
                    timeout: int = DEFAULT_TIMEOUT) -> Iterator[Path | None]:
-    """The tree to scan for ``commit``: ``checkout`` itself when it is clean, else a
-    scratch clone at ``head_sha`` (same directory name), removed afterwards; None when
-    that clone cannot be made."""
+    """The tree to scan for ``commit``: ``checkout`` itself when it is known clean or has
+    no commit, else (dirty or unknown, #932) a scratch clone at ``head_sha`` (same
+    directory name), removed afterwards; None when that clone cannot be made."""
     sha = commit["head_sha"]
-    if not commit["dirty"] or sha is None:
+    if commit["dirty"] is False or sha is None:
         yield checkout
         return
     holder = Path(tempfile.mkdtemp(prefix="committed-", dir=scratch))

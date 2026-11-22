@@ -3,6 +3,20 @@
 A leaf module so the orchestrator and the lib modules that write artifacts
 (the hotspot wiki pages, the index, the log, the findings snapshot) read one
 constant each.
+
+`ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
+writes (run-context.json, the badge, the wiki pages); the version history is in the
+module comment. `complexity-treemap.py` carries a copy that
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
+It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
+independent of plugin releases, bumped by one in any change that moves which findings
+a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
+`findings.json`.
+
+During a version freeze a change to either counter, or to another counter
+`scripts/fold_changes.py` knows, adds a note file under `skills/assess/changes/`
+instead of editing the history comment; the release PR folds the notes in with
+`make fold` (#1011).
 """
 
 # Artifact schema version, stamped on every artifact the run produces
@@ -264,23 +278,6 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-# Unreleased (bumped once by the 3.0.0 release PR):
-# - run-context.json layer_grades gains instruction_presence (issue #821): root,
-#   nested_only or none. instruction_file_present is true for nested_only, and
-#   instructions_grade there is the best nested grade, where both read as no
-#   instruction file before; both are null when there is no root file and the
-#   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
-#   nested_only and now sits after layer_grades in run-context.json.
-# - ci_checks basis, enforced_basis and lint_basis gain external_ci and
-#   external_ci_marker (issue #928): under --platform, more than half of the sampled
-#   merged pull requests carry a check of a known external CI system; offline, a root
-#   Prow OWNERS_ALIASES with no CI file. Either reads null in place of a false case.
-#   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
-#   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
-#   Additive: no existing key moves.
-# - run-context.json delivery gains sample_page_size (issue #995): the changes per
-#   heavy read the merged sample finished at, or null when none was made. Additive:
-#   no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -468,17 +465,4 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
-# Unreleased (bumped once by the 3.0.0 release PR):
-# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
-#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
-#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
-#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
-#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
-#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
-#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
-# - structure_drift.tier_0.boundary_patterns counts an architecture-doc reference
-#   only when its resolved files hold module source under a non-dot directory, the
-#   CODEOWNERS predicate ownership_parser.is_boundary_pattern (issue #874). An
-#   ARCHITECTURE.md naming only `CONTRIBUTING.md`, `docs/` or `.github/workflows/ci.yml`
-#   no longer meets Layer 4 level 1, which can move from met to unmet.
 ASSESS_METHOD_VERSION = 37

@@ -17,6 +17,91 @@ block. The registered builders live in ``lib.import_graph_builders``.
 
 This module imports no graph tool; it is types, dispatch and the dominant-language
 count only.
+
+The language-neutral builder interface (issues #708, #709). A builder is any object with a
+`language` token and `build(repo_root, extra_exclude_dirs, scope) -> ModuleGraph | None`
+(the `ImportGraphBuilder` protocol). `build` returns `None` when the repository holds
+nothing in its language, and raises `GraphUnavailable(reason)` when its tool is missing
+or fails; the reason sentence then reaches the block. A `ModuleGraph` carries:
+
+| Field | Meaning |
+|-------|---------|
+| `language` | the token the block reports and the `no_import_graph_<language>` suffix |
+| `modules` | sorted module ids; module ids are paths or path-like names, hashed by the counts-only PATH rule |
+| `edges` | importer -> the modules it imports directly; a target outside `modules` is ignored |
+| `front_doors` | the modules a package exposes as its public API (A3) |
+| `module_file` | module -> absolute source file; a module without one reads size 0 |
+| `package_of` | module -> package boundary id (A3 contract edges, A4 per-package splits) |
+| `surfaces` | module -> public definitions it exposes (A1); leave empty when the language has no measure, and every module reads 0 |
+| `name_collisions` | packages sharing a name, disclosed rather than merged |
+
+`select_graph(repo_root, builders, extra_exclude_dirs, scope)` runs every builder. The
+dominant source language decides: when a builder covers it (its `language`, or a token in
+an optional `languages` attribute; the TypeScript builder covers `javascript` too), that
+builder's graph is returned and its failure is final (the count honours a builder's
+optional `is_graph_source(rel)`, so files it skips, such as a Python app's
+`static/js/*.min.js`, never make their language dominant). A failure, a missing tool or an
+invalid graph, keeps its reason, so a missing grimp on a Python repository still reads
+`no_grimp` rather than yielding to a stray `.mjs` file. Graph sizes are never compared with
+the dominant language's graph, whose nodes can differ. When the dominant builder found
+nothing to graph (loose scripts, no package) or no builder covers the dominant language,
+the largest other graph stands in (most modules, then most internal edges, then the
+language token); with none the reason is the first builder failure in registration order, else
+`no_graph_reason`, which counts source files per language
+(`LANGUAGE_BY_EXTENSION`, skipping `EXCLUDE_DIRS` and the configured excludes, within
+`scope`) and names the dominant one. A built graph that breaks the contract (a module
+missing from `package_of`, which A3 and A4 index) is treated as a builder failure
+(`graph_defect`, reason `invalid_import_graph: ...`), so another language can still be
+reported and the measure never raises `KeyError`. `is_graph_source(rel_path, language)`
+says whether a file could be in that language's graph: its extension must be one of the
+languages the covering builder graphs (the TypeScript builder covers `.js` too), and the
+builder's own optional `is_graph_source(rel)` hook must accept it (Go skips test files and
+`GO_SKIP_DIRS`; TypeScript skips bundles, declarations, tests and tool configs). Imports
+no graph tool; the registered builders are loaded lazily when none are passed.
+
+Worked example: a builder for a language whose package is a directory and whose front
+door is the directory's `index` file.
+
+```python
+from pathlib import Path
+
+from lib.import_graph import GraphUnavailable, ModuleGraph
+
+
+class IndexDirBuilder:
+    language = "typescript"
+
+    def build(self, repo_root: Path, extra_exclude_dirs: set[str],
+              scope: Path | None) -> ModuleGraph | None:
+        root = scope or repo_root
+        files = sorted(p for p in root.rglob("*.ts")
+                       if not set(p.relative_to(repo_root).parts) & extra_exclude_dirs)
+        if not files:
+            return None                        # nothing to graph: the dominant-language reason applies
+        try:
+            imports = read_imports(files)      # your scan: module id -> module ids it imports
+        except OSError as e:
+            raise GraphUnavailable(f"typescript import scan failed ({e})") from e
+        ids = {p: p.relative_to(repo_root).with_suffix("").as_posix() for p in files}
+        return ModuleGraph(
+            language=self.language,
+            modules=sorted(ids.values()),
+            edges=imports,
+            front_doors={m for m in ids.values() if m.rsplit("/", 1)[-1] == "index"},
+            module_file={m: p for p, m in ids.items()},
+            package_of={m: m.rsplit("/", 1)[0] if "/" in m else "." for m in ids.values()},
+        )
+```
+
+Register it by appending to `BUILDERS` in `import_graph_builders.py` and add files in
+its language to `POLYGLOT` in `tests/test_import_graph_contract.py`, which checks every
+registered builder's graph shape (`package_of` covers `modules`). A new block field
+or reason code still needs its counts-only rule (`counts_only_rules.py`) and a note in
+the maturity model header (`levels/default.toml`).
+Tests: `tests/test_import_graph.py`, and `tests/test_import_graph_contract.py`, the
+contract every registered builder must keep (sorted unique modules, `package_of`
+covering them, front doors, files and surfaces within them, `None` on an empty tree).
+A new builder adds a fixture tree to its `CONTRACT_FIXTURES`.
 """
 from __future__ import annotations
 

@@ -27,6 +27,13 @@ takes the state of the first required condition that is not met (``unmet``, or
 ``not_measured`` with that condition's reason), with reason
 ``requires:<condition id>``.
 
+Two additive model fields (``lib/levels_fields.py``, #843) adjust this, and
+neither moves a row level or, in the shipped model, anything at all: a
+``polarity = "hazard"`` condition is a harm, so it is never counted (listed when
+met) and carries ``polarity: "hazard"``; a ``guarded_by`` condition's grade is
+capped at ``measured`` while its guard is not ``met``, so it reads ``verified``
+only when its own check is under test, and what is counted does not change.
+
 **Owner exclusions** (``lib/owner_exclusions.py``, #910) are passed in, never
 read from the signals. An excluded condition reads ``not_applicable`` with
 ``disposition: excluded_by_owner`` and its ``exclusion_kind``, whatever its own
@@ -70,6 +77,51 @@ bytes for identical inputs. ``/assess`` writes the result as the run context's
 ``level`` block (``run_context_level``); ``/fleet`` writes one per repository to
 ``level.json`` (``lib/fleet_level.py``). Shape: ``LevelResult`` (``lib/level_result_types.py``); the published
 schema is ``skills/fleet/references/level.schema.json``.
+
+The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
+one repository's signals with no prior run and no model in the path (#744). Each row level
+of the model is one condition, `<row id>.<level>`, read on its own criteria (a level does
+not need the level below; `requires` states a real dependency). `level_result(model, data)`
+returns a `LevelResult` (shapes in `level_result_types.py`):
+
+- `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
+  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
+  that is not met, a `reason` code. An owner-excluded condition also carries
+  `disposition: "excluded_by_owner"` and `exclusion_kind`. A
+  `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
+  `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
+- Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
+  entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
+  criteria say, out of the tally and the denominator; a condition that `requires` it is
+  `not_applicable` with `requires:<id>`; an excluded gate condition never holds its gate, so
+  its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
+  (`{id, kind, source}`) is present only when an exclusion applies, so a result without
+  exclusions is unchanged. Ids the model does not define are ignored.
+- `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
+  unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
+- `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
+  unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
+  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
+  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
+  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+
+Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906, and
+`agent_environment.pinning.unlocked_total` with `manifests_total` 0: `no_manifests`, #927); an
+`UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
+`requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
+counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads `level_tally.LEVEL_READS`:
+the blocks the default model names, `DEFAULT_BLOCKS`, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
+`$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
+fixtures through `/fleet` and `/assess` on the same commit.
 """
 from __future__ import annotations
 
@@ -79,14 +131,12 @@ from typing import Any
 
 from lib.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, ExcludedCondition, LevelResult, NextStep
-from lib.levels import CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef, condition_id, evaluate_row
+from lib.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
+from lib.levels import condition_id, evaluate_row, unavailable_signal
 from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
-# Unreleased (run 4 version freeze, the release PR bumps it): owner exclusions
-# add the optional ``excluded`` list and the condition and blocker fields
-# ``disposition`` and ``exclusion_kind`` (#910); results without exclusions are unchanged.
 LEVEL_RESULT_VERSION = 2
 
 STATES = ("met", "unmet", "not_applicable", "not_measured", "declined")
@@ -121,8 +171,10 @@ def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
 
 
 def _grade(row: Row, level: int) -> str | None:
-    grades = [INPUT_GRADES[SIGNAL_INPUTS[c["signal"]]] if c["signal"] in SIGNAL_INPUTS else None
-              for c in row["levels"][level - 1]["criteria"]]
+    # an eq_signal criterion reads two signals, so both grade it (lib/levels_fields.py)
+    paths = [p for c in row["levels"][level - 1]["criteria"]
+             for p in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))]
+    grades = [INPUT_GRADES[SIGNAL_INPUTS[p]] if p in SIGNAL_INPUTS else None for p in paths]
     if any(g is None for g in grades):
         return None
     return min((g for g in grades if g is not None), key=_GRADE_ORDER.index)
@@ -136,7 +188,8 @@ def _unmeasured(outcome: CriterionOutcome) -> str | None:
     return rule[1]
 
 
-def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[str, str | None]:
+def _own_state(outcome: LevelOutcome, criteria: list[Criterion],
+               data: Mapping[str, Any] | None) -> tuple[str, str | None]:
     """A condition's state from its own criteria, with the reason when not measured."""
     if any(u["status"] == "unmet" and _unmeasured(u) is None for u in outcome["unmet"]):
         return "unmet", None
@@ -148,7 +201,9 @@ def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[s
         return "not_measured", code
     if first["reason"] in EMPTY_SET_CODES or first["reason"] == "type_mismatch":
         return "not_measured", first["reason"]
-    return "not_measured", _block_reason(data, first["signal"])
+    criterion = next(c for c in criteria if (c["signal"], c["op"], c["value"])
+                     == (first["signal"], first["op"], first["value"]))
+    return "not_measured", _block_reason(data, unavailable_signal(criterion, data))
 
 
 def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
@@ -156,16 +211,24 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
     own: dict[str, tuple[str, str | None]] = {}
     built: list[ConditionResult] = []
     requires: dict[str, list[str]] = {}
+    guards: dict[str, str] = {}
     for row in model["rows"]:
         evaluation: Evaluation = evaluate_row(row, dict(data) if data is not None else None)
         for outcome, level in zip(evaluation["levels"], row["levels"]):
             cid = condition_id(row["id"], level["level"])
-            state, reason = ("not_applicable", None) if cid in excluded else _own_state(outcome, data)
+            state, reason = (("not_applicable", None) if cid in excluded
+                             else _own_state(outcome, level["criteria"], data))
             own[cid] = (state, reason)
             requires[cid] = level.get("requires", [])
+            if "guarded_by" in level:
+                guards[cid] = level["guarded_by"]
             grade = _grade(row, level["level"])
+            hazard = level.get("polarity") == "hazard"
             entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
-                                      "counted": grade in COUNTED_GRADES and cid not in excluded, "state": state}
+                                      "counted": grade in COUNTED_GRADES and cid not in excluded and not hazard,
+                                      "state": state}
+            if hazard:
+                entry["polarity"] = "hazard"
             if cid in excluded:
                 entry["disposition"] = EXCLUDED_BY_OWNER
                 entry["exclusion_kind"] = excluded[cid]["kind"]
@@ -189,6 +252,10 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
         entry["state"], reason = resolve(entry["id"])
         if reason is not None:
             entry["reason"] = reason
+    for entry in built:  # one hop: a guard's own guard does not matter here
+        guard = guards.get(entry["id"])
+        if guard is not None and entry["grade"] == "verified" and final[guard][0] != "met":
+            entry["grade"] = "measured"
     return built
 
 

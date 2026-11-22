@@ -40,6 +40,26 @@ marks it. Each run's point is still drawn, so a one-run segment is a dot.
 ``layout`` is shared by the renderer and its tests: end labels are spread by
 ``fleet_svg.spread_vertical`` so they never overlap. Deterministic: groups and
 runs sorted, fixed number formatting, no clock read.
+
+Group trend lines across the dated run history (#676). `history_runs(org_dir, stamp, repos)`
+reads each `<date>[.<n>]` entry (`fleet_history.one_per_date`; `run.json`,
+`groups.jsonl`, and `repos.jsonl` only between same-day runs) dated before this run whose stamp matches on window, scans, output mode,
+path hashing and `--fleet-config` hash and records a maturity-model version; unreadable entries are passed over. One
+run per date: the entry over this run's repository set, else the highest suffix.
+`trend_run(stamp, groups, levels)` is one run's point per group: `group_mean`, the
+`fleet_maturity.mean_share` of the group's known team rows over their `top_level` (#684, the
+slope chart's and quadrant's unit and row set). An entry without `top_level` takes it from
+this run's maturity model (`levels`, passed through `history_runs`) when it used the same
+version (`with_top_levels`); otherwise a run with any known team row lacking it is marked
+`scaled: false` and not drawn (`share_runs`), so the axis is always 0 to 1, and `hidden_note`
+names it in the caption, or in the skip line when fewer than `MIN_RUNS` share runs remain;
+`series_runs` appends this run (from memory) and keeps the newest `MAX_RUNS`. `layout`
+splits each line at an unknown or absent value and at a maturity-model version change
+(marked by a dashed rule), and spaces end labels with `fleet_svg.spread_vertical`
+(`LABEL_GAP`); `render_trend` draws it, naming every gap on a hatched note, never at zero.
+`fleet_diagrams` skips it below `MIN_RUNS` (3). Golden render: `tests/fixtures/fleet_trends/`
+(regenerate with `uv run --locked python tests/fleet_trends_fixture.py` from `skills/assess`).
+A run with floored unknown team rows carries `floor_means` (#697), printed in each point's tooltip and never drawn, so the line does not jump where floors first appear in the history.
 """
 from __future__ import annotations
 

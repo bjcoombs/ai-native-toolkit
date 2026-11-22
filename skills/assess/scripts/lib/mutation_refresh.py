@@ -12,6 +12,49 @@ they are kept as stored. The finding is recomputed through the same functions
 ``keyhole_signals.integrate`` uses, then the attention list and every report
 product are rebuilt through ``keyhole_signals.finding_products``, so a refreshed
 run ranks and renders exactly as a default run with the same inputs would.
+
+Rebuilds the keyhole products that read `test_pressure` after the opt-in mutation pass
+(`assess_core --opt-in-mutation`), which otherwise rewrote only `test_pressure` and left
+E1 unable to fire in a real run. `refresh_mutation_findings` recomputes
+`untrusted_hotspot` through `untrusted_hotspot_paths` and `apply_config_excludes`, keeps
+every other finding and its action as stored (none of them reads `test_pressure`),
+reassembles in `FINDING_ORDER` through `assemble_findings`, then rewrites
+`derived_findings`, the `finding_products` keys and `excluded_as_archive`, and rebuilds
+`excluded_by_config` with the config-excluded E1 paths, recording the ones a pass added
+under `added_by_mutation_pass` so a later pass that no longer suppresses them takes them
+back out. Only `untrusted_hotspot` is inserted when an older run-context lacks it.
+A run-context with no `derived_findings` list is left untouched (returns `False`).
+`assess_core` hands it this run's `complexity-stats.json` (the scoped one under
+`--scope`) and the excludes from `recorded_excludes` (the `excluded_by_config` dirs
+and patterns the default run applied and disclosed, or `load_excludes` when the
+block is absent). The badge is no longer rebuilt here: `assess_core` recounts the `level`
+block, rewords the `headline` and rewrites `badge.json` from it before this runs (#747). Tests:
+`tests/test_mutation_refresh.py`.
+
+The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
+is the repository-wide list, cut to `MAX_COUPLING_PAIRS` (100), and `change_coupling_pairs_total`
+beside it is the count *before* that cut, so a consumer can tell a complete list from a
+truncated one; the total is present and `0` on the unavailable path (no commit file-sets), never
+absent. Each `hidden_coupling` finding then carries its own `coupled_pairs` (at most
+`MAX_FINDING_COUPLED_PAIRS`, 5) and `coupled_pairs_total`. The per-finding candidates are the
+**full**, uncapped pair list: a directory's only coupling can rank below 100 repository-wide, and
+selecting from the already-capped list would drop exactly the pair the finding exists to explain.
+A pair belongs to a finding whose `path` is `D` when **exactly one** of `file_a` and `file_b` is
+inside `D`, a file being inside when it begins with `D + "/"` - a path-component test, so `src/app`
+does not claim `src/app2/x.py`. The finding reports commits bleeding across `D`'s boundary, and
+only a crossing pair is evidence of that: a pair wholly inside `D` is cohesion, and a pair wholly
+outside is about somewhere else. The exclusion matters most on an ancestor directory, where the
+internal seams of its own subtree carry the highest counts and would otherwise fill all five
+slots. The order is the repository-wide list's own (count descending, then path). The candidates
+are only pairs `change_coupling_pairs` reports: at least 3 co-changes (`min_support`), counted only
+in commits of at most 50 files (`MAX_COMMIT_FILES_FOR_COUPLING`), while larger commits still count
+toward the containment figure that flagged the directory. So `coupled_pairs_total: 0` means no
+crossing pair reached that floor, not that nothing co-changes with the directory. Selection is one
+pass over the pairs, filing each under the directories that hold exactly one of its files, so the
+cost grows with the pair count rather than with pairs times findings. Both keys are always written, so a
+finding with no matching pair reads as "none recorded" rather than "field absent";
+`hidden_coupling_findings` and `static_history_disagreement` share their record objects, so the
+keys appear on the hidden-coupling entries of both lists and on no other disagreement entry.
 """
 
 from __future__ import annotations

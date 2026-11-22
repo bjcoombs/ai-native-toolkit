@@ -58,6 +58,31 @@ reference (``~``, ``$HOME``, ``${localEnv:...}``). Skill and agent files are
 read from the default locations, not from ``plugin.json`` path overrides.
 Tracking-based findings need git; outside a repository ``tracked_known`` is
 false and they are not checked.
+
+The committed agent surface that runs code or exposes secrets (issue #513),
+static and dependency-free. `scan_agent_harness(repo_root, scope, excludes)`
+inventories under the run root, as `executes`, the hooks in
+`.claude/settings.json` and in skill / agent frontmatter, the `env` variable
+names (never values), `apiKeyHelper`, `.mcp.json` servers (command, or URL as
+`scheme://host[:port]`) and
+`.cursor/hooks.json`; a command is reported as its program only, never its
+arguments or leading `VAR=value` assignments. Finding kinds: `tracked_local_settings`,
+`tracked_env_file` (path only), `missing_env_deny` (only where Claude Code is
+configured: a `.claude/` directory or a `CLAUDE.md`), `hooks_forced_on`
+(`disableAllHooks: false`), `broad_allow` (`Bash`, `Bash(*)`, `Bash(:*)`,
+`Bash(**)`, `Bash(*:*)`),
+`credential_mount` (a devcontainer file mounting `~/.ssh`, `~/.aws`,
+`~/.config/gcloud` ...), `hidden_unicode` (zero-width and bidi controls in an
+instruction, rule, skill, command or agent file, reported as code points; a
+ZWJ inside an emoji sequence or a ZWNJ in Arabic-script or Indic text is not) and
+`privileged_comment_trigger` (an `issue_comment` / `pull_request_target`
+workflow that runs a deploy, apply or publish). Workflow and devcontainer files
+are read line by line, not parsed as YAML; the module docstring lists what that
+misses. It reuses `claude_config.parse_frontmatter` for the frontmatter hooks.
+The block is `{available, tracked_known, executes[], executes_by_kind,
+finding_count, counts_by_kind, findings[]}`; `tracked_known: false` (no git)
+means the tracking findings were not checked. Informational: it does not score
+a layer or count toward the badge. Tests: `tests/test_agent_harness.py`.
 """
 from __future__ import annotations
 

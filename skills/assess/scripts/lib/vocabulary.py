@@ -13,6 +13,59 @@ target) and identifiers that contain an underscore are left out (``prose``), and
 retired label "AI-Native" never matches as part of the product name ``ai-native-toolkit``, so machine field names, JSON keys, finding
 names and signal paths (``lying_map``, ``instruction_claims.failed``) stay as they
 are. Stdlib only.
+
+The one list of words user-facing output leaves out (#743, parent #740): every report reads
+as a readiness snapshot, never a verdict on the people who built the repository. A gap is
+the next goal. The banned-vocabulary guard is `tests/test_vocabulary_guard.py`
+(`cd skills/assess && uv run --locked pytest tests/test_vocabulary_guard.py`). It renders, from
+source, a real fleet run with the shipped maturity model (`report.md`, every diagram, the heat
+map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
+fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
+naming the word, the output and the line, when one of these words appears in the prose as a
+whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
+target) and identifiers containing an underscore are not prose (`prose`), so machine field
+names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
+`fail_under`) and links into the toolkit repository stay unchanged. The retired label
+`AI-Native` matches, in any case, only as a whole token not followed by `-toolkit`, because
+`ai-native-toolkit` is the product's own name (#794).
+
+| Word | Say instead |
+|------|-------------|
+| `tangled` | name the measured structure (cross-package edges, modularity) |
+| `penalty` | name the size or share the grade reads |
+| `weakest` | the row with the most room to grow |
+| `weak` | room to grow |
+| `lying` | stale, or reads better than it measures |
+| `missing` | not measured yet, or not in place yet |
+| `fail` | stop, or turn the job red |
+| `fails` | stops |
+| `failed` | could not be scanned, or did not run |
+| `failing` | erroring |
+| `failure` | an error, or a gap |
+| `Not Ready` | the Step the repository is ready for |
+| `Basic` | the Step name |
+| `Solid` | the Step name |
+| `AI-Native` | the Step name |
+
+The last four are the retired maturity band labels (`RETIRED_LABELS`); the Step names
+(1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops) replace them.
+
+**Opening line.** Every `## ` section of the fleet `report.md` and every heading of a team
+next-steps page (`teams.md` and `teams/<group>.md`) opens with a line that starts
+`In place:` (`IN_PLACE`) and says what is already in place before any next step: counts of
+what is measured or reached, and at level 0 or unknown a plain "nothing confirmed on this row
+yet", never implied credit. The guard checks it on every rendered page.
+
+**Wording elsewhere.** The quadrant names its shaded corner "Most room to grow: busy, early
+levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as
+"stale doc over complex code" (`keyhole_signals.FINDING_DISPLAY_NAMES`); and the headline words a
+reason code it has no entry for with "did not complete" and "not found" in place of "failed" and
+"missing" (`headline._reason_word`).
+
+**Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, heat map and layer bars) is the
+ColorBrewer YlGn growth palette, pale yellow to deep green, in place of the red OrRd ramp;
+unknown cells stay hatched. The complexity treemap and the doc graph keep their own ramps:
+they encode complexity and staleness, not maturity.
 """
 from __future__ import annotations
 

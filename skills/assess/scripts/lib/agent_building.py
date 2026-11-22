@@ -49,6 +49,34 @@ the code heuristic skips test files (a ``test``/``tests``/``__tests__``/``spec``
 that mocks a tool call is not read as an agent. At most ``MAX_SOURCE_FILES``
 source files of at most ``MAX_FILE_BYTES`` are read; ``source_files_capped``
 says when the cap was reached. Deterministic and offline.
+
+What a repository builds with agents, per repository (issue #689): an inventory, not
+scored, and named by no maturity model row. `scan_agent_building(repo_root)` writes
+`{available, agent_class, sdks[], agent_framework, llm_sdk, manifests, config[],
+ci_agents[], tool_loop_files, mcp_server_files, source_files_read, source_files_capped,
+issue_trackers[], git_hosts[], pairing}`. Evidence: (a) dependency names from the
+manifests `agent_manifests.reader_for` recognises (`package.json`, `pyproject.toml`,
+`requirements*.txt`, `Pipfile`, `go.mod`, `pom.xml`, Gradle, `Cargo.toml`, `Gemfile`,
+`*.csproj`), mapped through the pinned `agent_building_vocab.PACKAGES` table to slugs of
+kind `framework`, `llm`, `mcp`, `tracker` or `git_host`; (b) `config` kinds
+`instruction_file` (`instruction_files.INSTRUCTION_FILE_PATHS`), `mcp_json`,
+`claude_agents` and `ci_agent_job` (`CI_AGENT_PATTERNS` in `.gitlab-ci.yml` and
+`.github/workflows/*.yml`); (c) the count of source files matching
+`TOOL_LOOP_PATTERNS` and `MCP_SERVER_PATTERNS`; (d) issue-tracker and Git-host clients
+from manifests or `ENDPOINT_PATTERNS`; a Git host already in `git_hosts` is also an issue
+tracker when the source calls both its issues API (`ISSUE_API_PATTERNS`) and its
+merge-request or pull-request API (`CHANGE_API_PATTERNS`), the same-host case of #731,
+credited after every file is read; `pairing` when both lists are non-empty. Every string is
+a vocabulary slug, so counts-only keeps the block whole. `classify` is the class rule,
+first match wins: `builds-agent` (an agent framework, or a model SDK with a tool-call
+loop or the pairing), `builds-mcp-server` (an MCP server pattern), `uses-agent-tooling`
+(any config kind), else `none`. A model SDK with no loop and no pairing is `none`.
+Git-tracked files only, symlinks skipped; manifests and source under
+`doc_graph.is_excluded_path` trees, and test files (`is_test_path`), are not read by
+the heuristic; at most `MAX_SOURCE_FILES` files of `MAX_FILE_BYTES`. The vocabulary
+patterns use `[.]` and `[(]` so the module never matches its own source. Outside a git
+checkout the block is `available: false`. `agent_identity` is not used: it matches git
+commit identities, and this scan reads files. Tests: `tests/test_agent_building.py`.
 """
 from __future__ import annotations
 

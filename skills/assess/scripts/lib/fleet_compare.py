@@ -46,6 +46,29 @@ where the leaf is absent omits its key). Lists compare whole. Output has
 sorted keys and no absolute path, so comparing the same two runs again gives
 the same bytes. With hashed paths on both sides, hashes compare only under one
 ``--hash-salt``; ``notes`` says so.
+
+Compares two fleet runs (issue #552), driven by `fleet.py --compare` and
+`skills/fleet/scripts/fleet_compare.py`. `load_run` reads a run directory (raising
+`RunVersionError` for another envelope version or a run with no `run.json`, which callers
+turn into a not-comparable result). `comparability` reuses
+`diff_reliability._diff_is_reliable` for the plugin major version and stamp version and
+adds maturity-model version, window, output mode, scan selection, path hashing and the
+`--fleet-config` hash (`fleet_config_sha256`, read with `.get`: a pre-#706 stamp is no config) and
+`platform` (a pre-#714 stamp is false); any reason
+gives `comparable: false` with no deltas. `compare` reports the measured-set movement
+(`set_changes`: added, removed, no longer / newly scanned, no longer / newly active from
+the row's `active`) apart from level movement: each group's maturity model rows then and now with
+a `cause` of `level` (set unchanged), `set` (the group or row on one side, or only a
+team row's set moved) or `set_and_level` (a team row's set and evidence moved), plus the #774 causes below. An org
+row reads the group's settings, not its repositories, so on both sides it is `level`. `signal_changes` lists the changed leaves of each repository's `scans` map.
+`write_comparison` writes `compare.json` atomically; `clear_stale_comparison` removes
+only a regular `compare.json` carrying `fleet_compare_version`. `view_check` is the gate
+`heatmap.py --compare` uses for two stamped run directories (the same refusal reasons,
+plus the groups whose set moved), so the level-only view and `compare.json` share one rule.
+A level state carries `floor` when the row has one (#697); `moved` still compares status and level only, so a floor appearing against an entry written before #697 is not a move.
+`compare` takes an optional `scanner` (`fleet_scanner_diff.scanner_diff` of the two stamps,
+passed by both CLIs) and re-attributes moved team rows through `fleet_scanner_diff.attribute`;
+`FleetRun.row_signals` carries the signals each row's `fleet-data.json` cells name (#774).
 """
 from __future__ import annotations
 
