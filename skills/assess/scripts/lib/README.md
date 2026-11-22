@@ -2511,12 +2511,13 @@ calls them, and the module docstring is the reference.
   are #828).
 - **`guarded_by`** on a level: one condition id; default absent (no guard). One hop:
   `level_tally` caps the condition's grade at `measured` while the guard is not `met`, which
-  never changes what is counted. An unknown id or the condition itself fails the load naming
-  the id and `guarded_by`.
+  never changes what is counted. An unknown id, the condition itself or a hazard fails the
+  load naming the id and `guarded_by`.
 - **`eq_signal`** on a criterion: `{ signal = "<path>", op = "eq" | "ne", eq_signal = "<path>" }`
   with no `value`; default absent (compare with `value`). The criterion compares the two
   measured signals: either unavailable is `unknown`, different kinds or a non-scalar
-  `type_mismatch`. The parsed criterion keeps the second path as its `value` as well, so the
+  `type_mismatch`, and either side an empty-set statistic takes that signal's
+  `EMPTY_DENOMINATORS` code. The parsed criterion keeps the second path as its `value` as well, so the
   catalog shows what it compares with; the `PathValidator` checks both paths. The fleet
   next-step wording skips the signal's repository-native guidance for such a criterion and names
   both paths. `levels.unavailable_signal` names the unavailable side in `missing_signals` and in

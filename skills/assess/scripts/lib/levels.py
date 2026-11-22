@@ -318,7 +318,8 @@ def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None
     _resolve_truth(raw_rows, rows, source)
     _check_requires(rows)
     check_guards({condition_id(r["id"], lv["level"]): lv["guarded_by"] for r in rows for lv in r["levels"]
-                  if "guarded_by" in lv}, (condition_id(r["id"], lv["level"]) for r in rows for lv in r["levels"]))
+                  if "guarded_by" in lv},
+                 {condition_id(r["id"], lv["level"]): "polarity" in lv for r in rows for lv in r["levels"]})
     if validator is not None:
         _validate_paths(rows, validator)
     model: MaturityModel = {"version": version, "rows": rows}
@@ -641,6 +642,8 @@ def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> Criterio
         "reason": "unavailable",
     }
     empty = _empty_set(data, criterion["signal"])
+    if empty is None and "eq_signal" in criterion:  # either side may be a statistic over nothing
+        empty = _empty_set(data, criterion["eq_signal"])
     if empty is not None:  # before availability: a full run leaves loc {} with no file scored
         outcome["reason"] = empty
         return outcome

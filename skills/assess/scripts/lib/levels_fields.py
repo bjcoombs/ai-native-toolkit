@@ -45,21 +45,23 @@ Layer to truth, the documented mapping of the alias:
   ``measured`` while the guard is not ``met``, so the condition is ``verified``
   only when its check is itself under test. The grade cap never changes what is
   counted (``measured`` and ``verified`` both count), its state, a row level or
-  a Step. An id that names no condition, or the condition itself, fails the load
-  naming the id and ``guarded_by``.
+  a Step. An id that names no condition, the condition itself or a hazard (whose
+  ``met`` means the harm is present, so it cannot stand for "under test") fails
+  the load naming the id and ``guarded_by``.
 - ``eq_signal`` on a criterion: a second signal path, in the form
   ``{ signal = "<path>", op = "eq", eq_signal = "<path>" }`` (``op`` ``eq`` or
   ``ne``, no ``value``). The criterion compares the two measured signals, for
   "generated equals source" and "docs agree with config". Absent (the default)
   means the criterion compares ``signal`` with its ``value``. Either signal
   unavailable makes the criterion ``unknown``; two values of different kinds,
-  or a value that is not a scalar, ``type_mismatch``. The parsed criterion
+  or a value that is not a scalar, ``type_mismatch``; either side an empty-set
+  statistic (``signal_grades.EMPTY_DENOMINATORS``) takes that signal's code. The parsed criterion
   keeps the path as its ``value`` too, so every reader of ``value`` shows the
   path it compares with.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 TRUTH_TAGS: tuple[str, ...] = ("behaviour", "contracts", "docs", "structure", "agent_context",
                                "agent_runtime", "governance", "supply_chain")
@@ -142,14 +144,17 @@ def parse_guard(raw: Any, where: str) -> str:
     return raw
 
 
-def check_guards(guards: Mapping[str, str], conditions: Iterable[str]) -> None:
-    """Every ``guarded_by`` names an existing condition other than its own."""
-    known = set(conditions)
+def check_guards(guards: Mapping[str, str], hazards: Mapping[str, bool]) -> None:
+    """Every ``guarded_by`` names an existing, positive condition other than its own.
+
+    ``hazards`` maps every condition id to True when it is a hazard."""
     for cid, guard in sorted(guards.items()):
         if guard == cid:
             raise LevelsError(f"condition {cid!r}: 'guarded_by' names the condition itself")
-        if guard not in known:
+        if guard not in hazards:
             raise LevelsError(f"condition {cid!r}: 'guarded_by' names unknown condition {guard!r}")
+        if hazards[guard]:
+            raise LevelsError(f"condition {cid!r}: 'guarded_by' names hazard condition {guard!r}")
 
 
 def parse_eq_signal(raw: Mapping[str, Any], op: Any, where: str) -> str:

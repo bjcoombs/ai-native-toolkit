@@ -313,3 +313,17 @@ def test_next_step_wording_names_both_paths_of_an_eq_signal_criterion() -> None:
     (criterion,) = _eq_row()["levels"][0]["criteria"]
     text = "\n".join(_step(1, criterion, ["repo"]))
     assert "`a.x`" in text and "`b.x`" in text and "No repository-native wording" in text
+
+
+def test_an_empty_set_on_the_eq_signal_side_takes_its_code() -> None:
+    model = parse_levels(_model({"truth": ["contracts"], "criteria": [
+        {"signal": "a.x", "op": "eq", "eq_signal": "stats_summary.loc.p95"}]}))
+    data = {"a": {"x": 1}, "stats_summary": {"files_scored": 0, "loc": {}}}
+    (crit,) = evaluate_row(model["rows"][0], data)["levels"][0]["unmet"]
+    assert (crit["status"], crit["reason"]) == ("unknown", "no_scored_files")
+
+
+def test_a_guard_cannot_be_a_hazard() -> None:
+    with pytest.raises(LevelsError, match=r"condition 'r.1': 'guarded_by' names hazard condition 'r.2'"):
+        parse_levels(_model({"criteria": _crit(), "truth": ["docs"], "guarded_by": "r.2"},
+                            {"criteria": _crit(), "truth": ["docs"], "polarity": "hazard"}))
