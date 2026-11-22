@@ -42,7 +42,7 @@ The write-side scores aren't abstract good practice - each traces to a known ten
 
 ### Repository archetype (not every repo is software)
 
-The layered model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Scoring them Missing is itself a lying score: a well-run KB reads ~2.5/8 ("Not Ready") when it is in fact well-run, penalised for not testing code it doesn't contain.
+The layered model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Marking them Missing is itself a lying verdict: a well-run KB reads as mostly missing when it is in fact well-run, with gaps reported for tests on code it doesn't contain.
 
 The deterministic core (`lib/archetype.py`) classifies the repo and writes an `archetype` block to `run-context.json`:
 
