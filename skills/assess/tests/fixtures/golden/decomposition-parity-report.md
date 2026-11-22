@@ -2,6 +2,14 @@
 
 _Generated <<normalized>>._
 
+## Headline
+
+**Step 2 · Supervised agent PRs · contracts in place**
+
+Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests and 1 more verified practice is met, for example `layer-3-linters.1`
+
+Verified practices: 1 of 3 measured · 9 not measured (scan did not run: 1, needs a full run: 1, no remote: 2, no source files: 2, no value read: 2, unavailable: 1) · model <<normalized>>
+
 ## Metrics Dashboard
 
 - **Files scored:** 3
@@ -30,4 +38,4 @@ _No prior run to compare against - this is the first recorded snapshot._
 
 ---
 
-_Deterministic portion of the assessment: metrics, hotspots, and cross-layer findings. The 0-8 layer scores, the per-layer prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer verdicts and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._

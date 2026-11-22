@@ -7,7 +7,7 @@ description: "Assess a codebase's readiness for AI agent contributors using the 
 
 Three artefacts in one pass against a target repo:
 
-1. **Layered contract assessment** - 0-8 score across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
+1. **Layered contract assessment** - a deterministic headline (the autonomy Step, its next unlock and "Verified practices: N of M measured") over per-layer verdicts across navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, and AI project management.
 2. **Complexity hotspot SVG** - Codecov-style treemap of the code. Size = LOC. Colour = cyclomatic complexity. Saturation = recent git churn. Vivid red = complex AND active = riskiest to change.
 3. **Doc navigability SVG** - a node-graph of the docs. Structure = connectivity (centre = entry, rim = unreachable, dashed ring = orphan, solid edge = link, dotted edge = reference); colour = staleness (vivid red = a frozen doc beside churning code = a *lying map*); size = file length. Folds navigability and the decaying-map signal into one artifact.
 
@@ -42,16 +42,16 @@ The write-side scores aren't abstract good practice - each traces to a known ten
 
 ### Repository archetype (not every repo is software)
 
-The 0-8 model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Scoring them Missing is itself a lying score: a well-run KB reads ~2.5/8 ("Not Ready") when it is in fact well-run, penalised for not testing code it doesn't contain.
+The layered model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Marking them Missing is itself a lying verdict: a well-run KB reads as mostly missing when it is in fact well-run, with gaps reported for tests on code it doesn't contain.
 
 The deterministic core (`lib/archetype.py`) classifies the repo and writes an `archetype` block to `run-context.json`:
 
 - **Detection** is a heuristic - the code-file ratio (code vs markdown) and the absence of a runtime surface (`package.json`, `pyproject.toml`, `go.mod`, `Dockerfile`, ...). A documentation-heavy *application* (lots of markdown but a real build) stays software because of the runtime-surface gate.
 - **Override marker.** An `assess-archetype: knowledge-base` (or `software`) marker in any instruction file (`CLAUDE.md`/`AGENTS.md`/...) **forces or suppresses** detection, so a maintainer is never trapped by a misfire. Write it as an HTML comment, e.g. `<!-- assess-archetype: knowledge-base -->`.
-- **Scoring.** For a detected knowledge base the write-side layers (2-7) are scored **N/A** (not Missing) and **excluded from the denominator**; the headline renormalises over the applicable layers (L0, L1, L8 → denominator 3) and the maturity label names the archetype and the applicable-layer count (e.g. `Knowledge Base · Solid (3 applicable layers)`). A software repo is unaffected - all 0-8 layers, denominator 8.
+- **Scoring.** For a detected knowledge base the write-side layers (2-7) are marked **N/A** (not Missing) in the scorecard, so they name no gap; the applicable layers (L0, L1, L8) get verdicts on their merits. The headline is unchanged by the archetype: it reads the maturity model's conditions, not layers. A software repo gets a verdict for every layer 0-8.
 - **KB-maintenance signal.** `archetype.kb_maintenance` flags whether the repo documents *how the AI maintains the KB* - the [Karpathy LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (immutable raw sources, the schema file as the product, an ingest workflow, query-as-filing, periodic lint/consolidation). It is both a detection signal and a scored read-side (Layer 0) quality signal; the gist is cited in the report as the best-practice pointer whether or not the workflow is documented.
 
-This is intentionally **one** archetype (knowledge base), structured as an extensible dispatch so more are cheap to add later - not a general archetype framework (YAGNI). The `assess-layer-scorer` agent reads the block (its Step 0) and the `assess-findings` skill renders N/A layers and the renormalised headline.
+This is intentionally **one** archetype (knowledge base), structured as an extensible dispatch so more are cheap to add later - not a general archetype framework (YAGNI). The `assess-layer-scorer` agent reads the block (its Step 0) and the `assess-findings` skill renders N/A layers in the scorecard.
 
 <!-- chat-skip:start -->
 **$ARGUMENTS**
@@ -323,6 +323,8 @@ Interactivity is an explicit signal, never a stdin probe: pass `--non-interactiv
 
 Now `$REPO_ROOT/.assess/run-context.json` contains the structured data you need for the prose sections. Read it before writing the report. **The level result** is the `level` block of `run-context.json`: the default maturity model's conditions (`<row id>.<level>`) each with its `state`, `grade` and, when not measured, a `reason` code; the verified tally `tally.met` (measured and verified conditions met; config-only and declared ones are only `listed`), `tally.measured` and `tally.not_measured`; the autonomy `step` and the `next_step` with its `blockers`. It is computed by the deterministic core (`scripts/lib/level_tally.py`), never by you, and `/fleet` gives the same result on the same commit (its `level.json`). The shape is `$defs.level_result` in the fleet skill's `references/level.schema.json`; `scripts/lib/README.md` documents every field.
 
+**The headline** is the `headline` block of `run-context.json` (`scripts/lib/headline.py`), worded from the level result and rendered verbatim by the report (`headline.markdown`; `assess_report.py <repo> --stdout` prints it under `## Headline`). `headline.lines` holds three lines: the Step as the contracts in place (`Step 3 · Unattended agent PRs · contracts in place`), the Next line naming the next Step and the one change that reaches it (`Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced`), and `Verified practices: N of M measured · K not measured (reasons) · model <version>`. `headline.summary` (`Step 3 · 4 of 4 measured`) is the `badge.json` message and the `log.md` readiness line. There is no layered score and no band name; you write the prose around the headline and never set it.
+
 The `plugin_version` field in `run-context.json` tells you which plugin version produced this run. Surface it at the top of the report (e.g., "Generated by `/assess` v1.8.0") so readers can spot it if a stale cached version of the plugin produced unexpected output.
 
 ### 2d: Phase 3 - the bounded mutation pass (opt-in, kept separate)
@@ -365,7 +367,7 @@ REOFFER_MUT=$(jq -r '.reoffer_mutation // false' "$REPO_ROOT/.assess/run-context
 - **Skip for now** - continue with the cheap read intact. Don't write a marker; ask again next run.
 - **Skip permanently for this repo** - `write_decline_marker "$MUT_TOOL"` so future runs don't ask. Re-declining restamps the marker at the current version, so the re-offer won't repeat within this major.
 
-**On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets with test evidence itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place, together with what derives from it: `mutation_not_run_cap`, the `level` tally, the `untrusted_hotspot` finding in `derived_findings`, `attention`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` and `badge.json`. Read those blocks after this step, not before:
+**On accept (tool available):** run the opt-in mutation pass, then regenerate the heatmap with the survivor overlay. The core re-run reads the `test_focus` targets with test evidence itself, runs `scan_test_pressure(..., opt_in=True)` scoped to them, and rewrites the `test_pressure` block in `run-context.json` in place, together with what derives from it: `mutation_not_run_cap`, the `level` tally with the `headline`, the `log.md` readiness line and `badge.json` worded from it, the `untrusted_hotspot` finding in `derived_findings`, `attention`, `findings_markdown`, `keyhole_summary` and `prescribed_actions`. Read those blocks after this step, not before:
 
 <!-- chat-skip:end -->
 ```bash
@@ -394,7 +396,7 @@ The deterministic core has written the data bus (`.assess/run-context.json`). As
 **Layer 6 (truth pressure) is capped at Partial when mutation testing did not run.** Read `mutation_not_run_cap` from `run-context.json`: when `applies` is true (the default read-only pass leaves it true - mutation only runs on the opt-in Step 2d accept), Layer 6 **cannot** be scored Present. A Present verdict there claims the suite *proves* behaviour, which only a mutation run substantiates - absent it, the strongest honest verdict is Partial, annotated with `mutation_not_run_cap.annotation` (`truth-pressure unproven (mutation not run)`). This is enforced deterministically: `assess_finalize.py` refuses a finalize-input whose Layer 6 score exceeds Partial while `mutation_run` is false, so scoring it Present will fail the finalize step, not merely read wrong. The same hold applies when mutation ran on partial evidence only: `mutation_not_run_cap.partial` is true when every mutation group that produced records stopped at the time budget, `applies` stays false (mutation did run), `max_layer6_band` is Partial, and the annotation is `truth-pressure partial (mutation stopped at budget)`; finalize refuses Present here too. One complete group lifts the hold, since its files carry full mutation evidence.
 
 <!-- chat-replace:layer-scorer-delegate -->
-Spawn the `assess-layer-scorer` agent (`subagent_type: "assess-layer-scorer"`), passing `REPO_ROOT`. It reads `.assess/run-context.json`, scores every layer, and returns the 0-8 score, the per-layer verdicts with evidence, the maturity label, and the structured `evidence` list Step 4 re-checks. Hold that scorecard for Step 4.
+Spawn the `assess-layer-scorer` agent (`subagent_type: "assess-layer-scorer"`), passing `REPO_ROOT`. It reads `.assess/run-context.json`, gives every layer a verdict, and returns the per-layer verdicts with evidence and the structured `evidence` list Step 4 re-checks. Hold that scorecard for Step 4.
 
 ## Step 3.5: Read Cross-Run Context
 
@@ -426,7 +428,7 @@ Use the assess-findings skill, handing it the scorecard the layer-scorer returne
 
 ## Step 7.5: Finalize the wiki (required)
 
-After writing `assess-report.md`, write `finalize-input.json` to the transient cache and invoke `assess_finalize.py` so the wiki files reflect the score and actions you chose.
+After writing `assess-report.md`, write `finalize-input.json` to the transient cache and invoke `assess_finalize.py` so the wiki files reflect the actions you chose.
 
 The input file lives under `.assess/.cache/` rather than directly in `.assess/` because it is a one-off LLM-authored input consumed immediately - it has no future utility and only creates noisy diffs if committed. `assess_finalize.py` reads the cache path first (and falls back to the legacy in-tree location if a prior run wrote one there), then **deletes** it on success so it cannot leak into a commit either way.
 
@@ -435,9 +437,6 @@ mkdir -p "$REPO_ROOT/.assess/.cache"
 cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
 {
   "run_id": "<copy run_id verbatim from run-context.json>",
-  "score": 6.0,
-  "maturity_label": "Solid",
-  "denominator": 8,
   "layer_scores": {"0": 1.0, "1": 0.5, "2": 1.0, "3": 0.5, "4": 1.0, "5": 0.5, "6": 0.5, "7": 1.0, "8": 0.5}, "evidence": [{"layer": 0, "kind": "path_exists", "path": "CLAUDE.md"}],
   "top_action": "Add cyclop rule (threshold 15) to .golangci.yml",
   "hotspot_actions": {
@@ -451,6 +450,7 @@ cat > "$REPO_ROOT/.assess/.cache/finalize-input.json" <<'EOF'
       "rank": 1,
       "action": "Add cyclop rule (threshold 15) to .golangci.yml",
       "layer": 3,
+      "condition": "layer-3-linters.2",
       "effort": "small",
       "files": [".golangci.yml"],
       "first_step": "Add 'cyclop' with max-complexity: 15 under linters",
@@ -466,25 +466,24 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/assess_finalize.py" "$REPO_ROOT"
 ````
 
 This replaces:
-- The `**AI Readiness:** 0.0 / 8 ((LLM fills in))` and `**Top action:** Deterministic ranker not yet wired ...` placeholders in this run's `log.md` entry (found by its `assess:run_id` stamp) with your score, maturity label and Top 1 action; the log chain is re-computed.
+- The `**Top action:** (LLM fills in)` placeholder in this run's `log.md` entry (found by its `assess:run_id` stamp) with your Top 1 action; the log chain is re-computed. The entry's `**Readiness:**` line is the headline summary the core already wrote (`headline.summary`); you never set it.
 - Each `hotspots/<slug>.md`'s `Suggested actions` section with the actions you derived for that file.
 
-The optional `denominator` field is **8** for a software repo (the default when omitted) or the applicable-layer count for a detected archetype (3 for a knowledge base - see "Repository archetype" above). `assess_finalize.py` renormalises the `log.md` AI-Readiness line over it, so a KB reads `2.5 / 3` rather than a misleading `2.5 / 8`. If finalize exits 1 because an earlier same-date entry is still unfilled (a run on an older commit that was never finalized), run the `--drop-entry <run_id>` command its message prints (it leaves a one-line tombstone), then re-run finalize. Never delete a log entry by hand: it breaks the chain.
+**The minimal input** is `run_id` and `top_action`; every other field is optional. If finalize exits 1 because an earlier same-date entry is still unfilled (a run on an older commit that was never finalized), run the `--drop-entry <run_id>` command its message prints (it leaves a one-line tombstone), then re-run finalize. Never delete a log entry by hand: it breaks the chain.
 
 **`assess_finalize.py` reconciles this input against `run-context.json` before writing anything, and refuses (writing nothing, exiting non-zero) on any violation.** So the fields must be internally honest:
 - `run_id` - **copy it verbatim** from `run-context.json`. It proves the input was authored against *this* run; a mismatch is treated as a torn write and rejected.
-- `denominator` must equal `archetype.denominator` in `run-context.json`.
-- `score` must not exceed `denominator`, and `maturity_label` must name the tier the score earns (≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready over the denominator) - a label that overstates the score is rejected.
+- An action's optional `condition` is the maturity-model condition it moves (`<row id>.<level>`, as `level.conditions[].id` in `run-context.json` lists it, e.g. `layer-5-ci.1`). An id the run's level result does not list is rejected, naming it; `actions.json` carries the id through.
 - Every key in `hotspot_actions` must be a real top hotspot from `stats_summary.top_hotspots` - a fabricated path is rejected, naming the path.
 - `layer_scores` maps each layer id to its band (Missing 0.0 / Partial 0.5 / Present 1.0). Layer 6 must not exceed **0.5** when `mutation_not_run_cap.applies` or `mutation_not_run_cap.partial` is true (see Step 3). Include it so the cap is enforced; a legacy input omitting it skips only the Layer 6 check. Set `evidence` to the verified list the pre-report `evidence_check` run kept (flat `{layer, kind, path[, needle]}` entries), never the scorer's raw list; finalize re-checks it against the repository: a layer whose entries are all rejected is refused, naming each entry by kind, path and needle; a layer with at least one verified entry finalises, and each rejected entry prints a `finalize: warning:` line on stderr, which you relay to the user. An input without `evidence` skips the check.
 
-The live README badge (`.assess/badge.json`, shields.io endpoint schema) is deterministic: `assess_core.py` writes the findings-count form on every run and links it to `assess-report.md`. Your LLM-derived score is *not* written to the badge - it appears inside the report the badge links to, so the badge only ever claims what a deterministic run can reproduce. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
+The live README badge (`.assess/badge.json`, shields.io endpoint schema) is deterministic: `assess_core.py` writes the headline summary on every run (`headline.summary`: the Step and the verified tally, e.g. `Step 3 · 4 of 4 measured`) and links it to `assess-report.md`. Finalize never rewrites it, so the badge only ever claims what a deterministic run can reproduce. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
 
 ```markdown
 ![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F<owner>%2F<repo>%2F<default-branch>%2F.assess%2Fbadge.json)
 ```
 
-The `actions` array mirrors the report's Top 3 Actions table one-to-one and **must carry every table row** - `rank`, `action`, `done_when`, and `scope_fence` are required per entry (`layer`, `effort`, `files`, `first_step`, `finding` recommended). Set `finding` to the finding type the action addresses (e.g. `hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `refactor_boundary`) so `assess_finalize.py` can stamp the deterministic execution `mode` an executor should take; an action with no `finding` defaults to the conservative `characterize_first` mode. `assess_finalize.py` writes it to `.assess/actions.json`, the *durable* machine-readable contract (schema 2): unlike this input file (consumed and deleted), `actions.json` persists so an executing agent - including a smaller, cheaper model - can pick up the work with its exit criteria, fences, execution mode, and lifecycle status intact, without parsing the report's markdown. Re-running `/assess` preserves each action's `status`/`claimed_by`/`completed_sha`, matching on `finding` plus `files` and falling back to the directive text, so a completed action stays done even when you reword it; a done action that leaves the Top 3 moves to a `completed` list. For a `self_referential_tests` action, put the prescribed hotspot `path` (the source file) in `files`, alongside any test file. A committed `done` entry for `self_referential_tests` naming the source path in `files` clears that path from the Top 3 while the source is unchanged since `completed_sha` (it stays in `derived_findings` with a `reviewed` note). See [`references/actions-schema.md`](references/actions-schema.md) for the full schema.
+The `actions` array mirrors the report's Top 3 Actions table one-to-one and **must carry every table row** - `rank`, `action`, `done_when`, and `scope_fence` are required per entry (`layer`, `condition`, `effort`, `files`, `first_step`, `finding` recommended). Set `finding` to the finding type the action addresses (e.g. `hidden_coupling`, `lying_map`, `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`, `refactor_boundary`) so `assess_finalize.py` can stamp the deterministic execution `mode` an executor should take; an action with no `finding` defaults to the conservative `characterize_first` mode. `assess_finalize.py` writes it to `.assess/actions.json`, the *durable* machine-readable contract (schema 2): unlike this input file (consumed and deleted), `actions.json` persists so an executing agent - including a smaller, cheaper model - can pick up the work with its exit criteria, fences, execution mode, and lifecycle status intact, without parsing the report's markdown. Re-running `/assess` preserves each action's `status`/`claimed_by`/`completed_sha`, matching on `finding` plus `files` and falling back to the directive text, so a completed action stays done even when you reword it; a done action that leaves the Top 3 moves to a `completed` list. For a `self_referential_tests` action, put the prescribed hotspot `path` (the source file) in `files`, alongside any test file. A committed `done` entry for `self_referential_tests` naming the source path in `files` clears that path from the Top 3 while the source is unchanged since `completed_sha` (it stays in `derived_findings` with a `reviewed` note). See [`references/actions-schema.md`](references/actions-schema.md) for the full schema.
 
 Without this step, the `log.md` placeholders above carry forward forever. Hotspot pages you don't supply actions for keep a neutral pointer (`This file is flagged but outside this run's Top 3. See the report's Top 3 Actions, or run a focused /assess pass for file-specific guidance.`) rather than an unfinished-work placeholder - a flagged-but-not-Top-3 page reads as intentional.
 

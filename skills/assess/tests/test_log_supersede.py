@@ -17,7 +17,6 @@ import pytest
 
 from assess_core import build_and_publish_run
 from assess_finalize import FinalizeValidationError, finalize_run
-from lib.badge import maturity_band
 from lib.wiki_writer import (
     LOG_PLACEHOLDER,
     read_log_entries,
@@ -61,8 +60,7 @@ def _run(repo: Path) -> dict:
 def _stage_finalize(assess_dir: Path, run_id: str) -> None:
     (assess_dir / ".cache").mkdir(exist_ok=True)
     (assess_dir / ".cache" / "finalize-input.json").write_text(json.dumps({
-        "run_id": run_id, "score": 4.0, "denominator": 8,
-        "maturity_label": maturity_band(4.0, 8),
+        "run_id": run_id,
         "top_action": "fixture action", "hotspot_actions": {},
     }), encoding="utf-8")
 
@@ -287,8 +285,7 @@ def test_earlier_same_date_placeholder_without_run_id_does_not_block_finalize(re
 
     assess_dir = repo / ".assess"
     append_log_entry(assess_dir, LogEntry(
-        run_date=DAY, files_scored=1, readiness_score=0.0,
-        maturity_label=LOG_PLACEHOLDER, instructions_grade=None,
+        run_date=DAY, files_scored=1, readiness=LOG_PLACEHOLDER, instructions_grade=None,
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="Deterministic ranker not yet wired (LLM picks Top 3)",
     ))

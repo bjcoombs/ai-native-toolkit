@@ -150,8 +150,8 @@ SKILLS: dict[str, dict[str, Any]] = {
             # inline" instruction; the unit bodies ride along under references/.
             "layer-scorer-delegate": (
                 "Read the bundled methodology at `references/assess-layer-scorer.md` "
-                "and apply it yourself to produce the 0-8 score, the per-layer "
-                "verdicts with evidence, the maturity label, and the structured "
+                "and apply it yourself to produce the per-layer "
+                "verdicts with evidence and the structured "
                 "`evidence` list the report step re-checks - this context has "
                 "no separate agent. Hold that scorecard for the report step."
             ),

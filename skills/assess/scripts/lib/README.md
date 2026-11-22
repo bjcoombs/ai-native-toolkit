@@ -848,7 +848,8 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 The run's side effects, applied after every scan (#557) by
 `assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
-keys the run header reserved in place, writes `badge.json`, reads the previous
+keys the run header reserved in place, writes `badge.json` from the `headline` block
+(`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 
@@ -1726,9 +1727,9 @@ with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reop
 action that matches a done `completed` entry: the finding came back into the Top 3, so the
 old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
 sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
-rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
-gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a
-reviewed path neither counts nor fails the gate. The committed `findings.json` snapshot
+rebuild. The CI gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) reads open
+paths only, so a reviewed path does not fail the gate (the badge counts no findings since
+#747: it carries the Step and the verified tally). The committed `findings.json` snapshot
 and the method-change diff keep the full `paths`, so a review never reads as a finding
 that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
 `.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
@@ -1774,7 +1775,8 @@ A run-context with no `derived_findings` list is left untouched (returns `False`
 `assess_core` hands it this run's `complexity-stats.json` (the scoped one under
 `--scope`) and the excludes from `recorded_excludes` (the `excluded_by_config` dirs
 and patterns the default run applied and disclosed, or `load_excludes` when the
-block is absent), then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
+block is absent). The badge is no longer rebuilt here: `assess_core` recounts the `level`
+block, rewords the `headline` and rewrites `badge.json` from it before this runs (#747). Tests:
 `tests/test_mutation_refresh.py`.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
@@ -2341,7 +2343,7 @@ Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
 **`level_result_types.py`**
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`) and the run context's `Headline` (#747), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 
 **`fleet_level.py`**
@@ -3050,26 +3052,48 @@ gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
 (`tracked_files`), never an orchestrator. Structured as an extensible dispatch
 (one archetype today, YAGNI on a general framework). Read by `assess_core`
 (writes the `archetype` block to `run-context.json`), the `assess-layer-scorer`
-agent (N/A scoring + denominator), and the `assess-findings` skill (renders N/A
-+ renormalised headline). Co-changes with `badge.py`/`assess_finalize.py` (the
-denominator) and its test `tests/test_archetype.py`.
+agent (N/A verdicts), and the `assess-findings` skill (renders N/A rows). The
+`denominator` field is kept for compatibility; nothing reads it since the layered
+score was retired (#747). Co-changes with its test `tests/test_archetype.py`.
 
 **`badge.py`**
-Shields.io endpoint badge for the wiki (`.assess/badge.json`). The shipped badge
-is deterministic by default: `assess_core` always writes the findings-count form
-through `write_findings_badge` (`fallback_badge`, "2 findings · 0 stale markers",
-colour banded from the counts), which stamps a `link` to `assess-report.md`, so a
-badge-clicker lands on the full report; the opt-in mutation pass rewrites it the
-same way once the refreshed findings are in. The LLM-derived headline
-(`score_badge`, "7.0/8 · AI-Native",
-renormalised over its `denominator` - 8 for software, the applicable-layer count
-for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
-written to the badge; it appears inside `assess-report.md`, so the badge never
-claims a grade a deterministic run cannot reproduce. Pure threshold functions,
-fixture-tested. Also exposes `maturity_band`
-(the same score/denominator fraction mapped to the named tier ladder), the
-single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
-against. Both producers accept an optional `run_id` provenance stamp.
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). The message is the
+run's deterministic headline summary (`headline.summary` from `headline.py`, #747:
+"Step 3 · 4 of 4 measured"), the colour a pure function of the Step (`step_color`:
+blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
+"Step not measured" when the level result is unavailable). `assess_core` writes
+it through `write_headline_badge` on every run, stamping a `link` to
+`assess-report.md` and the `run_id`, and rewrites it after the opt-in mutation
+recount; `assess_finalize` never touches it. The layered "X / 8" score badge and
+its band ladder are retired. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
+
+**`headline.py`**
+The deterministic `/assess` headline (#747): `headline(level, model)` words a
+`LevelResult` under the model that produced it, and `run_context_headline(level)`
+(the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
+default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
+Unattended agent PRs · contracts in place"), the Next line naming the next Step and
+the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
+count still falls short once the gates hold and their counted conditions join the
+tally, "N more verified practices are met, for example `<first unmet counted
+condition>`"; a not-measured gate says
+so with its reason; at the top Step it says the Step holds while its gates hold),
+and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
+model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
+badge message and the `log.md` readiness line), `step`, `next_step`,
+`levels_version` and `headline_version`. A missing or degraded `level` block gives
+`available: false` and "Step not measured", never a guessed Step; `as_headline`
+returns that form for a degraded `headline` block. Shape: `Headline` in
+`level_result_types.py`; under counts-only the text fields are dropped and the
+numbers kept. The per-tag strip is a later line (#844). Tests: `tests/test_headline.py`.
+
+**`action_conditions.py`**
+The condition an action moves (#747): `condition_errors(actions, level)` returns one
+message per `finalize-input.json` action whose optional `condition` is not an id the
+run's `level.conditions` lists (or when the run has no level result to check it
+against). `assess_finalize` raises on any, before writing, so `actions.json` is
+unchanged; a met condition is accepted. Tests: `tests/test_headline.py`.
 
 **`evidence_check.py`**
 Deterministic re-check of the evidence a layer verdict cites (issue #360). The
@@ -3289,18 +3313,39 @@ splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
 `mypy` ... run directly), so `make lint` and `npx eslint` count and an install
 naming a linter does not; instruction-file classification does not use it. Used by
 `agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
-lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
-(`test_is_check_command`).
+lines). `is_lint_run(text)` (issue #782) is the lint test `ci_checks.lint_runs`
+reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
+--version` runs no lint) and without the package-manager test aliases
+`is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
+(`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
+ruff check .`). Type checkers count as linters there, in a vocabulary local to
+`is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
+`type-check` targets such as `npm run typecheck` or `make type-check`), so
+`is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
+`npm exec`, `pnpm exec` / `dlx`, `yarn exec` / `dlx`) is read by the program it runs:
+a linter or type checker is a lint run, a test runner (`jest`, `vitest`, `playwright
+test`) is neither, and any other program is `may_lint` (null, never false). A lone
+type-checker item (`- tsc` under `needs:`) is a value like a lone linter. `may_lint(text)` is a check that may run a linter the line cannot
+show: a check target of a runner or script (`make check`, `npm test`, `tox`,
+`./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
+(`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
+call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
+jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
+`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
+(`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
-Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
+Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
+it run a linter (#782)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
+the instruction file; Layer 3 level 1 reads `lint_runs`.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
-enforced_basis, masked_check_commands, off_trigger_check_commands}`. Each line,
+enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
+lint_basis, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3317,7 +3362,7 @@ line, own or included (`included_check_commands` counts the included ones); with
 is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
-false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
 every include resolved and holds no check reads false. Its third argument is the
 `gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
 offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
@@ -3347,7 +3392,38 @@ null with `enforced_basis: unknown_trigger`), else null under the
 same `included_jobs` rule, else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
 still describes `test_or_lint_runs`, which keeps its meaning.
-Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
+`lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
+and trigger rules, the same own, included and merged files, with
+`count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
+per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
+mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
+`lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
+`merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
+triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+target or script that may lint inside it; recipes are not read), `not_enforced`
+(false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
+`no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
+caps the row; a stored scan without the key reads unknown there.
+CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
+`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
+`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
+`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
+root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
 
 **`ci_masking.py`**

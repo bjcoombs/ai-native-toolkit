@@ -16,7 +16,6 @@ from assess_core import build_and_publish_run
 from assess_finalize import _write_actions_contract
 from assess_gate import check_finding_regressions
 from lib import reviewed_findings as rf
-from lib.badge import concern_count_from_findings
 from lib.counts_only import counts_only
 from lib.keyhole_signals import finding_display_name, finding_products
 from lib.mutation_refresh import _rebuilt_findings
@@ -260,12 +259,6 @@ def test_counts_only_keeps_the_reviewed_path_and_drops_the_note() -> None:
     out = counts_only({"derived_findings": [_reviewed_finding()]})
     reviewed = out["derived_findings"][0]["reviewed"]
     assert reviewed == [{"path": "src/a.py"}]
-
-
-def test_badge_counts_only_findings_with_an_open_path() -> None:
-    all_reviewed = {**_reviewed_finding(), "paths": ["src/a.py"]}
-    assert concern_count_from_findings([all_reviewed]) == 0
-    assert concern_count_from_findings([_reviewed_finding()]) == 1
 
 
 def test_gate_does_not_fire_on_a_reviewed_path() -> None:

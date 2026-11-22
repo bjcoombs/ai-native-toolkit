@@ -25,7 +25,6 @@ import pytest
 
 from assess_core import build_and_publish_run
 from assess_finalize import finalize_run
-from lib.badge import maturity_band
 from lib.wiki_writer import (
     RETIRED_EXCLUDED_STATUS,
     RETIRED_STATUS,
@@ -205,8 +204,7 @@ def _core(repo: Path, day: str = _EXCLUDE_DAY) -> dict:
 def _finalize(assess_dir: Path, ctx: dict) -> None:
     (assess_dir / ".cache").mkdir(exist_ok=True)
     (assess_dir / ".cache" / "finalize-input.json").write_text(json.dumps({
-        "run_id": ctx["run_id"], "score": 4.0, "denominator": 8,
-        "maturity_label": maturity_band(4.0, 8),
+        "run_id": ctx["run_id"],
         "top_action": "fixture action", "hotspot_actions": {},
     }), encoding="utf-8")
     finalize_run(assess_dir=assess_dir)

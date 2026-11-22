@@ -577,6 +577,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # not, #796). enforced_check_runs (#775) leaves out masked
     # checks and checks off the ordinary triggers (lib/ci_masking.py,
     # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
+    # lint_runs (#782) is the same test for lint lines; Layer 3 level 1 reads it.
     # Offline itself.
     ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root", "gitlab_merged_ci"),
              STAGE_POST_OFFERS),
@@ -633,5 +634,9 @@ SCANS: tuple[ScanSpec, ...] = (
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
 SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
+# The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
+# "Verified practices: N of M measured", worded from the level block. The report
+# pastes it verbatim and the badge and log entry carry its summary.
+SCANS = (*SCANS, ScanSpec("headline", cs.headline, ("level",), STAGE_POST_OFFERS))
 
 validate(SCANS)

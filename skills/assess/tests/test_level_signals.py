@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from lib.ci_checks import scan_ci_checks
 from lib.counts_only import counts_only_scans
 from lib.promissory_markers import scan_promissory_markers
 from lib.structure_graph import analyze_structure
@@ -270,7 +271,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-0-instructions": 0,   # no CLAUDE.md: level 0, not unknown
             "layer-1-liveness": 0,       # no telemetry committed: rung 0 (#699)
             "layer-2-design": None,      # no Python package: no_python_packages
-            "layer-3-linters": None,     # no lint suppression: no suppression family
+            "layer-3-linters": 0,        # no CI file: no linter runs in CI (#782)
             "layer-4-architecture": None,  # no ownership map: no_ownership_map
             "layer-5-ci": 0,
             "layer-6-coverage": 0,
@@ -373,23 +374,60 @@ def test_layer_two_is_unknown_on_an_import_graph_with_no_edges(tmp_path: Path) -
     assert "structure.modularity_q" in row["missing_signals"]
 
 
-def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
-    row = _row(_run({"r": suppressed_repo}), "layer-3-linters")
-    assert row["level"] == 2   # one fresh suppression: a linter runs, none stale
+_LINT_WORKFLOW = ("on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n"
+                  "      - run: ruff check .\n")
 
-    stale = copy.deepcopy(suppressed_repo)
+
+def _linted(repo: Path, files: dict[str, str]) -> dict[str, Any]:
+    for rel, text in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(text, encoding="utf-8")
+    _commit(repo)
+    return {"ci_checks": scan_ci_checks(repo),
+            "promissory_markers": scan_promissory_markers(repo).summary()}
+
+
+def test_layer_three_level_one_reads_a_linter_run_in_ci(tmp_path: Path) -> None:
+    """Issue #782: a linter in CI earns level 1; a suppression comment alone earns nothing."""
+    clean = _linted(tmp_path / "clean", {".github/workflows/ci.yml": _LINT_WORKFLOW,
+                                         "app.py": "import os\n"})
+    row = _row(_run({"r": clean}), "layer-3-linters")
+    assert row["repos"]["r"]["bounds"][0] == 1   # level 2 unknown: no suppression family
+    assert "promissory_markers.families.suppression.stale" in row["missing_signals"]
+
+    noqa_only = _linted(tmp_path / "noqa", {"app.py": "import os  # noqa: F401\n"})
+    row = _row(_run({"r": noqa_only}), "layer-3-linters")
+    assert (row["status"], row["level"]) == ("level", 0)
+
+    target = _linted(tmp_path / "target", {".github/workflows/ci.yml": _CI_WORKFLOW,
+                                           "Makefile": "check:\n\ttrue\n"})
+    row = _row(_run({"r": target}), "layer-3-linters")
+    assert row["status"] == "unknown" and row["repos"]["r"]["bounds"][0] == 0
+
+
+def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
+    linted = {**copy.deepcopy(suppressed_repo), "ci_checks": {"lint_runs": True}}
+    row = _row(_run({"r": linted}), "layer-3-linters")
+    assert row["level"] == 2   # a linter in CI, one fresh suppression, none stale
+
+    stale = copy.deepcopy(linted)
     stale["promissory_markers"]["families"]["suppression"]["stale"] = 11
     assert _row(_run({"r": stale}), "layer-3-linters")["level"] == 1
 
-    shallow = copy.deepcopy(suppressed_repo)   # degenerate history: stale 0 says nothing
+    shallow = copy.deepcopy(linted)   # degenerate history: stale 0 says nothing
     shallow["promissory_markers"]["aging_reliable"] = False
     assert _row(_run({"r": shallow}), "layer-3-linters")["level"] == 1
 
-    none = copy.deepcopy(suppressed_repo)
+    none = copy.deepcopy(linted)
     del none["promissory_markers"]["families"]["suppression"]
     row = _row(_run({"r": none}), "layer-3-linters")
-    assert (row["status"], row["level"]) == ("unknown", None)   # no footprint is not credit
-    assert "promissory_markers.families.suppression.total" in row["missing_signals"]
+    # No footprint leaves only level 2 unknown: level 1 still reads the linter run.
+    assert (row["status"], row["repos"]["r"]["bounds"]) == ("unknown", [1, 2])
+    assert row["missing_signals"] == ["promissory_markers.families.suppression.stale"]
+
+    unlinted = {**copy.deepcopy(suppressed_repo), "ci_checks": {"lint_runs": False}}
+    row = _row(_run({"r": unlinted}), "layer-3-linters")
+    assert (row["status"], row["level"]) == ("level", 0)   # a suppression never grants the row
 
 
 def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any]) -> None:
@@ -467,6 +505,24 @@ def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -
     assert env["pinning"]["unlocked_total"] == 1
     row = _row(_run({"r": setup}), "layer-5-ci")
     assert row["level"] == 1
+
+
+def test_layer_five_is_unknown_on_a_ci_system_the_scanner_cannot_read(tmp_path: Path) -> None:
+    """Issue #787: a Jenkins-only repository is not measured at Layer 5, never level 0."""
+    scans = _ci_repo(tmp_path / "jenkins", None, instructions=False,
+                     extra={"Jenkinsfile": "pipeline { stages { stage('t') { steps { sh 'pytest' } } } }\n"})
+    assert (scans["ci_checks"]["basis"], scans["ci_checks"]["unread_ci_files"]) == ("unread_ci_system", 1)
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+    layer3 = _row(_run({"r": scans}), "layer-3-linters")
+    assert (scans["ci_checks"]["lint_runs"], scans["ci_checks"]["lint_basis"]) == (
+        None, "unread_ci_system")
+    assert (layer3["status"], layer3["level"]) == ("unknown", None)
+    assert "ci_checks.lint_runs" in layer3["missing_signals"]
+    both = _ci_repo(tmp_path / "both", _CI_WORKFLOW.replace("make check", "make test"),
+                    instructions=False, extra={"Jenkinsfile": "sh 'pytest'\n"})
+    assert _row(_run({"r": both}), "layer-5-ci")["repos"]["r"]["levels"][0]["met"] is True
 
 
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:

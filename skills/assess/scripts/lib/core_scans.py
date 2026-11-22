@@ -47,6 +47,7 @@ from lib.instruction_files import (
 )
 from lib.interactivity import build_offers_block
 from lib.keyhole_signals import integrate
+from lib.headline import Headline, run_context_headline
 from lib.level_result_types import LevelResult
 from lib.level_tally import DEFAULT_BLOCKS, run_context_level
 from lib.liveness_scan import scan_liveness
@@ -338,3 +339,9 @@ def level(*blocks: Any) -> LevelResult:
     """The run context's ``level`` block (#744): the tally over ``level_tally.DEFAULT_BLOCKS``,
     which the registry entry reads in that order."""
     return run_context_level(dict(zip(DEFAULT_BLOCKS, blocks)))
+
+
+def headline(level_block: Any) -> Headline:
+    """The run context's ``headline`` block (#747): the Step, its next unlock and the
+    verified tally, worded from the ``level`` block under the default model."""
+    return run_context_headline(level_block)

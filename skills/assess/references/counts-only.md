@@ -613,6 +613,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ci_checks.reason` | dropped |
 | `ci_checks.basis` | token |
 | `ci_checks.enforced_basis` | token |
+| `ci_checks.lint_basis` | token |
 | `ci_checks.includes.kind` | token |
 | `ci_checks.includes.id` | external id (hashed when hashing is on) |
 | `ci_checks.includes.status` | token |
@@ -709,6 +710,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.next_step.blockers.condition` | token |
 | `level.next_step.blockers.state` | token |
 | `level.next_step.blockers.reason` | token |
+
+## headline
+
+| Field | Kept as |
+|---|---|
+| `headline.levels_version` | token |
+| `headline.lines` | dropped |
+| `headline.markdown` | dropped |
+| `headline.summary` | dropped |
+| `headline.reason` | token |
 
 ## fleet-data.json (the fleet skill)
 
