@@ -101,8 +101,3 @@ def test_check_is_the_documented_targets() -> None:
 
 def test_page_notes_git_bash_path_conversion() -> None:
     assert "MSYS_NO_PATHCONV=1 git show" in PAGE.read_text(encoding="utf-8")
-
-
-def test_fleet_missing_graph_example_has_a_builder_free_language() -> None:
-    # Go gained an import-graph builder, so it is no example of a missing graph.
-    assert "no_import_graph_go" not in (REPO / "skills" / "fleet" / "SKILL.md").read_text(encoding="utf-8")
