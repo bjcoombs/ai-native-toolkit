@@ -48,7 +48,8 @@ def _scan(tmp_path: Path, files: dict[str, str]) -> tuple[bool | None, bool | No
 
 @pytest.mark.parametrize("text", [
     "ruff --version", "pytest --version", "uv run tox --version", "ruff check --help", "ruff -V",
-    "python -m pytest -V",
+    "python -m pytest -V", "pytest -h", "pytest --collect-only", "pytest --co -q",
+    "uv run pytest --collect-only tests/", "make test ARGS=x --help",
 ])
 def test_an_info_invocation_runs_no_check(text: str) -> None:
     assert is_info_invocation(text)
@@ -66,6 +67,24 @@ def test_a_flag_that_is_not_a_version_query_still_counts(text: str) -> None:
 
 def test_ctest_v_is_verbose_not_a_version_query() -> None:
     assert not is_info_invocation("ctest -V")
+
+
+@pytest.mark.parametrize("text", [
+    "dart test --help", "flutter test --help", "flutter test -h", "dotnet test --list-tests",
+    "rspec --init", "bundle exec rspec --init", "ctest --version", "go test --help",
+    "cargo test --help", "mvn --version", "./gradlew --help",
+])
+def test_a_runner_asked_for_usage_or_a_test_list_is_an_info_invocation(text: str) -> None:
+    """The #924 runners and the ones before them: whatever classifies the command,
+    ``ci_checks`` drops an info invocation from every line test."""
+    assert is_info_invocation(text)
+    assert check_commands(_wf(text)) == 0
+    assert enforced_check_commands(_wf(text)) == (0, 0)
+
+
+@pytest.mark.parametrize("text", ["rspec", "dotnet test", "flutter test", "rspec spec/init_spec.rb"])
+def test_the_same_runners_running_tests_are_not_info_invocations(text: str) -> None:
+    assert not is_info_invocation(text)
 
 
 @pytest.mark.parametrize("text", [

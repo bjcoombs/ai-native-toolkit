@@ -146,25 +146,34 @@ def is_lint_command(text: str) -> bool:
 
 
 # A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
-_INFO_FLAGS = frozenset({"--version", "--help", "-V"})
+# Flags that ask a program for its version, usage or test list and run no check (#919):
+# ``ruff --version``, ``dart test --help``, ``dotnet test --list-tests``,
+# ``pytest --collect-only`` (``--co``).
+_INFO_FLAGS = frozenset({"--version", "--help", "-h", "--list-tests", "--collect-only", "--co"})
 
 
 def is_info_invocation(text: str) -> bool:
-    """A command that asks only for a version or usage, so it runs no check (#919).
+    """A command that asks only for a version, usage or a test list, so it runs no check (#919).
 
-    ``--version`` or ``--help`` anywhere, or ``-V`` when the program it runs is one
-    whose ``-V`` is its version flag (``_V_VERSION``: the linters, type checkers,
-    ``pytest``, ``tox``, ``nox``). Elsewhere ``-V`` can run the work (``mvn -B -V
-    verify``, ``./gradlew -V test``, ``ctest -V``), so it is not read. ``ruff
-    --version``, ``pytest --version`` and ``uv run tox --version`` are info invocations.
+    Any ``_INFO_FLAGS`` word (``--version``, ``--help``, ``-h``, ``--list-tests``,
+    ``--collect-only``, ``--co``); ``rspec --init``, which writes a config and runs no
+    spec; or ``-V`` when the program it runs is one whose ``-V`` is its version flag
+    (``_V_VERSION``: the linters, type checkers, ``pytest``, ``tox``, ``nox``). Elsewhere
+    ``-V`` can run the work (``mvn -B -V verify``, ``./gradlew -V test``, ``ctest -V``),
+    so it is not read. ``ruff --version``, ``uv run tox --version``, ``flutter test
+    --help`` and ``bundle exec rspec --init`` are info invocations.
     """
     words = command_words(text)
-    if not words or not _INFO_FLAGS.intersection(words):
+    if not words:
         return False
-    if {"--version", "--help"}.intersection(words):
+    if _INFO_FLAGS.intersection(words) or ("rspec" in words and "--init" in words):
         return True
+    if "-V" not in words:
+        return False
     program = _program(words)
     return bool(program) and program[0] in _V_VERSION
+
+
 # Test programs that run tests and nothing else: no linter can hide inside them.
 _DIRECT_TESTS = (ALWAYS_CHECK - {"tox", "nox"}) | _JS_TEST_RUNNERS
 
