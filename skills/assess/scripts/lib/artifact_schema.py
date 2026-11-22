@@ -281,6 +281,9 @@ constant each.
 #   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
 #   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
 #   Additive: no existing key moves.
+# - run-context.json delivery gains sample_page_size (issue #995): the changes per
+#   heavy read the merged sample finished at, or null when none was made. Additive:
+#   no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -469,6 +472,18 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
 # Unreleased (bumped once by the 3.0.0 release PR):
+# - agent_consistency drops a leading heading or list ordinal before reading
+#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
+#   conflict, so agent-consistency level 1 can move from unmet to met. A
+#   next step for an unlinked system names its primary file (CLAUDE.md) before
+#   a supplementary rule file.
+# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
+#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
+#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
+#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
+#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
+#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
+#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
 # - issue #937, two false readings. A coverage gate below 50 percent beside a
 #   go.mod or Cargo.toml with no gate read for that language reads
 #   threshold_meets_minimum null (go_rust_gate_form_not_read) where it read

@@ -836,6 +836,13 @@
                     "null"
                   ],
                   "description": "Share (0 to 1) of changes an agent identity authored; null when nothing was counted."
+                },
+                "sample_page_size": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Changes per heavy read of the sample (lib/merged_sample.py PAGE_SIZE, or half of it after one retry on HTTP 502 or 504); null when no heavy read was made."
                 }
               }
             },

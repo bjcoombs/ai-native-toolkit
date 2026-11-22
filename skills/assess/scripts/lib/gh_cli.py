@@ -65,11 +65,15 @@ _HTTP_STATUS_RE = re.compile(r"\bHTTP (\d{3})\b")
 
 
 class GhUnavailable(Exception):
-    """A GitHub read could not be made or was refused; ``reason`` says why."""
+    """A GitHub read could not be made or was refused; ``reason`` says why.
 
-    def __init__(self, reason: str) -> None:
+    ``status`` is the HTTP status the CLI printed (``"502"``), None when it printed
+    none; a caller that retries a server error reads it instead of the reason text."""
+
+    def __init__(self, reason: str, status: str | None = None) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.status = status
 
 
 @dataclass(frozen=True)
@@ -161,7 +165,7 @@ def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS, cache: bool = Tr
         raise GhUnavailable(f"no_access: `{shown}` was refused ({detail})")
     if status and status[-1] == "404":
         raise GhUnavailable(f"not_found: `{shown}` ({detail})")
-    raise GhUnavailable(f"gh_error: `{shown}` failed ({detail})")
+    raise GhUnavailable(f"gh_error: `{shown}` failed ({detail})", status[-1] if status else None)
 
 
 def open_github(repo_root: Path, timeout: int = GH_TIMEOUT_SECONDS) -> GithubRepo:
