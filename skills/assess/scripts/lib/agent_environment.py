@@ -28,7 +28,9 @@ at HEAD (``lib.command_index.repo_files``):
   count (``AGENT_LOADED``), not a review-bot prompt. ``named`` lists the ones that resolve. A check
   is classified by the target it runs (``make test``, ``npm run ci``, the
   program after ``uv run``), so an install command such as ``npm ci`` or
-  ``uv sync --extra test`` is never a check.
+  ``uv sync --extra test`` is never a check. Instruction files are read with
+  ``lib.named_check`` (#951), so a named ``make ci`` counts here though a CI line
+  running it reads null at Layer 5.
 - ``pinning``: one row per dependency manifest (a ``package.json`` or
   ``pyproject.toml`` that declares dependencies, ``Pipfile``,
   ``requirements*.txt``, ``go.mod``, ``Cargo.toml``, ``Gemfile``,
@@ -106,7 +108,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, NotRequired, TypedDict
 
 from lib.assess_config import is_user_excluded
-from lib.check_command import is_check_command, is_check_name
+from lib.named_check import is_named_check as is_check_command, is_named_check_name as is_check_name
 from lib.command_index import RepoIndex, build_index
 from lib.command_resolver import extract_commands, resolve
 from lib.doc_graph import is_excluded_path

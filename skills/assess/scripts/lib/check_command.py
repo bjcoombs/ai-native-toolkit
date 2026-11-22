@@ -2,21 +2,20 @@
 
 ``is_check_command`` classifies one command by the target it runs: a test or
 check target of a runner ``lib.command_resolver`` models (``make test``,
-``npm run ci``, ``tox``, ``uv run pytest``, the program after ``uv run``) or a
+``npm run check``, ``tox``, ``uv run pytest``, the program after ``uv run``) or a
 committed script named for a check (``./scripts/test.sh``). An install command
-such as ``npm ci`` or ``uv sync --extra test`` is never a check.
-``lib.agent_environment`` applies it to the commands instruction files name,
-``lib.ci_checks`` to the lines of CI configuration. ``is_lint_run`` and
-``may_lint`` (#782) feed ``ci_checks.lint_runs``: a linter that runs, and a
-check whose recipe may run one. Pure: no file or network
-access, so a scan that only classifies commands stays offline.
+such as ``npm ci`` or ``uv sync --extra test`` is never a check. ``lib.ci_checks``
+applies it to CI lines, ``lib.named_check`` to instruction files. ``is_lint_run`` and
+``may_lint`` (#782) feed ``ci_checks.lint_runs``: a linter that runs, and a check whose
+recipe may run one. Pure: no file or network access, so an offline scan stays offline.
 
 Pure classifier, split from `agent_environment.py` (issue #698) so an offline scan
 can use it without reaching `gh_cli`. `is_check_command(text)` is true for a test
 or check target of a runner `command_resolver.RUNNERS` models (`make test`, `npm
-run ci`, `tox`, the program after `uv run`), or a committed script named for a
+run check`, `tox`, the program after `uv run`), or a committed script named for a
 check; an install (`npm ci`, `uv sync --extra test`) never is. `is_check_name(name)`
-splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
+splits a target name on `:_./-` and looks for a word of `CHECK_NAMES` (`CHECK_WORDS`, no `ci`:
+#951, so CI's `make ci` reads null; `lib.named_check` adds `ci` for instruction files).
 `is_lint_command(text)` walks the same program/target anchoring with `LINT_WORDS`
 (`lint`, `vet`, `clippy` and the linters) and `LINT_PROGRAMS` (`ruff`, `eslint`,
 `mypy` ... run directly), so `make lint` and `npx eslint` count and an install
@@ -99,6 +98,7 @@ from __future__ import annotations
 
 import re
 import shlex
+from contextvars import ContextVar
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
@@ -106,8 +106,9 @@ from lib.lint_vocabulary import (
     ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
 
 CHECK_WORDS = frozenset({
-    "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
+    "test", "tests", "check", "checks", "verify", "validate", "pytest", "tox", "nox",
 })
+CHECK_NAMES: ContextVar[frozenset[str]] = ContextVar("check_names", default=CHECK_WORDS)  # lib.named_check
 ALWAYS_CHECK = frozenset({"pytest", "py.test", "tox", "nox"})
 _PM_TEST = frozenset({"test", "t", "tst"})
 _PM_INSTALL = frozenset({
@@ -132,8 +133,9 @@ _VALUED_FLAGS = frozenset({
 })
 
 
-def is_check_name(name: str, words: frozenset[str] = CHECK_WORDS) -> bool:
-    """A target or script name built from a check word (``test``, ``check:all``, ``ci``)."""
+def is_check_name(name: str, words: frozenset[str] | None = None) -> bool:
+    """A target or script name built from a check word (``test``, ``check:all``, ``test:ci``)."""
+    words = CHECK_NAMES.get() if words is None else words
     return any(part in words for part in re.split(r"[:_./-]", name.lower()))
 
 
@@ -159,7 +161,7 @@ def _drop_leading_flags(args: list[str], valued: frozenset[str] = _VALUED_FLAGS)
     return args[i:]
 
 
-def _js_check(head: str, pos: list[str], names: frozenset[str]) -> bool:
+def _js_check(head: str, pos: list[str], names: frozenset[str] | None) -> bool:
     """A package-manager or ``npx`` / ``bunx`` command that runs a check."""
     if not pos:
         return False
@@ -177,7 +179,7 @@ def _js_check(head: str, pos: list[str], names: frozenset[str]) -> bool:
     return pos[0] in _PM_TEST or is_check_name(pos[0], names)
 
 
-def _check_target(words: list[str], names: frozenset[str] = CHECK_WORDS,
+def _check_target(words: list[str], names: frozenset[str] | None = None,
                   programs: frozenset[str] = ALWAYS_CHECK) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
     head, pos = words[0], _positionals(words[1:])
