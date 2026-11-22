@@ -8,6 +8,8 @@ It renders:
 - the headline (``lib/headline.py``, #747): the Step, its next unlock and
   "Verified practices: N of M measured", pasted from the run context's
   ``headline`` block,
+- the diagram sections (``lib/assess_diagrams.py``, #942): the evidence waffle the
+  publish step wrote beside the report, linked, or why it was not drawn,
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
 - the keyhole-readiness summary + the six cross-layer findings, and
@@ -44,6 +46,7 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.assess_diagrams import build_diagrams, diagrams_section  # noqa: E402
 from lib.headline import as_headline  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
 
@@ -99,6 +102,8 @@ _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
 ## Headline
 
 $headline
+
+$diagrams_section
 
 ## Metrics Dashboard
 
@@ -590,6 +595,7 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
         headline=as_headline(ctx.get("headline"))["markdown"],
+        diagrams_section=diagrams_section(build_diagrams(ctx)),
         files_scored=_fmt(stats.get("files_scored", 0)),
         loc_total=_fmt(loc.get("total")),
         loc_p95=_fmt(loc.get("p95")),

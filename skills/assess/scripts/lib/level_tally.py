@@ -140,11 +140,6 @@ from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
-# Unreleased (run 4 version freeze, the release PR bumps it): owner exclusions
-# add the optional ``excluded`` list and the condition and blocker fields
-# ``disposition`` and ``exclusion_kind`` (#910); results without exclusions are unchanged.
-# Unreleased (the 3.0.0 release PR bumps it once): a condition may carry
-# ``polarity: "hazard"``, and a hazard is never counted (#843).
 LEVEL_RESULT_VERSION = 2
 
 STATES = ("met", "unmet", "not_applicable", "not_measured", "declined")

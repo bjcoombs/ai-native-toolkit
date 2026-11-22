@@ -1,0 +1,11 @@
+# #843. A condition with several tags counts once. Tags change no level, no
+# tally and no Step.
+#
+# Changing a criterion changes results: bump "version" with every edit.
+#
+# default-2026.12.01 (3.0.0 release): two changes since default-2026.11.22.
+# - the Layer 0 instructions comment changed with #821; the criterion did not.
+# - every condition gains "truth" (#843); no criterion, grade or Step changes.
+
+version = "default-2026.12.01"
+
