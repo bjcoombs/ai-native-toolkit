@@ -30,7 +30,6 @@ from test_fleet_heatmap import cli as heatmap_cli
 from test_fleet_next_steps import _pages as next_steps_pages
 from test_fleet_next_steps import cli as next_steps_cli
 
-README = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "README.md"
 _SVG_TEXT = re.compile(r"<(text|title)\b[^>]*>(.*?)</\1>", re.S)
 
 
@@ -107,8 +106,8 @@ def test_the_guard_reads_the_shipped_fleet_report_sections(fleet_out: Path) -> N
 
 
 def test_the_readme_documents_exactly_the_banned_list() -> None:
-    text = README.read_text(encoding="utf-8")
-    section = text.split("\n**`vocabulary.py`**\n", 1)[1].split("\n### ", 1)[0]
+    import lib.vocabulary
+    section = lib.vocabulary.__doc__ or ""
     listed = re.findall(r"^\| `([^`]+)` \|", section, flags=re.M)
     assert listed == [*BANNED_WORDS, *RETIRED_LABELS]
     assert "tests/test_vocabulary_guard.py" in section and IN_PLACE in section

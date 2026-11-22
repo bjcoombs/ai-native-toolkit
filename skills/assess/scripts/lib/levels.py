@@ -108,6 +108,8 @@ a ``requires`` naming a condition that does not exist (or itself, or a cycle),
 a missing, empty or unknown ``truth`` (``MixedTruthError`` when only some conditions
 carry it), a bad ``polarity``, ``guarded_by`` or ``eq_signal``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
 byte-identical JSON for identical inputs.
+
+Full reference: lib/docs/levels.md.
 """
 from __future__ import annotations
 

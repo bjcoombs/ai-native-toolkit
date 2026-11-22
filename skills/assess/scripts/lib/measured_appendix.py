@@ -15,6 +15,19 @@ The section opens with an ``In place:`` line (``vocabulary.IN_PLACE``, #743) and
 catalog, ``docs/what-we-measure.md``, by absolute URL because a report is written outside
 the repository. Pure and deterministic; reasons are reduced to
 their codes (``counts_only.reason_code``), so counts-only and full rows read alike.
+
+`measured_section(documents, names=None, absent=...)`: the "How this was measured" section. One
+`{block: block}` mapping per repository (a fleet row's `scans`, or a run-context); for each
+known scan, **Ran** when its block exists without a `not_registered` or `network` reason in at
+least one repository (with "not measured in k of n" and the reason codes where the block is
+unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
+a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
+`assess_report.py` instead passes `absent_code="no_block"`: a full run runs every scan, so a
+missing block, such as `structure_drift` with no ownership map, is listed under Ran as not
+measured). Its first line starts `In place:`
+(`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
+measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+Tests: `tests/test_measured_appendix.py`.
 """
 from __future__ import annotations
 

@@ -1,5 +1,4 @@
-"""AI review committed in CI, read statically (issue #696): the ``review_automation``
-and ``review_evidence`` blocks.
+"""AI review committed in CI, read statically (issue #696): the ``review_automation`` and ``review_evidence`` blocks.
 
 Layer 7 used to read only ``review_reality``, which needs the platform API, so a
 headless or fleet run read it as unknown on every repository, including those
@@ -62,6 +61,45 @@ with the reason of the block that could not say (``review_reality``'s first,
 so a headless run's ``network`` reason reaches the ``fleet --platform`` hint).
 It is listed in ``signals.PLATFORM_SCANS`` so the platform pass rebuilds it from
 the measured ``review_reality``.
+
+AI review committed in CI and the Layer 7 level 1 signal (issue #696).
+`scan_review_automation(repo_root, fleet_config, ghsync_root, merged_ci)` writes `{available, present, kinds[],
+matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked, on_changes, depth}`.
+The include entries of GitLab files `ci_includes.resolve_includes` read are matched as the
+repository's own are (#766), keeping the path and line of the repository's own include that
+led there, with `depth` the include level (0 for the repository's own file). Its fourth
+argument is the `gitlab_merged_ci` reading (#796): the sources GitLab's CI lint API lists as
+merged in are matched the same way, once each (a source an offline entry names is skipped),
+with `line` null and `depth` 1. Kinds:
+`ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
+`anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
+pipelines is not read), `ci_component` (a
+`shared_tooling.gitlab_includes` component or project whose last path segment matches
+`REVIEW_COMPONENT`, a name heuristic: `ai-code-review`, `claude_review`, `llm-review`,
+`code-review-ai`, `pr-agent`), and `config_file` (`REVIEW_CONFIG_FILES`: `.coderabbit.yaml`/`.yml`,
+`.gemini/config.yaml`, `.pr_agent.toml`, each mapped to its `delivery.AI_REVIEWERS`
+login). A CI action or include also matches (`rule: config`, `reviewer: configured`)
+when its source equals, or sits under, a `[review] ai_review_components` entry
+(lowercased, host, a leading CI variable such as `$CI_SERVER_FQDN`, and `@version` dropped). Copilot code review has no review-specific
+file and is not read. A `ci_action` is credited only when its workflow's `on:` (`shared_tooling.workflow_events`)
+names `pull_request`, `pull_request_target` or `merge_group` (`REVIEW_EVENTS`): a step wired
+only to `issue_comment` or `issues` (an @claude responder) is listed with `on_changes:
+false`; an `on:` the line reader cannot read is credited. `present` and `kinds` credit
+git-tracked matches only; outside a
+git checkout the block is `available: false`. Counts-only keeps the booleans, kinds,
+rules and reviewer slugs, never a source or a config entry. `is_review_action` and
+`is_review_component` expose the pinned matcher to other CI readers (#689).
+`review_evidence(review_automation, review_reality)` is the derived block the default
+maturity model's Layer 7 level 1 reads: `{available, present, ai_review_in_ci,
+reviewed_changes}`; `present` is true when an AI review step is credited or
+`review_reality.reviewed_share > 0` (`approved_share > 0` where `reviewed_share` is
+null), false when neither block shows review (a review config file alone does not count
+against a measured `reviewed_share` of 0; a CI step, or a measured `bot_review_share > 0`,
+does), and otherwise the block is unavailable
+with the reason of the block that could not say, `review_reality`'s first (so the
+offline `network` code gives the `fleet --platform` hint). It is in
+`signals.PLATFORM_SCANS`, so the platform pass rebuilds it from the measured
+`review_reality`. Tests: `tests/test_review_automation.py`.
 """
 from __future__ import annotations
 

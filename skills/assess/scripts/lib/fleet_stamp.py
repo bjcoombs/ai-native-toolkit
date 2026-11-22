@@ -35,6 +35,21 @@ The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
 write a byte-identical ``run.json`` (with ``--discovered``, a list run that leaves
 out a checkout counts it in ``coverage``, so its stamp differs there).
+
+The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
+commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
+(`counts_only`, `paths_hashed`, sorted `scans`) and `repositories` counts (`selected`,
+`scanned_ok` = ok rows, `failed`, `qualifying` = ok rows with `active` true), plus
+`fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
+without one, absent before #706 and read as null, so the stamp version stays 1), and
+`platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
+false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
+counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
+comparability key). No path,
+salt, timing or input mode, so a
+root run, a list run and any `--jobs` give the same bytes on the same day (with
+`--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
+writes atomically with sorted keys.
 """
 from __future__ import annotations
 

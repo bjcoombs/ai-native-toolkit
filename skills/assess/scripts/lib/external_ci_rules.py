@@ -10,6 +10,20 @@ context equal to an entry of ``EXTERNAL_CI_CONTEXTS`` or the entry followed by a
 separator (``/``, ``:``, a space or ``-``), compared case-insensitively. Anything else (``github-actions``, ``codecov``,
 ``coderabbitai``, a CLA bot) is not CI evidence. :attr:`ExternalCi.applies` is the
 majority rule: more than half of the sampled changes carry a known system.
+
+The `external_ci` value type and allowlist (#928), apart from `external_ci.py` so
+`ci_checks` stays an offline module: `ExternalCi(sampled, external)`, `NOT_READ`,
+`as_external(value)` (anything else, such as a degraded spec's dict, is `NOT_READ`), and
+`ExternalCi.applies`, the majority rule (more than half of the sampled changes carry a
+known system). The allowlist of known CI systems: a check run's app slug in
+`EXTERNAL_CI_APPS` (`buildkite`, `circleci-checks`, `travis-ci`, `appveyor`, `cirrus-ci`,
+`azure-pipelines`, `google-cloud-build`, `flutter-dashboard` for LUCI, and others), or a
+status context equal to an entry of `EXTERNAL_CI_CONTEXTS` (`buildkite/`, `ci/circleci`,
+`continuous-integration/travis-ci`, `azure pipelines`, `luci`, Prow's `tide`, and others)
+or the entry followed by `/`, `:`, a space or `-` (so `tide` never matches `tidelift`),
+case-insensitive. An app or context on neither list
+(`github-actions`, `codecov`, `coderabbitai`, a CLA bot) changes nothing. Tests:
+`tests/test_external_ci.py`.
 """
 from __future__ import annotations
 

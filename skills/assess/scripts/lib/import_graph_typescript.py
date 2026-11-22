@@ -41,6 +41,29 @@ already counts as a workspace package.
 
 The builder covers both ``typescript`` and ``javascript`` (its ``languages``), so
 ``select_graph`` picks it for a repository dominated by either.
+
+The TypeScript and JavaScript builder (`TYPESCRIPT_BUILDER`, issue #709): a deterministic
+regex scan, no Node. One builder graphs both languages, since they import each other; the
+graph's `language` is `typescript` when any scanned file is TypeScript, else `javascript`.
+Modules are repo-relative file paths with the extension kept. Imports are `import ... from`,
+side-effect `import`, `export ... from`, `import()`, `require()` and `import x = require()`,
+read after comments are stripped. A relative specifier resolves against the importer's
+directory; a bare one through the nearest `tsconfig.json` / `jsconfig.json` (`paths`, then
+`baseUrl`, following relative `extends`; JSONC is accepted), then the workspace packages
+(every `package.json` with a `name`, its entry from `source`, the `"."` export, `module` or
+`main`, with a `dist/` / `build/` / `lib/` / `out/` entry mapped to `src/`, else its `index`).
+A specifier matches a file, the file plus a source extension, a `.js` name standing for its
+`.ts` source, or a directory's `index`; anything else is external. A package is the nearest
+directory holding an `index` file or a named `package.json`, else the module's top directory;
+front doors are the `index` modules and each workspace entry; the surface is the count of
+exported declarations and `export { ... }` names plus CommonJS `exports.x =`. Skipped:
+`EXCLUDE_DIRS`, the configured excludes, `.d.ts`, minified bundles, test and story files,
+build and test tool configs (`vite.config.ts`, `jest.config.js` and the other
+`TOOL_CONFIG_PREFIXES`; an app's own `app.config.ts` stays) and dotfiles, files over 1 MB. Limits: specifiers built at run time are not
+seen, regex literals are not parsed by the comment stripper, `exports` maps are read for
+`"."` only, and `node_modules` and package `extends` are not followed. Configs and
+workspaces are read from the whole repository; modules come from `scope`.
+Tests: `tests/test_import_graph_typescript.py` (fixture `tests/fixtures/ts_workspace`).
 """
 from __future__ import annotations
 

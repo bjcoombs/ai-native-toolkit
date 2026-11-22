@@ -23,6 +23,18 @@ The vertical split is half the top level; the horizontal split is the median
 commit count of the plotted repositories. Labels are placed by
 ``fleet_svg.place_labels``; a label that fits nowhere is named under the plot.
 Deterministic: points sorted by a fixed key, fixed number formatting.
+
+The activity x maturity quadrant (#674). `repo_points(levels, repos)` gives each repository
+its commit count (`ai_usage.total_commits` over the run window; `None` for a failed scan or
+an unavailable block) and maturity: each `team` row re-evaluated against the repository's
+own `scans` (`levels.evaluate_row`), as a share of the row's top level, averaged over the
+rows that could be measured (`fleet_maturity.mean_share`; `None` when none could). Below 5 at
+the top, the commit axis ticks every whole commit (`count_ticks`, #684), never 0.2. `layout` places the plotted points
+and their labels (captions in `CAPTIONS` are obstacles); `render_quadrant` draws them with
+the busy-and-immature quadrant (at or above the median commits, below half the top level,
+`at_risk`) shaded, and names every repository with an unknown axis on a hatched strip,
+never at zero, and every label that fit nowhere under the plot.
+A repository with a floored unknown row also gets `maturity_floor` (`fleet_maturity.floor_mean`, #697), shown as "at least" in the tooltip and on the not-plotted strip; the dot stays on the known-only mean.
 """
 from __future__ import annotations
 

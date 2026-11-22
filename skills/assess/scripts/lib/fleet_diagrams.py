@@ -20,6 +20,24 @@ the ``--compare`` result (``comparison``) and is skipped without one; the trend
 report heading and question to ``HEADINGS`` (the one source a drawn, skipped or failed diagram
 reads them from; ``DIAGRAM_FILES`` follows it) and its entry to ``build_diagrams``. Deterministic: entries
 in a fixed order, no date in the report.
+
+The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
+`build_diagrams(levels, repos, window, *, history, comparison)` returns a `Diagram` per picture
+(`file`, `title`, `question`, `in_place`: the section's opening `In place:` line (#743), and `svg` or the one-line `skipped` reason: no maturity model, no
+team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
+the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
+is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
+`comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_coverage.coverage_line` paragraph when given, then the
+`fleet_credit` section when given, then the `fleet_opportunities_section` section when
+given, then embeds each with a relative clickable image link or says
+why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
+built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
+report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
+stale picture. A new diagram (#676) adds its module, its `FILE` with its
+report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
+#684; `DIAGRAM_FILES` follows it) and an entry to `build_diagrams`. Golden renders: `tests/fixtures/fleet_diagrams/` (regenerate with
+`uv run --locked python tests/fleet_diagrams_fixture.py` from `skills/assess`).
 """
 from __future__ import annotations
 

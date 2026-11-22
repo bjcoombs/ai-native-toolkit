@@ -54,6 +54,22 @@ exits 2. A mapped repository the run did not scan is skipped and reported.
 
 Pure apart from ``load_units`` reading the file; output sorted, so the same
 inputs give the same tree.
+
+The fleet's org units (#703, parent #692): one `Tree` per view (`ownership`, `system`),
+each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`) and a
+`placement` map, repository id to unit id, so a repository sits once per view.
+`build_trees` infers the ownership view from repository paths (every prefix of a GitLab
+`path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
+a GitHub settings fragment (written by `ghreport`; deepest team wins, then the first slug), then, for a
+repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
+under that group (matched ignoring case, the unit id's team part lower-cased; #733), and
+finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
+`[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
+with no repository left are dropped; their kind follows their place (root `org`, a unit
+holding a repository `team`, else `division` then `department`). Every fault raises
+`UnitsError` naming the entry (an unknown key or kind, a duplicate, a missing parent or
+unit, a cycle). `repo_owners` gives each repository the mapping's owners, else its
+CODEOWNERS ones; `unmatched_repos` names mapped repositories the run did not include.
 """
 from __future__ import annotations
 

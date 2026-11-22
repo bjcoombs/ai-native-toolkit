@@ -41,8 +41,8 @@ from typing import Any
 def __getattr__(name: str) -> Any:
     return getattr(importlib.import_module("{target}"), name)
 '''
-# Packages that predate #917, whose ``__init__.py`` is a documented facade and whose
-# README entry is the package heading (``**`test_pressure/`**``).
+# Packages that predate #917, whose ``__init__.py`` is a documented facade that
+# re-exports the package's names (and holds its module docstring, #981).
 FACADE_PACKAGES = {"test_pressure"}
 SHIM_DOC = re.compile(r"Moved to ``(lib(?:\.\w+)+)``")
 REMOVAL_RELEASE = "4.0.0"
@@ -238,29 +238,91 @@ def test_core_does_not_import_orchestrators() -> None:
     assert not structure, "lib subpackage rules (#917) broken:\n  " + "\n  ".join(structure)
 
 
-def test_every_lib_module_has_a_readme_entry() -> None:
-    """`lib/README.md` is the per-module reference `CLAUDE.md` points agents at.
-    A module merged without an entry is invisible to an agent that trusts the
-    map (issue #412: `decline_markers.py` and `interactivity.py` were missing).
-    Every ``lib/`` module, at any depth, except ``__init__.py`` files and #917
-    shims must have an entry heading in the README's form: a line of its own
-    reading **`name.py`**, or **`pkg/name.py`** inside a subpackage, optionally
-    followed by an italic note such as *(co-change hotspot)*. A facade package
-    (``test_pressure/``) has one **`pkg/`** heading instead. A mention in prose,
-    a bullet or a code example, or a name inside a longer filename (``stats.py``
-    in ``complexity_stats.py``), does not count."""
-    readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
-    # A fenced code example is not the map, even when a line in it looks like
-    # an entry heading.
-    readme = re.sub(r"^```.*?^```", "", readme, flags=re.MULTILINE | re.DOTALL)
-    entries = set(
-        re.findall(r"^\*\*`([\w./]+(?:\.py|/))`\*\*(?:[ \t]+\*\([^)\n]*\)\*)?[ \t]*$",
-                   readme, flags=re.MULTILINE)
-    )
-    modules = [p.relative_to(LIB_DIR) for p in _lib_modules()
-               if p.name != "__init__.py" and not _is_shim(_parse(p))]
-    assert any(len(m.parts) > 1 for m in modules), "the scan must reach lib subpackages"
-    missing = [m.as_posix() for m in modules
-               if m.parts[0] not in FACADE_PACKAGES and m.as_posix() not in entries]
-    missing += [f"{pkg}/" for pkg in sorted(FACADE_PACKAGES) if f"{pkg}/" not in entries]
-    assert not missing, f"lib/README.md has no entry for: {missing}"
+# A summary line is one sentence: it ends a sentence (optionally followed by a
+# parenthesised issue reference) and no sentence ends before that.
+_ONE_SENTENCE = re.compile(r"^[^\s].*[.?!](?: \([^()]*\))?$")
+_SENTENCE_BREAK = re.compile(r"[.?!] +[A-Z]")
+# A module too long to hold its whole reference keeps a summary and points at
+# its own file under lib/docs/ (one file per module, so no shared hotspot).
+_POINTER = re.compile(r"Full reference: lib/docs/([\w.-]+\.md)")
+
+
+def _docstring_problem(path: Path, docs_dir: Path = LIB_DIR / "docs") -> str | None:
+    """Why ``path`` fails the docstring rule, or None when it passes. An
+    ``__init__.py`` holding nothing but a docstring marks a package and is exempt.
+    A ``Full reference: lib/docs/<name>.md`` pointer must name a file in ``docs_dir``."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    doc = ast.get_docstring(tree)
+    if path.name == "__init__.py" and all(
+        (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
+        or (isinstance(n, ast.ImportFrom) and n.module == "__future__")
+        for n in tree.body
+    ):
+        return None
+    if not doc or not doc.strip():
+        return "no module docstring"
+    first = doc.splitlines()[0]
+    if not _ONE_SENTENCE.match(first) or _SENTENCE_BREAK.search(first[:-1]):
+        return f"first line is not a single sentence: {first!r}"
+    missing = [name for name in _POINTER.findall(doc) if not (docs_dir / name).is_file()]
+    if missing:
+        return f"points at a missing reference: lib/docs/{missing[0]}"
+    return None
+
+
+def test_every_lib_module_has_a_docstring() -> None:
+    """Each ``lib/`` module documents itself in its module docstring (issue #981,
+    replacing the per-module index once kept in ``lib/README.md``, which every
+    feature PR edited and so serialised merges). Every module at any depth needs a
+    non-empty docstring whose first line is a one-sentence summary, followed by
+    the details. A #917 shim is exempt: ``_shim_problems`` owns its docstring. An agent that trusts the map finds a module's contract beside
+    its code (issue #412 was two modules merged with no entry)."""
+    modules = [p for p in _lib_modules() if not _is_shim(_parse(p))]
+    assert any(len(p.relative_to(LIB_DIR).parts) > 1 for p in modules), "the scan must reach lib subpackages"
+    problems = [f"{p.relative_to(LIB_DIR).as_posix()}: {why}" for p in modules
+                if (why := _docstring_problem(p)) is not None]
+    assert not problems, "lib modules need a one-sentence docstring summary:\n  " + "\n  ".join(problems)
+
+
+def test_every_lib_docs_file_is_one_modules_reference() -> None:
+    """Each ``lib/docs/<name>.md`` is the full reference of exactly one module,
+    whose docstring points at it, so no file there is orphaned or shared."""
+    pointed: dict[str, list[str]] = {}
+    for module in _lib_modules():
+        for name in _POINTER.findall(ast.get_docstring(_parse(module)) or ""):
+            pointed.setdefault(name, []).append(module.relative_to(LIB_DIR).as_posix())
+    docs = sorted(p.name for p in (LIB_DIR / "docs").glob("*.md"))
+    assert docs, "expected the long module references under lib/docs/"
+    assert [d for d in docs if len(pointed.get(d, [])) != 1] == [], pointed
+
+
+def test_the_docstring_check_fails_on_a_missing_or_run_on_summary(tmp_path: Path) -> None:
+    """The rule bites: no docstring, an empty one, a wrapped summary and two
+    sentences on the first line each fail; a package marker passes."""
+    cases = {
+        "none.py": "x = 1\n",
+        "empty.py": '""" """\nx = 1\n',
+        "wrapped.py": '"""Parse a report into the shape\nthe scan reads."""\n',
+        "two.py": '"""Parse a report. Then grade it."""\n',
+    }
+    for name, body in cases.items():
+        (tmp_path / name).write_text(body, encoding="utf-8")
+        assert _docstring_problem(tmp_path / name) is not None, name
+    good = {
+        "ok.py": '"""Parse a report into the shape the scan reads.\n\nDetails."""\n',
+        "question.py": '"""Does CI run the coverage gate? (issue #921)"""\n',
+    }
+    for name, body in good.items():
+        (tmp_path / name).write_text(body, encoding="utf-8")
+        assert _docstring_problem(tmp_path / name) is None, name
+    pointer = tmp_path / "pointer.py"
+    pointer.write_text('"""Parse a report.\n\nFull reference: lib/docs/pointer.md."""\n', encoding="utf-8")
+    assert _docstring_problem(pointer, tmp_path) == "points at a missing reference: lib/docs/pointer.md"
+    (tmp_path / "pointer.md").write_text("# pointer\n", encoding="utf-8")
+    assert _docstring_problem(pointer, tmp_path) is None
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    assert _docstring_problem(pkg / "__init__.py") is None
+    (pkg / "__init__.py").write_text("X = 1\n", encoding="utf-8")
+    assert _docstring_problem(pkg / "__init__.py") == "no module docstring"

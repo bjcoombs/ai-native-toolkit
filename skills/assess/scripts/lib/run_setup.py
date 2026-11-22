@@ -9,6 +9,15 @@ depend on each other is declared rather than implied by statement order.
 
 Every function is a read: the wiki, the badge and ``run-context.json`` are
 written after the scans by ``lib/run_publish.py``.
+
+Setup-stage adapters for the scan table (#557): `run_scope`, `run_assess_dir`,
+`new_run_id`, `current_stats` / `prior_stats`, `stats_diff` (dropping a graduation the
+generated-file filter caused), `instruction_grading`, `rename_map` and
+`measured_commit`, `config_excludes`,
+`first_flagged`, `superseded_run`, `unfinalized_exclusions`, `read_plugin_version`, and
+`run_header`, which returns the first 27 run-context keys (`RUN_HEADER_KEYS`) with the
+four `WIKI_KEYS` and `prior_findings_snapshot` reserved as None for the publish step. Reads only. Tests:
+`tests/test_run_setup.py`.
 """
 from __future__ import annotations
 

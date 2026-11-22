@@ -22,6 +22,15 @@ share of the row's top level, so a row's top level is always the darkest step
 whatever its number of levels; each segment prints its count in the ramp's
 fixed text colour. Deterministic: bars in maturity-model order, fixed number
 formatting.
+
+The per-layer maturity bars (#675). `layer_bars(levels, repos)` evaluates every `team` row
+against each repository's own `scans` (`levels.evaluate_row`) and counts repositories per
+level, with the undetermined ones (failed scan, uncollected signal) apart. `render_layer_bars`
+stacks them pale to dark on the heat map's ramp (`fleet_svg.ramp_step`, so a row's top level is
+the darkest step whatever its level count), the unknown segment hatched and its repositories
+named, never counted as level 0; `org` rows, which have no per-repository level, are named
+under the bars.
+An unknown repository with a floor (#697) is named in `floored` and drawn first in the unknown part of the bar, in its floor's ramp colour under a hatch; the notes name it "(at least N)".
 """
 from __future__ import annotations
 

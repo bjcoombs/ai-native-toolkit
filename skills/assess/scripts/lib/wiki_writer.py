@@ -1,6 +1,6 @@
 """Render and write the .assess/ wiki files from templates.
 
-No LLM calls. Pure string formatting + file IO. Deterministic.
+No LLM calls. Pure string formatting + file IO. Deterministic. Full reference: lib/docs/wiki_writer.md.
 """
 from __future__ import annotations
 

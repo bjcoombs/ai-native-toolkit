@@ -42,6 +42,34 @@ one-line ``fix``:
 
 No ``.claude/`` directory and no plugin manifest gives ``available: false``
 with a reason: there is nothing to check, which is not a clean pass.
+
+Flags Claude Code configuration the runtime treats as legacy or silently ignores
+(issue #502), no model. `scan_claude_config(repo_root, scope, excludes)` reads,
+under the run root (the `--scope` directory, else the repo root),
+`.claude/skills/*/SKILL.md`, `.claude/commands/**/*.md` and
+`.claude/agents/**/*.md`, and for a plugin repository (`.claude-plugin/plugin.json`
+present) `skills/*/SKILL.md` plus the manifest's `skills` directories (which add
+to the default; a root `SKILL.md` when neither exists), and flat `commands/*.md`
+and recursive `agents/` or the paths the manifest's
+`commands` / `agents` keys name instead (those replace the default; a path that
+escapes the root is skipped; a file reached twice through a symlink is read once,
+as plugin configuration). The frontmatter parser is a dependency-free line
+parser for the YAML subset frontmatter uses (top-level keys with their lines,
+block scalars, block lists, one level of nested keys for `experimental`); it is
+case-sensitive, unlike `vault_queries.parse_frontmatter`, because `maxTurns` and
+`maxturns` are different fields, and it records malformed lines rather than
+raising. Finding kinds: `legacy_command`, `unknown_key` (with a rename hint when
+the key normalises to a documented one), `unsupported_value` (closed sets and the
+`model` pattern), `command_unsupported_key` (`name` / `paths`),
+`plugin_agent_ignored`, `malformed_frontmatter`, `unreadable_file`, `stray_markdown` (a `README.md`-style document with no frontmatter under a commands or agents path, which loads as a command or agent; reported instead of the other kinds for that file) and `missing_frontmatter` (an agent file with none); each carries `file`, `line`,
+`key`, `value` and `fix`. The run-context block `claude_config` is
+`{available, reason, snapshot_date, source_urls, plugin_repo, manifest_error,
+files_scanned, files_by_kind, finding_count, counts_by_kind, findings[]}`, or
+`{available: false, reason, snapshot_date}` when the root has no `.claude/` and no
+plugin manifest. It feeds Layer 0 evidence and is not counted in the badge.
+`loaded_config_files(root)` exposes the same discovery (plugin files first, then
+`.claude/`, deduplicated) as `(path, kind)` pairs for `instruction_placement`.
+Tests: `tests/test_claude_config.py` (fixture: `tests/fixtures/claude_config_plugin/`).
 """
 from __future__ import annotations
 

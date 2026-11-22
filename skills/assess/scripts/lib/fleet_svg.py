@@ -38,6 +38,26 @@ same inputs. This module holds what they share, so no diagram copies it:
   ``<svg>`` with its ``viewBox``, ``<title>``, ``<desc>``, style and defs.
 
 Stdlib only; numbers are formatted with fixed precision; nothing iterates a set.
+
+Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
+shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The API:
+
+| Helper | Use |
+|---|---|
+| `esc(s)` | Escape element text (`&`, `<`, `>`). |
+| `text(x, y, s, *, size, fill, anchor, weight, extra, tooltip, cls)` | One `<text>`; one-decimal coordinates. Pass `fill` (a colour, the heat map) or `cls` (a `THEME` role, themed diagrams), and `tooltip` for a `<title>`. |
+| `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
+| `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
+| `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
+| `LEVEL_RAMP`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
+| `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
+| `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \\| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
+| `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
+| `overlaps(a, b)`, `Box` | The box test. |
+| `THEME`, `theme_style(extra)` | Role -> (light, dark) colours (plus a diagram's `extra` roles, such as the trend's series colours) as `t-`/`f-` (fill) and `s-` (stroke) classes, dark under `prefers-color-scheme`. The only `text` rule sets `font-family`, so it never overrides a text's attributes (`tests/svg_cascade.py`). |
+| `document(w, h, title, desc, body, *, style, defs, background)` | The whole file: prolog, `viewBox`, `<title>`, `<desc>`, style, defs and a full-canvas background (`f-bg` unless a colour is given). |
+
+No script, no external font or link; fixed number formatting. Tests: `tests/test_fleet_diagrams.py`.
 """
 from __future__ import annotations
 

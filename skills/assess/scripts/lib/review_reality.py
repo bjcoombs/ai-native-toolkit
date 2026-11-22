@@ -73,6 +73,52 @@ it unprotected, and is unknown when that read is refused or incomplete
 (read at most once per scan); a refused read is None, never False. Any failed or
 refused merge-request or approvals read (403, 404 included) degrades the
 whole block, never reads as "no reviews".
+
+Layer 7 truth-pressure signal: whether merged pull requests were reviewed. The
+registry entry `review_reality_from_sample` reads the shared `merged_sample`
+(above; before #715 it was the 30 most recently opened merged pull requests,
+unwindowed, so figures shift with the window); `scan_review_reality(repo_root,
+history_window=None, run_date=None)` draws the sample itself. It
+emits `review_reality: {available, merged_count, oldest_merged_days_ago,
+reviewed_share, approved_share, bot_review_share, self_merged_share,
+review_required, hollow_required_review, required_approval_bypassed}`.
+`reviewed_share` counts a review in any state by any account other than the
+author; `approved_share` counts only `APPROVED` ones;
+`bot_review_share` counts a comment by a bot other than `github-actions` (nothing
+in `reviews`), classified by the sample's shared `BotClassifier`. An unknown
+author withholds the share (null) only when it decides a pull
+request: one with a confirmed bot comment counts regardless. A comment with no
+author login (a deleted account) is skipped, as in `delivery` (#769).
+`review_required` reads the default branch's effective rules
+(`repos/<slug>/rules/branches/<branch>`, inherited rulesets included) and then
+classic protection, each needing `required_approving_review_count` of 1 or more;
+null when neither says yes and one was refused. `hollow_required_review` is
+`review_required` and `reviewed_share` under `HOLLOW_THRESHOLD` (0.2);
+`required_approval_bypassed` is the same test on `approved_share`, so it fires
+where an AI reviewer comments on every change but nobody approves. Both are null
+when either input is unknown or under `MIN_SAMPLE` (5) merges were sampled. The
+rules are read as they stand now, so `oldest_merged_days_ago` travels with them. Counts, shares and booleans only: no title or login reaches
+the block. A failed sample read degrades the whole block to `available:
+False`. On a GitLab remote (`gitlab_cli.open_gitlab`) the same block comes from the
+sample's merged merge requests (`scan_gitlab_review_reality(project, mrs, notes=...)`) and
+one `approvals` read each: `approved_share` (approved by an account other than the author),
+`self_merged_share` (`merge_user`, else `merged_by`, is the author), and the note facts of
+the private `gitlab_note_facts` spec (#716, one notes read per merge request, shared with
+`delivery`): `bot_review_share` is a note with an
+AI-review marker or by an agent or pinned AI-review app (an access-token user only when
+it is an agent); `reviewed_share` is an approval by another account, a human comment by
+someone other than the author, or AI review. A merge request whose notes still decide nothing after up to `NOTES_MAX_PAGES` (3)
+pages / 300 notes makes the share null.
+`hollow_required_review` follows `reviewed_share` and is False whenever approvals alone
+clear the threshold. A refused or malformed notes read degrades the whole block like an
+approvals read. `review_required` reads the project's approval rules: a non-`report_approver`
+rule needing 1+ approvals with no branch scope, or a protected-branch name or `*`
+wildcard matching the default branch, is True; a rule scoped to all protected branches
+covers it when `gitlab_cli.branch_protection` finds the default branch protected, does
+not when the complete list leaves it unprotected, and is null when that read (made at
+most once) is refused or incomplete; a refused read is null. Any refused merge-request or approvals read (403
+and 404 included) degrades the whole block. Tests: `tests/test_review_reality.py`,
+`tests/test_review_reality_gitlab.py`, `tests/test_gitlab_protected_branches.py`.
 """
 from __future__ import annotations
 

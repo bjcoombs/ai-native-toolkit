@@ -1,4 +1,19 @@
-"""Resolve a run's ``--scope`` and the artifact directory it writes to."""
+"""Resolve a run's ``--scope`` and the artifact directory it writes to.
+
+`resolve_scope` turns a `--scope` argument into the absolute path, the repo-relative
+path and the artifact-directory slug, raising `ValueError` for a missing or
+outside-repo path; a whole-repo run returns `(None, None, "")`. `assess_dir_for` names
+`.assess/` or `.assess/<slug>/`, and `load_current_stats` reads that directory's
+`complexity-stats.json`, or an empty snapshot when none was written. The empty snapshot
+carries `available: false` and `NO_STATS_REASON` (`no_complexity_stats`, #959), and
+`run_setup.run_header` turns it into an unavailable `stats_summary` with `files_scored`
+null, so a run whose treemap step wrote nothing reads not measured
+(`no_complexity_stats`), never the measured empty set (`no_scored_files`). With `scc` on
+PATH (it reads every language) the treemap writes a zero-file sidecar when nothing is
+scorable (`complexity-treemap.py`, still exit 1), so the run reads `no_scored_files`;
+without `scc` zero files is not a measurement and no sidecar is written. Tests:
+`tests/test_scope.py`, `tests/test_run_setup.py`, `tests/test_complexity_treemap.py`.
+"""
 
 from __future__ import annotations
 

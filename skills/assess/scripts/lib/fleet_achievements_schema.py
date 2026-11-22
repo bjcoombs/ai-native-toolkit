@@ -6,6 +6,11 @@ checked-in file cannot drift from the type mypy checks: ``tests/test_fleet_achie
 fails when ``SCHEMA_PATH`` differs from ``render()``. Regenerate after changing a shape:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_achievements_schema.py
+
+Generates `skills/fleet/references/achievements.schema.json` from the `Achievements`
+TypedDict with `fleet_group_schema.type_schema`. `tests/test_fleet_achievements.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_achievements_schema.py` from `skills/assess`.
 """
 from __future__ import annotations
 

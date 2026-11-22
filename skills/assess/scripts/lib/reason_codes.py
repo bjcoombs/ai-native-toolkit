@@ -2,6 +2,11 @@
 
 Moved out of ``lib.counts_only`` (which re-exports both) so ``lib/level_tally.py``
 reads the same codes without importing the scanners' block shapes (#744).
+
+`reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
+(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map`, or the code a known sentence maps to), moved out of `counts_only.py`,
+which re-exports both, so the tally reads the same codes as counts-only output (#744).
+Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 """
 from __future__ import annotations
 

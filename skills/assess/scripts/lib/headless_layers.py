@@ -34,6 +34,21 @@ named code (``no_lizard``, ``no_grimp``, ``no_networkx``, ``grimp_failed``, ``no
 ``no_python_packages``, ``no_import_graph_<language>``, ``no_source_files``,
 ``no_ownership_map``) and a maturity-model row reads
 unknown, never a level. The full run's blocks are unchanged.
+
+The headless runner's entries for the four blocks the default maturity model's layer 2-4
+rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
+`structure_scan`, needs networkx and a language builder's tool, grimp for Python), `promissory_markers` (the private
+`promissory` scan, needs `rg`), `structure_drift` (tier 0 from the ownership map via
+`context_blocks.structure_drift_tier_0`; tier 1 needs the keyhole co-change pairs and is
+`not_probed`) and `stats_summary` (tracked source files scored by lizard in process:
+`files_scored`, `loc` and file-aggregate `ccn`, percentiles by numpy's linear rule; no
+scc languages, no hotspot lists). Every unavailable block is the bare marker with a
+`code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
+`not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
+and a maturity model row reads `unknown`. No ownership map reads `no_ownership_map`,
+the same marker the full run writes (`context_blocks.no_ownership_map`, #908). It
+diverges from the full run in one place: `stats_summary` covers lizard's languages only. Tests:
+`tests/test_headless_layers.py`.
 """
 from __future__ import annotations
 
