@@ -27,6 +27,52 @@ supplies the blocks the core builds from setup state a headless run lacks
 ``doc_graph``, ``doc_staleness``, ``archetype``; #699; ``owner_exclusions``, #944), in place of the core entries that publish them (``SIGNAL_SCANS``). The core's entries (setup
 state, the run header, the serialised blocks) run only when a reported scan
 reads one of them; the publish step that writes the wiki is never called.
+
+The headless, signals-only run behind `assess_signals.py` (issue #545). `collect` runs
+the selected registry scans, plus the registry keys they read, through `run_scans` with
+inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
+`grade_instruction_files`, `scope=None`, `excludes` from `load_excludes`,
+`history_window` set to `--window` for history-reading scans, `fleet_config` merged from
+`--fleet-config` and the target's `.assess/config.toml` (`fleet_config.repo_fleet_config`), and the
+`build_run_context` arguments `requested_scope=None`, `run_date` and
+`non_interactive=True`), so a raising scan degrades through `safe` and the run
+completes. A name the runner provides is never recomputed from the table. A
+`network` scan runs its `offline_fn` or is reported
+`{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
+both providers; defined in `gh_cli.py`, re-exported here). Offline, `merged_sample`
+runs `offline_merged_sample` and `review_reality` passes that value through, so a
+repository with no remote reads `no_remote` as `/assess` and `--platform` do (#908), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
+out of the document offline: absent, never a placeholder. `platform_only_error` makes
+`assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
+`offline_scans` strips those names from the `--scans` of a fleet run's offline child
+(`fleet.signals_command`); `fleet_groups.platform_only` reads such an absent block as a
+`--platform` gap only on a row that has scans. `collect(platform=True)` (`assess_signals.py --platform`, #714) is the
+one exception: a network scan in `PLATFORM_SCANS` (an explicit list: `review_reality`,
+`delivery` and `review_evidence`, an offline block the pass rebuilds because it reads
+`review_reality`, #696), or a network spec one of them reads, runs its `fn`. Extension point:
+append a new platform block's name to `PLATFORM_SCANS`; blocks that describe merged
+changes read the private `network=True` spec `merged_sample` (`merged_sample.py`, #715),
+which runs once under `--platform` as their dependency. Only published, single-key scans
+outside `CORE_MODULES` (`core_scans.py`, `run_setup.py`: the core's own entries since
+#557) are reported; the core's entries run only when a reported scan reads one, and
+the publish step never runs. The runner's table is `SIGNAL_SCANS` (`signal_scans`): the
+registry with `HEADLESS_SCANS` (`headless_layers.py`, #667, and `headless_static.py`,
+#699) in place of every core entry that publishes one of their names, and of every entry
+that reads a displaced one. Names in `UNREGISTERED_SCANS` (run-context blocks
+`assess_core` assembles, several of which report `available: false` without the
+`reason` the schema requires) are reported unavailable with `UNREGISTERED_REASON`; a
+name a reported scan also holds is dropped at runtime. `select_scans` raises
+`UnknownScanError` naming every name in neither set, and adds each requested name's
+`COMPANION_SCANS` (`with_companions`; #696: `review_reality` brings `review_automation`
+and `review_evidence`, the Layer 7 level 1 signal); `fleet_platform.platform_scans`
+expands a `--scans` selection the same way. `build_stamp` records the toolkit
+commit, plugin version, UTC scan date, `--window` and the target's HEAD and dirty flag
+(each nullable outside git). The window is validated, stamped and passed to the scans
+that read `history_window` (`ai_usage`). Every git call runs inside `read_only_git` (`GIT_OPTIONAL_LOCKS=0`,
+forced and restored), so `git status` cannot rewrite the target's index. The stamp is read once,
+before the scans; the caller keeps the checkout fixed for the run. Nothing here writes or reaches
+the network.
+`FULL_RUN_ONLY_REASONS` (#697) is the set of reason codes (`lib.counts_only.reason_code` of `UNREGISTERED_REASON` and `NETWORK_REASON`: `not_registered`, `network`) that mark a block only a full `/assess` run produces; derived, never listed by hand.
 """
 from __future__ import annotations
 

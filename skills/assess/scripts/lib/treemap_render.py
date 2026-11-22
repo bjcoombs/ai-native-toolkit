@@ -9,6 +9,12 @@ mechanical parts live here and each script keeps only its own colour mapping.
 Heavy deps (matplotlib/squarify/numpy) are imported here, so this module must
 only be imported by the treemap scripts -- never by the deterministic core,
 which runs with networkx alone.
+
+Shared treemap layout and SVG primitives for the code heatmap and the doc-staleness
+heatmap. Pulls `matplotlib`, `squarify`, and `numpy`. Must not be imported by the
+deterministic core (which runs with `networkx` alone) - only by the treemap scripts.
+Also holds `plural(n, singular)`, the count-agreement helper both SVG renderers use
+for generated text ("1 island", "9 islands").
 """
 from __future__ import annotations
 

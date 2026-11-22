@@ -21,6 +21,20 @@ reads as a measurement gap, not a setback.
 
 Every signal in the shipped ``levels/default.toml`` has wording here
 (``tests/test_fleet_next_steps.py`` checks it).
+
+Repository-native wording for a maturity model criterion. `guidance(signal, op, value)` gives
+the one change and a "done when" a maintainer checks without the plugin (a file
+state, a command, a platform setting), templated on the criterion's own operator and
+value. A compound check (`agent_environment.layer5_cap.applies`, no longer read by the
+default model since #786 but kept for models that still use it) is worded on the
+parts actually unmet: `parts` reads a repository's `layer5_cap.unmet` tokens, the page
+passes their union across the repositories a step lists and annotates each repository
+with its own. `guidance` returns `None` for a signal or shape it has no wording for, and the page
+then states the signal expression alone. `measure_hint(signal)` says why a signal can
+be unavailable (a full `/assess` run only, a network read, an opt-in pass, a ghreport
+permission; for the `structure`, `stats_summary` and `promissory_markers` blocks a missing
+grimp, networkx, lizard or `rg`, and for `structure_drift` no ownership map). Every signal of
+`levels/default.toml` has wording (tested).
 """
 from __future__ import annotations
 
@@ -482,6 +496,10 @@ _MEASURE_HINTS = {
                       "calls, so this is not measured there.",
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
+    "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "
+                         "check the fleet run's `--scans` and its `logs/` directory. The lockfile "
+                         "check (`unlocked_total`) is also not measured with no dependency manifest "
+                         "read (`manifests_total` 0, `no_manifests`): there is nothing to lock.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
                  "that can stop its job but a CI file pulls jobs from a file the run could not read (`basis: "
                  "included_jobs`: a GitLab `include:` whose template is not cloned in the "

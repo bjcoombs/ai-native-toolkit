@@ -54,6 +54,47 @@ consolidates them. :func:`classify_working_notes_trees` names such trees so
 ``build_doc_graph`` excludes them the same way it excludes raw trees. One
 invariant bounds what such a tree takes out of the headline: a doc leaves only
 if it is itself a positional note, or an index whose links go into such notes.
+
+Raw-source subtree detection (issue #225). Threshold-based, IO-free classifier:
+given per-doc graph signals (in/out degree + a machine-extraction-link count), it
+identifies maximal directory subtrees that are large, almost entirely
+link-isolated, and carry the machine-extraction fingerprint - a dump of raw,
+machine-extracted source documents (a disclosure / SAR export of converted
+`.msg`/`.pdf` files). `doc_graph.py` gathers the signals from the link graph it
+already builds and excludes the qualifying subtrees from the headline read-side
+metrics (orphan rate, reachability, broken links), reporting them separately so
+the curated-wiki signal isn't drowned. Pure - no `doc_graph` import - so
+`doc_graph.py` owns the graph and consumes this module's verdict. Co-changes with
+`doc_graph.py` (its consumer) and its test `tests/test_raw_source.py`.
+
+Its second classifier, `classify_working_notes_trees` (issue #366), finds
+working-notes trees: at least `WORKING_NOTES_MIN_FILES` docs, most named in a
+small set of sequence families (a date, or a word then an integer that ends the
+name: `plan_07`, `PROJ-123`; a counter followed by a title such as
+`adr-0001-use-postgres`, a dotted version, or a shared word alone like
+`how-to-*` is no family), most with in-degree <= 1, and one or two index docs
+linking to most of the tree (coverage of the tree, not a share of whatever edges
+exist, so one stray link into an unlinked pile does not qualify it) - an agent's
+plans or session logs hung off a backlog index. One invariant bounds the
+exclusion: a doc leaves the headline only if it is itself a positional note (a
+name family, or a member of a deeper tree already accepted) or an index whose
+links go into such notes, one of the top sources of their inbound links rather
+than a page citing one note. The tree is those docs: a subdirectory holding no
+note stays counted whole (a `docs/guides/` of curated pages beside 50 notes in
+`docs/`), and any other curated doc refuses the directory, leaving its deeper
+trees to stand alone (`docs/guide.md` beside `docs/notes/`). `notes/backlog.md`
+over `notes/2025/` and `notes/2026/` is one tree. Subdirectories are decided
+deepest first, and the tree must still pass the three legs on its own. Two
+`.assess/config.toml` keys override the verdict (issue #367), passed in as the
+`force` / `ignore` arguments: every doc under a `working_notes_dirs` directory
+joins a tree at that path whatever its size or fingerprint, and no doc under a
+`working_notes_ignore` directory joins any tree (a misclassified `chapter-01` to
+`chapter-20` series stays counted); ignore wins where they overlap, and an outer
+tree absorbs any tree inside it. Only docs are classified, never
+a `.base` hub. It runs on the headline graph (link and reference edges) after
+the raw pass. `doc_graph.py` excludes these trees too and reports
+`excluded_working_notes_trees`, `working_notes_doc_count`,
+`working_notes_orphan_rate` and `working_notes_broken_links`.
 """
 from __future__ import annotations
 

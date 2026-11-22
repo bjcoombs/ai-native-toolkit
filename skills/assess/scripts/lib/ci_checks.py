@@ -146,7 +146,15 @@ target or script may run a linter inside it, and the line alone cannot show
 it (``check_command.may_lint``: ``make check``, ``npm test``, ``tox``,
 ``./scripts/test.sh``, ``pre-commit run``; recipes are not read), so with no
 lint line such a check reads null. A direct test-program call (``pytest``,
-``go test``, ``cargo test``, ``npx jest``) runs no linter. ``lint_basis``:
+``go test``, ``cargo test``, ``npx jest``) runs no linter, and a target whose recipe
+is not read (``check_command.may_check``: ``make foo``, ``npm run foo``,
+``./scripts/foo.sh``) reads null here as it does at Layer 5 (#926). The lint and
+analyser commands of other ecosystems come from ``lib.lint_vocabulary`` (#926):
+``phpstan``, ``mix credo``, ``./gradlew ktlintCheck``, ``dart analyze``,
+``swiftlint``, ``clang-tidy``, and a formatter in its check mode. A formatter that
+rewrites files (``clang-format -i``, ``mix format``) counts only when a later
+unmasked line of its job runs ``git diff --exit-code`` (``lib.ci_lint_gates``).
+``lint_basis``:
 
 - ``lint_command`` (true): an own, included or merged line runs an unmasked
   linter on ordinary changes.
@@ -156,8 +164,19 @@ lint line such a check reads null. A direct test-program call (``pytest``,
   script may run one.
 - ``unread_ci_system``, ``external_ci``, ``external_ci_marker`` (null): as
   ``enforced_basis``.
+- ``analysers_in_build`` (null, #926): no lint line, but a CI ``dotnet build`` /
+  ``msbuild`` line runs the analysers a committed ``Directory.Build.props`` or
+  ``*.csproj`` turns on (``EnforceCodeStyleInBuild``, ``AnalysisLevel``); their
+  severities live in ``.editorconfig``, which is not evaluated.
+- ``compiler_gate_only`` (null, #926): no lint line, and the only static gate is a
+  compiler run with warnings as errors (``mix compile --warnings-as-errors``,
+  ``-Werror``, ``dotnet build -warnaserror``, a CI .NET build with
+  ``TreatWarningsAsErrors`` committed). ``analysers_in_build`` wins when both apply.
+  Both sit after ``unread_ci_system`` and the external codes, and apply only where no lint
+  line runs at all:
+  a masked or off-trigger linter keeps ``not_enforced``.
 - ``not_enforced`` (false): lint lines run, but each is masked or off the
-  ordinary triggers.
+  ordinary triggers (a masked compiler gate reads this too).
 - ``no_lint_command`` / ``no_ci`` (false): CI files with no lint or
   may-lint line, or no CI file.
 
@@ -171,6 +190,118 @@ changes, so a reader sees why the two signals disagree. ``basis`` describes
 ``enforced_basis`` does, and ``test_or_lint_configured`` keeps its value (as for
 ``unread_ci_system``). Layer 5 level 1 reads ``enforced_check_runs``; a stored
 scan without the key reads unknown there.
+
+Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
+it run a linter (#782)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
+the instruction file; Layer 3 level 1 reads `lint_runs`.
+`scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
+selects (GitHub Actions workflows directly under `.github/workflows/`, never a subfolder,
+which GitHub does not run (#919); `.gitlab-ci.yml`) plus the GitLab include files
+`ci_includes.resolve_includes` read (#766), and writes `{available,
+ci_files, check_commands, included_files, included_check_commands, resolved_includes,
+unresolved_includes, includes[], test_or_lint_configured, basis, enforced_check_runs,
+enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
+lint_basis, unread_ci_files}`. Each line,
+with its `- ` / `run:` / `script:` lead and a trailing `\\` dropped
+(`command_index.ci_line_text`), is split into shell segments by
+`command_resolver.extract_commands` on its own (an apostrophe or fence on one line
+cannot swallow the next); `check_commands` counts the lines with a segment that
+`check_command.is_check_command` or `is_lint_command` credits; a bare list item
+that only names a linter (`- mypy` under `matrix:`) does not count, and one that only
+names an always-check program (`- pytest`, `- tox`) counts only when its parent key is
+a GitLab `script:` / `before_script:` / `after_script:` (#725: under `needs:` or a
+`matrix:` axis it is a value). `count_check_lines(lines, context=)` is the same count over a
+line list, reading parent keys from `context` (the original lines) when given. Triggers are
+not read. Known limit: lines are read without a YAML parser, so a command inside a
+non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_configured` is true with any check
+line, own or included (`included_check_commands` counts the included ones); with none it
+is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
+(`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
+item, a job-level `uses:` of another repository's reusable workflow), else
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
+every include resolved and holds no check reads false. Its third argument is the
+`gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
+offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
+merged configuration, whose check lines are counted apart in `merged_check_commands`
+(the merged file repeats the own and resolved jobs). A check there makes the signal true
+(`basis: merged_config`, used only when no own or included line ran one: offline wins); a
+merged configuration read with none makes it false, unless it may lack jobs
+(`merged_partial`): a `rules:` key in the `include:` section of the repository's file or of a
+template read offline (`conditional_include`; the lint API may leave that include out), or a
+`trigger:` job in any of those or in the merged file (`child_pipeline`; a child or downstream
+pipeline is not expanded). Then the signal stays null with `basis: merged_config_partial`:
+unknown beats wrong. `merged_config` is `not_read`
+(offline), `not_needed`, `read`, `invalid` or `unavailable` (reason code in
+`merged_config_reason`); the merged text is never in the block. Known limit: a `rules:` include inside a
+template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
+`not_read`. The module itself is
+offline: it imports the value type, never a platform client.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line (own, included, or
+in the merged configuration when those hold none)
+whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
+off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
+null with `enforced_basis: unknown_trigger`), else null under the
+same `included_jobs` rule, else null with `enforced_basis: check_target` when an
+unmasked line on ordinary changes runs a target whose recipe is not read
+(`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_configured`, which keeps its meaning apart from #919's
+version-only and subfolder cases, which count nowhere.
+`lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
+and trigger rules, the same own, included and merged files, with
+`count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
+per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
+mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
+`lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
+`merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
+triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+target or script that may lint inside it; recipes are not read), `not_enforced`
+(false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
+`no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
+caps the row; a stored scan without the key reads unknown there.
+CI systems the scan does not parse (issues #787, #928): `unread_ci_files` counts the
+tracked files at the unread-CI paths of `unread_ci.py` (listed there). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_configured` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Off-repository CI (issue #928), after `unread_ci_system` and before the false cases:
+`external_ci` when the private `external_ci` reading (`external_ci.py`, `--platform`
+only) applies, else `external_ci_marker` when the tree tracks no CI file of any kind
+(no workflow, no `.gitlab-ci.yml`, no unread CI file) and the root holds a Prow
+`OWNERS_ALIASES` file. Either makes `enforced_check_runs` and `lint_runs` null with that
+basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_ci`, and
+`basis` reads it with `test_or_lint_configured` still false. Neither gives credit: a read
+enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
+environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
+Issue #926: a target whose recipe is not read (`_line_may_check`: `make foo`, `npm run
+foo`, `./scripts/foo.sh`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
+formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
+(`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
+gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
+`line_dotnet_build` and `line_compiler_gate` tallies (unmasked, on ordinary or unsettled
+triggers), and only where `lint_basis` would be `no_lint_command`: a masked linter beside a
+build keeps `not_enforced`. A masked or off-trigger compiler gate alone reads
+`not_enforced`. A lone `- msbuild` item reads its parent key like a lone linter
+(`_lone_build`), so a `matrix:` value is not a build.
+Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_external_ci.py` (#928), `tests/test_ci_lint_gates.py` (the #926 fixtures),
+`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
+`tests/test_level_signals.py`.
 """
 from __future__ import annotations
 
@@ -183,11 +314,14 @@ from lib.check_command import (
     BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_info_invocation,
     is_lint_command, is_lint_run, may_check, may_lint)
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
+from lib.ci_lint_gates import (
+    line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
-from lib.command_resolver import Command, command_words, extract_commands
+from lib.command_resolver import command_words, extract_commands
 from lib.external_ci_rules import as_external
+from lib.lint_vocabulary import dotnet_build
 from lib.merged_ci import MergedStatus, as_merged
 from lib.shared_tooling import include_lines, pulls_jobs_from_elsewhere
 from lib.unread_ci import UNREAD_CI_FILES as UNREAD_CI_FILES, unread_ci_paths
@@ -229,7 +363,8 @@ EnforcedBasis = Literal[
     "external_ci", "external_ci_marker", "not_enforced", "no_check_command", "no_ci"]
 LintBasis = Literal["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
                     "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
-                    "not_enforced", "no_lint_command", "no_ci"]
+                    "analysers_in_build", "compiler_gate_only", "not_enforced", "no_lint_command",
+                    "no_ci"]
 # Off-repository CI, in precedence order (#928): platform evidence, then the Prow marker.
 External = Literal["external_ci", "external_ci_marker"] | None
 # The offline Prow marker (#928): a root OWNERS_ALIASES with no CI file of any kind.
@@ -325,7 +460,7 @@ def _line_runs_lint(line: str, *, script_item: bool = True) -> bool:
     # A lone ``- mypy`` is a value under matrix: / needs: / stages:, but runs under a
     # GitLab script: key (``_script_items``).
     return any(is_lint_run(c.text) and not (bare_item and not script_item and _lone_linter(c.text))
-               for c in _line_commands(line))
+               for c in line_commands(line))
 
 
 def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
@@ -336,7 +471,7 @@ def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
     bare_item = _BARE_ITEM.match(line) is not None
     return any(may_lint(c.text) and not is_info_invocation(c.text)
                and not (bare_item and not script_item and _lone_check(c.text))
-               for c in _line_commands(line))
+               for c in line_commands(line))
 
 
 def _line_may_check(line: str, *, script_item: bool = True) -> bool:
@@ -345,12 +480,7 @@ def _line_may_check(line: str, *, script_item: bool = True) -> bool:
     bare_item = _BARE_ITEM.match(line) is not None
     return any(may_check(c.text) and not is_info_invocation(c.text)
                and not (bare_item and not script_item and _lone_check(c.text))
-               for c in _line_commands(line))
-
-
-def _line_commands(line: str) -> list[Command]:
-    text = ci_line_text(line).removesuffix("\\").strip()
-    return extract_commands(f"```bash\n{text}\n```\n") if text else []
+               for c in line_commands(line))
 
 
 def _lone_linter(text: str) -> bool:
@@ -358,6 +488,12 @@ def _lone_linter(text: str) -> bool:
     ``matrix:`` / ``needs:`` / ``stages:`` a value, not a run."""
     words = command_words(text)
     return len(words) == 1 and (words[0] in LINT_PROGRAMS or words[0] in TYPE_PROGRAMS)
+
+
+def _lone_build(text: str) -> bool:
+    """A lone .NET build program (``- msbuild``): under ``matrix:`` a value (#926)."""
+    words = command_words(text)
+    return len(words) == 1 and dotnet_build(words)
 
 
 def _lone_check(text: str) -> bool:
@@ -384,8 +520,9 @@ def _script_items(lines: Sequence[str]) -> list[bool]:
     flags = [True] * len(lines)
     for i, line in enumerate(lines):
         text = ci_line_text(line)
-        if _BARE_ITEM.match(line) is None or not (_lone_check(text) or _lone_linter(text)):
-            continue   # only a lone always-check or linter item needs its parent
+        if _BARE_ITEM.match(line) is None or not (_lone_check(text) or _lone_linter(text)
+                                                  or _lone_build(text)):
+            continue   # only a lone always-check, linter or build item needs its parent
         depth = _indent(line)
         parent = ""
         for above in reversed(lines[:i]):
@@ -404,16 +541,18 @@ LineTest = Callable[..., bool]
 
 
 def count_check_lines(lines: Sequence[str], *, context: Sequence[str] | None = None,
-                      test: LineTest = _line_runs_check) -> int:
+                      test: LineTest = _line_runs_check, extra: frozenset[int] = frozenset()) -> int:
     """How many of one CI file's lines run a test or lint check (a blanked line runs none).
 
     ``context`` is the file's original lines when ``lines`` is a rewrite of them with
     the same length (``ci_masking.unmasked_lines``): parent keys are read from it.
-    ``test`` classifies one line (``_line_runs_lint`` and ``_line_may_lint`` for #782).
+    ``test`` classifies one line (``_line_runs_lint`` and ``_line_may_lint`` for #782);
+    a non-blank line whose index is in ``extra`` counts whatever it holds (a formatter
+    rewrite a later ``git diff`` gate makes a lint run, ``ci_lint_gates.rewrite_gated``).
     """
     flags = _script_items(lines if context is None else context)
-    return sum(1 for line, script_item in zip(lines, flags, strict=True)
-               if test(line, script_item=script_item))
+    return sum(1 for i, (line, script_item) in enumerate(zip(lines, flags, strict=True))
+               if (i in extra and line.strip()) or test(line, script_item=script_item))
 
 
 def check_commands(text: str) -> int:
@@ -437,16 +576,19 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     """Per line test: ``(ordinary, unknown trigger, off trigger, masked)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
+    The lint test also counts the rewrite lines a ``git diff`` gate makes lint runs (#926).
     """
     lines = text.splitlines()
+    gated = rewrite_gated(text) if _line_runs_lint in tests else frozenset()
     unmasked = unmasked_lines(text)
     triggers: list[Trigger] = (gitlab_line_triggers(text) if workflow is None
                                else [workflow] * len(lines))
     kept = [keep(unmasked, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
     out: list[Tally] = []
     for test in tests:
-        counts = [count_check_lines(k, context=lines, test=test) for k in kept]
-        masked = max(count_check_lines(lines, test=test) - sum(counts), 0)
+        extra = gated if test is _line_runs_lint else frozenset()
+        counts = [count_check_lines(k, context=lines, test=test, extra=extra) for k in kept]
+        masked = max(count_check_lines(lines, test=test, extra=extra) - sum(counts), 0)
         out.append((counts[0], counts[1], counts[2], masked))
     return out
 
@@ -507,18 +649,22 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     texts = {rel: read_config(root, rel) for rel in files}
     workflows = resolve_workflows(
         {rel: workflow_trigger(texts[rel]) for rel in files if rel not in CI_CONFIG_FILES}, texts)
-    tests = (_line_runs_check, _line_runs_lint, _line_may_lint, _line_may_check)
+    tests = (_line_runs_check, _line_runs_lint, _line_may_lint, _line_may_check,
+             line_compiler_gate, line_dotnet_build)
     tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests) for rel in files]
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
-    check_t, lint_t, may_t, may_check_t = (_sum(t[i] for t in tallies) for i in range(len(tests)))
+    check_t, lint_t, may_t, may_check_t, gate_t, dotnet_t = (
+        _sum(t[i] for t in tallies) for i in range(len(tests)))
     ordinary, unknown, off, masked = check_t
     if merged.read and merged.text is not None:
         # GitLab's merged configuration (#796) repeats the file's own jobs: read it only
         # where the files alone found no enforced check, as basis reads merged_config.
-        m_check, m_lint, m_may, m_may_check = _trigger_tally(merged.text, None, tests)
+        m_check, m_lint, m_may, m_may_check, m_gate, m_dotnet = _trigger_tally(
+            merged.text, None, tests)
         m_ordinary, m_unknown, m_off, m_masked = m_check
         if not lint_t[0]:
             lint_t, may_t = _max(lint_t, m_lint), _max(may_t, m_may)
+            gate_t, dotnet_t = _max(gate_t, m_gate), _max(dotnet_t, m_dotnet)
         if not ordinary:
             ordinary, unknown = m_ordinary, max(unknown, m_unknown)
             may_check_t = _max(may_check_t, m_may_check)
@@ -530,9 +676,18 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
         any_check=bool(found or merged_checks), has_files=bool(files), external=external)
-    lint_runs, lint_basis = _lint_state(lint_t, may_t, elsewhere=bool(elsewhere),
+    lint_runs, lint_basis = _lint_state(lint_t, _max(may_t, may_check_t), elsewhere=bool(elsewhere),
                                         partial=partial, unread=bool(unread),
                                         has_files=bool(files), external=external)
+    # The #926 null codes apply only where no lint line runs at all: a masked linter stays
+    # not_enforced (false), never not measured, whatever the build beside it does.
+    if lint_basis == "no_lint_command":
+        gate = lint_gate(root, tracked, compiler=bool(gate_t[0] or gate_t[1]),
+                         dotnet=bool(dotnet_t[0] or dotnet_t[1]))
+        if gate is not None:
+            lint_runs, lint_basis = None, gate
+        elif gate_t[2] or gate_t[3]:
+            lint_basis = "not_enforced"   # a masked or off-trigger compiler gate
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,
             "resolved_includes": sum(r["status"] == "resolved" for r in records),

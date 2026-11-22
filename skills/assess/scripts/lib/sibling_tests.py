@@ -67,6 +67,38 @@ Inward-only: stdlib plus ``lib.git_churn`` / ``lib.doc_graph`` /
 ``lib.import_credit``, imports no orchestrator. Beyond the index, file I/O is
 existence checks (``is_file`` / ``is_dir``) bounded by
 :data:`MAX_ANCESTOR_LEVELS`. Never raises.
+
+The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,
+`.test`, `.spec`, `_spec`, `test_<stem>`, `<stem>Test`, `<stem>Tests`, with a
+hyphenated stem also matched as underscores, plus the one cross-extension rule
+from issue #593: `<stem>.bats` for a `.sh` or extensionless script, and any
+`*.bats` file is a test; `run.sh` and an extensionless `run` share the flat
+key `run.bats` and are rivals for a parallel-tree `run.bats`, issue #635), the adjacent test directories
+(`__tests__/` / `tests/` / `test/` / `spec/`), and the is-this-a-test rule, plus a
+layered probe: `find_colocated_test` (beside the source or in an adjacent test
+directory), `sibling_test_match` (then a `tests/` / `test/` / `spec/` tree at any
+ancestor mirroring the source path, then a conventionally named test anywhere in
+the repository - a parallel tree such as `app/unit-tests/` or Dart's
+`test/unit/` - then a test file that imports the source (`import_credit.py`), then a flat
+tree within two components),
+and `has_sibling_test` (the yes/no/unknown verdict, dropping a flat-only match
+on a bare name more than one hot file shares). Three consumers read it and must
+agree in one run: the hotspot page's `Has test file` row
+(`run_wiki._has_sibling_test`), the E2 test-to-code map
+(`keyhole_signals._find_sibling_test`, co-location layer only, since E2 means
+co-located and co-committed), and the `test_focus` signal. The parallel-tree
+(basename) tier reads a `TestIndex` built once per run by `build_test_index`
+(`git ls-files`, or a walk pruned of `doc_graph.EXCLUDE_DIRS` outside git): a
+test belongs to the same-named source sharing the deepest common directory with
+it, a tie between sources (two `index.js` equally close) credits none, and a
+root-only common ancestor credits nothing. Tracked files deleted from disk are
+left out. A walk past 200,000 files, or one that cannot read a directory, yields
+an empty index (fail closed: the missed files may hold a rival source). The module
+docstring names two limits: an untracked parallel test is invisible to this tier
+while the path probes see untracked files, and a helper named like a test
+(`test_utils.py`) can credit a lone `utils.py`. Imports `git_churn` and `doc_graph`;
+existence checks bounded to 16 ancestor levels; never raises.
+`tests/test_sibling_tests.py` pins the three-way agreement.
 """
 from __future__ import annotations
 

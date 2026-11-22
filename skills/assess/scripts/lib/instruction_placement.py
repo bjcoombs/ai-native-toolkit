@@ -28,6 +28,59 @@ an agent definition counts even without a plugin manifest (#662).
 
 The tendency it compensates for is accretion: an always-loaded file grows a
 section at a time, and every session pays for the growth.
+
+Per-section placement of instruction text (#559, part of #419), no model. The
+grader scores each instruction file on the same split (`analyse_file`, #560); the
+block itself is advice. `split_sections` splits a file on ATX headings outside fences (`fence_mask`, CommonMark closing: same character, at least the opening length, nothing after) and
+frontmatter, at the shallowest level (the next one down when a single heading is a
+document title); deeper headings roll into their section, text before the first
+heading is a section with an empty heading, and a file with no headings is one
+section. `classify` labels each section `always_on`, `fetch_on_need` or
+`unclassified` (counted as always-on), precision over recall: any always-on signal
+(`identity_or_rules` heading, `hard_rules` directive density, `pointer_list` of links
+to documents) keeps a section, even one a skill restates, so a guardrail is never
+told to become a pointer, unless the section is relocatable with a size signal
+(`SIZE_SIGNALS`: `command_reference` or `long_section`) among its fetch signals, so a
+heading rename or a few `Never` lines cannot flip it (#619); otherwise a section whose substantive lines overlap an
+existing `SKILL.md` by `SKILL_OVERLAP_MIN_PCT` (the
+`instruction_content.readme_overlap_pct` line overlap) is `duplicates_skill`, and
+any other section moves only when
+`MIN_FETCH_SIGNALS` of `scoped_heading` (one tool, language or platform),
+`scoped_paths` (backticked paths mostly under one top-level directory, unless the
+file already sits under it),
+`command_reference` (`FENCE_MIN_LINES` fenced lines or more, an absolute count so
+prose padding cannot dilute it, #619) and `long_section` (60 lines or more, an absolute count so that
+lines elsewhere cannot declassify a section, in a file with at least two headed
+sections) fire. Each threshold is a
+named constant with its rationale. Suggested homes: `existing_skill` (the
+duplicated `SKILL.md`), `nested_instruction_file` (`<dir>/<basename>` for
+`scoped_paths`), `skill` (`<skills dir>/<slug>/SKILL.md`), and for agent and skill
+files `reference_doc` (`<skill dir>/references/<slug>.md`, or `null` for an agent), or
+`existing_skill` when the text is already in another skill. Between two skills the
+pointer is one-way: a skill counts as the duplicate's home only when its path sorts
+before the file's, so the lexically first keeps the canonical copy.
+`detect_skills_dir` lists the skills directories and `SKILL.md` files (the
+`skills_present` evidence); `skill_texts(repo_root)` returns every `SKILL.md` text by
+path, the map the scan and the grader's callers both compare sections against.
+`scan_instruction_placement(repo_root, instruction_files, nested_instructions,
+scope, excludes)` runs from the `scan_registry` table. The block:
+`{available, thresholds {always_on_lines, always_on_share,
+loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
+loaded_in_full_considered}`. Each file record (`files`: the root instruction files
+that are present and not aliases, plus `nested_instructions.files`, each real file
+once; `loaded_in_full`: agent and `SKILL.md` files from
+`claude_config.loaded_config_files`, plus root `agents/**/*.md` files shaped as agents
+when there is no `.claude-plugin/plugin.json` (#662: `name` or `description`
+frontmatter, or no frontmatter and not a `claude_config.DOC_STEMS` name such as
+`README`; frontmatter without either key marks a document), over 200 lines, largest first) is `{path, kind
+(instruction | agent | skill), total_lines, always_on_lines, always_on_share,
+always_on_words, fetch_on_need_lines, unclassified_lines, sections_total, flagged,
+relocatable[],
+relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
+0.5 and each `relocatable` entry (largest first, capped at 10) is `{heading,
+start_line, end_line, lines, signals[], home {kind, target}}`. `flagged` at block
+level lists the instruction files only; `loaded_in_full` is informational.
+Tests: `tests/test_instruction_placement.py`.
 """
 from __future__ import annotations
 

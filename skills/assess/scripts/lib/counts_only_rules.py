@@ -39,6 +39,24 @@ new field is classified on purpose rather than dropped by accident.
 Lookup order for a pattern: the exact pattern, then ``<parent>.*``, then a
 global leaf rule (``**.<leaf>``): path field names are paths, and a ``reason``
 is dropped text wherever no rule says otherwise.
+
+The counts-only allow-list: `RULES` maps each collector's field patterns (generated from
+the collector's `privacy` table in `checks/core.toml`, #795; dotted keys, list
+levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
+an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
+with the paths), a `REASON` class for an unavailable block's reason kept as its code
+only, `REASON_SENTENCE_CODES` (the structure reason sentences that predate the
+`code: sentence` form, shared with `headless_layers.structure`), `PATH_KEYED_MAPS`, `IDENTIFIER_KEYED_MAPS` (kind- or tool-keyed maps), the global path
+field names and `classify`. Every other object is a record whose keys survive only when
+they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
+fields and rule segments), so a map keyed by a login or a function name is dropped
+rather than kept unhashed. Adding a run-context string field or block means adding its
+rule to its collector's `privacy` table in `checks/core.toml` (or a field name here) and
+regenerating `references/counts-only.md`. The global leaves, the keyed-map sets,
+`EXTRA_FIELD_NAMES` and `FLEET_DATA_RULES` stay in this module.
+`FLEET_DATA_RULES` and `classify_fleet_data` classify the fleet's `fleet-data.json`
+fields (#703), kept apart from `RULES` so their names never widen the run-context field
+names. Tests: `tests/test_counts_only.py`, `tests/test_fleet_data.py`.
 """
 from __future__ import annotations
 

@@ -37,6 +37,17 @@ linter marker keeps ``reoffer: True`` for its own record without claiming a
 re-offer that never comes.
 
 Pure stdlib. Never raises out of :func:`read_decline_markers`.
+
+Reads the `.assess/.no-<tool>` markers that record a permanent decline of an optional
+tool (`scc`, a dead-code linter, or the `mutmut` / `stryker` mutation pass). Markers
+are JSON carrying `declined_by` / `declined_at` / `plugin_version` / optional `reason`;
+a legacy empty `touch`-ed marker is still honoured as a decline, with no provenance.
+A marker written under an older plugin *major* carries `reoffer: True`, and
+`build_decline_block` returns the run-context `decline_markers` block: the per-marker
+provenance, `reoffer_mutation` (true only for a stale mutation-tool decline, the
+SKILL.md Step 2d re-offer flag), and one-line `disclosures` so an active decline is
+never invisible in the report. Legacy markers have no version and are never
+re-offered. Pure stdlib; never raises. Called by `assess_core.py`.
 """
 from __future__ import annotations
 

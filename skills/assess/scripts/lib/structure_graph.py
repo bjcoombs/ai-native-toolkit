@@ -41,6 +41,44 @@ Python repository, or ``no_source_files``. The Python builder
 crashing when it or a builder's tool is missing -- the assessment never blocks.
 The analysis is purely static (no code execution) and deterministic, so it is
 reproducible run to run.
+
+Import-graph analysis (Signals A1-A4) via `networkx`, over the graph a language builder
+returns (`import_graph.py`); nothing in it assumes a language:
+- A1 comprehension footprint: direct-dependency surface area for a unit.
+- A2 blob vs modular: strongly-connected components and Newman modularity Q.
+- A3 contracts: front-door vs burrow (internals-reaching) inbound edges, across the
+  builder's package boundaries (`package_of`) into its `front_doors`.
+- A4 breakup candidates: packages whose sub-modules form separable clusters.
+
+Every registered builder graphs its language; the graph `select_graph` picks (the dominant
+source language's) is measured and its language is the block's `language` field (null when nothing was measured). Degrades to
+`available: False` when `networkx` is absent, when a builder's tool is missing or fails
+and no other language was graphed, and when nothing could be graphed (nothing measured,
+not an empty graph whose modularity 0 would read as tangled code). With no graph the
+reason names the dominant source language (issues #707, #708):
+`no_import_graph_<language>: ...` when no builder graphed it, `no importable Python
+packages found` for a Python repository, `no_source_files: ...` with no source in a
+recognised language. `cross_package_edges` counts the
+import edges `front_door_ratio` is measured over; at 0 no package boundary is crossed and
+`front_door_ratio` is null (unknown, not a vacuous 1.0; issue #760), as it is on an
+unavailable block. A graph with packages but no import edges stays
+available with `modularity_q` null and `modularity_reason` `no_import_edges` (null when Q
+was measured): modules that never import each other have no community structure, and a
+0.0 would read as tangled, so the maturity model's Layer 2 row reads unknown (issue #682).
+`modularity_q` is therefore null in two cases: an edgeless graph (`modularity_reason`
+`no_import_edges`) and an unavailable block (`available` false; the cause is in
+`structure.reason`). A headless run reduces that block to the bare marker, whose reason
+opens with a named code (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`,
+`no_import_graph_<language>`, `no_source_files`; `lib/headless_layers.py`), so
+`modularity_q` is absent there rather than null. A full counts-only run keeps the same
+code as `structure.reason` (`REASON_SENTENCE_CODES`, #764). `STRUCTURE_REASON_CODES` is
+that run's allow-list, derived from `NO_SOURCE_FILES`, `INVALID_IMPORT_GRAPH`,
+`LANGUAGE_BY_EXTENSION` and `REASON_SENTENCE_CODES`.
+`structure_drift.py` builds its module map and communities from the same selected graph
+(`import_graph.select_graph`, `import_digraph`).
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
+`tests/test_level_signals.py`, `tests/test_headless_layers.py` (a full signals run and a
+counts-only one).
 """
 from __future__ import annotations
 

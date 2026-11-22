@@ -24,6 +24,17 @@ per block here, outside the core, as ``lib.headless_layers`` does for the layer
 Each block degrades to the bare ``{"available": false, "reason": ...}`` marker
 with a ``code: sentence`` reason (``scan_failed`` when the scan raises), so
 counts-only keeps a named code and a maturity-model row reads unknown.
+
+The headless runner's entries for the five static blocks the core publishes from
+`core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
+directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
+`doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
+doc->code edges; needs a git work tree: `not_git_root`), `archetype` and `owner_exclusions`
+(#944: `owner_exclusions.owner_exclusions_block`, so a fleet row's level applies the
+owner's exclusions). A scan that
+raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
+maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
+`signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
 """
 from __future__ import annotations
 

@@ -16,6 +16,15 @@ the owner exclusions of the repository's own ``.assess/config.toml`` (#910), rea
 subset without ``owner_exclusions`` applies none. Fleet-wide exclusions through
 ``--fleet-config`` wait on the method stamp (#952). Schema:
 ``skills/fleet/references/level.schema.json`` (``lib/fleet_level_schema.py``).
+
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `repo_level`
+(`level_tally.level_result` with the owner exclusions of the row's `owner_exclusions` scan,
+`level_tally.run_exclusions`, #944; `fleet_data.step_fields` calls it too) over each scanned
+row's `scans` (a failed row has no entry), keyed by repository id, in an
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
+plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
+nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
+stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
 

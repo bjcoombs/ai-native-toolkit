@@ -63,10 +63,18 @@ def _recipe(target: str) -> list[str]:
     return body
 
 
+def _macros() -> dict[str, str]:
+    """The Makefile's `NAME = value` macro defaults, which the page shows expanded."""
+    text = (REPO / "Makefile").read_text(encoding="utf-8")
+    return dict(re.findall(r"^([A-Z_]+) = (.+)$", text, re.MULTILINE))
+
+
 def make_free(command: str) -> str | None:
     """The page's form of one recipe line; None for a line the page words differently."""
     if command.startswith("@"):
         return None  # echo/warning lines; the page checks rg with `rg --version`
+    for name, value in _macros().items():
+        command = command.replace(f"$({name})", value)
     m = re.fullmatch(r"cd (\S+) && uv (.+)", command)
     if m:
         return f"uv --directory {m.group(1)} {m.group(2)}"
@@ -77,6 +85,9 @@ def test_make_free_translation() -> None:
     assert make_free("cd scripts && uv run --locked mypy") == "uv --directory scripts run --locked mypy"
     assert make_free("uv run --with pytest pytest -v tests/") == "uv run --with pytest pytest -v tests/"
     assert make_free("@command -v rg") is None
+    assert make_free("cd scripts && uv run --locked pytest $(XDIST)") == (
+        "uv --directory scripts run --locked pytest -n auto --dist loadfile"
+    )
 
 
 @pytest.mark.parametrize("target", DOCUMENTED_TARGETS)

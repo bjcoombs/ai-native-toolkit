@@ -47,6 +47,20 @@ a level reached or a best share. On the next run the newest earlier entry is at 
 version, so no Recount appears; no state is stored.
 
 Deterministic: lines sorted by repository key then maturity-model row order.
+
+Re-scores a stored run under the current maturity model and builds the Recount (#771).
+`rescore` rebuilds a history entry's `FleetData` in memory from its stored scans:
+cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
+roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
+`overall` are dropped, #772); None when a stored key does not join under the run's key
+function. `SIGNAL_ALIASES` (old path to new, pure renames only: #783's
+`ci_checks.test_or_lint_runs` to `ci_checks.test_or_lint_configured` and
+`coverage_gate.enforced` to `coverage_gate.configured`) is applied to the scans first
+(`aliased`). `recount` lists every (repository, team row) whose
+stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
+`now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
+`rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
+(`fleet_achievements.unknown_move`). Tests: `tests/test_fleet_rescore.py`.
 """
 from __future__ import annotations
 

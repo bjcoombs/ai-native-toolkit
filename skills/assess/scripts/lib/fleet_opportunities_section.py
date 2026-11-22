@@ -6,6 +6,14 @@ display-only recent progress. The first line starts ``In place:`` (``lib/vocabul
 biggest lift, the shared-template leverage and the recent progress, each phrased as an
 opportunity. Repository and unit names are listed in key order, never numbered or ranked.
 Deterministic; no date.
+
+`opportunities_section` renders `report.md`'s "Opportunities" section from a built
+`FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
+an `In place:` line first, then the biggest lift, the shared templates and the display-only
+recent progress (this run's `level_up` achievements, from the history; otherwise a
+nothing-new line, a starting-line line on a kept first run (`fleet_achievements.BASELINE_NOTE`),
+or the achievements note when the run is not kept). None when `opportunities` is null. Names are listed in key
+order, at most `PER_LIST` per line. Tests: `tests/test_fleet_opportunities.py`.
 """
 from __future__ import annotations
 

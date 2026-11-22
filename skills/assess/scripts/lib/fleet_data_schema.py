@@ -7,6 +7,11 @@ so the checked-in file cannot drift from the type mypy checks:
 Regenerate after changing a ``fleet_data`` shape:
 
     cd skills/assess && uv run --locked python scripts/lib/fleet_data_schema.py
+
+Generates `skills/fleet/references/fleet-data.schema.json` from the `FleetData` TypedDict
+with `fleet_group_schema.type_schema`, adding the enums. `tests/test_fleet_data.py` fails
+when the checked-in file differs; regenerate with
+`uv run --locked python scripts/lib/fleet_data_schema.py` from `skills/assess`.
 """
 from __future__ import annotations
 
