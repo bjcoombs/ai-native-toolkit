@@ -3380,7 +3380,10 @@ kind `framework`, `llm`, `mcp`, `tracker` or `git_host`; (b) `config` kinds
 `claude_agents` and `ci_agent_job` (`CI_AGENT_PATTERNS` in `.gitlab-ci.yml` and
 `.github/workflows/*.yml`); (c) the count of source files matching
 `TOOL_LOOP_PATTERNS` and `MCP_SERVER_PATTERNS`; (d) issue-tracker and Git-host clients
-from manifests or `ENDPOINT_PATTERNS`, `pairing` when both are present. Every string is
+from manifests or `ENDPOINT_PATTERNS`; a Git host already in `git_hosts` is also an issue
+tracker when the source calls both its issues API (`ISSUE_API_PATTERNS`) and its
+merge-request or pull-request API (`CHANGE_API_PATTERNS`), the same-host case of #731,
+credited after every file is read; `pairing` when both lists are non-empty. Every string is
 a vocabulary slug, so counts-only keeps the block whole. `classify` is the class rule,
 first match wins: `builds-agent` (an agent framework, or a model SDK with a tool-call
 loop or the pairing), `builds-mcp-server` (an MCP server pattern), `uses-agent-tooling`
@@ -3397,7 +3400,9 @@ The pinned vocabulary of `agent_building` (issue #689): `PACKAGES` maps a declar
 dependency name (exact, or a `*` prefix family) to `(slug, kind)`; `lookup` tries the
 name as written and PEP 503-normalised (`normalise`), exact before the longest prefix.
 `TOOL_LOOP_PATTERNS`, `MCP_SERVER_PATTERNS`, `ENDPOINT_PATTERNS` and
-`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics. Widening a table changes
+`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics; `ISSUE_API_PATTERNS` and
+`CHANGE_API_PATTERNS` (#731) tag a Git-host client's issues and merge-request or
+pull-request calls with the host slug. Widening a table changes
 classes, so it is a change of its own. Tests: `tests/test_agent_building.py`.
 
 **`agent_manifests.py`**

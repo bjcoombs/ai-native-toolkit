@@ -1460,7 +1460,7 @@ unknown_reasons = [
 id = "core.agent_building"
 kind = "collector"
 title = "Agent building"
-issues = [689]
+issues = [689, 731]
 callable = "lib.agent_building:scan_agent_building"
 publishes = ["agent_building"]
 reads = ["repo_root"]
@@ -1469,7 +1469,7 @@ headless = { agent_building = "registered" }
 shapes = [
   { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "agent_building.reason" = "drop"
   "agent_building.agent_class" = "token"

@@ -459,7 +459,12 @@ Each repository gets one class, first match wins:
 
 The pairing is an issue-tracker API client (Jira, Linear) and a Git-host API
 client (GitHub, GitLab) in the same repository, from manifests or REST endpoints
-in source: the marker of a ticket-to-merge-request agent. Test files, vendored
+in source: the marker of a ticket-to-merge-request agent. A Git host counts as its
+own issue tracker when the source calls both its issues API and its merge-request
+or pull-request API through that host's client (python-gitlab, PyGithub, Octokit,
+go-gitlab and the like), so an agent that reads GitLab issues and opens merge
+requests on GitLab has the pairing too; issues on one host and pull requests on
+another do not. Test files, vendored
 trees and untracked files are not evidence. SDKs, config kinds, trackers and
 hosts are slugs from a pinned vocabulary, so counts-only keeps them.
 

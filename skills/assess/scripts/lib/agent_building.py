@@ -18,8 +18,14 @@ Per repository it records four kinds of evidence:
   the tool-call loop and MCP server patterns. Counts only; no source text is
   kept.
 - (d) ``issue_trackers`` and ``git_hosts``: issue-tracker and Git-host API
-  clients, from manifests or from REST endpoints in source. ``pairing`` is true
-  when the repository has at least one of each: the marker of a
+  clients, from manifests or from REST endpoints in source. A Git host is also
+  listed as an issue tracker when the source calls both its issues API and its
+  merge-request or pull-request API through the same client
+  (``ISSUE_API_PATTERNS`` and ``CHANGE_API_PATTERNS``, issue #731): an agent
+  that reads GitLab or GitHub issues and opens merge requests on the same host.
+  Calls are credited only to a host already in ``git_hosts``, and both kinds
+  must be for that one host. ``pairing`` is true when the repository has at
+  least one issue tracker and one Git host: the marker of a
   ticket-to-merge-request agent.
 
 Class rule (``classify``), first match wins:
@@ -37,8 +43,8 @@ So a repository with only agent configuration is ``uses-agent-tooling``, never
 Only git-tracked files count, and symlinks are skipped, as in
 ``shared_tooling``. Manifests and source files under the built-in excluded
 trees (``node_modules``, ``vendor``, ``tests/fixtures`` ...) are skipped, and
-the code heuristic skips test files (a ``test``/``tests``/``__tests__``/``spec``
-directory, ``test_*``, ``*_test.*``, ``*.test.*``, ``*.spec.*``), so a test
+the code heuristic skips test files (a ``test``/``tests``/``__tests__``/``spec``/
+``testdata`` directory, ``test_*``, ``*_test.*``, ``*.test.*``, ``*.spec.*``), so a test
 that mocks a tool call is not read as an agent. At most ``MAX_SOURCE_FILES``
 source files of at most ``MAX_FILE_BYTES`` are read; ``source_files_capped``
 says when the cap was reached. Deterministic and offline.
@@ -50,8 +56,10 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 from lib.agent_building_vocab import (
+    CHANGE_API_PATTERNS,
     CI_AGENT_PATTERNS,
     ENDPOINT_PATTERNS,
+    ISSUE_API_PATTERNS,
     MCP_SERVER_PATTERNS,
     TOOL_LOOP_PATTERNS,
     lookup,
@@ -135,6 +143,8 @@ class _Evidence:
         self.llm = False
         self.trackers: set[str] = set()
         self.hosts: set[str] = set()
+        self.issue_calls: set[str] = set()  # hosts whose issues API the source calls
+        self.change_calls: set[str] = set()  # hosts whose MR/PR API the source calls
         self.manifests = 0
         self.config: set[str] = set()
         self.ci_agents: set[str] = set()
@@ -164,6 +174,12 @@ class _Evidence:
         for slug, kind, pattern in ENDPOINT_PATTERNS:
             if pattern.search(text):
                 (self.trackers if kind == "tracker" else self.hosts).add(slug)
+        self.issue_calls |= {slug for slug, pattern in ISSUE_API_PATTERNS if pattern.search(text)}
+        self.change_calls |= {slug for slug, pattern in CHANGE_API_PATTERNS if pattern.search(text)}
+
+    def same_host_trackers(self) -> set[str]:
+        """Hosts whose client the source uses for both issues and merge or pull requests."""
+        return self.hosts & self.issue_calls & self.change_calls
 
     def add_ci(self, text: str) -> None:
         agents = {slug for slug, pattern in CI_AGENT_PATTERNS if pattern.search(text)}
@@ -235,6 +251,8 @@ def scan_agent_building(repo_root: Path) -> AgentBuildingBlock:
     if tracked is None:
         return unavailable_block("git tracking unknown (not a git checkout, or git failed)")
     e = _collect(repo_root, tracked)
+    # After collection: a source file can sort before the manifest declaring its client.
+    e.trackers |= e.same_host_trackers()
     pairing = bool(e.trackers) and bool(e.hosts)
     config = sorted(e.config)
     return {

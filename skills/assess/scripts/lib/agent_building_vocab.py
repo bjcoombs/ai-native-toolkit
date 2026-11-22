@@ -18,6 +18,13 @@ fleet roll-up can compare repositories by it.
   source never matches its own patterns.
 - ``ENDPOINT_PATTERNS``: REST endpoints of an issue tracker or Git host called
   without a client library.
+- ``ISSUE_API_PATTERNS`` and ``CHANGE_API_PATTERNS``: calls to a Git host's
+  issues API and to its merge-request or pull-request API, through its client
+  library (python-gitlab, PyGithub, githubkit, Octokit, gitbeaker, go-gitlab,
+  go-github, gitlab4j, the Kohsuke GitHub API) or REST paths, tagged with the
+  host slug. A host whose source calls both is its own issue tracker (issue
+  #731). A call form two clients share is listed under both hosts; the scan
+  credits a host only when that host's client is also declared or called.
 - ``CI_AGENT_PATTERNS``: a CI job that runs an agent.
 
 Widening a table changes which repositories are classified, so it is a change
@@ -195,6 +202,34 @@ ENDPOINT_PATTERNS: tuple[tuple[str, PackageKind, re.Pattern[str]], ...] = (
     ("github", "git_host", re.compile(r"\bapi[.]github[.]com\b")),
     ("gitlab", "git_host", re.compile(r"/api/v4/project[s]\b")),
 )
+
+# Same-host ticket-to-merge-request calls (issue #731): (host slug, pattern).
+# A call to the host's issues API.
+ISSUE_API_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (slug, re.compile(p)) for slug, p in (
+        ("gitlab", r"[.]issues[.](?:list|get|create)[(]"),         # python-gitlab project manager
+        ("gitlab", r"\bIssues[.]\w+[(]"),                          # gitbeaker, go-gitlab
+        ("gitlab", r"\bgetIssuesApi[(]"),                           # gitlab4j
+        ("gitlab", r"/project[s]/[^\s\"'`]*/issues\b"),             # REST v4
+        ("github", r"[.]issues[.]\w+[(]"),                          # Octokit, githubkit
+        ("github", r"\bIssues[.]\w+[(]"),                          # go-github
+        ("github", r"[.](?:get_issues?|create_issue)[(]"),          # PyGithub
+        ("github", r"[.]getIssues?[(]"),                            # Kohsuke GitHub API
+        ("github", r"/repo[s]/[^\s\"'`]*/issues\b"),                # REST
+    ))
+# A call to the host's merge-request or pull-request API.
+CHANGE_API_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (slug, re.compile(p)) for slug, p in (
+        ("gitlab", r"[.]mergerequests[.]\w+[(]"),                   # python-gitlab
+        ("gitlab", r"\bMergeRequests[.]\w+[(]"),                   # gitbeaker, go-gitlab
+        ("gitlab", r"\bgetMergeRequestApi[(]"),                     # gitlab4j
+        ("gitlab", r"/project[s]/[^\s\"'`]*/merge_requests\b"),     # REST v4
+        ("github", r"[.]pulls[.]\w+[(]"),                           # Octokit, githubkit
+        ("github", r"\bPullRequests[.]\w+[(]"),                    # go-github
+        ("github", r"[.](?:create_pull|get_pulls?)[(]"),            # PyGithub
+        ("github", r"[.]createPullRequest[(]"),                     # Kohsuke GitHub API
+        ("github", r"/repo[s]/[^\s\"'`]*/pulls\b"),                 # REST
+    ))
 
 # A CI job that runs an agent: (slug, pattern), matched per CI file.
 CI_AGENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
