@@ -57,7 +57,8 @@ SKILLS: dict[str, dict[str, Any]] = {
             + VERSION_SUFFIX
         ),
         "source_dir": "skills/assess",
-        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv"},
+        # changes/ holds the release-time version notes (#1011), not skill content.
+        "exclude_dirs": {"tests", "__pycache__", ".pytest_cache", ".venv", "changes"},
         "replacements": {
             "uv-treemap": (
                 'uv run scripts/complexity-treemap.py "$REPO_ROOT" '

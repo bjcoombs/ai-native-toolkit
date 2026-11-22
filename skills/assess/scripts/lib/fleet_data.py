@@ -90,8 +90,6 @@ from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
 # ``overall`` for ``lowest_level``; repositories drop ``mean_share``. Cells are unchanged.
 # 3 (#746): ``opportunities``. Nothing else changed, so readers of 2 read 3.
-# Unreleased (run 4 version freeze, the release PR bumps it): repositories gain ``step``,
-# ``next_step``, ``tally`` and ``exclusions``, units gain ``step`` (#944). Additive.
 # Bump on any change to the shapes below; #704 and #705 read it.
 FLEET_DATA_VERSION = 3
 FLEET_DATA_FILE = "fleet-data.json"
