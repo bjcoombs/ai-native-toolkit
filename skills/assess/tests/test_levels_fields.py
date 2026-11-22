@@ -302,7 +302,7 @@ def test_the_catalog_never_counts_a_hazard() -> None:
     raw = _default()
     raw["rows"][5]["levels"][0]["polarity"] = "hazard"  # layer-5-ci.1, a counted ci_executed signal
     signals = {"ci_checks.enforced_check_runs": {"evidence": "ci_executed", "title": "CI"}}
-    rows = catalog._rows(parse_levels(raw), signals, {})  # type: ignore[arg-type]
+    rows = catalog._rows(parse_levels(raw), signals, {}, {})  # type: ignore[arg-type]
     assert rows[5]["levels"][0]["criteria"][0]["counts"] is False
     assert rows[5]["levels"][1]["criteria"][0]["grade"] is not None
 

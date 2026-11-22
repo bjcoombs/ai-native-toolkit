@@ -231,7 +231,10 @@ by the same step just before it rewrites findings.json.
         "measured_commit": measured_commit,
         "prior_stats_exists": prior is not None,
         "stats_summary": {
-            "files_scored": current.get("files_scored", 0),
+            # No sidecar: unavailable with its reason and a null count, never a measured 0 (#959).
+            **({"available": False, "reason": current.get("reason")}
+               if current.get("available") is False else {}),
+            "files_scored": None if current.get("available") is False else current.get("files_scored", 0),
             "loc": current.get("loc", {}),
             "est_tokens": current.get("est_tokens", {}),
             "ccn": current.get("ccn", {}),
