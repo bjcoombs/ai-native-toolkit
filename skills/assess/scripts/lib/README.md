@@ -3603,13 +3603,14 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
 on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
 program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
-`nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+`nox` (elsewhere `-V` can run the work: `mvn -B -V verify`, `./gradlew -V test`); `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
 cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
 script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
 `--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
-read through the #920 wrappers (`_info_program`: `bundle exec rspec -h`, `docker compose
-run app pytest --co`), and `ci_checks` drops an info invocation from `may_check` too (elsewhere `-V` can run the work: `mvn -B -V verify`,
-`./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
+read through every wrapper `check_command` knows (`_info_program`: `uv run`, `npx`, `python
+-m`, the #920 wrappers and `hatch run`, so `bundle exec rspec -h`, `docker compose run app
+pytest --co` and `hatch run pytest -V` are info calls, #936), and `ci_checks` drops such a
+command from every CI line test, `may_check` included, so
 `pytest --version` is no Layer 5 check and a version-only step makes
 `test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
@@ -3779,18 +3780,41 @@ a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
 step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
 statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
 grammar read only in a bash or sh body and only `{ }` / `( )` nesting in a pwsh,
-powershell, cmd or python body; `_depths`, `_not_code`) masks the statements
-before it, unless one of them or a statement between
-re-raises a status. The default `bash -e` stops at the failing check first, so
+powershell, cmd or python body; `_depths`, `_not_code`; a `{`, `(` or `<<EOF` inside
+quotes opens nothing) masks the statements before it, unless one of them or a statement
+between re-raises a status. Issue #936 adds the errexit-exempt positions
+(`ci_exempt.py`): with errexit on, a later top-level `exit 0` masks the segments bash
+does not stop on (the left of `&&` / `||`, a pipeline but its last command with pipefail
+off, an `if` / `elif` / `while` condition, a `!` pipeline). `run_errexit` returns
+`(errexit, bash grammar, pipefail)`: pipefail is on for `shell: bash` and a custom
+`-o pipefail`, off for the default `bash -e {0}` and `sh`, and `set -o pipefail` /
+`set +o pipefail` in the body move it. After an exit-zero segment that ends its
+pipeline, the `||` pipelines up to the next `&&` are dropped (`ruff check . --exit-zero
+|| pytest` drops `pytest`), and a folded block scalar (`run: >`) is folded into one
+line before any rule reads it. The default `bash -e` stops at the failing check first, so
 `pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
 `exit 0` rule; a literal `if: false`,
 `if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
 `\` continuations are joined first.
-Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
-wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+Known limits (module docstring): `|| echo`, an exempt check with no later `exit 0`
+(a lone `pytest | tee log` without pipefail, `pytest && echo ok` followed by any passing
+statement), an `until` loop that breaks out, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
-shared with `ci_triggers.py`. Tests for the #919 rules: `tests/test_ci_false_credit.py`.
+shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
+
+**`ci_exempt.py`**
+Which segments of one shell statement errexit does not stop on (issue #936), read by
+`ci_masking` on a GitHub `run:` body with errexit on, per the bash manual's `set -e`
+text. `exempt_segments(statement, pipefail)` takes `split_statements` output and returns
+the indices of the segments in every pipeline before the final `&&` / `||`, of a `!`
+pipeline, and, with pipefail off, of the last pipeline but its last command;
+`condition_flags(statements)` marks the statements of an `if` / `elif` / `while`
+condition, up to its `then` / `do` (an `until` condition loops until the check passes,
+so it is not read as exempt); `pipefail_after` reads `set -o pipefail` / `set -euo
+pipefail` / `set +o pipefail`; `shell_pipefail` reads a custom shell's flags;
+`unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
+`{` or `<<EOF` inside quotes. Tests: `tests/test_ci_false_credit.py`.
 
 **`ci_triggers.py`**
 Does a CI line run on ordinary changes (issue #775)? It makes

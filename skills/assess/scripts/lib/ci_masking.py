@@ -35,7 +35,7 @@ parser (the core has no YAML dependency). Only literal values count.
 - A later ``exit 0`` (#919), in a GitHub ``run:`` body read with errexit off. A
   statement that is ``exit 0`` alone, at the top level of the body (not inside
   ``if`` / ``fi``, a loop, ``case``, ``{ }``, a heredoc or a multi-line quote such
-  as ``python -c "..."``), masks the statements before it that ran with errexit
+  as ``python -c "..."``; a ``{``, ``(`` or ``<<EOF`` inside quotes opens nothing), masks the statements before it that ran with errexit
   off, unless the statement or one between it and the ``exit 0`` re-raises a
   status (``pytest || exit 1; exit 0`` keeps ``pytest``). Errexit is off after
   ``set +e``, under ``shell: pwsh`` / ``powershell`` / ``cmd`` / ``python`` (named,
@@ -61,21 +61,39 @@ parser (the core has no YAML dependency). Only literal values count.
   exits or returns a non-zero literal, a variable or ``$?`` (``exit 1``,
   ``exit $status``), as ``.github/workflows/floor.yml``'s retry loop does.
 
-Known limits: ``|| echo ...`` is not a no-op here, so it stays credited; a pipe
-without ``pipefail`` (``pytest | tee log``) is credited; an ``if pytest; then``
-wrapper is credited; ``allow_failure`` inherited through ``default:``,
-``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
-``before_script:`` does not reach ``script:``; reusable-workflow and
-composite-action internals are not read. A check that is the last statement
-after ``set +e`` is masked by design (issue #775 scope): bash would exit with
-its status, but any trailing line would hide it.
+- Errexit-exempt positions (#936, ``lib.ci_exempt``). With errexit on, bash does not stop
+  at a failing command on the left of ``&&`` / ``||``, in a pipeline but its last command
+  (pipefail off: the default ``bash -e {0}`` and ``sh``; on for ``shell: bash``, a custom
+  ``-o pipefail`` and after ``set -o pipefail`` in the body), in an ``if`` / ``elif`` /
+  ``while`` condition or after ``!``. A later top-level ``exit 0`` masks those segments
+  alone, with the same re-raise rule: ``pytest && echo ok; exit 0`` and ``pytest | tee
+  log; exit 0`` are masked, ``cd sub && pytest; exit 0`` and ``if ! pytest; then exit 1;
+  fi; exit 0`` are not. After an exit-zero segment that ends its pipeline, the ``||``
+  pipelines up to the next ``&&`` never run: ``ruff check . --exit-zero || pytest`` drops
+  ``pytest``.
+- A folded block scalar (``run: >``) is read as YAML folds it: adjacent non-blank lines at
+  the block's indentation are one line, so ``pytest`` and ``|| true`` on two lines are one
+  masked statement, and ``pytest`` then ``exit 0`` is the one command ``pytest exit 0``.
+
+Known limits: ``|| echo ...`` is not a no-op here, so it stays credited; an exempt check
+with no later ``exit 0`` is credited, though any later statement that passes, or the
+status of a lone ``pytest | tee log`` without pipefail, would hide its failure; an
+``until`` loop that breaks out is credited; a compound command in an exempt position
+(``fi || true``) does not exempt its body; ``allow_failure`` inherited through
+``default:``, ``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
+``before_script:`` does not reach ``script:``; reusable-workflow and composite-action
+internals are not read. A check that is the last statement after ``set +e`` is masked by
+design (issue #775 scope): bash would exit with its status, but any trailing line would
+hide it.
 """
 from __future__ import annotations
 
 import re
 from pathlib import PurePosixPath
+from collections.abc import Callable
 from dataclasses import dataclass
 
+from lib.ci_exempt import condition_flags, exempt_segments, pipefail_after, shell_pipefail, unquoted
 from lib.command_index import ci_line_text
 
 _LEAD = re.compile(r"^\s*(?:-\s+)?(?:run:|script:)?\s*")
@@ -353,13 +371,34 @@ def _join(statement: list[tuple[str, str]]) -> str:
     return " ".join(f"{op} {seg}" if op else seg for op, seg in statement)
 
 
-def _logical_lines(lines: list[str]) -> list[range]:
-    """Physical line ranges, joining a line that ends in ``\\`` with the next."""
+def _folds(tree: IndentTree, lines: list[str]) -> list[bool]:
+    """Per line: does a folded block scalar (``run: >``, ``>-``) join it with the next?
+
+    YAML folds two adjacent non-blank lines at the block's own indentation into one line;
+    a blank line or a more-indented line keeps its line break (#936).
+    """
+    out = [False] * len(lines)
+    base: dict[int, int] = {}
+    for i in range(len(lines) - 1):
+        owner = tree.owner[i]
+        if owner is None or not tree.lines[owner].value.startswith(">") or tree.owner[i + 1] != owner:
+            continue
+        if not lines[i].strip():
+            continue
+        indent = base.setdefault(owner, tree.lines[i].indent)
+        out[i] = bool(lines[i + 1].strip()) and tree.lines[i].indent == tree.lines[i + 1].indent == indent
+    return out
+
+
+def _logical_lines(lines: list[str], tree: IndentTree) -> list[range]:
+    """Physical line ranges, joining a line that ends in ``\\``, or that a folded block
+    scalar folds, with the next."""
+    folds = _folds(tree, lines)
     out: list[range] = []
     i = 0
     while i < len(lines):
         end = i
-        while end + 1 < len(lines) and lines[end].rstrip().endswith("\\"):
+        while end + 1 < len(lines) and (lines[end].rstrip().endswith("\\") or folds[end]):
             end += 1
         out.append(range(i, end + 1))
         i = end + 1
@@ -371,10 +410,33 @@ def _joined(lines: list[str], span: range) -> str:
     return " ".join(p.removesuffix("\\").strip() for p in parts)
 
 
-def _drop_exit_zero(statement: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """``statement`` without the segments run with an exit-zero flag (``ruff check . --exit-zero``)."""
-    kept = [(op, seg) for op, seg in statement if not _EXIT_ZERO_FLAG.search(seg)]
-    return [("", kept[0][1]), *kept[1:]] if kept else []
+def _drop_exit_zero(statement: list[tuple[str, str]], keep: list[int]) -> list[int]:
+    """``keep`` without the segments run with an exit-zero flag (``ruff check . --exit-zero``)
+    and, when that segment ends its pipeline, the ``||`` pipelines after it up to the next
+    ``&&``: they never run (``ruff check . --exit-zero || pytest`` drops ``pytest``, #936)."""
+    out: list[int] = []
+    state = ""   # "zero": just after an exit-zero segment; "skip": in a pipeline that never runs
+    for i in keep:
+        op, seg = statement[i]
+        if op == "|":
+            if state != "skip":
+                state = ""   # the pipeline goes on: its status is not the exit-zero command's
+                out.append(i)
+            continue
+        if op == "||" and state:
+            state = "skip"
+            continue
+        state = ""
+        if _EXIT_ZERO_FLAG.search(seg):
+            state = "zero"
+            continue
+        out.append(i)
+    return out
+
+
+def _pick(statement: list[tuple[str, str]], keep: list[int]) -> list[tuple[str, str]]:
+    """The segments of ``statement`` at ``keep``, the first with no operator before it."""
+    return [("", statement[keep[0]][1]), *(statement[i] for i in keep[1:])] if keep else []
 
 
 def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> list[int]:
@@ -399,9 +461,10 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> l
                 stack.pop()
             elif keywords and words and words[0] in _OPENERS:
                 stack.append(words[0])
-            delta = seg.count("{") - seg.count("}")
+            code = unquoted(seg)   # ``echo "{"`` opens nothing (#936)
+            delta = code.count("{") - code.count("}")
             if not stack or stack[-1] != "case":
-                delta += seg.count("(") - seg.count(")")
+                delta += code.count("(") - code.count(")")
             for _ in range(delta):
                 stack.append("{")
             for _ in range(-delta):   # a group closes only a group frame, never a keyword's
@@ -424,27 +487,30 @@ _ERREXIT_FLAG = re.compile(r"(?:^|\s)(?:-[a-zA-Z]*e[a-zA-Z]*|-o\s+errexit)(?=\s|
 _HEREDOC = re.compile(r"(?<!<)<<-?\s*(['\"]?)([A-Za-z_]\w*)\1")
 
 
-def _shell_errexit(shell: str | None, windows: bool) -> tuple[bool, bool]:
-    """``(errexit, bash grammar)`` for a ``run:`` body. ``shell`` is the step's, job's or
-    workflow's ``shell:`` value, None when none is set.
+def _shell_errexit(shell: str | None, windows: bool) -> tuple[bool, bool, bool]:
+    """``(errexit, bash grammar, pipefail)`` for a ``run:`` body. ``shell`` is the step's,
+    job's or workflow's ``shell:`` value, None when none is set.
 
-    Unset: bash with errexit, unless ``runs-on`` names Windows (default ``pwsh``).
-    ``bash`` / ``sh``: errexit. A shell in ``_NO_ERREXIT_SHELLS``, named or as the first
+    Unset: ``bash -e {0}`` (errexit, no pipefail), unless ``runs-on`` names Windows
+    (default ``pwsh``). ``bash``: ``bash --noprofile --norc -eo pipefail {0}``; ``sh``:
+    ``sh -e {0}`` (no pipefail). A shell in ``_NO_ERREXIT_SHELLS``, named or as the first
     word of a custom command (``powershell -NoProfile -File {0}``, a path and ``.exe``
     stripped): no errexit and not bash grammar. A custom ``bash`` / ``sh`` / ``dash`` /
-    ``zsh`` command: errexit only with ``-e`` or ``-o errexit`` (``bash {0}`` has none).
-    An expression or another program: errexit (not read).
+    ``zsh`` command: errexit only with ``-e`` or ``-o errexit`` (``bash {0}`` has none),
+    pipefail only with ``-o pipefail``. An expression or another program: errexit and
+    pipefail (not read, so nothing more is masked).
     """
     if shell is None:
-        return (False, False) if windows else (True, True)
+        return (False, False, False) if windows else (True, True, False)
     value = shell.strip().strip("'\"")
     words = value.split()
     head = PurePosixPath(words[0].replace("\\", "/")).name.lower().removesuffix(".exe") if words else ""
     if head in _NO_ERREXIT_SHELLS:
-        return False, False
+        return False, False, False
     if "{0}" in value and head in _POSIX_SHELLS:
-        return _ERREXIT_FLAG.search(" ".join(words[1:]).replace("{0}", "")) is not None, True
-    return True, True
+        flags = " ".join(words[1:]).replace("{0}", "")
+        return _ERREXIT_FLAG.search(flags) is not None, True, shell_pipefail(flags)
+    return True, True, value != "sh"
 
 
 def _child(tree: IndentTree, line: int, *path: str) -> int | None:
@@ -471,8 +537,9 @@ def _runs_on_windows(tree: IndentTree, job: int) -> bool:
     return "${{" not in text and "windows" in text
 
 
-def run_errexit(tree: IndentTree, body: int) -> tuple[bool, bool]:
-    """``(errexit, bash grammar)`` for the GitHub ``run:`` body at line ``body`` (#919).
+def run_errexit(tree: IndentTree, body: int) -> tuple[bool, bool, bool]:
+    """``(errexit, bash grammar, pipefail)`` for the GitHub ``run:`` body at line ``body``
+    (#919, #936).
 
     Reads the step's ``shell:``, then the job's and the workflow's ``defaults.run.shell``,
     then the job's ``runs-on`` (a Windows runner defaults to ``pwsh``).
@@ -505,9 +572,12 @@ def _not_code(texts: list[str]) -> list[bool]:
                 delimiter = ""
             continue
         out.append(bool(quote))
+        heredoc = None
         i = 0
         while i < len(text):
             ch = text[i]
+            if not quote and heredoc is None and ch == "<":
+                heredoc = _HEREDOC.match(text, i)   # only outside quotes (#936)
             if quote:
                 if ch == "\\" and quote == '"':
                     i += 1
@@ -518,64 +588,98 @@ def _not_code(texts: list[str]) -> list[bool]:
             elif ch == "#" and (i == 0 or text[i - 1].isspace()):
                 break
             i += 1
-        match = _HEREDOC.search(text) if not quote else None
-        if match:
-            delimiter = match.group(2)
+        if heredoc and not quote:
+            delimiter = heredoc.group(2)
     return out
 
 
-def _masked_in_body(refs: list[tuple[int, int]], parsed: dict[int, list[list[tuple[str, str]]]],
-                    texts: dict[int, str], run_shell: tuple[bool, bool] | None) -> list[tuple[int, int]]:
-    """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``.
+Parsed = dict[int, list[list[tuple[str, str]]]]
+
+
+def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, texts: dict[int, str],
+                    run_shell: tuple[bool, bool, bool] | None,
+                    ) -> tuple[list[tuple[int, int]], dict[tuple[int, int], frozenset[int]]]:
+    """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``,
+    and the segments a later ``exit 0`` masks in a body with errexit on.
 
     ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
     ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
-    ``run_shell`` is ``(errexit, bash grammar)`` for a GitHub ``run:`` body, None for any
-    other body. In a pwsh, powershell, cmd or python body only ``{ }`` / ``( )`` nesting is
-    read (no bash keywords): GitHub's pwsh wrapper ends with ``exit $LASTEXITCODE``, so an
-    ``exit 0`` inside ``if (...) { }`` is a guard, not a mask. Otherwise only a ``run:`` body read with errexit off (``set +e``, ``pwsh``, a Windows
-    runner, ``shell: bash {0}``) is masked by a later ``exit 0``. With errexit on the failing
-    check stops the step first, and GitLab checks each ``script:`` item's status.
+    ``run_shell`` is ``(errexit, bash grammar, pipefail)`` for a GitHub ``run:`` body, None
+    for any other body. In a pwsh, powershell, cmd or python body only ``{ }`` / ``( )``
+    nesting is read (no bash keywords): GitHub's pwsh wrapper ends with ``exit $LASTEXITCODE``,
+    so an ``exit 0`` inside ``if (...) { }`` is a guard, not a mask. Otherwise only a ``run:``
+    body read with errexit off (``set +e``, ``pwsh``, a Windows runner, ``shell: bash {0}``)
+    has whole statements masked by a later ``exit 0``. With errexit on the failing check stops
+    the step first, except in an errexit-exempt position (``lib.ci_exempt``, #936): those
+    segments, indexed into the unrewritten ``raw`` statement, come back in the second value.
+    GitLab checks each ``script:`` item's status.
     """
     errexit = True
     shell_errexit = True if run_shell is None else run_shell[0]
     bash = run_shell is None or run_shell[1]
+    pipefail = run_shell is None or run_shell[2]
     state: list[bool] = []
     off: list[bool] = []
+    pipes: list[bool] = []
     for first, k in refs:
         errexit = _errexit(parsed[first][k], errexit)
         shell_errexit = _errexit(parsed[first][k], shell_errexit)
+        pipefail = pipefail_after(raw[first][k], pipefail)
         state.append(not errexit)
         off.append(run_shell is not None and not shell_errexit)
+        pipes.append(pipefail)
     data = dict(zip(texts, _not_code(list(texts.values())), strict=True))
     code = [not data.get(first, False) for first, _ in refs]
     depths = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)],
                      keywords=bash)
+    conditions = condition_flags([raw[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
     out: list[tuple[int, int]] = []
+    exempt: dict[tuple[int, int], frozenset[int]] = {}
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
     for idx in range(len(refs) - 1, -1, -1):
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
-        if (state[idx] and not reraised) or (exited and off[idx] and not (exit_reraised or own)):
+        later_exit = exited and not (exit_reraised or own)
+        if (state[idx] and not reraised) or (later_exit and off[idx]):
             out.append((first, k))
+        elif later_exit and run_shell is not None and code[idx]:
+            statement = raw[first][k]
+            drop = (frozenset(range(len(statement))) if conditions[idx] and bash
+                    else exempt_segments(statement, pipes[idx]))
+            if drop:
+                exempt[(first, k)] = drop
         if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):
             exited, exit_reraised = True, False
         reraised = reraised or own
         exit_reraised = exit_reraised or own
-    return out
+    return out, exempt
+
+
+def _same_line_keep(statement: list[tuple[str, str]], later: Callable[[], list[str]]) -> list[int]:
+    """The segment indices of one statement the same-line rules keep: a ``|| <no-op>`` masks
+    the segments before it unless they are a capture checked on a ``later`` line of the job,
+    and an exit-zero flag masks its segment and the ``||`` pipelines it skips."""
+    keep = list(range(len(statement)))
+    cut = _noop_cut(statement)
+    if cut >= 0:
+        targets = _capture_targets(statement[:cut])
+        if not (targets and _checked_later(targets, later())):
+            keep = keep[cut + 1:]
+    return _drop_exit_zero(statement, keep)
 
 
 def unmasked_lines(text: str) -> list[str]:
     """``text``'s lines with every masked statement removed (an all-masked line is empty)."""
     lines = text.splitlines()
     tree = IndentTree(parse_lines(lines))
-    spans = _logical_lines(lines)
+    spans = _logical_lines(lines, tree)
     parsed = {span[0]: split_statements(_joined(lines, span)) for span in spans}
+    raw = {first: list(statements) for first, statements in parsed.items()}
     span_at = {span[0]: span for span in spans}
     masked: dict[int, set[int]] = {}
-    changed: set[int] = set()
+    kept: dict[tuple[int, int], list[int]] = {}
     bodies: dict[int, list[tuple[int, int]]] = {}
     for span in spans:
         first = span[0]
@@ -584,34 +688,35 @@ def unmasked_lines(text: str) -> list[str]:
             masked[first] = set(range(len(statements)))
             continue
         for k, statement in enumerate(statements):
-            cut = _noop_cut(statement)
-            if cut >= 0:
-                targets = _capture_targets(statement[:cut])
-                later = [lines[j] for j in tree.job(first) if j > span[-1]]
-                if not (targets and _checked_later(targets, later)):
-                    statement = statement[cut + 1:]
-            left = _drop_exit_zero(statement)
-            if left == statements[k]:
-                continue
-            changed.add(first)
-            if left:
-                statements[k] = left
-            else:
-                masked.setdefault(first, set()).add(k)
+            keep = _same_line_keep(statement, lambda: [lines[j] for j in tree.job(first) if j > span[-1]])
+            if len(keep) < len(statement):
+                kept[(first, k)] = keep
+                statements[k] = _pick(statement, keep)
         bodies.setdefault(tree.body(first), []).extend((first, k) for k in range(len(statements)))
     for body, refs in bodies.items():
         run_shell = run_errexit(tree, body) if tree.lines[body].key == "run" else None
         texts = {first: _joined(lines, span_at[first]) for first in dict.fromkeys(f for f, _ in refs)}
-        for first, k in _masked_in_body(refs, parsed, texts, run_shell):
+        whole, exempt = _masked_in_body(refs, parsed, raw, texts, run_shell)
+        for first, k in whole:
             masked.setdefault(first, set()).add(k)
+        for (first, k), skip in exempt.items():
+            base = kept.get((first, k), list(range(len(raw[first][k]))))
+            if any(i in skip for i in base):
+                kept[(first, k)] = [i for i in base if i not in skip]
+    for (first, k), keep in kept.items():
+        if keep:
+            parsed[first][k] = _pick(raw[first][k], keep)
+        else:
+            masked.setdefault(first, set()).add(k)
+    changed = {first for first, _ in kept}
     out = list(lines)
     for span in spans:
         drop = masked.get(span[0], set())
         if not drop and span[0] not in changed:
             continue
-        kept = [_join(s) for k, s in enumerate(parsed[span[0]]) if k not in drop]
+        kept_text = [_join(s) for k, s in enumerate(parsed[span[0]]) if k not in drop]
         lead = _LEAD.match(lines[span[0]])
-        out[span[0]] = (lead.group(0) if lead else "") + "; ".join(kept) if kept else ""
+        out[span[0]] = (lead.group(0) if lead else "") + "; ".join(kept_text) if kept_text else ""
         for j in span[1:]:
             out[j] = ""
     return out
