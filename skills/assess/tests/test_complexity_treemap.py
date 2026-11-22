@@ -2,8 +2,11 @@
 
 The script imports lizard/matplotlib/numpy at module load (it's a CLI wrapper),
 so those are stubbed in sys.modules before import. We only exercise functions
-that don't touch the real heavy deps: the build-artifact filter, the plugin
-version stamp, and the stats-sidecar enrichment (field naming + hotspot rank).
+that don't touch the real heavy deps. This module holds the stubbed loader,
+the build-artifact filter, the plugin version stamp, the render summary and
+main's CLI paths; the sibling test_complexity_treemap_*.py modules hold the
+rest by concern, and version assertions live in
+test_complexity_treemap_schema_versions.py.
 """
 from __future__ import annotations
 
