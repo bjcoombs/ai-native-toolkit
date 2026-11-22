@@ -278,6 +278,9 @@ constant each.
 #   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
 #   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
 #   Additive: no existing key moves.
+# - run-context.json delivery gains sample_page_size (issue #995): the changes per
+#   heavy read the merged sample finished at, or null when none was made. Additive:
+#   no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
