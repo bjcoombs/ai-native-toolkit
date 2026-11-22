@@ -3701,14 +3701,16 @@ note}` per dependency manifest outside the built-in and `.assess/config.toml` ex
 `requirements*.txt` (its own lock when every line is pinned with `==`), `go.mod`,
 `Cargo.toml`, `Gemfile`, `composer.json`, `mix.exs` (`mix.lock`), `pubspec.yaml`
 (`pubspec.lock`), `conanfile.py` / `conanfile.txt` (`conan.lock`), each looked for beside
-the manifest and in its parents; `Package.swift` (`Package.resolved` beside it or under an
+the manifest and in its parents; `Package.swift` with a `.package(` dependency (`Package.resolved` beside it or under an
 `*.xcworkspace/xcshareddata/swiftpm/` in its directory, also inside an `.xcodeproj`);
 `*.csproj` / `*.fsproj` with a `PackageReference` (`packages.lock.json` beside the
-project); `build.gradle(.kts)` with a `dependencies` block (`gradle.lockfile` beside it,
-`settings-gradle.lockfile` or `gradle/verification-metadata.xml` at the root); `vcpkg.json`
+project); `build.gradle(.kts)` with a `dependencies` block outside `buildscript`
+(`gradle.lockfile` beside it, or `gradle/verification-metadata.xml`; `settings-gradle.lockfile`
+locks the settings classpath only, so it does not count); `vcpkg.json`
 with dependencies (a `builtin-baseline` in the manifest itself). `note` is
 `skipped_library` for an unlocked Composer library (`type` `library` or absent), Pub
-package (no `publish_to: none`) or SwiftPM library (a `.library(` product): listed, not
+package (no `publish_to: none`) or SwiftPM library (a `.library(` product and no
+`.executable(` / `.executableTarget(`, comments not read): listed, not
 counted, so a repository of such libraries reads `no_manifests` until #827 gives not
 applicable. `direct_pins_only` marks an unlocked Gradle project beside
 `gradle/libs.versions.toml` or .NET project under a `Directory.Packages.props`: unlocked,

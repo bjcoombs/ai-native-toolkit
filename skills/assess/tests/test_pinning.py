@@ -20,7 +20,8 @@ GRADLE_DEPS = 'plugins { id("java") }\ndependencies {\n    implementation(libs.g
 CSPROJ = ('<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>'
           '<PackageReference Include="Newtonsoft.Json" /></ItemGroup></Project>\n')
 SWIFT_APP = ('// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(\n'
-             '  name: "App",\n  products: [.executable(name: "app", targets: ["App"])]\n)\n')
+             '  name: "App",\n  products: [.executable(name: "app", targets: ["App"])],\n'
+             '  dependencies: [.package(url: "https://github.com/apple/swift-log", from: "1.0.0")]\n)\n')
 SWIFT_LIB = SWIFT_APP.replace('.executable(name: "app", targets: ["App"])',
                               '.library(name: "Lib", targets: ["Lib"])')
 PUB_APP = "name: app\npublish_to: none\ndependencies:\n  http: ^1.0.0\n"
@@ -134,11 +135,40 @@ def test_direct_pins_only_read_unlocked_with_a_note(
     assert _condition(pinning) == ("unmet", None)
 
 
-@pytest.mark.parametrize("lock", ["settings-gradle.lockfile", "gradle/verification-metadata.xml"])
-def test_a_gradle_root_lock_covers_every_project(tmp_path: Path, lock: str) -> None:
+def test_gradle_verification_metadata_covers_every_project(tmp_path: Path) -> None:
+    lock = "gradle/verification-metadata.xml"
     pinning = _pinning(tmp_path, {"app/build.gradle": "dependencies {\n}\n", lock: "x\n",
                                   "gradle/libs.versions.toml": "[versions]\n"})
     assert _rows(pinning) == {"app/build.gradle": (True, lock, None)}
+
+
+def test_a_settings_lockfile_does_not_lock_the_projects(tmp_path: Path) -> None:
+    """Gradle writes settings-gradle.lockfile for the settings buildscript classpath only."""
+    pinning = _pinning(tmp_path, {"app/build.gradle.kts": GRADLE_DEPS, "settings-gradle.lockfile": "x\n"})
+    assert _rows(pinning) == {"app/build.gradle.kts": (False, None, None)}
+
+
+def test_a_buildscript_classpath_is_not_a_dependency_block(tmp_path: Path) -> None:
+    classpath = ("buildscript {\n  repositories { mavenCentral() }\n  dependencies {\n"
+                 "    classpath 'com.android.tools.build:gradle:8.5.0'\n  }\n}\n")
+    assert _pinning(tmp_path / "a", {"build.gradle": classpath})["manifests"] == []
+    both = _pinning(tmp_path / "b", {"build.gradle": classpath + "// dependencies {\n" + GRADLE_DEPS})
+    assert _rows(both) == {"build.gradle": (False, None, None)}
+
+
+@pytest.mark.parametrize("products, note", [
+    pytest.param('[.executable(name: "app", targets: ["App"]), .library(name: "Core", targets: ["Core"])]',
+                 None, id="executable-and-library"),
+    pytest.param('[.executable(name: "app", targets: ["App"])] // not .library(name: "x")',
+                 None, id="library-only-in-a-comment"),
+    pytest.param('[.library(name: "Core", targets: ["Core"])] /* .executable( */',
+                 "skipped_library", id="executable-only-in-a-comment"),
+])
+def test_a_swift_package_with_an_executable_is_an_app(tmp_path: Path, products: str, note: str | None) -> None:
+    manifest = SWIFT_APP.replace('[.executable(name: "app", targets: ["App"])]', products)
+    pinning = _pinning(tmp_path, {"Package.swift": manifest})
+    assert _rows(pinning) == {"Package.swift": (False, None, note)}
+    assert pinning["manifests_total"] == (1 if note is None else 0)
 
 
 def test_a_cpm_project_with_its_lock_reads_locked(tmp_path: Path) -> None:
@@ -153,6 +183,10 @@ def test_a_cpm_project_with_its_lock_reads_locked(tmp_path: Path) -> None:
     pytest.param({"vcpkg.json": json.dumps({"name": "x"})}, id="vcpkg-no-dependencies"),
     pytest.param({"vcpkg.json": "{"}, id="vcpkg-unparsed"),
     pytest.param({"Directory.Packages.props": "<Project />\n"}, id="cpm-props-alone"),
+    pytest.param({"composer.json": "{not json"}, id="composer-unparsed"),
+    pytest.param({"Package.swift": SWIFT_APP.replace(
+        '  dependencies: [.package(url: "https://github.com/apple/swift-log", from: "1.0.0")]\n', "")},
+        id="swift-no-dependencies"),
     pytest.param({"CMakeLists.txt": "project(x)\n"}, id="CMAKE"),
 ])
 def test_a_manifest_with_nothing_to_lock_is_not_a_row(tmp_path: Path, files: dict[str, str]) -> None:

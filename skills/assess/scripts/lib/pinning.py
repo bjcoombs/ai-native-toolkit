@@ -15,9 +15,9 @@ excludes, with the lockfile found for it. Read from the files at HEAD
 | ``composer.json`` | ``composer.lock`` | ``php`` |
 | ``mix.exs`` | ``mix.lock`` | ``elixir`` |
 | ``pubspec.yaml`` | ``pubspec.lock`` | ``dart`` |
-| ``Package.swift`` | ``Package.resolved`` beside it, or under ``<name>.xcworkspace/xcshareddata/swiftpm/`` (also inside an ``.xcodeproj``) in its directory | ``swift`` |
+| ``Package.swift`` (with a ``.package(`` dependency) | ``Package.resolved`` beside it, or under ``<name>.xcworkspace/xcshareddata/swiftpm/`` (also inside an ``.xcodeproj``) in its directory | ``swift`` |
 | ``*.csproj``, ``*.fsproj`` (with a ``PackageReference``) | ``packages.lock.json`` beside the project | ``dotnet`` |
-| ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block) | ``gradle.lockfile`` beside it, ``settings-gradle.lockfile`` at the root, or ``gradle/verification-metadata.xml`` | ``jvm`` |
+| ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block outside ``buildscript``) | ``gradle.lockfile`` beside it, or ``gradle/verification-metadata.xml`` | ``jvm`` |
 | ``vcpkg.json`` (with dependencies) | a ``builtin-baseline`` key in the manifest itself | ``cpp`` |
 | ``conanfile.py``, ``conanfile.txt`` | ``conan.lock`` | ``cpp`` |
 
@@ -31,7 +31,8 @@ Each row carries a ``note``:
   lock, with none committed: a ``composer.json`` whose ``type`` is ``library``
   or absent (Composer's default), a ``pubspec.yaml`` without ``publish_to:
   none`` (a published package) and a ``Package.swift`` declaring a
-  ``.library(`` product. The row stays in ``manifests`` for the reader, but
+  ``.library(`` product and no ``.executable(`` or ``.executableTarget(`` (an
+  executable makes it an app; comments are not read). The row stays in ``manifests`` for the reader, but
   ``manifests_total`` and ``unlocked_total`` leave it out, so a repository of
   such libraries alone reads Layer 5 level 2 not measured (``no_manifests``)
   until a not-applicable state exists (#827). A library that commits its lock
@@ -42,6 +43,10 @@ Each row carries a ``note``:
   parent). Both pin direct versions, not the transitive set, so the row reads
   unlocked; the note lets the advice say to turn on dependency locking.
 - null otherwise.
+
+``settings-gradle.lockfile`` is not a lock here: Gradle writes it for the
+settings buildscript classpath only, and project configurations lock to a
+``gradle.lockfile`` per project.
 
 ``Directory.Packages.props`` is read as that marker, not as a row of its own:
 the locks of central package management sit beside each project.
@@ -82,7 +87,7 @@ _LOCKS: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 _GRADLE = frozenset({"build.gradle", "build.gradle.kts"})
 _DOTNET_SUFFIXES = (".csproj", ".fsproj")
-_GRADLE_ROOT_LOCKS = ("settings-gradle.lockfile", "gradle/verification-metadata.xml")
+_GRADLE_ROOT_LOCKS = ("gradle/verification-metadata.xml",)
 _GRADLE_CATALOG = "gradle/libs.versions.toml"
 _NUGET_CPM = "Directory.Packages.props"
 _SWIFT_RESOLVED = re.compile(
@@ -90,6 +95,10 @@ _SWIFT_RESOLVED = re.compile(
 _REQUIREMENTS = re.compile(r"^requirements[\w.-]*\.txt$")
 _PUBLISH_NONE = re.compile(r"""^publish_to:\s*["']?none["']?\s*(?:#.*)?$""", re.MULTILINE)
 _SWIFT_LIBRARY = re.compile(r"\.library\s*\(")
+_SWIFT_EXECUTABLE = re.compile(r"\.executable(?:Target)?\s*\(")
+_SWIFT_DEPENDENCY = re.compile(r"\.package\s*\(")
+_C_COMMENTS = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+_BUILDSCRIPT = re.compile(r"\bbuildscript\s*\{")
 _GRADLE_DEPS = re.compile(r"^\s*dependencies\s*\{", re.MULTILINE)
 _PACKAGE_REFERENCE = re.compile(r"<PackageReference\b")
 
@@ -123,14 +132,34 @@ def _json(root: Path, rel: str) -> object:
         return None
 
 
+def _code(root: Path, rel: str) -> str:
+    """A Swift or Gradle manifest's text without ``//`` and ``/* */`` comments."""
+    return _C_COMMENTS.sub("", _read(root, rel))
+
+
+def _without_buildscript(text: str) -> str:
+    """Gradle text with each ``buildscript { ... }`` block removed (its plugin classpath)."""
+    while (m := _BUILDSCRIPT.search(text)) is not None:
+        depth, end = 0, len(text)
+        for i in range(m.end() - 1, len(text)):
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            if depth == 0:
+                end = i + 1
+                break
+        text = text[:m.start()] + text[end:]
+    return text
+
+
 def _declares_deps(root: Path, rel: str) -> bool:
     """A manifest that declares installable dependencies.
 
     A ``package.json`` or ``pyproject.toml`` that only holds scripts or tool
-    configuration, a ``go.mod`` with no ``require``, a project with no
-    ``PackageReference``, a Gradle build with no ``dependencies`` block and a
-    ``vcpkg.json`` with no dependencies have nothing to lock; one that does not
-    parse is skipped. Other manifests always count.
+    configuration, a ``go.mod`` with no ``require``, a ``Package.swift`` with no
+    ``.package(``, a project with no ``PackageReference``, a Gradle build with no
+    ``dependencies`` block outside ``buildscript`` and a ``vcpkg.json`` with no
+    dependencies have nothing to lock; a ``package.json``, ``composer.json``,
+    ``vcpkg.json`` or ``pyproject.toml`` that does not parse is skipped, so it
+    reads unknown rather than unlocked. Other manifests always count.
     """
     name = PurePosixPath(rel).name
     if name == "package.json":
@@ -141,11 +170,16 @@ def _declares_deps(root: Path, rel: str) -> bool:
     if name == "vcpkg.json":
         data = _json(root, rel)
         return isinstance(data, dict) and bool(data.get("dependencies"))
+    if name == "composer.json":
+        return isinstance(_json(root, rel), dict)
+    if name == "Package.swift":
+        # SwiftPM writes no Package.resolved for a package that depends on nothing.
+        return _SWIFT_DEPENDENCY.search(_code(root, rel)) is not None
     if name == "go.mod":
         # Go writes no go.sum for a module that requires nothing.
         return re.search(r"^\s*require\b", _read(root, rel), re.MULTILINE) is not None
     if name in _GRADLE:
-        return _GRADLE_DEPS.search(_read(root, rel)) is not None
+        return _GRADLE_DEPS.search(_without_buildscript(_code(root, rel))) is not None
     if name.endswith(_DOTNET_SUFFIXES):
         return _PACKAGE_REFERENCE.search(_read(root, rel)) is not None
     if name != "pyproject.toml":
@@ -220,15 +254,38 @@ def _is_library(root: Path, rel: str, name: str) -> bool:
     if name == "pubspec.yaml":
         return _PUBLISH_NONE.search(_read(root, rel)) is None
     if name == "Package.swift":
-        return _SWIFT_LIBRARY.search(_read(root, rel)) is not None
+        code = _code(root, rel)
+        return _SWIFT_LIBRARY.search(code) is not None and _SWIFT_EXECUTABLE.search(code) is None
     return False
+
+
+def _is_manifest(name: str) -> bool:
+    return (name in _LOCKS or name in _GRADLE or name in ("Package.swift", "vcpkg.json")
+            or name.endswith(_DOTNET_SUFFIXES))
+
+
+def _lock_for(index: RepoIndex, rel: str, name: str) -> tuple[str, str | None, PinNote | None]:
+    """``(ecosystem, lockfile, direct-pins note)`` for a manifest that declares dependencies."""
+    if name in _LOCKS:
+        ecosystem, locks = _LOCKS[name]
+        return ecosystem, _lock_near(index, rel, locks), None
+    if name == "Package.swift":
+        return "swift", _swift_lock(index, rel), None
+    if name == "vcpkg.json":
+        data = _json(index.root, rel)
+        return "cpp", rel if isinstance(data, dict) and data.get("builtin-baseline") else None, None
+    if name in _GRADLE:
+        lock = _beside(index, rel, "gradle.lockfile") or next(
+            (f for f in _GRADLE_ROOT_LOCKS if f in index.files), None)
+        pins_only = lock is None and _GRADLE_CATALOG in index.files
+        return "jvm", lock, "direct_pins_only" if pins_only else None
+    lock = _beside(index, rel, "packages.lock.json")  # a .csproj or .fsproj
+    return "dotnet", lock, "direct_pins_only" if lock is None and _cpm_above(index, rel) else None
 
 
 def _row(index: RepoIndex, rel: str) -> PinRow | None:
     """The row for one tracked file, or None when it is not a manifest with dependencies."""
     name = PurePosixPath(rel).name
-    lock: str | None
-    note: PinNote | None = None
     if _REQUIREMENTS.match(name):
         text = _read(index.root, rel)
         if not _requirement_lines(text):
@@ -236,35 +293,9 @@ def _row(index: RepoIndex, rel: str) -> PinRow | None:
         pinned = _requirements_pinned(text)
         return {"ecosystem": "python", "manifest": rel, "locked": pinned,
                 "lockfile": rel if pinned else None, "note": None}
-    if name in _LOCKS:
-        ecosystem, locks = _LOCKS[name]
-        if not _declares_deps(index.root, rel):
-            return None
-        lock = _lock_near(index, rel, locks)
-    elif name == "Package.swift":
-        ecosystem, lock = "swift", _swift_lock(index, rel)
-    elif name == "vcpkg.json":
-        if not _declares_deps(index.root, rel):
-            return None
-        data = _json(index.root, rel)
-        ecosystem = "cpp"
-        lock = rel if isinstance(data, dict) and data.get("builtin-baseline") else None
-    elif name in _GRADLE:
-        if not _declares_deps(index.root, rel):
-            return None
-        ecosystem = "jvm"
-        lock = _beside(index, rel, "gradle.lockfile") or next(
-            (f for f in _GRADLE_ROOT_LOCKS if f in index.files), None)
-        if lock is None and _GRADLE_CATALOG in index.files:
-            note = "direct_pins_only"
-    elif name.endswith(_DOTNET_SUFFIXES):
-        if not _declares_deps(index.root, rel):
-            return None
-        ecosystem, lock = "dotnet", _beside(index, rel, "packages.lock.json")
-        if lock is None and _cpm_above(index, rel):
-            note = "direct_pins_only"
-    else:
+    if not _is_manifest(name) or not _declares_deps(index.root, rel):
         return None
+    ecosystem, lock, note = _lock_for(index, rel, name)
     if lock is None and _is_library(index.root, rel, name):
         note = "skipped_library"
     return {"ecosystem": ecosystem, "manifest": rel, "locked": lock is not None,
