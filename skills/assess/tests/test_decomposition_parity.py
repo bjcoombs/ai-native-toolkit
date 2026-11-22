@@ -54,8 +54,8 @@ def _build_parity_fixture(repo: Path) -> Path:
         "top_complex": [{"path": "src/a.py", "ccn": 20}],
         "top_large": [{"path": "src/a.py", "loc": 500}],
     }
-    (assess / "complexity-stats.json").write_text(json.dumps(stats))
-    (repo / "CLAUDE.md").write_text("# Project\n\nDo X. Always Y. Never Z.\n")
+    (assess / "complexity-stats.json").write_text(json.dumps(stats), encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("# Project\n\nDo X. Always Y. Never Z.\n", encoding="utf-8")
     return repo
 
 
@@ -108,7 +108,7 @@ def test_orchestrator_is_thin():
 @pytest.mark.windows_followup
 def test_attention_low_signal_is_read_before_the_rule_that_uses_it():
     """The findings sub-skill's run-context read loads every key its Top 3 rule branches on."""
-    body = (REPO_ROOT / "skills" / "assess-findings" / "SKILL.md").read_text()
+    body = (REPO_ROOT / "skills" / "assess-findings" / "SKILL.md").read_text(encoding="utf-8")
     read = next(line for line in body.splitlines() if line.startswith("jq ") and ".prescribed_actions" in line)
     rule = next(line for line in body.splitlines() if line.startswith("**Mandatory attention rule"))
     for key in ("attention", "attention_low_signal", "prescribed_actions", "gap_actions"):

@@ -306,7 +306,7 @@ def test_delete_after_removes_safe_clones_and_keeps_the_rest(tmp_path, monkeypat
 
     assert not safe.exists()
     assert (dirty / "wip.txt").is_file()
-    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(r["repo"], r["status"]) for r in rows] == [("grp/dirty", "ok"), ("grp/safe", "ok")]
     stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
     assert stamp["repositories"] == {"selected": 2, "scanned_ok": 2, "failed": 0, "qualifying": 2}
@@ -406,7 +406,7 @@ def test_an_extreme_window_completes_the_run(tmp_path, monkeypatch):
     _pushed_repo(tmp_path / "root", "grp/safe")
     assert fleet_cli.main([str(tmp_path / "root"), "--out", str(tmp_path / "out"), "--scans", "agent_ops",
                            "--window", "999999999d"]) == 0
-    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(r["status"], r["active"]) for r in rows] == [("ok", True)]
 
 
@@ -422,7 +422,7 @@ def test_a_dormant_repository_is_scanned_but_not_qualifying(tmp_path, monkeypatc
     (root / "grp" / "dormant" / "worktree").mkdir(parents=True)
     _old_commit(root / "grp" / "dormant" / "dormant-main")
     assert fleet_cli.main([str(root), "--out", str(tmp_path / "out"), "--scans", "agent_ops"]) == 0
-    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "out" / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(r["repo"], r["active"]) for r in rows] == [("grp/dormant", False), ("grp/live", True)]
     stamp = json.loads((tmp_path / "out" / "run.json").read_text(encoding="utf-8"))
     assert stamp["repositories"] == {"selected": 2, "scanned_ok": 2, "failed": 0, "qualifying": 1}

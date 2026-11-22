@@ -51,7 +51,7 @@ def _self_ref_repo(git_repo: Any) -> tuple[Path, Any, str]:
     )
     (repo / "README.md").write_text("# x\n", encoding="utf-8")
     (repo / ".assess").mkdir()
-    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_stats()))
+    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_stats()), encoding="utf-8")
     commit("one")
     (repo / "README.md").write_text("# x y\n", encoding="utf-8")
     commit("two")

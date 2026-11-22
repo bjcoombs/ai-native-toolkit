@@ -22,7 +22,7 @@ def test_run_context_carries_uninstall_path(tmp_path: Path) -> None:
     (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 1, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["uninstall_instructions_path"] == "references/uninstall.md"
 

@@ -261,12 +261,12 @@ def test_collect_drops_generated_header_and_long_line_files(
     (root / "db").mkdir()
     (root / "src").mkdir()
     schema = root / "db" / "schema.sql"
-    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n")
+    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n", encoding="utf-8")
     font = root / "src" / "font.ts"
-    font.write_text('export const F = "' + "A" * 40000 + '";\n')
+    font.write_text('export const F = "' + "A" * 40000 + '";\n', encoding="utf-8")
     hand = root / "src" / "hand.py"
     hand.write_text("def f():\n    return 1\n" + "# x\n" * 196
-                    + "# do not edit the table above\n")
+                    + "# do not edit the table above\n", encoding="utf-8")
     _fake_scorers(treemap, monkeypatch, [schema, font, hand])
 
     excluded: list[dict] = []
@@ -283,7 +283,7 @@ def test_collect_drops_generated_header_and_long_line_files(
 def test_collect_include_artifacts_keeps_generated_header_files(
         treemap, tmp_path, monkeypatch):
     schema = tmp_path / "schema.sql"
-    schema.write_text("-- @generated\nCREATE TABLE t (id int);\n")
+    schema.write_text("-- @generated\nCREATE TABLE t (id int);\n", encoding="utf-8")
     _fake_scorers(treemap, monkeypatch, [schema])
     excluded: list[dict] = []
     files, *_ = treemap.collect(tmp_path, by="complexity",
@@ -296,22 +296,22 @@ def test_collect_include_artifacts_keeps_generated_header_files(
 def test_write_stats_carries_generated_header_exclusions(treemap, tmp_path):
     root = tmp_path
     f = root / "a.py"
-    f.write_text("x = 1\n")
+    f.write_text("x = 1\n", encoding="utf-8")
     out = root / "stats.json"
     listed = [{"path": "db/schema.sql", "reason": "generated-header"}]
     treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out,
                         excluded_generated=listed)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["excluded_generated"] == listed
     assert isinstance(stats["schema_version"], int) and stats["schema_version"] > 1
     treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, root, out)
-    assert json.loads(out.read_text())["excluded_generated"] == []
+    assert json.loads(out.read_text(encoding="utf-8"))["excluded_generated"] == []
 
 
 def test_generated_header_all_excluded_error_names_the_exclusion(
         treemap, tmp_path, monkeypatch, capsys):
     schema = tmp_path / "schema.sql"
-    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n")
+    schema.write_text("-- GENERATED FILE - DO NOT EDIT\nCREATE TABLE t (id int);\n", encoding="utf-8")
     _fake_scorers(treemap, monkeypatch, [schema])
     monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", str(tmp_path)])
     assert treemap.main() == 1
@@ -327,12 +327,12 @@ def test_write_stats_paths_match_generated_header_list_separator(treemap, tmp_pa
     (where str() of a relative path would use backslashes)."""
     (tmp_path / "db").mkdir()
     f = tmp_path / "db" / "a.py"
-    f.write_text("x = 1\n")
+    f.write_text("x = 1\n", encoding="utf-8")
     out = tmp_path / "stats.json"
     treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, tmp_path, out)
-    paths = [r["path"] for r in json.loads(out.read_text())["top_large"]]
+    paths = [r["path"] for r in json.loads(out.read_text(encoding="utf-8"))["top_large"]]
     assert paths == ["db/a.py"]
-    src = (Path(treemap.__file__)).read_text()
+    src = (Path(treemap.__file__)).read_text(encoding="utf-8")
     rel_body = src[src.index("def _rel_path(p: Path, root: Path) -> str:"):][:400]
     assert "as_posix()" in rel_body and "str(p" not in rel_body
 
@@ -378,7 +378,7 @@ def test_report_default_excludes_bypassed_by_include_artifacts(
 
     nested = tmp_path / "mcp" / "fixtures" / "lines.jsonl"
     nested.parent.mkdir(parents=True)
-    nested.write_text('{"a": 1}\n')
+    nested.write_text('{"a": 1}\n', encoding="utf-8")
     payload = json.dumps([{"Name": "JSONL", "Files": [
         {"Location": str(nested), "Code": 1, "Complexity": 0}]}])
     monkeypatch.setattr(treemap.shutil, "which", lambda _: "/usr/bin/scc")

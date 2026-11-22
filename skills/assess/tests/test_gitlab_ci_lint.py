@@ -304,7 +304,7 @@ def test_offline_collect_never_asks(glab, tmp_path):
 
 
 def _rows(out: Path) -> dict[str, dict[str, object]]:
-    rows = [json.loads(line) for line in (out / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (out / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     return {r["repo"]: r["scans"] for r in rows}
 
 

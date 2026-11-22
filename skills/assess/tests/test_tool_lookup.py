@@ -35,14 +35,14 @@ def _winget_tree(tmp_path: Path, *versions: str) -> Path:
         exe = (packages / "BurntSushi.ripgrep.MSVC_Microsoft.Winget.Source_8wekyb3d8bbwe"
                / f"ripgrep-{v}-x86_64-pc-windows-msvc" / "rg.exe")
         exe.parent.mkdir(parents=True)
-        exe.write_text("")
+        exe.write_text("", encoding="utf-8")
     return tmp_path
 
 
 def test_rg_path_wins_over_path_and_winget(tmp_path: Path) -> None:
     rg = tmp_path / "custom" / "rg"
     rg.parent.mkdir()
-    rg.write_text("")
+    rg.write_text("", encoding="utf-8")
     local = _winget_tree(tmp_path / "local", "14.1.0")
     env = {"RG_PATH": str(rg), "LOCALAPPDATA": str(local)}
     assert find_rg(env, which=lambda _: "/usr/bin/rg", windows=True) == str(rg)
@@ -103,7 +103,7 @@ def test_scan_runs_the_resolved_binary(tmp_path: Path, monkeypatch: pytest.Monke
     rg = shutil.which("rg")
     assert rg is not None
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    (tmp_path / "a.py").write_text("# TODO: later\n")
+    (tmp_path / "a.py").write_text("# TODO: later\n", encoding="utf-8")
     calls: list[str] = []
     real_run = pm._run
 

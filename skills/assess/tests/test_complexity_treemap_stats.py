@@ -36,7 +36,7 @@ def test_write_stats_uses_commits_field_and_balanced_rank(treemap, tmp_path):
     treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out,
                         tokens_by_path=tokens)
 
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert "plugin_version" in stats
     hotspots = stats["top_hotspots"]
     # Balanced composite: the active moderate-complexity file leads.
@@ -59,11 +59,11 @@ def test_write_stats_records_churn_degenerate_flag(treemap, tmp_path):
     out = root / "stats.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], {f: 1}, "commits (all-time)",
                         root, out)
-    assert json.loads(out.read_text())["churn_degenerate"] is False
+    assert json.loads(out.read_text(encoding="utf-8"))["churn_degenerate"] is False
 
     treemap.write_stats([(f, 100, 5.0, "lizard")], {f: 1}, "commits (all-time)",
                         root, out, churn_degenerate=True)
-    assert json.loads(out.read_text())["churn_degenerate"] is True
+    assert json.loads(out.read_text(encoding="utf-8"))["churn_degenerate"] is True
 
 
 def test_write_stats_commits_none_without_git(treemap, tmp_path):
@@ -72,7 +72,7 @@ def test_write_stats_commits_none_without_git(treemap, tmp_path):
     f = root / "a.go"
     out = root / "stats.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["top_hotspots"][0]["commits"] is None
 
 
@@ -93,7 +93,7 @@ def test_write_stats_separates_aggregate_from_per_function_ccn(treemap, tmp_path
         [(f, 800, 136.0, "lizard")], {f: 3}, "commits (last 12mo)", root, out,
         fn_ccn_by_path={f: fn_ccns},
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
 
     # The aggregate block self-labels and the per-function block is separate.
     assert stats["ccn"]["basis"] == "file-aggregate"
@@ -118,7 +118,7 @@ def test_write_stats_scc_file_has_null_max_fn_ccn(treemap, tmp_path):
     # No fn_ccn_by_path entry for this path -> scc-style, per-function unknown.
     treemap.write_stats([(f, 400, 50.0, "scc")], None, None, root, out,
                         fn_ccn_by_path={})
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["top_complex"][0]["max_fn_ccn"] is None
     assert stats["fn_ccn"]["function_count"] == 0
 
@@ -153,7 +153,7 @@ def test_hotspot_rank_favours_per_function_offender(treemap, tmp_path):
         fn_ccn_by_path={coordinator: coordinator_fns, dao: dao_fns},
         tokens_by_path=tokens,
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     hotspots = stats["top_hotspots"]
 
     # The true per-function offender ranks at or above the coordinator class.
@@ -185,7 +185,7 @@ def test_hotspot_rank_unchanged_for_single_function_per_file(treemap, tmp_path):
         files, aux_data, "commits (last 12mo)", root, out,
         fn_ccn_by_path={complex_go: [40.0], simple_go: [8.0]},
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     hotspots = stats["top_hotspots"]
 
     # Ranking is unchanged: the genuinely complex file still leads.
@@ -230,7 +230,7 @@ def test_write_stats_emits_est_tokens_per_row_and_uses_real_text(treemap, tmp_pa
     dense.write_text("y" * 4000, encoding="utf-8")  # 1000 est tokens
     out = root / "stats.json"
     treemap.write_stats([(dense, 50, 5.0, "lizard")], None, None, root, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     row = stats["top_hotspots"][0]
     assert row["est_tokens"] == 1000          # chars/4, not the 50 loc
     assert row["loc"] == 50                    # loc preserved alongside
@@ -249,7 +249,7 @@ def test_hotspot_score_includes_token_factor(treemap, tmp_path):
     out = root / "stats.json"
     treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out,
                         tokens_by_path=tokens)
-    hotspots = json.loads(out.read_text())["top_hotspots"]
+    hotspots = json.loads(out.read_text(encoding="utf-8"))["top_hotspots"]
     assert hotspots[0]["path"] == "big.go"
 
 
@@ -267,7 +267,7 @@ def test_big_but_simple_stable_file_does_not_top_on_size_alone(treemap, tmp_path
     out = root / "stats.json"
     treemap.write_stats(files, aux_data, "commits (last 12mo)", root, out,
                         tokens_by_path=tokens)
-    hotspots = json.loads(out.read_text())["top_hotspots"]
+    hotspots = json.loads(out.read_text(encoding="utf-8"))["top_hotspots"]
     assert hotspots[0]["path"] == "engine.go"  # complexity+churn beats raw size
 
 
@@ -288,7 +288,7 @@ def test_keyhole_budget_rollup_counts_files_and_subtrees(treemap, tmp_path):
     tokens = {over_file: 250000, a1: 150000, a2: 120000, small: 100}
     out = root / "stats.json"
     treemap.write_stats(files, None, None, root, out, tokens_by_path=tokens)
-    budget = json.loads(out.read_text())["est_tokens"]["budget"]
+    budget = json.loads(out.read_text(encoding="utf-8"))["est_tokens"]["budget"]
     assert budget["budget"] == treemap.CONTEXT_WINDOW_BUDGET_TOKENS
     assert budget["total"] == 250000 + 150000 + 120000 + 100
     assert budget["files_over_budget"] == 1           # only giant.py alone
@@ -308,25 +308,25 @@ def test_est_tokens_are_post_artifact_filter(treemap, tmp_path):
     # The bundle is simply absent from `files` (collect dropped it) - the
     # totals reflect only the surviving file.
     treemap.write_stats([(real, 20, 5.0, "lizard")], None, None, root, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["est_tokens"]["total"] == 100
 
 
 def test_code_data_maxima_split_by_scc_language(treemap, tmp_path):
     root = tmp_path
     code = root / "app.py"
-    code.write_text("x = 1\n" * 30)
+    code.write_text("x = 1\n" * 30, encoding="utf-8")
     data = root / "big.json"
-    data.write_text('{"k": 1}\n' * 500)
+    data.write_text('{"k": 1}\n' * 500, encoding="utf-8")
     conf = root / "settings.yaml"
-    conf.write_text("k: 1\n" * 100)
+    conf.write_text("k: 1\n" * 100, encoding="utf-8")
     out = root / "stats.json"
     langs = {data: "JSON", conf: "YAML"}
     treemap.write_stats(
         [(code, 30, 4.0, "lizard"), (data, 500, 0.0, "scc"),
          (conf, 100, 0.0, "scc")],
         None, None, root, out, languages_by_path=langs)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     rows = {r["path"]: r for r in stats["top_large"]}
     assert stats["loc"]["max"] == 500
     assert stats["loc"]["max_code"] == rows["app.py"]["loc"] == 30
@@ -338,10 +338,10 @@ def test_code_data_maxima_split_by_scc_language(treemap, tmp_path):
 
 def test_code_data_maxima_empty_side_reports_zero(treemap, tmp_path):
     f = tmp_path / "a.py"
-    f.write_text("x = 1\n")
+    f.write_text("x = 1\n", encoding="utf-8")
     out = tmp_path / "stats.json"
     treemap.write_stats([(f, 1, 1.0, "lizard")], None, None, tmp_path, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["loc"]["max_code"] == 1
     assert stats["loc"]["max_data"] == 0
     assert stats["est_tokens"]["max_data"] == 0
@@ -363,7 +363,7 @@ def test_write_stats_distribution_blocks_pin_percentiles_and_totals(
         fn_ccn_by_path={a: [1.0, 1.0], b: [2.0, 6.0]},
         tokens_by_path=tokens)
     # The numpy stub breaks pytest.approx, so round instead.
-    stats = json.loads(out.read_text(),
+    stats = json.loads(out.read_text(encoding="utf-8"),
                        parse_float=lambda v: round(float(v), 9))
     assert stats["files_scored"] == 3
     assert stats["scoring_coverage"] == {"lizard": 2, "scc": 1}
@@ -397,7 +397,7 @@ def test_write_stats_empty_file_list_reports_zeroes(treemap, tmp_path):
     rather than raising on max() of an empty sequence."""
     out = tmp_path / "stats.json"
     treemap.write_stats([], None, None, tmp_path, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["files_scored"] == 0
     assert stats["loc"]["max"] == stats["loc"]["p95"] == 0.0
     assert stats["ccn"]["max"] == 0.0

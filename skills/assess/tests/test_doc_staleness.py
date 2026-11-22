@@ -361,10 +361,10 @@ def _bulk_fixture(repo: Path, commit) -> None:
         days -= 10
     for rel in _BULK_DOCS:
         p = repo / rel
-        p.write_text("<!-- SPDX-License-Identifier: MIT -->\n" + p.read_text(), encoding="utf-8")
+        p.write_text("<!-- SPDX-License-Identifier: MIT -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
     commit("chore: licence headers", days_ago=8)
     p = repo / "docs/caching.md"
-    p.write_text(p.read_text() + "A genuine closing section.\n", encoding="utf-8")
+    p.write_text(p.read_text(encoding="utf-8") + "A genuine closing section.\n", encoding="utf-8")
     commit("docs: caching invalidation", days_ago=3)
 
 
@@ -419,7 +419,7 @@ def test_doc_created_in_bulk_commit_keeps_its_creation_date(git_repo) -> None:
     commit("import docs", days_ago=100)
     for rel in _BULK_DOCS:
         p = repo / rel
-        p.write_text("<!-- header -->\n" + p.read_text(), encoding="utf-8")
+        p.write_text("<!-- header -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
     commit("chore: headers", days_ago=5)
     r = analyze_doc_staleness(repo)
     assert {d["last_commit_days"] for d in r["docs"]} == {95}  # to HEAD, 5 days ago
@@ -460,7 +460,7 @@ def test_instruction_freshness_skips_bulk_commit(git_repo) -> None:
 def _sweep(repo: Path, commit, tag: str, days_ago: int, extra=()) -> None:
     for rel in list(_BULK_DOCS) + list(extra):
         p = repo / rel
-        p.write_text(f"<!-- {tag} -->\n" + p.read_text(), encoding="utf-8")
+        p.write_text(f"<!-- {tag} -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
     commit(f"chore: {tag}", days_ago=days_ago)
 
 
@@ -563,10 +563,10 @@ def test_non_doc_instruction_file_skips_bulk_commit(git_repo) -> None:
     commit("add cursor rules", days_ago=400)
     _bulk_fixture(repo, commit)
     rules = repo / ".cursorrules"
-    rules.write_text("# header\n" + rules.read_text(), encoding="utf-8")
+    rules.write_text("# header\n" + rules.read_text(encoding="utf-8"), encoding="utf-8")
     for rel in _BULK_DOCS:
         p = repo / rel
-        p.write_text("<!-- again -->\n" + p.read_text(), encoding="utf-8")
+        p.write_text("<!-- again -->\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
     commit("chore: headers everywhere", days_ago=5)
     files = grade_instruction_files(repo)[0]
     assert files[".cursorrules"]["freshness_days"] in (394, 395)  # to HEAD; DST slack

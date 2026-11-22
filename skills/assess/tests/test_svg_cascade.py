@@ -33,7 +33,7 @@ def test_write_svg_stylesheet_never_overrides_text_attributes(render_lib, tmp_pa
     out = tmp_path / "cascade.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out,
                          True, "ccn", show_survivor_legend=True)
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     assert 'text-anchor="start"' in svg  # the legend is in the render
     assert 'fill="#444"' in svg  # so are the grey label lines
     assert overridden_text_attributes(svg) == []

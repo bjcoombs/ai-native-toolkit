@@ -175,6 +175,9 @@ def _filter_step_script() -> str:
 def _run_filter(
     root: Path, base: str, author: str, tmp_path: Path, actor: str | None = None
 ) -> str:
+    if sys.platform == "win32":
+        pytest.skip("runs floor.yml's canary path filter step, an ubuntu-latest bash step, "
+                    "with a symlinked python on PATH; that step never runs on Windows")
     _git(root, "update-ref", "refs/remotes/origin/main", base)
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)

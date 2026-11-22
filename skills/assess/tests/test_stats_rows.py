@@ -61,7 +61,7 @@ def _write_repo_stats(tmp_path: Path) -> dict:
     files.append((root / "pkg" / "small.py", 30, 15.0, "lizard"))
     out = root / "stats.json"
     treemap.write_stats(files, None, None, root, out)
-    return json.loads(out.read_text())
+    return json.loads(out.read_text(encoding="utf-8"))
 
 
 def test_write_stats_files_key_reaches_the_join(tmp_path: Path) -> None:

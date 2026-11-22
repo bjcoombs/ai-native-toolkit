@@ -147,7 +147,7 @@ def _custody_writers() -> List[str]:
     writers: List[str] = []
     for path in sorted(SCRIPTS_DIR.rglob("*.py")):
         if _writes_verifier_custody(path.read_text(encoding="utf-8")):
-            writers.append(str(path.relative_to(REPO)))
+            writers.append(path.relative_to(REPO).as_posix())
     return writers
 
 

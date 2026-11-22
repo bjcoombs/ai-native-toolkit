@@ -156,7 +156,7 @@ def test_scratch_copy_never_links_back_into_the_assessed_tree(tmp_path: Path) ->
     assert mutmut3._copy_repo(repo, dest) is True
     assert not (dest / "abs_dir").exists() and not (dest / "abs_dir").is_symlink()
     for rel in ("abs_file", "pkg/up_file"):
-        assert not (dest / rel).is_symlink() and (dest / rel).read_text() == "n"
+        assert not (dest / rel).is_symlink() and (dest / rel).read_text(encoding="utf-8") == "n"
     in_file = dest / "pkg" / "in_file"
     assert in_file.is_symlink() and not Path(os.readlink(in_file)).is_absolute()
     assert in_file.resolve() == (dest / "pkg" / "scripts" / "lib" / "a.py").resolve()

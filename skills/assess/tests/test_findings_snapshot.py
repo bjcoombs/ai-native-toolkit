@@ -192,7 +192,7 @@ def test_core_writes_snapshot_and_stamps_method_version(tmp_path: Path) -> None:
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-11-19")
     assert ctx["assess_method_version"] == ASSESS_METHOD_VERSION
     assert ctx["prior_findings_snapshot"] is None
-    snap = json.loads((repo / ".assess" / FINDINGS_SNAPSHOT_FILE).read_text())
+    snap = json.loads((repo / ".assess" / FINDINGS_SNAPSHOT_FILE).read_text(encoding="utf-8"))
     assert snap == build_snapshot(ctx["derived_findings"], ASSESS_METHOD_VERSION)
     # A second run with no change reads the first snapshot back and leaves the
     # file byte-identical, so the gate stays silent.
@@ -216,10 +216,10 @@ def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, cap
     snap_path = repo / ".assess" / FINDINGS_SNAPSHOT_FILE
     # A snapshot committed under an older method, holding a finding path the
     # current method no longer produces.
-    old = json.loads(snap_path.read_text())
+    old = json.loads(snap_path.read_text(encoding="utf-8"))
     old["assess_method_version"] = ASSESS_METHOD_VERSION - 1
     old["findings"].append({"name": "retired_finding", "paths": ["src/old.py"]})
-    snap_path.write_text(json.dumps(old))
+    snap_path.write_text(json.dumps(old), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-11-20")
     assert main([str(repo)]) == 0
     out = capsys.readouterr().out
@@ -229,7 +229,7 @@ def test_bumped_method_version_fixture_produces_gate_message(tmp_path: Path, cap
     assert "retired_finding: src/old.py" in out
     assert "Re-freeze:" in out
     # The run rewrote the snapshot at the current method version.
-    assert json.loads(snap_path.read_text())["assess_method_version"] == ASSESS_METHOD_VERSION
+    assert json.loads(snap_path.read_text(encoding="utf-8"))["assess_method_version"] == ASSESS_METHOD_VERSION
 
 
 def test_fail_on_failure_with_method_change_exits_1_and_explains(
@@ -269,17 +269,17 @@ def test_gate_explains_method_change_against_the_committed_snapshot(
     (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     (repo / "notes").mkdir()
     for i in range(12):
-        (repo / "notes" / f"n{i}.md").write_text(f"# Note {i}\n")
-    (repo / "CLAUDE.md").write_text("# KB\n\n<!-- assess-archetype: software -->\n")
+        (repo / "notes" / f"n{i}.md").write_text(f"# Note {i}\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("# KB\n\n<!-- assess-archetype: software -->\n", encoding="utf-8")
     commit("init")
     assert assess_core.main([str(repo), "--non-interactive"]) == 0
     capsys.readouterr()
 
     snap_path = repo / ".assess" / FINDINGS_SNAPSHOT_FILE
-    snap = json.loads(snap_path.read_text())
+    snap = json.loads(snap_path.read_text(encoding="utf-8"))
     produced = next(f for f in snap["findings"]
                     if f["name"] == "override_contradicts_signals")
     assert produced["paths"] == ["CLAUDE.md"]
@@ -290,7 +290,7 @@ def test_gate_explains_method_change_against_the_committed_snapshot(
         snap["findings"].append(lying)
     lying["paths"].append("gone/old.py")
     snap["assess_method_version"] = ASSESS_METHOD_VERSION - 1
-    snap_path.write_text(json.dumps(snap, indent=2) + "\n")
+    snap_path.write_text(json.dumps(snap, indent=2) + "\n", encoding="utf-8")
 
     assert main([str(repo)]) == 0
     out = capsys.readouterr().out
@@ -307,7 +307,7 @@ def test_gate_reads_a_string_method_version_in_the_committed_snapshot(
     """A hand-edited snapshot holding the method version as a numeric string
     still establishes the prior version rather than reading as no snapshot."""
     (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(
-        json.dumps({"assess_method_version": "3", "findings": []}))
+        json.dumps({"assess_method_version": "3", "findings": []}), encoding="utf-8")
     snap = load_snapshot(tmp_path)
     assert snap is not None and snap["assess_method_version"] == 3
 
@@ -339,5 +339,5 @@ def test_load_snapshot_non_integer_string_version_is_none(tmp_path: Path) -> Non
     as no snapshot instead of crashing the gate."""
     for version in ("\u00b2", "v12", "", "1.5"):
         (tmp_path / FINDINGS_SNAPSHOT_FILE).write_text(
-            json.dumps({"assess_method_version": version, "findings": []}))
+            json.dumps({"assess_method_version": version, "findings": []}), encoding="utf-8")
         assert load_snapshot(tmp_path) is None, version

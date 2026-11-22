@@ -896,7 +896,7 @@ def signoff_repo(tmp_path, monkeypatch):
 
 
 def _commit_all(root: Path, message: str) -> str:
-    _git(root, "add", "-A")
+    _git(root, "-c", "core.fileMode=false", "add", "-A")  # keep index modes, as on Windows
     _git(root, "commit", "-q", "-m", message)
     return subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
@@ -1147,7 +1147,7 @@ def test_signoff_summary_mode_change_is_named_and_vetoes_pin_only(
     (signoff_repo / _WORKFLOW).write_text(
         _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
     )
-    (signoff_repo / FLOOR_FILE).chmod(0o755)
+    _git(signoff_repo, "update-index", "--chmod=+x", FLOOR_FILE)
     _commit_all(signoff_repo, "pin bump plus a mode change")
 
     out = _summary(capsys)
@@ -1191,7 +1191,7 @@ def test_signoff_summary_mode_change_with_content_is_named_and_vetoes_pin_only(
     (signoff_repo / _WORKFLOW).write_text(
         _workflow_text(_NEW_PIN, "v10.1.0"), encoding="utf-8"
     )
-    (signoff_repo / _WORKFLOW).chmod(0o755)
+    _git(signoff_repo, "update-index", "--chmod=+x", _WORKFLOW)
     _commit_all(signoff_repo, "pin bump plus chmod on the same file")
 
     out = _summary(capsys)

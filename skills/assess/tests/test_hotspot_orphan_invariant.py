@@ -72,7 +72,7 @@ def test_prune_retires_orphan_leaves_live_page(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     assess = repo / ".assess"
     (repo / "src").mkdir(parents=True)
-    (repo / "src" / "live.go").write_text("package main\n")
+    (repo / "src" / "live.go").write_text("package main\n", encoding="utf-8")
     _write_page(assess, "src/live.go")
     _write_page(assess, "src/gone.go")  # never created on disk
 
@@ -142,10 +142,10 @@ def test_file_recreated_can_be_rewritten_active(tmp_path: Path) -> None:
     _write_page(assess, "src/flap.go")
     prune_orphan_hotspots(assess, repo)
     page = next((assess / "hotspots").iterdir())
-    assert hotspot_page_status(page.read_text()) == RETIRED_STATUS
+    assert hotspot_page_status(page.read_text(encoding="utf-8")) == RETIRED_STATUS
 
     # File comes back and is re-written as a live hotspot.
-    (repo / "src" / "flap.go").write_text("package main\n")
+    (repo / "src" / "flap.go").write_text("package main\n", encoding="utf-8")
     _write_page(assess, "src/flap.go", status="regressed")
     content = page.read_text(encoding="utf-8")
     assert hotspot_page_status(content) == "regressed"

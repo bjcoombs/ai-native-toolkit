@@ -33,7 +33,7 @@ On expiry, or on a settled run whose conclusion is neither `success` nor `skippe
 
 ## CI patterns
 
-Required (merge-gating) checks, enforced by branch protection (see [CI and merge gates](./ci.md#branch-protection)): `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`.
+Required (merge-gating) checks, enforced by branch protection (see [CI and merge gates](./ci.md#branch-protection)): `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`, `windows suites + smoke runs`.
 
 Non-blocking checks:
 
@@ -52,7 +52,7 @@ Non-blocking checks:
 
 ### AI-readiness regression gate
 
-An `/assess`-based gate that is **effectively required but re-runs on every base advance** (it diffs the PR against `main`). It is not in the classic branch-protection `required_status_checks.contexts`, so it does not show in that API list, but a plain `gh pr merge` is refused while it is re-running. In a multi-PR wave each merge re-triggers it on the still-open PRs: either wait for it to re-settle per PR, or merge with `--admin` once the seven named required checks are green.
+An `/assess`-based gate that is **effectively required but re-runs on every base advance** (it diffs the PR against `main`). It is not in the classic branch-protection `required_status_checks.contexts`, so it does not show in that API list, but a plain `gh pr merge` is refused while it is re-running. In a multi-PR wave each merge re-triggers it on the still-open PRs: either wait for it to re-settle per PR, or merge with `--admin` once the eight named required checks are green.
 
 ## The version hot file
 

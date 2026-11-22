@@ -32,7 +32,7 @@ def test_write_stats_stamps_schema_and_tool_versions(treemap, tmp_path, monkeypa
 
     # lizard-only: no scc_version key.
     treemap.write_stats([(lz, 100, 5.0, "lizard")], None, None, root, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION
     assert stats["lizard_version"] == "1.23.0"
     assert "scc_version" not in stats
@@ -41,7 +41,7 @@ def test_write_stats_stamps_schema_and_tool_versions(treemap, tmp_path, monkeypa
     treemap.write_stats(
         [(lz, 100, 5.0, "lizard"), (sc, 80, 4.0, "scc")], None, None, root, out
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["lizard_version"] == "1.23.0"
     assert stats["scc_version"] == "3.7.0"
 
@@ -89,7 +89,7 @@ def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
     f = root / "a.go"
     out = root / "stats.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out)
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     assert stats["artifact_schema_version"] == treemap.ARTIFACT_SCHEMA_VERSION == "1.41.0"
     # The stats-layout schema_version (from #244) still coexists as an int.
     assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION
@@ -100,7 +100,7 @@ def test_write_stats_stamps_run_id_and_schema_version(treemap, tmp_path):
 
     out2 = root / "stats2.json"
     treemap.write_stats([(f, 100, 5.0, "lizard")], None, None, root, out2)
-    assert json.loads(out2.read_text())["run_id"] != run_id
+    assert json.loads(out2.read_text(encoding="utf-8"))["run_id"] != run_id
 
 
 def test_stats_schema_version_raised_for_backend_by_language(treemap):
@@ -124,7 +124,7 @@ def test_write_stats_version_keys_are_tool_versions_or_listed_non_tools(
         fn_ccn_by_path={py: [7.0], dart: [12.0]},
         fn_backend_by_path={dart: "dart-scanner"},
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     version_keys = {k for k in stats if k.endswith("_version")}
     tools = {f"{t}_version" for t in diff_reliability.stats_tool_versions(stats)}
     assert tools == {"lizard_version", "scc_version"}

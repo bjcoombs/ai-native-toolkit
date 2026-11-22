@@ -48,9 +48,9 @@ def test_find_untrusted_hotspots_only_flags_actual_hotspots() -> None:
 def test_build_test_to_code_map_finds_colocated_tests(tmp_path: Path) -> None:
     repo = tmp_path
     (repo / "pkg").mkdir()
-    (repo / "pkg" / "svc.go").write_text("package pkg")
-    (repo / "pkg" / "svc_test.go").write_text("package pkg")
-    (repo / "pkg" / "lonely.go").write_text("package pkg")  # no sibling test
+    (repo / "pkg" / "svc.go").write_text("package pkg", encoding="utf-8")
+    (repo / "pkg" / "svc_test.go").write_text("package pkg", encoding="utf-8")
+    (repo / "pkg" / "lonely.go").write_text("package pkg", encoding="utf-8")  # no sibling test
     mapping = ks.build_test_to_code_map(repo, ["pkg/svc.go", "pkg/lonely.go"])
     assert mapping == {"pkg/svc_test.go": "pkg/svc.go"}
 
@@ -58,15 +58,15 @@ def test_build_test_to_code_map_finds_colocated_tests(tmp_path: Path) -> None:
 def test_build_test_to_code_map_python_and_adjacent_dir(tmp_path: Path) -> None:
     repo = tmp_path
     (repo / "src").mkdir()
-    (repo / "src" / "mod.py").write_text("x = 1")
+    (repo / "src" / "mod.py").write_text("x = 1", encoding="utf-8")
     (repo / "src" / "tests").mkdir()
-    (repo / "src" / "tests" / "test_mod.py").write_text("x = 1")
+    (repo / "src" / "tests" / "test_mod.py").write_text("x = 1", encoding="utf-8")
     mapping = ks.build_test_to_code_map(repo, ["src/mod.py"])
     assert mapping == {"src/tests/test_mod.py": "src/mod.py"}
 
 
 def test_find_sibling_test_skips_test_files_themselves(tmp_path: Path) -> None:
     repo = tmp_path
-    (repo / "foo_test.go").write_text("package x")
+    (repo / "foo_test.go").write_text("package x", encoding="utf-8")
     assert ks._find_sibling_test(repo, "foo_test.go") is None
     assert ks.build_test_to_code_map(repo, ["foo_test.go"]) == {}

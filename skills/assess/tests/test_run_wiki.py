@@ -44,7 +44,7 @@ def test_unfinalized_hotspot_page_uses_neutral_pointer_not_placeholder(tmp_path:
         "top_hotspots": [{"path": "src/a.go", "loc": 500, "ccn": 20, "commits": 5}],
         "top_complex": [{"path": "src/a.go", "ccn": 20}],
         "top_large": [{"path": "src/a.go", "loc": 500}],
-    }))
+    }), encoding="utf-8")
 
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
@@ -70,7 +70,7 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
     grower = src / "grower.go"
     # Five commits that only add lines and never delete: pure accretion.
     for i in range(1, 6):
-        grower.write_text("\n".join(f"line {n}" for n in range(i * 40)) + "\n")
+        grower.write_text("\n".join(f"line {n}" for n in range(i * 40)) + "\n", encoding="utf-8")
         commit(f"grow {i}", days_ago=(6 - i) * 20)
 
     assess_dir = repo / ".assess"
@@ -82,7 +82,7 @@ def test_hotspot_page_carries_growth_profile_when_file_accretes(git_repo) -> Non
         "top_hotspots": [{"path": "src/grower.go", "loc": 200, "ccn": 20, "commits": 5}],
         "top_complex": [{"path": "src/grower.go", "ccn": 20}],
         "top_large": [{"path": "src/grower.go", "loc": 200}],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     # Precondition: the scan actually flagged this file (else the test proves nothing).
@@ -121,7 +121,7 @@ def test_hotspot_page_omits_growth_profile_when_scan_unavailable(tmp_path: Path)
         "top_hotspots": [{"path": "src/a.go", "loc": 500, "ccn": 20, "commits": 5}],
         "top_complex": [{"path": "src/a.go", "ccn": 20}],
         "top_large": [{"path": "src/a.go", "loc": 500}],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-06-17")
     assert ctx["accretion_ratchet"]["available"] is False
@@ -163,7 +163,7 @@ def test_graduated_index_row_carries_current_metrics(tmp_path: Path) -> None:
         "top_complex": [{"path": "src/legacy.go", "ccn": 172}],
         "top_large": [{"path": "src/legacy.go", "loc": 1096}],
     }
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats), encoding="utf-8")
 
     # Current run: src/legacy.go dropped off top_hotspots (a bigger file
     # took its slot) but still appears in top_complex and top_large at its
@@ -182,7 +182,7 @@ def test_graduated_index_row_carries_current_metrics(tmp_path: Path) -> None:
             {"path": "src/legacy.go", "loc": 1096},
         ],
     }
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats), encoding="utf-8")
 
     build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     index = (assess_dir / "index.md").read_text(encoding="utf-8")
@@ -214,7 +214,7 @@ def test_graduated_index_row_uses_dash_when_metrics_unknown(tmp_path: Path) -> N
         "top_complex": [{"path": "src/legacy.go", "ccn": 90}],
         "top_large": [{"path": "src/legacy.go", "loc": 800}],
     }
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats), encoding="utf-8")
 
     # Current: src/legacy.go fell off ALL top-N lists (none of them mention it).
     current_stats = {
@@ -225,7 +225,7 @@ def test_graduated_index_row_uses_dash_when_metrics_unknown(tmp_path: Path) -> N
         "top_complex": [{"path": "src/new.go", "ccn": 80}],
         "top_large": [{"path": "src/new.go", "loc": 600}],
     }
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats), encoding="utf-8")
 
     build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     index = (assess_dir / "index.md").read_text(encoding="utf-8")
@@ -247,7 +247,7 @@ def test_build_run_context_writes_hotspot_pages(tmp_path: Path) -> None:
         ],
         "top_complex": [{"path": "src/foo.go", "ccn": 20}],
         "top_large": [{"path": "src/foo.go", "loc": 500}],
-    }))
+    }), encoding="utf-8")
 
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     hotspots = list((assess_dir / "hotspots").iterdir())
@@ -270,7 +270,7 @@ def test_briefing_includes_loc_ccn_commits_and_status(tmp_path: Path) -> None:
         ],
         "top_complex": [{"path": "src/foo.go", "ccn": 20}],
         "top_large": [{"path": "src/foo.go", "loc": 500}],
-    }))
+    }), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
     page = next((assess_dir / "hotspots").iterdir())
@@ -287,17 +287,17 @@ def test_has_sibling_test_detects_colocated_and_adjacent(tmp_path: Path) -> None
     yes/no cheaply (issue #47, observation 6)."""
     repo = tmp_path / "repo"
     (repo / "go").mkdir(parents=True)
-    (repo / "go" / "foo.go").write_text("package foo")
-    (repo / "go" / "foo_test.go").write_text("package foo")  # co-located
+    (repo / "go" / "foo.go").write_text("package foo", encoding="utf-8")
+    (repo / "go" / "foo_test.go").write_text("package foo", encoding="utf-8")  # co-located
     (repo / "ts").mkdir()
-    (repo / "ts" / "bar.ts").write_text("export const x = 1")
-    (repo / "ts" / "bar.test.ts").write_text("test")          # co-located .test.
+    (repo / "ts" / "bar.ts").write_text("export const x = 1", encoding="utf-8")
+    (repo / "ts" / "bar.test.ts").write_text("test", encoding="utf-8")          # co-located .test.
     (repo / "py").mkdir()
-    (repo / "py" / "baz.py").write_text("x = 1")              # no test
+    (repo / "py" / "baz.py").write_text("x = 1", encoding="utf-8")              # no test
     (repo / "svc").mkdir()
-    (repo / "svc" / "api.py").write_text("x = 1")
+    (repo / "svc" / "api.py").write_text("x = 1", encoding="utf-8")
     (repo / "svc" / "__tests__").mkdir()
-    (repo / "svc" / "__tests__" / "test_api.py").write_text("t")  # adjacent dir
+    (repo / "svc" / "__tests__" / "test_api.py").write_text("t", encoding="utf-8")  # adjacent dir
 
     assert run_wiki._has_sibling_test(repo, "go/foo.go") is True
     assert run_wiki._has_sibling_test(repo, "ts/bar.ts") is True
@@ -312,8 +312,8 @@ def test_has_sibling_test_detects_colocated_and_adjacent(tmp_path: Path) -> None
 def test_hotspot_page_shows_yes_when_sibling_test_exists(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
-    (repo / "src" / "foo.go").write_text("package foo")
-    (repo / "src" / "foo_test.go").write_text("package foo")
+    (repo / "src" / "foo.go").write_text("package foo", encoding="utf-8")
+    (repo / "src" / "foo_test.go").write_text("package foo", encoding="utf-8")
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
@@ -321,7 +321,7 @@ def test_hotspot_page_shows_yes_when_sibling_test_exists(tmp_path: Path) -> None
         "ccn": {"p50": 1, "p95": 3, "max": 5},
         "top_hotspots": [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}],
         "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     content = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
     assert "Has test file | yes" in content
@@ -339,7 +339,7 @@ def test_commits_read_from_legacy_churn_field(tmp_path: Path) -> None:
         "ccn": {"p50": 1, "p95": 3, "max": 5},
         "top_hotspots": [{"path": "src/foo.go", "loc": 500, "ccn": 20, "churn": 33}],
         "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     content = next((assess_dir / "hotspots").iterdir()).read_text(encoding="utf-8")
     assert "33 commits" in content
@@ -362,21 +362,21 @@ def test_generated_header_exclusion_is_not_recorded_as_graduation(tmp_path: Path
         ],
         "top_complex": [], "top_large": [],
     }
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats), encoding="utf-8")
     current_stats = {
         "files_scored": 49, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
         "top_complex": [], "top_large": [],
         "excluded_generated": [{"path": "db/schema.sql", "reason": "generated-header"}],
     }
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-18")
     assert ctx["diff"]["graduated"] == 1
     assert ctx["excluded_generated"] == [
         {"path": "db/schema.sql", "reason": "generated-header"}
     ]
-    index = (assess_dir / "index.md").read_text()
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
     assert "src/legacy.go" in index
     assert "db/schema.sql" not in index
 
@@ -397,17 +397,17 @@ def test_generated_header_free_name_glob_is_not_recorded_as_graduation(tmp_path:
         ],
         "top_complex": [], "top_large": [],
     }
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats), encoding="utf-8")
     current_stats = {
         "files_scored": 49, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
         "top_complex": [], "top_large": [], "excluded_generated": [],
     }
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-09-19")
     assert ctx["diff"]["graduated"] == 1
-    index = (assess_dir / "index.md").read_text()
+    index = (assess_dir / "index.md").read_text(encoding="utf-8")
     assert "src/legacy.go" in index
     assert "database.types.ts" not in index
     assert "api.generated.ts" not in index
@@ -435,22 +435,22 @@ def test_index_keeps_graduated_row_absent_from_later_diff(tmp_path: Path) -> Non
     new_later = {"path": "src/new.go", "loc": 650, "ccn": 85, "commits": 6}
 
     # Run one: legacy graduates, new enters.
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([legacy])))
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new])))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([legacy])), encoding="utf-8")
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new])), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-05-29")
     index_one = (assess_dir / "index.md").read_text(encoding="utf-8")
     assert "graduated" in next(r for r in index_one.splitlines() if "src/legacy.go" in r)
 
     # Run two: new persists; legacy is in neither top_hotspots nor graduated.
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([new])))
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new_later])))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(_stats([new])), encoding="utf-8")
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats([new_later])), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-06-05")
     index_two = (assess_dir / "index.md").read_text(encoding="utf-8")
     legacy_row = next(r for r in index_two.splitlines() if "src/legacy.go" in r)
     assert "| graduated |" in legacy_row
     assert "2026-05-29" in legacy_row  # last seen stays at the run that saw it
 
-    page = (assess_dir / "hotspots" / f"{slug_for_path('src/new.go')}.md").read_text()
+    page = (assess_dir / "hotspots" / f"{slug_for_path('src/new.go')}.md").read_text(encoding="utf-8")
     history = page.split("## History across runs", 1)[1].split("##", 1)[0]
     rows = [r for r in history.splitlines() if r.startswith("| 2026-")]
     assert [r.split(" | ")[0] for r in rows] == ["| 2026-05-29", "| 2026-06-05"]
@@ -483,8 +483,8 @@ def _run(repo: Path, top: list[dict], day: str, **extra: object) -> dict:
     assess_dir = repo / ".assess"
     current = assess_dir / "complexity-stats.json"
     if current.exists():
-        (assess_dir / "complexity-stats.prior.json").write_text(current.read_text())
-    current.write_text(json.dumps({**_stats(top), **extra}))
+        (assess_dir / "complexity-stats.prior.json").write_text(current.read_text(encoding="utf-8"), encoding="utf-8")
+    current.write_text(json.dumps({**_stats(top), **extra}), encoding="utf-8")
     return build_and_publish_run(repo_root=repo, run_date=day)
 
 
@@ -545,7 +545,7 @@ def test_index_row_for_file_excluded_by_config_after_finalized_run(tmp_path: Pat
     repo, assess_dir = _absent_repo(tmp_path, hot["path"])
     _run(repo, [hot, _KEEP], "2026-06-01")
     _seeded(assess_dir, hot["path"])
-    (assess_dir / "config.toml").write_text('exclude_dirs = ["vendor"]\n')
+    (assess_dir / "config.toml").write_text('exclude_dirs = ["vendor"]\n', encoding="utf-8")
     ctx = _run(repo, [_KEEP], "2026-06-08")
     assert [g["path"] for g in ctx["diff_detail"]["graduated"]] == [hot["path"]]
     _run(repo, [_KEEP], "2026-06-15")
@@ -562,7 +562,7 @@ def test_index_drops_file_excluded_before_finalize(tmp_path: Path) -> None:
     _run(repo, [_KEEP], "2026-06-01")
     _run(repo, [hot, _KEEP], "2026-06-08")  # flags gen/big.go, never finalized
     _seeded(assess_dir, hot["path"])
-    (assess_dir / "config.toml").write_text('exclude_dirs = ["gen"]\n')
+    (assess_dir / "config.toml").write_text('exclude_dirs = ["gen"]\n', encoding="utf-8")
     ctx = _run(repo, [_KEEP], "2026-06-08")
     assert ctx["retired_excluded_hotspots"] == [hot["path"]]
     assert _index_row(assess_dir, hot["path"]) is None
@@ -596,7 +596,7 @@ def test_every_live_hotspot_page_has_an_index_row(tmp_path: Path) -> None:
     including one orphaned from the index by an older writer, has a row."""
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
-    (repo / "src" / "orphan.go").write_text("package main\n")
+    (repo / "src" / "orphan.go").write_text("package main\n", encoding="utf-8")
     assess_dir = repo / ".assess"
     assess_dir.mkdir()
     write_hotspot_page(
@@ -604,9 +604,9 @@ def test_every_live_hotspot_page_has_an_index_row(tmp_path: Path) -> None:
         last_seen="2026-02-01", status="graduated", loc=300, ccn=40, commits=2,
         has_tests=None, briefing="x", actions="- y",
     )
-    (assess_dir / "index.md").write_text("# Assess Wiki Index\n\n| File |\n")
+    (assess_dir / "index.md").write_text("# Assess Wiki Index\n\n| File |\n", encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(json.dumps(_stats(
-        [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}])))
+        [{"path": "src/foo.go", "loc": 500, "ccn": 20, "commits": 5}])), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-06-05")
 
     index = (assess_dir / "index.md").read_text(encoding="utf-8")
@@ -630,11 +630,11 @@ def test_hotspot_page_names_worst_function_and_aggregate(tmp_path: Path) -> None
          "max_fn_ccn": 8.0, "max_fn_name": "test_scan"},
         {"path": "src/b.go", "loc": 400, "ccn": 30, "commits": 2,
          "max_fn_ccn": None, "max_fn_name": None},
-    ])))
+    ])), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-06-05")
     hot = assess_dir / "hotspots"
-    a = (hot / f"{slug_for_path('src/a.py')}.md").read_text()
-    b = (hot / f"{slug_for_path('src/b.go')}.md").read_text()
+    a = (hot / f"{slug_for_path('src/a.py')}.md").read_text(encoding="utf-8")
+    b = (hot / f"{slug_for_path('src/b.go')}.md").read_text(encoding="utf-8")
     assert "| Cyclomatic complexity (file aggregate) | 159 |" in a
     assert "| Worst function | `test_scan` (8) |" in a
     assert "aggregate cyclomatic complexity 159 (worst function `test_scan` 8)" in a

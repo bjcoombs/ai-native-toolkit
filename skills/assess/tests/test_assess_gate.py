@@ -362,7 +362,7 @@ def test_verdict_generated_header_disclosure_silent_when_empty():
 
 def _write_ctx(tmp_path: Path, ctx: dict) -> Path:
     (tmp_path / ".assess").mkdir(parents=True, exist_ok=True)
-    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx))
+    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
     return tmp_path
 
 

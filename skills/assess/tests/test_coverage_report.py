@@ -44,14 +44,14 @@ def test_parse_cobertura_flat_schema(tmp_path: Path) -> None:
         '</coverage>\n'
     )
     path = tmp_path / "coverage.xml"
-    path.write_text(xml)
+    path.write_text(xml, encoding="utf-8")
     result = _parse_cobertura(path)
     assert result == {"_overall": 0.6, "per_file": {"x.py": 0.6}}
 
 
 def test_parse_cobertura_malformed_returns_none(tmp_path: Path) -> None:
     path = tmp_path / "coverage.xml"
-    path.write_text("<coverage line-rate=\"0.5\"><classes><not-closed")
+    path.write_text("<coverage line-rate=\"0.5\"><classes><not-closed", encoding="utf-8")
     assert _parse_cobertura(path) is None
 
 
@@ -71,7 +71,7 @@ def test_parse_lcov(fixtures_dir: Path) -> None:
 def test_parse_lcov_no_terminator_still_flushes(tmp_path: Path) -> None:
     """A record without ``end_of_record`` is flushed at EOF."""
     path = tmp_path / "lcov.info"
-    path.write_text("SF:a.py\nLF:4\nLH:2\n")
+    path.write_text("SF:a.py\nLF:4\nLH:2\n", encoding="utf-8")
     result = _parse_lcov(path)
     assert result == {"_overall": 0.5, "per_file": {"a.py": 0.5}}
 
@@ -79,7 +79,7 @@ def test_parse_lcov_no_terminator_still_flushes(tmp_path: Path) -> None:
 def test_parse_lcov_zero_lines_returns_none(tmp_path: Path) -> None:
     """A record with LF:0 contributes nothing; an all-zero report degrades."""
     path = tmp_path / "lcov.info"
-    path.write_text("SF:a.py\nLF:0\nLH:0\nend_of_record\n")
+    path.write_text("SF:a.py\nLF:0\nLH:0\nend_of_record\n", encoding="utf-8")
     assert _parse_lcov(path) is None
 
 
@@ -90,8 +90,8 @@ def test_parse_lcov_absent_returns_none(tmp_path: Path) -> None:
 # --- detection ------------------------------------------------------------
 
 def test_detect_prefers_cobertura_at_root(tmp_path: Path) -> None:
-    (tmp_path / "coverage.xml").write_text("<coverage line-rate=\"0.5\"/>")
-    (tmp_path / "lcov.info").write_text("SF:a\nLF:1\nLH:1\nend_of_record\n")
+    (tmp_path / "coverage.xml").write_text("<coverage line-rate=\"0.5\"/>", encoding="utf-8")
+    (tmp_path / "lcov.info").write_text("SF:a\nLF:1\nLH:1\nend_of_record\n", encoding="utf-8")
     assert detect_coverage_report(tmp_path) == {
         "source": "coverage.xml", "format": "cobertura"}
 
@@ -99,7 +99,7 @@ def test_detect_prefers_cobertura_at_root(tmp_path: Path) -> None:
 def test_detect_lcov_in_coverage_subdir(tmp_path: Path) -> None:
     (tmp_path / "coverage").mkdir()
     (tmp_path / "coverage" / "lcov.info").write_text(
-        "SF:a\nLF:1\nLH:1\nend_of_record\n")
+        "SF:a\nLF:1\nLH:1\nend_of_record\n", encoding="utf-8")
     assert detect_coverage_report(tmp_path) == {
         "source": "coverage/lcov.info", "format": "lcov"}
 
@@ -107,7 +107,7 @@ def test_detect_lcov_in_coverage_subdir(tmp_path: Path) -> None:
 def test_detect_dot_coverage_directory(tmp_path: Path) -> None:
     (tmp_path / ".coverage").mkdir()
     (tmp_path / ".coverage" / "coverage.xml").write_text(
-        "<coverage line-rate=\"0.5\"/>")
+        "<coverage line-rate=\"0.5\"/>", encoding="utf-8")
     assert detect_coverage_report(tmp_path) == {
         "source": ".coverage/coverage.xml", "format": "cobertura"}
 
@@ -115,7 +115,7 @@ def test_detect_dot_coverage_directory(tmp_path: Path) -> None:
 def test_detect_dot_coverage_sqlite_file_out_of_scope(tmp_path: Path) -> None:
     """A bare ``.coverage`` SQLite *file* (not a directory) is never matched -
     reading it needs the coverage.py library, which is out of scope."""
-    (tmp_path / ".coverage").write_text("SQLite format 3\x00binary junk")
+    (tmp_path / ".coverage").write_text("SQLite format 3\x00binary junk", encoding="utf-8")
     assert detect_coverage_report(tmp_path) is None
 
 
@@ -128,7 +128,7 @@ def test_detect_none_when_absent(tmp_path: Path) -> None:
 def test_load_cobertura_end_to_end(tmp_path: Path) -> None:
     (tmp_path / "coverage.xml").write_text(
         '<coverage line-rate="0.9"><classes>'
-        '<class filename="m.py" line-rate="0.9"/></classes></coverage>')
+        '<class filename="m.py" line-rate="0.9"/></classes></coverage>', encoding="utf-8")
     assert load_coverage_data(tmp_path) == {
         "_overall": 0.9, "per_file": {"m.py": 0.9}}
 
@@ -139,7 +139,7 @@ def test_load_returns_none_when_no_report(tmp_path: Path) -> None:
 
 def test_load_malformed_report_degrades_to_none(tmp_path: Path) -> None:
     """Detected but unparseable -> None, never an exception."""
-    (tmp_path / "coverage.xml").write_text("not xml at all <<<")
+    (tmp_path / "coverage.xml").write_text("not xml at all <<<", encoding="utf-8")
     assert load_coverage_data(tmp_path) is None
 
 

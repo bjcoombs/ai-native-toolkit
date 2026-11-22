@@ -29,12 +29,12 @@ from lib.instruction_content import RepoContext, build_repo_context
 
 @pytest.fixture
 def good_text(fixtures_dir: Path) -> str:
-    return (fixtures_dir / "good_instructions.md").read_text()
+    return (fixtures_dir / "good_instructions.md").read_text(encoding="utf-8")
 
 
 @pytest.fixture
 def bad_text(fixtures_dir: Path) -> str:
-    return (fixtures_dir / "bad_instructions.md").read_text()
+    return (fixtures_dir / "bad_instructions.md").read_text(encoding="utf-8")
 
 
 def test_positive_directives_good_outscores_bad(good_text: str, bad_text: str) -> None:
@@ -267,7 +267,7 @@ def grading_repo(tmp_path: Path, fixtures_dir: Path) -> RepoContext:
 
 
 def _fixture(fixtures_dir: Path, name: str) -> str:
-    return (fixtures_dir / "instruction_grading" / name).read_text()
+    return (fixtures_dir / "instruction_grading" / name).read_text(encoding="utf-8")
 
 
 @pytest.mark.windows_followup

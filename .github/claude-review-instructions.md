@@ -131,7 +131,7 @@ gh pr checks {PR_NUMBER}
 ```
 Required (merge-gating) checks are `skills/assess pytest`, `scripts/ pytest`,
 `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`,
-`floor enforcement` and `floor self-anchor`. `CodeRabbit`, `Auto-label`, and
+`floor enforcement`, `floor self-anchor` and `windows suites + smoke runs`. `CodeRabbit`, `Auto-label`, and
 `build` are non-blocking.
 
 ## Bot comment gate (CodeRabbit)

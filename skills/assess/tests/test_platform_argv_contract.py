@@ -73,23 +73,23 @@ def stubs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     data.mkdir()
     for name, body in (("gh", FAKE_GH), ("glab", FAKE_GLAB)):
         stub = bindir / name
-        stub.write_text(body)
+        stub.write_text(body, encoding="utf-8")
         stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
     prs = json.loads(RECORDED.read_text(encoding="utf-8"))
-    (data / "prs.json").write_text(json.dumps(prs))
-    (data / "light.json").write_text(json.dumps([{"mergedAt": pr["mergedAt"]} for pr in prs]))
+    (data / "prs.json").write_text(json.dumps(prs), encoding="utf-8")
+    (data / "light.json").write_text(json.dumps([{"mergedAt": pr["mergedAt"]} for pr in prs]), encoding="utf-8")
     (data / "mrs.json").write_text(json.dumps([
         {"iid": i, "author": {"username": "alice"}, "merge_user": {"username": "alice"},
          "created_at": "2026-11-01T00:00:00Z", "merged_at": f"2026-11-0{i}T00:00:00Z"}
-        for i in range(1, 4)]))
-    (data / "log").write_text("")
+        for i in range(1, 4)]), encoding="utf-8")
+    (data / "log").write_text("", encoding="utf-8")
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_DIR", str(data))
     return data
 
 
 def _calls(data: Path) -> list[list[str]]:
-    lines = (data / "log").read_text().splitlines()
+    lines = (data / "log").read_text(encoding="utf-8").splitlines()
     return [line.rstrip("\x1f").split("\x1f") for line in lines if line]
 
 

@@ -1,17 +1,25 @@
 name: Windows
 
-# Runs the skills/assess suite (the fleet tests included) on windows-latest so
-# separator, encoding and path-conversion regressions in /fleet and /assess
-# show up before a Windows user hits them (#701, #713).
+# The whole repository on windows-latest, the Git for Windows baseline (#749):
+# every test suite, the bash skill scripts under Git Bash, and end-to-end smoke
+# runs of /assess, /fleet and the marathon contract gates on fixtures (#754).
+# Separator, encoding, line-ending and path-conversion regressions show up here
+# before a Windows user hits them (#701, #713, #752, #753).
+#
+# One job, a required check: "windows suites + smoke runs". Every suite step
+# and smoke step runs even when an earlier one fails (`!cancelled()`), and -ra
+# lists every skip and failure, so one log read shows it all. The suites run on
+# every core with pytest-xdist (`-n auto --dist loadfile`: one file per worker,
+# so cross-file state, #831, cannot interleave), added with `--with` so the lockfiles
+# and the serial Linux jobs are unchanged. Serial, the job took over an hour.
+# No coverage gate here: the Linux jobs own the floors.
 #
 # Tests that need POSIX-only machinery carry one of the Windows skip markers
 # declared in skills/assess/tests/conftest.py (WINDOWS_SKIP_MARKERS:
 # needs_symlink, needs_posix_perms, needs_posix_shell), or call its
 # skip_without_posix_shell() from a fixture that puts a #!/bin/sh gh/glab stub
-# on PATH. No coverage gate here: the Linux job owns the floor.
-#
-# The job is continue-on-error until its first green run; then drop that line
-# and add "windows fleet + assess pytest" to the required checks.
+# on PATH. Known Windows failures that are not POSIX-only carry
+# windows_followup (#762).
 
 on:
   pull_request:
@@ -23,20 +31,28 @@ permissions:
   contents: read
 
 jobs:
-  windows-pytest:
-    name: windows fleet + assess pytest
+  windows:
+    name: windows suites + smoke runs
     runs-on: windows-latest
-    continue-on-error: true
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       # Without this, checkout converts every text file to CRLF and fixture
-      # byte and line counts stop matching the Linux goldens.
+      # byte and line counts stop matching the Linux goldens. The step "Shell
+      # scripts are LF in a CRLF checkout" below checks the default a Windows
+      # user gets (core.autocrlf=true) in a fresh clone.
       - name: Keep LF line endings
         run: git config --global core.autocrlf false
 
+      # Full history: the plugin contract tests reason about the diff against
+      # the PR base, which a shallow checkout cannot see (as in tests.yml).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Fetch the PR base ref
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       # An explicit interpreter for uv to pick up: --python 3.11 below then runs on
       # this one rather than one uv downloads.
@@ -54,79 +70,95 @@ jobs:
           choco install ripgrep -y --no-progress
           rg --version
 
-      - name: Python version
-        run: uv run --locked --python 3.11 python --version
-        working-directory: skills/assess
-
-      # A fixture estate built at test time is run through fleet.py and its
-      # repos.jsonl compared with the one committed from Linux
-      # (tests/fixtures/fleet_golden/repos.jsonl): field-level differences are
-      # listed by dotted path, then the bytes (LF endings) are compared.
-      - name: Fleet golden run against the committed Linux repos.jsonl
-        run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
-        working-directory: skills/assess
-
-      # The rest of the suite runs even when the golden step fails. -ra lists
-      # every skip and failure in the summary, so one log read shows it all.
-      - name: Run pytest
-        if: ${{ !cancelled() }}
-        run: >-
-          uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
-          --ignore=tests/test_fleet_golden.py
-        working-directory: skills/assess
-
-  # The bash skill scripts under Git Bash, the Git for Windows baseline (#749,
-  # #753): the ghsync and ghreport suites, the standalone ZIP build and the
-  # eval scaffolds. `shell: bash` on windows-latest is Git Bash. The checkout
-  # keeps the default core.autocrlf=true a Windows user gets, so this job also
-  # proves .gitattributes keeps every *.sh LF.
-  windows-git-bash:
-    name: windows ghsync + ghreport under Git Bash
-    runs-on: windows-latest
-    continue-on-error: true
-    timeout-minutes: 60
-    defaults:
-      run:
+      # `shell: bash` on windows-latest is Git Bash. Git Bash does not ship jq;
+      # the runner image usually does. The smoke fixtures and the eval
+      # scaffolds commit, so git needs an identity.
+      - name: Git Bash tools
         shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
-        with:
-          python-version: "3.11"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
-
-      # Git Bash does not ship jq; the runner image usually does.
-      - name: Tools
         run: |
           command -v jq >/dev/null || choco install jq -y --no-progress
           bash --version | head -1
           git --version
           jq --version
           command -v timeout
+          git config --global user.email ci@example.invalid
+          git config --global user.name ci
 
+      - name: Python version
+        run: uv run --locked --python 3.11 python --version
+        working-directory: skills/assess
+
+      # .gitattributes (`*.sh text eol=lf`) must keep every *.sh LF in the
+      # core.autocrlf=true checkout a Windows user gets: a fresh clone of this
+      # commit made with that setting. README.md turning CRLF there proves the
+      # conversion really ran. The bytes are read in Python: Git for Windows'
+      # grep strips CR before matching, so `grep $'\r'` never finds one.
       - name: Shell scripts are LF in a CRLF checkout
+        shell: bash
         run: |
-          git config --get core.autocrlf || true
-          bad=0
-          while IFS= read -r -d '' f; do
-            if grep -q $'\r' "$f"; then echo "CRLF: $f"; bad=1; fi
-          done < <(git ls-files -z '*.sh')
-          exit $bad
+          crlf="$RUNNER_TEMP/crlf-clone"
+          git clone -q --no-local --no-checkout -c core.autocrlf=true "$GITHUB_WORKSPACE" "$crlf"
+          git -C "$crlf" checkout -q --detach "$(git rev-parse HEAD)"
+          git -C "$crlf" ls-files -z '*.sh' > "$RUNNER_TEMP/sh-files"
+          python -c '
+          import sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          assert b"\r\n" in (root / "README.md").read_bytes(), "autocrlf=true did not convert README.md"
+          names = [n for n in Path(sys.argv[2]).read_bytes().decode("utf-8").split("\0") if n]
+          bad = [n for n in names if b"\r" in (root / n).read_bytes()]
+          print(len(names), "shell scripts checked;", "CRLF:", bad or "none")
+          sys.exit(1 if bad or not names else 0)
+          ' "$crlf" "$RUNNER_TEMP/sh-files"
 
-      - name: ghsync and ghreport suites
+      # --- Test suites ----------------------------------------------------------
+
+      # A fixture estate built at test time is run through fleet.py and its
+      # repos.jsonl compared with the one committed from Linux
+      # (tests/fixtures/fleet_golden/repos.jsonl): field-level differences are
+      # listed by dotted path, then the bytes (LF endings) are compared.
+      - name: Fleet golden run against the committed Linux repos.jsonl
+        if: ${{ !cancelled() }}
+        run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
+        working-directory: skills/assess
+
+      - name: skills/assess pytest
+        if: ${{ !cancelled() }}
         run: >-
-          uv run --python 3.11 --with pytest --with pyyaml
-          pytest -ra -p no:cacheprovider
+          uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
+          --ignore=tests/test_fleet_golden.py
+        working-directory: skills/assess
+
+      - name: scripts/ pytest
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
+        working-directory: scripts
+
+      # Under Git Bash: some contract tests and every ghsync/ghreport test run
+      # bash, and tests/gitbash.py resolves it on PATH (from PowerShell, `bash`
+      # can be the WSL launcher in System32).
+      - name: plugin contract pytest
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: >-
+          uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile tests/
+          --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
+
+      - name: ghsync and ghreport suites under Git Bash
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: >-
+          uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
           tests/test_ghsync*.py tests/test_ghreport*.py
 
       - name: Standalone skill ZIPs
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
           dest=$(mktemp -d)
           bash scripts/build-standalone-skills.sh --dest "$dest"
@@ -135,9 +167,8 @@ jobs:
 
       - name: Eval scaffolds build their fixtures
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          git config --global user.email ci@example.invalid
-          git config --global user.name ci
           while IFS= read -r -d '' s; do
             ws=$(mktemp -d)
             (cd "$ws" && bash "$GITHUB_WORKSPACE/$s")
@@ -145,3 +176,99 @@ jobs:
             test -n "$(git -C "$ws" ls-files)"
             echo "ok: $s"
           done < <(git ls-files -z 'evals/**/scaffold.sh')
+
+      # --- Smoke runs on fixtures -----------------------------------------------
+      # A ghsync-layout estate (<root>/acme/<repo>/<repo>-main) of two repos whose
+      # source and commit subjects hold non-ASCII text, so a wrong code page or
+      # separator shows up as a failed scan or a garbled report.
+
+      - name: Smoke fixture estate
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          for r in widget gadget; do
+            co="$RUNNER_TEMP/estate/acme/$r/$r-main"
+            mkdir -p "$co"
+            git -C "$co" init -q -b main
+            printf 'def greet(name):\n    """Say hello."""\n    return f"caf\xc3\xa9 \xc2\xb7 {name}"\n' > "$co/app.py"
+            printf '# %s\n\nSee [the app](app.py).\n' "$r" > "$co/README.md"
+            git -C "$co" add -A
+            git -C "$co" commit -q -m "init $r "$'caf\xc3\xa9'
+          done
+          find "$RUNNER_TEMP/estate" -name '*-main' -type d
+
+      - name: Smoke assess_signals.py
+        if: ${{ !cancelled() }}
+        shell: bash
+        working-directory: skills/assess
+        run: |
+          uv run --locked --python 3.11 python scripts/assess_signals.py \
+            "$RUNNER_TEMP/estate/acme/widget/widget-main" --out "$RUNNER_TEMP/signals.json"
+          uv run --locked --python 3.11 python -c '
+          import json, sys
+          doc = json.load(open(sys.argv[1], encoding="utf-8"))
+          scans = doc["scans"]
+          assert len(scans) > 10, sorted(scans)
+          print(len(scans), "scan blocks")
+          ' "$RUNNER_TEMP/signals.json"
+
+      - name: Smoke assess_core.py
+        if: ${{ !cancelled() }}
+        shell: bash
+        working-directory: skills/assess
+        run: |
+          co="$RUNNER_TEMP/estate/acme/widget/widget-main"
+          uv run --locked --python 3.11 python scripts/assess_core.py "$co"
+          uv run --locked --python 3.11 python scripts/assess_report.py "$co" --stdout > "$RUNNER_TEMP/report.md"
+          uv run --locked --python 3.11 python -c '
+          import json, sys
+          from pathlib import Path
+          json.loads((Path(sys.argv[1]) / ".assess" / "run-context.json").read_text(encoding="utf-8"))
+          report = Path(sys.argv[2]).read_bytes().decode("utf-8")
+          assert report.startswith("# Deterministic Assessment Snapshot: widget-main"), report[:200]
+          assert "·" in report, "headline separator missing or garbled"
+          assert "init widget café" in report, "commit subject garbled"
+          print(report[:400])
+          ' "$co" "$RUNNER_TEMP/report.md"
+
+      - name: Smoke fleet.py over a ghsync-layout root
+        if: ${{ !cancelled() }}
+        shell: bash
+        working-directory: skills/assess
+        run: |
+          uv run --locked --python 3.11 python ../fleet/scripts/fleet.py "$RUNNER_TEMP/estate" \
+            --out "$RUNNER_TEMP/fleet-root" --jobs 2 --no-history
+          uv run --locked --python 3.11 python ../../tests/fixtures/windows_smoke/check_fleet_rows.py \
+            "$RUNNER_TEMP/fleet-root/repos.jsonl" acme/gadget acme/widget
+
+      - name: Smoke fleet.py --from-list
+        if: ${{ !cancelled() }}
+        shell: bash
+        working-directory: skills/assess
+        run: |
+          # Deliberately mixed: widget by its checkout dir, gadget by its repository
+          # dir. --from-list accepts both forms and both must map to acme/<name>.
+          printf '%s\n' "$RUNNER_TEMP/estate/acme/widget/widget-main" "$RUNNER_TEMP/estate/acme/gadget" \
+            > "$RUNNER_TEMP/fleet-list.txt"
+          uv run --locked --python 3.11 python ../fleet/scripts/fleet.py --from-list "$RUNNER_TEMP/fleet-list.txt" \
+            --out "$RUNNER_TEMP/fleet-list" --jobs 2 --no-history
+          uv run --locked --python 3.11 python ../../tests/fixtures/windows_smoke/check_fleet_rows.py \
+            "$RUNNER_TEMP/fleet-list/repos.jsonl" acme/gadget acme/widget
+
+      # tests/fixtures/windows_smoke/contract holds run "smoke": freeze evidence
+      # with a passing kill test, verifier results and the provenance token, so
+      # both gates open. A run with no record must be refused by both.
+      - name: Smoke start_gate.py and complete_gate.py
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          dir=tests/fixtures/windows_smoke/contract
+          python scripts/contract/start_gate.py smoke --contract-dir "$dir"
+          python scripts/contract/complete_gate.py smoke --contract-dir "$dir"
+          if python scripts/contract/start_gate.py no-such-run --contract-dir "$dir"; then
+            echo "start gate opened for a run with no record"; exit 1
+          fi
+          if python scripts/contract/complete_gate.py no-such-run --contract-dir "$dir"; then
+            echo "complete gate passed a run with no record"; exit 1
+          fi
+          echo "both gates open for smoke and refuse no-such-run"

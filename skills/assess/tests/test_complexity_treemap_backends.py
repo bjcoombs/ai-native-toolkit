@@ -41,7 +41,7 @@ def test_write_stats_backend_by_language_maps_lizard_and_null(treemap, tmp_path)
         languages_by_path={py: "Python", ex: "Elixir",
                            js: "JSON", md: "Markdown"},
     )
-    fn = json.loads(out.read_text())["fn_ccn"]
+    fn = json.loads(out.read_text(encoding="utf-8"))["fn_ccn"]
     assert fn["source"] == [{"name": "lizard", "approximate": False}]
     assert fn["backend_by_language"] == {"Python": "lizard", "Elixir": None}
 
@@ -63,7 +63,7 @@ def test_write_stats_backend_by_language_partial_coverage_is_null(
         languages_by_path={cpp: "C++", ipp: "C++",
                            js: "JavaScript", mjs: "JavaScript"},
     )
-    fn = json.loads(out.read_text())["fn_ccn"]
+    fn = json.loads(out.read_text(encoding="utf-8"))["fn_ccn"]
     assert fn["backend_by_language"] == {"C++": None, "JavaScript": "lizard"}
 
 
@@ -75,7 +75,7 @@ def test_write_stats_backend_by_language_empty_source_when_no_backend(
     out = root / "stats.json"
     treemap.write_stats([(ex, 9, 2.0, "scc")], None, None, root, out,
                         languages_by_path={ex: "Elixir"})
-    fn = json.loads(out.read_text())["fn_ccn"]
+    fn = json.loads(out.read_text(encoding="utf-8"))["fn_ccn"]
     assert fn["source"] == []
     assert fn["backend_by_language"] == {"Elixir": None}
 
@@ -96,7 +96,7 @@ def test_write_stats_max_fn_name_names_worst_function(treemap, tmp_path):
         fn_ccn_by_path={py: [1.0, 7.0], flat: []},
         fn_name_by_path={py: "gnarly"},
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     for key in ("top_hotspots", "top_complex", "top_large"):
         rows = {r["path"]: r for r in stats[key]}
         assert rows["app.py"]["max_fn_ccn"] == 7.0
@@ -111,7 +111,7 @@ def test_lizard_scores_fills_max_fn_name_with_worst_function(
     """lizard_scores records the name of each file's highest-ccn function in
     the optional fn_names map, and collect threads it through."""
     src = tmp_path / "app.py"
-    src.write_text("def simple(a):\n    return a\n")
+    src.write_text("def simple(a):\n    return a\n", encoding="utf-8")
 
     def fn(name, ccn):
         return types.SimpleNamespace(name=name, cyclomatic_complexity=ccn)
@@ -143,9 +143,9 @@ def test_collect_dart_scanner_scores_scc_dart_files(
     scc files stay without a breakdown."""
     dart = tmp_path / "lib" / "order.dart"
     dart.parent.mkdir()
-    dart.write_text("int a(x) { if (x) {} return 1; }\nint b() => 2;\n")
+    dart.write_text("int a(x) { if (x) {} return 1; }\nint b() => 2;\n", encoding="utf-8")
     ex = tmp_path / "router.ex"
-    ex.write_text("defmodule R do\nend\n")
+    ex.write_text("defmodule R do\nend\n", encoding="utf-8")
     monkeypatch.setattr(treemap, "lizard_scores", lambda root, **kw: {})
     monkeypatch.setattr(
         treemap, "scc_scores",
@@ -175,7 +175,7 @@ def test_write_stats_dart_scanner_marked_approximate(treemap, tmp_path):
         languages_by_path={py: "Python", dart: "Dart"},
         fn_backend_by_path={dart: "dart-scanner"},
     )
-    stats = json.loads(out.read_text())
+    stats = json.loads(out.read_text(encoding="utf-8"))
     fn = stats["fn_ccn"]
     assert fn["source"] == [{"name": "dart-scanner", "approximate": True},
                             {"name": "lizard", "approximate": False}]
@@ -190,7 +190,7 @@ def test_collect_dart_scanner_skips_files_with_no_function(
     """A Dart file the scanner finds no function in stays scc-only, so it
     records no backend and cannot make Dart read as covered."""
     dart = tmp_path / "consts.dart"
-    dart.write_text("const a = 1;\n")
+    dart.write_text("const a = 1;\n", encoding="utf-8")
     monkeypatch.setattr(treemap, "lizard_scores", lambda root, **kw: {})
     monkeypatch.setattr(treemap, "scc_scores",
                         lambda root, **kw: {dart.resolve(): (1, 1.0)})

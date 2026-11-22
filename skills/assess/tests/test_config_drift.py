@@ -81,7 +81,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     skip_without_posix_shell()
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
-    (repo / "src" / "a.py").write_text("x = 1\n")
+    (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "remote", "add", "origin", "https://github.com/acme/widget.git")
 
@@ -89,10 +89,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     bindir.mkdir()
     ghdir.mkdir()
     gh = bindir / "gh"
-    gh.write_text(FAKE_GH)
+    gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-    (ghdir / "log").write_text("")
-    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n")
+    (ghdir / "log").write_text("", encoding="utf-8")
+    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n", encoding="utf-8")
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_GH", str(ghdir))
 
@@ -102,17 +102,17 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         def track(self, rel: str, doc: object) -> None:
             path = repo / rel
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(doc))
+            path.write_text(json.dumps(doc), encoding="utf-8")
             _git(repo, "add", rel)
 
         def serve(self, name: str, doc: object) -> None:
-            (ghdir / name).write_text(json.dumps(doc))
+            (ghdir / name).write_text(json.dumps(doc), encoding="utf-8")
 
         def fail_with(self, line: str) -> None:
-            (ghdir / "fail").write_text(line + "\n")
+            (ghdir / "fail").write_text(line + "\n", encoding="utf-8")
 
         def calls(self) -> list[str]:
-            return (ghdir / "log").read_text().splitlines()
+            return (ghdir / "log").read_text(encoding="utf-8").splitlines()
 
     return World()
 
@@ -146,7 +146,7 @@ def test_no_remote_never_invokes_gh(world) -> None:
 
 
 def test_unauthenticated_gh_degrades(world) -> None:
-    (Path(os.environ["FAKE_GH"]) / "noauth").write_text("")
+    (Path(os.environ["FAKE_GH"]) / "noauth").write_text("", encoding="utf-8")
     with pytest.raises(GhUnavailable) as e:
         open_github(world.root)
     assert e.value.reason.startswith("not_authenticated")
@@ -339,7 +339,7 @@ def test_no_snapshots_is_clean_without_calling_gh(world) -> None:
 def test_untracked_snapshot_is_ignored(world) -> None:
     path = world.root / ".github" / "rulesets" / "main.json"
     path.parent.mkdir(parents=True)
-    path.write_text(json.dumps(_ruleset(False)))
+    path.write_text(json.dumps(_ruleset(False)), encoding="utf-8")
     assert find_snapshots(world.root) == []
 
 

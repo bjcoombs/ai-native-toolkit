@@ -24,11 +24,11 @@ RUNNING = "1.60.2"
 def _write_ctx(tmp_path: Path, version: str | None) -> None:
     (tmp_path / ".assess").mkdir(parents=True, exist_ok=True)
     ctx = {"plugin_version": version} if version is not None else {}
-    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx))
+    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
 
 
 def _workflow(tmp_path: Path) -> str:
-    return (tmp_path / ".github" / "workflows" / "assess-gate.yml").read_text()
+    return (tmp_path / ".github" / "workflows" / "assess-gate.yml").read_text(encoding="utf-8")
 
 
 def _pins(text: str) -> set[str]:
@@ -179,7 +179,7 @@ def test_unknown_running_version_without_fallback_refuses(tmp_path, monkeypatch,
 
 def test_running_version_reads_plugin_json():
     root = Path(emit.__file__).resolve().parents[3]
-    expected = json.loads((root / ".claude-plugin" / "plugin.json").read_text())["version"]
+    expected = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
     assert emit._running_version() == expected
 
 
@@ -216,7 +216,7 @@ _NOTICE = "Applied the default paths-ignore"
 def _existing_workflow(tmp_path: Path, body: str) -> None:
     wf = tmp_path / ".github" / "workflows"
     wf.mkdir(parents=True)
-    (wf / "ci.yml").write_text(body)
+    (wf / "ci.yml").write_text(body, encoding="utf-8")
 
 
 _FILTERED = "on:\n  pull_request:\n    paths:\n      - src/**\n"

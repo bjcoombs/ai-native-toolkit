@@ -236,7 +236,7 @@ def test_rename_map_incomplete_when_ancestry_check_fails(tmp_path: Path, monkeyp
                         "-c", "user.name=T", *args], check=True, capture_output=True)
 
     git("init", "-q")
-    (tmp_path / "a.py").write_text("a = 1\n" * 5)
+    (tmp_path / "a.py").write_text("a = 1\n" * 5, encoding="utf-8")
     git("add", "-A")
     git("commit", "-q", "-m", "a")
     git("mv", "a.py", "b.py")

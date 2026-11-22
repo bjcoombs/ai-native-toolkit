@@ -59,12 +59,12 @@ def _repo(tmp_path: Path, files: dict[str, str], *, untracked: dict[str, str] | 
     _git(root, "init", "-q", "-b", "main")
     for rel, body in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
-        (root / rel).write_text(body)
+        (root / rel).write_text(body, encoding="utf-8")
     _git(root, "add", "-A")
     _git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init")
     for rel, body in (untracked or {}).items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
-        (root / rel).write_text(body)
+        (root / rel).write_text(body, encoding="utf-8")
     return root
 
 
@@ -390,11 +390,11 @@ def gh_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     bindir.mkdir()
     ghdir.mkdir()
     gh = bindir / "gh"
-    gh.write_text(FAKE_GH)
+    gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-    (ghdir / "log").write_text("")
-    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n")
-    (ghdir / "repo.json").write_text(json.dumps({"defaultBranchRef": {"name": "main"}}))
+    (ghdir / "log").write_text("", encoding="utf-8")
+    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n", encoding="utf-8")
+    (ghdir / "repo.json").write_text(json.dumps({"defaultBranchRef": {"name": "main"}}), encoding="utf-8")
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_GH", str(ghdir))
     return root, ghdir
@@ -414,7 +414,7 @@ def test_ci_duration_medians_per_workflow(gh_world) -> None:
         _run("Lint", "bad", "2026-10-01T10:00:30Z"),
         _run("Lint", "2026-10-01T10:00:30Z", "2026-10-01T10:00:00Z"),  # negative: dropped
         "not a run",
-    ]))
+    ]), encoding="utf-8")
     block = ci_duration(root)
     assert block["available"] is True
     assert block["branch"] == "main" and block["runs_sampled"] == 4
@@ -423,7 +423,7 @@ def test_ci_duration_medians_per_workflow(gh_world) -> None:
         {"workflow": "Lint", "runs": 1, "median_seconds": 30},
     ]
     assert block["slowest_median_seconds"] == 240 and block["over_target"] is False
-    call = next(c for c in (ghdir / "log").read_text().splitlines() if c.startswith("run list"))
+    call = next(c for c in (ghdir / "log").read_text(encoding="utf-8").splitlines() if c.startswith("run list"))
     assert "--branch main" in call and "--status success" in call and "--event push" in call
     assert "--jq" not in call
 
@@ -431,7 +431,7 @@ def test_ci_duration_medians_per_workflow(gh_world) -> None:
 def test_ci_duration_over_target(gh_world) -> None:
     root, ghdir = gh_world
     (ghdir / "runs.json").write_text(json.dumps([
-        _run("Tests", "2026-10-01T10:00:00Z", "2026-10-01T10:15:00Z")]))
+        _run("Tests", "2026-10-01T10:00:00Z", "2026-10-01T10:15:00Z")]), encoding="utf-8")
     assert ci_duration(root)["over_target"] is True
 
 
@@ -444,11 +444,11 @@ def test_ci_duration_over_target(gh_world) -> None:
 def test_ci_duration_degrades(gh_world, setup: str, prefix: str) -> None:
     root, ghdir = gh_world
     if setup == "noauth":
-        (ghdir / "noauth").write_text("")
+        (ghdir / "noauth").write_text("", encoding="utf-8")
     elif setup == "no_runs":
-        (ghdir / "runs.json").write_text("[]")
+        (ghdir / "runs.json").write_text("[]", encoding="utf-8")
     elif setup == "bad_branch":
-        (ghdir / "repo.json").write_text(json.dumps({"defaultBranchRef": None}))
+        (ghdir / "repo.json").write_text(json.dumps({"defaultBranchRef": None}), encoding="utf-8")
     block = ci_duration(root)
     assert block["available"] is False
     assert block["reason"].startswith(prefix)
@@ -476,7 +476,7 @@ def test_probe_off_is_recorded_as_not_probed(tmp_path: Path) -> None:
 def test_scan_probes_ci_by_default(gh_world) -> None:
     root, ghdir = gh_world
     (ghdir / "runs.json").write_text(json.dumps([
-        _run("Tests", "2026-10-01T10:00:00Z", "2026-10-01T10:01:00Z")]))
+        _run("Tests", "2026-10-01T10:00:00Z", "2026-10-01T10:01:00Z")]), encoding="utf-8")
     block = scan_agent_environment(root, {}, None)
     assert block["ci_duration"]["available"] is True
 
@@ -512,7 +512,7 @@ def test_only_agent_loaded_files_name_a_check(tmp_path: Path) -> None:
     root = _repo(tmp_path, files)
     block = _scan(root, (".github/claude-review-instructions.md", "docs/CLAUDE.md"))
     assert block["check"]["named"] == [] and "check_named" in block["layer5_cap"]["unmet"]
-    (root / ".github/copilot-instructions.md").write_text("Run `make test`.\n")
+    (root / ".github/copilot-instructions.md").write_text("Run `make test`.\n", encoding="utf-8")
     _git(root, "add", "-A")
     block = _scan(root, (".github/copilot-instructions.md", "docs/CLAUDE.md"))
     assert [n["file"] for n in block["check"]["named"]] == [".github/copilot-instructions.md"]

@@ -50,12 +50,12 @@ def test_diff_unreliable_when_prior_snapshot_lacks_version_stamp(tmp_path: Path)
         # No plugin_version: seeded by hand / written by an older plugin.
         "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/old.go", "loc": 500, "ccn": 20, "commits": 5}],
-    }))
+    }), encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "plugin_version": "1.12.0",
         "files_scored": 55, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/new.go", "loc": 400, "ccn": 18, "commits": 4}],
-    }))
+    }), encoding="utf-8")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is False
     assert ctx["diff_version_note"] == "version not stamped in prior snapshot"
@@ -71,8 +71,8 @@ def test_diff_reliable_when_plugin_versions_match(tmp_path: Path) -> None:
         "plugin_version": "1.12.0", "files_scored": 50, "loc": {}, "ccn": {},
         "top_hotspots": [{"path": "src/a.go", "loc": 500, "ccn": 20, "commits": 5}],
     }
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(stats))
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(stats))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(stats), encoding="utf-8")
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(stats), encoding="utf-8")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff_reliable"] is True
     assert ctx["diff_version_note"] is None
@@ -93,10 +93,10 @@ def _seed_prior_current(
     }
     (assess_dir / "complexity-stats.prior.json").write_text(
         json.dumps({**base, **prior_extra})
-    )
+    , encoding="utf-8")
     (assess_dir / "complexity-stats.json").write_text(
         json.dumps({**base, **current_extra})
-    )
+    , encoding="utf-8")
     return repo
 
 

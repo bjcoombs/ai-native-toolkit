@@ -93,7 +93,7 @@ Claude Code's docs call flat `commands/<name>.md` files the older form of skills
 
 ## CI
 
-`main` has branch protection (`enforce_admins: true`, 0 required approvals). Seven checks must be green: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`. PR titles follow conventional-commit format. CI installs from the committed `uv.lock` files (`uv run --locked`), and the `Lockfiles match pyproject.toml` step fails on a stale one: a dependency edit commits the re-locked `uv.lock` (run `uv lock` in that package). CI runs only on PRs to `main` and pushes to `main`. A red test is a real regression; the core is deterministic.
+`main` has branch protection (`enforce_admins: true`, 0 required approvals). Eight checks must be green: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`, `windows suites + smoke runs` (every suite and the smoke runs on Windows, `docs/contributing/ci.md`). PR titles follow conventional-commit format. CI installs from the committed `uv.lock` files (`uv run --locked`), and the `Lockfiles match pyproject.toml` step fails on a stale one: a dependency edit commits the re-locked `uv.lock` (run `uv lock` in that package). CI runs only on PRs to `main` and pushes to `main`. A red test is a real regression; the core is deterministic.
 
 Workflows, lockfiles, the type gate, the ratchet and coverage details, mutation testing, CodeQL and the coverage recipe for `/assess`: `docs/contributing/ci.md`.
 
@@ -125,9 +125,9 @@ No human reviewers on this repo.
 
 ### CI Patterns
 
-- **Required (merge-gating) checks**: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`.
+- **Required (merge-gating) checks**: `skills/assess pytest`, `scripts/ pytest`, `plugin contract pytest`, `ruff + mypy gates`, `Validate PR title`, `floor enforcement`, `floor self-anchor`, `windows suites + smoke runs`.
 - **Non-blocking checks**: `CodeRabbit`, `Auto-label from PR title`, `canary suite (semantic layer)`, `canary path filter`, `floor sign-off summary`, `floor sign-off` (gates indirectly via `floor enforcement`), `build`, `mutmut (assess core)`, `CodeQL (python)`, `CodeQL (javascript-typescript)`, `CodeQL (actions)`, `CodeQL`, `pip-audit`, `claude-review` (confirm its `Commit:` line matches the head).
-- **`AI-readiness regression gate`**: effectively required and re-runs on every base advance; not in the branch-protection list, but `gh pr merge` is refused while it runs. Wait for it per PR, or merge with `--admin` once the seven required checks are green.
+- **`AI-readiness regression gate`**: effectively required and re-runs on every base advance; not in the branch-protection list, but `gh pr merge` is refused while it runs. Wait for it per PR, or merge with `--admin` once the eight required checks are green.
 - **Hot file on every PR**: `.claude-plugin/plugin.json` `.version`. Assign each teammate its target version at spawn (final) and merge sequentially, highest wins. Never give parallel PRs identical bumps: the last-merging PR bumps one step higher (or the wave bumps once at the end) so the standalone bundle republishes.
 
 ### GitHub Issues (for `/issues`)

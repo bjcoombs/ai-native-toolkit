@@ -38,7 +38,10 @@ def _load_treemap():
     """Import complexity-treemap.py with heavy deps stubbed out."""
     for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify"):
         sys.modules.setdefault(name, types.ModuleType(name))
-    sys.modules.setdefault("numpy", _StubNumpy("numpy"))
+    # Another file's loader may have left a bare numpy stub in sys.modules
+    # (test_scope, test_doc_graph_svg); this one needs percentile (#831).
+    if not hasattr(sys.modules.get("numpy"), "percentile"):
+        sys.modules["numpy"] = _StubNumpy("numpy")
     # complexity-treemap does `import matplotlib.pyplot as plt`
     sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
     spec = importlib.util.spec_from_file_location("complexity_treemap", _SCRIPT)
@@ -250,7 +253,7 @@ def test_write_svg_token_tooltip_and_label_pluralise(render_lib, tmp_path, token
     rects = [(0.0, 0.0, 1600.0, 1000.0, node)]
     out = tmp_path / "tok.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, True, "ccn")
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     assert text in svg
     label = text.split(" · ")[0]
     assert f">{label}</text>" in svg

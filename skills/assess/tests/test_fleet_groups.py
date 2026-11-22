@@ -319,7 +319,7 @@ def test_default_levels_loads_and_rolls_up(froot, tmp_path):  # noqa: F811
     """The shipped maturity model (#564) passes the same validation and yields a level or unknown per row."""
     assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--out", str(tmp_path / "o"),
                            "--jobs", "2"]) == 0
-    rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "o" / fg.GROUPS_FILE).read_text(encoding="utf-8").splitlines()]
     default = load_default_levels()
     for row in rows:
         assert row["levels_version"] == default["version"]
@@ -337,7 +337,7 @@ def test_additive_repo_row_fields_are_tolerated():
 def test_union_of_groups_counts_distinct_marketplaces(froot, tmp_path):  # noqa: F811
     """grpa plus grpb reference two distinct marketplaces between them."""
     assert fleet_cli.main([str(froot), "--out", str(tmp_path / "o"), "--scans", "shared_tooling"]) == 0
-    rows = [json.loads(line) for line in (tmp_path / "o" / "repos.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (tmp_path / "o" / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     ids = {i for row in rows for i in row["scans"]["shared_tooling"]["marketplace_ids"]}
     assert len(ids) == 2
 

@@ -59,11 +59,11 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     bindir.mkdir()
     ghdir.mkdir()
     gh = bindir / "gh"
-    gh.write_text(FAKE_GH)
+    gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-    (ghdir / "log").write_text("")
-    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n")
-    (ghdir / "repo.json").write_text(json.dumps({"nameWithOwner": "acme/widget", "isPrivate": True}))
+    (ghdir / "log").write_text("", encoding="utf-8")
+    (ghdir / "fail").write_text("gh: Not Found (HTTP 404)\n", encoding="utf-8")
+    (ghdir / "repo.json").write_text(json.dumps({"nameWithOwner": "acme/widget", "isPrivate": True}), encoding="utf-8")
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_GH", str(ghdir))
 
@@ -72,10 +72,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         gh_dir = ghdir
 
         def serve(self, name: str, doc: object) -> None:
-            (ghdir / name).write_text(json.dumps(doc))
+            (ghdir / name).write_text(json.dumps(doc), encoding="utf-8")
 
         def calls(self) -> list[str]:
-            return (ghdir / "log").read_text().splitlines()
+            return (ghdir / "log").read_text(encoding="utf-8").splitlines()
 
     return World()
 
@@ -122,7 +122,7 @@ def test_gate_cost_no_gh(world, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_gate_cost_unauthenticated(world) -> None:
-    (world.gh_dir / "noauth").write_text("")
+    (world.gh_dir / "noauth").write_text("", encoding="utf-8")
     world.serve("prs.json", _merged(40, NOW))
     block = estimate_gate_cost(world.root, now=NOW)
     assert block["available"] is False

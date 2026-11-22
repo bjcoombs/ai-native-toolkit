@@ -23,6 +23,7 @@ from lib.headline import as_headline
 from lib.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
 from lib.run_scope import resolve_scope
+from test_complexity_treemap import _StubNumpy
 from lib.wiki_writer import HotspotEntry, write_index
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "complexity-treemap.py"
@@ -130,8 +131,9 @@ def test_build_doc_graph_scope_confines_docs(git_repo) -> None:
 # treemap collect scope (lizard/scc stubbed - no heavy deps in the test env)
 # --------------------------------------------------------------------------
 def _load_treemap():
-    for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify", "numpy"):
+    for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify"):
         sys.modules.setdefault(name, types.ModuleType(name))
+    sys.modules.setdefault("numpy", _StubNumpy("numpy"))  # with percentile (#831)
     sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
     spec = importlib.util.spec_from_file_location("complexity_treemap_scope", _SCRIPT)
     mod = importlib.util.module_from_spec(spec)
@@ -145,8 +147,8 @@ def test_treemap_collect_filters_to_scope(tmp_path: Path) -> None:
     b = (tmp_path / "service-b" / "app.py")
     a.parent.mkdir(parents=True)
     b.parent.mkdir(parents=True)
-    a.write_text("x = 1\n")
-    b.write_text("y = 2\n")
+    a.write_text("x = 1\n", encoding="utf-8")
+    b.write_text("y = 2\n", encoding="utf-8")
 
     def fake_lizard(root, **kw):
         return {a.resolve(): (10, 5.0, [5.0]), b.resolve(): (20, 9.0, [9.0])}
@@ -194,7 +196,7 @@ def _seed_scoped_stats(repo: Path, slug: str, hotspot_path: str) -> None:
         "files_scored": 1,
         "top_hotspots": [{"path": hotspot_path, "loc": 20, "ccn": 9,
                           "commits_12mo": 1}],
-    }))
+    }), encoding="utf-8")
 
 
 def test_scoped_run_routes_artifacts_and_records_scope(git_repo) -> None:
@@ -251,7 +253,7 @@ def test_root_run_unchanged_by_scope_support(git_repo) -> None:
     """The key invariant: a no-scope run is byte-identical to pre-scope."""
     repo, _ = _two_service_repo(git_repo)
     (repo / ".assess").mkdir()
-    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_STATS_SHAPE))
+    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_STATS_SHAPE), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
     assert ctx["scope"] is None
@@ -271,7 +273,7 @@ def test_invalid_scope_raises_valueerror(git_repo) -> None:
 def test_cli_invalid_scope_exits_nonzero(git_repo, capsys) -> None:
     repo, _ = _two_service_repo(git_repo)
     (repo / ".assess").mkdir()
-    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_STATS_SHAPE))
+    (repo / ".assess" / "complexity-stats.json").write_text(json.dumps(_STATS_SHAPE), encoding="utf-8")
     rc = assess_core.main([str(repo), "--scope", "no-such-dir"])
     assert rc == 2
     assert "error" in capsys.readouterr().err.lower()

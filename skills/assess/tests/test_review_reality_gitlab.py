@@ -96,20 +96,20 @@ class World:
         _git(self.root, "remote", "add", "origin", url)
 
     def serve(self, endpoint: str, doc: object) -> None:
-        (self.data / _key(endpoint)).write_text(json.dumps(doc))
+        (self.data / _key(endpoint)).write_text(json.dumps(doc), encoding="utf-8")
 
     def fail(self, endpoint: str, line: str) -> None:
-        (self.data / f"{_key(endpoint)}.fail").write_text(line + "\n")
+        (self.data / f"{_key(endpoint)}.fail").write_text(line + "\n", encoding="utf-8")
 
     def no_auth(self, line: str = "x gitlab.com: api call failed: 401 Unauthorized") -> None:
-        (self.data / "noauth").write_text(line + "\n")
+        (self.data / "noauth").write_text(line + "\n", encoding="utf-8")
 
     def without(self, tool: str) -> None:
         (self.bindir / tool).unlink()
 
     def calls(self, log: str = "log") -> list[str]:
         path = self.data / log
-        return path.read_text().splitlines() if path.exists() else []
+        return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
 
     def merged(self, mrs: list[dict[str, object]], approvals: dict[int, object],
                notes: dict[int, object] | None = None) -> None:
@@ -143,7 +143,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         (bindir / tool).symlink_to(found)
     for name, body in (("glab", FAKE_GLAB), ("gh", FAKE_GH)):
         stub = bindir / name
-        stub.write_text(body)
+        stub.write_text(body, encoding="utf-8")
         stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("PATH", str(bindir))
     monkeypatch.setenv("FAKE_GLAB", str(data))
@@ -265,7 +265,7 @@ def test_glab_api_maps_refusals(world: World) -> None:
     world.fail("projects/x", "glab: 403 Forbidden (HTTP 403)")
     world.fail("projects/y", "ERROR: 404 Project Not Found")
     world.fail("projects/z", "boom")
-    (world.data / _key("projects/bad")).write_text("not json")
+    (world.data / _key("projects/bad")).write_text("not json", encoding="utf-8")
     for path, reason in (("projects/x", "no_access"), ("projects/y", "not_found"),
                          ("projects/z", "glab_error"), ("projects/bad", "glab_bad_json")):
         with pytest.raises(GhUnavailable) as e:
@@ -487,7 +487,7 @@ def test_gitlab_token_user_ai_review_on_every_mr(world: World, tmp_path: Path,
     text = json.dumps(block)
     assert "SECRET" not in text and "project_42" not in text and "bob" not in text
     # Notes are read in memory only: never written to the response cache.
-    cached = [f.read_text() for f in cache.iterdir()]
+    cached = [f.read_text(encoding="utf-8") for f in cache.iterdir()]
     assert cached, "other platform reads are cached"
     assert not any(SENTINEL in c for c in cached)
     # Every notes call names its host and project (the cache key is argv alone).

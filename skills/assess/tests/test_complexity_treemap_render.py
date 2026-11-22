@@ -71,7 +71,7 @@ def test_write_svg_emits_hatch_overlay_and_legend(render_lib, tmp_path):
     out = tmp_path / "hatched.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out,
                          False, "ccn", show_survivor_legend=True)
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     # pattern definition + overlay reference
     assert 'id="survivor-diag"' in svg
     assert 'fill="url(#survivor-diag)"' in svg
@@ -92,7 +92,7 @@ def test_write_svg_emits_a11y_title_and_desc(render_lib, tmp_path):
     rects = [(0.0, 0.0, 100.0, 100.0, node)]
     out = tmp_path / "a11y.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, False, "ccn")
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     assert 'role="img"' in svg
     assert "<title>Complexity Hotspot Heatmap</title>" in svg
     assert "hue indicates cyclomatic complexity" in svg
@@ -112,7 +112,7 @@ def test_write_svg_no_overlay_without_survivor_data(render_lib, tmp_path):
     out = tmp_path / "plain.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out,
                          False, "ccn")
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     assert "survivor-" not in svg
     assert "<defs>" not in svg
     assert 'height="1000"' in svg
@@ -198,6 +198,6 @@ def test_write_svg_tooltip_shows_est_tokens_and_loc(render_lib, tmp_path):
     rects = [(0.0, 0.0, 100.0, 100.0, node)]
     out = tmp_path / "tok.svg"
     render_lib.write_svg(rects, Path("/repo"), 1600.0, 1000.0, out, False, "ccn")
-    svg = out.read_text()
+    svg = out.read_text(encoding="utf-8")
     assert "8,200 est. tokens" in svg
     assert "514 loc" in svg

@@ -101,7 +101,7 @@ def test_build_run_context_first_run(
         "top_complex": [{"path": "src/a.go", "ccn": 20}],
         "top_large": [{"path": "src/a.go", "loc": 500}],
     }
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats), encoding="utf-8")
 
     # Clear the ambient CI signal so the default (no-flag) run is genuinely
     # interactive regardless of where the suite runs (locally or under CI).
@@ -146,12 +146,12 @@ def test_build_run_context_surfaces_decline_markers(tmp_path: Path) -> None:
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 1, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
     # Marker declined under an ancient major -> re-offer eligible.
     (assess_dir / ".no-mutmut").write_text(json.dumps({
         "declined_by": "ben", "declined_at": "2025-01-01",
         "plugin_version": "0.9.0",
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
@@ -180,7 +180,7 @@ def test_build_run_context_second_run_sees_diff(tmp_path: Path) -> None:
         "top_complex": [{"path": "src/legacy.go", "ccn": 20}],
         "top_large": [{"path": "src/legacy.go", "loc": 500}],
     }
-    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats))
+    (assess_dir / "complexity-stats.prior.json").write_text(json.dumps(prior_stats), encoding="utf-8")
 
     current_stats = {
         "files_scored": 55, "loc": {"p50": 30, "p95": 220, "max": 550},
@@ -191,7 +191,7 @@ def test_build_run_context_second_run_sees_diff(tmp_path: Path) -> None:
         "top_complex": [{"path": "src/new.go", "ccn": 18}],
         "top_large": [{"path": "src/new.go", "loc": 400}],
     }
-    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats))
+    (assess_dir / "complexity-stats.json").write_text(json.dumps(current_stats), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert ctx["diff"]["graduated"] == 1
@@ -208,7 +208,7 @@ def test_build_run_context_includes_anomalies_field(tmp_path: Path) -> None:
         "files_scored": 0,
         "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "anomalies" in ctx
@@ -230,7 +230,7 @@ def test_run_context_has_deterministic_keyhole_products(tmp_path: Path) -> None:
         "top_hotspots": [{"path": "src/a.py", "loc": 100, "ccn": 12, "commits": 3}],
         "top_complex": [{"path": "src/a.py", "ccn": 12}],
         "top_large": [{"path": "src/a.py", "loc": 100}],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
 
@@ -272,7 +272,7 @@ def test_repo_root_not_in_ctx(tmp_path: Path) -> None:
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "repo_root" not in ctx
@@ -281,8 +281,8 @@ def test_repo_root_not_in_ctx(tmp_path: Path) -> None:
 def test_readside_blocks_present_in_ctx(tmp_path: Path) -> None:
     """run-context.json must carry the Layer 0/1 read-side blocks."""
     repo = _minimal_repo(tmp_path)
-    (repo / "README.md").write_text("# Project\nsee [code](app.py)\n")
-    (repo / "app.py").write_text("x = 1\n")
+    (repo / "README.md").write_text("# Project\nsee [code](app.py)\n", encoding="utf-8")
+    (repo / "app.py").write_text("x = 1\n", encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     for key in ("doc_graph", "doc_staleness", "stale_hubs", "dead_code", "observability"):
@@ -337,7 +337,7 @@ def test_coverage_gate_block_reports_configured_threshold(tmp_path: Path) -> Non
     assert ctx["coverage_gate"]["configured"] is False
     assert ctx["coverage_gate"]["gates"] == []
 
-    (repo / ".coveragerc").write_text("[report]\nfail_under = 80\n")
+    (repo / ".coveragerc").write_text("[report]\nfail_under = 80\n", encoding="utf-8")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     gate = ctx["coverage_gate"]["gates"][0]
     assert ctx["coverage_gate"]["configured"] is True
@@ -357,7 +357,7 @@ def test_plugin_version_in_ctx(tmp_path: Path) -> None:
     (assess_dir / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 0, "loc": {}, "ccn": {},
         "top_hotspots": [], "top_complex": [], "top_large": [],
-    }))
+    }), encoding="utf-8")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-22")
     assert "plugin_version" in ctx
@@ -415,7 +415,7 @@ def test_test_pressure_passes_hotspots_as_hot_files(tmp_path: Path, monkeypatch)
         ],
         "top_complex": [{"path": "src/hot.py", "ccn": 20}],
         "top_large": [{"path": "src/hot.py", "loc": 500}],
-    }))
+    }), encoding="utf-8")
     captured = {}
 
     def fake_scan(repo_root, hot_files=None, opt_in=False, coverage_data=None):
@@ -611,7 +611,7 @@ def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     assert len(stamp) == 14 and stamp.isdigit()
     assert len(suffix) == 8 and all(c in "0123456789abcdef" for c in suffix)
     # The same id is persisted to run-context.json on disk.
-    on_disk = json.loads((repo / ".assess" / "run-context.json").read_text())
+    on_disk = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     assert on_disk["run_id"] == run_id
     assert on_disk["artifact_schema_version"] == "1.41.0"
 
@@ -627,7 +627,7 @@ def test_run_context_run_id_stamped_on_badge(tmp_path: Path) -> None:
     """The deterministic fallback badge carries the run_id (no prior badge)."""
     repo = _minimal_repo(tmp_path)
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
-    badge = json.loads((repo / ".assess" / "badge.json").read_text())
+    badge = json.loads((repo / ".assess" / "badge.json").read_text(encoding="utf-8"))
     assert badge["run_id"] == ctx["run_id"]
 
 
@@ -644,10 +644,10 @@ def test_override_contradiction_fires_finding_end_to_end(git_repo) -> None:
     _write_min_stats(repo / ".assess")
     (repo / "notes").mkdir()
     for i in range(12):
-        (repo / "notes" / f"n{i}.md").write_text(f"# Note {i}\n")
+        (repo / "notes" / f"n{i}.md").write_text(f"# Note {i}\n", encoding="utf-8")
     (repo / "CLAUDE.md").write_text(
         "# KB\n\n<!-- assess-archetype: software -->\n"
-    )
+    , encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
@@ -668,8 +668,8 @@ def test_no_override_no_contradiction_finding_end_to_end(git_repo) -> None:
     repo, commit = git_repo
     (repo / ".assess").mkdir()
     _write_min_stats(repo / ".assess")
-    (repo / "app.py").write_text("def f():\n    return 1\n")
-    (repo / "pyproject.toml").write_text("[project]\nname='app'\n")
+    (repo / "app.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text("[project]\nname='app'\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
@@ -687,21 +687,21 @@ def _gap_repo(tmp_path: Path, *, lcov: bool, linked_docs: int) -> Path:
     (repo / "src").mkdir(parents=True)
     (repo / "docs").mkdir()
     for name in ("zeta", "mid"):
-        (repo / "src" / f"{name}.py").write_text("v = 1\n")
+        (repo / "src" / f"{name}.py").write_text("v = 1\n", encoding="utf-8")
     readme = ["# Fixture", ""]
     for n in range(9):
-        (repo / "docs" / f"d{n}.md").write_text(f"# d{n}\n")
+        (repo / "docs" / f"d{n}.md").write_text(f"# d{n}\n", encoding="utf-8")
         if n < linked_docs:
             readme.append(f"- [d{n}](docs/d{n}.md)")
-    (repo / "README.md").write_text("\n".join(readme) + "\n")
+    (repo / "README.md").write_text("\n".join(readme) + "\n", encoding="utf-8")
     if lcov:
-        (repo / "lcov.info").write_text("SF:src/zeta.py\nLF:1\nLH:1\nend_of_record\n")
+        (repo / "lcov.info").write_text("SF:src/zeta.py\nLF:1\nLH:1\nend_of_record\n", encoding="utf-8")
     (repo / ".assess").mkdir()
     (repo / ".assess" / "complexity-stats.json").write_text(json.dumps({
         "files_scored": 2, "loc": {}, "ccn": {}, "top_complex": [], "top_large": [],
         "top_hotspots": [{"path": f"src/{n}.py", "loc": 1, "ccn": 1.0, "commits": 1}
                          for n in ("zeta", "mid")],
-    }))
+    }), encoding="utf-8")
     return repo
 
 
@@ -744,8 +744,8 @@ def test_build_run_context_writes_nothing_on_a_fresh_repo(git_repo) -> None:
     (index.md, log.md, badge.json, findings.json, run-context.json) is
     ``publish_run``'s, run by ``build_and_publish_run`` and ``main``."""
     repo, commit = git_repo
-    (repo / "app.py").write_text("def f():\n    return 1\n")
-    (repo / "CLAUDE.md").write_text("# Proj\n")
+    (repo / "app.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("# Proj\n", encoding="utf-8")
     commit("init")
     before = _tree(repo)
 
@@ -758,7 +758,7 @@ def test_build_run_context_writes_nothing_on_a_fresh_repo(git_repo) -> None:
 
 def test_build_and_publish_run_writes_the_artifacts(git_repo) -> None:
     repo, commit = git_repo
-    (repo / "app.py").write_text("def f():\n    return 1\n")
+    (repo / "app.py").write_text("def f():\n    return 1\n", encoding="utf-8")
     commit("init")
 
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-11-20", non_interactive=True)
