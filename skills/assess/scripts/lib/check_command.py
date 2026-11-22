@@ -342,7 +342,7 @@ SETUP_TARGETS = frozenset({
     "install", "deps", "dependencies", "setup", "bootstrap", "clean", "help", "init",
     "build", "compile", "deploy", "release", "publish", "docs", "format", "fmt", "prepare",
     "start", "serve", "dev", "watch", "configure", "generate", "codegen", "package", "dist",
-    "upload", "migrate",
+    "upload", "migrate", "version",
 })
 # Programs a wrapper may run that are known not to be a check (``docker run img echo hi``).
 _PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
@@ -581,7 +581,7 @@ _KNOWN_PROGRAMS = (_PLAIN_PROGRAMS | frozenset(RUNNERS) | TARGET_RUNNERS | TEST_
 # (``bundle exec fastlane beta``, ``npx vercel --prod``).
 _DEPLOY_TOOLS = frozenset({
     "fastlane", "twine", "wrangler", "changeset", "vercel", "netlify", "firebase", "serverless",
-    "sls", "cdk", "terraform", "pulumi", "semantic-release", "lerna", "gh", "aws", "gcloud", "az",
+    "sls", "cdk", "terraform", "pulumi", "semantic-release", "gh", "aws", "gcloud", "az",
 })
 
 

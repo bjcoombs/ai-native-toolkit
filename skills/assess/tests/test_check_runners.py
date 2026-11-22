@@ -215,7 +215,13 @@ def test_an_unknown_program_behind_a_wrapper_reads_null(text: str) -> None:
     # Deploy, publish and install lines behind a wrapper stay false (#924 review).
     ("npx wrangler deploy", False), ("npx changeset publish", False), ("uvx twine upload", False),
     ("npx playwright install --with-deps", False), ("npx prisma migrate deploy", False),
-    ("bundle exec fastlane beta", False), ("uv run mkdocs build --strict", False),
+    ("bundle exec fastlane beta", False), ("npx lerna publish", False), ("npx lerna version", False), ("uv run mkdocs build --strict", False),
 ])
 def test_known_programs_behind_a_wrapper_stay_definite(text: str, expected: bool) -> None:
     assert check_verdict(text) is expected
+
+
+@pytest.mark.parametrize("text", ["npx lerna run test", "yarn lerna run test"])
+def test_a_lerna_run_reads_like_its_package_manager_form(text: str) -> None:
+    """``lerna run test`` runs each package's test script: never a wrong 0."""
+    assert check_verdict(text) is not False
