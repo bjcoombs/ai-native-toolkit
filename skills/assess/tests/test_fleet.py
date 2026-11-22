@@ -145,6 +145,31 @@ def test_missing_list_entry_becomes_a_target_that_fails(tmp_path):
     assert fleet.checkout_problem(targets[0].checkout) == fleet.MISSING_CHECKOUT
 
 
+def _windows_expanduser(users: Path):
+    """``ntpath.expanduser``'s behaviour: ``~name`` becomes ``<users dir>/<name>``
+    whether or not that account exists, never raising."""
+    def expanduser(self: Path) -> Path:
+        head, _, rest = self.as_posix().partition("/")
+        if not head.startswith("~"):
+            return self
+        return users / head[1:] / rest if rest else users / head[1:]
+    return expanduser
+
+
+def test_a_tilde_user_entry_with_no_home_is_a_usage_error(tmp_path, monkeypatch):
+    """Windows expands ``~nosuchuser`` without checking the account exists, so the
+    missing home is checked after expansion on every platform (issue #965)."""
+    users = tmp_path / "Users"
+    (users / "known" / "grp" / "svc").mkdir(parents=True)
+    monkeypatch.setattr(Path, "expanduser", _windows_expanduser(users))
+    with pytest.raises(ValueError, match=r"list entry '~ghost/repo': cannot expand '~ghost'"):
+        fleet.targets_from_list(["~ghost/repo"], None, tmp_path)
+    with pytest.raises(ValueError, match=r"cannot expand '~ghost' "):
+        fleet.targets_from_list(["~ghost\\repo"], None, tmp_path)
+    targets = fleet.targets_from_list(["~known/grp/svc"], None, tmp_path)
+    assert [t.repo for t in targets] == ["grp/svc"]
+
+
 @pytest.mark.parametrize(("url", "path"), [
     ("https://gl.test/grp/sub/repo.git", "grp/sub/repo"),
     ("https://token@github.com/org/repo", "org/repo"),
