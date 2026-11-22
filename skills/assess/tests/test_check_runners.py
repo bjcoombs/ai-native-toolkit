@@ -33,6 +33,7 @@ _ISSUE_RUNNERS = [
     "./gradlew connectedAndroidTest", "rake test", "rake spec", "bundle exec rake test",
     "bin/test", "bin/rails test", "flutter test", "xcodebuild test -scheme App",
     "xcodebuild -workspace App.xcworkspace -scheme App -destination 'platform=iOS' test",
+    "dart test", "php artisan test", "php vendor/bin/phpunit", "./gradlew testDemoDebug",
 ])
 def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
     assert check_verdict(text) is True
@@ -42,7 +43,7 @@ def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
 @pytest.mark.parametrize("text", [
     "make foo", "task foo", "make", "task", "just foo", "turbo run e2e",
     "npx nx affected -t e2e", "hatch run foo", "bundle exec rake", "uv run make foo",
-    "docker compose run app", "deno task foo",
+    "docker compose run app", "deno task foo", "make XCODEBUILD_ARGUMENT=-quiet xcodebuild",
     # Package scripts, committed scripts and containers whose body is not read (#920).
     "npm run foo", "pnpm run foo", "pnpm foo", "yarn foo", "./scripts/foo.sh",
     "bash scripts/foo.sh", "scripts/foo", "docker run img", "docker run --rm img foo",
@@ -60,7 +61,8 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "yarn install", "yarn", "npm run", "./scripts/install.sh", "./scripts/deploy.sh",
     "./configure", "./gradlew assemble", "docker run img echo hi", "docker build .",
     "bash -c 'foo'", "/usr/bin/foo", "./gradlew assembleDebug", "xcodebuild build -scheme App",
-    "xcodebuild -scheme test build", "flutter build apk", "npm ci", "uv sync --extra test",
+    "xcodebuild -scheme test build", "flutter build apk", "dart compile exe bin/x.dart",
+    "php artisan migrate", "npm ci", "uv sync --extra test",
     "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",
 ])
@@ -114,14 +116,16 @@ def _scan(tmp_path: Path, files: dict[str, str]) -> tuple[bool | None, str]:
     return block["enforced_check_runs"], block["enforced_basis"]
 
 
-@pytest.mark.parametrize("run", _ISSUE_RUNNERS)
+@pytest.mark.parametrize("run", [*_ISSUE_RUNNERS, "./gradlew testDemoDebug", "bundle exec rake test",
+                                 "dart test", "php artisan test"])
 def test_each_listed_runner_reads_true_in_ci(tmp_path: Path, run: str) -> None:
     assert _scan(tmp_path, _gha(run)) == (True, "enforced_check")
 
 
 @pytest.mark.parametrize("run", ["make foo", "task foo", "make", "hatch run foo",
                                  "docker compose run app", "npm run foo", "yarn foo",
-                                 "./scripts/foo.sh", "docker run img"])
+                                 "./scripts/foo.sh", "docker run img",
+                                 "make XCODEBUILD_ARGUMENT=-quiet xcodebuild"])
 def test_an_unrecognised_target_in_ci_reads_check_target(tmp_path: Path, run: str) -> None:
     assert _scan(tmp_path, _gha(run)) == (None, "check_target")
 

@@ -329,7 +329,7 @@ def may_lint(text: str) -> bool:
 TEST_PROGRAMS = frozenset({"ctest", "phpunit", "pest", "rspec"}) | _JS_TEST_RUNNERS
 # Toolchains whose ``test`` subcommand runs the tests (``dotnet test``, ``bazel test //...``).
 TEST_SUBCOMMANDS = frozenset({
-    "dotnet", "swift", "mix", "deno", "bazel", "bazelisk", "hatch", "flutter", "rails",
+    "dotnet", "swift", "mix", "deno", "bazel", "bazelisk", "hatch", "flutter", "rails", "dart",
 })
 # The ones whose ``test`` runs tests only, never a linter (``bazel test`` may run lint targets).
 _TEST_ONLY_SUBCOMMANDS = TEST_SUBCOMMANDS - {"bazel", "bazelisk"}
@@ -481,6 +481,24 @@ def _script_verdict(words: list[str]) -> bool | None:
     return _target_verdict([path])
 
 
+def _toolchain_test(words: list[str]) -> bool | None:
+    """Whether a toolchain command runs its tests (``dotnet test``, ``./gradlew testDebug``,
+    ``xcodebuild -scheme App test``, ``php artisan test``); None for another command."""
+    head, pos = words[0], _positionals(words[1:])
+    name = PurePosixPath(head).name
+    if name in _GRADLE:   # ./gradlew testDebugUnitTest, :app:testReleaseUnitTest
+        return any(_GRADLE_TEST.match(t.rsplit(":", 1)[-1]) for t in pos)
+    if head == "php":   # php artisan test, php vendor/bin/phpunit
+        return pos[:2] == ["artisan", "test"] or (
+            bool(pos) and PurePosixPath(pos[0]).name in TEST_PROGRAMS)
+    if head == "xcodebuild":
+        actions = _positionals(words[1:], _XCODE_FLAGS)
+        return any(a in ("test", "test-without-building") for a in actions)
+    if name in TEST_SUBCOMMANDS or head == "playwright":
+        return pos[:1] == ["test"]
+    return None
+
+
 def _check_verdict(words: list[str]) -> bool | None:
     """Whether a command runs a check: True, False, or None for a target whose recipe is not read."""
     head = words[0]
@@ -504,16 +522,11 @@ def _check_verdict(words: list[str]) -> bool | None:
                 RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS:
             return None   # docker run img some-tool: a program this scan does not know
         return verdict
-    pos = _positionals(words[1:])
-    if head == "deno" and pos[:1] == ["task"]:
-        return _target_verdict(pos[1:2])
-    if PurePosixPath(head).name in _GRADLE:   # ./gradlew testDebugUnitTest
-        return any(_GRADLE_TEST.match(t.rsplit(":", 1)[-1]) for t in pos)
-    if head == "xcodebuild":   # xcodebuild -scheme App test
-        actions = _positionals(words[1:], _XCODE_FLAGS)
-        return any(a in ("test", "test-without-building") for a in actions)
-    if PurePosixPath(head).name in TEST_SUBCOMMANDS or head == "playwright":
-        return pos[:1] == ["test"]
+    if head == "deno" and _positionals(words[1:])[:1] == ["task"]:   # deno task foo: not read
+        return _target_verdict(_positionals(words[1:])[1:2])
+    toolchain = _toolchain_test(words)
+    if toolchain is not None:
+        return toolchain
     if head in TARGET_RUNNERS:
         if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
             return False
