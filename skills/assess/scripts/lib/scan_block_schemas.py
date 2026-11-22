@@ -45,8 +45,8 @@ AI_USAGE: JsonDict = {
     "description": (
         "Agent involvement in the commits of the run window (lib/ai_usage.py), counted from git "
         "history. An agent identity is matched by trailer (Co-Authored-By and similar) or by "
-        "author against the pinned agent rules plus any [[ai_usage.agent_identities]] rules of "
-        "--fleet-config. Counts are commits; shares are of total_commits. A lower bound: an "
+        "author against the accounts confirmed in [identities], the pinned agent rules and any "
+        "[[ai_usage.agent_identities]] rules of --fleet-config. Counts are commits; shares are of total_commits. A lower bound: an "
         "agent that leaves no trace is not counted."),
     "properties": {
         "available": {"type": "boolean"},
@@ -71,6 +71,12 @@ AI_USAGE: JsonDict = {
             {"type": "array", "items": _INT},
             "Commits each [[ai_usage.agent_identities]] rule matched, a positional list in rule "
             "order; the rule patterns themselves are never written."),
+        "identities_awaiting_confirmation": _field(
+            _INT, "Accounts in the window that look automated (a [bot] suffix, a GitLab "
+                  "token user, a bot or AI tool name) and are neither classified in the "
+                  "[identities] config section nor counted by an agent rule (#765). A next "
+                  "step for the human, never a score; the accounts are listed only by "
+                  "scripts/identity_candidates.py."),
         "lower_bound": {"type": "boolean"},
         "covered_agents": _STRINGS,
         "covered_author_agents": _STRINGS,
@@ -93,7 +99,9 @@ CI_CHECKS: JsonDict = {
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
         "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
         "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
-        "lines left out. Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and "
+        "lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 "
+        "level 1); a check target or script that may run a linter inside it reads null. "
+        "Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and "
         "Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no "
         "readable check one makes basis unread_ci_system and enforced_check_runs null."),
     "properties": {
@@ -164,6 +172,20 @@ CI_CHECKS: JsonDict = {
         "off_trigger_check_commands": _field(
             _INT, "Unmasked CI check lines whose workflow or job does not run on ordinary changes "
             "(workflow_dispatch or schedule only, a manual GitLab job)."),
+        "lint_runs": _field(
+            {"type": ["boolean", "null"]},
+            "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job "
+            "on ordinary changes (not --version or --help), or a step uses a known lint action "
+            "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
+            "null when none does but included "
+            "jobs, unsettled triggers or a check target or script that may lint inside it could "
+            "hold one, else false."),
+        "lint_basis": _field(
+            {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
+                      "check_target", "not_enforced", "no_lint_command", "no_ci"]},
+            "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
+            "unknown_trigger or check_target (null), not_enforced, no_lint_command or no_ci "
+            "(false)."),
         "unread_ci_files": _field(
             _INT, "Tracked root CI files of systems the scan does not parse (Jenkinsfile, "
             ".circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, "

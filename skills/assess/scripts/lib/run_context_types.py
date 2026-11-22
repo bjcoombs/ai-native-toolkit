@@ -438,10 +438,19 @@ class FindingPaths(TypedDict):
     paths: list[str]
 
 
+class ReviewedPath(TypedDict):
+    """A finding path a committed review cleared (``lib.reviewed_findings``)."""
+
+    path: str
+    completed_sha: str
+    note: str
+
+
 class DerivedFinding(FindingPaths):
     """One ``derived_findings`` row: a named finding, its paths and its action."""
 
     action: str
+    reviewed: NotRequired[list[ReviewedPath]]  # paths a done review clears (#721)
 
 
 class FindingsSnapshot(TypedDict):

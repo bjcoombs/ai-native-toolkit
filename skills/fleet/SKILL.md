@@ -78,7 +78,7 @@ there.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json`, with `--levels` `DIR/level.json`, and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` writes it on a GitHub org fragment. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
@@ -98,6 +98,7 @@ there.
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
+| `--discovered FILE` | What ghsync discovered: its `--porcelain` output (one path per line) or `--porcelain-json` output (one object per line). `report.md` and `run.json` then say how many of these repositories were assessed and count each gap. Needs `ROOT`; a malformed line exits 2 and names the line. See [Coverage](#coverage---discovered). |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
 | `--targets FILE` | Targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the targets file format below). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--first-achievements` | Also credit `first` achievements in [`achievements.json`](#output-achievementsjson) (a unit reaching a level no unit of its view and kind has held on that row in this fleet's history). Off by default (#772), since it compares a unit with its peers. Not part of the run stamp. |
@@ -236,6 +237,32 @@ earlier history entries still load and match. `--compare` against a 1.x run from
 
 Group rows contain no timing or per-run stamp, so a rerun over unchanged
 inputs on the same day is byte-identical.
+
+## Output: `level.json`
+
+Written with `--levels`, beside `groups.jsonl`: each scanned repository's level result,
+keyed by its repository id (a failed scan has no entry), in an envelope of
+`level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`. The
+result (`scripts/lib/level_tally.py` in the assess skill, #744) treats each row level of
+the maturity model as one condition, `<row id>.<level>`, and reports:
+
+- `conditions[]`: `id`, `row`, `level`, `grade`, `counted`, `state` (`met`, `unmet`,
+  `not_measured`; `not_applicable` and `declined` are reserved) and a `reason` code when
+  not measured (`needs_full_run`, `needs_platform`, a block's own code, `block_absent`,
+  `no_value`, `type_mismatch`, `degenerate_history`, or `requires:<id>`);
+- `tally`: `met` is the level, the count of counted conditions met (graded measured or
+  verified); `measured` counts the counted conditions met or unmet; `not_measured` counts
+  every condition not measured. An unknown never counts;
+- `counted` and `listed`: the met conditions that count, and the met ones that are only
+  listed (config-only, declared, or a signal with no producer class);
+- `not_measured[]`: `{id, reason}`;
+- `step` and `next_step` (`step`, `threshold`, `blockers[]`), from the model's `[[steps]]`
+  (null without them). A Step is held when `tally.met` reaches its threshold and its gates
+  hold; a gate reads the state of its row's conditions, not their grade.
+
+`/assess` writes the same result for the same commit as the `level` block of its
+run context, from the same function. The file has no date or path in it, so a rerun over
+the same commits writes identical bytes. Schema: `references/level.schema.json`.
 
 ## Output: `fleet-data.json`
 
@@ -512,9 +539,12 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
 | `platform` | `true` when `--platform` ran a platform read; `false` without it, and also when `--scans` selects no platform scan (nothing was read). A comparability key. Absent in a run from before #714, which reads as `false`. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
+| `coverage` | The [`--discovered`](#coverage---discovered) counts: `discoverable`, `assessed`, `archived_or_empty`, `not_cloned`, `failed_scan`, `excluded_by_filters` and `not_in_listing`. `null` without `--discovered` (coverage unknown), and absent in a run from before #745. Counts only, and not a comparability key. |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
-any `--jobs` over unchanged checkouts on the same day write the same bytes.
+any `--jobs` over unchanged checkouts on the same day write the same bytes. A list
+run that leaves a checkout out differs in `repositories` (`selected`, `scanned_ok`) and,
+with `--discovered`, in `coverage` (`excluded_by_filters`).
 
 ## Fleet settings: `--fleet-config`
 
@@ -524,6 +554,7 @@ One TOML file of fleet-wide lists and settings, with one section per consumer:
 [ai_usage]   # agent identities (#695)
 [review]     # AI review components in CI (#696)
 [platform]   # --platform settings (#714)
+[identities] # confirmed bot and agent accounts (#765)
 ```
 
 The sections are known and may be empty or left out. Each consumer adds its keys;
@@ -533,8 +564,20 @@ until it does, any key in a section is unknown and exits 2.
 |-----|---------|
 | `[review] ai_review_markers` | Strings an AI reviewer prints in its GitLab merge-request notes (a list; case-insensitive substrings). With `--platform`, a note carrying one counts as AI review in `review_reality.bot_review_share`, on top of the pinned markers (an "AI Code Review" heading, an HTML marker comment) and agent accounts. An access-token user's unmarked note is not review unless `[ai_usage] token_users_as_agents` or an identity rule makes it an agent: coverage, Danger and release bots post through tokens too. |
 | `[review] ai_review_components` | GitLab CI component or project paths, and GitHub `owner/repo` actions, that run an AI review in CI, beside the pinned list in `lib/review_automation.py` (#696). Compared lowercased with the host and `@version` dropped; a project path covers the components under it. Read by `review_automation`; a match reports `rule: config` and never the entry itself. |
+| `[identities] agents`, `bots`, `people` | Accounts the human confirmed (#765): literal e-mails or logins such as `codecov[bot]`, matched case-insensitively, never patterns. `agents` count as agent authors in `ai_usage`; `bots` and `people` never do, whatever a pinned agent rule says. A dependency bot (Renovate, Dependabot) stays in `dependency_bot_commits` whatever the answer. The fleet lists extend each repository's own `[identities]` (`/assess` SKILL.md and `skills/assess/references/identities.md`). |
 | `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
 | `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
+
+**Confirming accounts across the fleet.** The rows carry only `ai_usage.identities_awaiting_confirmation`, a count. To see the accounts, run the listing over every repository at once; it never prompts and prints to the terminal only, aggregated by account with the commits summed and the repositories counted:
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/identity_candidates.py" --from-list repos.txt --fleet-config fleet.toml [--json]
+uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/identity_candidates.py" --from-list repos.txt --confirm 'bot=codecov[bot]' --config fleet.toml
+```
+<!-- chat-skip:end -->
+
+In an interactive session, ask one AskUserQuestion round over the aggregated list (AI agent, automation bot or person, with the evidence shown) and record the answers in the `--fleet-config` file with `--confirm ... --config`. The next run lists only accounts not yet classified. A headless fleet run never asks.
 
 The `[platform]` keys are read from the `--fleet-config` file only: the pass is fleet-wide, so a
 repository's own `[platform]` values have no effect.
@@ -816,6 +859,45 @@ A scanner change that alters a signal's meaning ships under a new signal name or
 `signals_schema_version` bump, so an earlier run reads the new signal as absent; these causes
 are the backstop for a change that kept the name.
 
+## Coverage: `--discovered`
+
+A repository ghsync never cloned leaves no row, so on its own a run cannot say what it
+missed. `--discovered FILE` reconciles the run against ghsync's discovery listing and
+reports "N of M discoverable repositories were assessed", each gap named and counted:
+
+```bash
+# /ghsync's discovery listing (its --porcelain output works too), then the run against it
+ghsync.sh --org my-org --porcelain-json > discovered.jsonl
+fleet.py ~/dev/github.com/my-org --discovered discovered.jsonl --out fleet-out
+```
+
+Each discovered path lands in one bucket, the first that matches:
+
+| Bucket (`run.json` key) | When |
+|-------------------------|------|
+| `assessed` | its row is `ok` |
+| `failed_scan` | its row is `failed`: cloned, but it could not be scanned (the reason is in `repos.jsonl`). A `missing_checkout` row (a `--from-list` entry with no clone) is not a scan and falls through to the buckets below |
+| `archived_or_empty` | `archived` is true or `default_branch` is empty: ghsync skips both |
+| `excluded_by_filters` | a `<repo>-main` checkout under `ROOT` this run was not given, such as one a `--from-list` run left out |
+| `not_cloned` | anything else: discovered, but there is no checkout |
+
+The buckets sum to `discoverable`. A path names a row the way the root layout does: a
+one-segment GitHub path `svc` is the row `<root name>/svc`, and two paths naming the same
+row count once. `not_in_listing` counts the rows
+no discovered path names; they are left out of the other counts.
+
+ghsync's listing leaves archived and empty repositories out, so `archived_or_empty` counts
+the listing's own archived or branchless lines plus the paths in ghsync's archived-repos
+cache, `ROOT/.gh_archived_repos`, that the listing lacks. ghsync records no cache of empty
+repositories, so an empty one appears only when your list includes it.
+
+`report.md` gives the coverage line first, above every section and diagram, and
+`run.json` records the counts under `coverage`. Both are counts only in every output mode:
+the coverage line and `coverage` name no repository. (A repository whose scan exits
+non-zero is still named by its row and its `logs/<repo>.stderr`, as above.)
+Without `--discovered`, the line says the coverage is unknown and `coverage` is `null`.
+Logic: `lib/fleet_coverage.py`.
+
 ## Output: `report.md` and diagrams
 
 Every run draws diagrams from its own rows, with no model call, and writes them beside
@@ -823,8 +905,8 @@ Every run draws diagrams from its own rows, with no model call, and writes them 
 in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
-The report opens with "What changed and who earned it", before the diagrams (see
-[`achievements.json`](#output-achievementsjson)).
+The report opens with the [coverage line](#coverage---discovered), then "What changed and who
+earned it", before the diagrams (see [`achievements.json`](#output-achievementsjson)).
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows

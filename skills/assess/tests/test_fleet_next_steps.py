@@ -377,6 +377,8 @@ def test_measure_hints():
     assert "${{ env.COV_MIN }}" in measure_hint("coverage_gate.threshold_meets_minimum")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
     assert "no_import_edges" in measure_hint("structure.modularity_q")
+    hint = measure_hint("ci_checks.lint_runs")   # issue #782
+    assert "check_target" in hint and "`pre-commit run`" in hint
     hint = measure_hint("ci_checks.enforced_check_runs")   # issue #775
     assert "included_jobs" in hint and "unknown_trigger" in hint
     assert "`push` or `pull_request`" in hint and "re-run the scan" in hint
@@ -455,3 +457,10 @@ def test_parts_reads_the_cap_tokens():
                  {"agent_environment": {"layer5_cap": {"unmet": "check_named"}}}) == ["check_named"]
     assert parts("agent_environment.layer5_cap.applies", {}) == []
     assert parts("coverage_gate.enforced", scans) == []
+
+
+def test_lint_runs_guidance_names_a_linter_command_in_ci():
+    """Issue #782 requirement 6: the done-when names a linter command in a CI file."""
+    words = guidance("ci_checks.lint_runs", "eq", True)
+    assert words is not None
+    assert "`.gitlab-ci.yml`" in words["done_when"] and "`ruff check .`" in words["done_when"]

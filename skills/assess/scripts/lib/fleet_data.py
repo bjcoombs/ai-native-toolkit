@@ -129,10 +129,11 @@ class DataRepo(TypedDict):
     rows: list[Cell]
 
 
-# The stamp fields RunDetails leaves out: the stamp's own envelope version, and the
-# --fleet-config section counts (the sha256 is the comparability key). A test fails when
-# FleetStamp gains a field that is neither copied below nor listed here.
-RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries"})
+# The stamp fields RunDetails leaves out: the stamp's own envelope version, the
+# --fleet-config section counts (the sha256 is the comparability key) and the --discovered
+# coverage counts (#745; run.json and report.md carry them). A test fails when FleetStamp
+# gains a field that is neither copied below nor listed here.
+RUN_EXCLUDED = frozenset({"fleet_stamp_version", "fleet_config_entries", "coverage"})
 
 
 class RunDetails(TypedDict):

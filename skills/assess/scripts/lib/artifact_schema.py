@@ -207,11 +207,27 @@ constant each.
 # go_rust_gate_form_not_read when no gate is found in a repository holding a
 # go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
 # the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
-# 1.36.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# 1.34.0: run-context.json gains the level block (issue #744): the default maturity
+# model's conditions with state, grade and reason, the verified tally (met, measured,
+# not_measured), the autonomy Step and the next Step's blockers
+# (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+# 1.35.0: run-context.json derived_findings rows gain an optional reviewed list of
+# {path, completed_sha, note} (issue #721): the paths a done review in the
+# committed .assess/actions.json clears. actions.json gains an optional completed
+# list for done entries that left the Top 3. Additive.
+# 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# #765): the window's accounts that look automated and are not yet classified in
+# the [identities] config section, a count with no identity. Additive.
+# 1.37.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
+# #782): whether an unmasked CI line on ordinary triggers runs a linter (null
+# when a check target or script may lint inside it). Additive: no existing
+# key moves, and complexity-stats.json is unchanged.
+# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis and
 # enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
 # system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.36.0"
+ARTIFACT_SCHEMA_VERSION = "1.38.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -339,9 +355,24 @@ ARTIFACT_SCHEMA_VERSION = "1.36.0"
 #     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
 #     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
 #     level 1 as not measured (threshold_meets_minimum null) where it read 0.
-# 31: a repository with no readable CI check whose tree tracks a CI file of a
+# 30: a self_referential_tests path whose done review is recorded in the committed
+#     .assess/actions.json (status done, completed_sha an ancestor of HEAD, the path
+#     in files) and untouched since that commit leaves the attention list,
+#     prescribed_actions and the keyhole summary (issue #721), so the Top 3 can move.
+#     It stays in derived_findings with a reviewed note; a later change re-flags it.
+# 31: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+#     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
+#     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
+#     or person never does. The same matcher serves ``delivery`` and the GitLab
+#     note classifier (``gitlab_notes``) under --platform, so a confirmed account
+#     moves their agent counts too. Without the section nothing changes.
+# 32: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
+#     in CI, not a suppression comment. One suppression comment no longer earns the row,
+#     and a clean repository that lints in CI reads at least 1 where it was
+#     unknown, so the Layer 3 row can move.
+# 33: a repository with no readable CI check whose tree tracks a CI file of a
 #     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
 #     Bitbucket Pipelines, Travis CI, Buildkite) reads
 #     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
 #     its Layer 5 row moves from level 0 to unknown (issue #787).
-ASSESS_METHOD_VERSION = 31
+ASSESS_METHOD_VERSION = 33

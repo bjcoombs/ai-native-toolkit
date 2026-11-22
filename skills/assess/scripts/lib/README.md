@@ -1328,6 +1328,7 @@ team rows, no repositories; for the trend no run history or fewer than 3 compara
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
@@ -1368,6 +1369,21 @@ described under `scans`), with a `status` enum, a reason-token pattern and an
 `tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
 `uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 
+**`fleet_coverage.py`**
+Fleet coverage against ghsync's discovery listing (issue #745). `read_discovery` parses
+`fleet.py --discovered FILE` (`parse_discovery`: ghsync `--porcelain` paths or
+`--porcelain-json` objects, `archived` and an empty `default_branch` read, a repeated path
+once, a malformed line a `DiscoveryError` naming its number) and adds the paths in the root's
+`.gh_archived_repos` cache as archived. `reconcile` puts each discovered path in one bucket,
+first match: `assessed` (ok row), `failed_scan` (failed row), `archived_or_empty`,
+`excluded_by_filters` (a checkout under the root this run was not given), `not_cloned`; the
+buckets sum to `discoverable`, and `not_in_listing` counts rows no path names. A path maps to
+a row id as `fleet.layout_id` does (`row_id`). `Coverage` is counts only and is stamped in
+`run.json` (`fleet_stamp.FleetStamp.coverage`, null without a listing, optional in the schema since a stamp from before #745 lacks it; not copied into
+`fleet-data.json`, `fleet_data.RUN_EXCLUDED`). `coverage_line` is the paragraph
+`fleet_diagrams.report_markdown` puts first in `report.md`; without a listing it says the
+coverage is unknown. Tests: `tests/test_fleet_coverage.py`.
+
 **`fleet_stamp.py`**
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
@@ -1376,14 +1392,17 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
 without one, absent before #706 and read as null, so the stamp version stays 1), and
 `platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
-false through `fleet_legacy.stamp_value`). No path,
+false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
+counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
+comparability key). No path,
 salt, timing or input mode, so a
-root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+root run, a list run and any `--jobs` give the same bytes on the same day (with
+`--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
 writes atomically with sorted keys.
 
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
-`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+`[ai_usage]`, `[review]`, `[platform]` and `[identities]` (empty allowed; their keys are added by #695,
 #696 and #714; `[review]` has `ai_review_components`, a string list read by
 `review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
 --platform-jobs` and `--platform-timeout`). API:
@@ -1407,7 +1426,9 @@ Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`
 required) and `field` (`one_of("email", "username", "name")`)) and
 `token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
 classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
-`gitlab_notes` (#716).
+`gitlab_notes` (#716); `[identities]` `agents`, `bots` and `people` (`string_list`
+of literal accounts, #765), read through `identities_section` by `ai_usage.matcher_from_config`
+(so also `delivery` and `gitlab_notes`) and counted in `section_entries`.
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
@@ -1672,7 +1693,45 @@ input, with the degenerate-churn gate on `_CHURN_DERIVED_FINDINGS`) and `_filter
 `integrate`; the C901 gate keeps each step under ccn 15. The attention list and every
 product rendered from the findings (`findings_markdown`, `keyhole_summary`,
 `attention_low_signal`, `prescribed_actions`, `archived_finding_paths`) come from one
-function, `finding_products`, which `mutation_refresh.py` calls too.
+function, `finding_products`, which `mutation_refresh.py` calls too. After
+`_filter_findings`, `integrate` calls `reviewed_findings.mark_reviewed`, and
+`finding_products` reads every product from `reviewed_findings.open_findings`, so a
+reviewed path stays in `derived_findings` but not in the attention list, the
+prescribed actions, the summary or the rendered path lists.
+
+**`reviewed_findings.py`** *(#721)*
+A recorded human review clears `self_referential_tests` until the source changes. The
+finding keys on commit origin (a test co-committed with its code), which no later
+commit can change, so it could never clear before. `committed_reviews` reads
+`.assess/actions.json` **as committed at HEAD** (`git show HEAD:./.assess/actions.json`,
+never the working tree) and collects, from its `actions` and `completed` arrays
+(`action_entries`), every entry with `finding` in `REVIEWABLE_FINDINGS`
+(`self_referential_tests` only), `status: done`, a hex `completed_sha` and a `files`
+list. `mark_reviewed` marks a finding path reviewed when it is in such an entry's
+`files` and `unchanged_since` holds: the sha resolves to a commit that is an ancestor of
+HEAD and `git rev-list <sha>..HEAD -- <path>` is empty. The finding's
+`derived_findings` row keeps the path in `paths` and gains `reviewed`, a list of
+`{path, completed_sha, note}` (`ReviewedPath`; the full resolved sha, and `note` from
+`review_note`, which contains it), written only when non-empty. `open_findings` is the
+rows with reviewed paths taken out of `paths`, which `finding_products` ranks and
+renders; `render_reviewed_markdown` appends a `### Reviewed` section to
+`findings_markdown`. A later commit touching the path re-flags it (no `reviewed`, back in
+attention and `prescribed_actions`). The source path must be in `files`: an entry
+naming only the test file does not clear it. Any failure (no git, no committed file, bad
+JSON, an unknown or non-ancestor sha) leaves the finding open. `carried_completed` gives
+`assess_finalize` the prior `done` entries of a reviewable finding that no new action
+matched; finalize writes them to actions.json `completed`, so a review that took its
+finding out of the Top 3 is not lost on the next finalize. Finalize reads `completed` back
+with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reopened` on an
+action that matches a done `completed` entry: the finding came back into the Top 3, so the
+old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
+sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
+rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
+gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a
+reviewed path neither counts nor fails the gate. The committed `findings.json` snapshot
+and the method-change diff keep the full `paths`, so a review never reads as a finding
+that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
+`.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
 
 **`untrusted_hotspot.py`**
 The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity
@@ -2227,6 +2286,75 @@ parser, hidden from `--help`: any use of it exits 2 with one line naming `--leve
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
 flag in `tests/test_fleet_legacy.py`.
 An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
+Two optional model keys feed `level_tally.py` and leave every row level unchanged (#744):
+`requires` on a level (condition ids, `<row id>.<level>` from `condition_id`, that must be
+met for this condition to count as met; an unknown id, a self-reference or a cycle fails
+the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`, and
+`gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
+later Step keeps every gate of the one below and never lowers the threshold, or the load
+fails. A model without them loads exactly as before.
+
+**`level_tally.py`**
+The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
+one repository's signals with no prior run and no model in the path (#744). Each row level
+of the model is one condition, `<row id>.<level>`, read on its own criteria (a level does
+not need the level below; `requires` states a real dependency). `level_result(model, data)`
+returns a `LevelResult` (shapes in `level_result_types.py`):
+
+- `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`),
+  `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
+  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+- `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
+  unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
+- `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
+  unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
+  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
+  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
+  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+
+Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
+`requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
+counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads the blocks the default
+model names, `level_tally.DEFAULT_BLOCKS`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
+`$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
+fixtures through `/fleet` and `/assess` on the same commit.
+
+**`signal_grades.py`**
+The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES` and the `DEFAULT_LEVELS`
+path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
+`tests/test_level_tally.py`.
+
+**`reason_codes.py`**
+`reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
+(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+which re-exports both, so the tally reads the same codes as counts-only output (#744).
+Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
+
+**`level_result_types.py`**
+The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
+`NextStep`), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+import cycle. Tests: `tests/test_level_tally.py`.
+
+**`fleet_level.py`**
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
+over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
+stale file when the run has no model. Tests: `tests/test_level_tally.py`.
+
+**`fleet_level_schema.py`**
+Generates `skills/fleet/references/level.schema.json` from `FleetLevels` and `LevelResult`
+(`fleet_group_schema.type_schema`); `tests/test_level_tally.py` fails when the checked-in
+file drifts. Regenerate: `cd skills/assess && uv run --locked python scripts/lib/fleet_level_schema.py`.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
@@ -2264,8 +2392,11 @@ each class to a grade (`config_only < declared < measured < verified`); `criteri
 returns the signal's class grade whatever the operator (the #789 grades design: no
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
 conditions #744 lists without counting. The module doc records the rulings (platform
-reads are their own class; instruction files stay declared but still gate Steps). Nothing
-in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+reads are their own class; instruction files stay declared but still gate Steps).
+`level_tally.py` reads it to count conditions; `levels.py` does not. `UNMEASURED_VALUES`
+names the values that mean "could not be measured" with the tally's reason code
+(`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
+false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 **`instruction_files.py`**
@@ -3158,18 +3289,39 @@ splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
 `mypy` ... run directly), so `make lint` and `npx eslint` count and an install
 naming a linter does not; instruction-file classification does not use it. Used by
 `agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
-lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
-(`test_is_check_command`).
+lines). `is_lint_run(text)` (issue #782) is the lint test `ci_checks.lint_runs`
+reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
+--version` runs no lint) and without the package-manager test aliases
+`is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
+(`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
+ruff check .`). Type checkers count as linters there, in a vocabulary local to
+`is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
+`type-check` targets such as `npm run typecheck` or `make type-check`), so
+`is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
+`npm exec`, `pnpm exec` / `dlx`, `yarn exec` / `dlx`) is read by the program it runs:
+a linter or type checker is a lint run, a test runner (`jest`, `vitest`, `playwright
+test`) is neither, and any other program is `may_lint` (null, never false). A lone
+type-checker item (`- tsc` under `needs:`) is a value like a lone linter. `may_lint(text)` is a check that may run a linter the line cannot
+show: a check target of a runner or script (`make check`, `npm test`, `tox`,
+`./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
+(`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
+call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
+jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
+`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
+(`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
-Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
+Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
+it run a linter (#782)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
+the instruction file; Layer 3 level 1 reads `lint_runs`.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
-enforced_basis, masked_check_commands, off_trigger_check_commands, unread_ci_files}`. Each line,
+enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
+lint_basis, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3216,6 +3368,25 @@ null with `enforced_basis: unknown_trigger`), else null under the
 same `included_jobs` rule, else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
 still describes `test_or_lint_runs`, which keeps its meaning.
+`lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
+and trigger rules, the same own, included and merged files, with
+`count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
+per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
+mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
+`lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
+`merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
+triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+target or script that may lint inside it; recipes are not read), `not_enforced`
+(false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
+`no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
+caps the row; a stored scan without the key reads unknown there.
 CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
 `UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
 `azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
@@ -3225,7 +3396,8 @@ included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays f
 and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
 `enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
 beside it still reads null). Their commands are not read; an empty `Jenkinsfile` reads the same.
-Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
+Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
 
 **`ci_masking.py`**
@@ -3367,8 +3539,33 @@ pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
 token's owner-chosen name), which is `agent` under `token_users_as_agents` and
 `token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
 `--timeout` bounds a pathological repository pattern).
+Confirmed identities (#765): `AuthorMatcher(..., confirmed=ConfirmedIdentities)` holds the
+`[identities]` section as lower-case literal sets (`ConfirmedIdentities.from_section`;
+entries are exact accounts, never patterns). Right after the dependency-bot check, an
+identity whose `identity_keys(email, name, username)` (the e-mail, the noreply login and
+a `[bot]` display name) is a confirmed person or bot is `other`, and a confirmed agent is
+`agent` (rule_index None), ahead of every config rule and pinned default; a person or
+bot entry wins over an agent entry for the same account.
 Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
-`tests/test_change_coupling.py`.
+`tests/test_identity_candidates.py`, `tests/test_change_coupling.py`.
+
+**`account_discovery.py`**
+Bot and agent account discovery (issue #765): suggestions for the human to confirm in
+`[identities]`. `discover(commits, matcher)` is pure: over `HistoryCommit(author_email,
+author_name, subject, coauthors)` rows (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
+returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
+commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
+`STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
+`agent_name_hint` from `AI_TOOL_NAMES`, `automation_name_hint`) makes a candidate, while
+`co_author_trailer`, `noreply_address` and `uniform_subjects` (at least
+`UNIFORM_MIN_COMMITS` commits, one folded subject shape covering `UNIFORM_SHARE`) only
+annotate one. An account the matcher already puts in `agent`, or one classified in
+`[identities]`, is never a candidate. A candidate holds an identity: `ai_usage` emits only
+`len(discover(...))` as `identities_awaiting_confirmation`, and the rows reach only the
+terminal through `scripts/identity_candidates.py` (list one repository or a fleet list
+aggregated by account; `--confirm CLASS=ACCOUNT` rewrites the `[identities]` section of
+`--config` or the repository's `.assess/config.toml`). Tests:
+`tests/test_identity_candidates.py`.
 
 **`ai_usage.py`**
 AI-assisted change share (issue #547), a lower bound on agent use.
@@ -3376,7 +3573,8 @@ AI-assisted change share (issue #547), a lower bound on agent use.
 `--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
 total_commits, agent_trailer_commits, agent_trailer_share, agent_authored_commits,
 agent_authored_share, agent_either_commits, agent_either_share, dependency_bot_commits,
-token_user_commits, agent_identity_rule_commits[], lower_bound, covered_agents[],
+token_user_commits, agent_identity_rule_commits[], identities_awaiting_confirmation,
+lower_bound, covered_agents[],
 covered_author_agents[], limits[]}`. A commit is a trailer commit when any `Co-authored-by` trailer names an
 AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded),
 and an authored commit when `agent_identity.AuthorMatcher` (built by
@@ -3384,6 +3582,9 @@ and an authored commit when `agent_identity.AuthorMatcher` (built by
 input) puts its author (`%ae`, `%an`) in the `agent` bucket; `agent_either_*` counts a
 commit with both once. `agent_identity_rule_commits[i]` counts the commits credited to
 config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
+`identities_awaiting_confirmation` counts the window's accounts `account_discovery.discover`
+lists (#765), a number only. `window_commits(repo_root, scope, window)` is the shared
+windowed read (`WindowCommits(commits, since)` or a fixed reason string).
 Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or

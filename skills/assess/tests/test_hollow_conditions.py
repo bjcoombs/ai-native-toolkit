@@ -72,7 +72,9 @@ CASES = [
     _case("l1-1-telemetry-dependency", "layer-1-liveness", 1, {
         "pyproject.toml": "[project]\nname = 'x'\nversion = '0'\ndependencies = ['opentelemetry-api']\n",
     }, _NONE_FILED),
-    _case("l3-1-one-noqa", "layer-3-linters", 1, {"app.py": "import os  # noqa: F401\n"}, _ISSUES + "782"),
+    _case("l3-1-one-noqa", "layer-3-linters", 1, {"app.py": "import os  # noqa: F401\n"}, None),
+    _case("l3-1-linter-version", "layer-3-linters", 1,
+          {".github/workflows/ci.yml": _workflow("ruff --version")}, None),
     _case("l4-1-codeowners-star", "layer-4-architecture", 1, {
         ".github/CODEOWNERS": "* @x\n", "src/a.py": "x = 1\n",
     }, None),

@@ -405,6 +405,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `derived_findings.name` | token |
 | `derived_findings.paths` | path (hashed when hashing is on) |
 | `derived_findings.action` | dropped |
+| `derived_findings.reviewed.path` | path (hashed when hashing is on) |
+| `derived_findings.reviewed.completed_sha` | dropped |
+| `derived_findings.reviewed.note` | dropped |
 | `attention.findings` | token |
 | `prescribed_actions.findings` | token |
 | `prescribed_actions.action` | dropped |
@@ -610,6 +613,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ci_checks.reason` | dropped |
 | `ci_checks.basis` | token |
 | `ci_checks.enforced_basis` | token |
+| `ci_checks.lint_basis` | token |
 | `ci_checks.includes.kind` | token |
 | `ci_checks.includes.id` | external id (hashed when hashing is on) |
 | `ci_checks.includes.status` | token |
@@ -675,6 +679,26 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_claims.contradictions.kind` | token |
 | `doc_claims.contradictions.sites.value` | dropped |
 | `doc_claims.contradictions.conflict_pair.value` | dropped |
+
+## level
+
+| Field | Kept as |
+|---|---|
+| `level.levels_version` | token |
+| `level.counted` | token |
+| `level.listed` | token |
+| `level.not_measured.id` | token |
+| `level.not_measured.reason` | token |
+| `level.conditions.id` | token |
+| `level.conditions.row` | token |
+| `level.conditions.grade` | token |
+| `level.conditions.state` | token |
+| `level.conditions.reason` | token |
+| `level.next_step.blockers.kind` | token |
+| `level.next_step.blockers.gate` | token |
+| `level.next_step.blockers.condition` | token |
+| `level.next_step.blockers.state` | token |
+| `level.next_step.blockers.reason` | token |
 
 ## fleet-data.json (the fleet skill)
 
