@@ -56,6 +56,7 @@ files = [
     "transform_skill.py",
     "standalone_skill_config.py",
     "floor_anchor.py",
+    "fold_changes.py",
     "contract",
     "canaries",
 ]
