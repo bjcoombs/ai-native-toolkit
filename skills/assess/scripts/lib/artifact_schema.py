@@ -219,13 +219,17 @@ constant each.
 # 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-# 1.37.0: run-context.json gains the agent_consistency block (issue #768): the root
+# 1.37.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
+# #782): whether an unmasked CI line on ordinary triggers runs a linter (null
+# when a check target or script may lint inside it). Additive: no existing
+# key moves, and complexity-stats.json is unchanged.
+# 1.38.0: run-context.json gains the agent_consistency block (issue #768): the root
 # instruction files of every agent system present, the check commands and
 # thresholds they disagree on, each file's link to the canonical source and the
 # pointer line per unlinked system. nested_instructions also discovers the
 # Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.37.0"
+ARTIFACT_SCHEMA_VERSION = "1.38.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -364,8 +368,12 @@ ARTIFACT_SCHEMA_VERSION = "1.37.0"
 #     or person never does. The same matcher serves ``delivery`` and the GitLab
 #     note classifier (``gitlab_notes``) under --platform, so a confirmed account
 #     moves their agent counts too. Without the section nothing changes.
-# 32: the agent_consistency block and its conflicts and unlinked signals (issue
+# 32: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
+#     in CI, not a suppression comment. One suppression comment no longer earns the row,
+#     and a clean repository that lints in CI reads at least 1 where it was
+#     unknown, so the Layer 3 row can move.
+# 33: the agent_consistency block and its conflicts and unlinked signals (issue
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
-ASSESS_METHOD_VERSION = 32
+ASSESS_METHOD_VERSION = 33

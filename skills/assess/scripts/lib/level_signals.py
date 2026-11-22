@@ -52,8 +52,9 @@ new signal has to be classified on purpose; ``input_class`` raises
   (``lib/ci_triggers.py``: a GitHub ``push`` / ``pull_request`` /
   ``merge_group`` event, a GitLab job no ``when: manual``, ``only:`` or
   ``rules:`` keeps off ordinary pipelines); triggers it cannot settle read
-  null. ``ci_checks.test_or_lint_runs`` reads neither and would be
-  ``head_text``.
+  null. ``ci_checks.lint_runs`` (#782) reads lint lines under the same
+  rules, so it has the class too. ``ci_checks.test_or_lint_runs`` reads
+  neither and would be ``head_text``.
 - ``platform``: read from the GitHub or GitLab API (``review_reality``,
   ``agent_environment.ci_duration``). Grade ``verified``.
 

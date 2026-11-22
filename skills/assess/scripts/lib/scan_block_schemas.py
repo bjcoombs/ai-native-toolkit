@@ -99,7 +99,8 @@ CI_CHECKS: JsonDict = {
         "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
         "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
         "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
-        "lines left out."),
+        "lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 "
+        "level 1); a check target or script that may run a linter inside it reads null."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -166,6 +167,20 @@ CI_CHECKS: JsonDict = {
         "off_trigger_check_commands": _field(
             _INT, "Unmasked CI check lines whose workflow or job does not run on ordinary changes "
             "(workflow_dispatch or schedule only, a manual GitLab job)."),
+        "lint_runs": _field(
+            {"type": ["boolean", "null"]},
+            "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job "
+            "on ordinary changes (not --version or --help), or a step uses a known lint action "
+            "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
+            "null when none does but included "
+            "jobs, unsettled triggers or a check target or script that may lint inside it could "
+            "hold one, else false."),
+        "lint_basis": _field(
+            {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
+                      "check_target", "not_enforced", "no_lint_command", "no_ci"]},
+            "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
+            "unknown_trigger or check_target (null), not_enforced, no_lint_command or no_ci "
+            "(false)."),
     },
 }
 
