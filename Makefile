@@ -45,7 +45,8 @@ test-contract:
 	uv run --with pytest --with pyyaml pytest -v tests/
 
 # The measures catalog, generated from skills/assess/checks/core.toml, the default
-# maturity model and lib/level_signals.py. test-assess fails (tests/test_catalog.py)
+# maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and
+# lib/scan_registry.py (the registry). test-assess fails (tests/test_catalog.py)
 # when a committed copy is stale, so run this after changing any of them.
 catalog:
 	cd skills/assess && uv run --locked python scripts/gen_catalog.py

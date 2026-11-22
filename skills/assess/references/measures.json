@@ -3,7 +3,9 @@
   "sources": [
     "skills/assess/checks/core.toml",
     "skills/assess/levels/default.toml",
-    "skills/assess/scripts/lib/level_signals.py"
+    "skills/assess/scripts/lib/level_signals.py",
+    "skills/assess/scripts/lib/signals.py",
+    "skills/assess/scripts/lib/scan_registry.py"
   ],
   "grades": [
     {

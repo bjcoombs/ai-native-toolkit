@@ -70,7 +70,8 @@ def _rows(catalog: Catalog) -> list[str]:
             for c in level["criteria"]:
                 lines.append(
                     f"| `{row['id']}.{level['level']}` {_cell(c['title'])} | {_cell(c['text'])} "
-                    f"(`{c['signal']} {c['op']} {json.dumps(c['value'])}`) | `{c['grade']}` | "
+                    f"(`{_cell(c['signal'] + ' ' + c['op'] + ' ' + json.dumps(c['value']))}`) | "
+                    f"`{c['grade']}` | "
                     f"{'yes' if c['counts'] else 'no, listed'} | {_cell(c['fix'])} |")
         lines.append("")
     return lines
@@ -125,7 +126,7 @@ def _findings(catalog: Catalog) -> list[str]:
         if not f["concern"]:
             rules.append("a strength, not a concern")
         lines.append(f"| `{f['name']}` {_cell(f['title'])} | {', '.join(_code(i) for i in f['inputs'])} | "
-                     f"{_cell(f['action'])} | `{f['mode']}` | {'; '.join(rules) or '-'} |")
+                     f"{_cell(f['action'])} | `{f['mode']}` | {_cell('; '.join(rules)) or '-'} |")
     lines.append("")
     return lines
 

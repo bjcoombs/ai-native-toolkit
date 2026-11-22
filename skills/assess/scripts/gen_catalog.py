@@ -36,9 +36,9 @@ def outputs() -> dict[Path, str]:
 
 
 def stale(expected: dict[Path, str]) -> list[Path]:
-    """The files whose committed text differs from ``expected`` (or that are missing)."""
+    """The files whose committed bytes differ from ``expected`` (or that are missing)."""
     return [path for path, text in expected.items()
-            if not path.is_file() or path.read_text(encoding="utf-8") != text]
+            if not path.is_file() or path.read_bytes() != text.encode("utf-8")]
 
 
 def main(argv: list[str] | None = None) -> int:

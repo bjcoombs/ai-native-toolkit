@@ -41,7 +41,8 @@ def _manifest_data() -> dict[str, Any]:
 def test_committed_catalog_is_current(path: Path) -> None:
     expected = gen_catalog.outputs()[path]
     assert path.is_file(), f"{path.name} is missing: run `make catalog` from the repository root"
-    assert path.read_text(encoding="utf-8") == expected, (
+    # Byte for byte: .gitattributes keeps both files LF in every checkout.
+    assert path.read_bytes() == expected.encode("utf-8"), (
         f"{path.relative_to(gen_catalog.ROOT).as_posix()} is stale: run `make catalog` from the "
         "repository root (or `uv run --locked python scripts/gen_catalog.py` from skills/assess)")
 
@@ -142,6 +143,20 @@ def test_a_criterion_without_manifest_entries_still_renders() -> None:
     crit = row["levels"][0]["criteria"][0]
     assert (crit["grade"], crit["counts"], crit["fix"]) == (UNCLASSIFIED, False, "")
     assert crit["title"] == "ci_checks.ci_files"
+
+
+def test_every_source_exists() -> None:
+    for source in build_catalog()["sources"]:
+        assert (gen_catalog.ROOT / source).is_file(), source
+
+
+def test_a_pipe_in_a_criterion_value_keeps_the_table_columns() -> None:
+    model = load_default_levels()
+    model["rows"][0]["levels"][0]["criteria"] = [{"signal": "x.y", "op": "in", "value": ["a|b"]}]
+    row_lines = [line for line in render_markdown(build_catalog(model=model)).splitlines()
+                 if "x.y in" in line]
+    assert len(row_lines) == 1
+    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == 6  # five columns
 
 
 def test_markdown_avoids_the_retired_vocabulary() -> None:

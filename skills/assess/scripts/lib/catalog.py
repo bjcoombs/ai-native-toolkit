@@ -48,7 +48,8 @@ GRADE_ORDER = ("config_only", "declared", "measured", "verified")
 UNCLASSIFIED = "unclassified"
 # The sources the catalog is generated from, repo-relative.
 SOURCES = ("skills/assess/checks/core.toml", "skills/assess/levels/default.toml",
-           "skills/assess/scripts/lib/level_signals.py")
+           "skills/assess/scripts/lib/level_signals.py", "skills/assess/scripts/lib/signals.py",
+           "skills/assess/scripts/lib/scan_registry.py")
 
 Headless = Literal["registered", "headless_variant", "unregistered", "platform_only"]
 

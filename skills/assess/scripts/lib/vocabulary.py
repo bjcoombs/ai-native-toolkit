@@ -50,8 +50,9 @@ _IDENT = re.compile(r"\S*_\S*")
 _URL = re.compile(r"\]\([^)\s]*\)|<?https?://[^\s)>]+>?")
 
 #: "AI-Native" is also the product's own name in ``ai-native-toolkit``, so the retired
-#: label matches (in any case) only as a whole token not followed by ``-toolkit``.
-_AI_NATIVE = re.compile(r"(?<![\w-])AI-Native(?!-toolkit)(?![\w-])", re.I)
+#: label matches as a whole word in any case, hyphen-joined forms included, except when
+#: followed by exactly ``-toolkit``.
+_AI_NATIVE = re.compile(r"\bAI-Native(?!(?-i:-toolkit)\b)\b", re.I)
 
 
 def prose(text: str) -> str:
