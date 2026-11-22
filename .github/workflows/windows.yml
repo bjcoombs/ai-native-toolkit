@@ -9,8 +9,9 @@ name: Windows
 # One job, a required check: "windows suites + smoke runs". Every suite step
 # and smoke step runs even when an earlier one fails (`!cancelled()`), and -ra
 # lists every skip and failure, so one log read shows it all. The suites run on
-# every core with pytest-xdist (`-n auto`, added with `--with` so the lockfiles
-# and the serial Linux jobs are unchanged): serial, the job took over an hour.
+# every core with pytest-xdist (`-n auto --dist loadfile`: one file per worker,
+# so cross-file state, #831, cannot interleave), added with `--with` so the lockfiles
+# and the serial Linux jobs are unchanged. Serial, the job took over an hour.
 # No coverage gate here: the Linux jobs own the floors.
 #
 # Tests that need POSIX-only machinery carry one of the Windows skip markers
@@ -120,7 +121,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: >-
           uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
-          pytest -ra -p no:cacheprovider -n auto
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
           --ignore=tests/test_fleet_golden.py
         working-directory: skills/assess
 
@@ -128,7 +129,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: >-
           uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
-          pytest -ra -p no:cacheprovider -n auto
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
         working-directory: scripts
 
       # Under Git Bash: some contract tests and every ghsync/ghreport test run
@@ -139,7 +140,7 @@ jobs:
         shell: bash
         run: >-
           uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
-          pytest -ra -p no:cacheprovider -n auto tests/
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile tests/
           --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
 
       - name: ghsync and ghreport suites under Git Bash
@@ -147,7 +148,7 @@ jobs:
         shell: bash
         run: >-
           uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
-          pytest -ra -p no:cacheprovider -n auto
+          pytest -ra -p no:cacheprovider -n auto --dist loadfile
           tests/test_ghsync*.py tests/test_ghreport*.py
 
       - name: Standalone skill ZIPs
