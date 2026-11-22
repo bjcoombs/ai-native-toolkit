@@ -4210,7 +4210,7 @@ and `npm install jest` run neither; `runs_tool`, `gate_family`):
 `pytest --cov` (or a pytest `addopts` holding `--cov`, on one line, in a TOML list or on
 INI continuation lines) or `coverage
 report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
-nothing), any `pytest` for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
+nothing), any `pytest` with pytest-cov on (`--cov` on the line or in `addopts`) for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
 `collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
 or `jacoco:check`, Gradle `jacocoTestCoverageVerification`, the go-test-coverage
 program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)

@@ -245,7 +245,8 @@ def test_folded_paragraphs_are_one_command_each() -> None:
 @pytest.mark.parametrize(("words", "family", "expected"), [
     (("pytest", "--cov=src"), "coverage.py", True),
     (("pytest",), "coverage.py", False),
-    (("pytest",), "pytest", True),
+    (("pytest",), "pytest", False),
+    (("pytest", "--cov"), "pytest", True),
     (("coverage", "xml"), "coverage.py", True),
     (("npx", "jest"), "jest", None),
     (("./mvnw", "install"), "maven-jacoco", True),
@@ -289,6 +290,10 @@ def _action_step(extra: str) -> dict[str, str]:
     (_ci("pytest --cov-fail-under=80"), (False, "not_run_in_ci")),
     ({**_ci("pytest"), "pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"--cov-report=xml\"\n"
       "[tool.coverage.report]\nfail_under = 80\n"}, (False, "not_run_in_ci")),
+    ({**_ci("pytest"), "pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"--cov-fail-under=80\"\n"},
+     (False, "not_run_in_ci")),
+    ({**_ci("pytest --cov"), "pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"--cov-fail-under=80\"\n"},
+     (True, "ci_run")),
     ({**_ci("npx jest --coverage=false"), **JEST_80}, (False, "not_run_in_ci")),
     ({**_ci("npx jest --coverage=true"), **JEST_80}, (True, "ci_run")),
     ({**_ci("npx jest --coverageDirectory=out"), **JEST_80}, (None, "indirect_run")),
@@ -299,7 +304,7 @@ def _action_step(extra: str) -> dict[str, str]:
 ], ids=["make-coverage", "make-cov", "npm-run-coverage", "just-coverage", "npm-install",
         "go-tc-action", "go-tc-action-continue-on-error", "go-tc-action-if-false",
         "pytest-cov-report-only", "pytest-fail-under-only", "addopts-cov-report-only",
-        "jest-coverage-false", "jest-coverage-true", "jest-coverage-directory",
+        "addopts-threshold-no-cov", "addopts-threshold-cov-on-line", "jest-coverage-false", "jest-coverage-true", "jest-coverage-directory",
         "jest-collect-line-comment", "jest-collect-block-comment"])
 def test_final_review_round(tmp_path: Path, files: dict[str, str],
                             expected: tuple[bool | None, str]) -> None:

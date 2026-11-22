@@ -31,7 +31,7 @@ How a gate is run, by where it is written:
   ``jacocoTestCoverageVerification``; go-test-coverage: the program or its
   action. A threshold flag in a pytest config section (``[pytest]``,
   ``[tool:pytest]``, ``[tool.pytest.ini_options]``) is ``addopts``, run by any
-  ``pytest`` line; a ``tox.ini`` ``[testenv]`` ``commands`` line is a task command.
+  ``pytest`` line with pytest-cov on (``--cov`` there or in ``addopts``); a ``tox.ini`` ``[testenv]`` ``commands`` line is a task command.
 - A task-runner file (``Makefile``, ``tox.ini`` commands, ``package.json``
   scripts, ``justfile``, ``noxfile.py``, ...): CI reaches it only through a
   target, whose recipe this scan does not follow.
@@ -299,7 +299,9 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     name, args = program(words)
     if family in ("coverage.py", "pytest"):
         if name in ("pytest", "py.test"):
-            return family == "pytest" or pytest_cov or cov_enabled(args)
+            # Either family gates only with pytest-cov on: ``--cov`` on the line or in
+            # ``addopts``. An ``addopts`` threshold with no ``--cov`` anywhere checks nothing.
+            return pytest_cov or cov_enabled(args)
         return (family == "coverage.py" and name == "coverage"
                 and bool(args) and args[0] in _COVERAGE_REPORTS)
     if family in ("jest", "vitest"):
