@@ -1,38 +1,11 @@
 """Promissory-marker scan: stale TODO/FIXME, suppressions, disabled tests.
 
-Detects the four families of *promissory markers* - lines where the code makes
-a promise about its own future - and ages each one by the number of commits to
-its file that have landed since the marker was introduced ("survived touches").
-A marker that survived many edits to an actively-maintained file is unactioned
-intent: the damning case. A marker in a dormant file is just dormant; calendar
-age alone cannot tell these apart, so survived-touches is the primary metric.
-
 Families and the layer each one wounds:
 
 - ``todo``           TODO / FIXME / HACK / XXX / TBD          -> Layer 8 (intent tracking)
 - ``deprecation``    @deprecated / DEPRECATED / remove-after  -> Layer 2 (design honesty)
 - ``suppression``    noqa / type: ignore / eslint-disable ... -> Layer 3 (linter integrity)
 - ``disabled_test``  pytest.mark.skip / it.skip / @Disabled   -> Layer 5 (CI integrity)
-
-A marker is *tracked* (pressure exists) when it cites an issue, ticket, URL, or
-deadline date - or, for suppressions, when it carries an inline justification
-(``//nolint:x // reason``, ``eslint-disable-line x -- reason``). A justified
-suppression is never stale, however many edits it survived: the reason is the
-record, and there is no promise left to keep. Other tracked markers still age,
-because an issue or a deadline can go stale while the marker stays. The bare
-remainder is the debt. Each marker's
-introducing commit is also classified agent/human (reusing the conservative B4
-identity rules from ``change_coupling``), so "agent-introduced unactioned
-intent" is a measured quantity, not an article of faith.
-
-Marker text that is data is not a marker. In a Python file ``tokenize`` places
-each hit: one inside a string literal (f-strings included) is a fixture or a
-pattern and is dropped, but a todo or deprecation in a triple-quoted docstring
-is prose about the code and counts. A suppression counts only in a comment, where linters read
-it; a disabled test in code or a comment. A file that does not tokenize, and
-every other language, keeps the line-based filters. A suppression quoted in a
-backtick code span on a comment-only line is a quotation, and config files (TOML, YAML, INI, JSON)
-carry no suppressions: no listed linter reads them.
 
 Pure subprocess (rg + git) and stdlib. No LLM calls. Degrades to
 ``available: False`` when ``rg`` is missing or the directory is not a git

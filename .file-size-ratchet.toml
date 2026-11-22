@@ -73,14 +73,6 @@ reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrust
 lines = 806
 reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 
-[ceilings."skills/assess/scripts/lib/promissory_markers.py"]
-lines = 812
-reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
-
-[ceilings."skills/assess/scripts/lib/structure_drift.py"]
-lines = 813
-reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
-
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]
 lines = 1065
 reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet); raised to 1065 by #981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"

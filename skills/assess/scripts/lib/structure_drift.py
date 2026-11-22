@@ -40,24 +40,9 @@ one (files that keep co-changing in the same commit). Where they disagree about
 which files belong together is the signal: a declared boundary the import graph
 or the commit log has quietly split or fused.
 
-The correctness property is **label invariance**. A grouping is not its
-community *names* - relabel the communities, reorder them, swap which is "A" and
-which is "B", and nothing about which files belong together has changed. A
-partition therefore *is* its co-membership relation ``{(a, b) | same_group(a,
-b)}``; two partitions are equal iff their relations are equal. Tier 1 reports
-disagreement as set operations over canonical file-pairs ``(min(a, b), max(a,
-b))``, so the metric is invariant to any community relabeling by construction -
-the relation never carries a label to permute. This is the whole correctness
-contract of the tier, and the suite pins it directly (build communities, relabel
-them, assert identical metrics).
-
-A repo legitimately groups some directories together by design - a lib module
-and its test, a packager and the thing it packages. Those known-good seams are an
-allowlist subtracted from the *denominator* (correct by construction: a seam can
-only shrink the disagreement set, never inflate it), so owned cohesion never
-reads as drift. The tier degrades to ``available: False`` when there is no
-ownership map to ground the human grouping, or when the static / historical
-lenses are unavailable - it never crashes the assessment.
+The suite pins label invariance directly (build communities, relabel them, assert
+identical metrics). Tier 1 also degrades to ``available: False`` when the static or
+historical lens is unavailable.
 
 The Layer 0 structure-drift signal, built entirely on `ownership_parser`'s parse + resolve
 primitives (it re-implements no parsing). A declaration is a self-description under no
@@ -86,7 +71,7 @@ community relabeling by construction** - relabel or reorder the groups and nothi
 because the relation carries pairs, never labels. The six metrics are set differences /
 intersections of the three relations (human-vs-static splits/fuses, human-vs-cochange, and
 the two agreement sets). Known-good architectural seams (the lib<->tests and standalone-build
-<->skills seams documented above) are an allowlist subtracted from the *denominator* - correct
+<->skills seams documented in `lib/README.md`) are an allowlist subtracted from the *denominator* - correct
 by construction, a seam can only suppress an owned boundary, never manufacture drift. Tier 1
 degrades to `available: False` reason `"no ownership map"` and emits its own `tier_1_available`
 field. `keyhole_signals.py` orchestrates Tier 1 (feeding it the behaviour block's already-parsed
