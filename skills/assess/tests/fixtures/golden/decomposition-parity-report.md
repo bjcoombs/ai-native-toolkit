@@ -42,9 +42,9 @@ _Deterministic portion of the assessment: headline, metrics, hotspots, and cross
 
 ## How this was measured
 
-In place: over 1 repository, 27 scans were measured everywhere, 15 ran but were not measured everywhere, and 1 was skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 27 scans were measured everywhere, 16 ran but were not measured everywhere, and 0 were skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (42)
+### Ran (43)
 
 - `agent_ops`
 - `config_drift`
@@ -71,6 +71,7 @@ In place: over 1 repository, 27 scans were measured everywhere, 15 ran but were 
 - `structure`: not measured in 1 of 1 (no_source_files)
 - `stats_summary`
 - `promissory_markers`: not measured in 1 of 1 (unavailable)
+- `structure_drift`: not measured in 1 of 1 (no_block)
 - `observability`
 - `doc_graph`
 - `doc_staleness`
@@ -89,6 +90,6 @@ In place: over 1 repository, 27 scans were measured everywhere, 15 ran but were 
 - `accretion_ratchet`: not measured in 1 of 1 (unavailable)
 - `gap_actions`
 
-### Skipped (1)
+### Skipped (0)
 
-- `structure_drift`: this run wrote no block for it.
+- none
