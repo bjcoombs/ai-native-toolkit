@@ -407,6 +407,9 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     ("hatch fmt --check", True),
     ("hatch run lint", None),
     ("hatch run pytest", False),
+    ("pyright", True),
+    ("npx tsc --noEmit", True),
+    ("npm run typecheck", True),
 ])
 def test_lint_runs_per_command(tmp_path: Path, run: str, lint: bool | None) -> None:
     assert scan_ci_checks(_write(tmp_path, _gha(run)))["lint_runs"] is lint

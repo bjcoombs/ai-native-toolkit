@@ -80,3 +80,20 @@ def test_may_lint(text: str, expected: bool) -> None:
 def test_hatch_commands(text: str, lint: bool, maybe: bool) -> None:
     # Issue #782: a Hatch repository that lints in CI must not read a definite level 0.
     assert (is_lint_run(text), may_lint(text)) == (lint, maybe)
+
+
+@pytest.mark.parametrize("text", [
+    "pyright", "uv run pyright src", "basedpyright", "tsc --noEmit", "npx tsc --noEmit",
+    "npx vue-tsc --noEmit", "npm run typecheck", "npm run type-check", "pnpm typecheck",
+    "yarn type-check", "make typecheck", "make type-check", "just typecheck", "task typecheck",
+    "hatch run pyright",
+])
+def test_a_type_checker_is_a_lint_run(text: str) -> None:
+    # Issue #782: the Layer 3 condition is "CI runs a linter or type checker".
+    assert is_lint_run(text) is True
+
+
+def test_type_checkers_leave_is_lint_command_unchanged() -> None:
+    # Layer 5 and test_or_lint_runs keep is_lint_command's vocabulary.
+    assert not is_lint_command("pyright") and not is_lint_command("tsc --noEmit")
+    assert not is_lint_run("tsc --version") and not is_lint_run("npm run build:types")

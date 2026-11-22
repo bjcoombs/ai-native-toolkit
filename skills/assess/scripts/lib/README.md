@@ -3273,7 +3273,10 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 --version` runs no lint) and without the package-manager test aliases
 `is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
 (`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
-ruff check .`). `may_lint(text)` is a check that may run a linter the line cannot
+ruff check .`). Type checkers count as linters there, in a vocabulary local to
+`is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
+`type-check` targets such as `npm run typecheck` or `make type-check`), so
+`is_lint_command` and Layer 5 are unchanged. `may_lint(text)` is a check that may run a linter the line cannot
 show: a check target of a runner or script (`make check`, `npm test`, `tox`,
 `./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
 (`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program

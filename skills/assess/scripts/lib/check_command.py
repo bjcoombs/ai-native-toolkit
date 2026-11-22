@@ -171,6 +171,22 @@ def _task_target(words: list[str], names: frozenset[str]) -> bool:
     return words[0] == "task" and bool(pos) and is_check_name(pos[0], names)
 
 
+# Type checkers Layer 3 credits as lint runs (#782), local to ``is_lint_run`` so
+# ``is_lint_command`` (Layer 5, ``test_or_lint_runs``) keeps its vocabulary.
+_TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
+_RUN_PROGRAMS = LINT_PROGRAMS | _TYPE_PROGRAMS
+_RUN_WORDS = LINT_WORDS | _TYPE_PROGRAMS | {"typecheck", "typechecks"}
+_TYPE_CHECK = re.compile(r"type[-_]check", re.IGNORECASE)
+
+
+def _lint_target(words: list[str]) -> bool:
+    """``is_lint_command``'s anchoring over the Layer 3 vocabulary (linters and type checkers)."""
+    head = words[0]
+    if head not in RUNNERS and not head.startswith("./") and head not in _RUN_PROGRAMS:
+        return False
+    return _check_target(words, _RUN_WORDS, _RUN_PROGRAMS)
+
+
 def _js_lint(head: str, pos: list[str]) -> bool:
     """A package-manager or ``npx`` command that runs a linter or a lint script.
 
@@ -180,12 +196,12 @@ def _js_lint(head: str, pos: list[str]) -> bool:
     if not pos:
         return False
     if head in ("npx", "bunx"):
-        return is_check_name(pos[0], LINT_WORDS)
+        return is_check_name(pos[0], _RUN_WORDS)
     if pos[0] in ("run", "run-script"):
-        return len(pos) > 1 and is_check_name(pos[1], LINT_WORDS)
+        return len(pos) > 1 and is_check_name(pos[1], _RUN_WORDS)
     if head == "npm" or pos[0] in _PM_INSTALL or pos[0] in _PM_TEST:
         return False
-    return is_check_name(pos[0], LINT_WORDS)
+    return is_check_name(pos[0], _RUN_WORDS)
 
 
 def _hatch_run(words: list[str]) -> list[str] | None:
@@ -210,20 +226,23 @@ def _hatch_fmt_check(words: list[str]) -> bool:
 def is_lint_run(text: str) -> bool:
     """``is_lint_command`` that also runs the lint (#782): not ``--version`` / ``--help`` / ``-V``.
 
-    A go-task lint target (``task lint``), ``hatch fmt --check`` and ``hatch run``
+    Type checkers count as linters here (``pyright``, ``tsc --noEmit``, ``npx vue-tsc``,
+    ``npm run typecheck``, ``make type-check``). A go-task lint target (``task lint``),
+    ``hatch fmt --check`` and ``hatch run``
     of a linter program (``hatch run ruff check .``) count too, and a package-manager test
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
     meaning: ``lib.ci_checks.test_or_lint_runs`` and Layer 5 read it unchanged.
     """
-    words = command_words(text)
+    # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
+    words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or _INFO_FLAGS.intersection(words):
         return False
     if words[0] in ("npx", "bunx", "npm", "pnpm", "yarn", "bun"):
         return _js_lint(words[0], _positionals(words[1:]))
     hatch = _hatch_run(words)
     if hatch is not None:   # hatch run ruff check .: a linter program; a script name may lint
-        return bool(hatch) and hatch[0] in LINT_PROGRAMS
-    return _hatch_fmt_check(words) or is_lint_command(text) or _task_target(words, LINT_WORDS)
+        return bool(hatch) and hatch[0] in _RUN_PROGRAMS
+    return _hatch_fmt_check(words) or _lint_target(words) or _task_target(words, _RUN_WORDS)
 
 
 def may_lint(text: str) -> bool:
