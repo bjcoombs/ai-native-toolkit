@@ -404,6 +404,9 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     ("npx jest", False),
     ("make check || true", False),              # a masked check target cannot fail the job either
     ("make build", False),
+    ("hatch fmt --check", True),
+    ("hatch run lint", None),
+    ("hatch run pytest", False),
 ])
 def test_lint_runs_per_command(tmp_path: Path, run: str, lint: bool | None) -> None:
     assert scan_ci_checks(_write(tmp_path, _gha(run)))["lint_runs"] is lint

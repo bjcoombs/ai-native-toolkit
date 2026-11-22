@@ -64,3 +64,19 @@ def test_is_lint_command_keeps_its_meaning() -> None:
 ])
 def test_may_lint(text: str, expected: bool) -> None:
     assert may_lint(text) is expected
+
+
+@pytest.mark.parametrize(("text", "lint", "maybe"), [
+    ("hatch fmt --check", True, False),
+    ("hatch fmt", False, False),            # rewrites the files: no failing check
+    ("hatch run ruff check .", True, False),
+    ("hatch run lint", False, True),        # a script: like tox -e, its recipe is not read
+    ("hatch run lint:all", False, True),
+    ("hatch run test:cov", False, True),
+    ("hatch -e lint run check", False, True),
+    ("hatch run pytest -q", False, False),  # a direct test run
+    ("hatch build", False, False),
+])
+def test_hatch_commands(text: str, lint: bool, maybe: bool) -> None:
+    # Issue #782: a Hatch repository that lints in CI must not read a definite level 0.
+    assert (is_lint_run(text), may_lint(text)) == (lint, maybe)

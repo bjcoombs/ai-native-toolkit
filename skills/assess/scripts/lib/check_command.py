@@ -188,10 +188,30 @@ def _js_lint(head: str, pos: list[str]) -> bool:
     return is_check_name(pos[0], LINT_WORDS)
 
 
+def _hatch_run(words: list[str]) -> list[str] | None:
+    """What ``hatch run`` runs (``hatch run lint`` -> ``["lint"]``), None for another command.
+
+    ``hatch`` is not a modelled runner, so it is read here (#782): the first word after
+    ``run`` is a script name (``lint``, ``test:cov``) or a program (``ruff check``).
+    """
+    if words[0] != "hatch":
+        return None
+    pos = _positionals(words[1:])
+    if pos[:1] != ["run"]:
+        return None
+    return _drop_leading_flags(words[words.index("run") + 1:])
+
+
+def _hatch_fmt_check(words: list[str]) -> bool:
+    """``hatch fmt --check``: Hatch's ruff lint and format check, failing on a finding."""
+    return words[0] == "hatch" and _positionals(words[1:])[:1] == ["fmt"] and "--check" in words
+
+
 def is_lint_run(text: str) -> bool:
     """``is_lint_command`` that also runs the lint (#782): not ``--version`` / ``--help`` / ``-V``.
 
-    A go-task lint target (``task lint``) counts too, and a package-manager test
+    A go-task lint target (``task lint``), ``hatch fmt --check`` and ``hatch run``
+    of a linter program (``hatch run ruff check .``) count too, and a package-manager test
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
     meaning: ``lib.ci_checks.test_or_lint_runs`` and Layer 5 read it unchanged.
     """
@@ -200,14 +220,18 @@ def is_lint_run(text: str) -> bool:
         return False
     if words[0] in ("npx", "bunx", "npm", "pnpm", "yarn", "bun"):
         return _js_lint(words[0], _positionals(words[1:]))
-    return is_lint_command(text) or _task_target(words, LINT_WORDS)
+    hatch = _hatch_run(words)
+    if hatch is not None:   # hatch run ruff check .: a linter program; a script name may lint
+        return bool(hatch) and hatch[0] in LINT_PROGRAMS
+    return _hatch_fmt_check(words) or is_lint_command(text) or _task_target(words, LINT_WORDS)
 
 
 def may_lint(text: str) -> bool:
     """A check that may run a linter inside it, which a CI line alone cannot show (#782).
 
     A check target of a runner or a script (``make check``, ``npm test``, ``tox``,
-    ``./scripts/test.sh``, ``task check``) or ``pre-commit run``. A direct test-program
+    ``./scripts/test.sh``, ``task check``), ``pre-commit run``, or any ``hatch run``
+    script (``hatch run lint``, ``hatch run test:cov``), whose recipe is not read. A direct test-program
     call (``pytest``, ``uv run pytest``, ``go test``, ``cargo test``, ``bun test``, ``npx jest``) runs
     tests only, so it is not one.
     """
@@ -217,6 +241,9 @@ def may_lint(text: str) -> bool:
     program = _program(words)
     if program[:2] == ["pre-commit", "run"]:
         return True
+    hatch = _hatch_run(words)
+    if hatch is not None:   # hatch run <script>: like tox -e, its recipe is not read
+        return bool(hatch) and hatch[0] not in _DIRECT_TESTS | LINT_PROGRAMS
     if _task_target(words, CHECK_WORDS):
         return True
     if not is_check_command(text) or not program:

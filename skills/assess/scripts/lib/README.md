@@ -3234,9 +3234,11 @@ lines). `is_lint_run(text)` (issue #782) is the lint test `ci_checks.lint_runs`
 reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 --version` runs no lint) and without the package-manager test aliases
 `is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
-(`task lint`). `may_lint(text)` is a check that may run a linter the line cannot
+(`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
+ruff check .`). `may_lint(text)` is a check that may run a linter the line cannot
 show: a check target of a runner or script (`make check`, `npm test`, `tox`,
-`./scripts/test.sh`, `task check`) or `pre-commit run`, never a direct test-program
+`./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
+(`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
 call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
 jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
 `tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
