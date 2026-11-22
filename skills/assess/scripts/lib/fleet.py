@@ -82,8 +82,6 @@ from lib.signals import offline_scans
 # 2 (#569): ``active``. ``head_sha`` and ``dirty`` (#907) were added without a
 # bump: the history readers reject any other version, and a row written before
 # them reads both as None through ``.get``.
-# Unreleased (#932): ``dirty_reason``, likewise without a bump; the release PR
-# decides whether to bump.
 FLEET_ROW_VERSION = 2
 REPOS_FILE = "repos.jsonl"
 SIGNALS_SCRIPT = Path(__file__).resolve().parents[1] / "assess_signals.py"

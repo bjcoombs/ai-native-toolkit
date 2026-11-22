@@ -42,6 +42,8 @@ class Counter:
     kind: str  # "semver", "int" or "dated"
     noun: str = "changes"
     lead: tuple[str, ...] = ()  # comment lines written before a new entry
+    # A comment line that closes the history (the bump rule); the entry goes above it.
+    before: re.Pattern[str] | None = None
 
 
 COUNTERS: dict[str, Counter] = {
@@ -71,6 +73,23 @@ COUNTERS: dict[str, Counter] = {
         re.compile(r'^version = "(?P<value>default-[0-9.]+)"$'),
         "dated",
         lead=("#",),
+    ),
+    "fleet_data": Counter(
+        Path("skills/assess/scripts/lib/fleet_data.py"),
+        re.compile(r"^FLEET_DATA_VERSION = (?P<value>[0-9]+)$"),
+        "int",
+        before=re.compile(r"^# Bump on any change"),
+    ),
+    "achievements": Counter(
+        Path("skills/assess/scripts/lib/fleet_achievements.py"),
+        re.compile(r"^ACHIEVEMENTS_VERSION = (?P<value>[0-9]+)$"),
+        "int",
+        before=re.compile(r"^# Bump on any change"),
+    ),
+    "fleet_row": Counter(
+        Path("skills/assess/scripts/lib/fleet.py"),
+        re.compile(r"^FLEET_ROW_VERSION = (?P<value>[0-9]+)$"),
+        "int",
     ),
 }
 
@@ -162,6 +181,16 @@ def fold_counter(lines: list[str], name: str, notes: list[Note], release: str, n
     insert = at
     while insert > 0 and not lines[insert - 1].strip():
         insert -= 1
+    if counter.before is not None:
+        # The entry goes above the closing comment line (the bump rule), not below it.
+        block = insert
+        while block > 0 and lines[block - 1].startswith("#"):
+            block -= 1
+        closing = [i for i in range(block, insert) if counter.before.match(lines[i])]
+        if len(closing) != 1:
+            raise FoldError(f"{counter.path}: expected one line matching {counter.before.pattern!r} "
+                            f"in the comment above {name}, found {len(closing)}")
+        insert = closing[0]
     start, end = match.span("value")
     assigned = lines[at][:start] + new + lines[at][end:]
     return lines[:insert] + entry + lines[insert:at] + [assigned] + lines[at + 1:]

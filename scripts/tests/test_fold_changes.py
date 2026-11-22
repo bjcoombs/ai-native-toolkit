@@ -64,8 +64,8 @@ def test_fold_matches_the_hand_fold_of_the_notes_moved_from_main(before: Path) -
 
 def test_fold_writes_lf_line_endings(before: Path) -> None:
     fc.fold(before, "3.0.0", RELEASE_DATE, {})
-    for counter in fc.COUNTERS.values():
-        assert b"\r\n" not in (before / counter.path).read_bytes(), counter.path
+    for path in {c.path for c in fc.COUNTERS.values() if (before / c.path).exists()}:
+        assert b"\r\n" not in (before / path).read_bytes(), path
 
 
 def test_fold_deletes_the_notes_and_keeps_the_readme(before: Path) -> None:
@@ -95,6 +95,37 @@ def test_fold_refuses_a_file_without_the_assignment_line(before: Path) -> None:
     (before / fc.COUNTERS["level_result"].path).write_text("# no counter here\n", encoding="utf-8")
     with pytest.raises(fc.FoldError, match="expected one level_result assignment line, found 0"):
         fc.fold(before, "3.0.0", RELEASE_DATE, {})
+
+
+FLEET_DATA_BEFORE = """\
+from lib.levels import evaluate_row
+
+# 1 (#703): first version.
+# 3 (#746): ``opportunities``.
+# Bump on any change to the shapes below; #704 and #705 read it.
+FLEET_DATA_VERSION = 3
+"""
+
+
+def test_an_entry_goes_above_the_closing_bump_rule(tmp_path: Path) -> None:
+    path = tmp_path / fc.COUNTERS["fleet_data"].path
+    path.parent.mkdir(parents=True)
+    path.write_text(FLEET_DATA_BEFORE, encoding="utf-8")
+    _write(tmp_path, "1001.fleet_data.md", "- ``units``.\n")
+    fc.fold(tmp_path, "3.0.0", RELEASE_DATE, {})
+    assert path.read_text(encoding="utf-8") == FLEET_DATA_BEFORE.replace(
+        "# Bump on any change",
+        "# 4 (3.0.0 release): one change since 3.\n# - ``units``.\n# Bump on any change",
+    ).replace("FLEET_DATA_VERSION = 3", "FLEET_DATA_VERSION = 4")
+
+
+def test_a_missing_closing_bump_rule_is_named(tmp_path: Path) -> None:
+    path = tmp_path / fc.COUNTERS["achievements"].path
+    path.parent.mkdir(parents=True)
+    path.write_text("# 4 (#772): retired.\nACHIEVEMENTS_VERSION = 4\n", encoding="utf-8")
+    _write(tmp_path, "1001.achievements.md", "- x\n")
+    with pytest.raises(fc.FoldError, match="found 0"):
+        fc.fold(tmp_path, "3.0.0", RELEASE_DATE, {})
 
 
 def test_next_value_per_kind() -> None:
