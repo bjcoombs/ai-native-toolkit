@@ -33,7 +33,14 @@ so when no gate at all is found and the walk holds a ``go.mod`` or a
 the normal reading.
 
 A configured threshold is evidence the tooling fails below it *when coverage
-runs*; whether CI runs coverage at all is a separate read (Layer 5).
+runs*. ``enforced_meets_minimum`` (#921) is ``threshold_meets_minimum`` with
+that run required: an enforced CI line (unmasked, on ordinary triggers) runs the
+coverage tool that reads the threshold, or carries the threshold flag itself.
+Layer 6 level 1, and so the Step 4 ``coverage_gate`` gate, reads it; the rules
+and ``enforced_basis`` tokens are in ``lib.coverage_ci``. A JaCoCo
+``<maximum>`` on a ``MISSEDCOUNT`` / ``MISSEDRATIO`` counter is a gate whose
+percentage is not read (unit ``uncovered_count`` / ``missed_ratio``), so it
+reads unknown, never 0.
 
 Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule and
 ``lib.assess_config.is_user_excluded``; never an orchestrator.
@@ -47,6 +54,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
+from lib.coverage_ci import NO_RUNS, EnforcedBasis, enforced_meets_minimum, read_ci_runs
 from lib.doc_graph import is_excluded_path
 
 # The user's ``--exclude`` / config.toml excludes: (directory names, basename globs).
@@ -150,6 +158,23 @@ _POM_MINIMUM_RE = re.compile(r"<minimum>\s*" + _NUM + r"\s*(%?)\s*</minimum>")
 _POM_COUNTER_RE = re.compile(r"<counter>\s*(\w+)\s*</counter>")
 _GRADLE_MINIMUM_RE = re.compile(r"\bminimum\s*=\s*[^0-9\n]{0,20}?" + _NUM)
 _GRADLE_COUNTER_RE = re.compile(r"\bcounter\s*=\s*[\"'](\w+)[\"']")
+# A ``<maximum>`` limit on a missed counter (``MISSEDCOUNT``, ``MISSEDRATIO``).
+_POM_MAXIMUM_RE = re.compile(r"<maximum>\s*" + _NUM + r"\s*</maximum>")
+_POM_VALUE_RE = re.compile(r"<value>\s*(\w+)\s*</value>")
+_GRADLE_MAXIMUM_RE = re.compile(r"\bmaximum\s*=\s*[^0-9\n]{0,20}?" + _NUM)
+_GRADLE_VALUE_RE = re.compile(r"\bvalue\s*=\s*[\"'](\w+)[\"']")
+# pytest ``addopts`` holding a ``--cov`` flag: a plain ``pytest`` runs coverage.
+_ADDOPTS_RE = re.compile(r"^\s*addopts\s*=(.*)$")
+# pytest-cov's enabling flag: ``--cov`` or ``--cov=src``, not ``--cov-report``.
+_COV_FLAG_RE = re.compile(r"--cov(?![\w-])")
+_JS_COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\"'])//[^\n]*", re.S)
+_PYTEST_CONFIG_FILES = {"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
+_PYTEST_SECTIONS = {"pytest", "tool:pytest", "tool.pytest.ini_options"}
+# ``check.dependsOn jacocoTestCoverageVerification`` (Groovy or Kotlin DSL, a
+# ``tasks.check { dependsOn(...) }`` block): ``gradle check`` / ``build`` runs the gate.
+_GRADLE_CHECK_WIRED_RE = re.compile(
+    r"\bcheck\b[^\n{]*(?:\{[^}]*)?\bdependsOn\b[^\n]*jacocoTestCoverageVerification")
+_JEST_COLLECTS_RE = re.compile(r"[\"']?collectCoverage[\"']?\s*:\s*true\b")
 
 # Common gate forms this scan does not read - reported so an empty result reads
 # as "none of the detected forms", never as "no gate anywhere".
@@ -183,7 +208,9 @@ NOT_DETECTED_SCOPED: tuple[str, ...] = (
 )
 
 
-Unit = Literal["percent", "ratio", "uncovered_count"]
+Unit = Literal["percent", "ratio", "uncovered_count", "missed_ratio"]
+# Units that bound what is missed: any value gates, zero included (no line missed).
+_MISSED_UNITS = {"uncovered_count", "missed_ratio"}
 
 # The lowest configured threshold, as a percentage, that Layer 6 level 1 credits.
 MINIMUM_THRESHOLD_PERCENT = 50.0
@@ -211,6 +238,8 @@ class CoverageGateBlock(TypedDict):
     max_threshold_percent: float | None
     threshold_meets_minimum: bool | None
     unmeasured_reason: str | None
+    enforced_meets_minimum: bool | None
+    enforced_basis: EnforcedBasis
     not_detected: list[str]
 
 
@@ -228,8 +257,8 @@ _NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov",
 def threshold_percent(threshold: float | None, unit: Unit) -> float | None:
     """``threshold`` as a percentage of coverage: as written for ``percent``, times
     100 for ``ratio`` (rounded, so ``0.55`` is ``55.0``), and None for an
-    ``uncovered_count`` or a threshold that was not read."""
-    if threshold is None or unit == "uncovered_count":
+    ``uncovered_count`` or ``missed_ratio`` or a threshold that was not read."""
+    if threshold is None or unit in _MISSED_UNITS:
         return None
     return threshold if unit == "percent" else round(threshold * 100, 6)
 
@@ -480,7 +509,26 @@ def _scan_jacoco(rel: str, lines: list[str], minimum: re.Pattern[str],
             unit: Unit = "percent" if has_percent else "ratio"
             gates.append(_gate(rel, idx, "jacoco", form, value, unit,
                                _nearest_counter(lines, idx, counter)))
+        gates.extend(_jacoco_maximum(rel, lines, idx, form, counter))
     return gates
+
+
+def _jacoco_maximum(rel: str, lines: list[str], idx: int, form: str,
+                    counter: re.Pattern[str]) -> list[CoverageGate]:
+    """A JaCoCo ``maximum`` on a missed counter, on line ``idx``: its percentage is not read."""
+    pom = form.startswith("<")
+    line = lines[idx - 1]
+    match = None if _is_comment(line) else (_POM_MAXIMUM_RE if pom else _GRADLE_MAXIMUM_RE).search(line)
+    if match is None:
+        return []
+    value_re = _POM_VALUE_RE if pom else _GRADLE_VALUE_RE
+    before = lines[max(idx - _WINDOW, 0):idx - 1] + [line[:match.start()]]
+    values = [m.group(1).upper() for text in before for m in value_re.finditer(text)]
+    if not values or not values[-1].startswith("MISSED"):
+        return []
+    unit: Unit = "missed_ratio" if values[-1] == "MISSEDRATIO" else "uncovered_count"
+    return [_gate(rel, idx, "jacoco", form.replace("minimum", "maximum"), _num(match.group(1)),
+                  unit, _nearest_counter(lines, idx, counter))]
 
 
 def _scanners_for(name: str, rel_parts: tuple[str, ...]
@@ -609,8 +657,49 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
+def _addopts_cov(lines: list[str]) -> bool:
+    """A pytest ``addopts`` in a pytest config section holds a ``--cov`` flag, on its own
+    line, in a TOML list (``addopts = [`` ... ``]``) or on INI continuation lines."""
+    section = set(_pytest_section_lines(lines))
+    for idx, line in enumerate(lines, 1):
+        match = _ADDOPTS_RE.match(line) if idx in section else None
+        if match is None:
+            continue
+        value = [match.group(1)]
+        listed = match.group(1).strip().startswith("[") and "]" not in match.group(1)
+        for nxt in lines[idx:]:
+            if listed:
+                value.append(nxt)
+                if "]" in nxt:
+                    break
+            elif nxt[:1].isspace() and nxt.strip():
+                value.append(nxt)
+            else:
+                break
+        if any(_COV_FLAG_RE.search(v) for v in value):
+            return True
+    return False
+
+
+def _pytest_section_lines(lines: list[str]) -> list[int]:
+    """1-based lines inside a pytest config section (``[pytest]``, ``[tool:pytest]``,
+    ``[tool.pytest.ini_options]``), where a flag is ``addopts``, not a task command."""
+    out: list[int] = []
+    current = None
+    for idx, line in enumerate(lines, 1):
+        header = _SECTION_RE.match(line)
+        if header:
+            current = header.group(1).strip().strip("\"'")
+        elif current in _PYTEST_SECTIONS:
+            out.append(idx)
+    return out
+
+
 def gates_something(gate: CoverageGate) -> bool:
-    """A gate `configured` counts: a non-zero threshold, or a null one from nyc/c8."""
+    """A gate `configured` counts: a non-zero threshold, a null one from nyc/c8, or any
+    bound on what is missed (a JaCoCo ``MISSEDCOUNT`` maximum of 0 misses nothing)."""
+    if gate["unit"] in _MISSED_UNITS:
+        return True
     if gate["threshold"] is None:
         return gate["tool"] in _NULL_THRESHOLD_GATES
     return gate["threshold"] != 0
@@ -661,23 +750,41 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     root = Path(repo_root).resolve()
     scope_abs = (root / scope).resolve() if scope else None
     gates: list[CoverageGate] = []
+    pytest_cov = jest_collects = gradle_check = False
+    pytest_lines: set[tuple[str, int]] = set()
     for path, rel in _candidate_files(root, scope_abs, excludes or (set(), [])):
         lines = _read_lines(path)
         if lines is None:
             continue
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
+        if path.name in _PYTEST_CONFIG_FILES:
+            pytest_lines.update((rel, n) for n in _pytest_section_lines(lines))
+        pytest_cov = pytest_cov or (path.name in _PYTEST_CONFIG_FILES
+                                    and _addopts_cov(lines))
+        gradle_check = gradle_check or (path.name in _JACOCO_GRADLE and bool(
+            _GRADLE_CHECK_WIRED_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines)))))
+        jest_collects = jest_collects or bool(
+            _JEST_COLLECTS_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines))))
     walk_excludes = excludes or (set(), [])
     unmeasured = (GO_RUST_UNMEASURED if not gates
                   and _holds_go_or_rust(root, scope_abs if scope_abs != root else None,
                                         walk_excludes) else None)
+    meets = None if unmeasured else threshold_meets_minimum(gates)
+    enforced, basis = enforced_meets_minimum(
+        gates, meets, read_ci_runs(root) if meets else NO_RUNS,
+        lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
+        minimum=MINIMUM_THRESHOLD_PERCENT, pytest_cov=pytest_cov, jest_collects=jest_collects,
+        gradle_check=gradle_check, pytest_lines=frozenset(pytest_lines))
     return {
         "available": True,
         "configured": any(gates_something(g) for g in gates),
         "gates": gates,
         "max_threshold_percent": max_threshold_percent(gates),
-        "threshold_meets_minimum": None if unmeasured else threshold_meets_minimum(gates),
+        "threshold_meets_minimum": meets,
         "unmeasured_reason": unmeasured,
+        "enforced_meets_minimum": enforced,
+        "enforced_basis": basis,
         "not_detected": list(NOT_DETECTED) + (
             list(NOT_DETECTED_SCOPED) if scope_abs not in (None, root) else []),
     }

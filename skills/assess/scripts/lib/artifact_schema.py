@@ -260,6 +260,10 @@ constant each.
 #   {"available": false, "reason": "no_ownership_map: ..."} when the repository
 #   commits no ownership or boundary map, where it was omitted (issue #908), so the
 #   level block reads the same reason as fleet. A scan failure still omits it.
+# - run-context.json coverage_gate gains enforced_meets_minimum and enforced_basis
+#   (issue #921): the threshold reading with an enforced CI run of the gate
+#   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
+#   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -433,4 +437,8 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #   without errexit (pwsh, a Windows runner, set +e) and a literal `if: false`
 #   step or job are masked; a workflow in a subfolder of .github/workflows/ is
 #   not a CI file. Layer 3 level 1 and Layer 5 level 1 can move from met to unmet.
+# - Layer 6 level 1, and so the Step 4 coverage_gate gate, reads
+#   coverage_gate.enforced_meets_minimum (issue #921): a threshold of at least 50
+#   percent that no enforced CI line runs is level 0, where it read 1, and CI the
+#   scan cannot read is unknown. A JaCoCo MISSEDCOUNT maximum reads unknown, not 0.
 ASSESS_METHOD_VERSION = 36

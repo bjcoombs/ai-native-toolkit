@@ -4113,7 +4113,8 @@ reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
 `coverage_gate` block (`CoverageGateBlock`): `{available, configured, gates,
-max_threshold_percent, threshold_meets_minimum, unmeasured_reason, not_detected}`, each gate
+max_threshold_percent, threshold_meets_minimum, unmeasured_reason, enforced_meets_minimum,
+enforced_basis, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
 (`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
@@ -4176,9 +4177,69 @@ Nothing found is `configured: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
-fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
-Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
-Tests: `tests/test_coverage_gate.py`.
+fails below it when coverage runs; `enforced_meets_minimum` (below) adds the run.
+JaCoCo `<maximum>` on a `MISSEDCOUNT` or `MISSEDRATIO` counter (and Gradle's `maximum =`
+beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_ratio`:
+its `threshold_percent` is null, so it reads unknown, never 0, and any such bound
+(zero included) gates something.
+Stdlib plus `lib.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`
+and `lib.coverage_ci`. Tests: `tests/test_coverage_gate.py`.
+
+**`coverage_ci.py`**
+Does CI run the coverage gate? (#921, the maintainer decision on the Step 4 gate).
+`enforced_meets_minimum(gates, threshold, ci, line_gates, ...)` returns the
+`coverage_gate` block's `enforced_meets_minimum` and `enforced_basis`, which Layer 6
+level 1 of the default maturity model, and so the Step 4 `coverage_gate` gate, reads.
+A false or null `threshold_meets_minimum` stays false or null (`no_gate`,
+`threshold_below_minimum`, `threshold_not_read`); a true one needs a counted gate of at
+least 50 percent that an enforced CI line runs. `read_ci_runs(repo_root)` reads the
+GitHub workflows and `.gitlab-ci.yml` with #775's rules unchanged
+(`ci_masking.unmasked_lines`, `ci_triggers.workflow_trigger` / `resolve_workflows` /
+`gitlab_line_triggers`), one `Run` per command, a folded `run: >-` paragraph read as one
+command (masked as one line, so a `|| true` on a continuation line masks the head, and a
+paragraph with a line its step or body masks is dropped) and `sh -c '...'` and a quoted `run:` value read through. A word holding
+whitespace (a quoted argument) is dropped, so a flag inside an `echo` string is no flag.
+A gate written on a CI line must sit on an enforced command that carries its flag and
+whose program can run it (`runs_a_program`: not `echo` / `printf` and the like, not an
+install such as `pip install` or `npm install`), so `echo --cov-fail-under=90` runs nothing. A
+config gate needs an enforced command whose program is its tool (`program` resolves the
+wrappers `check_command._exec_program` and `_info_program` read, `bundle exec` and `docker
+compose run` included, and `check_command.is_info_invocation` (#919) makes `pytest
+--version` or `pytest --co` no run, so `pip install pytest --cov`
+and `npm install jest` run neither; `runs_tool`, `gate_family`):
+`pytest --cov` (or a pytest `addopts` holding `--cov`, on one line, in a TOML list or on
+INI continuation lines) or `coverage
+report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
+nothing), any `pytest` with pytest-cov on (`--cov` on the line or in `addopts`) for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
+`collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
+or `jacoco:check`, Gradle `jacocoTestCoverageVerification` (and `build` / `check` when the
+build file wires `check.dependsOn jacocoTestCoverageVerification`; any other Gradle task
+reads `indirect_run`, null), the go-test-coverage
+program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)
+is reached only through a target. pytest-cov is on only with `--cov` or `--cov=<source>` on the line or in `addopts`
+(`--cov-report` or `--cov-fail-under` alone turns nothing on), and an inline
+`--cov-fail-under` on a `pytest` line needs it too. Jest and Vitest `--coverage` is read
+with its value (`--coverage=false` runs no gate; `--coverageDirectory` is not the flag), and
+`collectCoverage: true` is read with comments stripped. A coverage action step
+(go-test-coverage) is masked like a `run:` line. A CI file read as empty that is not empty
+on disk (over the size cap, unreadable) is unread. Null, never false: `unknown_trigger`,
+`indirect_run` (an enforced `check_command.may_lint` line such as `make test`, `npm
+test`, `tox`, `mvn test`, a target or script named for coverage such as `make coverage`,
+`make cov`, `npm run coverage` or `just coverage`, or a Jest / Vitest run with no
+`--coverage`),
+`included_jobs` (`shared_tooling.pulls_jobs_from_elsewhere`), `unread_ci_system`
+(`ci_checks.UNREAD_CI_FILES` tracked, or the gate written in one or in a composite
+action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:
+GitHub step and job `if:`, branch filters, matrix values and composite-action
+internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
+phase reads null. A run whose own flag overrides the config threshold
+(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate. On a scoped run,
+any enforced run of the tool anywhere in the repository credits the scope's config gate
+(`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
+runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+`lib.command_index`, `lib.command_resolver`, `lib.check_command` and
+`lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
+Tests: `tests/test_coverage_ci.py`.
 
 **`guardrails.py`**
 Guardrails stated (#767): does an instruction file tell an agent what the gates
