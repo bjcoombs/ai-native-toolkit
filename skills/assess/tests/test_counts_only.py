@@ -382,7 +382,7 @@ def test_live_run_writes_a_content_free_file(live_repo: Path, live_ctx: dict[str
 
 def _repo_paths(repo: Path) -> set[str]:
     tracked = subprocess.run(["git", "-C", str(repo), "ls-files"], check=True,
-                             capture_output=True, text=True).stdout.split()
+                             capture_output=True, text=True, encoding="utf-8", errors="surrogateescape").stdout.split()
     paths = set(tracked)
     for p in tracked:
         parts = p.split("/")

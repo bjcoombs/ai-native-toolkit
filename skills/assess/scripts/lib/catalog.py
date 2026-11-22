@@ -47,8 +47,10 @@ from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, kno
 CATALOG_VERSION = 1
 GRADE_ORDER = ("config_only", "declared", "measured", "verified")
 UNCLASSIFIED = "unclassified"
-# The sources the catalog is generated from, repo-relative.
-SOURCES = ("skills/assess/checks/core.toml", "skills/assess/levels/default.toml",
+# The sources the catalog is generated from, repo-relative; a glob names a set of files
+# (the check manifest's fragments, #994).
+SOURCES = ("skills/assess/checks/core.toml", "skills/assess/checks/core/*.toml",
+           "skills/assess/levels/default.toml",
            "skills/assess/scripts/lib/level_signals.py", "skills/assess/scripts/lib/signals.py",
            "skills/assess/scripts/lib/scan_registry.py")
 

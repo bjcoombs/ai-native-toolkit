@@ -21,7 +21,8 @@ from lib.fleet_group_schema import type_schema  # noqa: E402
 from lib.fleet import RepoCommit  # noqa: E402
 from lib.fleet_level import FleetLevels  # noqa: E402
 from lib.level_result_types import LevelResult  # noqa: E402
-from lib.level_tally import COUNTED_GRADES, LEVEL_RESULT_VERSION, STATES  # noqa: E402
+from lib.level_tally import COUNTED_GRADES, EXCLUDED_BY_OWNER, LEVEL_RESULT_VERSION, STATES  # noqa: E402
+from lib.owner_exclusions import KINDS, SOURCE_REPO  # noqa: E402
 from lib.level_signals import INPUT_GRADES  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
@@ -37,9 +38,17 @@ def level_result_schema() -> JsonDict:
     condition["state"] = {"enum": list(STATES)}
     grades = sorted(set(INPUT_GRADES.values()), key=list(INPUT_GRADES.values()).index)
     condition["grade"] = {"enum": [*grades, None]}
-    condition["counted"]["description"] = f"true when the grade is one of {', '.join(sorted(COUNTED_GRADES))}"
+    condition["counted"]["description"] = (
+        f"true when the grade is one of {', '.join(sorted(COUNTED_GRADES))} and the owner did not exclude it")
+    excluded = props["excluded"]["items"]["properties"]
+    condition["exclusion_kind"] = excluded["kind"] = {"enum": list(KINDS)}
+    condition["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
+    excluded["source"] = {"enum": [SOURCE_REPO]}
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
-    blocker["properties"]["blockers"]["items"]["properties"]["kind"] = {"enum": ["gate", "threshold"]}
+    blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
+    blocker_fields["kind"] = {"enum": ["gate", "threshold"]}
+    blocker_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
+    blocker_fields["exclusion_kind"] = {"enum": list(KINDS)}
     return schema
 
 

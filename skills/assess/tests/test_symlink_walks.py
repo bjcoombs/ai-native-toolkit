@@ -96,10 +96,10 @@ def test_scratch_git_never_touches_an_inherited_repository(
     mutmut3._snapshot_git(dest, time.monotonic() + 60)
     assert (user / ".git" / "index").read_bytes() == index_before
     head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=user,
-                          env=clean, capture_output=True, text=True, check=False)
+                          env=clean, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=False)
     assert head.returncode != 0  # no snapshot commit landed in the user's repo
     log = subprocess.run(["git", "log", "--format=%s"], cwd=dest, env=clean,
-                         capture_output=True, text=True, check=False)
+                         capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=False)
     assert log.stdout.strip() == "snapshot"
 
 
