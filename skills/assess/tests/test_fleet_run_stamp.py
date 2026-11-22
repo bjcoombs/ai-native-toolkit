@@ -96,6 +96,7 @@ def test_is_active_reads_the_head_commit_date(tmp_path):
 def test_scan_target_sets_active_only_when_asked(tmp_path, monkeypatch):
     from lib import fleet
     monkeypatch.setattr(fleet, "checkout_problem", lambda _c: None)
+    monkeypatch.setattr(fleet, "commit_state", lambda _c: {"head_sha": None, "dirty": None})
 
     def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         out = Path(command[command.index("--out") + 1])

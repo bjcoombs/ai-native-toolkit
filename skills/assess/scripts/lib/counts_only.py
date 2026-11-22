@@ -222,6 +222,14 @@ def hash_path(value: str, salt: str) -> str | None:
     return _Filter(True, salt).path(value, allow_space=True)
 
 
+HASHED_RE = re.compile(r"h:[0-9a-f]{16}")
+
+
+def is_hashed(value: str) -> bool:
+    """``value`` is already a ``hash_value`` output: a stored id hashed at the output boundary (#909)."""
+    return HASHED_RE.fullmatch(value) is not None
+
+
 def hash_value(value: str, salt: str) -> str:
     """``value`` as ``h:`` plus 16 hex digits under ``salt``, the hash every kept path gets,
     for a key that must always hash (a fleet unit or repository key, #703)."""
@@ -312,7 +320,7 @@ def render_doc() -> str:
         "`file_a`, `file_b`, `test_file` or `source_file` is a path in every block,",
         "and a field named `reason` is dropped in every block without its own rule.",
         "A field kept as a reason code keeps only the code of a `code: sentence`",
-        "reason when it is a known structure code (`no_import_graph_rust`),",
+        "reason when it is a known structure code (`no_import_graph_rust`) or `no_ownership_map`,",
         "or the code a known sentence maps to (`no_grimp`), else `unavailable`,",
         "so a path or name before the colon is never kept; an empty reason is dropped.",
         "",

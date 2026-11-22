@@ -13,7 +13,10 @@ unit's row roll-ups are recomputed over its members (a version 1 entry's ``mean_
 ``overall``, which #772 removed, are dropped), using the parents and placements the entry already stores. ``model`` and
 ``run.levels_version`` become this run's. ``rescore`` returns None when a stored repository
 key does not join to a scanned row under this run's key function (another salt), or a
-stored row holds no scans while ok: the caller then passes the entry over.
+stored row holds no scans while ok: the caller then passes the entry over. A hashed run's
+``repos.jsonl`` holds ids hashed at the output boundary (#909), which the key keeps as they
+are, so they always join their own entry's keys; ``fleet_achievements_runs`` passes over
+such an entry when none of its ids is one of this run's (another salt).
 
 **Signal aliases.** ``SIGNAL_ALIASES`` maps an old signal path to its new name for pure
 renames. #783 renamed two signals that read configuration text but were named as if

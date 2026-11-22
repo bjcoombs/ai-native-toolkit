@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json",
   "title": "fleet repository row",
-  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans and active. An ok row's active says whether its HEAD was committed inside the run's window. Generated from lib/fleet.py by lib/fleet_schema.py.",
+  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans, active, head_sha and dirty. An ok row's active says whether its HEAD was committed inside the run's window; head_sha is the HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's committed tree was scanned (untracked files and .assess/ outputs never count); dirty is null on an ok row when the checkout has no commit or git status fails. Generated from lib/fleet.py by lib/fleet_schema.py.",
   "type": "object",
   "properties": {
     "fleet_row_version": {
@@ -24,7 +24,7 @@
       "anyOf": [
         {
           "type": "string",
-          "pattern": "^(missing_checkout|not_a_git_work_tree|scan_timeout|invalid_output|scan_error|scan_exit_-?[0-9]+)$"
+          "pattern": "^(missing_checkout|not_a_git_work_tree|scan_timeout|invalid_output|scan_error|committed_tree_error|scan_exit_-?[0-9]+)$"
         },
         {
           "type": "null"
@@ -928,6 +928,54 @@
                 }
               }
             },
+            "review_evidence": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: network (no AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read); no_remote (no AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "review_reality": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "structure": {
               "type": "object",
               "if": {
@@ -951,6 +999,30 @@
                   "reason"
                 ]
               }
+            },
+            "structure_drift": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: no_ownership_map (the repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
             }
           }
         },
@@ -964,12 +1036,26 @@
         "boolean",
         "null"
       ]
+    },
+    "head_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dirty": {
+      "type": [
+        "boolean",
+        "null"
+      ]
     }
   },
   "required": [
     "active",
+    "dirty",
     "fleet_row_version",
     "group",
+    "head_sha",
     "reason",
     "repo",
     "scans",
@@ -1011,6 +1097,12 @@
             "type": "null"
           },
           "active": {
+            "type": "null"
+          },
+          "head_sha": {
+            "type": "null"
+          },
+          "dirty": {
             "type": "null"
           }
         }

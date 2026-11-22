@@ -831,9 +831,12 @@ worst first, capped at `MAX_ACCRETION_FILES` (12); `accretion_lookup` gives the 
 pages a per-path view of the same scan. `excluded_generated` and `generated_exclusion`
 read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
 0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
-Tier 1 counts `keyhole_signals` computed, omitting the block when no ownership map
-exists; `structure_drift_tier_0` builds the same block with Tier 1 unavailable, or
-None with no map, for the headless runner (`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+Tier 1 counts `keyhole_signals` computed. With no ownership map the block is
+`no_ownership_map()`, the bare marker the headless runner writes too (reason
+`NO_OWNERSHIP_MAP_REASON`, #908), so `/assess` and fleet give the level the same
+reason; a raising scan still omits the block. `structure_drift_tier_0` builds the
+same block with Tier 1 unavailable, or None with no map, for the headless runner
+(`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
@@ -932,7 +935,9 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
-both providers), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
+both providers; defined in `gh_cli.py`, re-exported here). Offline, `merged_sample`
+runs `offline_merged_sample` and `review_reality` passes that value through, so a
+repository with no remote reads `no_remote` as `/assess` and `--platform` do (#908), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
 out of the document offline: absent, never a placeholder. `platform_only_error` makes
 `assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
 `offline_scans` strips those names from the `--scans` of a fleet run's offline child
@@ -976,9 +981,9 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
 `code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
-and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
-map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
-lizard's languages only. Tests:
+and a maturity model row reads `unknown`. No ownership map reads `no_ownership_map`,
+the same marker the full run writes (`context_blocks.no_ownership_map`, #908). It
+diverges from the full run in one place: `stats_summary` covers lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
 **`headless_static.py`**
@@ -1060,10 +1065,20 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+`run_salt` draws one salt per run for `--hash-paths`; under a salt a failed scan's
+stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
-`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
+`fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
+no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
+`git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
+when failed (`dirty` is also `null` on an ok row with no commit or a failed `git status`).
+`_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
+`git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
+(no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
+copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
+`run_signals` too, so it reads the same tree. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -1180,6 +1195,22 @@ CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab 
 headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
 read gives no URL and no owners.
 
+**`fleet_hashed.py`**
+Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
+(#909). `public_rows` hashes each row's `repo`, `group` and `head_sha` (#907: a sha finds its repository) with `counts_only.hash_value`
+under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
+`settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
+hashed id set the history entry is chosen and compared by. The ids equal the
+`fleet-data.json` repository keys, so every file joins on them. The scan, the coverage
+reconcile, the group roll-up (the settings join) and `build_fleet_data` keep the real ids.
+Without a salt every function is the identity, so default counts-only output is
+unchanged. `fleet_next_steps.page_path` writes a hashed group as `teams/h-<hex>.md` and
+`group_scopes` rejoins `--settings` through the recorded `settings_scope` under the run's
+salt; `fleet_achievements_runs` passes over a re-score of an entry whose hashed ids share
+none with this run (another salt). Tests:
+`tests/test_fleet_hashed.py` (every file under `--out`, SVGs and team pages included,
+holds no repository id; the joins; fixed-salt reruns are byte-identical).
+
 **`fleet_data.py`**
 `fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
 #704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
@@ -1191,7 +1222,9 @@ per team row, `measured` of `repos` and `lowest_level`, the lowest known level b
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
-repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written;
+`Privacy.key` keeps an id that is already hashed (`counts_only.is_hashed`), so the re-score
+joins a stored `repos.jsonl` row hashed at the output boundary (#909).
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
 Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
 without a model).
@@ -2182,7 +2215,7 @@ one set of flags. `counts_only_scans` applies the filter to the `scans` map of a
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
 reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
-allow-list `import_graph.STRUCTURE_REASON_CODES` names it (so a path or a name never leaks), the code of
+allow-list `import_graph.STRUCTURE_REASON_CODES` or `reason_codes.BLOCK_REASON_CODES` (`no_ownership_map`, the `structure_drift.reason` marker, #908) names it (so a path or a name never leaks), the code of
 a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
 so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
 Tests: `tests/test_counts_only_reason.py`. `render_doc`
@@ -2395,7 +2428,9 @@ a helper extraction.
 
 **`levels.py`**
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
-from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
+from signals with no model in the path. A criterion over a signal in
+`signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
+the table's code as its `reason` (`no_scored_files`, #906), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
@@ -2449,7 +2484,9 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
   condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
 
-Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906); an
+`UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
 `needs_platform` for a `network` one; another unavailable block's own code (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
@@ -2462,14 +2499,14 @@ fixtures through `/fleet` and `/assess` on the same commit.
 
 **`signal_grades.py`**
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
-`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES` and the `DEFAULT_LEVELS`
-path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
+to its set's count and the code when that count is 0, read by `levels.py`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`.
 
 **`reason_codes.py`**
 `reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
-(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map`, or the code a known sentence maps to), moved out of `counts_only.py`,
 which re-exports both, so the tally reads the same codes as counts-only output (#744).
 Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
@@ -2481,7 +2518,8 @@ import cycle. Tests: `tests/test_level_tally.py`.
 **`fleet_level.py`**
 `OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
 over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
-envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
+plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
 stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 
@@ -3095,7 +3133,15 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+blocks and they describe the same changes. Both reads classify the remote with
+`remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
+`gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
+`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
+`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
+without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
+`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
+`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
+so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
