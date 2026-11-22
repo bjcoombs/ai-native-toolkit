@@ -62,7 +62,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
-from lib.level_tally import DEFAULT_BLOCKS
+from lib.level_tally import LEVEL_READS
 from lib.merged_sample import merged_sample, offline_merged_sample
 from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
@@ -482,8 +482,6 @@ SCANS: tuple[ScanSpec, ...] = (
     ),
     ScanSpec("keyhole_blocks", cs.keyhole_blocks, ("keyhole",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=KEYHOLE_KEYS),
-    ScanSpec("gap_actions", cs.gap_actions,
-             ("coverage_report", "doc_graph", "current", "archetype"), STAGE_READ_SIDE),
     ScanSpec("exclusion_disclosures", cs.exclusion_disclosures, ("keyhole", "excludes"),
              STAGE_READ_SIDE, degrade=False, gate_reason=_SERIALISER,
              spread=("excluded_by_config", "excluded_as_archive", "pruned_finding_paths")),
@@ -499,6 +497,9 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("decline", cs.decline_blocks, ("assess_dir", "plugin_version"), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER,
              spread=("decline_markers", "reoffer_mutation", "decline_disclosures")),
+    # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
+    ScanSpec("owner_exclusions", cs.owner_exclusions, ("repo_root",), STAGE_READ_SIDE,
+             degrade=False, gate_reason=_SELF_DEGRADING),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     ScanSpec("offers_block", cs.offers_blocks, ("non_interactive",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=("interactive", "offers")),
@@ -591,8 +592,17 @@ SCANS: tuple[ScanSpec, ...] = (
     # fleet roll-up counts classes per group and clusters similar builders.
     ScanSpec("agent_building", scan_agent_building, ("repo_root",), STAGE_POST_OFFERS),
     # Deterministic layer grades (issue #620): instructions_grade republished as
-    # a block, so a maturity model can name it in a headless or full run.
-    ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),
+    # a block, so a maturity model can name it in a headless or full run, with
+    # the three-way instruction presence (root, nested_only, none; issue #821)
+    # read from the root grading and the nested block.
+    ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading", "nested_instructions"),
+             STAGE_POST_OFFERS),
+    # Top 3 candidates read from measured gaps. Post-offers since #821: the
+    # root-instructions gap reads layer_grades.
+    ScanSpec("gap_actions", cs.gap_actions,
+             ("coverage_report", "doc_graph", "current", "archetype", "layer_grades",
+              "nested_instructions"),
+             STAGE_POST_OFFERS),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and
@@ -643,7 +653,7 @@ SCANS: tuple[ScanSpec, ...] = (
 # The verified tally and the autonomy Step (lib/level_tally.py, #744): the
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
-SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
+SCANS = (*SCANS, ScanSpec("level", cs.level, LEVEL_READS, STAGE_POST_OFFERS))
 # The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
 # "Verified practices: N of M measured", worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.

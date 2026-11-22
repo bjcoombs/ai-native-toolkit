@@ -50,7 +50,7 @@ test-scripts:
 test-contract:
 	uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
 
-# The measures catalog, generated from skills/assess/checks/core.toml, the default
+# The measures catalog, generated from skills/assess/checks/core.toml (and its fragments), the default
 # maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and
 # lib/scan_registry.py (the registry). test-assess fails (tests/test_catalog.py)
 # when a committed copy is stale, so run this after changing any of them.

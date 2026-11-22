@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import importlib
 import json
-import tomllib
+import re
 import types
 from collections.abc import Iterable
 from functools import partial
@@ -53,7 +53,7 @@ def manifest() -> cm.CheckManifest:
 def raw() -> cm.CheckManifest:
     """The manifest as parsed TOML, unvalidated: the registry comparison still names a scan
     whose entry is missing when a dangling reference stops the strict loader."""
-    return cast(cm.CheckManifest, tomllib.loads(cm.CORE_MANIFEST.read_text(encoding="utf-8")))
+    return cast(cm.CheckManifest, cm.read_manifest())
 
 
 def _clean(problems: Iterable[str]) -> None:
@@ -121,6 +121,24 @@ def test_callables_resolve_to_the_registered_functions(manifest: cm.CheckManifes
     for f in cm.findings(manifest):
         if "derive" in f:
             assert callable(_resolve(f["derive"])), f["name"]
+    # Every "lib.x:attr" string in core.toml or a checks/core/ fragment, in any
+    # table, names the module that holds attr: a #917 alias shim (another
+    # __name__) or a package __getattr__ forward (attr not in the module's
+    # namespace) still resolves, so a stale path would otherwise pass.
+    files = [cm.CORE_MANIFEST, *sorted(cm.CORE_MANIFEST.with_suffix("").glob("*.toml"))]
+    refs = [ref for path in files
+            for ref in re.findall(r"""["'](lib(?:\.\w+)+):(\w+)["']""", path.read_text(encoding="utf-8"))]
+    assert len(refs) >= 90, refs
+    for module_name, attr in refs:
+        module = importlib.import_module(module_name)
+        assert module.__name__ == module_name, f"{module_name}:{attr} resolves through a shim"
+        assert attr in vars(module), f"{module_name}:{attr} is not defined in {module_name}"
+        # A re-export (``from lib.nested.worker import scan`` in lib.worker) is in
+        # the namespace too: a callable must be defined by the module it names.
+        value = _fn(vars(module)[attr])
+        if callable(value):
+            assert value.__module__ == module_name, (
+                f"{module_name}:{attr} is defined in {value.__module__}, not {module_name}")
 
 
 def test_headless_tables_match_manifest(manifest: cm.CheckManifest) -> None:

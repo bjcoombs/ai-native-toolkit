@@ -1,0 +1,12 @@
+# Check manifest fragment: the churn_degenerate collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.churn_degenerate"
+kind = "collector"
+title = "Degenerate churn history"
+callable = "lib.core_scans:churn_degenerate"
+publishes = ["churn_degenerate"]
+reads = ["doc_staleness"]
+stage = "read_side"
+revision = 1

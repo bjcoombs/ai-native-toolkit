@@ -1,0 +1,25 @@
+# Check manifest fragment: the agent_building collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.agent_building"
+kind = "collector"
+title = "Agent building"
+issues = [689, 731]
+callable = "lib.agent_building:scan_agent_building"
+publishes = ["agent_building"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { agent_building = "registered" }
+shapes = [
+  { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
+]
+revision = 2
+  [entries.privacy]
+  "agent_building.reason" = "drop"
+  "agent_building.agent_class" = "token"
+  "agent_building.sdks" = "token"
+  "agent_building.config" = "token"
+  "agent_building.ci_agents" = "token"
+  "agent_building.issue_trackers" = "token"
+  "agent_building.git_hosts" = "token"

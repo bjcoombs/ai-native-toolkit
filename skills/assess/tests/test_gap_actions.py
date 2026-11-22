@@ -78,3 +78,26 @@ def test_gap_actions_coverage_entry_skips_archive_hotspots() -> None:
     assert gaps[0]["paths"] == ["src/zeta.py", "src/mid.py", "src/a.py"]
     only_archive = [{"path": "archive/legacy_service.py"}]
     assert build_gap_actions(NO_COVERAGE, _docs(1.0), only_archive, SOFTWARE) == []
+
+
+def _nested(*paths: str) -> dict:
+    return {"available": True, "files": [{"path": p, "grade": "C"} for p in paths]}
+
+
+def test_gap_actions_nested_only_names_a_root_file_and_the_check_command() -> None:
+    """#821: nested-only instruction files get the root-file advice, first."""
+    grades = {"instruction_presence": "nested_only", "instruction_file_present": True,
+              "instructions_grade": "C"}
+    gaps = build_gap_actions(NO_COVERAGE, _docs(0.1), HOTSPOTS, SOFTWARE,
+                             grades, _nested("pkg/z/AGENTS.md", "pkg/AGENTS.md"))
+    assert [g["signal"] for g in gaps] == ["layer_grades", "coverage_report", "doc_graph"]
+    action = gaps[0]["action"]
+    assert "root instruction file" in action and "check command" in action
+    assert gaps[0]["paths"] == ["pkg/AGENTS.md", "pkg/z/AGENTS.md"]
+
+
+def test_gap_actions_root_and_none_presence_add_no_root_file_entry() -> None:
+    for presence in ("root", "none", None):
+        grades = {"instruction_presence": presence}
+        assert build_gap_actions(COVERAGE, _docs(0.8), HOTSPOTS, SOFTWARE,
+                                 grades, _nested("pkg/AGENTS.md")) == []

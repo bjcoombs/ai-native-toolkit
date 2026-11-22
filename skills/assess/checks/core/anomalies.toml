@@ -1,0 +1,16 @@
+# Check manifest fragment: the anomalies collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.anomalies"
+kind = "collector"
+title = "Anomalies"
+callable = "lib.core_scans:anomalies"
+publishes = ["anomalies"]
+reads = ["run_header"]
+stage = "final"
+revision = 1
+  [entries.privacy]
+  "anomalies.code" = "token"
+  "anomalies.description" = "drop"
+  "anomalies.detail" = "drop"

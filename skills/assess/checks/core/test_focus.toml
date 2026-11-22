@@ -1,0 +1,18 @@
+# Check manifest fragment: the test_focus collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.test_focus"
+kind = "collector"
+title = "Test focus"
+callable = "lib.core_scans:test_focus"
+publishes = ["test_focus"]
+reads = ["repo_root", "current", "coverage_data", "test_pressure", "hot_test_index"]
+stage = "read_side"
+headless = { test_focus = "unregistered" }
+revision = 1
+  [entries.privacy]
+  "test_focus.entries.risk_band" = "token"
+  "test_focus.entries.test_signal" = "token"
+  "test_focus.entries.suggested_action" = "token"
+  "test_focus.entries.hollow_heuristic_kinds" = "token"

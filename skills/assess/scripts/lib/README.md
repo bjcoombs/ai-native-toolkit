@@ -1936,16 +1936,21 @@ graph already surfaces it.
 
 **`gap_actions.py`**
 Builds the run-context `gap_actions` list: Top 3 candidates for the slots
-`prescribed_actions` leaves free, read from two blocks `assess_core` already holds. Each
-entry is `{signal, action, paths}`. A `coverage_report` entry fires when no coverage
+`prescribed_actions` leaves free, read from blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `layer_grades` entry (issue #821) fires when
+`layer_grades.instruction_presence` is `nested_only`: its action is to add a root
+instruction file (`AGENTS.md` or `CLAUDE.md`) that names the check command, and it names
+up to five nested files (`MAX_NESTED_PATHS`); it comes first. The registry runs the
+scan at the post-offers stage, after `layer_grades` and `nested_instructions`.
+A `coverage_report` entry fires when no coverage
 report was found in a repo whose archetype is `software` and names up to three
 `top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
 `keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
-and when no hotspot remains, and when it fires it comes first.
+and when no hotspot remains, and when it fires it comes next.
 A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
 its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
 reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
-`[]` when neither fires. There is no lint complexity-rule gap: the core has no detector
+`[]` when none fires. There is no lint complexity-rule gap: the core has no detector
 for it, and the layer scorer owns that check.
 
 **`understanding_analysis.py`**
@@ -1972,6 +1977,24 @@ raising, and `parse_manifest(data)` validates an already-parsed document. Helper
 `collectors`, `signals`, `conditions`, `findings` (by `order`), `scan_key` (a collector
 id minus its owner), `block_collectors` (run-context block to publishing collector id)
 and `condition_key(row, level, signal)`.
+
+**Fragments (#982).** A root manifest may list `fragments` instead of declaring
+`[[entries]]`. The core does: `checks/core.toml` holds `manifest_version`, `owner` and
+`fragments`, the scan keys in scan-table order, and each entry lives in
+`checks/core/<scan key>.toml`. A fragment holds `[[entries]]` only: exactly one collector,
+the one its file is named for, plus the signals, conditions and findings it owns (a signal
+names its collector, a condition reads one signal, a finding belongs to the collector of
+its first input). The loader merges the fragments by kind (collectors, signals,
+conditions, findings) and, within a kind, in the listed order, so the merged document is
+the one a single file declares, and an error names the fragment
+(`core/ci_checks.toml entries[0] (core.ci_checks).stage`). Layout errors:
+`MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
+would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
+the file) and `FRAGMENTS_AND_ENTRIES`. An id declared in two fragments is `DUPLICATE_ID`,
+naming both files. A new collector adds its fragment and one line to `fragments`; a change
+to an existing check edits its own fragment only. `read_manifest(path)` returns the merged
+document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
+list. A single-file manifest (any third-party owner) loads as before.
 
 The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
 `[[entries]]` of four kinds:
@@ -2078,8 +2101,8 @@ Meridian's distance and closest-match tables.
 ### Measures catalog
 
 **`catalog.py`** *(#789 step 2, #794)*
-`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
-default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml` and its
+fragments), the default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
 1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
 row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
@@ -2089,7 +2112,8 @@ the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known
 counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
-(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+(every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
+them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -2102,7 +2126,7 @@ relatively.
 **Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
 root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
 `tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
-so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml` or `level_signals.py` regenerates the catalog.
 `make check` runs it through `test-assess`.
 
 **`measured_appendix.py`**
@@ -2154,6 +2178,23 @@ provenance, `reoffer_mutation` (true only for a stale mutation-tool decline, the
 SKILL.md Step 2d re-offer flag), and one-line `disclosures` so an active decline is
 never invisible in the report. Legacy markers have no version and are never
 re-offered. Pure stdlib; never raises. Called by `assess_core.py`.
+
+**`owner_exclusions.py`**
+Reads the owner's condition exclusions from `.assess/config.toml` (#910):
+`[checks] exclude = [{id, reason, kind?, excluded_by?, excluded_at?, plugin_version?}]`.
+`id` is a default-model condition id (`<row id>.<level>`) and `reason` is required;
+`kind` is one of `KINDS` (`not_applicable`, `measured_elsewhere`, `tool_unsupported`,
+`false_positive`, `other`, the default when the key is left out; a written kind that is not
+one of them is skipped). The provenance keys are named as a decline marker's.
+`parse_exclusions(config, known)` returns the run-context `owner_exclusions` block
+(`OwnerExclusionsBlock`): the `exclusions` in force (with `source: "repo"`), the `skipped`
+entries with a `PROBLEMS` code (`not_a_list` for a `[checks]` or `exclude` of the wrong type, `not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
+`unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
+line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
+reads the repository's config and warns on stderr per skipped entry; never raises. A
+`scan_registry` entry (`core_scans.owner_exclusions`), core-only, so the headless runner and
+`/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
+ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 
 **`interactivity.py`**
 Decides whether a run may prompt a human. Interactive is the default; the run is
@@ -2472,9 +2513,18 @@ not need the level below; `requires` states a real dependency). `level_result(mo
 returns a `LevelResult` (shapes in `level_result_types.py`):
 
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
-  null for a signal with no producer class), `counted` (grade `measured` or `verified`),
-  `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
-  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
+  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
+  that is not met, a `reason` code. An owner-excluded condition also carries
+  `disposition: "excluded_by_owner"` and `exclusion_kind`.
+- Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
+  entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
+  criteria say, out of the tally and the denominator; a condition that `requires` it is
+  `not_applicable` with `requires:<id>`; an excluded gate condition never holds its gate, so
+  its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
+  (`{id, kind, source}`) is present only when an exclusion applies, so a result without
+  exclusions is unchanged. Ids the model does not define are ignored.
 - `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
@@ -2492,8 +2542,8 @@ is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, 
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
-the `level` block, a `scan_registry` entry (`core_scans.level`, which reads the blocks the default
-model names, `level_tally.DEFAULT_BLOCKS`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads `level_tally.LEVEL_READS`:
+the blocks the default model names, `DEFAULT_BLOCKS`, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
 byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
 `$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
 fixtures through `/fleet` and `/assess` on the same commit.
@@ -2829,7 +2879,7 @@ exist (and stale ones, with URLs, globs, placeholders, absolute paths, excluded 
 gitignored paths and `owner/repo`-shaped slugs left unchecked), backticked code symbols
 no other tracked file names (`git grep`, skipped outside git), directory-tree blocks,
 repository-overview headings and the share of lines repeated from the root README.
-`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
+`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Gitignored candidates go to `git check-ignore -z --stdin` as NUL-separated UTF-8 bytes (`surrogateescape` both ways), never text-mode stdin, so Windows newline translation and git's path quoting cannot hide a match. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
 `tests/test_instruction_content.py`.
 
 **`liveness_scan.py`**
@@ -2900,7 +2950,14 @@ closures fold into their enclosing function. `dart_function_scores` reads at mos
 of a file (the `generated_files.py` bound) and returns the per-function values and the
 worst function's name. The treemap's `collect` runs it on scc-scored `.dart` files and
 registers it in `FN_BACKENDS` as `dart-scanner` with `approximate: true`. No regex has a
-nested quantifier, so a pathological file costs linear time. Pure stdlib.
+nested quantifier, so a pathological file costs linear time. The pass has two paths
+(#967): a run of plain code up to the next quote, `/`, `?` or raw-string prefix,
+outside any `${...}`, is tokenised by one `findall` call and handled inline, and
+everything else goes one token at a time through `_CODE_TOKEN`. Both see the same
+tokens, so the output does not depend on the path; the fast path cuts the per-token
+cost of the common case, which keeps the pathological-input budget in
+`test_dart_complexity.py` on the Windows runner. Functions sort by the ordinal of their
+opening, which is source order. Pure stdlib.
 
 **`promissory_markers.py`**
 Write-side erosion instrument: detects the four families of promissory markers
@@ -3328,9 +3385,12 @@ the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when 
 count still falls short once the gates hold and their counted conditions join the
 tally, "N more verified practices are met, for example `<first unmet counted
 condition>`"; a not-measured gate says
-so with its reason; at the top Step it says the Step holds while its gates hold),
-and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
-model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+so with its reason, and a gate whose condition the owner excluded says "excluded by
+owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
+Step holds while its gates hold), and "Verified practices: N of M measured · K not
+measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes), with
+"E not applicable (excluded by owner)" before the model when the level lists exclusions,
+E counting the excluded conditions and those whose `requires` names one (#910). Also `markdown` (the lines, the
 first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
 badge message and the `log.md` readiness line), `step`, `next_step`,
 `levels_version` and `headline_version`. A missing or degraded `level` block gives
@@ -4060,12 +4120,22 @@ Tests: `tests/test_shared_tooling.py`.
 **`layer_grades.py`**
 Deterministic layer grades as one registered block (issue #620), so the headless
 signals document carries them and a maturity model can name them.
-`scan_layer_grades(instruction_grading)` reads the setup grading
-(`run_setup.instruction_grading`) and writes `{instructions_grade,
-instruction_file_present}`: the best letter grade of the tracked, present instruction
-files (null with none, the top-level `instructions_grade` value, which stays) and
-whether one exists, so a maturity model can score "no instruction file" as level 0 rather
-than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
+`scan_layer_grades(instruction_grading, nested_instructions)` reads the setup grading
+(`run_setup.instruction_grading`) and the `nested_instructions` block and writes
+`{instructions_grade, instruction_file_present, instruction_presence}`.
+`instruction_presence` (issue #821) is three-way: `root` (a tracked file at a root
+location, or a discovered file its tool loads at session start, `scope.always_loaded`:
+always loaded), `nested_only` (no root file, but `nested_instructions.files` lists one,
+such as `pkg/AGENTS.md`: present, loaded on demand) or `none` (no instruction file at any
+known location); null only when there is no root file and the nested block is
+unavailable, so a nested file was not looked for. `instructions_grade` is the best letter
+grade of the files that value counts (the root grading, the top-level
+`instructions_grade` value, which stays root-only; else the always-loaded or nested
+grades), null only for `none`. `instruction_file_present` is true for `root` and
+`nested_only` and false for `none` (null with the presence), so a maturity model scores
+"no instruction file" as level 0 rather than unknown and a nested-only repository meets
+Layer 0 level 1 (maintainer decision on #821); its advice is the `gap_actions`
+`layer_grades` entry. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
 default maturity model's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
 counts-only filter. Tests: `tests/test_layer_grades.py`, and the maturity model rows in
 `tests/test_level_signals.py`.

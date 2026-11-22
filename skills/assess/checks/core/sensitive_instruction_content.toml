@@ -1,0 +1,18 @@
+# Check manifest fragment: the sensitive_instruction_content collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.sensitive_instruction_content"
+kind = "collector"
+title = "Sensitive instruction content"
+callable = "lib.core_scans:sensitive_instruction_content"
+publishes = ["sensitive_instruction_content"]
+reads = ["instruction_grading"]
+stage = "read_side"
+shapes = [
+  { path = "sensitive_instruction_content.{}", type = "lib.agent_instructions_grader:SensitiveFinding" },
+]
+revision = 1
+  [entries.privacy]
+  "sensitive_instruction_content.{}.category" = "token"
+  "sensitive_instruction_content.{}.evidence" = "drop"

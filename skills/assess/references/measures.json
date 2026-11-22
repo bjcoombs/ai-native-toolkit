@@ -1377,10 +1377,11 @@
     {
       "name": "layer_grades",
       "title": "Deterministic layer grades",
-      "summary": "The instruction-file grade republished as a block, so a maturity model can read it.",
+      "summary": "The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them.",
       "collector": "core.layer_grades",
       "reads": [
-        "instruction_grading"
+        "instruction_grading",
+        "nested_instructions"
       ],
       "network": false,
       "platform": false,
@@ -1388,6 +1389,7 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "layer_grades.instruction_presence": "token",
           "layer_grades.instructions_grade": "token",
           "layer_grades.reason": "drop"
         }
@@ -2761,7 +2763,9 @@
         "coverage_report",
         "doc_graph",
         "current",
-        "archetype"
+        "archetype",
+        "layer_grades",
+        "nested_instructions"
       ],
       "network": false,
       "platform": false,
@@ -3531,21 +3535,6 @@
       "private": false
     },
     {
-      "name": "gap_actions",
-      "title": "Gap actions",
-      "publishes": [
-        "gap_actions"
-      ],
-      "reads": [
-        "coverage_report",
-        "doc_graph",
-        "current",
-        "archetype"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
       "name": "exclusion_disclosures",
       "title": "Exclusion disclosures",
       "publishes": [
@@ -3606,6 +3595,18 @@
       "reads": [
         "assess_dir",
         "plugin_version"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "owner_exclusions",
+      "title": "Owner exclusions",
+      "publishes": [
+        "owner_exclusions"
+      ],
+      "reads": [
+        "repo_root"
       ],
       "network": false,
       "private": false
@@ -3798,7 +3799,25 @@
         "layer_grades"
       ],
       "reads": [
-        "instruction_grading"
+        "instruction_grading",
+        "nested_instructions"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "gap_actions",
+      "title": "Gap actions",
+      "publishes": [
+        "gap_actions"
+      ],
+      "reads": [
+        "coverage_report",
+        "doc_graph",
+        "current",
+        "archetype",
+        "layer_grades",
+        "nested_instructions"
       ],
       "network": false,
       "private": false
@@ -3901,7 +3920,8 @@
         "stats_summary",
         "structure",
         "structure_drift",
-        "test_pressure"
+        "test_pressure",
+        "owner_exclusions"
       ],
       "network": false,
       "private": false
@@ -3927,7 +3947,7 @@
       "collector": "core.layer_grades",
       "input_class": "head_text",
       "grade": "declared",
-      "null_means": "never null; a missing layer_grades block is unknown"
+      "null_means": "no root instruction file and the nested_instructions block did not run, so a nested file was not looked for; a missing layer_grades block is unknown too"
     },
     {
       "path": "agent_environment.check.named_total",

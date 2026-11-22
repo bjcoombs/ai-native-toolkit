@@ -28,7 +28,7 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
     import os
 
     return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True,
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True,
         env={**os.environ, **(env or {})},
     ).stdout
 
