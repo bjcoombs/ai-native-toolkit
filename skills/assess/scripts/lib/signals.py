@@ -54,7 +54,7 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 
 # Bumped when the document's envelope (stamp fields, top-level keys) changes.
 # Per-scan blocks carry their own shapes and are not versioned here.
-SIGNALS_SCHEMA_VERSION = 1
+SIGNALS_SCHEMA_VERSION = 2
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in
 # ``CORE_MODULES`` (#557, #558). Names only: the headless runner reports each as

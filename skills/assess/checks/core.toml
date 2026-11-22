@@ -876,7 +876,7 @@ headless = { review_reality = "registered" }
 shapes = [
   { path = "review_reality", type = "lib.block_shapes:ReviewRealityBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
   { code = "network", means = "A headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in." },
   { code = "no_remote", means = "The repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes." },
@@ -933,7 +933,7 @@ headless = { coverage_gate = "registered" }
 shapes = [
   { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
-revision = 2
+revision = 3
 unknown_reasons = [
   { code = "go_rust_gate_form_not_read", carried_in = "unmeasured_reason", means = "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.", next_step = "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines." },
 ]
@@ -1144,7 +1144,7 @@ headless_variants = [
 shapes = [
   { path = "structure_drift", type = "lib.block_shapes:StructureDriftBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
   { code = "no_ownership_map", means = "The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read.", next_step = "Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it." },
 ]
@@ -1454,7 +1454,7 @@ headless = { review_evidence = "registered" }
 shapes = [
   { path = "review_evidence", type = "lib.review_automation:ReviewEvidenceBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
   { code = "network", means = "No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in." },
   { code = "no_remote", means = "No AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes." },
@@ -1467,7 +1467,7 @@ id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
 summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked."
-issues = [698, 775, 782, 787, 920]
+issues = [698, 775, 782, 787, 919, 920]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
 reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
@@ -1477,7 +1477,7 @@ headless = { ci_checks = "registered" }
 shapes = [
   { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
 ]
-revision = 3
+revision = 4
 unknown_reasons = [
   { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
   { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
