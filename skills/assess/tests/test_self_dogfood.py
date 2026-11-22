@@ -49,7 +49,7 @@ _HOT_TWO = "src/hot_two.py"
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(
         ["git", "-C", str(repo), *args],
-        check=True, capture_output=True, text=True, env=os.environ,
+        check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=os.environ,
     )
 
 

@@ -866,7 +866,7 @@ def test_finalize_evidence_refusal_through_core_and_cli(tmp_path: Path) -> None:
 
     script = Path(__file__).resolve().parents[1] / "scripts" / "assess_finalize.py"
     proc = subprocess.run(
-        [sys.executable, str(script), str(root)], capture_output=True, text=True
+        [sys.executable, str(script), str(root)], capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
 
     assert proc.returncode == 1
