@@ -793,10 +793,10 @@ references) and side B the tracked, non-excluded file set, and the finding is th
 declarations whose match set is empty. Binary, no statistics; a pattern matching only
 excluded files counts as empty (the excludes are not part of the navigable repo). It emits
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
-coverage ratio, `boundary_patterns` - the matched architecture-doc references plus the
-CODEOWNERS lines `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at
-least one matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`,
-`README.md` and `docs/` are left out); Layer 4 level 1 reads it (#785) - and
+coverage ratio, `boundary_patterns` - the CODEOWNERS lines and architecture-doc references
+`ownership_parser.is_boundary_pattern` accepts (a literal path segment and at least one
+matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`, `README.md`,
+`CONTRIBUTING.md` and `docs/` are left out); Layer 4 level 1 reads it (#785, #874) - and
 legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a

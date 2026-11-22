@@ -224,10 +224,11 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
 
     Counts both sides' declarations: every CODEOWNERS glob, and every distinct
     architecture-doc path reference (per declaring boundary). ``matched`` is the
-    declarations whose resolution is non-empty. ``boundary`` counts the matched
-    architecture-doc references and the CODEOWNERS globs ``is_boundary_pattern``
-    accepts: a catch-all, an extension glob, or a path owning no module source
-    (``/.github/``, ``README.md``, ``docs/``) leaves the code with one owner (#785).
+    declarations whose resolution is non-empty. ``boundary`` counts the CODEOWNERS
+    globs and architecture-doc references ``is_boundary_pattern`` accepts: a
+    catch-all, an extension glob, or a path owning no module source (``/.github/``,
+    ``README.md``, ``docs/``, ``CONTRIBUTING.md``) leaves the code with one owner
+    (#785, #874).
     Reuses the same parse/resolve path as the empty-set detectors so the two never
     disagree on what "declared" means.
     """
@@ -245,38 +246,44 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
                 text = doc.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            d, m = _declared_refs_in_doc(text, repo_root, rel_paths)
+            d, m, b = _declared_refs_in_doc(text, repo_root, rel_paths)
             declared += d
             matched += m
-            boundary += m
+            boundary += b
     return declared, matched, boundary
 
 
 def _declared_refs_in_doc(
     text: str, repo_root: Path, rel_paths: set[str],
-) -> tuple[int, int]:
-    """(declared, matched) path-reference counts for one architecture doc.
+) -> tuple[int, int, int]:
+    """(declared, matched, boundary) path-reference counts for one architecture doc.
 
     Same sectioning as ``_empty_refs_in_doc`` - one declaration per (boundary,
     distinct reference) - but counts resolution outcomes instead of collecting the
     empties, so totals and the empty list are derived from the identical walk. The
     boundary name is irrelevant to a count, so sectioning here only flushes the
     buffer at each header rather than tracking the current boundary key.
+    ``boundary`` counts the matched references whose resolved set holds module
+    source, through the CODEOWNERS predicate ``is_boundary_pattern`` (#874).
     """
     body = _FENCE_RE.sub("\n", text)
     buffer: list[str] = []
     declared = 0
     matched = 0
+    boundary = 0
 
     def flush(lines: list[str]) -> None:
-        nonlocal declared, matched
+        nonlocal declared, matched, boundary
         if not lines:
             return
         segment = "\n".join(lines)
         for ref in _extract_path_refs(segment):
             declared += 1
-            if _resolve_ref(ref, repo_root, rel_paths):
+            files = _resolve_ref(ref, repo_root, rel_paths)
+            if files:
                 matched += 1
+            if is_boundary_pattern(ref, files):
+                boundary += 1
 
     for line in body.splitlines():
         if _HEADER_RE.match(line):
@@ -285,7 +292,7 @@ def _declared_refs_in_doc(
         else:
             buffer.append(line)
     flush(buffer)
-    return declared, matched
+    return declared, matched, boundary
 
 
 def detect_path_existence_drift(

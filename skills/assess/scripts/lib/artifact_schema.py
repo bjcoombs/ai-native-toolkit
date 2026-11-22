@@ -476,4 +476,9 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
 #   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
 #   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
+# - structure_drift.tier_0.boundary_patterns counts an architecture-doc reference
+#   only when its resolved files hold module source under a non-dot directory, the
+#   CODEOWNERS predicate ownership_parser.is_boundary_pattern (issue #874). An
+#   ARCHITECTURE.md naming only `CONTRIBUTING.md`, `docs/` or `.github/workflows/ci.yml`
+#   no longer meets Layer 4 level 1, which can move from met to unmet.
 ASSESS_METHOD_VERSION = 37

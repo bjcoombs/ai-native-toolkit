@@ -18,6 +18,8 @@ from lib.ownership_parser import is_boundary_pattern
 from lib.structure_drift import detect_path_existence_drift
 
 _ARCH = "# Architecture\n\nThe entry point is `src/a.py`.\n"
+_ARCH_NON_MODULE = ("# Architecture\n\nRead `CONTRIBUTING.md` first; CI runs "
+                    "`.github/workflows/ci.yml`.\n")
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -61,6 +63,19 @@ def _repo(root: Path, files: dict[str, str]) -> Path:
     pytest.param({".github/CODEOWNERS": "* @x\n", "ARCHITECTURE.md": _ARCH}, 1,
                  id="star-plus-architecture"),
     pytest.param({".github/CODEOWNERS": "* @x\nghost/ @team\n"}, 0, id="unmatched-path-not-counted"),
+    # Architecture-doc references pass the same module-source predicate (#874).
+    pytest.param({"ARCHITECTURE.md": _ARCH_NON_MODULE, "CONTRIBUTING.md": "# c\n",
+                  ".github/workflows/ci.yml": "on: push\n"}, 0,
+                 id="architecture-names-only-contributing-and-ci"),
+    pytest.param({"ARCHITECTURE.md": "# Architecture\n\nThe package lives in `src/pkg/`.\n",
+                  "src/pkg/core.py": "x = 1\n"}, 1, id="architecture-names-src-pkg"),
+    pytest.param({"ARCHITECTURE.md": "# Architecture\n\nSee `docs/guide.md` and `docs/`.\n",
+                  "docs/guide.md": "# g\n"}, 0, id="architecture-names-only-docs"),
+    pytest.param({"ARCHITECTURE.md": "# A\n\nCI scripts in `.github/scripts/`.\n",
+                  ".github/scripts/s.py": "x = 1\n"}, 0, id="architecture-names-dot-directory-source"),
+    pytest.param({"ARCHITECTURE.md": _ARCH_NON_MODULE + "\n## Core\n\nOwns `src/`.\n",
+                  "CONTRIBUTING.md": "# c\n", ".github/workflows/ci.yml": "on: push\n"}, 1,
+                 id="architecture-mixed-counts-only-module-ref"),
 ])
 def test_boundary_patterns_excludes_catch_all(tmp_path: Path, files: dict[str, str], expected: int) -> None:
     repo = _repo(tmp_path / "r", files)
