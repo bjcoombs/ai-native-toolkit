@@ -54,6 +54,7 @@ case "$*" in
   *"approval_rules"*) echo '[{"rule_type":"regular","approvals_required":1,"applies_to_all_protected_branches":true}]'; exit 0 ;;
   *"protected_branches"*) echo '[{"name":"main"}]'; exit 0 ;;
   *"projects/grp%2Fapp") echo '{"default_branch":"main"}'; exit 0 ;;
+  *"projects/grp%2Fapp/ci/lint?"*) echo '{"valid":true,"merged_yaml":"t:\n  script:\n    - make\n"}'; exit 0 ;;
 esac
 echo "glab: 404 Not Found (HTTP 404)" >&2; exit 1
 """
@@ -102,11 +103,15 @@ def _names_target(argv: list[str], slug: str) -> bool:
     return any(a.startswith(f"repos/{slug}") or a.startswith("users/") for a in argv)
 
 
-def _run(tmp_path: Path, remote: str) -> dict[str, object]:
+def _run(tmp_path: Path, remote: str, gitlab_ci: str | None = None) -> dict[str, object]:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "remote", "add", "origin", remote)
+    if gitlab_ci is not None:  # an include no clone holds: ci_checks asks the CI lint API (#796)
+        (repo / ".gitlab-ci.yml").write_text(gitlab_ci, encoding="utf-8")
+        _git(repo, "add", ".gitlab-ci.yml")
+        _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "c")
     # Run from elsewhere: a call leaning on the cwd remote would find none here.
     return signals.collect(repo, list(signals.PLATFORM_SCANS), platform=True)
 
@@ -128,12 +133,13 @@ def test_every_github_platform_read_names_its_target(stubs: Path, tmp_path: Path
 def test_every_gitlab_platform_read_names_its_target(stubs: Path, tmp_path: Path,
                                                      monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
-    scans = _run(tmp_path, "https://gitlab.com/grp/app.git")
+    scans = _run(tmp_path, "https://gitlab.com/grp/app.git",
+                 "include:\n  - project: grp/ci-templates\n    file: /t.yml\n")
     assert all(scans[name].get("available") for name in signals.PLATFORM_SCANS), scans
     calls = _calls(stubs)
     assert [c for c in calls if not _names_target(c, "grp/app")] == []
     joined = [" ".join(c) for c in calls]
     for needle in ("merge_requests?state=merged", "/approvals", "/notes?", "approval_rules",
-                   "protected_branches"):
+                   "protected_branches", "projects/grp%2Fapp/ci/lint?content_ref="):
         assert any(needle in c for c in joined), needle
     assert all(c[0] == "glab" for c in calls)
