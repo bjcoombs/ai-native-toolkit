@@ -201,3 +201,39 @@ def test_a_path_that_cannot_be_written_is_skipped_not_raised(tmp_path: Path, cap
     (tmp_path / ad.WAFFLE_FILE).mkdir()
     assert ad.write_diagrams(tmp_path, ad.build_diagrams({"level": LEVEL}, MODEL_ROWS)) == []
     assert f"{ad.WAFFLE_FILE} not written" in capsys.readouterr().err
+
+
+# --- hazards (#843) and the report's view of the disk ---------------------------
+
+
+def test_a_hazard_is_never_listed_and_its_key_shows_only_when_used() -> None:
+    met = {**LEVEL["conditions"][2], "state": "met", "counted": False, "polarity": "hazard"}
+    unmet = {**LEVEL["conditions"][2], "state": "unmet", "counted": False, "polarity": "hazard"}
+    assert ad.category(met) == "hazard" and ad.category(unmet) == "hazard_absent"  # type: ignore[arg-type]
+    assert "Hazard" not in _waffle()
+    level: LevelResult = {**LEVEL, "conditions": [met, unmet, *LEVEL["conditions"][3:]]}  # type: ignore[list-item]
+    drawn = _waffle(level)
+    assert [s.attrib["data-category"] for s in _squares(drawn)][:2] == ["hazard", "hazard_absent"]
+    assert "Hazard present, never counted (1)" in drawn and "Hazard absent, never counted (1)" in drawn
+    assert sum(c in ad.COUNTED for c in (ad.category(c) for c in level["conditions"])) == \
+        sum(c["state"] == "met" and c["counted"] for c in level["conditions"])
+
+
+def test_a_drawn_diagram_whose_file_is_not_on_disk_reads_not_drawn(tmp_path: Path) -> None:
+    drawn = ad.build_diagrams({"level": LEVEL}, MODEL_ROWS)
+    section = ad.diagrams_section(drawn, tmp_path)
+    assert f"Not drawn: {ad.NOT_ON_DISK}" in section and "](./" not in section
+    assert section.splitlines()[2].startswith(IN_PLACE)
+    assert not banned_hits(section)
+    ad.write_diagrams(tmp_path, drawn)
+    assert ad.diagrams_section(drawn, tmp_path) == ad.diagrams_section(drawn)
+
+
+def test_the_report_cli_checks_the_artifact_directory(tmp_path: Path) -> None:
+    import assess_report
+    repo = _build_parity_fixture(tmp_path / "repo")
+    build_and_publish_run(repo_root=repo, run_date="2026-01-01")
+    (repo / ".assess" / ad.WAFFLE_FILE).unlink()
+    assert assess_report.main([str(repo)]) == 0
+    report = (repo / ".assess" / "deterministic-report.md").read_text(encoding="utf-8")
+    assert f"Not drawn: {ad.NOT_ON_DISK}" in report and "./evidence-waffle.svg" not in report

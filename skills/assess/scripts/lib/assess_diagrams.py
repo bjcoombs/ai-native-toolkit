@@ -13,7 +13,9 @@ after it recounts the ``level`` block. ``diagrams_section`` is the Markdown the
 deterministic report embeds, one ``## `` section per diagram, each opening with an
 ``In place:`` line (``lib/vocabulary.IN_PLACE``, #743), then the relative clickable
 image link and the caption, or ``Not drawn:`` and the reason. The publish step and the
-report (``assess_report.py``) both call ``build_diagrams`` on the same context.
+report (``assess_report.py``) both call ``build_diagrams`` on the same context; given the
+artifact directory, the section says ``Not drawn:`` for a drawn diagram whose file is not
+there (the write was skipped, or the context predates the diagram) instead of linking it.
 
 Diagrams:
 
@@ -22,7 +24,10 @@ Diagrams:
   order, coloured by state and grade (``CATEGORIES``). Met conditions read verified,
   measured or listed (counted or not, as the tally reads them); unmet, declined, not
   applicable (an empty outline) and not measured (hatched, its reason in the key)
-  follow. The verified and measured squares together are ``tally.met``.
+  follow. The verified and measured squares together are ``tally.met``. A hazard
+  condition (``polarity: "hazard"``, #843) is never counted: met draws as ``hazard``
+  (the warn colour), unmet as ``hazard_absent`` (a warn outline); the key lists the two
+  only when a square uses them.
 
 A new diagram adds its ``FILE`` and heading to ``HEADINGS``, a builder returning an
 ``AssessDiagram``, and an entry in ``build_diagrams``; it draws its cells, legend and
@@ -69,8 +74,12 @@ CATEGORIES: tuple[tuple[str, str], ...] = (
     ("declined", "Declined"),
     ("not_applicable", "Not applicable"),
     ("not_measured", "Not measured"),
+    ("hazard", "Hazard present, never counted"),
+    ("hazard_absent", "Hazard absent, never counted"),
 )
 LABELS = dict(CATEGORIES)
+# Shown in the key only when a square uses them: no shipped condition is a hazard before #843.
+OPTIONAL = ("hazard", "hazard_absent")
 COUNTED = ("verified", "measured")
 
 # Category colour roles, (light, dark), added to the fleet theme. Declined has its own
@@ -105,6 +114,10 @@ def cell(x: float, y: float, category: str, *, size: float = SQ, tooltip: str | 
     not a legend swatch), ``tooltip`` a hover ``<title>``."""
     if category == "not_applicable":
         paint = 'class="f-bg s-muted" stroke-width="1.5"'
+    elif category == "hazard":
+        paint = 'class="f-warn s-rule" stroke-width="1"'
+    elif category == "hazard_absent":
+        paint = 'class="f-bg s-warn" stroke-width="1.5"'
     elif category == "not_measured":
         paint = f'fill="{svg.HATCH_FILL}" class="s-muted" stroke-width="1"'
     elif category in LABELS:
@@ -155,8 +168,14 @@ def _titles(model_rows: Sequence[Mapping[str, Any]] | None) -> dict[str, str]:
 
 
 def category(condition: ConditionResult) -> str:
-    """A condition's waffle category from its state, grade and whether the tally counts it."""
+    """A condition's waffle category from its state, grade and whether the tally counts it.
+
+    A hazard (``polarity: "hazard"``, #843) is a harm and never counted: met reads
+    ``hazard`` (present), unmet ``hazard_absent``; its other states draw as any condition's.
+    """
     state = condition["state"]
+    if condition.get("polarity") == "hazard" and state in ("met", "unmet"):
+        return "hazard" if state == "met" else "hazard_absent"
     if state == "met":
         if not condition["counted"]:
             return "listed"
@@ -213,7 +232,8 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str]) -> str:
         y += ROW_H
     reasons = Counter(s["reason"] for s in squares if s["reason"] is not None)
     notes = {"not_measured": [f"{_reason_text(code, titles)}: {n}" for code, n in sorted(reasons.items())]}
-    entries = [(key, f"{label} ({counts[key]})", notes.get(key, [])) for key, label in CATEGORIES]
+    entries = [(key, f"{label} ({counts[key]})", notes.get(key, [])) for key, label in CATEGORIES
+               if key not in OPTIONAL or counts[key]]
     key_parts, key_h = legend(PAD, y + 12, entries)
     body += key_parts
     caption = waffle_caption()
@@ -285,13 +305,22 @@ def build_diagrams(ctx: Mapping[str, Any],
     return [_guarded(lambda: _waffle(ctx, model_rows), WAFFLE_FILE)]
 
 
-def diagrams_section(diagrams: Sequence[AssessDiagram]) -> str:
+NOT_ON_DISK = ("the file is not in the artifact directory (the write was skipped, or the "
+               "run context comes from a run before this diagram).")
+
+
+def diagrams_section(diagrams: Sequence[AssessDiagram], assess_dir: Path | None = None) -> str:
     """The report's Markdown: per diagram a ``## `` section opening with its ``In place:``
-    line, then the SVG as a relative clickable image and its caption, or why it is not drawn."""
+    line, then the SVG as a relative clickable image and its caption, or why it is not drawn.
+
+    With ``assess_dir``, a drawn diagram whose file is not there reads ``Not drawn:``
+    (``NOT_ON_DISK``) instead of linking an image that does not exist."""
     lines: list[str] = []
     for d in diagrams:
         lines += [f"## {d['title']}", "", d["in_place"], ""]
-        if d["svg"] is not None:
+        if d["svg"] is not None and assess_dir is not None and not (assess_dir / d["file"]).is_file():
+            lines += [f"Not drawn: {NOT_ON_DISK}", ""]
+        elif d["svg"] is not None:
             lines += [f"[![{d['title']}](./{d['file']})](./{d['file']})", "", d["caption"], ""]
         else:
             lines += [f"Not drawn: {d['skipped']}", ""]

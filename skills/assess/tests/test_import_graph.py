@@ -37,8 +37,14 @@ def _dump(value: object) -> str:
     return json.dumps(value, indent=2, sort_keys=True)
 
 
+# The package map's fields (#942) postdate the frozen golden, which no current code rewrites.
+PACKAGE_MAP_KEYS = ("packages", "package_count", "package_edges")
+
+
 def _without_language(block: dict) -> dict:
     assert block.pop("language") == "python"
+    for key in PACKAGE_MAP_KEYS:
+        block.pop(key, None)
     return block
 
 
@@ -193,6 +199,69 @@ def test_the_largest_graph_is_reported_with_its_language(tmp_path: Path) -> None
     assert block["internal_burrow_edges"] == [{"importer": "app/main", "imported": "lib/util"}]
     # A language with no public-surface measure reads 0, not a crash.
     assert all(fp["exposed_surface"] == 0 for fp in block["footprints"])
+
+
+def test_the_package_map_data_counts_imports_and_front_door_bypasses(tmp_path: Path) -> None:
+    builder = _StubBuilder("typescript", ["app/index", "app/main", "lib/index", "lib/util", "web/index"],
+                           {"app/main": {"lib/index", "lib/util", "web/index"}, "lib/index": {"lib/util"},
+                            "lib/util": {"app/index"}, "web/index": {"lib/util"}})
+    block = analyze_structure(tmp_path, builders=(builder,)).as_dict()
+    assert [p["id"] for p in block["packages"]] == ["app", "lib", "web"]  # all loc 0: by id
+    assert [p["modules"] for p in block["packages"]] == [2, 2, 1]
+    assert block["package_count"] == 3
+    assert block["package_edges"] == [
+        {"from": "app", "to": "lib", "imports": 2, "bypass": 1},
+        {"from": "app", "to": "web", "imports": 1, "bypass": 0},
+        {"from": "lib", "to": "app", "imports": 1, "bypass": 0},
+        {"from": "web", "to": "lib", "imports": 1, "bypass": 1},
+    ]
+    assert sum(e["imports"] for e in block["package_edges"]) == block["cross_package_edges"]
+    assert sum(e["bypass"] for e in block["package_edges"]) == len(block["internal_burrow_edges"])
+
+
+def test_the_golden_repo_package_data_matches_its_burrows_and_sizes() -> None:
+    block = analyze_structure(REPO).as_dict()
+    assert block["packages"] and block["package_count"] == len(block["packages"])
+    assert sum(e["bypass"] for e in block["package_edges"]) == len(block["internal_burrow_edges"]) > 0
+    assert sum(e["imports"] for e in block["package_edges"]) == block["cross_package_edges"]
+    assert sum(p["loc"] for p in block["packages"]) == sum(fp["size"] for fp in block["footprints"])
+    assert sum(p["modules"] for p in block["packages"]) == block["module_count"]
+    assert [(-p["loc"], p["id"]) for p in block["packages"]] == sorted((-p["loc"], p["id"]) for p in block["packages"])
+
+
+def test_the_package_list_is_capped_and_edges_stay_among_kept_packages(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lib.structure_graph.MAX_PACKAGES", 2)
+    builder = _StubBuilder("typescript", ["a/index", "b/index", "c/index"],
+                           {"a/index": {"b/index", "c/index"}})
+    block = analyze_structure(tmp_path, builders=(builder,)).as_dict()
+    assert [p["id"] for p in block["packages"]] == ["a", "b"] and block["package_count"] == 3
+    assert block["package_edges"] == [{"from": "a", "to": "b", "imports": 1, "bypass": 0}]
+
+
+def test_counts_only_hashes_package_ids_and_keeps_every_count() -> None:
+    from lib.counts_only import HASH_PREFIX, counts_only
+    block = analyze_structure(REPO).as_dict()
+    out = counts_only({"structure": block}, hash_paths=True, salt="fleet")["structure"]
+    ids = [p["id"] for p in block["packages"]]
+    assert [p["id"] for p in out["packages"]] != ids
+    assert all(p["id"].startswith(HASH_PREFIX) for p in out["packages"])
+    assert all(e["from"].startswith(HASH_PREFIX) and e["to"].startswith(HASH_PREFIX)
+               for e in out["package_edges"])
+    dumped = json.dumps({k: out[k] for k in PACKAGE_MAP_KEYS})
+    assert not any(f'"{name}"' in dumped for name in ids)
+    # Every number survives: a dropped field fails here.
+    assert [{k: v for k, v in p.items() if k != "id"} for p in out["packages"]] == \
+        [{k: v for k, v in p.items() if k != "id"} for p in block["packages"]]
+    assert [(e["imports"], e["bypass"]) for e in out["package_edges"]] == \
+        [(e["imports"], e["bypass"]) for e in block["package_edges"]]
+    assert out["package_count"] == block["package_count"]
+
+
+def test_an_unavailable_block_has_no_package_data(tmp_path: Path) -> None:
+    block = analyze_structure(tmp_path).as_dict()
+    assert block["available"] is False
+    assert (block["packages"], block["package_count"], block["package_edges"]) == ([], 0, [])
 
 
 def test_a_tie_on_modules_goes_to_edges_then_language(tmp_path: Path) -> None:
