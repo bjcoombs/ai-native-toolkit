@@ -71,7 +71,7 @@ In place: over 1 repository, 27 scans were measured everywhere, 16 ran but were 
 - `structure`: not measured in 1 of 1 (no_source_files)
 - `stats_summary`
 - `promissory_markers`: not measured in 1 of 1 (unavailable)
-- `structure_drift`: not measured in 1 of 1 (no_block)
+- `structure_drift`: not measured in 1 of 1 (no_ownership_map)
 - `observability`
 - `doc_graph`
 - `doc_staleness`

@@ -878,8 +878,8 @@ shapes = [
 ]
 revision = 1
 unknown_reasons = [
+  { code = "network", means = "A headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in." },
   { code = "no_remote", means = "The repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes." },
-  { code = "network", means = "A headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet with --platform, or /assess, to read the merged changes." },
 ]
   [entries.privacy]
   "review_reality.reason" = "drop"
@@ -1455,8 +1455,8 @@ shapes = [
 ]
 revision = 1
 unknown_reasons = [
+  { code = "network", means = "No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in." },
   { code = "no_remote", means = "No AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes." },
-  { code = "network", means = "No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet with --platform, or /assess, to read the merged changes." },
 ]
   [entries.privacy]
   "review_evidence.reason" = "drop"
