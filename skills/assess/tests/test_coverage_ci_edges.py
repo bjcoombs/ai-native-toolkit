@@ -4,9 +4,11 @@ lib/coverage_activation.py).
 Each form from PR #933's review either reads as the real tool behaves or reads null
 with a reason, never true where no CI run enforces the gate. The expected exits were
 checked against the tools: pytest-cov 7.1 ``--no-cov`` turns coverage off wherever it
-stands (on the line or in ``addopts``, before or after ``--cov``); Gradle skips a task
-named with ``-x`` even when another task depends on it, and ``-m`` / ``--dry-run``
-executes no task action.
+stands (on the line or in ``addopts``, before or after ``--cov``), and
+``--no-cov-on-fail`` does not; on Gradle 9.4, ``check -x jacocoTestCoverageVerification``
+(or ``--exclude-task=``) runs ``check`` without the verification task it depends on,
+``-m`` / ``--dry-run`` marks every task SKIPPED, and ``--task-graph`` prints the graph
+and runs nothing.
 """
 from __future__ import annotations
 
@@ -129,11 +131,29 @@ def test_runs_tool_edges(words: tuple[str, ...], expected: bool) -> None:
     ("[tool.pdm.scripts]\ncov = \"pytest --cov --cov-fail-under=80\"\n", "pdm run cov"),
     ("[tool.poe.tasks]\ncov = \"pytest --cov --cov-fail-under=80\"\n", "poe cov"),
     ("[tool.poe.tasks.cov]\ncmd = \"coverage report --fail-under=80\"\n", "poe cov"),
-], ids=["hatch", "pdm", "poe", "poe-table"])
+    ("[tool.poe.tasks]\ncov = \"pytest --cov --cov-fail-under=80\"\n", "uv run poe cov"),
+    ("[tool.poe.tasks]\ncov = \"pytest --cov --cov-fail-under=80\"\n", "poetry run poe cov"),
+    ("[tool.pdm.scripts]\ncov = \"pytest --cov --cov-fail-under=80\"\n", "pdm cov"),
+    ("[tool.taskipy.tasks]\ncov = \"pytest --cov --cov-fail-under=80\"\n", "task cov"),
+], ids=["hatch", "pdm", "poe", "poe-table", "uv-run-poe", "poetry-run-poe", "pdm-bare",
+        "taskipy"])
 def test_case5_script_section_reads_indirect_run(
         tmp_path: Path, section: str, line: str) -> None:
     files = {**_ci(line), "pyproject.toml": "[project]\nname = 'x'\n\n" + section}
     assert _read(tmp_path, files) == (None, "indirect_run")
+
+
+def test_case5_setup_cfg_tox_command_reads_indirect_run(tmp_path: Path) -> None:
+    files = {**_ci("tox"), "setup.cfg":
+             "[tox:tox]\nenvlist = py\n\n[testenv]\ncommands = pytest --cov --cov-fail-under=80\n"}
+    assert _read(tmp_path, files) == (None, "indirect_run")
+
+
+@pytest.mark.parametrize("line", ["pdm install", "pdm sync -G test", "poe"])
+def test_case5_a_pdm_command_or_bare_poe_runs_no_script(tmp_path: Path, line: str) -> None:
+    files = {**_ci(line), "pyproject.toml":
+             "[tool.pdm.scripts]\ncov = \"pytest --cov --cov-fail-under=80\"\n"}
+    assert _read(tmp_path, files) == (False, "not_run_in_ci")
 
 
 def test_case5_script_section_with_no_ci_run_reads_not_run(tmp_path: Path) -> None:
@@ -183,11 +203,10 @@ def test_read_activation_keys_by_directory() -> None:
         ("a/pyproject.toml", ADDOPTS_COV.splitlines()),
         ("b/setup.cfg", ["[tool:pytest]", "addopts = --no-cov"]),
         ("c/package.json", ['{"jest": {"collectCoverage": true}}']),
-        ("pyproject.toml", ["[tool.pdm.scripts]", "cov = \"pytest --cov-fail-under=80\""]),
     ])
     assert (act.pytest_cov, act.pytest_off, act.jest_collects) == (
         frozenset({"a"}), frozenset({"b"}), frozenset({"c"}))
-    assert act.script_lines == frozenset({("pyproject.toml", 2)})
+    assert act.pytest_lines == frozenset({("a/pyproject.toml", 2), ("b/setup.cfg", 2)})
 
 
 @pytest.mark.parametrize(("lines", "expected"), [

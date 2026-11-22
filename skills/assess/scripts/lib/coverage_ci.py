@@ -33,10 +33,11 @@ How a gate is run, by where it is written:
   ``[tool:pytest]``, ``[tool.pytest.ini_options]``) is ``addopts``, run by any
   ``pytest`` line with pytest-cov on (``--cov`` there or in ``addopts``); a ``tox.ini`` ``[testenv]`` ``commands`` line is a task command.
 - A task-runner file (``Makefile``, ``tox.ini`` commands, ``package.json``
-  scripts, ``justfile``, ``noxfile.py``, ...) or a hatch, pdm or poe script section of
-  ``pyproject.toml`` (#954): CI reaches it only through a target or script, whose
-  recipe this scan does not follow (``indirect_run`` when CI runs one, ``hatch run``,
-  ``pdm run`` and ``poe`` included).
+  scripts, ``justfile``, ``noxfile.py``, ...), or a flag outside a pytest section of
+  ``pyproject.toml`` or ``setup.cfg`` (a hatch, pdm or poe script, a tox command, #954):
+  CI reaches it only through a target or script, whose recipe this scan does not follow
+  (``indirect_run`` when CI runs one: ``hatch run``, ``pdm [run]`` and ``poe`` included,
+  through ``uv run`` or ``poetry run``).
 
 #954 edge cases. A CI line's gate is credited only to the run whose own flag carries
 its threshold (``echo --cov-fail-under=90 && pytest --cov --cov-fail-under=10``
@@ -119,7 +120,9 @@ phase reads null. A run whose own flag overrides the config threshold
 (`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate.
 A root `addopts` or `collectCoverage: true` switches on a package's gate, though a run at
 the root has coverage.py read the root config; Gradle's `check` wiring is still read once
-per repository; a package `addopts` `--no-cov` does not stop a CI-line gate. On a scoped run,
+per repository; a package `addopts` `--no-cov` does not stop a CI-line gate, and a root
+`addopts` `--no-cov` turns off a package gate whose own `addopts` holds `--cov` (pytest
+reads the nearest config only). On a scoped run,
 any enforced run of the tool anywhere in the repository credits the scope's config gate
 (`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
 runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
@@ -162,7 +165,10 @@ _GO_TC_ACTION = re.compile(r"uses:\s*['\"]?vladopajic/go-test-coverage@", re.IGN
 # Files whose CLI gates run only through a target or session: a task runner.
 _TASK_FILES = frozenset({
     "Makefile", "justfile", "Justfile", "Taskfile.yml", "Taskfile.yaml", "noxfile.py",
-    "package.json", "tox.ini", ".pre-commit-config.yaml"})
+    "package.json", "tox.ini", ".pre-commit-config.yaml",
+    # #954: outside a pytest section, a flag in these is a hatch / pdm / poe script or a
+    # tox / setuptools command, run only through ``hatch run``, ``pdm``, ``poe`` or ``tox``.
+    "pyproject.toml", "setup.cfg"})
 # The null reasons, most specific first.
 _NULL_ORDER: tuple[EnforcedBasis, ...] = (
     "unknown_trigger", "indirect_run", "included_jobs", "unread_ci_system")
@@ -500,9 +506,7 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
     family = gate_family(gate, activation.pytest_lines)
     if file in ci.ci_files:
         found = _line_gate_run(gate, ci, line_gates, activation)
-    elif family is None and (file.rsplit("/", 1)[-1] in _TASK_FILES
-                             or (file, _line(gate)) in activation.script_lines):
-        # A hatch / pdm / poe script in pyproject.toml is a task too (#954).
+    elif file.rsplit("/", 1)[-1] in _TASK_FILES and family is None:
         found = _indirect(ci)
     elif family is None:
         # A CI system or composite action this module does not read.
@@ -586,6 +590,11 @@ def _indirect(ci: CiRuns, family: str | None = None) -> bool | str:
 _TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "invoke", "nox", "tox"})
 # Python task runners whose any script may run the gate, as ``may_lint`` reads ``hatch run``.
 _PY_SCRIPT_RUNNERS = frozenset({"pdm", "poe"})
+# pdm's own commands; any other first word is a script (``pdm cov`` runs ``pdm run cov``).
+_PDM_COMMANDS = frozenset({
+    "add", "build", "cache", "completion", "config", "export", "fix", "import", "info",
+    "init", "install", "list", "lock", "new", "outdated", "publish", "py", "python",
+    "remove", "search", "self", "show", "sync", "update", "use", "venv"})
 _SCRIPT_RUNNERS = frozenset({"npm", "yarn", "pnpm", "bun"})
 
 
@@ -593,13 +602,14 @@ def coverage_target(words: tuple[str, ...]) -> bool:
     """A runner target or package script named for coverage (``make coverage``, ``make
     cov``, ``npm run coverage``, ``just coverage``), or any ``pdm run`` script or ``poe``
     task (#954, as ``may_lint`` reads any ``hatch run`` script): it may run the gate."""
-    if not words:
-        return False
-    name = words[0].rsplit("/", 1)[-1]
-    positionals = [w for w in words[1:] if not w.startswith("-")]
-    if name in _PY_SCRIPT_RUNNERS:   # pdm run <script>, poe <task>: the recipe is not read
-        return bool(positionals[1:2] if name == "pdm" and positionals[:1] == ["run"]
-                    else positionals[:1] if name == "poe" else [])
+    name, args = program(words)   # uv run poe cov, poetry run poe cov: the runner is poe
+    positionals = [w for w in args if not w.startswith("-")]
+    if name in _PY_SCRIPT_RUNNERS:   # pdm [run] <script>, poe <task>: the recipe is not read
+        if name == "pdm" and positionals[:1] == ["run"]:
+            positionals = positionals[1:]
+        elif name == "pdm" and positionals[:1] and positionals[0] in _PDM_COMMANDS:
+            return False
+        return bool(positionals)
     if name in _SCRIPT_RUNNERS and positionals[:1] == ["run"]:
         positionals = positionals[1:]
     elif name not in _TARGET_RUNNERS | _SCRIPT_RUNNERS:

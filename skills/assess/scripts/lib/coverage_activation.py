@@ -17,10 +17,6 @@ for each candidate config file and returns an ``Activation``:
   read with JavaScript comments stripped.
 - ``gradle_check``: a ``build.gradle`` / ``build.gradle.kts`` wires
   ``check.dependsOn jacocoTestCoverageVerification`` (still read once per repository).
-- ``script_lines``: the ``(file, line)`` pairs inside a hatch, pdm or poe script
-  section of ``pyproject.toml`` (``[tool.hatch.*]``, ``[tool.pdm.*]``,
-  ``[tool.poe.*]``): a flag there runs only through ``hatch run`` / ``pdm run`` /
-  ``poe``, whose recipe is not followed (``indirect_run``).
 - ``pytest_lines``: the ``(file, line)`` pairs inside a pytest config section, where a
   flag is ``addopts``, not a ``tox.ini`` ``commands`` line.
 
@@ -50,8 +46,6 @@ _NO_COV_FLAG_RE = re.compile(r"--no-cov(?![\w-])")
 _JS_COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\"'])//[^\n]*", re.S)
 PYTEST_CONFIG_FILES = frozenset({"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"})
 _PYTEST_SECTIONS = frozenset({"pytest", "tool:pytest", "tool.pytest.ini_options"})
-# Task-runner script sections of ``pyproject.toml``: hatch, pdm and poe.
-_SCRIPT_SECTION_RE = re.compile(r"^tool\.(?:hatch|pdm|poe)(?:\.|$)")
 _JACOCO_GRADLE = frozenset({"build.gradle", "build.gradle.kts"})
 # ``check.dependsOn jacocoTestCoverageVerification`` (Groovy or Kotlin DSL, a
 # ``tasks.check { dependsOn(...) }`` block): ``gradle check`` / ``build`` runs the gate.
@@ -69,7 +63,6 @@ class Activation:
     jest_collects: frozenset[str] = frozenset()
     gradle_check: bool = False
     pytest_lines: frozenset[tuple[str, int]] = frozenset()
-    script_lines: frozenset[tuple[str, int]] = frozenset()
 
 
 def covers(dirs: frozenset[str], file: str) -> bool:
@@ -85,7 +78,6 @@ def read_activation(files: Iterable[tuple[str, list[str]]]) -> Activation:
     jest: set[str] = set()
     gradle = False
     pytest_lines: set[tuple[str, int]] = set()
-    script_lines: set[tuple[str, int]] = set()
     for rel, lines in files:
         name = posixpath.basename(rel)
         if name in PYTEST_CONFIG_FILES:
@@ -93,14 +85,12 @@ def read_activation(files: Iterable[tuple[str, list[str]]]) -> Activation:
             state = addopts_cov(lines)
             if state is not False:
                 (pytest_cov if state else pytest_off).add(posixpath.dirname(rel))
-        if name == "pyproject.toml":
-            script_lines.update((rel, n) for n in _script_section_lines(lines))
         source = _JS_COMMENT_RE.sub("", "\n".join(lines))
         gradle = gradle or (name in _JACOCO_GRADLE and bool(_GRADLE_CHECK_WIRED_RE.search(source)))
         if _JEST_COLLECTS_RE.search(source):
             jest.add(posixpath.dirname(rel))
     return Activation(frozenset(pytest_cov), frozenset(pytest_off), frozenset(jest), gradle,
-                      frozenset(pytest_lines), frozenset(script_lines))
+                      frozenset(pytest_lines))
 
 
 def addopts_cov(lines: list[str]) -> bool | None:
@@ -141,15 +131,3 @@ def section_lines(lines: list[str], sections: frozenset[str]) -> list[int]:
             out.append(idx)
     return out
 
-
-def _script_section_lines(lines: list[str]) -> list[int]:
-    """1-based lines inside a hatch, pdm or poe section of ``pyproject.toml``."""
-    out: list[int] = []
-    inside = False
-    for idx, line in enumerate(lines, 1):
-        header = _SECTION_RE.match(line)
-        if header:
-            inside = bool(_SCRIPT_SECTION_RE.match(header.group(1).strip().strip("\"'")))
-        elif inside:
-            out.append(idx)
-    return out
