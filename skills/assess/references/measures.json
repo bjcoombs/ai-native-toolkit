@@ -1322,6 +1322,18 @@
           "means": "In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them.",
           "next_step": "Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent.",
           "carried_in": "basis"
+        },
+        {
+          "code": "analysers_in_build",
+          "means": "In lint_basis: no CI line runs a linter, but a CI dotnet build runs the analysers a committed Directory.Build.props or .csproj turns on (EnforceCodeStyleInBuild, AnalysisLevel). Their severities live in .editorconfig, which the scan does not evaluate.",
+          "next_step": "Nothing to change if the analysers fail the build on a finding; a CI step running dotnet format --verify-no-changes lets the scan read a lint run.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "compiler_gate_only",
+          "means": "In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors (mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror, TreatWarningsAsErrors in Directory.Build.props). It is not counted as a lint run.",
+          "next_step": "Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run.",
+          "carried_in": "basis"
         }
       ],
       "evidence": [
@@ -3999,7 +4011,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: the linter may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a check target or script may run one inside it"
+      "null_means": "included_jobs, merged_config_partial: the linter may live in an included file; unknown_trigger: triggers not settled; check_target: a target may run one; unread_ci_system: an unparsed CI system may; analysers_in_build: .NET build analysers; compiler_gate_only: only warnings as errors"
     },
     {
       "path": "promissory_markers.families.suppression.stale",

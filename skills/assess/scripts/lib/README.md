@@ -3618,9 +3618,44 @@ A target runner asked for `--version` or its list (`task --list`, `rake -T`) is 
 `may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
 `bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
 lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
-(`ci_checks._lone_check`). Tests: `tests/test_check_command.py`,
-`tests/test_check_runners.py` (#920), `tests/test_agent_environment.py`
-(`test_is_check_command`), `tests/test_ci_checks.py` (`test_lint_runs_per_command`).
+(`ci_checks._lone_check`). Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
+analysers of `lint_vocabulary.ANALYSER_PROGRAMS`, and `is_lint_command` and `is_lint_run`
+also accept `lint_vocabulary.ecosystem_lint` (a formatter in its check mode, `mix credo`,
+`dart analyze`, a Gradle lint task). `_plain_wrapper` reads `xargs [flags] <program>` and
+`dotnet tool run <program>` as the program they run, in `_wrapped` too, where a non-check
+program behind them stays false (`xargs rm` is not a target whose recipe is unread).
+`is_format_rewrite(text)` is a formatter that rewrites files (`clang-format -i`,
+`xargs clang-format-21 -i`, `mix format`), read by `ci_lint_gates`. `is_info_invocation`
+reads the program by `lint_vocabulary.program_name` (`clang-tidy-18 -h`). `nx graph`,
+`nx show`, `nx list`, `nx report`, `nx reset` and `nx daemon` print information:
+`check_verdict` reads them false, not null. Tests: `tests/test_check_command.py`,
+`tests/test_check_runners.py` (#920), `tests/test_lint_vocabulary.py` (#926),
+`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
+(`test_lint_runs_per_command`).
+
+**`lint_vocabulary.py`**
+The lint, analyser and formatter-check words of .NET, Gradle, PHP, Elixir, Dart, Swift
+and C++ (issue #926), split from `check_command.py` for the size ratchet; it imports no
+other lib module. `program_name(word)` is the basename with a `.phar`, `.exe` or numeric
+version suffix dropped (`vendor/bin/phpstan`, `clang-tidy-18`). `ANALYSER_PROGRAMS`
+(`phpstan`, `psalm`, `phpcs`, `detekt`, `swiftlint`, `clang-tidy`, `cppcheck`) lint in any
+mode. `formatter_mode(words)` is `check` for a formatter's check mode (`pint --test`,
+`php-cs-fixer fix --dry-run` or `check`, `swift-format lint`, `dotnet format
+--verify-no-changes`, `dotnet-format --check`, `clang-format --dry-run --Werror` or `-n
+--Werror`, `mix format --check-formatted`, `dart` / `flutter format --set-exit-if-changed`),
+`rewrite` when it rewrites in place, and None otherwise (`clang-format a.cc` and `dart
+format -o none` only print); formatter checks count as lint (maintainer decision 2).
+`subcommand_lint(words)`: `mix credo`, `mix dialyzer` (not `--plt`), `dart analyze`,
+`flutter analyze`, and Gradle tasks (`gradle_tasks` drops the `:project:` prefix and the
+task after `-x`) named `lint*`, `ktlint*Check`, `detekt*`, `spotless*Check` or
+`checkstyle*`, never one that fixes, formats, applies or records a baseline (`lintFix`,
+`ktlintFormat`, `spotlessApply`, `detektBaseline`). `ecosystem_lint(words)` is any of the
+three, with `php <program>` read as the program. `compiler_gate(words)` is a compiler run
+with warnings as errors (`mix compile --warnings-as-errors`, `-Werror` after a compiler,
+`make`, `ninja` or `cmake`, `-DCMAKE_COMPILE_WARNING_AS_ERROR=ON`, `dotnet build
+-warnaserror` or `-p:TreatWarningsAsErrors=true`), never a lint run (decision 1).
+`dotnet_build(words)` is `dotnet build`, `dotnet msbuild` or `msbuild`. Tests:
+`tests/test_lint_vocabulary.py`.
 
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
@@ -3714,9 +3749,35 @@ and with no enforced check and no `included_jobs` / `unknown_trigger` case, it m
 beside it still reads null). With no lint line on ordinary triggers and no check target,
 one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
 unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Issue #926: a target whose recipe is not read (`_line_may_check`: `make foo`, `npm run
+foo`, `./scripts/foo.sh`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
+formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
+(`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
+gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
+`line_dotnet_build` and `line_compiler_gate` tallies (unmasked, on ordinary or unsettled
+triggers); a masked or off-trigger compiler gate alone reads `not_enforced`.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
-`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
-`tests/test_level_signals.py`.
+`tests/test_ci_lint_gates.py` (the #926 fixtures), `tests/test_gitlab_ci_lint.py`, and the
+Layer 3 and Layer 5 rows in `tests/test_level_signals.py`.
+
+**`ci_lint_gates.py`**
+Layer 3 lint gates one CI line cannot show (issue #926), for `ci_checks.lint_runs`.
+`rewrite_gated(text)` is the set of line indices of rewrite-formatter lines
+(`check_command.is_format_rewrite`) that a later, or the same, unmasked line of the same
+job turns into a lint run with `git diff --exit-code` or `git diff --quiet`; a rewrite
+alone, followed by a commit, or with the diff in another job is not one. `job_ids(lines)`
+numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
+under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
+`ci_checks` shares. `line_compiler_gate` and `line_dotnet_build` are per-line tests over
+`lint_vocabulary.compiler_gate` and `dotnet_build`. `dotnet_props(root, tracked)` reads
+the committed `Directory.Build.props` files, then the `*.csproj` files, by path through
+`command_index.read_config`, and returns two booleans: `TreatWarningsAsErrors` true, and
+the analysers on (`EnforceCodeStyleInBuild` true or an `AnalysisLevel` other than `none`);
+no text leaves the module. `lint_gate(root, tracked, compiler=, dotnet=)` is
+`analysers_in_build` for a CI .NET build with the analysers on, else
+`compiler_gate_only` for a compiler-gate line or a CI .NET build with
+`TreatWarningsAsErrors` committed, else None (decisions 1, 3 and 4 on #926). Tests:
+`tests/test_ci_lint_gates.py`.
 
 **`ci_masking.py`**
 Which CI shell statements cannot fail their job (issue #775), with no YAML parser
