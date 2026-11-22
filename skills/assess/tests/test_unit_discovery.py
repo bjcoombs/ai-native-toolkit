@@ -372,6 +372,15 @@ def test_a_gradle_project_dir_moves_its_member(tmp_path: Path):
     assert _paths(block) == ["modules/core"] and block["skipped"] == []
 
 
+def test_a_byte_order_mark_does_not_make_a_manifest_unreadable(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "Cargo.toml": '\ufeff[workspace]\nmembers = ["a"]\n', "a/Cargo.toml": "\ufeff[package]\n",
+        "a/src/lib.rs": "", "web/package.json": '\ufeff{"name": "web"}', "web/i.js": "",
+    }))
+    assert block["unreadable_manifests"] == [] and block["unit_count"] == 2
+    assert _paths(block) == ["a", "web"]
+
+
 def test_excluded_folders_hold_no_units(tmp_path: Path):
     root = _write(tmp_path, {
         "node_modules/dep/package.json": "{}", "node_modules/dep/i.js": "",

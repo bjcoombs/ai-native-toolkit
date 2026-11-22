@@ -174,7 +174,7 @@ def _strings(value: object) -> list[str]:
 
 def _toml(path: Path) -> Mapping[str, Any]:
     try:
-        return tomllib.loads(path.read_text(encoding="utf-8"))
+        return tomllib.loads(path.read_text(encoding="utf-8-sig"))
     except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
 
@@ -195,7 +195,7 @@ def _uv(path: Path) -> _Workspace | None:
     ws = uv.get("workspace") if isinstance(uv, Mapping) else None
     if not isinstance(ws, Mapping):
         return None
-    # a uv workspace root is always a member: its [project] is a package
+    # a uv root with a [project] is a member too; a virtual workspace (no [project]) is not
     return _Workspace("uv", _strings(ws.get("members")), _strings(ws.get("exclude")),
                       root_member="project" in data)
 
@@ -207,7 +207,7 @@ def _split_negated(patterns: Iterable[str]) -> tuple[list[str], list[str]]:
 
 def _npm(path: Path) -> _Workspace | None:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (ValueError, UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     if not isinstance(data, Mapping) or "workspaces" not in data:
@@ -229,7 +229,7 @@ def _pnpm(path: Path) -> _Workspace | None:
     value this reader cannot parse raises ``_Unreadable``.
     """
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     patterns: list[str] = []
@@ -261,7 +261,7 @@ _GO_USE = re.compile(r"^\s*use\s+(?:\(\s*(?P<block>[^)]*)\)|(?P<one>\S+))", re.M
 
 def _go(path: Path) -> _Workspace:
     try:
-        text = re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8"))
+        text = re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8-sig"))
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     members: list[str] = []
@@ -281,7 +281,7 @@ _GRADLE_PROJECT_DIR = re.compile(
 
 def _gradle(path: Path) -> _Workspace | None:
     try:
-        text = re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8"))
+        text = re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8-sig"))
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     moved = {name.strip(":").replace(":", "/"): folder
@@ -297,7 +297,7 @@ _MAVEN_MODULE = re.compile(r"<module>\s*([^<]+?)\s*</module>")
 
 def _maven(path: Path) -> _Workspace | None:
     try:
-        text = re.sub(r"<!--.*?-->", "", path.read_text(encoding="utf-8"), flags=re.DOTALL)
+        text = re.sub(r"<!--.*?-->", "", path.read_text(encoding="utf-8-sig"), flags=re.DOTALL)
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     modules = _MAVEN_MODULE.findall(text)
@@ -342,7 +342,7 @@ def _tooling_only(root: Path, folder: str, names: frozenset[str]) -> bool:
     if not names or not names <= _PACKAGE_KEYS.keys():
         return False
     for name in names:
-        text = (root / folder / name).read_text(encoding="utf-8", errors="replace")
+        text = (root / folder / name).read_text(encoding="utf-8-sig", errors="replace")
         try:
             data: Any = json.loads(text) if name == "package.json" else tomllib.loads(text)
         except (ValueError, tomllib.TOMLDecodeError):
