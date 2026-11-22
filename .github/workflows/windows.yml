@@ -6,9 +6,20 @@ name: Windows
 # Separator, encoding, line-ending and path-conversion regressions show up here
 # before a Windows user hits them (#701, #713, #752, #753).
 #
-# One job, a required check: "windows suites + smoke runs". Every suite step
-# and smoke step runs even when an earlier one fails (`!cancelled()`), and -ra
-# lists every skip and failure, so one log read shows it all. The suites run on
+# Four parallel matrix legs (#938), each on its own windows-latest runner with
+# the same setup: assess (the fleet golden run and skills/assess pytest),
+# scripts-contract (scripts/ pytest and plugin contract pytest), ghsync (the
+# ghsync/ghreport suites behind the #971 path gate) and smoke (the CRLF check,
+# standalone ZIPs, eval scaffolds and the smoke runs). fail-fast is off, so one
+# red leg does not cancel the others. Branch protection requires only the
+# aggregator job, "windows suites + smoke runs": it always runs (`always()`)
+# and passes only when the matrix result is success, so a failed, cancelled or
+# skipped leg turns it red. No leg is skipped at job level; the ghsync gate is
+# a step inside its leg, so that leg still reports success when it skips.
+#
+# Within a leg every suite step and smoke step runs even when an earlier one
+# fails (`!cancelled()`), and -ra lists every skip and failure, so one log read
+# per leg shows it all. The suites run on
 # every core with pytest-xdist (`-n auto --dist loadfile`: one file per worker,
 # so cross-file state, #831, cannot interleave), added with `--with` so the lockfiles
 # and the serial Linux jobs are unchanged. Serial, the job took over an hour.
@@ -31,10 +42,14 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: windows suites + smoke runs
+  suites:
+    name: windows / ${{ matrix.suite }}
     runs-on: windows-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [assess, scripts-contract, ghsync, smoke]
     steps:
       # Without this, checkout converts every text file to CRLF and fixture
       # byte and line counts stop matching the Linux goldens. The step "Shell
@@ -94,6 +109,7 @@ jobs:
       # conversion really ran. The bytes are read in Python: Git for Windows'
       # grep strips CR before matching, so `grep $'\r'` never finds one.
       - name: Shell scripts are LF in a CRLF checkout
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         run: |
           crlf="$RUNNER_TEMP/crlf-clone"
@@ -118,12 +134,12 @@ jobs:
       # (tests/fixtures/fleet_golden/repos.jsonl): field-level differences are
       # listed by dotted path, then the bytes (LF endings) are compared.
       - name: Fleet golden run against the committed Linux repos.jsonl
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'assess' }}
         run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider tests/test_fleet_golden.py
         working-directory: skills/assess
 
       - name: skills/assess pytest
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'assess' }}
         run: >-
           uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
@@ -131,7 +147,7 @@ jobs:
         working-directory: skills/assess
 
       - name: scripts/ pytest
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'scripts-contract' }}
         run: >-
           uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
           pytest -ra -p no:cacheprovider -n auto --dist loadfile
@@ -141,7 +157,7 @@ jobs:
       # bash, and tests/gitbash.py resolves it on PATH (from PowerShell, `bash`
       # can be the WSL launcher in System32).
       - name: plugin contract pytest
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'scripts-contract' }}
         shell: bash
         run: >-
           uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
@@ -149,12 +165,13 @@ jobs:
           --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
 
       # The ghsync/ghreport suites take about 12 minutes and test only these
-      # paths (#971). A step-level gate, not a workflow `paths:` filter: the
-      # job is a required check and must always report. A push to main always
-      # runs them; so does a PR whose diff cannot be computed.
+      # paths (#971). A step-level gate, not a workflow `paths:` filter or a
+      # job-level `if:`: the required aggregator must always report, and it
+      # treats a skipped leg as a failure. A push to main always runs them; so
+      # does a PR whose diff cannot be computed.
       - name: Decide whether the ghsync and ghreport suites run
         id: ghsync_gate
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'ghsync' }}
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -186,7 +203,7 @@ jobs:
           fi
 
       - name: ghsync and ghreport suites under Git Bash
-        if: ${{ !cancelled() && steps.ghsync_gate.outputs.run != 'false' }}
+        if: ${{ !cancelled() && matrix.suite == 'ghsync' && steps.ghsync_gate.outputs.run != 'false' }}
         shell: bash
         run: >-
           uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
@@ -194,7 +211,7 @@ jobs:
           tests/test_ghsync*.py tests/test_ghreport*.py
 
       - name: Standalone skill ZIPs
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         run: |
           dest=$(mktemp -d)
@@ -203,7 +220,7 @@ jobs:
           compgen -G "$dest/*.zip" >/dev/null
 
       - name: Eval scaffolds build their fixtures
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         run: |
           while IFS= read -r -d '' s; do
@@ -220,7 +237,7 @@ jobs:
       # separator shows up as a failed scan or a garbled report.
 
       - name: Smoke fixture estate
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         run: |
           for r in widget gadget; do
@@ -235,7 +252,7 @@ jobs:
           find "$RUNNER_TEMP/estate" -name '*-main' -type d
 
       - name: Smoke assess_signals.py
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         working-directory: skills/assess
         run: |
@@ -250,7 +267,7 @@ jobs:
           ' "$RUNNER_TEMP/signals.json"
 
       - name: Smoke assess_core.py
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         working-directory: skills/assess
         run: |
@@ -269,7 +286,7 @@ jobs:
           ' "$co" "$RUNNER_TEMP/report.md"
 
       - name: Smoke fleet.py over a ghsync-layout root
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         working-directory: skills/assess
         run: |
@@ -279,7 +296,7 @@ jobs:
             "$RUNNER_TEMP/fleet-root/repos.jsonl" acme/gadget acme/widget
 
       - name: Smoke fleet.py --from-list
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         working-directory: skills/assess
         run: |
@@ -296,7 +313,7 @@ jobs:
       # with a passing kill test, verifier results and the provenance token, so
       # both gates open. A run with no record must be refused by both.
       - name: Smoke start_gate.py and complete_gate.py
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
         run: |
           dir=tests/fixtures/windows_smoke/contract
@@ -309,3 +326,21 @@ jobs:
             echo "complete gate passed a run with no record"; exit 1
           fi
           echo "both gates open for smoke and refuse no-such-run"
+
+  # The required check. `always()` makes it report on every run, including one
+  # where a leg failed or was cancelled; the result test makes it pass only
+  # when every leg succeeded. needs.suites.result is success only if all four
+  # legs are; failure, cancelled and skipped all fail here.
+  windows:
+    name: windows suites + smoke runs
+    needs: suites
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every Windows leg passed
+        env:
+          RESULT: ${{ needs.suites.result }}
+        run: |
+          echo "windows matrix result: $RESULT"
+          [ "$RESULT" = "success" ]
