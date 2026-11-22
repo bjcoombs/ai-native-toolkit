@@ -1728,7 +1728,7 @@ null_means = "null when no import crosses a package boundary"
 [[entries]]
 id = "core:ci_checks.lint_runs"
 kind = "signal"
-title = "A CI line runs a linter on ordinary changes and can fail its job"
+title = "A CI line runs a linter on ordinary changes and can stop its job"
 collector = "core.ci_checks"
 path = "ci_checks.lint_runs"
 type = "bool"
@@ -1776,7 +1776,7 @@ evidence = "head_structure"
 [[entries]]
 id = "core:ci_checks.enforced_check_runs"
 kind = "signal"
-title = "A CI check runs on ordinary changes and can fail its job"
+title = "A CI check runs on ordinary changes and can stop its job"
 collector = "core.ci_checks"
 path = "ci_checks.enforced_check_runs"
 type = "bool"
@@ -1978,7 +1978,7 @@ fix = "Split the largest files along their natural seams."
 [[entries]]
 id = "core.cond.layer-5-ci.1.enforced_check_runs"
 kind = "condition"
-title = "CI runs your tests or linters, and a failure fails the job"
+title = "CI runs your tests or linters, and an error stops the job"
 key = "layer-5-ci.1:ci_checks.enforced_check_runs"
 fix = "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure."
 
@@ -2082,7 +2082,7 @@ headless = "unregistered"
 [[entries]]
 id = "core.finding.lying_map"
 kind = "finding"
-title = "Lying map"
+title = "Stale doc over complex code"
 name = "lying_map"
 order = 1
 action = "fix or delete the doc"
@@ -2098,7 +2098,7 @@ kind = "finding"
 title = "Unexplained complexity"
 name = "unexplained_complexity"
 order = 2
-action = "write the missing contract (do NOT auto-generate)"
+action = "write the contract the code needs (do NOT auto-generate)"
 mode = "characterize_first"
 concern = true
 inputs = ["documentation.unexplained_complexity"]

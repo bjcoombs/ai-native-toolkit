@@ -1,10 +1,14 @@
 # Next steps: `grpa`
 
-Maturity model `next-steps-fixture-1`. 3 repositories: 2 scanned, 1 failed.
+In place: 0 of 7 rows at the top level and 2 at level 1 or above, across 3 repositories.
+
+Maturity model `next-steps-fixture-1`. 3 repositories: 2 scanned, 1 could not be scanned.
 
 Each numbered step is one change: take or leave it on its own. "Done when" is checkable in the repository or its platform settings; the re-run check is optional.
 
 ## Levels
+
+In place: 3 of 7 rows measured for this group, each with the roll-up rule it uses.
 
 | Row | Level | Roll-up |
 |-----|-------|---------|
@@ -18,7 +22,9 @@ Each numbered step is one change: take or leave it on its own. "Done when" is ch
 
 ## Group settings
 
-Level 1 of 2. To reach level 2:
+In place: level 1 of 2.
+
+To reach level 2:
 
 1. **Set the group's push rules to `on`.**
    - Done when: The group settings page shows the push rules as `on`.
@@ -28,14 +34,14 @@ Level 1 of 2. To reach level 2:
 
 ## Agent instructions
 
-Level unknown (between 0 and 1 of 2). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
+In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 2 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
-- `agent_environment.check.named_total`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
-- `nested_instructions.budget.claude_code.bytes`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
-- `nested_instructions.budget.claude_code.lines`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
-- Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
+- `agent_environment.check.named_total`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
+- `nested_instructions.budget.claude_code.bytes`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
+- `nested_instructions.budget.claude_code.lines`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
+- Repositories whose own level is undetermined (1): `grpa/svc3` (scan did not complete: `scan_timeout`).
 
-Measured unmet criteria already cap the group at level 1, whatever the missing signals show. Toward level 2:
+Measured unmet criteria already cap the group at level 1, whatever the signals not measured yet show. Toward level 2:
 
 1. **Name the command an agent runs to check its work (for example `make check` or `npm test`) in the agent instruction file.**
    - Done when: `CLAUDE.md` or `AGENTS.md` names a check command that exists in the repository (a Makefile target, a package script or a committed script).
@@ -48,43 +54,47 @@ Measured unmet criteria already cap the group at level 1, whatever the missing s
 
 ## Coverage \| mutation
 
-Level 1 of 2. To reach level 2: 0 of 3 repositories already there; the rule needs 2.
+In place: level 1 of 2; 0 of 3 repositories already at level 2.
+
+To reach level 2: the rule needs 2.
 
 1. **Run mutation testing against the test suite.**
    - Done when: A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a run of it completes.
    - Re-run check (optional): the next fleet run reads `test_pressure.mutation_run` = true.
    - Holding the group back (2): `grpa/svc1` (now false), `grpa/svc2` (now false).
 
-Below level 2 with no unmet criterion found, because a signal was not measured (1): `grpa/svc3` (scan failed: `scan_timeout`).
+Below level 2 with no unmet criterion found, because a signal was not measured (1): `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Runtime legibility
 
-Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
+In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `observability.rung`: not measured in 3 of 3 repositories. Read from committed files by a full `/assess` run and a headless scan alike; unavailable when the scan raised (`scan_failed`) or the scan came from an older toolkit, which measured it in a full run only.
-- Repositories whose own level is undetermined (3): `grpa/svc1`, `grpa/svc2`, `grpa/svc3` (scan failed: `scan_timeout`).
+- Repositories whose own level is undetermined (3): `grpa/svc1`, `grpa/svc2`, `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Agent permissions
 
-Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
+In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
-- `agent_ops.summary.permissions_encoded`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
-- Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
+- `agent_ops.summary.permissions_encoded`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
+- Repositories whose own level is undetermined (1): `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Shared tooling
 
-Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
+In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
-- `shared_tooling.available`: not measured in 1 of 3 repositories. The repository scan failed in each of them; the reason token is listed below.
-- Repositories whose own level is undetermined (1): `grpa/svc3` (scan failed: `scan_timeout`).
+- `shared_tooling.available`: not measured in 1 of 3 repositories. The repository scan did not complete in each of them; the reason token is listed below.
+- Repositories whose own level is undetermined (1): `grpa/svc3` (scan did not complete: `scan_timeout`).
 
 ## Agent environment
 
-Level 0 of 1. To reach level 1: 1 of 3 repositories already there; the rule needs 3.
+In place: level 0 of 1; 1 of 3 repositories already at level 1.
+
+To reach level 1: the rule needs 3.
 
 1. **Name a check command that resolves (a Makefile target, a package script or a committed script) in the agent instruction file.**
    - Done when: `CLAUDE.md` or `AGENTS.md` names a check command that exists in the repository.
    - Re-run check (optional): the next fleet run reads `agent_environment.layer5_cap.applies` = false.
    - Holding the group back (1): `grpa/svc2` (now true; unmet: `check_named`).
 
-Below level 1 with no unmet criterion found, because a signal was not measured (1): `grpa/svc3` (scan failed: `scan_timeout`).
+Below level 1 with no unmet criterion found, because a signal was not measured (1): `grpa/svc3` (scan did not complete: `scan_timeout`).

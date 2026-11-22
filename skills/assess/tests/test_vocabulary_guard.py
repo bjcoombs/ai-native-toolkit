@@ -1,0 +1,139 @@
+"""The banned-vocabulary guard (issue #743, parent #740): ``lib/vocabulary.py``.
+
+Renders the user-facing outputs from source, never from a committed golden, so an edit to
+any string that reaches them is caught here: a real fleet run with the shipped maturity
+model (``report.md``, every diagram, the heat map, the team next-steps pages), the
+in-repo diagram, trend, heat map and next-steps fixtures, and the /assess deterministic
+report with every cross-layer finding rendered. It fails when a banned word or a retired
+band label appears in the prose, naming the word, the output and the line, and when a
+section of ``report.md`` or a next-steps page does not open with ``In place:``.
+
+    cd skills/assess && uv run --locked pytest tests/test_vocabulary_guard.py
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+
+import fleet_diagrams_fixture
+import fleet_trends_fixture
+from assess_report import render_report
+from lib import keyhole_signals as ks
+from lib.level_signals import DEFAULT_LEVELS
+from lib.vocabulary import BANNED_WORDS, IN_PLACE, RETIRED_LABELS, banned_hits, opening_lines, prose
+from test_decomposition_parity import _build_parity_fixture
+from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
+from test_fleet_heatmap import FIXTURES as HEATMAP_FIXTURES
+from test_fleet_heatmap import cli as heatmap_cli
+from test_fleet_next_steps import _pages as next_steps_pages
+from test_fleet_next_steps import cli as next_steps_cli
+
+README = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "README.md"
+_SVG_TEXT = re.compile(r"<(text|title)\b[^>]*>(.*?)</\1>", re.S)
+
+
+def _svg_prose(svg: str) -> str:
+    return "\n".join(re.sub(r"<[^>]+>", " ", body) for _, body in _SVG_TEXT.findall(svg))
+
+
+@pytest.fixture(scope="module")
+def fleet_out(froot: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:  # noqa: F811
+    """A real fleet run with diagrams, then the heat map and the next-steps pages on it."""
+    base = tmp_path_factory.mktemp("vocabulary")
+    out = base / "out"
+    assert fleet_cli.main([str(froot), "--levels", str(DEFAULT_LEVELS), "--history-dir",
+                           str(base / "history"), "--out", str(out)]) == 0
+    assert heatmap_cli.main([str(out), "--levels", str(DEFAULT_LEVELS)]) == 0
+    assert next_steps_cli.main([str(out), "--levels", str(DEFAULT_LEVELS)]) == 0
+    return out
+
+
+@pytest.fixture(scope="module")
+def outputs(fleet_out: Path, tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
+    """Every rendered output as ``{name: prose-bearing text}``."""
+    rendered: dict[str, str] = {}
+    for path in sorted(fleet_out.rglob("*.md")):
+        rendered[f"fleet run: {path.relative_to(fleet_out).as_posix()}"] = path.read_text(encoding="utf-8")
+    for path in sorted(fleet_out.glob("*.svg")):
+        rendered[f"fleet run: {path.name}"] = _svg_prose(path.read_text(encoding="utf-8"))
+    for name, content in fleet_diagrams_fixture.goldens(fleet_diagrams_fixture.FIXTURES).items():
+        rendered[f"diagrams fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
+    for name, content in fleet_trends_fixture.goldens(fleet_trends_fixture.FIXTURES).items():
+        rendered[f"trends fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
+    base = tmp_path_factory.mktemp("vocabulary-fixtures")
+    for name, extra in (("heatmap.svg", []), ("heatmap-compare.svg", ["--compare", str(HEATMAP_FIXTURES / "earlier")])):
+        target = base / name
+        assert heatmap_cli.main([str(HEATMAP_FIXTURES), "--levels", str(HEATMAP_FIXTURES / "levels.toml"),
+                                 "--output", str(target), *extra]) == 0
+        rendered[f"heat map fixture: {name}"] = _svg_prose(target.read_text(encoding="utf-8"))
+    for name, page in next_steps_pages(base / "next-steps").items():
+        rendered[f"next-steps fixture: {name}"] = page
+    from assess_core import build_and_publish_run
+    repo = _build_parity_fixture(base / "repo")
+    rendered["assess report"] = render_report(build_and_publish_run(repo_root=repo, run_date="2026-01-01"), "r")
+    every = ks.assemble_findings({name: ["src/a.py"] for name in ks.FINDING_ORDER})
+    rendered["assess findings"] = ks.render_findings_markdown(every, [])
+    concerns = [{"name": name, "count": 1} for name in ks.FINDING_ORDER]
+    rendered["assess keyhole summary"] = ks._format_summary(concerns, 2)  # type: ignore[arg-type]
+    return rendered
+
+
+def test_no_banned_word_or_retired_label_in_rendered_prose(outputs: dict[str, str]) -> None:
+    hits = [f"{term!r} in {name}, line {line}: {text}"
+            for name, content in outputs.items() for term, line, text in banned_hits(content)]
+    assert not hits, "banned vocabulary (lib/vocabulary.py) in rendered output:\n" + "\n".join(hits)
+
+
+def test_every_fleet_report_and_next_steps_section_opens_with_what_is_in_place(
+        outputs: dict[str, str]) -> None:
+    pairs = []
+    for name, content in outputs.items():
+        if name.endswith("report.md"):
+            pairs += [(name, h, first) for h, first in opening_lines(content, "##")]
+        elif "teams" in name or name.startswith("next-steps fixture"):
+            pairs += [(name, h, first) for h, first in opening_lines(content)]
+    assert len(pairs) > 20
+    missing = [f"{name}: {heading!r} opens with {first!r}" for name, heading, first in pairs
+               if not first.startswith(f"{IN_PLACE} ")]
+    assert not missing, f"sections that do not open with {IN_PLACE!r}:\n" + "\n".join(missing)
+
+
+def test_the_guard_reads_the_shipped_fleet_report_sections(fleet_out: Path) -> None:
+    """The real run's report has the credit section and every diagram section."""
+    headings = [h for h, _ in opening_lines((fleet_out / "report.md").read_text(encoding="utf-8"), "##")]
+    assert "## What changed and who earned it" in headings and len(headings) >= 6
+
+
+def test_the_readme_documents_exactly_the_banned_list() -> None:
+    text = README.read_text(encoding="utf-8")
+    section = text.split("\n**`vocabulary.py`**\n", 1)[1].split("\n### ", 1)[0]
+    listed = re.findall(r"^\| `([^`]+)` \|", section, flags=re.M)
+    assert listed == [*BANNED_WORDS, *RETIRED_LABELS]
+    assert "tests/test_vocabulary_guard.py" in section and IN_PLACE in section
+
+
+@pytest.mark.parametrize(("text", "found"), [
+    ("Structure reads tangled.", ["tangled"]),
+    ("A Lying map.", ["lying"]),
+    ("Rows say Missing.", ["missing"]),
+    ("Score 7 / 8 - AI-Native", ["AI-Native"]),
+    ("a failure", ["failure"]),
+    ("`instruction_claims.failed` and `fail_under` stay", []),
+    ("coverage_gate.fail_under stays", []),
+    ("```\nfailed\n```", []),
+    ("at least 50 percent", []),
+])
+def test_banned_hits_reads_prose_only(text: str, found: list[str]) -> None:
+    assert [term for term, _, _ in banned_hits(text)] == found
+
+
+def test_prose_blanks_code_and_identifiers() -> None:
+    assert "lying" not in prose("`lying_map` and lying_map")
+
+
+def test_opening_lines_pairs_each_heading_with_its_first_line() -> None:
+    page = "# T\n\nIn place: a.\n\n## A\n\n### B\n\nx\n## C\n"
+    assert opening_lines(page) == [("# T", "In place: a."), ("## A", ""), ("### B", "x"), ("## C", "")]
+    assert opening_lines(page, "##") == [("## A", ""), ("## C", "")]

@@ -5,7 +5,9 @@ model it used) into a list of ``Diagram`` entries, each either an SVG or the
 one-line reason it was skipped. ``report_markdown`` renders ``report.md``: the
 "What changed and who earned it" section first when given (``lib/fleet_credit.py``), then one
 section per diagram, the SVG embedded with a relative, clickable image link,
-or the skip reason in its place. ``write_diagrams`` writes the SVGs and the
+or the skip reason in its place. Every ``## `` section opens with a line starting
+``In place:`` (``lib/vocabulary.IN_PLACE``, #743) that says what this run already has
+before the question and any next step. ``write_diagrams`` writes the SVGs and the
 report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
 ``clear_diagrams`` removes them all (``fleet.py --no-diagrams``).
@@ -27,6 +29,7 @@ from typing import TypedDict
 
 from lib import (fleet_layer_bars, fleet_maturity, fleet_quadrant, fleet_slope, fleet_tooling_map,
                  fleet_trends)
+from lib.vocabulary import IN_PLACE
 from lib.fleet import FleetRow
 from lib.fleet_compare import Comparison
 from lib.fleet_trends import TrendRun
@@ -36,12 +39,12 @@ REPORT_FILE = "report.md"
 # Each diagram's report heading and question, by file: the one source for a drawn
 # diagram, a skipped one and one whose renderer raised (#684).
 HEADINGS: dict[str, tuple[str, str]] = {
-    fleet_quadrant.FILE: ("Activity and maturity", "Which busy repositories are least mature?"),
+    fleet_quadrant.FILE: ("Activity and maturity", "Which busy repositories have the most room to grow?"),
     fleet_tooling_map.FILE: ("Shared tooling",
-                             "What breaks if a shared template changes, and who drifted off it?"),
+                             "What does a shared template change reach, and which pins differ from the fleet's?"),
     fleet_trends.FILE: ("Group trends", "Is each team improving?"),
     fleet_slope.FILE: ("Before and after", "What moved since the earlier run, and which row moved it?"),
-    fleet_layer_bars.FILE: ("Maturity by layer", "Which layer is the org-wide weak spot?"),
+    fleet_layer_bars.FILE: ("Maturity by layer", "Which layer has the most room to grow across the fleet?"),
 }
 
 
@@ -54,6 +57,7 @@ class Diagram(TypedDict):
     question: str
     svg: str | None  # None when skipped
     skipped: str | None  # the one-line reason, when skipped
+    in_place: str  # the section's opening line: what this run already has (#743)
 
 
 NO_LEVELS = "skipped: the run had no maturity model (--levels), so no levels."
@@ -62,10 +66,16 @@ NO_TEAM_ROWS = "skipped: the maturity model has no team rows to measure maturity
 NO_REPOS = "skipped: no repositories in the run."
 
 
-def _entry(file: str) -> Diagram:
-    """A diagram entry with the file's heading, not yet drawn or skipped."""
+def _repos(count: int) -> str:
+    return f"{count} repository" if count == 1 else f"{count} repositories"
+
+
+def _entry(file: str, repos: int = 0) -> Diagram:
+    """A diagram entry with the file's heading, not yet drawn or skipped; its opening line says
+    what the run holds until a drawn diagram states more."""
     title, question = HEADINGS[file]
-    return {"file": file, "title": title, "question": question, "svg": None, "skipped": None}
+    return {"file": file, "title": title, "question": question, "svg": None, "skipped": None,
+            "in_place": f"{IN_PLACE} {_repos(repos)} in this run, scanned with no model call."}
 
 
 def _has_team_rows(levels: MaturityModel) -> bool:
@@ -73,7 +83,7 @@ def _has_team_rows(levels: MaturityModel) -> bool:
 
 
 def _quadrant(levels: MaturityModel | None, repos: Sequence[FleetRow], window: str) -> Diagram:
-    entry = _entry(fleet_quadrant.FILE)
+    entry = _entry(fleet_quadrant.FILE, len(repos))
     if levels is None:
         entry["skipped"] = NO_LEVELS
     elif not _has_team_rows(levels):
@@ -81,22 +91,33 @@ def _quadrant(levels: MaturityModel | None, repos: Sequence[FleetRow], window: s
     elif not repos:
         entry["skipped"] = NO_REPOS
     else:
-        entry["svg"] = fleet_quadrant.render_quadrant(fleet_quadrant.repo_points(levels, repos), window)
+        points = fleet_quadrant.repo_points(levels, repos)
+        measured = [p for p in points if p["maturity"] is not None]
+        half = sum(1 for p in measured if (p["maturity"] or 0.0) >= 0.5)
+        entry["in_place"] = (f"{IN_PLACE} {_repos(len(measured))} with a measured level, {half} of them "
+                             "at or above half the top level.")
+        entry["svg"] = fleet_quadrant.render_quadrant(points, window)
     return entry
 
 
 def _tooling(repos: Sequence[FleetRow]) -> Diagram:
-    entry = _entry(fleet_tooling_map.FILE)
+    entry = _entry(fleet_tooling_map.FILE, len(repos))
     if not repos:
         entry["skipped"] = NO_REPOS
     else:
-        entry["svg"] = fleet_tooling_map.render_tooling_map(fleet_tooling_map.tooling_view(repos))
+        view = fleet_tooling_map.tooling_view(repos)
+        sharing = len({link["repo"] for link in view["links"]})
+        items = len({link["item"] for link in view["links"]})
+        entry["in_place"] = (f"{IN_PLACE} {_repos(sharing)} share {items} CI "
+                             f"{'source or marketplace' if items == 1 else 'sources and marketplaces'}.")
+        entry["svg"] = fleet_tooling_map.render_tooling_map(view)
     return entry
 
 
-def _slope(levels: MaturityModel | None, comparison: Comparison | None) -> Diagram:
-    entry = _entry(fleet_slope.FILE)
+def _slope(levels: MaturityModel | None, comparison: Comparison | None, repos: int) -> Diagram:
+    entry = _entry(fleet_slope.FILE, repos)
     if comparison is None:
+        entry["in_place"] = f"{IN_PLACE} this run, the baseline a later comparison starts from."
         entry["skipped"] = ("skipped: no earlier run compared (no --compare, or no history entry "
                             "matched this run).")
     elif not comparison["comparable"]:
@@ -108,7 +129,10 @@ def _slope(levels: MaturityModel | None, comparison: Comparison | None) -> Diagr
         entry["skipped"] = NO_TEAM_ROWS
     else:
         view = fleet_slope.slope_view(levels, comparison)
-        if not fleet_slope.plotted(view):
+        paired = len(fleet_slope.plotted(view))
+        entry["in_place"] = (f"{IN_PLACE} {paired} {'group' if paired == 1 else 'groups'} with a known "
+                             "level in both runs.")
+        if not paired:
             entry["skipped"] = "skipped: no group has a team row with a known level in both runs."
         else:
             entry["svg"] = fleet_slope.render_slope(view)
@@ -116,7 +140,7 @@ def _slope(levels: MaturityModel | None, comparison: Comparison | None) -> Diagr
 
 
 def _layer_bars(levels: MaturityModel | None, repos: Sequence[FleetRow]) -> Diagram:
-    entry = _entry(fleet_layer_bars.FILE)
+    entry = _entry(fleet_layer_bars.FILE, len(repos))
     if levels is None:
         entry["skipped"] = NO_LEVELS
     elif not _has_team_rows(levels):
@@ -125,20 +149,29 @@ def _layer_bars(levels: MaturityModel | None, repos: Sequence[FleetRow]) -> Diag
         entry["skipped"] = NO_REPOS
     else:
         org = [row["title"] for row in levels["rows"] if row["scope"] == "org"]
-        entry["svg"] = fleet_layer_bars.render_layer_bars(
-            fleet_layer_bars.layer_bars(levels, repos), org)
+        bars = fleet_layer_bars.layer_bars(levels, repos)
+        started = sum(1 for bar in bars if sum(bar["counts"][1:]))
+        entry["in_place"] = (f"{IN_PLACE} {started} of {len(bars)} team rows have at least one "
+                             "repository at level 1 or above.")
+        entry["svg"] = fleet_layer_bars.render_layer_bars(bars, org)
     return entry
 
 
-def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None) -> Diagram:
-    entry = _entry(fleet_trends.FILE)
+def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None, repos: int) -> Diagram:
+    entry = _entry(fleet_trends.FILE, repos)
     if levels is None:
         entry["skipped"] = NO_LEVELS
-    elif not _has_team_rows(levels):
+        return entry
+    if not _has_team_rows(levels):
         entry["skipped"] = NO_TEAM_ROWS
-    elif history is None:
+        return entry
+    if history is None:
         entry["skipped"] = NO_HISTORY
-    elif len(shown := fleet_trends.share_runs(history)) < fleet_trends.MIN_RUNS:
+        return entry
+    shown = fleet_trends.share_runs(history)
+    entry["in_place"] = (f"{IN_PLACE} {len(shown)} comparable dated "
+                         f"{'run' if len(shown) == 1 else 'runs'} in the history.")
+    if len(shown) < fleet_trends.MIN_RUNS:
         hidden = fleet_trends.hidden_note(history)
         entry["skipped"] = (f"skipped: {len(shown)} comparable dated run(s), the trend needs at least "
                             f"{fleet_trends.MIN_RUNS} (same window, scans and output mode, with a maturity model"
@@ -148,14 +181,14 @@ def _trend(levels: MaturityModel | None, history: Sequence[TrendRun] | None) -> 
     return entry
 
 
-def _guarded(build: Callable[[], Diagram], file: str) -> Diagram:
+def _guarded(build: Callable[[], Diagram], file: str, repos: int) -> Diagram:
     """One diagram; a renderer that raises becomes a skip line naming the error class, so one
     broken picture never costs the others, the report or the run."""
     try:
         return build()
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
-        entry = _entry(file)
-        entry["skipped"] = f"skipped: drawing failed ({type(e).__name__})."
+        entry = _entry(file, repos)
+        entry["skipped"] = f"skipped: the renderer raised {type(e).__name__}."
         return entry
 
 
@@ -168,12 +201,13 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
     (``fleet_trends.history_runs`` and ``series_runs``); None when no history was read.
     ``comparison`` is this run's ``--compare`` result, None without ``--compare``.
     """
+    count = len(repos)
     return [
-        _guarded(lambda: _quadrant(levels, repos, window), fleet_quadrant.FILE),
-        _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE),
-        _guarded(lambda: _trend(levels, history), fleet_trends.FILE),
-        _guarded(lambda: _slope(levels, comparison), fleet_slope.FILE),
-        _guarded(lambda: _layer_bars(levels, repos), fleet_layer_bars.FILE),
+        _guarded(lambda: _quadrant(levels, repos, window), fleet_quadrant.FILE, count),
+        _guarded(lambda: _tooling(repos), fleet_tooling_map.FILE, count),
+        _guarded(lambda: _trend(levels, history, count), fleet_trends.FILE, count),
+        _guarded(lambda: _slope(levels, comparison, count), fleet_slope.FILE, count),
+        _guarded(lambda: _layer_bars(levels, repos), fleet_layer_bars.FILE, count),
     ]
 
 
@@ -190,7 +224,7 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
     if credit is not None:
         lines += [credit.rstrip("\n"), ""]
     for diagram in diagrams:
-        lines += [f"## {diagram['title']}", "", diagram["question"], ""]
+        lines += [f"## {diagram['title']}", "", diagram["in_place"], "", diagram["question"], ""]
         if diagram["svg"] is not None:
             lines.append(f"[![{diagram['title']}](./{diagram['file']})](./{diagram['file']})")
         else:

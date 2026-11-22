@@ -17,7 +17,9 @@ model, before the diagrams, so the report opens on credit and the next step:
 4. **Targets**, when a targets file was given: met, or the distance (in levels for a
    level target, in share of top level for a share target).
 
-Every line is phrased as credit or as a next step. Deterministic; no date.
+The section opens with a line starting ``In place:`` (``lib/vocabulary.IN_PLACE``, #743)
+that says what is already earned or held before any next step. Every line is phrased as
+credit or as a next step. Deterministic; no date.
 """
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ from lib.fleet_achievements import KINDS, REPO_VIEW, Achievements, NextStep, Tar
 from lib.fleet_next_steps import code, text
 from lib.fleet_rescore import NOW_MEASURED, UP
 from lib.levels import MaturityModel
+from lib.vocabulary import IN_PLACE
 
 TITLE = "What changed and who earned it"
 PER_KIND = 20
@@ -45,9 +48,19 @@ def _intro(doc: Achievements) -> str:
     if doc["recount"] is not None:
         rule += " The Recount below lists the moves the rule change caused."
     if len(doc["runs"]) < 2:
-        return f"This run is the starting line ({doc['note'] or 'no earlier comparable run'}). {rule}"
+        return f"This run is the starting line: {doc['note'] or 'no earlier comparable run'}. {rule}"
     return (f"Since {code(doc['runs'][-2])}, over {len(doc['runs'])} comparable runs in this fleet's "
             f"history. {rule}")
+
+
+def _in_place(doc: Achievements) -> str:
+    mine = sum(1 for a in doc["achievements"] if a["run"] == doc["run"])
+    if mine:
+        return f"{IN_PLACE} {mine} {'achievement' if mine == 1 else 'achievements'} earned this run."
+    if len(doc["runs"]) < 2:
+        return f"{IN_PLACE} this run's levels, the starting line later runs are credited from."
+    return (f"{IN_PLACE} {len(doc['runs'])} comparable runs in this fleet's history; nothing new "
+            "earned this run.")
 
 
 def _earned(doc: Achievements) -> list[str]:
@@ -137,7 +150,7 @@ def credit_section(doc: Achievements, model: MaturityModel | None) -> str:
     rows = model["rows"] if model is not None else []
     order = {row["id"]: i for i, row in enumerate(rows)}
     titles = {row["id"]: row["title"] for row in rows}
-    lines = [f"## {TITLE}", "", _intro(doc), "", "### Earned this run", "", *_earned(doc), "",
+    lines = [f"## {TITLE}", "", _in_place(doc), "", _intro(doc), "", "### Earned this run", "", *_earned(doc), "",
              *_recount(doc), "### Next level-ups", "", *_steps(doc, order), ""]
     if doc["targets"]:
         lines += ["### Targets", "", *(_target(t, titles) for t in doc["targets"]), ""]

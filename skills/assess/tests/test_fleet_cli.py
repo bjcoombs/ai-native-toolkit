@@ -214,8 +214,8 @@ def test_a_raising_renderer_keeps_exit_0_and_the_history(froot, tmp_path, monkey
     assert sorted(p.name for p in (tmp_path / "hist").glob("*/*/*")) == [
         "fleet-data.json", "groups.jsonl", "repos.jsonl", "run.json"]
     report = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
-    assert "Not drawn: skipped: drawing failed (RuntimeError)." in report
-    assert "shared-tooling.svg skipped: drawing failed (RuntimeError)." in capsys.readouterr().err
+    assert "Not drawn: skipped: the renderer raised RuntimeError." in report
+    assert "shared-tooling.svg skipped: the renderer raised RuntimeError." in capsys.readouterr().err
 
 
 def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, monkeypatch, capsys):

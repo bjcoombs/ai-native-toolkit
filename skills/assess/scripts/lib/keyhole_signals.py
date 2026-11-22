@@ -978,9 +978,8 @@ def render_findings_markdown(
 # Display-name overrides for finding identifiers whose naive underscore->space
 # form reads wrong (compound adjectives need a hyphen). Names not listed here
 # fall back to a plain underscore->space replace in ``finding_display_name``.
-FINDING_DISPLAY_NAMES = {
-    "self_referential_tests": "self-referential tests",
-}
+FINDING_DISPLAY_NAMES = {"self_referential_tests": "self-referential tests",
+                         "lying_map": "stale doc over complex code"}  # supportive wording (#743)
 
 
 def finding_display_name(name: str) -> str:

@@ -38,4 +38,4 @@ _No prior run to compare against - this is the first recorded snapshot._
 
 ---
 
-_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer verdicts and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._

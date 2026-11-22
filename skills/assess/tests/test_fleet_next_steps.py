@@ -163,16 +163,16 @@ def test_every_row_below_top_names_an_unmet_criterion_and_its_repositories(tmp_p
     assert checked >= 5
 
 
-def test_unknown_names_missing_signals_and_never_reads_as_failure(tmp_path):
+def test_unknown_names_unmeasured_signals_and_reads_as_a_measurement_gap(tmp_path):
     page = _pages(tmp_path)["teams/grpa.md"]
     section = page.split("## Runtime legibility\n", 1)[1].split("\n## ", 1)[0]
-    assert "not a failure" in section
+    assert section.startswith("\nIn place: ") and "This is a measurement gap:" in section
     assert "`observability.rung`: not measured in 3 of 3 repositories" in section
-    assert "`grpa/svc3` (scan failed: `scan_timeout`)" in section
+    assert "`grpa/svc3` (scan did not complete: `scan_timeout`)" in section
     assert "Holding the group back" not in section
     instructions = page.split("## Agent instructions\n", 1)[1].split("\n## ", 1)[0]
-    assert "Level unknown (between 0 and 1 of 2)" in instructions
-    assert "The repository scan failed in each of them" in instructions
+    assert "In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 2 once measured)" in instructions
+    assert "The repository scan did not complete in each of them" in instructions
     assert "cap the group at level 1" in instructions and "`grpa/svc2` (now 340)" in instructions
     grpb = _pages(tmp_path / "b")["teams/grpb.md"]
     assert "No ghreport settings matched this group" in grpb
@@ -200,8 +200,8 @@ def test_non_token_values_print_as_set_never_in_clear(tmp_path):
 def test_failed_repository_below_target_is_listed_as_not_measured(tmp_path):
     page = _pages(tmp_path)["teams/grpa.md"]
     section = page.split("## Coverage \\| mutation\n", 1)[1].split("\n## ", 1)[0]
-    assert "0 of 3 repositories already there; the rule needs 2" in section
-    assert "`grpa/svc3` (scan failed: `scan_timeout`)" in section
+    assert "0 of 3 repositories already at level" in section and "the rule needs 2" in section
+    assert "`grpa/svc3` (scan did not complete: `scan_timeout`)" in section
 
 
 def test_unmapped_signal_falls_back_to_the_expression(tmp_path):
@@ -408,7 +408,7 @@ def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path): 
         for entry in group["levels"]:
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
             if entry["status"] == "unknown":
-                assert "not a failure" in section
+                assert "This is a measurement gap:" in section
             elif entry["level"] < tops[entry["id"]]:
                 assert "\n1. **" in section and "Holding the group back" in section
     assert "No repository-native wording" not in "".join(
