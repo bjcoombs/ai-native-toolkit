@@ -342,6 +342,7 @@ SETUP_TARGETS = frozenset({
     "install", "deps", "dependencies", "setup", "bootstrap", "clean", "help", "init",
     "build", "compile", "deploy", "release", "publish", "docs", "format", "fmt", "prepare",
     "start", "serve", "dev", "watch", "configure", "generate", "codegen", "package", "dist",
+    "upload", "migrate",
 })
 # Programs a wrapper may run that are known not to be a check (``docker run img echo hi``).
 _PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
@@ -547,7 +548,7 @@ def _check_verdict(words: list[str]) -> bool | None:
     program = _wrapped(words)
     if program is not None:
         verdict = _check_verdict(program)
-        if verdict is False and not _setup_name(program[0]) and program[0] not in _KNOWN_PROGRAMS:
+        if verdict is False and not _setup_program(program) and program[0] not in _KNOWN_PROGRAMS:
             return None   # uv run foo, npx foo, docker run img foo: a program this scan does not know
         return verdict
     if head == "deno" and _positionals(words[1:])[:1] == ["task"]:   # deno task foo: not read
@@ -576,3 +577,17 @@ def check_verdict(text: str) -> bool | None:
 # any other program reads null (#920).
 _KNOWN_PROGRAMS = (_PLAIN_PROGRAMS | frozenset(RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS
                    | LINT_PROGRAMS | TYPE_PROGRAMS)
+# Release, deploy and infrastructure tools: whatever they are asked, they run no check
+# (``bundle exec fastlane beta``, ``npx vercel --prod``).
+_DEPLOY_TOOLS = frozenset({
+    "fastlane", "twine", "wrangler", "changeset", "vercel", "netlify", "firebase", "serverless",
+    "sls", "cdk", "terraform", "pulumi", "semantic-release", "lerna", "gh", "aws", "gcloud", "az",
+})
+
+
+def _setup_program(program: list[str]) -> bool:
+    """A wrapped program that only sets up, builds or ships: a setup-named program or one of
+    its first two subcommands (``npx wrangler deploy``, ``npx prisma migrate deploy``,
+    ``npx playwright install``), or a deploy tool (``bundle exec fastlane beta``)."""
+    return (program[0] in _DEPLOY_TOOLS or _setup_name(program[0])
+            or any(_setup_name(w) for w in _positionals(program[1:])[:2]))

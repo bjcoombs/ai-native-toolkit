@@ -199,7 +199,7 @@ def test_scan_survives_a_repeated_package_manager_word(tmp_path: Path) -> None:
 @pytest.mark.parametrize("text", [
     "uv run foo", "poetry run foo", "npx foo", "pnpm exec foo", "yarn dlx foo", "bunx foo",
     "pipx run foo", "pipx run --spec foo==1 foo", "uvx foo", "bundle exec foo",
-    "uv run mkdocs build --strict",
+    "uv run mkdocs", "uv run locust -f load.py",
 ])
 def test_an_unknown_program_behind_a_wrapper_reads_null(text: str) -> None:
     """Unknown beats wrong: the wrapper runs a program whose checks are not read."""
@@ -212,6 +212,10 @@ def test_an_unknown_program_behind_a_wrapper_reads_null(text: str) -> None:
     ("uv run deploy", False), ("npx build-thing", False), ("uv run python -m build", False),
     ("npx eslint .", False), ("uv run echo hi", False),
     ("npx", False), ("uv run", False), ("pipx install foo", False),
+    # Deploy, publish and install lines behind a wrapper stay false (#924 review).
+    ("npx wrangler deploy", False), ("npx changeset publish", False), ("uvx twine upload", False),
+    ("npx playwright install --with-deps", False), ("npx prisma migrate deploy", False),
+    ("bundle exec fastlane beta", False), ("uv run mkdocs build --strict", False),
 ])
 def test_known_programs_behind_a_wrapper_stay_definite(text: str, expected: bool) -> None:
     assert check_verdict(text) is expected
