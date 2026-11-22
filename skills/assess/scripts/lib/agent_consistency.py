@@ -23,8 +23,8 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    canonical text for a file that imports or points to it):
    ``command``: a test or lint command (``check_command.is_check_command`` /
    ``is_lint_command``, including a bare inline ```pytest```) one system names
-   and another does not; ``threshold``: two systems stating different numbers
-   on a line naming ``coverage``, ``complexity`` or ``line length``.
+   and another does not; ``threshold``: two systems whose numbers on lines
+   naming ``coverage``, ``complexity`` or ``line length`` share none.
 
 ``conflicts`` (divergences, the level 1 signal of the ``agent-consistency``
 row) and ``unlinked`` (systems not linked, level 2) are null, and
@@ -38,7 +38,7 @@ from file text. Read-only, no network, no model.
 """
 from __future__ import annotations
 
-import os
+import posixpath
 import re
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
@@ -160,7 +160,7 @@ def thresholds(text: str) -> dict[str, set[float]]:
 
 def _rel_from(path: str, target: str) -> str:
     start = PurePosixPath(path).parent.as_posix() or "."
-    return PurePosixPath(os.path.relpath(target, start)).as_posix()
+    return posixpath.relpath(target, start)
 
 
 def pointer_line(system: str, path: str, canonical: str) -> str:
@@ -223,7 +223,10 @@ def _divergences(texts: dict[str, str]) -> list[Divergence]:
     stated = {s: thresholds(texts[s]) for s in systems}
     for key in THRESHOLD_KEYWORDS:
         values = {s: stated[s][key] for s in systems if key in stated[s]}
-        if len(values) >= 2 and len({frozenset(v) for v in values.values()}) > 1:
+        # A conflict only when two systems share no number: a stray figure on the
+        # line (an issue number, a second limit) beside the agreed one is no conflict.
+        sets = list(values.values())
+        if any(not (a & b) for i, a in enumerate(sets) for b in sets[i + 1:]):
             out.append({"kind": "threshold", "value": key, "named_in": list(values),
                         "missing_from": [],
                         "stated": [{"system": s, "number": n}
@@ -264,7 +267,8 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
     unlinked = [s for s in systems if not linked[s]] if applicable else []
     steps: list[ConsistencyStep] = []
     for system in unlinked:
-        path = next(r["path"] for r in rows if r["system"] == system)
+        path = next(r["path"] for r in rows
+                    if r["system"] == system and r["link"] not in LINKED)
         assert canon is not None  # two or more systems hold at least one file
         steps.append({
             "system": system,

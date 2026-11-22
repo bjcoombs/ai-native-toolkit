@@ -2496,8 +2496,8 @@ A system is linked when it holds the canonical file or every file of it links. E
 effective text (its files, plus the canonical text where a file imports or points to
 it): `command`, a test or lint command (`check_command.is_check_command` or
 `is_lint_command`, plus a one-word inline `pytest`, `tox`, `nox` or linter) named by
-some systems and not others; `threshold`, two or more systems stating different numbers
-on a line naming `coverage`, `complexity` or `line length`. `conflicts` (divergences)
+some systems and not others; `threshold`, two systems whose numbers on lines naming
+`coverage`, `complexity` or `line length` share none (a stray second number is no conflict). `conflicts` (divergences)
 and `unlinked` (systems not linked) are the default model's `agent-consistency` row
 signals, level 1 `conflicts == 0` and level 2 `unlinked == 0` with `requires` level 1,
 both `head_structure` (graded measured). With fewer than two systems `applicable` is

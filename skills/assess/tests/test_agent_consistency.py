@@ -221,7 +221,28 @@ def test_counts_only_keeps_the_counts_and_drops_the_text(tmp_path: Path) -> None
     block = kept["agent_consistency"]
     assert (block["conflicts"], block["unlinked"], block["systems"]) == (
         2, 1, ["agents_md", "windsurf"])
+    assert (block["systems_total"], block["applicable"], block["consistent"]) == (2, True, False)
+    assert [f["link"] for f in block["files"]] == ["independent", "canonical"]
+    assert block["next_steps"][0]["system"] == "windsurf"
     assert block["divergences"][0]["missing_from"] == ["windsurf"]
     text = json.dumps(block)
     assert "npm test" not in text and "make test" not in text
     assert "Follow the project" not in text and "ln -sf" not in text
+
+
+def test_next_step_names_the_unlinked_file_of_a_multi_file_system(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "AGENTS.md": AGENTS,
+        ".github/copilot-instructions.md": "See [AGENTS.md](../AGENTS.md).\n",
+        ".github/instructions/all.instructions.md": "---\napplyTo: '**'\n---\nRun `make test`.\n"})
+    block = scan_agent_consistency(root)
+    assert block["unlinked"] == 1 and block["conflicts"] == 0
+    step = block["next_steps"][0]
+    assert step["path"] == ".github/instructions/all.instructions.md"
+    assert step["pointer"] == "Follow the project instructions in [AGENTS.md](../../AGENTS.md)."
+
+
+def test_a_stray_number_beside_the_agreed_threshold_is_no_conflict(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "Keep coverage at 90 (see issue 412).\n",
+                            "CLAUDE.md": "Coverage stays at 90.\n"})
+    assert scan_agent_consistency(root)["conflicts"] == 0
