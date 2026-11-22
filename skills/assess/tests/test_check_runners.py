@@ -28,6 +28,11 @@ _ISSUE_RUNNERS = [
     "npx nx run-many --target=lint,test", "turbo test", "deno task test", "uv run make test",
     "make -C sub VAR=1 test", "hatch run pytest", "vitest run", "rspec",
     "docker run --rm -v src:/src img pytest", "pnpm turbo run test",
+    # Calibration round 2 (#920): Gradle test tasks, rake, Rails and mobile toolchains.
+    "./gradlew testDebugUnitTest", "./gradlew :app:testReleaseUnitTest", "gradle testDebug",
+    "./gradlew connectedAndroidTest", "rake test", "rake spec", "bundle exec rake test",
+    "bin/test", "bin/rails test", "flutter test", "xcodebuild test -scheme App",
+    "xcodebuild -workspace App.xcworkspace -scheme App -destination 'platform=iOS' test",
 ])
 def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
     assert check_verdict(text) is True
@@ -54,7 +59,8 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "make format", "turbo run build", "npm run build", "npm run build:prod", "pnpm build",
     "yarn install", "yarn", "npm run", "./scripts/install.sh", "./scripts/deploy.sh",
     "./configure", "./gradlew assemble", "docker run img echo hi", "docker build .",
-    "bash -c 'foo'", "/usr/bin/foo", "npm ci", "uv sync --extra test",
+    "bash -c 'foo'", "/usr/bin/foo", "./gradlew assembleDebug", "xcodebuild build -scheme App",
+    "xcodebuild -scheme test build", "flutter build apk", "npm ci", "uv sync --extra test",
     "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",
 ])
@@ -74,7 +80,7 @@ def test_a_wrapper_is_read_by_the_program_it_runs_for_lint(text: str, lint: bool
 @pytest.mark.parametrize(("text", "maybe"), [
     # Direct test programs run tests only: Layer 3 reads no linter in them.
     ("dotnet test", False), ("swift test", False), ("mix test", False), ("deno test", False),
-    ("hatch test", False), ("ctest", False), ("vendor/bin/phpunit", False),
+    ("hatch test", False), ("flutter test", False), ("bin/rails test", False), ("ctest", False), ("vendor/bin/phpunit", False),
     ("bundle exec rspec", False), ("docker compose run app pytest", False),
     ("pnpm exec vitest run", False),
     # A target whose recipe is not read may lint: Layer 3 reads null, as Layer 5 does.

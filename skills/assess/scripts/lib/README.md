@@ -3539,7 +3539,9 @@ Test runners and wrappers beyond `RUNNERS` (issue #920): `check_verdict(text)` i
 `is_check_command` as three states. True for a test program (`TEST_PROGRAMS`: `ctest`,
 `phpunit`, `pest`, `rspec` and the JS test runners, matched by basename so
 `vendor/bin/phpunit` counts), the `test` subcommand of a toolchain (`TEST_SUBCOMMANDS`:
-`dotnet`, `swift`, `mix`, `deno`, `bazel`, `bazelisk`, `hatch`) or a check-named target of
+`dotnet`, `swift`, `mix`, `deno`, `bazel`, `bazelisk`, `hatch`, `flutter`, `rails`), a
+Gradle test task (`./gradlew testDebugUnitTest`, `connectedAndroidTest`), the
+`test` action of `xcodebuild` or a check-named target of
 a target runner (`TARGET_RUNNERS`: `make`, `just`, `task`, `rake`, `turbo`, `nx`, with
 `nx affected -t test` and `nx run app:test` read). A wrapper is read by the program it
 runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`,

@@ -317,7 +317,7 @@ def may_lint(text: str) -> bool:
         return False
     if program[0] in _DIRECT_TESTS or PurePosixPath(program[0]).name in TEST_PROGRAMS:
         return False
-    if program[0] in _TEST_ONLY_SUBCOMMANDS:   # dotnet test, mix test, hatch test: tests only
+    if PurePosixPath(program[0]).name in _TEST_ONLY_SUBCOMMANDS:   # dotnet test, mix test: tests only
         return _positionals(program[1:])[:1] != ["test"]
     if program[0] in ("go", "cargo", "bun"):   # go test, cargo test, bun test: built-in runners
         return _positionals(program[1:])[:1] != ["test"]
@@ -328,7 +328,9 @@ def may_lint(text: str) -> bool:
 # Test programs that run tests and nothing else, matched by basename (``vendor/bin/phpunit``).
 TEST_PROGRAMS = frozenset({"ctest", "phpunit", "pest", "rspec"}) | _JS_TEST_RUNNERS
 # Toolchains whose ``test`` subcommand runs the tests (``dotnet test``, ``bazel test //...``).
-TEST_SUBCOMMANDS = frozenset({"dotnet", "swift", "mix", "deno", "bazel", "bazelisk", "hatch"})
+TEST_SUBCOMMANDS = frozenset({
+    "dotnet", "swift", "mix", "deno", "bazel", "bazelisk", "hatch", "flutter", "rails",
+})
 # The ones whose ``test`` runs tests only, never a linter (``bazel test`` may run lint targets).
 _TEST_ONLY_SUBCOMMANDS = TEST_SUBCOMMANDS - {"bazel", "bazelisk"}
 # Runners of named targets whose recipe this scan does not read: a check-named target is a
@@ -361,6 +363,16 @@ _COMPOSE_FLAGS = frozenset({
     "--user", "--publish", "-l", "--label",
 })
 _NX_TARGET_FLAGS = ("-t", "--target", "--targets")
+_GRADLE = frozenset({"gradle", "gradlew", "./gradlew"})
+# A Gradle test task: ``test``, ``testDebugUnitTest``, ``:app:testReleaseUnitTest``,
+# ``connectedAndroidTest`` (Android variants and instrumented tests).
+_GRADLE_TEST = re.compile(r"^(?:test[A-Z0-9]\w*|\w*Test)$")
+# xcodebuild options that take a value (``-scheme App``); its actions are bare words.
+_XCODE_FLAGS = frozenset({
+    "-scheme", "-project", "-workspace", "-destination", "-configuration", "-sdk", "-target",
+    "-testPlan", "-derivedDataPath", "-resultBundlePath", "-only-testing", "-skip-testing",
+    "-arch", "-xcconfig", "-toolchain", "-destination-timeout",
+})
 # A target runner asked for its version or its target list runs no target.
 _RUNNER_INFO_FLAGS = _INFO_FLAGS | {"-h", "--list", "--list-all", "-T", "--tasks", "--summary"}
 
@@ -495,7 +507,12 @@ def _check_verdict(words: list[str]) -> bool | None:
     pos = _positionals(words[1:])
     if head == "deno" and pos[:1] == ["task"]:
         return _target_verdict(pos[1:2])
-    if head in TEST_SUBCOMMANDS or head == "playwright":
+    if PurePosixPath(head).name in _GRADLE:   # ./gradlew testDebugUnitTest
+        return any(_GRADLE_TEST.match(t.rsplit(":", 1)[-1]) for t in pos)
+    if head == "xcodebuild":   # xcodebuild -scheme App test
+        actions = _positionals(words[1:], _XCODE_FLAGS)
+        return any(a in ("test", "test-without-building") for a in actions)
+    if PurePosixPath(head).name in TEST_SUBCOMMANDS or head == "playwright":
         return pos[:1] == ["test"]
     if head in TARGET_RUNNERS:
         if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
