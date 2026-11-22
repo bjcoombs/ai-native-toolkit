@@ -180,3 +180,17 @@ def test_a_named_dotnet_test_that_ci_runs_lifts_the_layer_five_cap(tmp_path: Pat
     assert [(n["command"], n["verdict"]) for n in block["check"]["named"]] == [
         ("dotnet test", "resolved")]
     assert "check_named" not in block["layer5_cap"]["unmet"]
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("pnpm pnpm foo", None), ("yarn yarn", None), ("bun bun x", None), ("npm npm", False),
+    ("pnpm turbo run test", True), ("yarn yarn test", True),
+])
+def test_a_script_named_like_its_package_manager_terminates(text: str, expected: bool | None) -> None:
+    """A first positional repeating the head must not re-read the whole command (no recursion)."""
+    assert check_verdict(text) is expected
+
+
+def test_scan_survives_a_repeated_package_manager_word(tmp_path: Path) -> None:
+    assert _scan(tmp_path, _gha("pnpm pnpm foo", "yarn yarn", "bun bun x"))[1] in (
+        "check_target", "no_check_command")

@@ -200,7 +200,7 @@ def _exec_program(words: list[str]) -> list[str] | None:
     if head in ("npm", "pnpm", "yarn", "bun"):
         pos = _positionals(words[1:])
         if pos[:1] and pos[0] in _EXEC_SUBCOMMANDS:
-            return _drop_leading_flags(words[words.index(pos[0]) + 1:])
+            return _drop_leading_flags(words[words.index(pos[0], 1) + 1:])
     return None
 _RUN_WORDS = LINT_WORDS | TYPE_PROGRAMS | {"typecheck", "typechecks"}
 _TYPE_CHECK = re.compile(r"type[-_]check", re.IGNORECASE)
@@ -480,7 +480,7 @@ def _js_script_verdict(head: str, words: list[str]) -> bool | None:
         return _target_verdict(pos[1:2]) if len(pos) > 1 else False
     if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
         return False
-    rest = words[words.index(pos[0]):]   # pnpm turbo run test: a bin of the package
+    rest = words[words.index(pos[0], 1):]   # pnpm turbo run test: a bin of the package
     return True if _check_verdict(rest) is True else _target_verdict(pos[:1])
 
 
