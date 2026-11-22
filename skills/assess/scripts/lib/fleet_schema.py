@@ -76,8 +76,10 @@ def build_schema() -> JsonDict:
         "title": "fleet repository row",
         "description": (
             "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row "
-            "has a reason token and null signals_schema_version, scans and active. An ok row's "
-            "active says whether its HEAD was committed inside the run's window. Generated from "
+            "has a reason token and null signals_schema_version, scans, active, head_sha and dirty. An ok "
+            "row's active says whether its HEAD was committed inside the run's window; head_sha is the "
+            "HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's "
+            "committed tree was scanned (untracked files and .assess/ outputs never count). Generated from "
             "lib/fleet.py by lib/fleet_schema.py."
         ),
         **schema,
@@ -88,7 +90,8 @@ def build_schema() -> JsonDict:
                                         "signals_schema_version": {"type": "integer"}}},
                 "else": {"properties": {"reason": {"type": "string"}, "scans": {"type": "null"},
                                         "signals_schema_version": {"type": "null"},
-                                        "active": {"type": "null"}}},
+                                        "active": {"type": "null"}, "head_sha": {"type": "null"},
+                                        "dirty": {"type": "null"}}},
             },
         ],
     }

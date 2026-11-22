@@ -274,11 +274,13 @@ def test_counts_only_keeps_every_field_of_the_level_block():
 def test_fleet_levels_skip_a_failed_row_and_a_run_without_a_model_removes_the_file(tmp_path):
     model = _stepped()
     rows: list[Any] = [
-        {"repo": "b", "status": STATUS_OK, "scans": _fresh()},
-        {"repo": "a", "status": STATUS_FAILED, "scans": None},
+        {"repo": "b", "status": STATUS_OK, "scans": _fresh(), "head_sha": "f" * 40, "dirty": True},
+        {"repo": "a", "status": STATUS_FAILED, "scans": None, "head_sha": None, "dirty": None},
+        {"repo": "c", "status": STATUS_OK, "scans": _fresh()},  # a row written before #907
     ]
     doc = fleet_levels(rows, model, toolkit_commit="abc", plugin_version="9.9.9")
-    assert list(doc["repos"]) == ["b"] and doc["levels_version"] == "fixture-t1"
+    assert list(doc["repos"]) == ["b", "c"] and doc["levels_version"] == "fixture-t1"
+    assert doc["commits"] == {"b": {"head_sha": "f" * 40, "dirty": True}, "c": {"head_sha": None, "dirty": None}}
     jsonschema.validate(doc, build_schema())
     path = write_fleet_levels(tmp_path, rows, model, toolkit_commit="abc", plugin_version="9.9.9")
     assert path is not None and json.loads(path.read_text(encoding="utf-8")) == doc
@@ -352,6 +354,26 @@ def test_fleet_reruns_are_byte_identical_and_steps_follow_the_gates(estate):
     assert repos["ci2/r"]["tally"]["met"] >= repos["ci0/r"]["tally"]["met"] + 1
     assert repos["inc/r"]["tally"]["met"] == repos["nci/r"]["tally"]["met"]
     assert repos["inc/r"]["tally"]["not_measured"] > repos["nci/r"]["tally"]["not_measured"]
+
+
+def test_an_uncommitted_change_keeps_the_step_of_the_commit(estate, tmp_path):
+    """#907: fleet scores HEAD's committed tree, and level.json names the commit and the dirty flag."""
+    repo = tmp_path / "ci2" / "r"
+    subprocess.run(["git", "clone", "-q", str(estate / "ci2" / "r"), str(repo)], check=True, capture_output=True)
+    (tmp_path / "list.txt").write_text("ci2/r\n", encoding="utf-8")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True,
+                          encoding="utf-8").stdout.strip()
+    clean = _fleet(tmp_path, "clean")
+    (repo / "CLAUDE.md").unlink()
+    (repo / "AGENTS.md").write_text("# untracked\n", encoding="utf-8")  # untracked: still ignored
+    dirty = _fleet(tmp_path, "dirty")
+    assert clean["repos"]["ci2/r"]["step"] > 1  # the instruction gate holds at HEAD
+    assert dirty["repos"] == clean["repos"]
+    assert clean["commits"] == {"ci2/r": {"head_sha": head, "dirty": False}}
+    assert dirty["commits"] == {"ci2/r": {"head_sha": head, "dirty": True}}
+    row = json.loads((tmp_path / "dirty" / "repos.jsonl").read_text(encoding="utf-8"))
+    assert (row["head_sha"], row["dirty"]) == (head, True)
+    assert not (repo / "CLAUDE.md").exists()
 
 
 def test_assess_gives_the_fleet_level_and_step_on_the_same_commit(estate, tmp_path):

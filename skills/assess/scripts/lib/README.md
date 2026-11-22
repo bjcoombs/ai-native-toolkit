@@ -1060,7 +1060,14 @@ its schema version - no stamp field, path or timing - so reruns are byte-identic
 `run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
-`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
+`fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
+no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
+`git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
+when failed. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
+`git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
+(no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
+copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
+`run_signals` too, so it reads the same tree. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -2431,7 +2438,8 @@ import cycle. Tests: `tests/test_level_tally.py`.
 **`fleet_level.py`**
 `OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
 over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
-envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
+plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
 stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 

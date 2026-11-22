@@ -18,6 +18,7 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.fleet_group_schema import type_schema  # noqa: E402
+from lib.fleet import RepoCommit  # noqa: E402
 from lib.fleet_level import FleetLevels  # noqa: E402
 from lib.level_result_types import LevelResult  # noqa: E402
 from lib.level_tally import COUNTED_GRADES, LEVEL_RESULT_VERSION, STATES  # noqa: E402
@@ -46,6 +47,13 @@ def build_schema() -> JsonDict:
     schema = type_schema(FleetLevels)
     schema["properties"]["level_result_version"] = {"const": LEVEL_RESULT_VERSION}
     schema["properties"]["repos"] = {"type": "object", "additionalProperties": {"$ref": "#/$defs/level_result"}}
+    commit = type_schema(RepoCommit)
+    commit["properties"]["head_sha"]["description"] = "the HEAD commit measured; null when the checkout has none"
+    commit["properties"]["dirty"]["description"] = (
+        "true when tracked files differed from HEAD (untracked files and .assess/ outputs are left out, "
+        ".assess/config.toml is not); the result is then scored from HEAD's committed tree")
+    schema["properties"]["commits"] = {"type": "object", "additionalProperties": commit,
+                                       "description": "the commit each repos entry measured, under the same ids"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,
@@ -54,7 +62,7 @@ def build_schema() -> JsonDict:
             "level.json written by skills/fleet/scripts/fleet.py --levels: each scanned repository's "
             "conditions with their state and grade, the verified tally (counted conditions met, of those "
             "measured, and the conditions not measured with a reason) and its autonomy Step with what blocks "
-            "the next. $defs.level_result is also the /assess run context's level block. Generated from "
+            "the next, and under commits the HEAD sha it measured and whether the checkout was dirty. $defs.level_result is also the /assess run context's level block. Generated from "
             "lib/fleet_level.py and lib/level_result_types.py by lib/fleet_level_schema.py."
         ),
         **schema,
