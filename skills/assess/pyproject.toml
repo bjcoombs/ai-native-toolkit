@@ -48,7 +48,6 @@ markers = [
     "needs_symlink: creates a symlink; skipped on Windows",
     "needs_posix_perms: relies on chmod/getuid permission semantics; skipped on Windows",
     "needs_posix_shell: runs a #!/bin/sh stub or sh -c; skipped on Windows",
-    "windows_followup: known Windows failure tracked in #762; skipped on Windows",
 ]
 
 [tool.coverage.report]

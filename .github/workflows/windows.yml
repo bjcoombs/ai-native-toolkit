@@ -18,8 +18,7 @@ name: Windows
 # declared in skills/assess/tests/conftest.py (WINDOWS_SKIP_MARKERS:
 # needs_symlink, needs_posix_perms, needs_posix_shell), or call its
 # skip_without_posix_shell() from a fixture that puts a #!/bin/sh gh/glab stub
-# on PATH. Known Windows failures that are not POSIX-only carry
-# windows_followup (#762).
+# on PATH.
 
 on:
   pull_request:
