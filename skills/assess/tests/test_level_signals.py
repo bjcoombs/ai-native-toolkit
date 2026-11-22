@@ -65,6 +65,8 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     repo = tmp_path_factory.mktemp("instructed") / "repo"
     shutil.copytree(FIXTURES / "golden-doc-repo", repo)
     (repo / "CLAUDE.md").write_text("# Guide\n\nRun `make check` before pushing.\n", encoding="utf-8")
+    # A second agent system, so agent_consistency compares two root files.
+    (repo / ".windsurfrules").write_text("Follow [CLAUDE.md](CLAUDE.md).\n", encoding="utf-8")
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")
     (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
     (repo / "pyproject.toml").write_text(
@@ -279,6 +281,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-8-agent-ops": 0,
             "doc-freshness": 2,          # docs and code committed together: none stale
             "guardrails-stated": None,   # no configured gate: nothing to state
+            "agent-consistency": None,   # no instruction file: nothing to agree with
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -310,6 +313,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "layer-8-agent-ops": None,
         "doc-freshness": None,  # the capture predates doc_staleness.summary
         "guardrails-stated": None,  # the capture predates the guardrails block
+        "agent-consistency": None,  # the capture predates agent_consistency
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

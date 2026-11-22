@@ -17,7 +17,7 @@ threshold gets that threshold. It returns ``None`` for a signal it has no
 wording for, or an operator/value shape the wording does not fit; the page
 then states the signal expression alone. ``measure_hint(signal)`` says why a
 signal can be unavailable and how to get it measured, so an ``unknown`` level
-reads as a measurement gap, never as a failure.
+reads as a measurement gap, not a setback.
 
 Every signal in the shipped ``levels/default.toml`` has wording here
 (``tests/test_fleet_next_steps.py`` checks it).
@@ -274,7 +274,7 @@ def _file_size(op: str, value: Operand) -> Guidance | None:
     bound = f"{number:g} lines or fewer" if op == "lte" else f"fewer than {number:g} lines"
     return {"change": f"Split large source files and enforce a file-size limit in CI, so 95% of "
                       f"files stay at {bound}.",
-            "done_when": f"A CI check fails a file over the limit, and 95% of source files are "
+            "done_when": f"A CI check turns the job red for a file over the limit, and 95% of source files are "
                          f"{bound}."}
 
 
@@ -304,6 +304,27 @@ def _guardrails_stated(op: str, value: Operand) -> Guidance | None:
             "done_when": f"A graded instruction file states {share} the repository configures: "
                          "the rule and its threshold on one line (for example \"Functions stay "
                          "under complexity 15 (ruff C901): run `ruff check .`\")."}
+
+
+def _agents_agree(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Make every agent system's instruction file name the same test and lint "
+                      "commands and the same coverage, complexity and line-length numbers, "
+                      "ideally by keeping them in `AGENTS.md` only.",
+            "done_when": "No check command or threshold is named in one tool's instruction file "
+                         "and absent from, or different in, another's."}
+
+
+def _agents_linked(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Keep `AGENTS.md` as the one canonical source and replace each other "
+                      "tool's file with the pointer line `/assess` gives for it (`@AGENTS.md` "
+                      "for Claude Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: "
+                      "AGENTS.md` in `.aider.conf.yml`), or make it a symlink to `AGENTS.md`.",
+            "done_when": "Every agent system's root instruction file is `AGENTS.md`, a symlink to "
+                         "it, an `@AGENTS.md` import or a line pointing to it."}
 
 
 def _setting(name: str) -> Wording:
@@ -341,7 +362,7 @@ _WORDING: dict[str, Wording] = {
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
         "lint command."),
     "ci_checks.enforced_check_runs": _flag(
-        "Run the test suite or linter in CI so a failure fails the job (`make test`, `pytest`, "
+        "Run the test suite or linter in CI so a test or lint error stops the job (`make test`, `pytest`, "
         "`npm test`, `uv run ruff check`) on pull requests or pushes. Remove `|| true` / "
         "`continue-on-error` / `allow_failure` from the step that runs the tests, or re-raise "
         "the status after `set +e`.",
@@ -349,7 +370,7 @@ _WORDING: dict[str, Wording] = {
         "lint command, is not masked and runs on ordinary changes "
         "(`ci_checks.masked_check_commands` and `off_trigger_check_commands` count the others)."),
     "ci_checks.lint_runs": _flag(
-        "Run a linter or type checker in CI so a finding fails the job: a GitHub Actions or "
+        "Run a linter or type checker in CI so a finding stops the job: a GitHub Actions or "
         "`.gitlab-ci.yml` step that calls it (`ruff check .`, `npx eslint .`, `mypy src`, "
         "`golangci-lint run`, `make lint`) on pull requests or pushes, without `|| true`, "
         "`continue-on-error` or `allow_failure`.",
@@ -374,12 +395,14 @@ _WORDING: dict[str, Wording] = {
     "stats_summary.loc.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
     "guardrails.stated_pct": _guardrails_stated,
+    "agent_consistency.conflicts": _agents_agree,
+    "agent_consistency.unlinked": _agents_linked,
     "coverage_gate.enforced": _flag(
-        "Make the test run fail when line coverage drops below a floor.",
+        "Make the test run exit non-zero when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
-        "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it fails."),
+        "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it exits non-zero."),
     "coverage_gate.threshold_meets_minimum": _flag(
-        "Make the test run fail when line coverage drops below a threshold of at least 50 "
+        "Make the test run exit non-zero when line coverage drops below a threshold of at least 50 "
         "percent (a JaCoCo ratio of at least `0.50`).",
         "A committed coverage threshold of at least 50 percent (`fail_under = 50` in "
         "`pyproject.toml`, `--cov-fail-under=50`, Jest `coverageThreshold`, JaCoCo `<minimum>0.50"
@@ -419,7 +442,10 @@ _MEASURE_HINTS = {
     "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
                   "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
                   "strict): with nothing to state there is no share to measure.",
-    "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
+    "agent_consistency": "Not measured when fewer than two agent systems have a root "
+                         "instruction file: one system has nothing to agree with, so "
+                         "`conflicts` and `unlinked` are null (`applicable: false`).",
+    "structure": _NEEDS.format("structure", "grimp or networkx is not installed (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
                  "the dominant source language: `no_import_graph_<language>` when no "
                  "builder graphs that language, `no_python_packages` for a Python "
@@ -427,7 +453,7 @@ _MEASURE_HINTS = {
                  "source at all. An import graph with no edges leaves "
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
                  "that never import each other have no community structure to measure.",
-    "stats_summary": _NEEDS.format("stats_summary", "lizard is missing (`no_lizard`)"),
+    "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)"),
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",
@@ -446,7 +472,7 @@ _MEASURE_HINTS = {
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
-                 "that can fail its job but a CI file pulls jobs from a file the run could not read (`basis: "
+                 "that can stop its job but a CI file pulls jobs from a file the run could not read (`basis: "
                  "included_jobs`: a GitLab `include:` whose template is not cloned in the "
                  "fleet root, or a `template:` or `remote:` include, a reusable workflow from "
                  "another repository): the check may live there. Cloning the template into "

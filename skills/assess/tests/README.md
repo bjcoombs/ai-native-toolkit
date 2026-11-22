@@ -15,8 +15,9 @@ The three highest-frequency co-change pairs in the git history are:
 - **`test_assess_core.py` / `assess_core.py`** - the orchestrator and its end-to-end
   harness. Every time the core adds a signal or changes the `run-context.json` schema,
   both files move.
-- **`test_complexity_treemap.py` / `complexity-treemap.py`** - the heatmap CLI and its
-  filter, version-stamp and sidecar tests.
+- **`test_complexity_treemap*.py` / `complexity-treemap.py`** - the heatmap CLI and its
+  filter, version-stamp and sidecar tests, split by concern. A schema bump edits
+  `test_complexity_treemap_schema_versions.py` only.
 - **`test_doc_graph.py` / `lib/doc_graph.py`** - the navigability graph is the
   foundation for Layer 0 and feeds both the staleness and the understanding analysis,
   so its contract tests are touched on most doc-analysis changes.
@@ -39,7 +40,13 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
 | `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |
-| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, stats-sidecar enrichment, the render summary, CLI argument and scope checks, and the `plural()` count helper (heavy deps are stubbed) |
+| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, the render summary, CLI argument and scope checks, and the `plural()` count helper; holds `_load_treemap`, the stubbed loader the sibling modules import (heavy deps are stubbed) |
+| `test_complexity_treemap_schema_versions.py` | `scripts/complexity-treemap.py` - `ARTIFACT_SCHEMA_VERSION`, `STATS_SCHEMA_VERSION` and tool-version stamps; the one module a schema bump edits |
+| `test_complexity_treemap_stats.py` | `scripts/complexity-treemap.py` - stats-sidecar enrichment: field naming, hotspot rank, per-function ccn, estimated tokens, code/data maxima and distribution blocks |
+| `test_complexity_treemap_exclusions.py` | `scripts/complexity-treemap.py` - `.assess` self-exclusion, `--exclude` and `config.toml` merging, generated-file sniffing and generated test reports |
+| `test_complexity_treemap_render.py` | `scripts/complexity-treemap.py` + `lib/treemap_render.py` - survivor-density hatch overlay, SVG legend, a11y title, tooltips and the size-by tree build |
+| `test_complexity_treemap_backends.py` | `scripts/complexity-treemap.py` - per-function backends per language (lizard, the approximate Dart scanner), `backend_by_language` and the worst function's name |
+| `test_complexity_treemap_ordering.py` | `scripts/complexity-treemap.py` - the scc-only hint and the tie-break by path across the top lists, the dominant-file warning and largest-first |
 
 ### lib/ suites
 
@@ -176,8 +183,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_groups.py` | `lib/fleet_groups.py` - the group roll-up with maturity model levels and joined group settings |
 | `test_fleet_labels.py` | `lib/fleet_labels.py` + `skills/fleet/scripts/fleet_labels.py` - the closed label set, the `labels.jsonl` schema and its join to `repos.jsonl`; labels never touch a maturity model score |
 | `test_fleet_next_steps.py` | `lib/fleet_next_steps.py` + `lib/next_step_guidance.py` + `lib/fleet_view.py` + `skills/fleet/scripts/fleet_next_steps.py` - per-team next-steps pages against goldens in `fixtures/fleet_next_steps/expected/` |
+| `test_vocabulary_guard.py` | `lib/vocabulary.py` - the banned-vocabulary guard (#743): renders a real fleet run, the fleet fixtures and the /assess deterministic report from source and fails, naming the word, on a banned word or retired band label in prose, or on a report or next-steps section that does not open with `In place:` |
 | `test_fleet_heatmap.py` | `lib/fleet_view.py` + `lib/fleet_heatmap.py` + `skills/fleet/scripts/heatmap.py` - the leadership heat map SVG against goldens in `fixtures/fleet_heatmap/` |
 | `fleet_heatmap_fixture.py` | builds the `fixtures/fleet_heatmap/` runs from `lib/fleet_groups.roll_up` (not a test module; regenerate with `uv run --locked python tests/fleet_heatmap_fixture.py`) |
+| `test_fleet_opportunities.py` | `lib/fleet_opportunities.py` + `lib/fleet_opportunities_section.py` - fleet opportunities (#746): the biggest lift, shared-template leverage, unknown never counted, hashing, no rank, the report section and its display-only recent progress |
 | `test_fleet_coverage.py` | `lib/fleet_coverage.py` + `fleet.py --discovered` - fleet coverage against ghsync's discovery listing: the buckets, the report line and the `run.json` counts |
 | `test_fleet_run_stamp.py` | `lib/fleet_stamp.py` + `lib/fleet_cleanup.py` - the fleet run stamp, per-repository activity and `--delete-after` |
 | `test_windows_portability.py` | Windows correctness across every runtime Python tree (`skills/*/scripts/` and `scripts/`, #712, #752): every text-mode subprocess call names UTF-8 (checked under an emulated ASCII locale), every `git ls-files -z` decode uses `surrogateescape`, every fleet writer pins `newline="\n"`, repo-relative paths render with `/`, and `lib/fleet_cleanup.py` deletes read-only files under emulated Windows deletion semantics |
@@ -224,7 +233,7 @@ ambient commit signing or hooks cannot break the git-backed tests.
 | `golden/` | `golden.py`, `test_decomposition_parity.py`, `test_golden_baseline.py` - the run-context and report baselines |
 | `golden-doc-repo/`, `golden-svg-repo/` | `test_golden_svg_render.py` - small repos the real renderers draw |
 | `hollow_test_repo/`, `honest_test_repo/` | `test_test_pressure.py` - weak versus real tests |
-| `mutmut-junitxml.xml` | `test_test_pressure.py`, `test_complexity_treemap.py` - mutation output |
+| `mutmut-junitxml.xml` | `test_test_pressure.py`, `test_complexity_treemap_render.py` - mutation output |
 | `good_instructions.md`, `bad_instructions.md`, `monolithic_instructions.md`, `lean_with_skills/` | the instruction grader and bloat suites |
 | `instruction_grading/` | the #512 fixture pair: `verified_commands.md` (59 lines of commands that resolve in `repo/`) and `directive_monolith.md` (400 lines of directives, overview and a directory tree) |
 | `coverage.xml`, `lcov.info` | `test_coverage_report.py` |

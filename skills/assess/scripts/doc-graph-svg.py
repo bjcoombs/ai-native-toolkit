@@ -551,7 +551,7 @@ def _legend(size_label: str, layout: str, colour: str, cw: float, ch: float,
         out.append(f'<text x="{gx - 6:.0f}" y="{y - 16:.0f}" font-size="12" fill="#555" '
                    'text-anchor="end">stable</text>')
         out.append(f'<rect x="{gx:.0f}" y="{y - 27:.0f}" width="110" height="12" rx="3" fill="url(#stalegrad)"/>')
-        out.append(f'<text x="{gx + 116:.0f}" y="{y - 16:.0f}" font-size="12" fill="#555">lying map</text>')
+        out.append(f'<text x="{gx + 116:.0f}" y="{y - 16:.0f}" font-size="12" fill="#555">stale map</text>')
         ux = mid - 125
         out.append(f'<circle cx="{ux:.0f}" cy="{y - 20:.0f}" r="8" fill="{UNMEASURED_FILL}" '
                    'stroke="#b8b8b8" stroke-width="1"/>')

@@ -37,6 +37,7 @@ from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
+from lib.agent_consistency import AgentConsistencyBlock
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
@@ -104,6 +105,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.complexity_unreliable", UnreliableCcnRow),
     ("excluded_generated", GeneratedExclusion),
     ("nested_instructions", NestedInstructionsBlock),
+    ("agent_consistency", AgentConsistencyBlock),
     ("agent_harness", AgentHarnessBlock),
     ("agent_environment", AgentEnvironmentBlock),
     ("claude_config", ClaudeConfigBlock),

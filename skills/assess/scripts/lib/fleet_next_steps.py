@@ -13,7 +13,7 @@ one page per group, with no rescan:
   back, each with its current value; an org row names the settings scope it
   applies to;
 - for an ``unknown`` row, the signals that could not be measured and why: a
-  measurement gap, never a failure. A row with a confirmed floor (#697) reads
+  measurement gap, not a setback. A row with a confirmed floor (#697) reads
   "at least N", and a signal only a full ``/assess`` measures (its block
   unavailable as ``not_registered`` or ``network`` in every repository missing
   it, ``fleet_groups.full_run_only_signals``) says so instead of a scan hint; a
@@ -32,6 +32,10 @@ Counts-only: a page holds repository and group ids, maturity model titles and
 operands (caller-authored, printed in clear), counts and the actual values of
 criteria. An actual value is a number, a boolean, a short token (``TOKEN_RE``) or ``set``
 for any other string, the same reduction ``groups.jsonl`` applies to settings.
+
+Every heading on a page opens with a line starting ``In place:``
+(``lib/vocabulary.IN_PLACE``, #743) that says what the group already has before any
+next step; at level 0 or unknown it says so plainly and never implies credit.
 
 Output is deterministic: rows in maturity model order, repositories sorted, no date.
 ``write_pages`` writes ``<out>/teams.md`` (the index) and
@@ -56,6 +60,7 @@ from lib.next_step_guidance import guidance, measure_hint
 from lib.next_step_guidance import parts as unmet_parts_of
 from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
 from lib.run_context_types import JsonDict
+from lib.vocabulary import IN_PLACE
 
 TEAMS_DIR = "teams"
 INDEX_FILE = "teams.md"
@@ -232,7 +237,7 @@ def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, s
         parts = []
         for name in unmeasured:
             if name in failed:
-                parts.append(f"{code(name)} (scan failed: {code(failed[name])})")
+                parts.append(f"{code(name)} (scan did not complete: {code(failed[name])})")
             else:
                 missing = sorted({o["signal"] for o in per_repo[name].values() if o["status"] == "unknown"})
                 parts.append(f"{code(name)} (not measured: {', '.join(code(s) for s in missing)})")
@@ -272,10 +277,11 @@ def _rolled(result: RowResult, top: int, bound: int) -> int:
 
 def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
                      failed: Mapping[str, str], signals: Mapping[str, JsonDict]) -> list[str]:
-    gap = "This is a measurement gap, not a failure: the run could not measure every signal the level depends on."
+    gap = "This is a measurement gap: the run could not measure every signal the level depends on."
     floor = floor_of(result)
     if result["scope"] == "org":
-        head = "Level unknown" if floor is None else f"Level at least {floor}, higher levels unknown"
+        head = (f"{IN_PLACE} nothing confirmed on this row yet; the level is not measured" if floor is None
+                else f"{IN_PLACE} at least level {floor}, confirmed; higher levels are not measured yet")
         if settings_scope is None:
             return [f"{head}. {gap}", "",
                     "- No ghreport settings matched this group: pass ghreport's settings to the fleet "
@@ -285,29 +291,37 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
     top = len(row["levels"])
     evaluations = result.get("repos", {})
     low, high = _rolled(result, top, 0), _rolled(result, top, 1)
-    span = f" (between {low} and {high} of {top})" if evaluations else ""
-    head = (f"Level unknown{span}" if floor is None
-            else f"Level at least {floor} of {top}, unknown above it (up to {high})")
+    span = f" (between {low} and {high} of {top} once measured)" if evaluations else ""
+    head = (f"{IN_PLACE} nothing confirmed on this row yet; the level is not measured{span}" if floor is None
+            else f"{IN_PLACE} at least level {floor} of {top}, confirmed; higher levels are not measured "
+                 f"yet (up to {high})")
     lines = [f"{head}. {gap}", ""]
     only = set(full_run_only_signals(evaluations, signals))
     platform = set(platform_signals(evaluations, signals))
     for signal in result["missing_signals"]:
         names = sorted(n for n, ev in evaluations.items() if signal in ev["missing_signals"])
-        hint = ("The repository scan failed in each of them; the reason token is listed below."
+        hint = ("The repository scan did not complete in each of them; the reason token is listed below."
                 if all(n in failed for n in names) else FULL_RUN_HINT if signal in only
                 else PLATFORM_HINT if signal in platform else measure_hint(signal))
         lines.append(f"- {code(signal)}: not measured in {len(names)} of {_repos(len(evaluations))}. {hint}")
     undetermined = result.get("unknown_repos", [])
     if undetermined:
-        parts = [f"{code(n)} (scan failed: {code(failed[n])})" if n in failed else code(n)
+        parts = [f"{code(n)} (scan did not complete: {code(failed[n])})" if n in failed else code(n)
                  for n in undetermined]
         lines.append(f"- Repositories whose own level is undetermined ({len(parts)}): {', '.join(parts)}.")
     if evaluations and high < top:
         steps = _team_steps(row, result, high + 1, failed, signals, report_unmeasured=False)
         if steps:
             lines += ["", f"Measured unmet criteria already cap the group at level {high}, whatever the "
-                          f"missing signals show. Toward level {high + 1}:", ""] + steps
+                          f"signals not measured yet show. Toward level {high + 1}:", ""] + steps
     return lines
+
+
+def _held(level: int, top: int) -> str:
+    """The opening line of a known row below its top: level 0 confirms nothing, so it says so."""
+    if level == 0:
+        return f"{IN_PLACE} nothing confirmed on this row yet (level 0 of {top})"
+    return f"{IN_PLACE} level {level} of {top}"
 
 
 def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[str, str],
@@ -318,17 +332,18 @@ def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[s
     if result["status"] != "level" or level is None:
         return lines + _unknown_section(row, result, group["settings_scope"], failed, signals)
     if level >= top:
-        return lines + [f"Level {top} of {top}: the top level. No next step."]
+        return lines + [f"{IN_PLACE} level {top} of {top}, the top level. No next step."]
     target = level + 1
     if result["scope"] == "team":
         evaluations = result.get("repos", {})
         reached = sum(1 for ev in evaluations.values() if ev["bounds"][0] >= target)
-        lines.append(f"Level {level} of {top}. To reach level {target}: {reached} of "
-                     f"{_repos(len(evaluations))} already there; the rule needs "
-                     f"{_needed(result, len(evaluations))}.")
+        lines.append(f"{_held(level, top)}; {reached} of {_repos(len(evaluations))} "
+                     f"already at level {target}.")
+        lines.append("")
+        lines.append(f"To reach level {target}: the rule needs {_needed(result, len(evaluations))}.")
         lines.append("")
         return lines + _team_steps(row, result, target, failed, signals)
-    lines += [f"Level {level} of {top}. To reach level {target}:", ""]
+    lines += [f"{_held(level, top)}.", "", f"To reach level {target}:", ""]
     return lines + _org_steps(row, result, target, group["settings_scope"], group["repos"])
 
 
@@ -340,12 +355,22 @@ def group_page(maturity_model: MaturityModel, group: GroupRow, rows: Sequence[Fl
     """One group's page."""
     failed = {row["repo"]: row["reason"] or "failed" for row in rows if row["status"] != STATUS_OK}
     signals = {row["repo"]: repo_signals(row) for row in rows}
+    tops = [len(row["levels"]) for row in maturity_model["rows"]]
+    known = [(r["level"], top) for r, top in zip(results, tops) if r["status"] == "level" and r["level"] is not None]
+    at_top = sum(1 for level, top in known if level == top)
+    started = sum(1 for level, _ in known if level >= 1)
+    rows_n = len(maturity_model["rows"])
     lines = [f"# Next steps: {code(group['group'])}", "",
+             f"{IN_PLACE} {at_top} of {rows_n} rows at the top level and {started} at level 1 or above, "
+             f"across {_repos(group['repos'])}.", "",
              f"Maturity model {code(maturity_model['version'])}. {_repos(group['repos'])}: "
-             f"{group['scanned']} scanned, {group['failed']} failed.", "",
+             f"{group['scanned']} scanned, {group['failed']} could not be scanned.", "",
              "Each numbered step is one change: take or leave it on its own. \"Done when\" is "
              "checkable in the repository or its platform settings; the re-run check is optional.",
-             "", "## Levels", "", "| Row | Level | Roll-up |", "|-----|-------|---------|"]
+             "", "## Levels", "",
+             f"{IN_PLACE} {len(known)} of {rows_n} rows measured for this group, each with the roll-up "
+             "rule it uses.", "",
+             "| Row | Level | Roll-up |", "|-----|-------|---------|"]
     for row, result in zip(maturity_model["rows"], results):
         lines.append(f"| {text(row['title'])} | {_level_cell(result, len(row['levels']))} | "
                      f"{_rule_cell(result, group['settings_scope'])} |")
@@ -363,7 +388,12 @@ def page_path(group: str) -> Path:
 
 
 def index_page(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> str:
+    tops = {row["id"]: len(row["levels"]) for row in maturity_model["rows"]}
+    reached = sum(1 for g in groups for r in g["levels"]
+                  if r["status"] == "level" and r["level"] is not None and r["level"] == tops.get(r["id"]))
     lines = ["# Team next steps", "",
+             f"{IN_PLACE} {len(groups)} {'group' if len(groups) == 1 else 'groups'} with a page, holding "
+             f"{reached} {'row' if reached == 1 else 'rows'} at the top level between them.", "",
              f"Maturity model {code(maturity_model['version'])}: {len(maturity_model['rows'])} rows. One page per group.", "",
              "| Group | Repositories | Rows at top level | Rows with next steps | Rows unknown |",
              "|-------|--------------|-------------------|----------------------|--------------|"]

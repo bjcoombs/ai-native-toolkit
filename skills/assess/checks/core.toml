@@ -1552,6 +1552,38 @@ revision = 1
   "instruction_placement.loaded_in_full.relocatable.home.target" = "path"
 
 [[entries]]
+id = "core.agent_consistency"
+kind = "collector"
+title = "Cross-agent instruction consistency"
+summary = "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system."
+issues = [768]
+callable = "lib.agent_consistency:scan_agent_consistency"
+publishes = ["agent_consistency"]
+reads = ["repo_root", "excludes"]
+stage = "post_offers"
+headless = { agent_consistency = "registered" }
+shapes = [
+  { path = "agent_consistency", type = "lib.agent_consistency:AgentConsistencyBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_consistency.systems" = "token"
+  "agent_consistency.canonical" = "path"
+  "agent_consistency.files.path" = "path"
+  "agent_consistency.files.system" = "token"
+  "agent_consistency.files.link" = "token"
+  "agent_consistency.divergences.kind" = "token"
+  "agent_consistency.divergences.value" = "drop"
+  "agent_consistency.divergences.named_in" = "token"
+  "agent_consistency.divergences.missing_from" = "token"
+  "agent_consistency.divergences.stated.system" = "token"
+  "agent_consistency.next_steps.system" = "token"
+  "agent_consistency.next_steps.path" = "path"
+  "agent_consistency.next_steps.pointer" = "drop"
+  "agent_consistency.next_steps.symlink" = "drop"
+  "agent_consistency.not_read" = "drop"
+
+[[entries]]
 id = "core.ai_usage"
 kind = "collector"
 title = "AI-assisted change share"
@@ -1628,7 +1660,7 @@ summary = "The default maturity model's conditions with state, grade and reason,
 issues = [744]
 callable = "lib.core_scans:level"
 publishes = ["level"]
-reads = ["agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
+reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
 stage = "post_offers"
 shapes = [
   { path = "level", type = "lib.level_result_types:LevelResult" },
@@ -1751,7 +1783,7 @@ null_means = "null when no import crosses a package boundary"
 [[entries]]
 id = "core:ci_checks.lint_runs"
 kind = "signal"
-title = "A CI line runs a linter on ordinary changes and can fail its job"
+title = "A CI line runs a linter on ordinary changes and can stop its job"
 collector = "core.ci_checks"
 path = "ci_checks.lint_runs"
 type = "bool"
@@ -1799,7 +1831,7 @@ evidence = "head_structure"
 [[entries]]
 id = "core:ci_checks.enforced_check_runs"
 kind = "signal"
-title = "A CI check runs on ordinary changes and can fail its job"
+title = "A CI check runs on ordinary changes and can stop its job"
 collector = "core.ci_checks"
 path = "ci_checks.enforced_check_runs"
 type = "bool"
@@ -1909,6 +1941,26 @@ type = "number"
 evidence = "head_structure"
 null_means = "no gate found: nothing to state"
 
+[[entries]]
+id = "core:agent_consistency.conflicts"
+kind = "signal"
+title = "Commands and thresholds the agent systems disagree on"
+collector = "core.agent_consistency"
+path = "agent_consistency.conflicts"
+type = "number"
+evidence = "head_structure"
+null_means = "fewer than two agent systems: nothing to agree with"
+
+[[entries]]
+id = "core:agent_consistency.unlinked"
+kind = "signal"
+title = "Agent systems not linked to the canonical instruction file"
+collector = "core.agent_consistency"
+path = "agent_consistency.unlinked"
+type = "number"
+evidence = "head_structure"
+null_means = "fewer than two agent systems: nothing to link"
+
 # -- conditions: display metadata for each default criterion -----------------------
 [[entries]]
 id = "core.cond.layer-0-instructions.1.instruction_file_present"
@@ -2011,7 +2063,7 @@ fix = "Split the largest files along their natural seams."
 [[entries]]
 id = "core.cond.layer-5-ci.1.enforced_check_runs"
 kind = "condition"
-title = "CI runs your tests or linters, and a failure fails the job"
+title = "CI runs your tests or linters, and an error stops the job"
 key = "layer-5-ci.1:ci_checks.enforced_check_runs"
 fix = "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure."
 
@@ -2106,6 +2158,20 @@ title = "Every configured gate is stated"
 key = "guardrails-stated.2:guardrails.stated_pct"
 fix = "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing."
 
+[[entries]]
+id = "core.cond.agent-consistency.1.conflicts"
+kind = "condition"
+title = "Every agent system names the same checks"
+key = "agent-consistency.1:agent_consistency.conflicts"
+fix = "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives."
+
+[[entries]]
+id = "core.cond.agent-consistency.2.unlinked"
+kind = "condition"
+title = "Every agent system reads one canonical file"
+key = "agent-consistency.2:agent_consistency.unlinked"
+fix = "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool."
+
 # -- findings -----------------------------------------------------------------------
 [[entries]]
 id = "core.finding.hidden_coupling"
@@ -2129,7 +2195,7 @@ headless = "unregistered"
 [[entries]]
 id = "core.finding.lying_map"
 kind = "finding"
-title = "Lying map"
+title = "Stale doc over complex code"
 name = "lying_map"
 order = 1
 action = "fix or delete the doc"
@@ -2145,7 +2211,7 @@ kind = "finding"
 title = "Unexplained complexity"
 name = "unexplained_complexity"
 order = 2
-action = "write the missing contract (do NOT auto-generate)"
+action = "write the contract the code needs (do NOT auto-generate)"
 mode = "characterize_first"
 concern = true
 inputs = ["documentation.unexplained_complexity"]

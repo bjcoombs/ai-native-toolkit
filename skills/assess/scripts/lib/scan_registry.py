@@ -43,6 +43,7 @@ from typing import Any
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib.agent_building import scan_agent_building
+from lib.agent_consistency import scan_agent_consistency
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
@@ -601,6 +602,13 @@ SCANS: tuple[ScanSpec, ...] = (
         ("repo_root", "instruction_files", "nested_instructions", "scope", "excludes"),
         STAGE_POST_OFFERS,
     ),
+    # Cross-agent instruction consistency (issue #768): whether the root
+    # instruction files of every agent system present (Claude Code, AGENTS.md,
+    # Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
+    # Zed; lib/agent_systems.py) name the same check commands and thresholds,
+    # and whether each links to one canonical file. Feeds the agent-consistency row.
+    ScanSpec("agent_consistency", scan_agent_consistency, ("repo_root", "excludes"),
+             STAGE_POST_OFFERS),
     # AI-assisted change share (issue #547): commits in the churn window with an
     # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
     # on agent use, never an estimate; merge commits and automation bots

@@ -6,7 +6,7 @@ rescan, no model.
 
 Encoding:
 
-- Fill: the ColorBrewer OrRd 9-class sequential ramp, hardcoded (no matplotlib,
+- Fill: the ColorBrewer YlGn 9-class sequential growth ramp, hardcoded (no matplotlib,
   whose colormaps can shift between versions), so output is byte-identical
   across machines. Pale is level 0 (nothing reached), darker is a higher level
   reached. With a maturity model file a level is placed on the ramp by its share of its
@@ -16,12 +16,12 @@ Encoding:
 - ``unknown``: white with grey diagonal hatching (the ``UNMEASURED_FILL`` idea
   in ``doc-graph-svg.py``), never a ramp colour, so it cannot read as level 0.
   The cell prints ``?`` and a key letter; the key under the grid names the
-  missing signals for each distinct set, in visible text (an SVG shown as an
+  signals not measured yet for each distinct set, in visible text (an SVG shown as an
   image has no tooltips; ``<title>`` repeats it on hover).
 - A floor (#697, an unknown row whose confirmed criteria reach level N): the
   ramp colour of N under the grey hatch, printing ``N+`` and a key letter, so
   it reads apart from both a known level and plain unknown and never as exactly
-  N. The key names the missing signals and, when a signal only a full
+  N. The key names the signals not measured yet and, when a signal only a full
   ``/assess`` measures (``full_run_only``), says so.
 - Colour is never the only channel: every known cell prints its level, and the
   text colour per ramp step comes from a fixed table (dark on pale steps, white
@@ -46,7 +46,7 @@ from typing import TypedDict
 from lib import fleet_svg
 from lib.fleet_svg import (  # the level ramp is shared with the layer bars
     CHAR_W,
-    ORRD_9,
+    LEVEL_RAMP,
     STEP_TEXT,
     TEXT_DARK,
     hatch_pattern,
@@ -130,7 +130,7 @@ def change_text(change: Change) -> str:
 
 def _missing_text(entry: RowLevel) -> str:
     if entry["missing_signals"]:
-        text = "missing " + ", ".join(entry["missing_signals"])
+        text = "not measured yet: " + ", ".join(entry["missing_signals"])
         only = entry.get("full_run_only", [])
         return text + (f"; needs a full /assess: {', '.join(only)}" if only else "")
     return "no evidence (no repository scanned)"
@@ -176,7 +176,7 @@ def _legend_entries(groups: Sequence[GroupRow], columns: Sequence[Column]) -> li
 def _swatches(groups: Sequence[GroupRow], columns: Sequence[Column], y: float,
               floors: bool) -> list[tuple[str, str, int]]:
     """(swatch, label text, label width) per legend entry, one ``LINE_H + 4`` apart from ``y``."""
-    entries: list[tuple[str, str]] = [(ORRD_9[step], label)
+    entries: list[tuple[str, str]] = [(LEVEL_RAMP[step], label)
                                       for step, label in _legend_entries(groups, columns)]
     entries.append((UNKNOWN_FILL, "unknown: not measured, never level 0 (? and a key letter)"))
     if floors:
@@ -185,7 +185,7 @@ def _swatches(groups: Sequence[GroupRow], columns: Sequence[Column], y: float,
     out = []
     for fill, label in entries:
         box = f'x="{PAD:.1f}" y="{y:.1f}" width="{SWATCH:.1f}" height="{SWATCH:.1f}"'
-        under = f'<rect {box} fill="{ORRD_9[2]}"/>' if fill == FLOOR_HATCH else ""
+        under = f'<rect {box} fill="{LEVEL_RAMP[2]}"/>' if fill == FLOOR_HATCH else ""
         swatch = under + f'<rect {box} fill="{fill}" stroke="{FRAME_STROKE}" stroke-width="1"/>'
         out.append((swatch, _text(PAD + SWATCH + 8, y + 12, label), len(label) + 4))
         y += LINE_H + 4
@@ -201,21 +201,21 @@ def _cell_parts(x: float, y: float, group: GroupRow, column: Column, keys: dict[
     if floor is not None:
         missing = _missing_text(entry)
         step = ramp_step(floor, column["top"])
-        fill, ink = ORRD_9[step], TEXT_DARK
+        fill, ink = LEVEL_RAMP[step], TEXT_DARK
         of_top = "" if column["top"] is None else f" of {column['top']}"
         label = f"{floor}+ {keys[missing]}"
-        tip = f"at least level {floor}{of_top}, higher levels unknown: {missing}"
+        tip = f"at least level {floor}{of_top}, higher levels unknown ({missing})"
     elif known:
         level = entry["level"] or 0
         step = ramp_step(level, column["top"])
-        fill, ink = ORRD_9[step], STEP_TEXT[step]
+        fill, ink = LEVEL_RAMP[step], STEP_TEXT[step]
         of_top = "" if column["top"] is None else f" of {column['top']}"
         label, tip = str(level), f"level {level}{of_top}"
     else:
         missing = _missing_text(entry)
         fill, ink = UNKNOWN_FILL, TEXT_DARK
         label = f"? {keys[missing]}"
-        tip = f"unknown: {missing}"
+        tip = f"unknown ({missing})"
     if not known and entry["unknown_repos"]:
         count = len(entry["unknown_repos"])
         tip += f"; {count} {'repository' if count == 1 else 'repositories'} without a level"
@@ -312,7 +312,7 @@ def render_heatmap(groups: Sequence[GroupRow], columns: Sequence[Column],
 
     if keys:
         y += 18
-        body.append(_text(PAD, y, "Unknown cells: the signal that was missing", weight="bold"))
+        body.append(_text(PAD, y, "Unknown cells: the signals not measured yet", weight="bold"))
         y += LINE_H + 2
         for text, label in keys.items():
             for index, line in enumerate(textwrap.wrap(text, KEY_WRAP)):

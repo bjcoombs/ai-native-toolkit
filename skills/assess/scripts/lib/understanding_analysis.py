@@ -84,7 +84,7 @@ _ORPHANED_RECOMMENDATION = (
     "Assign a human anchor before further change. This is complex code with no "
     "confirmed human author and no spec stating what it should do - agents can "
     "keep changing it, but no one retains the understanding to review them. Do "
-    "NOT auto-generate a doc to clear this; a synthetic summary is a lying map."
+    "NOT auto-generate a doc to clear this; a synthetic summary is a stale map."
 )
 
 

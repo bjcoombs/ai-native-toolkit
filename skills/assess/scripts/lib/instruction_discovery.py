@@ -10,7 +10,13 @@ through path-scoped rules, not only from the fixed root locations
 * ``.github/instructions/**/*.instructions.md``, scoped by ``applyTo``
   (GitHub Copilot);
 * ``.cursor/rules/**/*.mdc``, scoped by ``globs`` / ``alwaysApply`` (Cursor),
-  where a plain ``.md`` is ignored by the tool.
+  where a plain ``.md`` is ignored by the tool;
+* the root files of Windsurf, Cline, Aider, JetBrains Junie, Amazon Q, Kiro,
+  Continue and Zed, each with its own scoping rule (``lib.agent_systems``,
+  issue #768), graded like the others with ``tool`` naming the system.
+
+``collect_instruction_files`` hands every discovered file, root locations
+included, to ``lib.agent_consistency``.
 
 Each tracked file outside the built-in and ``.assess/config.toml`` excludes is
 graded with ``grade_instructions`` and recorded with its scope; the block also
@@ -33,6 +39,7 @@ from difflib import SequenceMatcher
 from pathlib import Path, PurePosixPath
 
 from lib.agent_instructions_grader import grade_instructions
+from lib.agent_systems import AIDER_CONFIG, aider_read_files, match_system_file, might_match
 from lib.instruction_content import RepoContext
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_repo_file
@@ -85,6 +92,9 @@ class _Candidate:
     globs: list[str] = field(default_factory=list)
     always_loaded: bool = False
     body: str = ""
+
+
+InstructionCandidate = _Candidate  # the public name lib.agent_consistency reads
 
 
 def _contains(parts: tuple[str, ...], seq: tuple[str, ...]) -> int:
@@ -155,6 +165,26 @@ def _directory_candidate(rel: PurePosixPath, text: str) -> _Candidate | None:
                       _dir_of(parts), always_loaded=parts == (), body=text)
 
 
+def _system_candidate(rel: PurePosixPath, text: str,
+                      aider_reads: frozenset[str]) -> _Candidate | None:
+    """A file of a system ``lib.agent_systems`` classifies (Windsurf, Cline, ...)."""
+    found = match_system_file(rel, text, aider_reads)
+    if found is None:
+        return None
+    return _Candidate(rel.as_posix(), found.kind, found.system, ".", found.globs,
+                      always_loaded=found.always_loaded, body=found.body)
+
+
+def _aider_reads(repo_root: Path, tracked: frozenset[Path] | None) -> frozenset[str]:
+    config = repo_root / AIDER_CONFIG
+    if not config.is_file() or not is_repo_file(config, repo_root, tracked):
+        return frozenset()
+    try:
+        return aider_read_files(config.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return frozenset()
+
+
 def _is_stray_cursor_md(rel: PurePosixPath) -> bool:
     return _contains(rel.parts, (".cursor", "rules")) >= 0 and rel.suffix == ".md"
 
@@ -175,6 +205,7 @@ class _Surface:
     candidates: list[_Candidate]
     stray_cursor_md: list[str]
     universe: list[str]
+    aider_reads: frozenset[str] = frozenset()
 
 
 def _collect(
@@ -183,11 +214,12 @@ def _collect(
 ) -> _Surface:
     candidates: list[_Candidate] = []
     stray: list[str] = []
+    aider_reads = _aider_reads(repo_root, tracked)
     for rel_path in _walk(repo_root, extra_dirs, extra_pats):
         rel = PurePosixPath(rel_path.as_posix())
         maybe_rule = (rel.suffix in (".md", ".mdc")
                       and (rel.name in DIRECTORY_FILE_NAMES or "rules" in rel.parts
-                           or "instructions" in rel.parts))
+                           or "instructions" in rel.parts)) or might_match(rel)
         if not maybe_rule:
             continue
         if not is_repo_file(repo_root / rel_path, repo_root, tracked):
@@ -199,11 +231,23 @@ def _collect(
             text = (repo_root / rel_path).read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        cand = _rule_candidate(rel, text) or _directory_candidate(rel, text)
+        cand = (_rule_candidate(rel, text) or _directory_candidate(rel, text)
+                or _system_candidate(rel, text, aider_reads))
         if cand is not None:
             candidates.append(cand)
     return _Surface(sorted(candidates, key=lambda c: c.rel), sorted(stray),
-                    _universe(repo_root, tracked))
+                    _universe(repo_root, tracked), aider_reads)
+
+
+def collect_instruction_files(
+    repo_root: Path, tracked: frozenset[Path] | None,
+    extra_dirs: set[str], extra_pats: list[str],
+) -> tuple[list[InstructionCandidate], frozenset[str]]:
+    """Every discovered instruction file with its system (``tool``), scope and body,
+    and the paths ``.aider.conf.yml`` reads: the input ``lib.agent_consistency``
+    compares. Root locations ``lib.instruction_files`` grades are included."""
+    surface = _collect(repo_root, tracked, extra_dirs, extra_pats)
+    return surface.candidates, surface.aider_reads
 
 
 def _ls_files(repo_root: Path) -> set[str]:

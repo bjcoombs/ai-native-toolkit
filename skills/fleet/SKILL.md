@@ -75,7 +75,11 @@ stale share is null on a shallow clone, so the doc-freshness row is `unknown`
 there. The guardrails-stated row reads `guardrails.stated_pct`, the share of the
 gates a repository configures (complexity limit, coverage floor, pre-commit
 hooks, mypy strict) that an instruction file states; with no gate found it is
-`unknown`.
+`unknown`. The agent-consistency row reads `agent_consistency.conflicts` (level 1:
+no check command or threshold one agent system's instruction file names and
+another's does not) and `agent_consistency.unlinked` (level 2: every system's
+file is `AGENTS.md`, a symlink, an import or a pointer to it); with fewer than
+two agent systems it is `unknown`.
 
 | Flag | Meaning |
 |------|---------|
@@ -277,11 +281,12 @@ the run history beside the other files.
 
 | Key | Value |
 |-----|-------|
-| `fleet_data_version` | Document version (1). |
+| `fleet_data_version` | Document version (3: version 3 added `opportunities`; the achievements engine reads versions 1 to 3 alike). |
 | `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
 | `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
 | `views` | One entry per view, `ownership` and `system`, each with its `units`. |
 | `repos` | One entry per repository row, sorted by `key`. |
+| `opportunities` | The [opportunities](#opportunities) this run's data shows: what is in place, the biggest lift and the shared-template leverage. `null` without `--levels`. |
 
 **Units.** A unit is an org, division, department, team or system. Each has a `key`
 (`<view>/<id>`), `view`, `parent` (the parent's key, `null` at a root), `kind`, `source`
@@ -353,6 +358,28 @@ join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` 
 repository ids in clear, so under hashing a `fleet-data.json` repository cannot be joined
 to its `repos.jsonl` row. GitHub team slugs from a `ghreport` fragment's `teams` list
 appear only as unit keys, so they are hashed with them.
+
+### Opportunities
+
+`opportunities` (#746) turns the run into the changes that would lift the most
+repositories. It is computed from this run's rows and the maturity model alone, with no
+model call and no history, so the same run gives the same bytes. Every line is phrased as
+an opportunity, nothing ranks or numbers a team or repository (names are listed in key
+order), and no insight names a person.
+
+| Key | Value |
+|-----|-------|
+| `measured` | Repositories scanned `ok`. |
+| `in_place` | Per `team` row: `row`, `at_top` (measured repositories already at its top level) and `measured`. The report opens the section with it. |
+| `biggest_lift` | The single next-level criterion whose completion would lift the most repositories: `row`, `level` (the level they would reach), `signal`, `repo_count`, `repos` (sorted keys), `gate` and `step` (the Step gate this condition is, else `null`), `change` and `done_when` (the same wording as the team pages), and `text`. A repository counts only when its row level is known and that criterion is the one unmet criterion of its next level; an unknown never counts. Ties go to maturity-model row order, then level. `null` when no single change lifts a measured repository. |
+| `shared_templates` | One entry per shared CI source (a `shared_tooling.ci_source_ids` id at least 2 repositories include) and row level it would unlock: `source` (the id, such as `gitlab_project:grp/ci-templates`), `kind`, `includers`, `row`, `level`, `signal`, `repo_count`, `repos` and `text`. Its `repos` are the including repositories whose one unmet next-level criterion reads a `ci_checks.` signal: what the template would lift if it ran tests or another enforced check. Sorted by `source`, then row order. |
+
+Privacy follows the keys: `repos` and `source` are in clear in counts-only output (shared
+tooling ids stay readable) and hashed under `--hash-paths` or `--hash-salt`. A hashed
+`source` is the scan's own hash, so it matches `ci_source_ids` in `repos.jsonl`; `text` holds
+counts and maturity-model titles only. Recent progress, the units that reached a new level
+since the previous run, is not in this file: it comes from the run history, is display
+only and appears only in `report.md`. Logic: `lib/fleet_opportunities.py`.
 
 ## Output: `achievements.json`
 
@@ -909,7 +936,23 @@ in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipp
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
 The report opens with the [coverage line](#coverage---discovered), then "What changed and who
-earned it", before the diagrams (see [`achievements.json`](#output-achievementsjson)).
+earned it" (see [`achievements.json`](#output-achievementsjson)), then "Opportunities",
+before the diagrams.
+
+**Opportunities.** Rendered from `fleet-data.json`'s [`opportunities`](#opportunities), so
+the two always agree. It opens with what is already in place (per row, how many measured
+repositories hold its top level), then the biggest lift with its change and "done when",
+each shared template's lift, and **Recent progress**: the units that reached a new level
+since the previous comparable run, read from this run's `level_up` achievements. Recent
+progress is display only: it comes from the run history and never feeds a level or
+`fleet-data.json`. On the first kept run it says the run is the starting line; under
+`--no-history` or `--full` it says the run is not kept in the history. Without `--levels`
+the section is left out. Logic: `lib/fleet_opportunities_section.py`.
+Every `## ` section opens with a line that starts `In place:` and says what this run already
+has (what is measured, reached or earned) before the section's question and any next step;
+the team next-steps pages open every heading the same way. The wording rules, the words
+user-facing output leaves out and the guard test that enforces both are in the
+"Supportive vocabulary" section of `skills/assess/scripts/lib/README.md`.
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows
@@ -920,11 +963,11 @@ scale. The layer bars draw team rows too and name the org rows under the bars.
 
 | File | Question | Built from |
 |------|----------|------------|
-| `quadrant.svg` | Which busy repositories are least mature? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--levels` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--levels` or without team rows. |
-| `shared-tooling.svg` | What breaks if a shared template changes, and who drifted off it? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep, or a ref that is a CI variable (`$TPL_REF`), is dotted as pin unknown, never unpinned or drift. |
+| `quadrant.svg` | Which busy repositories have the most room to grow? | Each repository's commits in the window (`ai_usage.total_commits`, non-merge) across, and up its mean maturity: every `team` row of the `--levels` maturity model evaluated on that repository alone, as a share of the row's top level, averaged over the rows that could be measured. The busy (at or above the median) and below-half quadrant is shaded. Skipped without `--levels` or without team rows. |
+| `shared-tooling.svg` | What does a shared template change reach, and which pins differ from the fleet's? | `shared_tooling`: repositories linked to the CI sources and marketplaces they reference, with each item's dependent count. Drift: a CI include pinned to a ref other than the fleet's most common ref for that source (ties go to the lexically greatest ref) is dashed, and the SVG caption states this rule; an unpinned include is counted as unpinned, not drift; a pin counts-only could not keep, or a ref that is a CI variable (`$TPL_REF`), is dotted as pin unknown, never unpinned or drift. |
 | `trend.svg` | Is each team improving? | The run history: each group's mean maturity (each known team row's level as a share of its `top_level`, the slope chart's unit) in every comparable dated run, oldest left, this run right. Comparable: same window, scans, output mode, path hashing and `--fleet-config` hash, with a maturity model; one run per date, the newest 12. A change of maturity-model version breaks every line, marked by a dashed rule. A history entry written before `groups.jsonl` carried `top_level` takes the top levels from this run's maturity model when it used the same version; otherwise (an older maturity-model version) it is not drawn, so the axis is always 0 to 1 share of top level, and the caption names it ("N earlier runs on an older maturity-model version not shown"). End labels give the last value and the change over the last unbroken stretch. Skipped with fewer than 3 comparable share runs (the skip line names any runs left out), without `--levels` or without team rows, or when the run is not kept in the history (`--no-history`, `--full`). |
 | `slope.svg` | What moved since the earlier run, and which row moved it? | The `--compare` result: each group's mean level (a team row's level as a share of its top level) in the earlier run and this one, over the team rows with a known level in both runs, labelled with the row that moved most; a `*` marks a move where the group's measured set of repositories moved too, or the scanner changed (`scanner_changed`, `toolkit_changed_unknown_scope`). Skipped when no earlier run was compared (no `--compare`, or a bare `--compare` matched no history entry), when the runs are not comparable (the reasons are named), without `--levels` or without team rows, or when no group has a team row with a known level in both runs. |
-| `layer-bars.svg` | Which layer is the org-wide weak spot? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-dark ramp); repositories whose level is undetermined are a hatched segment and named. Skipped without `--levels`, without team rows, or with no repositories in the run. |
+| `layer-bars.svg` | Which layer has the most room to grow across the fleet? | One bar per `team` row of the maturity model, split by how many repositories reach each level (the heat map's pale-to-deep-green growth ramp); repositories whose level is undetermined are a hatched segment and named. Skipped without `--levels`, without team rows, or with no repositories in the run. |
 
 Unknown is never drawn as zero: a repository with no measured row or no commit count, or no
 `shared_tooling` evidence, a group with no row known in both compared runs, or a repository
@@ -958,12 +1001,12 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/heatmap.py" fleet-out --levels levels.toml -
 | `--compare EARLIER_RUN` | An earlier run (directory or `groups.jsonl`): each cell shows its change (`+1`, `-1`, `=`, `new`, `was 2`, `was ?`) and groups only the earlier run has are listed. When both are run directories with a `run.json`, the [fleet comparison rule](#run-history-and-comparison) applies: runs that differ in maturity-model version, window, output mode, scans, path hashing, `--fleet-config` hash or plugin major version are not compared (a note says why), and a note names the groups whose measured set moved, so a change there is not read as a level change (`fleet_compare.py` gives each cell's cause). When both are run directories holding `repos.jsonl` but only one has a `run.json` (a run from before the stamp), the pair is refused the same way. A bare `groups.jsonl` (or a directory holding only one) is compared on levels only, refused across maturity-model versions. |
 | `--output FILE` | The SVG path (default `heatmap.svg` beside `groups.jsonl`). |
 
-Encoding: the ColorBrewer OrRd ramp (colour-blind safe), pale for level 0 and
+Encoding: the ColorBrewer YlGn growth ramp (colour-blind safe), pale yellow for level 0 and
 darker for a higher level reached, with the level printed in every cell. An
 `unknown` cell is white with grey hatching, never level 0: it prints `?` and a
-key letter, and the key under the grid names the missing signals. An unknown
+key letter, and the key under the grid names the signals not measured yet. An unknown
 cell with a `floor` is the floor's ramp colour under the hatch and prints `N+`
-(at least level N, never the exact level); its key says which missing signals
+(at least level N, never the exact level); its key says which unmeasured signals
 need a full `/assess`. The canvas
 has its own white background. The same run gives a byte-identical file. Exit
 codes: `0` written, `2` an unreadable or malformed run, a run without maturity model
@@ -987,7 +1030,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --levels leve
 | `--levels FILE` | The maturity model the run used (default: the shipped `skills/assess/levels/default.toml`). A different `version` exits 2. |
 | `--settings PATH` | The ghreport settings the run used, in the `fleet.py --settings` forms. |
 
-Each page holds:
+Each page holds (every heading opening with an `In place:` line, as above):
 
 - the group's level on every maturity model row, with the roll-up rule;
 - for each row below its top level, the unmet criteria of the next level, one
@@ -998,7 +1041,7 @@ Each page holds:
   back, each with its current value, and apart from them the repositories that
   could not be measured; an org row names the settings scope it applies to;
 - for an `unknown` row, the signals that were not measured, in how many
-  repositories, and how to measure them: a measurement gap, not a failure.
+  repositories, and how to measure them: a measurement gap, not a setback.
   When measured repositories already fail a higher level, those criteria follow.
 
 Pages are counts-only (ids, counts, numbers, booleans and short tokens; any

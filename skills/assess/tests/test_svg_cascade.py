@@ -1,7 +1,7 @@
 """The heatmap stylesheet must not override any <text> presentation attribute.
 
-Lives apart from test_complexity_treemap.py, which sits at its file-size
-ceiling; the cascade check itself is in svg_cascade.py.
+Lives apart from the test_complexity_treemap*.py family; the cascade check
+itself is in svg_cascade.py.
 """
 from __future__ import annotations
 

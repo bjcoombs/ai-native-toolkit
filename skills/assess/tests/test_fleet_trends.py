@@ -268,7 +268,7 @@ def test_a_raising_trend_renderer_is_a_skip_line(monkeypatch):
         raise RuntimeError("render bug")
     monkeypatch.setattr(ft, "render_trend", bug)
     entry = _trend([_run(str(i), "v", {"g": 1.0}) for i in range(3)])
-    assert entry["skipped"] == "skipped: drawing failed (RuntimeError)."
+    assert entry["skipped"] == "skipped: the renderer raised RuntimeError."
 
 
 def test_trend_file_is_cleared_with_the_others(tmp_path):

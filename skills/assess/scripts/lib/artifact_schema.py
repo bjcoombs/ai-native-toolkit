@@ -238,7 +238,13 @@ constant each.
 # mypy strict), whether an instruction file states each, a snippet for each
 # unstated one, and stated_pct. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.40.0"
+# 1.41.0: run-context.json gains the agent_consistency block (issue #768): the root
+# instruction files of every agent system present, the check commands and
+# thresholds they disagree on, each file's link to the canonical source and the
+# pointer line per unlinked system. nested_instructions also discovers the
+# Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -394,4 +400,8 @@ ARTIFACT_SCHEMA_VERSION = "1.40.0"
 #     maturity model gains the guardrails-stated row (half of the configured
 #     gates stated is level 1, all of them level 2, none found is unknown).
 #     Existing rows are unchanged.
-ASSESS_METHOD_VERSION = 35
+# 36: the agent_consistency block and its conflicts and unlinked signals (issue
+#     #768): the default maturity model gains the agent-consistency row (no
+#     conflict is level 1, every system linked to the canonical file level 2,
+#     fewer than two systems unknown). Existing rows are unchanged.
+ASSESS_METHOD_VERSION = 36

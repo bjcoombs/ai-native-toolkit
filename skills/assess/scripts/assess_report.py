@@ -120,7 +120,7 @@ $diff_section
 
 ---
 
-_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer verdicts and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 """)
 
 
@@ -544,7 +544,7 @@ def _render_churn_window(ctx: dict[str, Any]) -> str:
     if doc_staleness.get("history_truncated"):
         # Shallow clone (issue #544): ages at the boundary are lower bounds.
         boundary = doc_staleness.get("history_boundary_date") or "unknown"
-        return f"{label} - shallow clone, history before {boundary} missing"
+        return f"{label} - shallow clone, history before {boundary} not in the clone"
     return label
 
 
