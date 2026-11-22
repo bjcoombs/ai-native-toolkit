@@ -16,6 +16,16 @@ fields), there is no ``additionalProperties`` limit, and a list of strings is
 typed as an array or an integer because counts-only output keeps only its
 length. ``tests/test_scan_block_schemas.py`` checks every described field is
 a field of the block's TypedDict, and that real documents validate.
+
+`BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
+of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
+`delivery` (#779), `guardrails` (#767) and `agent_consistency` (#768), read
+by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
+describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
+TypedDict field and every TypedDict field is described; real full and counts-only blocks
+validate). `tests/test_signals.py` fails when the checked-in file differs from
+`build_schema()`; regenerate with `uv run --locked python scripts/lib/signals_schema.py`
+from `skills/assess`.
 """
 from __future__ import annotations
 

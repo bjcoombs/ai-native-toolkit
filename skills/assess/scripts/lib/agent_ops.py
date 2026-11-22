@@ -19,6 +19,17 @@ and ``.claude/skills/`` are deliberately NOT scanned here - they already feed
 Layer 0; this block feeds Layer 8 only, so the two never double-count.
 
 Pure stdlib. ``scan_agent_ops`` never raises (callers wrap in ``_safe`` anyway).
+
+Layer 8 workflow-maturity evidence: scans the repo-observable agent-operations
+guardrails - `.claude/settings.json` / `.claude/settings.local.json` permission
+`allow`/`deny`/`ask` counts, hook events, sandbox config; scripts under
+`.claude/hooks/`; routine definitions under `.claude/workflows/` /
+`.claude/routines/`. Summary booleans (`permissions_encoded`, `hooks_present`,
+`routines_present`) credit **git-tracked** evidence only, mirroring the Layer 0
+rule (an uncommitted settings file reaches no clone). Deliberately excludes
+`.claude/agents/` and `.claude/skills/` - those are Layer 0's evidence - so the
+two layers never double-count. Pure stdlib JSON/filesystem reads plus
+`git_churn.tracked_files`.
 """
 from __future__ import annotations
 

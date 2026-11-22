@@ -7,6 +7,22 @@ so the anchor is ``%ct``; day counts subtract an author time (``%at``) from it,
 which keeps the rebase-safe staleness axis ``git_churn.file_last_commit_epoch``
 documents. A missing anchor (no HEAD, git failure) degrades the window scan; it
 never falls back to today.
+
+The anchor of every history window (issue #773). `head_commit_epoch(root)` is HEAD's
+committer time (`%ct`, the time `git log --since` filters on) or None; `since_args(root,
+window, anchor_epoch)` gives `["--since=@<epoch>"]` through
+`history_window.anchored_since`, `[]` for all history, and None when a window has no
+anchor so the caller degrades. Used by `git_churn` and `understanding_analysis`;
+`ai_usage` reads HEAD through its own `_git` so a missing git or a timeout keeps its
+reason, then builds the bound with `anchored_since`. Tests: `tests/test_commit_anchor.py` (anchored values on a
+dated fixture repository, and the same `scans` from two faked dates, Python's clock and
+git's), `tests/test_no_wall_clock.py` (an AST guard: no wall-clock read
+outside an allowlist of run-metadata and network functions, no relative git date
+literal, and every date bound a headless run passes to git starts with `@`).
+Outside the guarantee: the network scans (`merged_sample`, `review_reality`,
+`delivery`, `gate_cost`, `config_drift`) read forge state that is not a function of the
+commit, so Layer 7 level 2 (`layer-7-review`) is not yet same-commit-same-level; they
+are unavailable in a headless run. A dirty working tree is never a function of a commit.
 """
 from __future__ import annotations
 

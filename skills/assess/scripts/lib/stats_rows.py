@@ -4,6 +4,17 @@
 ``file_ccn_rows`` emits the uncapped ``files`` list, one ``{path, ccn}`` row per
 scored file, which the doc-complexity join reads so it sees every scored file
 rather than only the files that made a top-10 list (issue #556). Stdlib only.
+
+The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
+`top_lists` ranks the enriched rows into `top_hotspots` / `top_complex` / `top_large`
+(ten each, ties broken on path); `file_ccn_rows` emits `files`, every scored file as
+`{path, ccn}` (`FileCcnRow`), sorted by path with no cap. `doc_complexity_join.py`'s
+`_extract_file_ccn` reads `files`, so the join sees a complex file that made no top-10
+list (issue #556). Its other readers see every scored file too: `candidate_dead_weight`
+(through `keyhole_signals._high_complexity_paths`) and `orphaned_understanding`
+(through `understanding_analysis._extract_file_ccn`). Adding `files` moved `STATS_SCHEMA_VERSION` to 6, which disarms the
+cross-run diff once (`diff_reliability.py`). Stdlib only. Tests:
+`tests/test_stats_rows.py`.
 """
 
 from __future__ import annotations

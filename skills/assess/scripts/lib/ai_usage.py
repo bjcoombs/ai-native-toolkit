@@ -80,6 +80,38 @@ Privacy: counts, a share and fixed strings only. No name, e-mail or commit
 subject reaches the block. A missing git, a timeout, a non-repository and a
 shallow clone each degrade to ``{"available": False, "reason"}`` with a fixed
 reason of their own (``REASON_*``).
+
+AI-assisted change share (issue #547), a lower bound on agent use.
+`scan_ai_usage(repo_root, scope, history_window, fleet_config)` runs `git log --no-merges` over the
+`--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
+total_commits, agent_trailer_commits, agent_trailer_share, agent_authored_commits,
+agent_authored_share, agent_either_commits, agent_either_share, dependency_bot_commits,
+token_user_commits, agent_identity_rule_commits[], identities_awaiting_confirmation,
+lower_bound, covered_agents[],
+covered_author_agents[], limits[]}`. A commit is a trailer commit when any `Co-authored-by` trailer names an
+AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded),
+and an authored commit when `agent_identity.AuthorMatcher` (built by
+`matcher_from_config` from the merged `[ai_usage]` section of the `fleet_config`
+input) puts its author (`%ae`, `%an`) in the `agent` bucket; `agent_either_*` counts a
+commit with both once. `agent_identity_rule_commits[i]` counts the commits credited to
+config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
+`identities_awaiting_confirmation` counts the window's accounts `account_discovery.discover`
+lists (#765), a number only. `window_commits(repo_root, scope, window)` is the shared
+windowed read (`WindowCommits(commits, since)` or a fixed reason string).
+Each share is null at zero commits.
+`merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
+churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
+the headless `--window`), or None for full history (`window: "all-time"`);
+`resolve_window` returns the label and raises on anything else, which degrades the
+block. The window counts back from HEAD's committer time (issue #773) and `since`
+records the absolute `@<epoch>` bound; a window with no HEAD is `available: false`. `limits` is the
+fixed `LIMITS` tuple (squash merges, stripped or missing trailers, unrecognised
+identities, an agent under a person's identity, automation bots not counted; dependency
+bots and token users counted apart). Counts, shares and fixed strings only: no name, e-mail, pattern or
+subject. A missing git, a timeout, a non-repository and a shallow clone (or one
+`rev-parse --is-shallow-repository` cannot confirm is full) each degrade to
+`available: false` with a fixed reason of their own: a truncated history can put the
+share above the true value. Tests: `tests/test_ai_usage.py`.
 """
 from __future__ import annotations
 

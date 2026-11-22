@@ -36,6 +36,27 @@ file suffixes that count there):
 
 The files are counted, never parsed: ``ci_checks.unread_ci_files`` is the
 number of tracked paths that match, and no path is published.
+
+The unread-CI paths (issues #787, #928): CI files of systems `ci_checks` and `coverage_ci`
+do not parse, shared by both through `unread_ci_paths(tracked)` / `is_unread_ci_path(rel)`.
+Every path is relative to the repository root; the same name in a subdirectory is not
+the repository's pipeline. The unread-CI path list:
+
+- Exact paths (`UNREAD_CI_FILES`): Jenkins `Jenkinsfile`; CircleCI `.circleci/config.yml`;
+  Bitbucket `bitbucket-pipelines.yml`; Travis CI `.travis.yml`; Azure Pipelines
+  `azure-pipelines.yml`, `azure-pipelines.yaml`, `.azure-pipelines.yml` and
+  `.azure-pipelines.yaml`; Buildkite `.buildkite/pipeline.yml`, `.buildkite/pipeline.yaml`,
+  `buildkite.yml` and `buildkite.yaml`; Flutter Cocoon / LUCI `.ci.yaml`; Prow
+  `.prow.yaml`; Zuul `.zuul.yaml`; Drone `.drone.yml`; Woodpecker `.woodpecker.yml`;
+  Cirrus CI `.cirrus.yml`; AppVeyor `appveyor.yml`; Semaphore `.semaphore/semaphore.yml`;
+  Google Cloud Build `cloudbuild.yaml`; Bitrise `bitrise.yml`; Codemagic `codemagic.yaml`.
+- Patterns (`UNREAD_CI_PATTERNS`, any depth below the directory): LUCI project
+  configuration `infra/config/**/*.star` and `infra/config/**/*.cfg`; Azure Pipelines
+  `.azure/pipelines/**/*.yml|yaml`, `eng/pipelines/**/*.yml|yaml` (the .NET Arcade
+  layout), `.azure-pipelines/**/*.yml|yaml` and `azure-pipelines/**/*.yml|yaml`;
+  Woodpecker `.woodpecker/**/*.yml|yaml`; Zuul any file under `zuul.d/`.
+
+The files are counted, never parsed or published. Tests: `tests/test_external_ci.py`.
 """
 from __future__ import annotations
 

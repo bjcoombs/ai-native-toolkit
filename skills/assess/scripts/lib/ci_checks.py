@@ -190,6 +190,118 @@ changes, so a reader sees why the two signals disagree. ``basis`` describes
 ``enforced_basis`` does, and ``test_or_lint_configured`` keeps its value (as for
 ``unread_ci_system``). Layer 5 level 1 reads ``enforced_check_runs``; a stored
 scan without the key reads unknown there.
+
+Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
+it run a linter (#782)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
+the instruction file; Layer 3 level 1 reads `lint_runs`.
+`scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
+selects (GitHub Actions workflows directly under `.github/workflows/`, never a subfolder,
+which GitHub does not run (#919); `.gitlab-ci.yml`) plus the GitLab include files
+`ci_includes.resolve_includes` read (#766), and writes `{available,
+ci_files, check_commands, included_files, included_check_commands, resolved_includes,
+unresolved_includes, includes[], test_or_lint_configured, basis, enforced_check_runs,
+enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
+lint_basis, unread_ci_files}`. Each line,
+with its `- ` / `run:` / `script:` lead and a trailing `\\` dropped
+(`command_index.ci_line_text`), is split into shell segments by
+`command_resolver.extract_commands` on its own (an apostrophe or fence on one line
+cannot swallow the next); `check_commands` counts the lines with a segment that
+`check_command.is_check_command` or `is_lint_command` credits; a bare list item
+that only names a linter (`- mypy` under `matrix:`) does not count, and one that only
+names an always-check program (`- pytest`, `- tox`) counts only when its parent key is
+a GitLab `script:` / `before_script:` / `after_script:` (#725: under `needs:` or a
+`matrix:` axis it is a value). `count_check_lines(lines, context=)` is the same count over a
+line list, reading parent keys from `context` (the original lines) when given. Triggers are
+not read. Known limit: lines are read without a YAML parser, so a command inside a
+non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_configured` is true with any check
+line, own or included (`included_check_commands` counts the included ones); with none it
+is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
+(`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
+item, a job-level `uses:` of another repository's reusable workflow), else
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
+every include resolved and holds no check reads false. Its third argument is the
+`gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
+offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
+merged configuration, whose check lines are counted apart in `merged_check_commands`
+(the merged file repeats the own and resolved jobs). A check there makes the signal true
+(`basis: merged_config`, used only when no own or included line ran one: offline wins); a
+merged configuration read with none makes it false, unless it may lack jobs
+(`merged_partial`): a `rules:` key in the `include:` section of the repository's file or of a
+template read offline (`conditional_include`; the lint API may leave that include out), or a
+`trigger:` job in any of those or in the merged file (`child_pipeline`; a child or downstream
+pipeline is not expanded). Then the signal stays null with `basis: merged_config_partial`:
+unknown beats wrong. `merged_config` is `not_read`
+(offline), `not_needed`, `read`, `invalid` or `unavailable` (reason code in
+`merged_config_reason`); the merged text is never in the block. Known limit: a `rules:` include inside a
+template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
+`not_read`. The module itself is
+offline: it imports the value type, never a platform client.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line (own, included, or
+in the merged configuration when those hold none)
+whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
+off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
+null with `enforced_basis: unknown_trigger`), else null under the
+same `included_jobs` rule, else null with `enforced_basis: check_target` when an
+unmasked line on ordinary changes runs a target whose recipe is not read
+(`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_configured`, which keeps its meaning apart from #919's
+version-only and subfolder cases, which count nowhere.
+`lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
+and trigger rules, the same own, included and merged files, with
+`count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
+per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
+mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
+`lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
+`merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
+triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+target or script that may lint inside it; recipes are not read), `not_enforced`
+(false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
+`no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
+caps the row; a stored scan without the key reads unknown there.
+CI systems the scan does not parse (issues #787, #928): `unread_ci_files` counts the
+tracked files at the unread-CI paths of `unread_ci.py` (listed there). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_configured` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Off-repository CI (issue #928), after `unread_ci_system` and before the false cases:
+`external_ci` when the private `external_ci` reading (`external_ci.py`, `--platform`
+only) applies, else `external_ci_marker` when the tree tracks no CI file of any kind
+(no workflow, no `.gitlab-ci.yml`, no unread CI file) and the root holds a Prow
+`OWNERS_ALIASES` file. Either makes `enforced_check_runs` and `lint_runs` null with that
+basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_ci`, and
+`basis` reads it with `test_or_lint_configured` still false. Neither gives credit: a read
+enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
+environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
+Issue #926: a target whose recipe is not read (`_line_may_check`: `make foo`, `npm run
+foo`, `./scripts/foo.sh`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
+formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
+(`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
+gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
+`line_dotnet_build` and `line_compiler_gate` tallies (unmasked, on ordinary or unsettled
+triggers), and only where `lint_basis` would be `no_lint_command`: a masked linter beside a
+build keeps `not_enforced`. A masked or off-trigger compiler gate alone reads
+`not_enforced`. A lone `- msbuild` item reads its parent key like a lone linter
+(`_lone_build`), so a `matrix:` value is not a build.
+Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_external_ci.py` (#928), `tests/test_ci_lint_gates.py` (the #926 fixtures),
+`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
+`tests/test_level_signals.py`.
 """
 from __future__ import annotations
 

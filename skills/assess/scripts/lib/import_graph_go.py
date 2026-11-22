@@ -32,6 +32,41 @@ The shared ``EXCLUDE_DIRS`` is not used: ``build``, ``out``, ``dist``, ``target`
 and ``test`` are ordinary Go package names. Build constraints are not evaluated: every non-test file
 counts. A file that cannot be read is skipped. The builder has no tool to miss,
 so it never raises ``GraphUnavailable``.
+
+The Go builder (`GO_BUILDER`, issue #710). It reads `go.mod` and each file's `import`
+declarations as text and never runs a go tool (`go list` can reach the network). A
+graph module is a Go package, a directory holding a non-test `.go` file, with its
+repo-relative path as the id (`.` for the root). The go.mod module path
+(`example.com/org/svc`) only resolves an import to a directory and never reaches an id,
+so no module path appears in the block, hashed or not. A package belongs to the nearest
+`go.mod` at or above it; nested modules resolve each other's imports. Each package is
+its own boundary (`package_of[m] == m`) and a front door, since an importer reaches only
+exported identifiers: Go has no burrow edge and `front_door_ratio` is 1.0 by
+construction, so its Layer 2 level 2 reads modularity plus one cross-package import. The
+public surface is the package's exported top-level `func` (not method) and `type`
+declarations. There is no `module_file` (a package is several files), so A1 size reads 0
+and structure-drift tier 1, whose static lens pairs files, empties its three
+static-derived lists with reason `no_static_file_map` rather than reading every declared
+pair as split; its three co-change metrics still report. The run-context `tier_1` block
+(`context_blocks.py`) carries those three counts as null with `static_lens_reason:
+no_static_file_map`, and the report prints them `n/a (no_static_file_map)`, never 0. The behaviour
+block projects the static metrics only onto directories holding a file the graph's
+language could graph (`import_graph.is_graph_source` over `structure.language`), so a Go
+graph never vouches for a Python tree or a directory of `_test.go` files alone. Go's
+`front_door_ratio` is projected as null there (1.0 by construction is not evidence), so
+`hidden_coupling` on a Go directory rests on `modularity_q` alone. Skipped:
+`_test.go` files, `GO_SKIP_DIRS` (`vendor`, `testdata`, `node_modules`, `.git`), the
+configured excludes, and directories starting with `.` or `_`. The shared `EXCLUDE_DIRS`
+is not used, since `build`, `out`, `dist`, `target` and `test` are ordinary Go package
+names. The builder's `is_graph_source(rel)` hook applies the same skips to the
+dominant-language count and to `import_graph.is_graph_source`. Build constraints are not evaluated. No `go.mod` returns `None`,
+so the reason stays `no_import_graph_go`; the builder has no tool to miss and never
+raises `GraphUnavailable`. Graphs are not compared by size against the dominant
+language's: a Go-dominant repository reports its Go graph even beside a larger Python
+package tree, and a Go module beside loose Python scripts (Python dominant, no package
+to graph) reports Go through the fallback.
+Tests: `tests/test_import_graph_go.py` (including a `--counts-only --hash-paths` run),
+`tests/test_import_graph_contract.py` (the contract every registered builder keeps).
 """
 from __future__ import annotations
 

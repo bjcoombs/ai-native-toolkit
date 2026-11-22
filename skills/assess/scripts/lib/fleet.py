@@ -52,6 +52,52 @@ empty either way, so a moved submodule commit still does.
 Read only: every git call here and in the scan runs with
 ``GIT_OPTIONAL_LOCKS=0``, scans run with the scratch directory as their working
 directory, and their output lands in that scratch directory, never in a target.
+
+The core of `skills/fleet/scripts/fleet.py` (issue #567): headless signals across a
+ghsync root or a list, one JSONL row per repository. `discover_root` walks
+`<root>/<path>/<repo>-main` at any depth (by layout, not by a valid `.git`, so a broken
+checkout is reported rather than skipped), never descending into a found repository,
+`worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
+directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
+expanded is a `ValueError`, a usage error, and so is one whose expanded home directory
+does not exist, since Windows expands `~name` without checking the account, #965); `layout_id` gives both inputs the
+same `repo` id (the path under the root, prefixed with the root's name when one
+segment), a listed path outside the root falling back to `remote_path` (the `origin`
+URL's path) and then to its last two directory names. `scan_target` checks
+`checkout_problem` first (`assess_signals` exits 0 on a broken `.git`), then runs
+`assess_signals.py` as a subprocess with `GIT_OPTIONAL_LOCKS=0` and `PYTHONUTF8=1` (#712), counts-only unless
+told otherwise, from a scratch directory, with a timeout; every failure becomes a
+`failed` row with a reason token (`FAILURE_REASONS` or `scan_exit_<code>`), never
+message text. A `scan_exit_<code>` failure's stderr tail goes to `write_stderr_tail`
+(`<out>/logs/<repo>.stderr`, when `ScanOptions.log_dir` is set), never into the row;
+`run_fleet` first removes the `*.stderr` files there (`clear_stderr_logs`, nothing else), and a path resolving outside it is not written.
+`remote_path` drops `.`, `..` and empty segments, so a remote-derived id cannot climb out,
+and treats a host-less URL (`file:///...`) as no remote, so no local path becomes an id.
+A list entry repeating an earlier id is skipped with a note on stderr. `run_fleet` maps targets over a thread pool of those processes, isolates
+a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
+`repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
+its schema version - no stamp field, path or timing - so reruns are byte-identical.
+`run_salt` draws one salt per run for `--hash-paths`; under a salt a failed scan's
+stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
+hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
+(`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
+`fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
+no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
+`git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
+when failed. On an ok row `dirty` is `null` only when unknown, with `dirty_reason` naming why
+(#932, `DIRTY_UNKNOWN_REASONS`): `no_commit`, `status_error`, `index_read_error`, or, after a
+clean status, index entries `git status` never compares (`_hidden_entries` reads `git ls-files -v`:
+`sparse_checkout`, `skip_worktree`, `assume_unchanged`). `commit_state` returns `CommitState`
+(`RepoCommit` plus `dirty_reason`). Status runs with `--ignore-submodules=dirty`, so a submodule's
+own edits never mark the checkout dirty (unlike `/assess`); a moved submodule commit still does.
+`_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when known clean or without a commit, else (dirty or unknown) a
+`git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
+(no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
+copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
+`run_signals` too, so it reads the same tree. The row shape is the `FleetRow`
+TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
+readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 """
 from __future__ import annotations
 

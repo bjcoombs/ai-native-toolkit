@@ -19,6 +19,18 @@ A repository whose ``shared_tooling`` evidence is missing (a failed scan, an
 unavailable or absent block) is named on a hatched strip, never shown as
 sharing nothing; repositories that share nothing are named on their own line.
 Deterministic: repositories and items sorted by fixed keys.
+
+The shared-tooling map (#674). `tooling_view(repos)` reads each scanned repository's
+`shared_tooling` block: links to its tracked CI source and marketplace ids with the refs it
+pins (`ci_includes[].ref`), the repositories that share nothing, and those with no evidence
+(failed, absent or unavailable block). `common_refs` is each item's most pinned ref (ties:
+lexically greatest); `drifted` marks a link pinned off it, drawn dashed. An unpinned include
+is not drift (counted as unpinned); an include whose `ref` key is absent (dropped by
+counts-only) or whose ref is a CI variable (`ref_variable`, #684) is "pin unknown", drawn
+dotted, never unpinned or drift. A run whose blocks carry neither `ref` nor `ref_variable`
+(before #674) says "drift not shown" instead. `render_tooling_map` draws
+repositories left, items right with their dependent counts, and the unknown repositories on
+a hatched strip.
 """
 from __future__ import annotations
 

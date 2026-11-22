@@ -31,6 +31,30 @@ Writes are narrow and fail closed:
 ``latest_matching`` finds the newest entry (by date, then suffix) whose stamp
 matches a planned run, preferring one with the same repository set: the
 default earlier run for ``--compare``.
+
+The fleet run history (issue #552): each counts-only run's `repos.jsonl`, `groups.jsonl`
+and `run.json` kept in `<root>/<org>/<scan_date>/`, plus `doc_freshness.jsonl` and `fleet-data.json` when the
+run wrote them (`OPTIONAL_HISTORY_FILES`, #664 and #703; a same-day replacement without it removes
+the old copy so an entry never mixes runs). `history_root` is
+`${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet` (a relative or empty
+`XDG_DATA_HOME` ignored); `default_org` is the first segment every repository id shares,
+or the distinct ones sorted and joined by `+`. Fails closed: `safe_component` rejects a
+name that is not one plain path component, `entry_dir` refuses a symlinked directory on
+the way, and `entry_conflict` keeps a same-day entry that is not this tool's (no readable
+`run.json` at the current stamp version) or whose stamp differs in maturity-model version,
+window, output mode, scan selection, path hashing or `--fleet-config` hash, or that holds a different
+repository set (`entry_repos`), so a partial rerun never replaces a full-fleet entry;
+`choose_entry` then moves to
+`<date>.2`, `<date>.3`, ... (the first free or matching, up to `MAX_SAME_DAY`).
+`latest_matching` finds the newest matching entry, preferring one over the same
+repository set, the default for a bare `--compare`. `dated_entries` lists the
+`<date>[.<n>]` directories oldest first; `one_per_date` keeps one accepted entry per date
+before a run's (the entry over its repository set, else the highest suffix), shared by
+`fleet_trends` and `fleet_achievements_runs`.
+`persist` writes the three files to a hidden temp sibling first: a new entry is that
+directory renamed into place in one step, and a replaced same-day entry loses its
+`run.json` before the new files move in (`run.json` last), so a failure part-way never
+leaves a mixed entry that `latest_matching` selects. Other files in an entry are kept.
 """
 from __future__ import annotations
 

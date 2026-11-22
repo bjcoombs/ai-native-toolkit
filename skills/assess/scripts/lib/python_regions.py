@@ -13,6 +13,18 @@ about the code. Any other string literal, f-strings and t-strings included, is
 fall back to its line-based filters; nothing here raises on bad input.
 
 Pure stdlib. No LLM calls.
+
+Token regions of a Python source for `promissory_markers`: `tokenize` records
+each string literal's span (classed `docstring` when it is a statement of its
+own, `string` otherwise; an f-string, a t-string and a run of implicitly
+concatenated literals each form one span) and each comment's
+opening column, and `PyRegions.region(row, col)` answers `comment` / `docstring`
+/ `string` / `code`. Returns `None` for a source that does not tokenize, so the
+caller falls back to its line filters; `load_regions` memoises per file and
+decodes the bytes with `utf-8-sig`, so a BOM does not shift row 1 against rg's
+output and a lone carriage return is not split into a second row.
+Pure stdlib. Tested with the marker scan in
+`tests/test_promissory_markers_literals.py`.
 """
 
 from __future__ import annotations

@@ -16,6 +16,16 @@ The envelope is strict. ``scans`` holds the ``assess_signals`` blocks
 ``"available": false`` carries a ``reason``. ``review_automation`` and the blocks in
 ``lib/scan_block_schemas.py`` (``ai_usage``, ``ci_checks``, ``delivery``) are described
 field by field, and ``structure`` names its reason codes (``signals_schema.described_blocks``).
+
+Generates `skills/fleet/references/repos.schema.json` from `FleetRow` through
+`signals_schema.type_schema` (with `review_automation` and the `scan_block_schemas` blocks
+described under `scans`), with a `status` enum, a reason-token pattern and an
+`if`/`then` tying `ok` to non-null `scans`; and `run.schema.json` from `FleetStamp`
+(`build_stamp_schema`, mapping the `scans` name list itself); and
+`doc_freshness.schema.json` from `fleet_doc_freshness.FreshnessRow`
+(`build_freshness_schema`, status and reason enums, `scope`/`commits` lists mapped itself). `tests/test_fleet.py` and
+`tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
+`uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 """
 from __future__ import annotations
 

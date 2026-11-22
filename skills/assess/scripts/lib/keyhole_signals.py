@@ -18,7 +18,7 @@ reuses). No function writes files; ``assess_core.build_run_context`` calls
 catch-all so one signal's failure or timeout degrades that block to
 ``available: False`` rather than crashing the whole ``/assess`` run. The
 deterministic core stays ignorant of LLM-derived prose - this module emits only
-structured data + the named findings; the LLM write-back fills judgement later.
+structured data + the named findings; the LLM write-back fills judgement later. Full reference: lib/docs/keyhole_signals.md.
 """
 from __future__ import annotations
 

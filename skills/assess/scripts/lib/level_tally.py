@@ -77,6 +77,51 @@ bytes for identical inputs. ``/assess`` writes the result as the run context's
 ``level`` block (``run_context_level``); ``/fleet`` writes one per repository to
 ``level.json`` (``lib/fleet_level.py``). Shape: ``LevelResult`` (``lib/level_result_types.py``); the published
 schema is ``skills/fleet/references/level.schema.json``.
+
+The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
+one repository's signals with no prior run and no model in the path (#744). Each row level
+of the model is one condition, `<row id>.<level>`, read on its own criteria (a level does
+not need the level below; `requires` states a real dependency). `level_result(model, data)`
+returns a `LevelResult` (shapes in `level_result_types.py`):
+
+- `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
+  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
+  that is not met, a `reason` code. An owner-excluded condition also carries
+  `disposition: "excluded_by_owner"` and `exclusion_kind`. A
+  `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
+  `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
+- Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
+  entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
+  criteria say, out of the tally and the denominator; a condition that `requires` it is
+  `not_applicable` with `requires:<id>`; an excluded gate condition never holds its gate, so
+  its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
+  (`{id, kind, source}`) is present only when an exclusion applies, so a result without
+  exclusions is unchanged. Ids the model does not define are ignored.
+- `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
+  unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
+- `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
+  unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
+  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
+  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
+  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+
+Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906, and
+`agent_environment.pinning.unlocked_total` with `manifests_total` 0: `no_manifests`, #927); an
+`UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
+`requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
+counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads `level_tally.LEVEL_READS`:
+the blocks the default model names, `DEFAULT_BLOCKS`, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
+`$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
+fixtures through `/fleet` and `/assess` on the same commit.
 """
 from __future__ import annotations
 

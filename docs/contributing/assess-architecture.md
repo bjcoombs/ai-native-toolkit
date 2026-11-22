@@ -1,6 +1,6 @@
 # /assess architecture
 
-How the `/assess` skill splits work between a deterministic core and the LLM. The per-module reference is [`skills/assess/scripts/lib/README.md`](../../skills/assess/scripts/lib/README.md). Back to the [Map of Content](../index.md).
+How the `/assess` skill splits work between a deterministic core and the LLM. The per-module reference is each module's docstring under `skills/assess/scripts/lib/`; the [lib README](../../skills/assess/scripts/lib/README.md) holds the seams. Back to the [Map of Content](../index.md).
 
 ## Layering
 
@@ -18,7 +18,7 @@ Key modules:
 
 Tests live in `skills/assess/tests/` and run via `uv run --with pytest pytest`. Add a test alongside any change to a deterministic module: that is the contract that lets the output be trusted regardless of which LLM is driving.
 
-`skills/assess/scripts/lib/README.md` is also the home of the **co-change seam map**: it names the directories that move together by design (the core <-> lib seam, each lib module <-> its test, and the standalone build <-> the skills it packages), so the historical coupling `/assess` flags on this repo reads as owned cohesion, not entanglement. Update it alongside any change to a `lib/` module so it never becomes a lying map of its own.
+`skills/assess/scripts/lib/README.md` is also the home of the **co-change seam map**: it names the directories that move together by design (the core <-> lib seam, each lib module <-> its test, and the standalone build <-> the skills it packages), so the historical coupling `/assess` flags on this repo reads as owned cohesion, not entanglement. Update it alongside any change to a `lib/` module that moves a seam, so it never becomes a lying map of its own.
 
 ## The `.assess/` wiki
 

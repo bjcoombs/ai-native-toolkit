@@ -31,6 +31,18 @@ One run per scan date (``fleet_history.one_per_date``); dates on or after this r
 are dropped, since this run comes from memory, so a same-day rerun gives the same
 bytes. An unreadable entry is passed over, never an error. An earlier
 ``achievements.json`` is never read: the engine recomputes from run data every time.
+
+`earlier_runs` reads the history entries the engine replays: `run.json` passing
+`fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
+`READABLE_FLEET_DATA_VERSIONS` (1, 2 and 3: version 1's roll-up is not read, #772;
+version 3 only adds `opportunities`, #746),
+one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
+`run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
+the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
+model and key function (`model=`, `key=`), an entry whose only refusal is the
+maturity-model version is re-scored from its `repos.jsonl` (`fleet_view.read_repos`,
+`fleet_rescore.rescore`) and returned as a `HistoryRun` with `rescored_from` (its stored
+version) and `stored` (its `fleet-data.json`) set (#771).
 """
 from __future__ import annotations
 
