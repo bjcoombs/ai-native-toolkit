@@ -4197,7 +4197,7 @@
       "collector": "core.agent_environment",
       "input_class": "head_text",
       "grade": "declared",
-      "null_means": ""
+      "null_means": "no_manifests: no dependency manifest is read (pinning.manifests_total 0), so there is nothing to lock"
     },
     {
       "path": "coverage_gate.enforced_meets_minimum",
