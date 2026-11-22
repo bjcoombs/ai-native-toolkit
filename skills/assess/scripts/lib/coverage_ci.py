@@ -27,7 +27,9 @@ How a gate is run, by where it is written:
   true`` committed; Vitest: ``vitest --coverage``; nyc/c8: the program; JaCoCo:
   ``mvn verify`` / ``install`` / ``deploy`` / ``jacoco:check``, Gradle's
   ``jacocoTestCoverageVerification``; go-test-coverage: the program or its
-  action. A pytest ``addopts`` threshold is run by any ``pytest`` line.
+  action. A threshold flag in a pytest config section (``[pytest]``,
+  ``[tool:pytest]``, ``[tool.pytest.ini_options]``) is ``addopts``, run by any
+  ``pytest`` line; a ``tox.ini`` ``[testenv]`` ``commands`` line is a task command.
 - A task-runner file (``Makefile``, ``tox.ini`` commands, ``package.json``
   scripts, ``justfile``, ``noxfile.py``, ...): CI reaches it only through a
   target, whose recipe this scan does not follow.
@@ -84,7 +86,6 @@ _GO_TC_ACTION = re.compile(r"uses:\s*['\"]?vladopajic/go-test-coverage@", re.IGN
 _TASK_FILES = frozenset({
     "Makefile", "justfile", "Justfile", "Taskfile.yml", "Taskfile.yaml", "noxfile.py",
     "package.json", "tox.ini", ".pre-commit-config.yaml"})
-_PYTEST_CONFIGS = frozenset({"pyproject.toml", "pytest.ini", "setup.cfg"})
 # The null reasons, most specific first.
 _NULL_ORDER: tuple[EnforcedBasis, ...] = (
     "unknown_trigger", "indirect_run", "included_jobs", "unread_ci_system")
@@ -230,12 +231,16 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     return False
 
 
-def gate_family(gate: Gate) -> str | None:
-    """The tool run a config gate needs, or None for a gate written as a command line."""
+def gate_family(gate: Gate, pytest_lines: frozenset[tuple[str, int]] = frozenset()
+                ) -> str | None:
+    """The tool run a config gate needs, or None for a gate written as a command line.
+    ``pytest_lines`` are the ``(file, line)`` pairs inside a pytest config section
+    (``[pytest]``, ``[tool:pytest]``, ``[tool.pytest.ini_options]``): a flag there is
+    ``addopts``, which any ``pytest`` run applies, not a ``tox.ini`` ``commands`` line."""
     tool, file = str(gate["tool"]), str(gate["file"]).rsplit("/", 1)[-1]
     if tool == "coverage.py" and str(gate["form"]).endswith("fail_under"):
         return "coverage.py"
-    if tool == "pytest-cov" and file in _PYTEST_CONFIGS:
+    if tool == "pytest-cov" and (str(gate["file"]), _line(gate)) in pytest_lines:
         return "pytest"
     if tool in ("jest", "vitest"):
         return tool
@@ -262,10 +267,12 @@ def _merge(states: Iterable[bool | None | str]) -> bool | str:
 
 
 def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool = False,
-             jest_collects: bool = False) -> bool | str:
+             jest_collects: bool = False,
+             pytest_lines: frozenset[tuple[str, int]] = frozenset()) -> bool | str:
     """True when an enforced CI line runs ``gate``; a null reason token when that cannot be
     told; False when CI is read and does not."""
     file = str(gate["file"])
+    family = gate_family(gate, pytest_lines)
     if file in ci.ci_files:
         states: list[bool | None | str] = []
         for run in ci.runs:
@@ -277,13 +284,13 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool 
                 states.append(True if run.trigger == "ordinary"
                               else "unknown_trigger" if run.trigger == "unknown" else False)
         found = _merge(states)
-    elif file.rsplit("/", 1)[-1] in _TASK_FILES and gate_family(gate) is None:
+    elif file.rsplit("/", 1)[-1] in _TASK_FILES and family is None:
         found = _indirect(ci)
-    elif gate_family(gate) is None:
+    elif family is None:
         # A CI system or composite action this module does not read.
         found = "unread_ci_system"
     else:
-        found = _merge([_tool_state(run, str(gate_family(gate)), pytest_cov, jest_collects)
+        found = _merge([_tool_state(run, family, pytest_cov, jest_collects)
                         for run in ci.runs] + [_indirect(ci)])
     if found is False and ci.elsewhere:
         return "included_jobs"
@@ -311,7 +318,9 @@ def _indirect(ci: CiRuns) -> bool | str:
 def enforced_meets_minimum(
         gates: Sequence[G], threshold: bool | None, ci: CiRuns, line_gates: LineGates, *,
         counted: Callable[[G], bool], minimum: float, pytest_cov: bool = False,
-        jest_collects: bool = False) -> tuple[bool | None, EnforcedBasis]:
+        jest_collects: bool = False,
+        pytest_lines: frozenset[tuple[str, int]] = frozenset()
+        ) -> tuple[bool | None, EnforcedBasis]:
     """``(enforced_meets_minimum, enforced_basis)``: ``threshold`` is
     ``threshold_meets_minimum``. A false or null threshold stays false or null; a true one
     is met only when CI runs a counted gate of at least ``minimum`` percent."""
@@ -325,7 +334,7 @@ def enforced_meets_minimum(
         percent = gate["threshold_percent"]
         if not counted(gate) or (isinstance(percent, (int, float)) and percent < minimum):
             continue
-        state = gate_run(gate, ci, line_gates, pytest_cov=pytest_cov,
+        state = gate_run(gate, ci, line_gates, pytest_cov=pytest_cov, pytest_lines=pytest_lines,
                          jest_collects=jest_collects)
         if state is True and percent is not None:
             return True, "ci_run"

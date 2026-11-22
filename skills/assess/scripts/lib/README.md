@@ -4133,7 +4133,7 @@ A gate written on a CI line must sit on an enforced command that carries its fla
 config gate needs an enforced command that runs its tool (`runs_tool`, `gate_family`):
 `pytest --cov` (or a pytest `addopts` holding `--cov`) or `coverage
 report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
-nothing), any `pytest` for an `addopts` threshold, `jest --coverage` (or `jest` with
+nothing), any `pytest` for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
 `collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
 or `jacoco:check`, Gradle `jacocoTestCoverageVerification`, the go-test-coverage
 program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)

@@ -166,6 +166,7 @@ _GRADLE_VALUE_RE = re.compile(r"\bvalue\s*=\s*[\"'](\w+)[\"']")
 # pytest ``addopts`` holding a ``--cov`` flag: a plain ``pytest`` runs coverage.
 _ADDOPTS_COV_RE = re.compile(r"^\s*addopts\s*=.*--cov\b")
 _PYTEST_CONFIG_FILES = {"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
+_PYTEST_SECTIONS = {"pytest", "tool:pytest", "tool.pytest.ini_options"}
 _JEST_COLLECTS_RE = re.compile(r"[\"']?collectCoverage[\"']?\s*:\s*true\b")
 
 # Common gate forms this scan does not read - reported so an empty result reads
@@ -649,6 +650,20 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
+def _pytest_section_lines(lines: list[str]) -> list[int]:
+    """1-based lines inside a pytest config section (``[pytest]``, ``[tool:pytest]``,
+    ``[tool.pytest.ini_options]``), where a flag is ``addopts``, not a task command."""
+    out: list[int] = []
+    current = None
+    for idx, line in enumerate(lines, 1):
+        header = _SECTION_RE.match(line)
+        if header:
+            current = header.group(1).strip().strip("\"'")
+        elif current in _PYTEST_SECTIONS:
+            out.append(idx)
+    return out
+
+
 def gates_something(gate: CoverageGate) -> bool:
     """A gate `configured` counts: a non-zero threshold, a null one from nyc/c8, or any
     bound on what is missed (a JaCoCo ``MISSEDCOUNT`` maximum of 0 misses nothing)."""
@@ -705,12 +720,15 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     scope_abs = (root / scope).resolve() if scope else None
     gates: list[CoverageGate] = []
     pytest_cov = jest_collects = False
+    pytest_lines: set[tuple[str, int]] = set()
     for path, rel in _candidate_files(root, scope_abs, excludes or (set(), [])):
         lines = _read_lines(path)
         if lines is None:
             continue
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
+        if path.name in _PYTEST_CONFIG_FILES:
+            pytest_lines.update((rel, n) for n in _pytest_section_lines(lines))
         pytest_cov = pytest_cov or (path.name in _PYTEST_CONFIG_FILES
                                     and any(_ADDOPTS_COV_RE.match(x) for x in lines))
         jest_collects = jest_collects or any(_JEST_COLLECTS_RE.search(x) for x in lines)
@@ -722,7 +740,8 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     enforced, basis = enforced_meets_minimum(
         gates, meets, read_ci_runs(root) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
-        minimum=MINIMUM_THRESHOLD_PERCENT, pytest_cov=pytest_cov, jest_collects=jest_collects)
+        minimum=MINIMUM_THRESHOLD_PERCENT, pytest_cov=pytest_cov, jest_collects=jest_collects,
+        pytest_lines=frozenset(pytest_lines))
     return {
         "available": True,
         "configured": any(gates_something(g) for g in gates),
