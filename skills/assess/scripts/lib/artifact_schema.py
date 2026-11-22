@@ -203,11 +203,15 @@ constant each.
 # continue-on-error: true, allow_failure: true, set +e) and checks off the
 # ordinary triggers left out. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-# 1.33.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# 1.33.0: run-context.json coverage_gate gains unmeasured_reason (issue #788):
+# go_rust_gate_form_not_read when no gate is found in a repository holding a
+# go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
+# the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
+# 1.36.0: run-context.json ci_checks gains unread_ci_files, and basis and
 # enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
 # system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.33.0"
+ARTIFACT_SCHEMA_VERSION = "1.36.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -331,9 +335,13 @@ ARTIFACT_SCHEMA_VERSION = "1.33.0"
 #     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
 #     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
 #     Layer 5 evidence can move.
-# 29: a repository with no readable CI check whose tree tracks a CI file of a
+# 29: coverage_gate reads go-test-coverage's .testcoverage.yml, cargo tarpaulin
+#     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
+#     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
+#     level 1 as not measured (threshold_meets_minimum null) where it read 0.
+# 31: a repository with no readable CI check whose tree tracks a CI file of a
 #     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
 #     Bitbucket Pipelines, Travis CI, Buildkite) reads
 #     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
 #     its Layer 5 row moves from level 0 to unknown (issue #787).
-ASSESS_METHOD_VERSION = 29
+ASSESS_METHOD_VERSION = 31
