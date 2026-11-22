@@ -30,10 +30,11 @@ Every kind counts one gate per configuring file. Ruff, flake8 and mypy configs
 are read wherever they sit in the repository (a package's own ``pyproject.toml``
 is a gate of its own), through the walk ``coverage_gate`` uses, so a monorepo's
 package gates are counted beside its coverage floors. A scoped run walks the scope
-only (#956), as ``coverage_gate`` does, so a flake8 or mypy config outside the scope
-is not a gate of the run and ``not_read`` names those configs. Ruff finds its config by
-walking up from each file, so when the scope root holds no ruff config the nearest one
-at or above it (up to the repository root, in ruff's order) is the scope's ruff gate.
+only (#956), as ``coverage_gate`` does, so a package config beside the scope is not a
+gate of the run. Ruff finds its config by walking up from each file, and mypy and flake8
+from the directory they run in, so when the scope root holds no config for a tool the
+nearest one at or above it (up to the repository root, in the tool's order) is the
+scope's gate for that tool.
 The root pre-commit config still counts, as the root CI files do for ``coverage_gate``,
 because it runs on every commit to the scope; its hooks' ``files`` and ``exclude``
 filters are not read, and ``not_read`` says so. Within one directory only
@@ -50,7 +51,8 @@ CI checks and branch protection, sign-off rules.
 
 A gate is **stated** when one line of a graded instruction file (the keys of the
 core's ``instruction_files``) names its rule and, where the gate has a threshold,
-the threshold as a standalone number:
+the threshold as a standalone number (not glued to a letter, digit, underscore or dot, so
+``v1.0`` or ``max10`` states nothing):
 
 - ``complexity_limit``: ``complexity``, ``C901`` or ``mccabe`` and the limit;
 - ``coverage_floor``: ``coverage`` and the threshold as a percentage (``80``) or
@@ -85,9 +87,9 @@ count) and `type_strictness` (mypy `strict = true` in `[tool.mypy]`, `mypy.ini`,
 (`config_files`, through `coverage_gate.walk_named`: the coverage scan's bounded walk with
 the built-in and user excludes), so each package's own `pyproject.toml` is a gate of its
 own and a monorepo's package gates are counted beside its coverage floor; a scoped run
-walks the scope only (#956): flake8 and mypy configs outside it are named in `not_read`,
-ruff's nearest config at or above a scope root without one counts (`_ruff_above`), and
-the root pre-commit config still counts, its hook file filters named in `not_read`. Every kind counts
+walks the scope only (#956), and for a scope root without a ruff, flake8 or mypy config
+the tool's nearest config at or above it counts (`_nearest_above`); the root pre-commit
+config still counts, its hook file filters named in `not_read`. Every kind counts
 one gate per configuring file. Within a directory only the config the tool reads counts
 (`_applied`): the first, in the tool's own order, that configures it (ruff `.ruff.toml`,
 `ruff.toml`, a `pyproject.toml` with `[tool.ruff]`; flake8 the first of `setup.cfg`, `tox.ini`,
@@ -96,7 +98,9 @@ one gate per configuring file. Within a directory only the config the tool reads
 (the keys of `instruction_files`, an aliased file read once) names its rule and its
 threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
 `coverage` plus the floor (a ratio only with a decimal point, so `1.0` for 100; with no
-readable floor, `coverage` beside `fail_under`, `threshold`, `floor` or `minimum`), `pre-commit`, or `mypy` plus `strict`. The local
+readable floor, `coverage` beside `fail_under`, `threshold`, `floor` or `minimum`),
+`pre-commit`, or `mypy` plus `strict`. A threshold glued to a letter, digit, underscore
+or dot (`v1.0`, `max10`) is not a standalone number and states no gate. The local
 command is not required. An unstated gate carries `snippet`, a one-line sentence built
 from a template and the gate's own figures (never from file text) naming the rule, the
 threshold, the configuring file and the command that checks it. `stated_pct` is
@@ -139,10 +143,7 @@ NOT_READ: tuple[str, ...] = (
     "required CI checks and branch protection",
     "sign-off rules",
 )
-NOT_READ_SCOPED: tuple[str, ...] = (
-    "flake8 and mypy configs outside the scope (for example a root `setup.cfg` or `mypy.ini`)",
-    "pre-commit hook `files` and `exclude` filters",
-)
+NOT_READ_SCOPED: tuple[str, ...] = ("pre-commit hook `files` and `exclude` filters",)
 # Ruff compares C9 and C90 as the same linter-level selector (#956).
 _SELECTOR_SPECIFICITY = {"ALL": 0, "C9": 3}
 
@@ -407,20 +408,25 @@ def _scope_base(root: Path, scope: Path | str | None) -> Path | None:
     return None if base == root else base
 
 
-def _ruff_above(root: Path, base: Path, applied: list[str]) -> str | None:
-    """On a scoped run whose scope root has no ruff config, the config ruff applies to it:
-    the nearest at or above the scope, up to the repository root, in ruff's own order."""
+def _nearest_above(root: Path, base: Path | None, applied: list[str], order: tuple[str, ...],
+                   configures: Callable[[Path, str], bool]) -> list[str]:
+    """``applied``, plus, on a scoped run whose scope root has no config for the tool, the
+    one the tool applies to it: the nearest at or above the scope, up to the repository
+    root, in the tool's own order. Ruff walks up from each file, and mypy and flake8 from
+    the directory they run in, so a root config gates a scope that has none (#956)."""
+    if base is None:
+        return applied
     scope_rel = base.relative_to(root).as_posix()
     if any(Path(rel).parent.as_posix() == scope_rel for rel in applied):
-        return None
+        return applied
     for directory in [base, *base.parents]:
         if not directory.is_relative_to(root):
             break
-        for name in _RUFF_FILES:
+        for name in order:
             rel = (directory / name).relative_to(root).as_posix()
-            if (directory / name).is_file() and _configures_ruff(root, rel):
-                return rel
-    return None
+            if (directory / name).is_file() and configures(root, rel):
+                return [rel, *applied]
+    return applied
 
 
 def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None,
@@ -429,15 +435,16 @@ def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None,
     """Every gate this module reads under ``root`` (or ``scope``, an absolute directory
     under it), in kind order then file order."""
     files = config_files(root, excludes, scope)
-    ruff = _applied(root, files, _RUFF_FILES, _configures_ruff)
-    above = _ruff_above(root, scope, ruff) if scope is not None else None
+
+    def applied(order: tuple[str, ...], configures: Callable[[Path, str], bool]) -> list[str]:
+        return _nearest_above(root, scope, _applied(root, files, order, configures), order,
+                              configures)
+
     gates: list[Guardrail | None] = [
-        _ruff_gate(root, rel) for rel in ([above] if above else []) + ruff]
-    gates += [_flake8_gate(root, rel)
-              for rel in _applied(root, files, _FLAKE8_FILES, _configures_flake8)]
+        _ruff_gate(root, rel) for rel in applied(_RUFF_FILES, _configures_ruff)]
+    gates += [_flake8_gate(root, rel) for rel in applied(_FLAKE8_FILES, _configures_flake8)]
     gates += [*_coverage_gates(coverage_gate), _pre_commit_gate(root)]
-    gates += [_mypy_gate(root, rel)
-              for rel in _applied(root, files, _MYPY_FILES, _configures_mypy)]
+    gates += [_mypy_gate(root, rel) for rel in applied(_MYPY_FILES, _configures_mypy)]
     return [gate for gate in gates if gate is not None]
 
 

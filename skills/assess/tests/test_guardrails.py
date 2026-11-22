@@ -276,13 +276,16 @@ def test_a_scoped_run_counts_only_the_gates_inside_the_scope(tmp_path: Path) -> 
     })
     scoped = scan_guardrails(root, [], detect_coverage_gate(root, Path("pkg")), None,
                              Path("pkg"))
+    # pkg has its own ruff config; flake8 and mypy find the root ones by walking up.
     assert [(g["kind"], g["file"]) for g in scoped["gates"]] == [
-        ("complexity_limit", "pkg/pyproject.toml"), ("coverage_floor", "pkg/pyproject.toml"),
-        ("pre_commit", ".pre-commit-config.yaml")]
-    assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 2
+        ("complexity_limit", "pkg/pyproject.toml"), ("complexity_limit", "setup.cfg"),
+        ("coverage_floor", "pkg/pyproject.toml"), ("pre_commit", ".pre-commit-config.yaml"),
+        ("type_strictness", "pyproject.toml")]
+    assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 1
     absolute = scan_guardrails(root, [], None, None, root / "pkg")
     assert [(g["kind"], g["file"]) for g in absolute["gates"]] == [
-        ("complexity_limit", "pkg/pyproject.toml"), ("pre_commit", ".pre-commit-config.yaml")]
+        ("complexity_limit", "pkg/pyproject.toml"), ("complexity_limit", "setup.cfg"),
+        ("pre_commit", ".pre-commit-config.yaml"), ("type_strictness", "pyproject.toml")]
     whole = scan_guardrails(root, [], detect_coverage_gate(root), None, root)
     assert len(whole["gates"]) == 7
 
@@ -301,7 +304,7 @@ def test_ruff_select_and_ignore_resolve_by_the_longest_prefix(
 @pytest.mark.parametrize(("line", "stated"), [
     ("Run coverage in step 1.", False), ("Coverage must reach 100 percent.", True),
     ("Coverage ratio 1.0 is enforced.", True), ("Coverage 1.5 is not it.", False),
-    ("See the coverage v1.0 docs.", False)])
+    ("See the coverage v1.0 docs.", False), ("Coverage max100 applies.", False)])
 def test_a_floor_of_100_needs_a_decimal_point_in_its_ratio_form(
         tmp_path: Path, line: str, stated: bool) -> None:
     coverage = {"available": True, "enforced": True, "gates": [
@@ -337,3 +340,16 @@ def test_a_scope_with_its_own_ruff_config_does_not_add_the_root_one(tmp_path: Pa
                              "svc/.ruff.toml": "[lint]\nselect = ['C901']\n"})
     block = scan_guardrails(root, [], None, None, Path("svc"))
     assert [g["file"] for g in block["gates"]] == ["svc/.ruff.toml"]
+
+
+def test_a_scope_without_mypy_or_flake8_config_is_gated_by_the_root_ones(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"mypy.ini": "[mypy]\nstrict = true\n",
+                             "tox.ini": "[flake8]\nmax-complexity = 9\n",
+                             "svc/setup.cfg": "[metadata]\nname = svc\n",
+                             "other/mypy.ini": "[mypy]\nstrict = true\n"})
+    block = scan_guardrails(root, [], None, None, Path("svc"))
+    assert [(g["kind"], g["file"]) for g in block["gates"]] == [
+        ("complexity_limit", "tox.ini"), ("type_strictness", "mypy.ini")]
+    own = _write(tmp_path, {"svc/.mypy.ini": "[mypy]\nstrict = false\n"})
+    assert [g["kind"] for g in scan_guardrails(own, [], None, None, Path("svc"))["gates"]] == [
+        "complexity_limit"]
