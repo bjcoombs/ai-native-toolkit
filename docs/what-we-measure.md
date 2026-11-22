@@ -94,7 +94,7 @@ Row `layer-6-coverage`, team scope, aggregated by `min`.
 
 | Condition | Criterion | Grade | Counts | Next step |
 |---|---|---|---|---|
-| `layer-6-coverage.1` A coverage gate of at least 50 percent is configured | A coverage threshold of at least 50 percent is set: is true (`coverage_gate.threshold_meets_minimum eq true`) | `config_only` | no, listed | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, so CI holds the line you have reached. |
+| `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error, so CI holds the line you have reached. |
 | `layer-6-coverage.2` A mutation run has completed | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | Run the opt-in mutation pass to see which tests pin behaviour. |
 
 ### Layer 7: review on merged pull requests
@@ -214,9 +214,9 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Collector: `core.coverage_gate`, reading `repo_root`, `scope`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `coverage_gate.gates.form` drop, `coverage_gate.gates.metric` token, `coverage_gate.gates.tool` token, `coverage_gate.gates.unit` token, `coverage_gate.not_detected` drop, `coverage_gate.unmeasured_reason` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `coverage_gate.enforced_basis` token, `coverage_gate.gates.form` drop, `coverage_gate.gates.metric` token, `coverage_gate.gates.tool` token, `coverage_gate.gates.unit` token, `coverage_gate.not_detected` drop, `coverage_gate.unmeasured_reason` token.
 - Used by: row `layer-6-coverage`.
-- Evidence: `coverage_gate.threshold_meets_minimum` config_text (config_only).
+- Evidence: `coverage_gate.enforced_meets_minimum` ci_executed (verified).
 - Not measured when:
   - `go_rust_gate_form_not_read`: No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read. Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.
 

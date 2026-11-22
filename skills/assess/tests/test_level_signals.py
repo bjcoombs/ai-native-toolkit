@@ -676,7 +676,14 @@ def test_layer_six_level_one_needs_a_threshold_of_at_least_fifty(tmp_path: Path)
     assert low["coverage_gate"]["threshold_meets_minimum"] is False
     assert _row(_run({"r": low}), "layer-6-coverage")["level"] == 0
 
-    high = _coverage_repo(tmp_path / "high", {"pyproject.toml": report.format(85)})
+    # Issue #921: a threshold no CI line runs is level 0.
+    config_only = _coverage_repo(tmp_path / "config", {"pyproject.toml": report.format(85)})
+    assert _row(_run({"r": config_only}), "layer-6-coverage")["level"] == 0
+
+    run = ("on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
+           "      - run: pytest --cov\n")
+    high = _coverage_repo(tmp_path / "high", {"pyproject.toml": report.format(85),
+                                              ".github/workflows/ci.yml": run})
     row = _row(_run({"r": high}), "layer-6-coverage")
     # Mutation (level 2) is not measured headless, so level 1 shows as the floor.
     assert (row["status"], row.get("floor")) == ("unknown", 1)
@@ -686,7 +693,7 @@ def test_layer_six_level_one_needs_a_threshold_of_at_least_fifty(tmp_path: Path)
     templated = _coverage_repo(tmp_path / "templated", {".github/workflows/ci.yml": workflow})
     row = _row(_run({"r": templated}), "layer-6-coverage")
     assert (row["status"], row["level"], row.get("floor")) == ("unknown", None, None)
-    assert "coverage_gate.threshold_meets_minimum" in row["missing_signals"]
+    assert "coverage_gate.enforced_meets_minimum" in row["missing_signals"]
 
 
 @pytest.mark.parametrize("meets", [True, False, None])
@@ -711,9 +718,22 @@ def test_layer_six_is_unknown_on_a_go_repository_with_no_readable_gate(tmp_path:
     assert (row["status"], row["level"]) == ("unknown", None)
     assert row.get("floor") is None
     gated = _coverage_repo(tmp_path / "gated", {
-        "go.mod": "module example.com/x\n", ".testcoverage.yml": "threshold:\n  total: 80\n"})
+        "go.mod": "module example.com/x\n", ".testcoverage.yml": "threshold:\n  total: 80\n",
+        ".github/workflows/ci.yml": "on: push\njobs:\n  t:\n    runs-on: x\n    steps:\n"
+                                    "      - uses: vladopajic/go-test-coverage@v2\n"})
     row = _row(_run({"r": gated}), "layer-6-coverage")
     assert (row["status"], row.get("floor")) == ("unknown", 1)
+
+
+@pytest.mark.parametrize(("meets", "basis"), [(True, "ci_run"), (False, "not_run_in_ci"),
+                                              (None, "indirect_run")])
+def test_enforced_signal_survives_counts_only(meets: bool | None, basis: str) -> None:
+    """Counts-only output keeps the #921 three-state signal and its basis token."""
+    block = {"available": True, "configured": True, "gates": [], "max_threshold_percent": 80.0,
+             "threshold_meets_minimum": True, "enforced_meets_minimum": meets,
+             "enforced_basis": basis, "not_detected": ["x"]}
+    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
+    assert (out["enforced_meets_minimum"], out["enforced_basis"]) == (meets, basis)
 
 
 def test_unmeasured_reason_survives_counts_only() -> None:
