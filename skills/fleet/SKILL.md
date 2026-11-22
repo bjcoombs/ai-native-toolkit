@@ -294,6 +294,11 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
   (null without them). A Step is held when `tally.met` reaches its threshold and its gates
   hold; a gate reads the state of its row's conditions, not their grade.
 
+Each result applies the owner exclusions of the repository's own `.assess/config.toml`
+(#910), read from its `owner_exclusions` scan: an excluded condition reads `not_applicable`,
+is never counted, and never holds a gate, and the result lists it under `excluded`. A
+`--scans` subset without `owner_exclusions` applies none.
+
 `/assess` writes the same result for the same commit as the `level` block of its
 run context, from the same function. The file has no date or path in it, so a rerun over
 the same commits writes identical bytes. Schema: `references/level.schema.json`.
@@ -357,8 +362,14 @@ A mapped repository not in the run is skipped and named on stderr.
 **Roll-ups.** Per unit, one entry in `levels` per `team` row: `measured` of `repos`
 ("8 of 12 measured": an unknown or failed repository is counted in `repos`, never read
 as 0) and `lowest_level`, the lowest level a measured repository holds on the row
-(`null` when none was measured). Steps (#744) are not yet available, so the lowest row
-level stands in for the lowest Step. The roll-up holds no average and names no
+(`null` when none was measured). Each unit also has a `step` roll-up (#944): `measured` of
+`repos` (repositories with a Step; a failed one counts in `repos` only, never as Step 1),
+`lowest_step` (the lowest Step a measured repository holds, `null` when none is), and
+`next_step` for the Step above it (`null` at the top Step or when none is measured): `step`,
+`threshold`, `held` (measured repositories below it), `below_threshold` (of those, the ones
+whose met tally is below the threshold) and `gates`, every gate of that Step in model order
+with `held` (repositories it holds back) and, of those, `not_measured` and `excluded` (the
+owner excluded the gate's condition, so the Step stays unreached). The roll-up holds no average and names no
 repository (#772: the no-comparison rule of #740), so `fleet-data.json` version 2 has no
 `mean_share`, `weakest` or `overall`. `org` rows read a group's settings, not a
 repository, so they have no unit roll-up; their levels are in `groups.jsonl`.
@@ -370,7 +381,11 @@ CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), and 
 one cell per `team` row: `status`, `level`, `top_level` and the criterion behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
 next level and its measured value; at the top level both are `null`; an unknown cell
 names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
-`not_scanned` for a failed repository).
+`not_scanned` for a failed repository). `step`, `next_step` and `tally` are the
+repository's [`level.json`](#output-leveljson) entry for the same commit (`null` when failed or without `--levels`),
+and `exclusions` lists the conditions the owner excluded in its `.assess/config.toml`
+(#910): `id`, `kind`, `source` and `reason`, listed and never counted. The reason is the
+owner's own words, so it is written only under `--full` (`null` otherwise).
 
 **Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
 the group and team paths (`ownership/acme/platform`) and repository ids unless

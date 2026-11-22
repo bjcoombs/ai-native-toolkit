@@ -15,11 +15,16 @@ One JSON document per run, beside ``groups.jsonl``, holding:
 unit and each ``team`` row, over every repository below the unit: how many were
 measured of how many (``measured``, ``repos``: "8 of 12 measured") and the lowest
 level a measured repository holds on the row (``lowest_level``; None when none was
-measured). Steps (#744) are not yet available, so the lowest row level stands in
-for the lowest Step. An unknown or failed repository counts in ``repos`` only,
+measured). An unknown or failed repository counts in ``repos`` only,
 never as 0. ``org`` rows read a group's ghreport settings, not a repository, so
 they have no per-repository cell or unit roll-up; their levels stay in
 ``groups.jsonl``.
+
+**Steps** (#944, ``lib/fleet_data_steps.py``): each repository carries ``step``,
+``next_step`` and ``tally`` exactly as ``level.json`` gives them (``lib.fleet_level.repo_level``)
+and the owner's ``exclusions``; each unit carries a ``step`` roll-up: the lowest Step over
+its measured repositories, "N of M measured", and for the next Step how many repositories
+each gate holds back and how many are below its threshold.
 
 **Per-repository cell** (one per ``team`` row): ``status`` and ``level`` as
 ``lib.levels.evaluate_row`` gives them, plus the criterion that explains it:
@@ -54,16 +59,21 @@ from typing import NamedTuple, TypedDict
 from lib.counts_only import hash_value, is_hashed
 from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
 from lib.fleet import STATUS_OK, FleetRow
+from lib.fleet_data_steps import NO_STEPS, RepoExclusion, RepoSteps, StepRollUp, repo_steps, step_roll_up
 from lib.fleet_groups import repo_signals
+from lib.fleet_level import repo_level
 from lib.fleet_maturity import SCOPE
 from lib.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet_units import Tree
-from lib.levels import Evaluation, MaturityModel, Row, evaluate_row
+from lib.level_result_types import NextStep, Tally
+from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
 
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
 # ``overall`` for ``lowest_level``; repositories drop ``mean_share``. Cells are unchanged.
 # 3 (#746): ``opportunities``. Nothing else changed, so readers of 2 read 3.
+# Unreleased (run 4 version freeze, the release PR bumps it): repositories gain ``step``,
+# ``next_step``, ``tally`` and ``exclusions``, units gain ``step`` (#944). Additive.
 # Bump on any change to the shapes below; #704 and #705 read it.
 FLEET_DATA_VERSION = 3
 FLEET_DATA_FILE = "fleet-data.json"
@@ -99,6 +109,7 @@ class DataUnit(TypedDict):
     owner_count: int
     repos: int  # repositories below the unit, at any depth
     levels: list[RowRollUp]
+    step: StepRollUp  # #944
 
 
 class View(TypedDict):
@@ -131,6 +142,10 @@ class DataRepo(TypedDict):
     owner_count: int
     units: list[RepoUnit]
     rows: list[Cell]
+    step: int | None  # #944: as level.json; None when not measured or the model has no Steps
+    next_step: NextStep | None
+    tally: Tally | None
+    exclusions: list[RepoExclusion]  # the owner's, listed and never counted
 
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
@@ -267,7 +282,8 @@ def unit_key(view: str, uid: str) -> str:
 
 
 def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Cell]],
-               privacy: Privacy) -> View:
+               privacy: Privacy, steps: Sequence[StepDef] = (),
+               repo_step: Mapping[str, RepoSteps] | None = None) -> View:
     below = _below(tree)
     view = tree["view"]
     units: list[DataUnit] = []
@@ -287,6 +303,7 @@ def build_view(tree: Tree, team_rows: Sequence[Row], cells: Mapping[str, list[Ce
             "owner_count": len(unit["owners"]),
             "repos": len(repos),
             "levels": levels,
+            "step": step_roll_up(steps, [(repo_step or {}).get(r, NO_STEPS) for r in repos]),
         })
     return {"view": view, "units": sorted(units, key=lambda u: u["key"])}
 
@@ -312,6 +329,23 @@ def model_rows(maturity_model: MaturityModel | None) -> list[ModelRow]:
             for row in maturity_model["rows"]]
 
 
+def step_fields(maturity_model: MaturityModel | None, rows: Sequence[FleetRow]) -> dict[str, RepoSteps]:
+    """Each repository's Step fields by id: its level result, or none when failed or without a model."""
+    return {row["repo"]: repo_steps(repo_level(maturity_model, row) if maturity_model is not None
+                                    and row["status"] == STATUS_OK else None, row["scans"])
+            for row in rows}
+
+
+def public_steps(fields: RepoSteps, privacy: Privacy) -> RepoSteps:
+    """``fields`` with the exclusions' strings written under ``privacy``."""
+    exclusions: list[RepoExclusion] = [
+        {"id": e["id"], "kind": privacy.text("repos.exclusions.kind", e["kind"]) or "other",
+         "source": privacy.text("repos.exclusions.source", e["source"]) or "repo",
+         "reason": privacy.text("repos.exclusions.reason", e["reason"])}
+        for e in fields["exclusions"]]
+    return {**fields, "exclusions": exclusions}
+
+
 def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,
                      trees: Sequence[Tree], *, owners: Mapping[str, list[str]] | None = None,
                      web_urls: Mapping[str, str | None] | None = None,
@@ -319,6 +353,8 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
     """The whole document for one run."""
     team_rows = [row for row in (maturity_model["rows"] if maturity_model else []) if row["scope"] == SCOPE]
     cells = {repo["repo"]: repo_cells(team_rows, repo) for repo in rows}
+    repo_step = step_fields(maturity_model, rows)
+    steps = maturity_model.get("steps", []) if maturity_model else []
     owners = owners or {}
     web_urls = web_urls or {}
     repos: list[DataRepo] = []
@@ -336,12 +372,13 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
             "units": [{"view": tree["view"], "unit": privacy.key(unit_key(tree["view"], tree["placement"][name]))}
                       for tree in trees if name in tree["placement"]],
             "rows": [{**cell, "value": privacy.value(cell["value"])} for cell in cells[name]],
+            **public_steps(repo_step[name], privacy),
         })
     return {
         "fleet_data_version": FLEET_DATA_VERSION,
         "run": run_details(stamp),
         "model": model_rows(maturity_model),
-        "views": [build_view(tree, team_rows, cells, privacy) for tree in trees],
+        "views": [build_view(tree, team_rows, cells, privacy, steps, repo_step) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
         "opportunities": build_opportunities(maturity_model, rows, privacy.key),
     }

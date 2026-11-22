@@ -88,7 +88,8 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
 - **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
-  roll-ups with `fleet_data`'s own `repo_cells` and `row_roll_up`, so a
+  roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `step_fields` (with
+  `fleet_data_steps.step_roll_up`), so a
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
   `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
@@ -1218,8 +1219,7 @@ holds no repository id; the joins; fixed-salt reruns are byte-identical).
 the unit trees and the repository rows. `repo_cells` evaluates each `team` row per
 repository (`levels.evaluate_row`) with the criterion behind the level (`signal`, `value`,
 or `reason` when unknown; `not_scanned` for a failed row). `row_roll_up` gives each unit,
-per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it
-(the lowest Step's stand-in until #744). Version 2 (#772) holds no average and names no
+per team row, `measured` of `repos` and `lowest_level`, the lowest known level below it. Version 2 (#772) holds no average and names no
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
@@ -1228,7 +1228,18 @@ repository key is `counts_only.hash_value`d and no name, owner or web URL is wri
 joins a stored `repos.jsonl` row hashed at the output boundary (#909).
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
 Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
-without a model).
+without a model). `step_fields` gives each repository its Step fields (`fleet_data_steps`)
+from `fleet_level.repo_level`; `public_steps` writes the exclusions' strings under `Privacy`
+(the owner's reason only in `--full`). Additive and unreleased under the run 4 version freeze (#944).
+
+**`fleet_data_steps.py`**
+The Step parts of `fleet-data.json` (#944, parent #705). `repo_steps` copies `step`,
+`next_step` and `tally` from a repository's level result, so they equal `level.json` for the
+same commit, and lists the owner's `exclusions` (id, kind, source, reason), never counted.
+`step_roll_up` gives a unit `measured` of `repos` (a failed repository counts in `repos`
+only), `lowest_step`, and for the Step above it the repositories held below it, per gate
+(model order, zero counts kept) how many it holds back with the `not_measured` and
+`excluded` among them, and `below_threshold`. Tests: `tests/test_fleet_data_steps.py`.
 
 **`fleet_opportunities.py`**
 The `opportunities` object of `fleet-data.json` (#746, parent #740), from one run's rows and
