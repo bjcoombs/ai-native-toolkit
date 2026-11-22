@@ -12,16 +12,21 @@ minus the doc graph's ``EXCLUDE_DIRS`` and the ``.assess/config.toml`` excludes:
    declared member is a unit instead, and the search goes on below the
    aggregator outside its members (``openai/codex``: the root pnpm workspace
    lists ``codex-cli``, and ``codex-rs/`` is a Cargo workspace of its own).
+   A root that is a member too (``go.work`` ``use .``, a Cargo ``[package]`` or uv
+   ``[project]`` beside the workspace table) is a unit of the source files no
+   member or nested manifest owns, or ``manifest_only`` without any.
    Members are expanded one level: a member that is itself an aggregator (a
    Maven ``pom`` module with ``<modules>``) is one unit, as the Helidon spike on
    #800 counted its top-level areas. Workspace declarations read:
 
    - Cargo: ``[workspace] members`` and ``exclude`` in ``Cargo.toml``;
-   - pnpm: ``packages`` in ``pnpm-workspace.yaml`` (``!`` excludes);
+   - pnpm: ``packages`` in ``pnpm-workspace.yaml`` (``!`` excludes; a file without
+     ``packages`` holds settings only and is no workspace);
    - npm and Yarn: ``workspaces`` in ``package.json``, a list or ``{packages}``;
    - Go: ``use`` in ``go.work``;
    - uv: ``[tool.uv.workspace] members`` and ``exclude`` in ``pyproject.toml``;
-   - Gradle: ``include`` in ``settings.gradle`` or ``settings.gradle.kts``;
+   - Gradle: ``include`` in ``settings.gradle`` or ``settings.gradle.kts``, over
+     several lines too (``includeBuild`` is no member);
    - Maven: ``<module>`` entries in ``pom.xml``.
 
    A member pattern may be a glob (``crates/*``, ``packages/**``); a glob match
@@ -138,6 +143,7 @@ class _Workspace(NamedTuple):
     ecosystem: Ecosystem
     members: list[str]  # patterns relative to the aggregator folder
     excludes: list[str]
+    root_member: bool = False  # the root manifest is a package too (Cargo [package], uv [project])
 
 
 class _Unreadable(Exception):
@@ -158,19 +164,24 @@ def _toml(path: Path) -> Mapping[str, Any]:
 
 
 def _cargo(path: Path) -> _Workspace | None:
-    ws = _toml(path).get("workspace")
+    data = _toml(path)
+    ws = data.get("workspace")
     if not isinstance(ws, Mapping):
         return None
-    return _Workspace("cargo", _strings(ws.get("members")), _strings(ws.get("exclude")))
+    return _Workspace("cargo", _strings(ws.get("members")), _strings(ws.get("exclude")),
+                      root_member="package" in data)
 
 
 def _uv(path: Path) -> _Workspace | None:
-    tool = _toml(path).get("tool")
+    data = _toml(path)
+    tool = data.get("tool")
     uv = tool.get("uv") if isinstance(tool, Mapping) else None
     ws = uv.get("workspace") if isinstance(uv, Mapping) else None
     if not isinstance(ws, Mapping):
         return None
-    return _Workspace("uv", _strings(ws.get("members")), _strings(ws.get("exclude")))
+    # a uv workspace root is always a member: its [project] is a package
+    return _Workspace("uv", _strings(ws.get("members")), _strings(ws.get("exclude")),
+                      root_member="project" in data)
 
 
 def _split_negated(patterns: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -191,26 +202,42 @@ def _npm(path: Path) -> _Workspace | None:
 
 
 _YAML_ITEM = re.compile(r"""^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$""")
+_YAML_FLOW = re.compile(r"""^\[(.*)\]$""")
 
 
-def _pnpm(path: Path) -> _Workspace:
-    """``packages:`` list items, read line by line (no YAML dependency in the core)."""
+def _pnpm(path: Path) -> _Workspace | None:
+    """``packages:`` list items, read line by line (no YAML dependency in the core).
+
+    None when the file has no ``packages:`` key: pnpm 10 keeps settings such as
+    ``onlyBuiltDependencies`` there in a single-package repository. A ``packages:``
+    value this reader cannot parse raises ``_Unreadable``.
+    """
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     patterns: list[str] = []
-    inside = False
+    found = inside = False
     for line in lines:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if not line[0].isspace() and not line.startswith("-"):
-            inside = line.split("#")[0].strip() == "packages:"
+            key, _, value = line.split("#")[0].partition(":")
+            inside = key.strip() == "packages"
+            found = found or inside
+            value = value.strip()
+            if inside and value:
+                flow = _YAML_FLOW.match(value)
+                if flow is None:
+                    raise _Unreadable(str(path))
+                patterns += [item.strip().strip("'\"") for item in flow.group(1).split(",")
+                             if item.strip()]
+                inside = False
             continue
         match = _YAML_ITEM.match(line) if inside else None
         if match:
             patterns.append(match.group(1).strip())
-    return _Workspace("pnpm", *_split_negated(patterns))
+    return _Workspace("pnpm", *_split_negated(patterns)) if found else None
 
 
 _GO_USE = re.compile(r"^\s*use\s+(?:\(\s*(?P<block>[^)]*)\)|(?P<one>\S+))", re.MULTILINE)
@@ -227,17 +254,20 @@ def _go(path: Path) -> _Workspace:
     return _Workspace("go", [m.strip('"') for m in members], [])
 
 
-_GRADLE_INCLUDE = re.compile(r"\binclude\b(?!Build)\s*\(?([^\n)]*)")
+# ``include(":a",\n ":b")`` (parentheses, any lines) or ``include ':a', ':b'`` (Groovy,
+# continued on the next line after a trailing comma).
+_GRADLE_INCLUDE = re.compile(r"\binclude\b(?!Build)\s*(?:\(([^)]*)\)|((?:[^\n]*,[ \t]*\n)*[^\n]*))")
 _QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
 
 
 def _gradle(path: Path) -> _Workspace | None:
     try:
-        text = path.read_text(encoding="utf-8")
+        text = re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
     members = [q.strip(":").replace(":", "/")
-               for args in _GRADLE_INCLUDE.findall(text) for q in _QUOTED.findall(args)]
+               for paren, bare in _GRADLE_INCLUDE.findall(text)
+               for q in _QUOTED.findall(paren or bare)]
     return _Workspace("gradle", [m for m in members if m], []) if members else None
 
 
@@ -302,7 +332,9 @@ def _glob_match(pattern: str, path: str) -> bool:
 
 
 def _expand(folder: str, ws: _Workspace, dirs: frozenset[str],
-            manifest_dirs: Mapping[str, frozenset[str]]) -> tuple[list[str], list[SkippedUnit]]:
+            manifest_dirs: Mapping[str, frozenset[str]]) -> tuple[list[str], list[SkippedUnit], bool]:
+    """The member folders below ``folder``, the members skipped, and whether ``folder``
+    itself is a member (``go.work`` ``use .``, a Cargo ``[package]`` or uv ``[project]`` root)."""
     members: set[str] = set()
     skipped: list[SkippedUnit] = []
     for raw in ws.members:
@@ -318,7 +350,7 @@ def _expand(folder: str, ws: _Workspace, dirs: frozenset[str],
     excluded = [j for j in (_join(folder, e) for e in ws.excludes) if j is not None]
     kept = sorted(m for m in members
                   if m != folder and not any(_glob_match(e, m) for e in excluded))
-    return kept, skipped
+    return kept, skipped, ws.root_member or folder in members
 
 
 # -- discovery ----------------------------------------------------------------
@@ -369,10 +401,11 @@ def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
         if name in MANIFEST_NAMES:
             by_dir.setdefault(posixpath.dirname(rel) or ".", set()).add(name)
     manifest_dirs = {d: frozenset(n) for d, n in by_dir.items()}
-    source_dirs = frozenset(
-        p for rel in files if PurePosixPath(rel).suffix.lower() in CODE_EXTENSIONS
-        for p in _parents(rel)
-    )
+    sources = [rel for rel in files if PurePosixPath(rel).suffix.lower() in CODE_EXTENSIONS]
+    source_dirs = frozenset(p for rel in sources for p in _parents(rel))
+    # the manifest folder nearest each source file: a root package owns only these
+    owning = frozenset(next(p for p in _parents(rel) if p in manifest_dirs or p == ".")
+                       for rel in sources)
 
     units: list[UnitEntry] = []
     aggregators: list[AggregatorEntry] = []
@@ -401,10 +434,17 @@ def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
         if ws is None:
             add(folder, "manifest", _ecosystem(names), None)
             continue
-        members, member_skips = _expand(folder, ws, dirs, manifest_dirs)
+        members, member_skips, root_member = _expand(folder, ws, dirs, manifest_dirs)
         skipped.extend(member_skips)
         aggregators.append({"path": folder, "ecosystem": ws.ecosystem,
-                            "member_count": len(members)})
+                            "member_count": len(members) + root_member})
+        if root_member:
+            # the root package is a unit of its own files; it claims nothing below it
+            if folder in owning:
+                units.append({"path": folder, "origin": "workspace_member",
+                              "ecosystem": ws.ecosystem, "workspace": folder, "name": None})
+            else:
+                skipped.append({"path": folder, "problem": "manifest_only"})
         for member in members:
             if any(_is_under(member, c) for c in claimed):
                 continue

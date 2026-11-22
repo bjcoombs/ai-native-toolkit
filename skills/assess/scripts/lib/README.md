@@ -2210,7 +2210,10 @@ workspace (Cargo `[workspace] members`/`exclude`, `pnpm-workspace.yaml` `package
 excludes, npm/Yarn `workspaces`, `go.work` `use`, uv `[tool.uv.workspace]`, Gradle
 `settings.gradle[.kts]` `include`, Maven `<module>`) is an aggregator: its members are the
 units (`origin: workspace_member`, `workspace` naming the aggregator), expanded one level,
-and the search continues below it outside the members. Glob members (`*`, `**`) match only
+and the search continues below it outside the members. A root that is a member too (`go.work`
+`use .`, a Cargo `[package]` or uv `[project]` root) is a unit of the source files no nested
+manifest owns. A `pnpm-workspace.yaml` without `packages` holds settings only and is no
+workspace; Gradle `include` is read over several lines. Glob members (`*`, `**`) match only
 folders that hold a manifest; a workspace-excluded folder is found later as a plain unit.
 A candidate with no `doc_graph.CODE_EXTENSIONS` file below it is skipped as `manifest_only`;
 a literal member with no tracked file is `missing`, one above the root `outside_repo`. An

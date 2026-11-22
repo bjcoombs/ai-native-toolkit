@@ -158,6 +158,64 @@ def test_gradle_include_build_is_a_separate_shallowest_unit_not_a_member(tmp_pat
     assert origins == {"app": "workspace_member", "b": "manifest"}
 
 
+def test_a_settings_only_pnpm_workspace_file_is_no_workspace(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "pnpm-workspace.yaml": "onlyBuiltDependencies:\n  - esbuild\n",
+        "package.json": "{}", "src/index.ts": "",
+    }))
+    assert _paths(block) == ["."] and block["aggregators"] == []
+
+
+def test_a_pnpm_flow_list_is_read_and_an_unparseable_value_is_named(tmp_path: Path):
+    flow = scan_units(_write(tmp_path / "flow", {
+        "pnpm-workspace.yaml": "packages: ['apps/*', \"!apps/old\"]\n",
+        "package.json": "{}", "apps/web/package.json": "{}", "apps/web/i.ts": "",
+        "apps/old/package.json": "{}", "apps/old/i.ts": "",
+    }))
+    assert [(u["path"], u["workspace"]) for u in flow["units"]] == [
+        ("apps/old", None), ("apps/web", "."),
+    ]
+    odd = scan_units(_write(tmp_path / "odd", {
+        "pnpm-workspace.yaml": "packages: *anchor\n", "package.json": "{}", "i.ts": "",
+    }))
+    assert odd["unreadable_manifests"] == ["pnpm-workspace.yaml"] and _paths(odd) == ["."]
+
+
+@pytest.mark.parametrize("settings", [
+    'include(\n    ":app", // the app\n    ":lib"\n)\n',
+    "include ':app',\n        ':lib'\n",
+], ids=["kotlin-multiline", "groovy-continued"])
+def test_a_gradle_include_over_several_lines_lists_every_member(tmp_path: Path, settings: str):
+    block = scan_units(_write(tmp_path, {
+        "settings.gradle.kts": settings, "app/build.gradle.kts": "", "app/A.kt": "",
+        "lib/build.gradle.kts": "", "lib/L.kt": "",
+    }))
+    assert _paths(block) == ["app", "lib"]
+
+
+@pytest.mark.parametrize("files", [
+    {"go.work": "use (\n\t.\n\t./tools\n)\n", "go.mod": "m", "main.go": "",
+     "tools/go.mod": "m", "tools/t.go": ""},
+    {"Cargo.toml": '[package]\nname = "r"\n[workspace]\nmembers = ["tools"]\n', "src/main.rs": "",
+     "tools/Cargo.toml": "", "tools/src/lib.rs": ""},
+    {"pyproject.toml": '[project]\nname = "r"\n[tool.uv.workspace]\nmembers = ["tools"]\n',
+     "r/__init__.py": "", "tools/pyproject.toml": "", "tools/t.py": ""},
+], ids=["go-use-dot", "cargo-root-package", "uv-root-project"])
+def test_a_root_that_is_also_a_member_is_a_unit(tmp_path: Path, files: dict[str, str]):
+    block = scan_units(_write(tmp_path, files))
+    assert _paths(block) == [".", "tools"]
+    assert block["aggregators"][0]["member_count"] == 2
+    assert block["units"][0]["workspace"] == "."
+
+
+def test_a_root_member_with_no_source_of_its_own_is_manifest_only(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "Cargo.toml": '[package]\nname = "r"\n[workspace]\nmembers = ["tools"]\n',
+        "tools/Cargo.toml": "", "tools/src/lib.rs": "",
+    }))
+    assert _paths(block) == ["tools"] and _skipped(block) == {".": "manifest_only"}
+
+
 def test_a_maven_member_that_aggregates_is_one_unit(tmp_path: Path):
     block = scan_units(_write(tmp_path, {
         "pom.xml": "<project><modules><module>webserver</module></modules></project>",
