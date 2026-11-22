@@ -656,6 +656,26 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
 
+## agent_consistency
+
+| Field | Kept as |
+|---|---|
+| `agent_consistency.systems` | token |
+| `agent_consistency.canonical` | path (hashed when hashing is on) |
+| `agent_consistency.files.path` | path (hashed when hashing is on) |
+| `agent_consistency.files.system` | token |
+| `agent_consistency.files.link` | token |
+| `agent_consistency.divergences.kind` | token |
+| `agent_consistency.divergences.value` | dropped |
+| `agent_consistency.divergences.named_in` | token |
+| `agent_consistency.divergences.missing_from` | token |
+| `agent_consistency.divergences.stated.system` | token |
+| `agent_consistency.next_steps.system` | token |
+| `agent_consistency.next_steps.path` | path (hashed when hashing is on) |
+| `agent_consistency.next_steps.pointer` | dropped |
+| `agent_consistency.next_steps.symlink` | dropped |
+| `agent_consistency.not_read` | dropped |
+
 ## ai_usage
 
 | Field | Kept as |
@@ -751,3 +771,7 @@ kept as written. A string
 | `repos.rows.status` | token |
 | `repos.rows.value` | token |
 | `repos.rows.reason` | token |
+| `opportunities.biggest_lift.repos` | path (hashed when hashing is on) |
+| `opportunities.shared_templates.repos` | path (hashed when hashing is on) |
+| `opportunities.shared_templates.source` | path (hashed when hashing is on) |
+| `opportunities.shared_templates.kind` | token |

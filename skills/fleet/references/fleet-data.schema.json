@@ -6,7 +6,7 @@
   "type": "object",
   "properties": {
     "fleet_data_version": {
-      "const": 2
+      "const": 3
     },
     "run": {
       "type": "object",
@@ -395,11 +395,177 @@
         ],
         "additionalProperties": false
       }
+    },
+    "opportunities": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "measured": {
+              "type": "integer"
+            },
+            "in_place": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "row": {
+                    "type": "string"
+                  },
+                  "at_top": {
+                    "type": "integer"
+                  },
+                  "measured": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "at_top",
+                  "measured",
+                  "row"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "biggest_lift": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "row": {
+                      "type": "string"
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "signal": {
+                      "type": "string"
+                    },
+                    "repo_count": {
+                      "type": "integer"
+                    },
+                    "repos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "gate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "step": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "change": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "done_when": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "change",
+                    "done_when",
+                    "gate",
+                    "level",
+                    "repo_count",
+                    "repos",
+                    "row",
+                    "signal",
+                    "step",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "shared_templates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "includers": {
+                    "type": "integer"
+                  },
+                  "row": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "integer"
+                  },
+                  "signal": {
+                    "type": "string"
+                  },
+                  "repo_count": {
+                    "type": "integer"
+                  },
+                  "repos": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "includers",
+                  "kind",
+                  "level",
+                  "repo_count",
+                  "repos",
+                  "row",
+                  "signal",
+                  "source",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "biggest_lift",
+            "in_place",
+            "measured",
+            "shared_templates"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
     "fleet_data_version",
     "model",
+    "opportunities",
     "repos",
     "run",
     "views"

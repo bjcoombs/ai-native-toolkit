@@ -7,7 +7,9 @@ One JSON document per run, beside ``groups.jsonl``, holding:
 - ``views``: the ownership and system unit trees (``lib/fleet_units.py``), each
   unit with its kind, parent, owners, source and rolled-up levels;
 - ``repos``: per repository its status, web URL, owners, its unit in each view
-  and, per ``team`` row, its level with the value and reason behind it.
+  and, per ``team`` row, its level with the value and reason behind it;
+- ``opportunities``: what is in place, the biggest lift and the shared-template
+  leverage (``lib/fleet_opportunities.py``, #746); null without a maturity model.
 
 **Roll-up** (#772, option A: no average and no repository singled out). For each
 unit and each ``team`` row, over every repository below the unit: how many were
@@ -54,14 +56,16 @@ from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_flee
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
 from lib.fleet_maturity import SCOPE
+from lib.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet_units import Tree
 from lib.levels import Evaluation, MaturityModel, Row, evaluate_row
 
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
 # ``overall`` for ``lowest_level``; repositories drop ``mean_share``. Cells are unchanged.
+# 3 (#746): ``opportunities``. Nothing else changed, so readers of 2 read 3.
 # Bump on any change to the shapes below; #704 and #705 read it.
-FLEET_DATA_VERSION = 2
+FLEET_DATA_VERSION = 3
 FLEET_DATA_FILE = "fleet-data.json"
 NOT_SCANNED = "not_scanned"
 SET = "set"
@@ -159,6 +163,7 @@ class FleetData(TypedDict):
     model: list[ModelRow]
     views: list[View]
     repos: list[DataRepo]
+    opportunities: Opportunities | None
 
 
 class Privacy(NamedTuple):
@@ -336,6 +341,7 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
         "model": model_rows(maturity_model),
         "views": [build_view(tree, team_rows, cells, privacy) for tree in trees],
         "repos": sorted(repos, key=lambda r: r["key"]),
+        "opportunities": build_opportunities(maturity_model, rows, privacy.key),
     }
 
 
