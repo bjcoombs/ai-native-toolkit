@@ -8,7 +8,7 @@ reports, the derived findings, and every registry scan.
 A tag section is a ``### <tag title>`` heading, then the tag's opening lines
 (``_tag_opening``), then one table of the conditions listed under that tag. Each condition
 has one table row per criterion, under its first tag only, so it appears once however many
-tags it carries; its other tags name it under "Shared". The table's columns are
+tags it carries; its other tags name it in an "Also carries this tag" line. The table's columns are
 ``CONDITION_COLUMNS``, one ``(header, cell)`` entry each, so a later column (the #939 "Why it
 matters") is one more entry and a tag's ``why`` one more opening line. Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
@@ -109,8 +109,9 @@ CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
     ("Condition", _condition_cell),
     ("Producer", lambda line: f"`{line.criterion['producer']['scan']}`"),
     ("Criterion", _criterion_cell),
-    ("Grade", lambda line: f"`{line.criterion['grade']}`"),
-    ("Counts", lambda line: "yes" if line.criterion["counts"] else "no, listed"),
+    # Grade and Counts are the whole condition's, as lib.level_tally scores it: its weakest signal.
+    ("Grade", lambda line: f"`{line.level['grade']}`"),
+    ("Counts", lambda line: "yes" if line.level["counts"] else "no, listed"),
     ("Step gate", lambda line: _codes(line.level["step_gates"])),
     ("Polarity", lambda line: line.level["polarity"]),
     ("Links", _links_cell),
