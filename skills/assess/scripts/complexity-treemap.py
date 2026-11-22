@@ -1449,11 +1449,8 @@ def main() -> int:
     )
     if not files:
         print(_no_files_message(scope, excluded_generated), file=sys.stderr)
-        if args.stats:
-            # A measured empty set (a docs-only tree): the sidecar says so, so the run
-            # reads no_scored_files, not a missing sidecar (no_complexity_stats, #959).
-            write_stats([], aux_data, aux_label, root, args.stats,
-                        excluded_generated=excluded_generated)
+        if args.stats:  # the measured empty set: no_scored_files, not no_complexity_stats (#959)
+            write_stats([], aux_data, aux_label, root, args.stats, excluded_generated=excluded_generated)
         return 1
 
     _warn_if_dominated_by_one_file(files)
@@ -1485,10 +1482,8 @@ def main() -> int:
     if args.stats:
         write_stats(files, aux_data, aux_label, root, args.stats,
                     fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens,
-                    churn_degenerate=churn_degenerate,
-                    excluded_generated=excluded_generated,
-                    languages_by_path=scc_languages,
-                    fn_name_by_path=fn_names,
+                    churn_degenerate=churn_degenerate, excluded_generated=excluded_generated,
+                    languages_by_path=scc_languages, fn_name_by_path=fn_names,
                     fn_backend_by_path=fn_backends)
     return 0
 
