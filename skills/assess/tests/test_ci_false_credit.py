@@ -282,6 +282,8 @@ def test_a_may_check_target_asking_for_help_is_not_a_pending_check(tmp_path: Pat
     pytest.param(_shell('echo "{"; pytest; exit 0', "    shell: bash {0}\n"), id="quoted_brace_is_not_a_group"),
     pytest.param(_block('echo "<<EOF"\npytest\nexit 0', shell="bash {0}"), id="quoted_heredoc_is_not_a_heredoc"),
     pytest.param(_wf("ruff check . --exit-zero || pytest"), id="or_after_exit_zero_never_runs"),
+    pytest.param(_wf("git diff | flake8 --diff --exit-zero"), id="piped_exit_zero_flag"),
+    pytest.param(_block("if [ -n \"$X\" ]; then\n  pytest && echo ok\nfi\nexit 0"), id="and_list_in_an_if_body"),
 ])
 def test_a_check_in_an_errexit_exempt_position_before_exit_0_is_masked(text: str) -> None:
     assert check_commands(text) == 1
@@ -301,6 +303,10 @@ def test_a_check_in_an_errexit_exempt_position_before_exit_0_is_masked(text: str
     pytest.param(_wf("pytest && echo ok; [ -f x ] && exit 0"), id="conditional_exit_0_masks_nothing"),
     pytest.param(_wf("ruff check . --exit-zero && pytest || echo x"), id="and_after_exit_zero_still_runs"),
     pytest.param(_wf("ruff check . --exit-zero | grep E || pytest"), id="exit_zero_not_ending_its_pipeline"),
+    # A subshell or a function returns the list's status as one command: errexit stops there.
+    pytest.param(_wf("( pytest && echo ok ); exit 0"), id="and_list_in_a_subshell"),
+    pytest.param(_block("(\n  pytest && echo ok\n)\nexit 0"), id="and_list_in_a_multi_line_subshell"),
+    pytest.param(_block("run_tests() {\n  pytest && echo ok\n}\nrun_tests\nexit 0"), id="and_list_in_a_function"),
 ])
 def test_a_check_errexit_still_stops_on_stays_enforced(text: str) -> None:
     assert enforced_check_commands(text) == (1, 0)
@@ -345,7 +351,7 @@ def _reads_pytest(text: str) -> bool:
     return any("pytest" in line for line in unmasked_lines(text))
 
 
-# The line classifier reads no check behind ``if`` / ``while`` / ``until`` / ``!``, so these
+# The line classifier reads no check behind ``if`` / ``while`` / ``until`` / ``!`` / ``do`` / ``{``, so these
 # are read on ``unmasked_lines``: the condition is dropped before a later ``exit 0``.
 @pytest.mark.parametrize("text", [
     pytest.param(_wf("if pytest; then :; fi; exit 0"), id="if_condition"),
@@ -353,6 +359,7 @@ def _reads_pytest(text: str) -> bool:
     pytest.param(_block("if [ -n \"$X\" ]; then\n  echo x\nelif pytest; then\n  echo ok\nfi\nexit 0"),
                  id="elif_condition"),
     pytest.param(_wf("while pytest; do break; done; exit 0"), id="while_condition"),
+    pytest.param(_wf("for d in a b; do pytest && echo ok; done; exit 0"), id="and_list_in_a_loop_body"),
     pytest.param(_wf("! pytest; exit 0"), id="negated"),
     pytest.param(_shell("! pytest | tee log; exit 0", "    shell: bash\n"), id="negated_pipeline_with_pipefail"),
 ])
@@ -365,6 +372,8 @@ def test_a_condition_or_negated_check_before_exit_0_is_dropped(text: str) -> Non
     pytest.param(_block("if pytest; then\n  echo ok\nelse\n  exit 1\nfi\nexit 0"), id="if_else_exit_1"),
     pytest.param(_wf("until pytest; do sleep 5; done; exit 0"), id="until_retries_until_it_passes"),
     pytest.param(_wf("if pytest; then :; fi"), id="if_condition_with_no_exit_0"),
+    # Known limit: a ``{ }`` group is read like a function body, so its exempt check stays credited.
+    pytest.param(_wf("{ pytest && echo ok; }; exit 0"), id="brace_group_known_limit"),
 ])
 def test_a_condition_with_a_reraise_or_no_exit_0_is_kept(text: str) -> None:
     assert _reads_pytest(text)

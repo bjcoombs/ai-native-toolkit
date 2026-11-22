@@ -3788,7 +3788,8 @@ does not stop on (the left of `&&` / `||`, a pipeline but its last command with 
 off, an `if` / `elif` / `while` condition, a `!` pipeline). `run_errexit` returns
 `(errexit, bash grammar, pipefail)`: pipefail is on for `shell: bash` and a custom
 `-o pipefail`, off for the default `bash -e {0}` and `sh`, and `set -o pipefail` /
-`set +o pipefail` in the body move it. After an exit-zero segment that ends its
+`set +o pipefail` in the body move it; a statement in or opening a `( )` / `{ }` group
+is not read (`_depths` second value). After an exit-zero segment that ends its
 pipeline, the `||` pipelines up to the next `&&` are dropped (`ruff check . --exit-zero
 || pytest` drops `pytest`), and a folded block scalar (`run: >`) is folded into one
 line before any rule reads it. The default `bash -e` stops at the failing check first, so
@@ -3798,7 +3799,8 @@ line before any rule reads it. The default `bash -e` stops at the failing check 
 `\` continuations are joined first.
 Known limits (module docstring): `|| echo`, an exempt check with no later `exit 0`
 (a lone `pytest | tee log` without pipefail, `pytest && echo ok` followed by any passing
-statement), an `until` loop that breaks out, `allow_failure` through `default:` / `extends:` / anchors, a
+statement), an `until` loop that breaks out, an exempt check inside a `( )` / `{ }` group
+(a subshell or function returns its status, so it is not read as exempt), `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
 shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.

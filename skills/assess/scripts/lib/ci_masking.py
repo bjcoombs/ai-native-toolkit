@@ -78,7 +78,9 @@ parser (the core has no YAML dependency). Only literal values count.
 Known limits: ``|| echo ...`` is not a no-op here, so it stays credited; an exempt check
 with no later ``exit 0`` is credited, though any later statement that passes, or the
 status of a lone ``pytest | tee log`` without pipefail, would hide its failure; an
-``until`` loop that breaks out is credited; a compound command in an exempt position
+``until`` loop that breaks out is credited; an exempt check inside a ``( )`` / ``{ }``
+group is credited (a subshell or a function returns its status as one command, and
+errexit stops there; a ``{ }`` group would not); a compound command in an exempt position
 (``fi || true``) does not exempt its body; ``allow_failure`` inherited through
 ``default:``, ``extends:`` or a YAML anchor is not resolved; a GitLab ``set +e`` in
 ``before_script:`` does not reach ``script:``; reusable-workflow and composite-action
@@ -419,9 +421,10 @@ def _drop_exit_zero(statement: list[tuple[str, str]], keep: list[int]) -> list[i
     for i in keep:
         op, seg = statement[i]
         if op == "|":
-            if state != "skip":
-                state = ""   # the pipeline goes on: its status is not the exit-zero command's
+            if state != "skip" and not _EXIT_ZERO_FLAG.search(seg):
                 out.append(i)
+            if state != "skip":
+                state = ""   # an earlier command of the pipeline sets its status under pipefail
             continue
         if op == "||" and state:
             state = "skip"
@@ -439,8 +442,9 @@ def _pick(statement: list[tuple[str, str]], keep: list[int]) -> list[tuple[str, 
     return [("", statement[keep[0]][1]), *(statement[i] for i in keep[1:])] if keep else []
 
 
-def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> list[int]:
-    """Per statement of one script body: how many compound commands it sits in.
+def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> tuple[list[int], list[bool]]:
+    """Per statement of one script body: how many compound commands it sits in, and whether
+    it sits in, or opens, a ``{ }`` / ``( )`` group (a subshell or a function body).
 
     ``if`` / loops / ``case`` open on their first word and ``fi`` / ``done`` / ``esac``
     close; ``{ }`` and ``( )`` are counted across the whole segment, so a group that
@@ -448,11 +452,15 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> l
     Inside ``case`` a pattern's ``)`` is not counted. With ``keywords`` false (a pwsh,
     powershell, cmd or python body) only the ``{ }`` / ``( )`` delta is read, so
     ``if ($env:X) {`` ... ``}`` nests and a one-line ``if (...) { ... }`` nets to zero.
+    ``$(`` and ``${`` open no group for the second value.
     """
     stack: list[str] = []
     out: list[int] = []
+    grouped: list[bool] = []
     for statement in statements:
         out.append(len(stack))
+        own = unquoted(_join(statement)).replace("$(", "").replace("${", "")
+        grouped.append("{" in stack or "(" in own or "{" in own)
         for _, seg in statement:
             words = seg.split()
             while words and words[0] in _PREFIXES:
@@ -461,7 +469,7 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> l
                 stack.pop()
             elif keywords and words and words[0] in _OPENERS:
                 stack.append(words[0])
-            code = unquoted(seg)   # ``echo "{"`` opens nothing (#936)
+            code = unquoted(seg, escapes=keywords)   # ``echo "{"`` opens nothing (#936)
             delta = code.count("{") - code.count("}")
             if not stack or stack[-1] != "case":
                 delta += code.count("(") - code.count(")")
@@ -470,7 +478,7 @@ def _depths(statements: list[list[tuple[str, str]]], keywords: bool = True) -> l
             for _ in range(-delta):   # a group closes only a group frame, never a keyword's
                 if stack and stack[-1] == "{":
                     stack.pop()
-    return out
+    return out, grouped
 
 
 def _exit_zero(statement: list[tuple[str, str]]) -> bool:
@@ -612,6 +620,8 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     has whole statements masked by a later ``exit 0``. With errexit on the failing check stops
     the step first, except in an errexit-exempt position (``lib.ci_exempt``, #936): those
     segments, indexed into the unrewritten ``raw`` statement, come back in the second value.
+    Not inside a ``( )`` / ``{ }`` group: a subshell or a function returns the failing
+    status as one command, and errexit stops there.
     GitLab checks each ``script:`` item's status.
     """
     errexit = True
@@ -630,7 +640,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         pipes.append(pipefail)
     data = dict(zip(texts, _not_code(list(texts.values())), strict=True))
     code = [not data.get(first, False) for first, _ in refs]
-    depths = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)],
+    depths, grouped = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)],
                      keywords=bash)
     conditions = condition_flags([raw[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
     out: list[tuple[int, int]] = []
@@ -644,7 +654,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         later_exit = exited and not (exit_reraised or own)
         if (state[idx] and not reraised) or (later_exit and off[idx]):
             out.append((first, k))
-        elif later_exit and run_shell is not None and code[idx]:
+        elif later_exit and run_shell is not None and code[idx] and not grouped[idx]:
             statement = raw[first][k]
             drop = (frozenset(range(len(statement))) if conditions[idx] and bash
                     else exempt_segments(statement, pipes[idx]))

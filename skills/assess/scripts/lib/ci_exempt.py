@@ -90,20 +90,22 @@ def shell_pipefail(flags: str) -> bool:
     return _PIPEFAIL_FLAG.search(flags) is not None
 
 
-def unquoted(text: str) -> str:
+def unquoted(text: str, escapes: bool = True) -> str:
     """``text`` with its quoted spans and backslash-escaped characters removed, so a
-    ``{`` or ``<<EOF`` inside ``"..."`` or ``'...'`` is not read as shell grammar."""
+    ``{`` or ``<<EOF`` inside ``"..."`` or ``'...'`` is not read as shell grammar.
+    With ``escapes`` false (a pwsh, powershell, cmd or python body) a backslash is an
+    ordinary character (``"C:\\dir\\"`` closes its quote)."""
     out: list[str] = []
     quote = ""
     i = 0
     while i < len(text):
         ch = text[i]
         if quote:
-            if ch == "\\" and quote == '"':
+            if ch == "\\" and quote == '"' and escapes:
                 i += 1
             elif ch == quote:
                 quote = ""
-        elif ch == "\\":
+        elif ch == "\\" and escapes:
             i += 1
         elif ch in "'\"":
             quote = ch
