@@ -6,8 +6,17 @@ evidence is static, read from the files at HEAD:
 
 - The CI configuration files ``lib.command_index`` indexes: GitHub Actions
   workflows (``.github/workflows/*.yml|yaml``) and ``.gitlab-ci.yml``. Other CI
-  systems (Jenkins, CircleCI, Azure Pipelines) are not read, so a repository
-  that uses only them reads ``no_ci``.
+  systems are not parsed (issue #787): ``unread_ci_files`` counts the tracked
+  files of the ones this scan knows (``UNREAD_CI_FILES``: ``Jenkinsfile``,
+  ``.circleci/config.yml``, ``azure-pipelines.yml``, ``bitbucket-pipelines.yml``,
+  ``.travis.yml``, ``.buildkite/pipeline.yml``, the Azure and Buildkite ``.yaml``
+  spellings and a root ``buildkite.yml``, at the repository root). When no
+  GitHub or GitLab line runs a check and no included jobs are pending, such a
+  file makes ``basis`` (and ``enforced_basis`` and ``lint_basis``) ``unread_ci_system``
+  and ``enforced_check_runs`` and ``lint_runs`` null: the scanner did not see that system's checks,
+  it did not find them absent. ``test_or_lint_runs`` keeps its meaning and stays
+  false there. An empty ``Jenkinsfile`` reads the same (accepted: the scan
+  cannot tell an empty pipeline from one it cannot parse).
 - Each line with its ``- `` / ``run:`` / ``script:`` lead dropped
   (``command_index.ci_line_text``), split into shell segments and tokenised the
   way instruction-file commands are (``command_resolver.extract_commands``),
@@ -89,6 +98,9 @@ run on ordinary changes left out too (a ``workflow_dispatch``- or
   not read.
 - ``unknown_trigger`` (null): none does, but an unmasked check sits in a
   workflow or job whose triggers this reader cannot settle.
+- ``unread_ci_system`` (null): none does, and the tree holds a CI file of a
+  system this scan does not read (#787). A masked or off-trigger check beside it
+  still reads null: the unread system may run the check unmasked.
 - ``not_enforced`` (false): checks run, but each is masked or off the ordinary
   triggers.
 - ``no_check_command`` / ``no_ci`` (false): as ``basis``.
@@ -176,11 +188,20 @@ def merged_partial(text: str, resolution: Resolution | None, merged_text: str | 
 
 
 CiChecksBasis = Literal["check_command", "merged_config", "included_jobs",
-                        "merged_config_partial", "no_check_command", "no_ci"]
+                        "merged_config_partial", "unread_ci_system", "no_check_command", "no_ci"]
 EnforcedBasis = Literal[
-    "enforced_check", "included_jobs", "unknown_trigger", "not_enforced", "no_check_command", "no_ci"]
+    "enforced_check", "included_jobs", "unknown_trigger", "unread_ci_system", "not_enforced",
+    "no_check_command", "no_ci"]
+
+# Root CI files of systems this scan does not parse (#787): their presence makes a
+# repository with no readable check not measured, never 0.
+UNREAD_CI_FILES = frozenset({
+    "Jenkinsfile", ".circleci/config.yml", "azure-pipelines.yml", "azure-pipelines.yaml",
+    "bitbucket-pipelines.yml", ".travis.yml", ".buildkite/pipeline.yml",
+    ".buildkite/pipeline.yaml", "buildkite.yml", "buildkite.yaml",
+})
 LintBasis = Literal["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                    "check_target", "not_enforced", "no_lint_command", "no_ci"]
+                    "check_target", "unread_ci_system", "not_enforced", "no_lint_command", "no_ci"]
 
 
 class CiChecksBlock(TypedDict):
@@ -206,6 +227,7 @@ class CiChecksBlock(TypedDict):
     off_trigger_check_commands: int
     lint_runs: bool | None  # Layer 3 level 1 (#782)
     lint_basis: LintBasis
+    unread_ci_files: int  # tracked UNREAD_CI_FILES (#787)
 
 
 # A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
@@ -385,13 +407,30 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     return out
 
 
+def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread: bool,
+           files: bool) -> tuple[bool | None, CiChecksBasis]:
+    """``(test_or_lint_runs, basis)``: an own or included check, the merged one, pending
+    included jobs, an unread CI system (#787: the value stays false, its meaning unchanged)."""
+    if found:
+        return True, "check_command"
+    if merged:
+        return True, "merged_config"
+    if elsewhere:
+        return None, "merged_config_partial" if partial else "included_jobs"
+    if unread:
+        return False, "unread_ci_system"
+    return False, "no_check_command" if files else "no_ci"
+
+
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the
     ``gitlab_merged_ci`` reading (``lib/gitlab_ci_lint.py``); anything else is not read."""
     root = repo_root.resolve()
     merged = as_merged(merged_ci)
-    files = ci_config_files(repo_files(root))
+    tracked = repo_files(root)
+    files = ci_config_files(tracked)
+    unread = len(UNREAD_CI_FILES & tracked)
     checks = 0
     included = 0
     elsewhere = 0  # files whose pulled jobs this run cannot read
@@ -433,23 +472,15 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             ordinary, unknown = m_ordinary, max(unknown, m_unknown)
         if not (checks or included_checks):
             off, masked = m_off, m_masked
-    runs: bool | None
-    basis: CiChecksBasis
-    if checks or included_checks:
-        runs, basis = True, "check_command"
-    elif merged_checks:
-        runs, basis = True, "merged_config"
-    elif elsewhere:
-        runs, basis = None, "merged_config_partial" if partial else "included_jobs"
-    elif files:
-        runs, basis = False, "no_check_command"
-    else:
-        runs, basis = False, "no_ci"
+    found = bool(checks or included_checks)
+    runs, basis = _basis(found, bool(merged_checks), elsewhere=bool(elsewhere), partial=partial,
+                         unread=bool(unread), files=bool(files))
     enforced_runs, enforced_basis = _enforced_state(
-        ordinary, unknown, elsewhere=bool(elsewhere),
-        any_check=bool(checks or included_checks or merged_checks), has_files=bool(files))
+        ordinary, unknown, elsewhere=bool(elsewhere), unread=bool(unread),
+        any_check=bool(found or merged_checks), has_files=bool(files))
     lint_runs, lint_basis = _lint_state(lint_t, may_t, elsewhere=bool(elsewhere),
-                                        partial=partial, has_files=bool(files))
+                                        partial=partial, unread=bool(unread),
+                                        has_files=bool(files))
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,
             "resolved_includes": sum(r["status"] == "resolved" for r in records),
@@ -459,7 +490,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             "test_or_lint_runs": runs, "basis": basis,
             "enforced_check_runs": enforced_runs, "enforced_basis": enforced_basis,
             "masked_check_commands": masked, "off_trigger_check_commands": off,
-            "lint_runs": lint_runs, "lint_basis": lint_basis}
+            "lint_runs": lint_runs, "lint_basis": lint_basis,
+            "unread_ci_files": unread}
 
 
 def _sum(tallies: Iterable[Tally]) -> Tally:
@@ -473,23 +505,27 @@ def _max(x: Tally, y: Tally) -> Tally:
     return max(x[0], y[0]), max(x[1], y[1]), max(x[2], y[2]), max(x[3], y[3])
 
 
-def _enforced_state(ordinary: int, unknown: int, *, elsewhere: bool, any_check: bool,
-                    has_files: bool) -> tuple[bool | None, EnforcedBasis]:
-    """``enforced_check_runs`` and ``enforced_basis`` (#775)."""
+def _enforced_state(ordinary: int, unknown: int, *, elsewhere: bool, unread: bool,
+                    any_check: bool, has_files: bool) -> tuple[bool | None, EnforcedBasis]:
+    """``enforced_check_runs`` and ``enforced_basis`` (#775); unknown beats wrong, so an
+    unread CI system (#787) reads null ahead of a masked or off-trigger check."""
     if ordinary:
         return True, "enforced_check"
     if elsewhere:
         return None, "included_jobs"
     if unknown:
         return None, "unknown_trigger"
+    if unread:
+        return None, "unread_ci_system"
     if any_check:
         return False, "not_enforced"
     return False, "no_check_command" if has_files else "no_ci"
 
 
-def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool,
+def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool, unread: bool,
                 has_files: bool) -> tuple[bool | None, LintBasis]:
-    """``lint_runs`` and ``lint_basis`` from the lint and may-lint tallies (#782)."""
+    """``lint_runs`` and ``lint_basis`` from the lint and may-lint tallies (#782); an unread
+    CI system (#787) reads null ahead of the false cases, as for ``enforced_check_runs``."""
     ordinary, unknown, off, masked = lint
     if ordinary:
         return True, "lint_command"
@@ -499,6 +535,8 @@ def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool,
         return None, "unknown_trigger"
     if may[0] or may[1]:
         return None, "check_target"
+    if unread:
+        return None, "unread_ci_system"
     if not has_files:
         return False, "no_ci"
     return False, "not_enforced" if off or masked else "no_lint_command"

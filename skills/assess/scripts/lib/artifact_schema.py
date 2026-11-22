@@ -223,7 +223,11 @@ constant each.
 # #782): whether an unmasked CI line on ordinary triggers runs a linter (null
 # when a check target or script may lint inside it). Additive: no existing
 # key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.37.0"
+# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
+# system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.38.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -366,4 +370,9 @@ ARTIFACT_SCHEMA_VERSION = "1.37.0"
 #     in CI, not a suppression comment. One suppression comment no longer earns the row,
 #     and a clean repository that lints in CI reads at least 1 where it was
 #     unknown, so the Layer 3 row can move.
-ASSESS_METHOD_VERSION = 32
+# 33: a repository with no readable CI check whose tree tracks a CI file of a
+#     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
+#     Bitbucket Pipelines, Travis CI, Buildkite) reads
+#     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
+#     its Layer 5 row moves from level 0 to unknown (issue #787).
+ASSESS_METHOD_VERSION = 33

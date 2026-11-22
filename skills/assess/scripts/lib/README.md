@@ -3321,7 +3321,7 @@ selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include fil
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
 enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
-lint_basis}`. Each line,
+lint_basis, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3338,7 +3338,7 @@ line, own or included (`included_check_commands` counts the included ones); with
 is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
-false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
 every include resolved and holds no check reads false. Its third argument is the
 `gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
 offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
@@ -3387,6 +3387,17 @@ target or script that may lint inside it; recipes are not read), `not_enforced`
 (false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
 `no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
 caps the row; a stored scan without the key reads unknown there.
+CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
+`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
+`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
+`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
+root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
