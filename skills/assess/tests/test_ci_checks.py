@@ -82,7 +82,8 @@ def test_no_ci_files_is_false_with_basis_no_ci(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {"README.md": "x\n"}))
     assert block == {"available": True, "ci_files": 0, "check_commands": 0, "included_files": 0,
                      "included_check_commands": 0, "resolved_includes": 0, "unresolved_includes": 0,
-                     "includes": [], "test_or_lint_runs": False, "basis": "no_ci"}
+                     "includes": [], "merged_config": "not_read", "merged_config_reason": None,
+                     "merged_check_commands": 0, "test_or_lint_runs": False, "basis": "no_ci"}
 
 
 def test_a_workflow_running_a_test_is_true(tmp_path: Path) -> None:
