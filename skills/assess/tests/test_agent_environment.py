@@ -316,6 +316,20 @@ def test_pinning_rows(tmp_path: Path) -> None:
         "svc/pyproject.toml": (True, "svc/uv.lock"),
     }
     assert _scan(root)["pinning"]["all_locked"] is False
+    assert _scan(root)["pinning"]["manifests_total"] == len(rows)
+
+
+@pytest.mark.parametrize("files, total, unlocked", [
+    pytest.param({"CMakeLists.txt": "project(x)\n"}, 0, 0, id="CMAKE"),
+    pytest.param({"package.json": '{"dependencies": {"a": "1"}}', "package-lock.json": "{}"},
+                 1, 0, id="NODE-LOCKED"),
+    pytest.param({"package.json": '{"dependencies": {"a": "1"}}'}, 1, 1, id="NODE-UNLOCKED"),
+])
+def test_manifests_total_is_the_lockfile_denominator(
+        tmp_path: Path, files: dict[str, str], total: int, unlocked: int) -> None:
+    """#927 A: the count Layer 5 level 2 reads not measured on when it is 0."""
+    pinning = _scan(_repo(tmp_path, files))["pinning"]
+    assert (pinning["manifests_total"], pinning["unlocked_total"]) == (total, unlocked)
 
 
 def test_locked_bootstrap_satisfies_setup(tmp_path: Path) -> None:
@@ -333,7 +347,8 @@ def test_locked_bootstrap_satisfies_setup(tmp_path: Path) -> None:
 def test_no_manifest_means_nothing_to_install(tmp_path: Path) -> None:
     root = _repo(tmp_path, {"Makefile": "test:\n\tx\n", "CLAUDE.md": "`make test`\n"})
     block = _scan(root, ("CLAUDE.md",))
-    assert block["pinning"] == {"manifests": [], "all_locked": None, "unlocked_total": 0}
+    assert block["pinning"] == {"manifests": [], "all_locked": None, "unlocked_total": 0,
+                                "manifests_total": 0}
     assert block["layer5_cap"]["applies"] is False
     assert "no dependency manifest to install" in block["layer5_cap"]["reason"]
 
@@ -364,6 +379,15 @@ def test_counts_only_keeps_setup_ready(tmp_path: Path) -> None:
     kept = counts_only_scans({"agent_environment": block})["agent_environment"]
     assert kept["setup_ready"] is False
     assert kept["pinning"]["unlocked_total"] == 1
+
+
+def test_counts_only_keeps_manifests_total(tmp_path: Path) -> None:
+    """#927 A: the empty-denominator count survives into a fleet counts-only row."""
+    block = _scan(_repo(tmp_path, {"package.json": '{"dependencies": {"a": "1"}}',
+                                   "package-lock.json": "{}"}))
+    kept = counts_only_scans({"agent_environment": block})["agent_environment"]
+    assert kept["pinning"]["manifests_total"] == 1
+    assert kept["pinning"]["unlocked_total"] == 0
 
 
 # --- CI duration (fake gh) --------------------------------------------------------

@@ -18,6 +18,22 @@ also name and describe their fields. Each named block's ``reason`` description i
 generated from the check manifest (``reason_description``, #795): the codes its
 collector declares and how counts-only output keeps it, so the ``structure`` codes
 are described under ``structure`` only.
+
+Generates the published `references/signals.schema.json` from the `SignalsDocument` and
+`SignalsStamp` TypedDicts in `run_context_types.py`: a strict envelope, a `scans` map
+whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
+custom table, and the namespace `level_signals.py` checks paths against), open per-scan
+blocks, and an `if`/`then` rule that an `"available": false` block carries a string
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery`, `guardrails` and `agent_consistency` blocks (`scan_block_schemas.py`, #779, #781, #767, #768)
+also name and describe their fields (`described_block`), loosely: no required field, and a
+string list may be its counts-only length. Each block's `reason` description is generated
+from the check manifest (`reason_description`, #795): the codes its collector declares in
+`unknown_reasons` (carried in `reason`, for that block) with what each means, then
+`REASON_KEPT`: a counts-only signals document keeps an unavailable block's reason as its
+leading code, or `unavailable` (`counts_only.reason_code`), for every block. `described_blocks`
+adds every known block that declares codes (`structure`), so the structure codes
+(`no_grimp` and the rest) are described under `structure` only and the shared text of
+every other block names no code. `fleet_schema` uses the same blocks for `repos.schema.json`.
 """
 from __future__ import annotations
 

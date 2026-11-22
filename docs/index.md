@@ -41,7 +41,7 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 - [`assess-findings`](../skills/assess-findings/SKILL.md) - renders the report from the deterministic `run-context.json` and the layer scorecard.
 - [`assess-pr`](../skills/assess-pr/SKILL.md) - the end-of-run offers (open a PR, track the Top 3 Actions, freeze a CI gate), including the [uninstall steps](../skills/assess/references/uninstall.md) that remove what a run wrote.
 
-The deterministic core's per-module reference is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
+The deterministic core's per-module reference is each module's docstring under `skills/assess/scripts/lib/`, and its seam map is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
 The [scoring model](../skills/assess/references/scoring-model.md) is the current, decided state of how `/assess` and `/fleet` score a repository, marking what has shipped and what is decided but pending: truth tags, Steps and their gates, and the "N of M measured" headline. It is the page to read before changing the maturity model.
 

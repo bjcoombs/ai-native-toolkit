@@ -37,6 +37,27 @@
 
 Callers keep their own ``FileNotFoundError`` and ``subprocess.TimeoutExpired``
 mapping; this module raises both unchanged. Pure subprocess + stdlib.
+
+How `gh_cli._run_gh` and `gitlab_cli._run_glab` run their binary (issue #714). `run_cli`
+closes stdin and sets `GH_PROMPT_DISABLED`, `NO_PROMPT` (glab) and `GIT_TERMINAL_PROMPT=0`
+over the inherited environment, so a prompt fails the call. A reply reporting a rate limit
+(`rate_limited`: HTTP 429 in gh's `(HTTP 429)` and glab's `glab: HTTP 429` or `429 Too Many
+Requests` forms, or GitHub's rate-limit 403 text "API rate limit exceeded" / "secondary
+rate limit") is retried up to `MAX_RETRIES` (3) times, waiting the printed `Retry-After` seconds when the
+CLI shows the header, else `BASE_WAIT * 2**attempt`, at most `MAX_WAIT` (60s) per wait;
+`SLEEP` is replaceable in tests. When `CACHE_ENV` (`ASSESS_PLATFORM_CACHE`) names a
+directory, a successful call's stdout is stored under the sha256 of its argv and the same
+argv is answered from it for the rest of the run (any process); failures are never stored.
+Only the fleet platform pass sets it, to a temporary directory it removes. A call made
+with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
+nor writes it. The cache never holds comment or review text on either provider: GitLab
+merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
+through `gitlab_cli.glab_api(..., cache=False)`, GitLab's merged CI configuration
+(`gitlab_ci_lint.py`, #796, the same way), and the GitHub merged pull request read with
+reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
+in memory only. Callers keep
+their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
+`tests/test_platform_cli.py`.
 """
 from __future__ import annotations
 

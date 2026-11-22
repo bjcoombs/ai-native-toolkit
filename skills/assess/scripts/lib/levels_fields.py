@@ -58,6 +58,42 @@ Layer to truth, the documented mapping of the alias:
   statistic (``signal_grades.EMPTY_DENOMINATORS``) takes that signal's code. The parsed criterion
   keeps the path as its ``value`` too, so every reader of ``value`` shows the
   path it compares with. The condition's grade is the weaker of the two signals'.
+
+The rules for the four condition fields of a maturity model (#843); `levels.parse_levels`
+calls them, and the module docstring is the reference.
+
+- **`truth`** (required, multi-valued): every level carries a non-empty array of distinct tags
+  from `TRUTH_TAGS` (`behaviour`, `contracts`, `docs`, `structure`, `agent_context`,
+  `agent_runtime`, `governance`, `supply_chain`). An unknown tag, an empty array or a repeat
+  fails the load naming the row, the level and the cause.
+- **Legacy layer alias (rule A, maintainer decision of 2026-11-22):** the alias applies only
+  when **no condition in the model carries `truth`**. Each condition then takes
+  `legacy_truth(row id)`: a `layer-<n>-...` row takes `LEGACY_LAYER_TRUTH[n]` (0
+  `agent_context`; 1 `agent_runtime`; 2, 3, 4 `structure`; 5, 6 `behaviour`; 7, 8
+  `governance`), the default model's `doc-freshness` takes `docs` and `guardrails-stated` and
+  `agent-consistency` take `agent_context` (`LEGACY_ROW_TRUTH`), and any other row `[]`. A
+  model where some conditions carry `truth` and others do not raises **`MixedTruthError`**
+  (a `LevelsError`), whose message starts `MixedTruthError:` and names the model file, the
+  row id and the level of the first condition without it. There is no format-marker field.
+- **`polarity`** on a level: `"positive"` (default) or `"hazard"`. A hazard is parsed as
+  `polarity: "hazard"`; `level_tally` never counts it (it is listed when met) and marks its
+  condition with `polarity: "hazard"`. No row level or Step reads it (Step-blocking hazards
+  are #828).
+- **`guarded_by`** on a level: one condition id; default absent (no guard). One hop:
+  `level_tally` caps the condition's grade at `measured` while the guard is not `met`, which
+  never changes what is counted. An unknown id, the condition itself or a hazard fails the
+  load naming the id and `guarded_by`.
+- **`eq_signal`** on a criterion: `{ signal = "<path>", op = "eq" | "ne", eq_signal = "<path>" }`
+  with no `value`; default absent (compare with `value`). The criterion compares the two
+  measured signals: either unavailable is `unknown`, different kinds or a non-scalar
+  `type_mismatch`, and either side an empty-set statistic takes that signal's
+  `EMPTY_DENOMINATORS` code. The parsed criterion keeps the second path as its `value` as well, so the
+  catalog shows what it compares with; the `PathValidator` checks both paths. The fleet
+  next-step wording skips the signal's repository-native guidance for such a criterion and names
+  both paths. `levels.unavailable_signal` names the unavailable side in `missing_signals` and in
+  the tally's `not_measured` reason. The catalog never counts a hazard.
+
+Tests: `tests/test_levels_fields.py`.
 """
 from __future__ import annotations
 

@@ -45,6 +45,23 @@ Privacy. A candidate holds an identity, so it stays local: the listing CLI
 (``scripts/identity_candidates.py``) prints it to the terminal and the
 ``ai_usage`` block carries only the count (``identities_awaiting_confirmation``).
 No candidate reaches counts-only output, the fleet run history or an artifact.
+
+Bot and agent account discovery (issue #765): suggestions for the human to confirm in
+`[identities]`. `discover(commits, matcher)` is pure: over `HistoryCommit(author_email,
+author_name, subject, coauthors)` rows (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
+returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
+commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
+`STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
+`agent_name_hint` from `AI_TOOL_NAMES`, `automation_name_hint`) makes a candidate, while
+`co_author_trailer`, `noreply_address` and `uniform_subjects` (at least
+`UNIFORM_MIN_COMMITS` commits, one folded subject shape covering `UNIFORM_SHARE`) only
+annotate one. An account the matcher already puts in `agent`, or one classified in
+`[identities]`, is never a candidate. A candidate holds an identity: `ai_usage` emits only
+`len(discover(...))` as `identities_awaiting_confirmation`, and the rows reach only the
+terminal through `scripts/identity_candidates.py` (list one repository or a fleet list
+aggregated by account; `--confirm CLASS=ACCOUNT` rewrites the `[identities]` section of
+`--config` or the repository's `.assess/config.toml`). Tests:
+`tests/test_identity_candidates.py`.
 """
 from __future__ import annotations
 

@@ -109,8 +109,7 @@
 #   when there is no root file and nested_instructions did not run, and a
 #   missing layer_grades block is unknown. A nested-only repository's advice
 #   is the gap_actions layer_grades entry: add a root file that names the
-#   check command. Unreleased: this comment changed with #821 and the
-#   criterion did not; the 3.0.0 release PR bumps "version".
+#   check command.
 #   layer_grades.instructions_grade (the letter grade, null with no
 #   file) is available to a maturity model too; this one does not grade on the
 #   letter, since /assess weighs it with the instruction text. Level 2 reads
@@ -169,10 +168,13 @@
 #   never 0: the check may live in the included file. Level 2 is pinned
 #   dependencies: agent_environment.pinning.unlocked_total is 0, so every
 #   dependency manifest has its lockfile committed (a requirements*.txt pinned
-#   with == is its own lock); a repository with no manifest has nothing to
-#   lock. Committed setup does not stand in for a lockfile. Naming a check
-#   command that resolves is read once, by Layer 0 level 2, so a missing named
-#   check costs Layer 0 only (#786). A repository with locked dependencies but
+#   with == is its own lock). A repository with no manifest has nothing to
+#   lock: the condition reads not measured (no_manifests, the count
+#   agent_environment.pinning.manifests_total is 0,
+#   signal_grades.EMPTY_DENOMINATORS, #927), never met. Committed setup
+#   does not stand in for a lockfile. Naming a check command that resolves
+#   is read once, by Layer 0 level 2, so a missing named check costs Layer 0
+#   only (#786). A repository with locked dependencies but
 #   no CI check line is 0.
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
@@ -240,9 +242,6 @@
 # tally and no Step.
 #
 # Changing a criterion changes results: bump "version" with every edit.
-#
-# Unreleased (the 3.0.0 release PR bumps "version" once): every condition
-# gains "truth" (#843); no criterion, grade or Step changes.
 
 version = "default-2026.11.22"
 

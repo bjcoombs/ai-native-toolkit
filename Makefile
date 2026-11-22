@@ -10,7 +10,12 @@
 # without make; tests/test_windows_docs.py fails when the two drift.
 
 .POSIX:
-.PHONY: help setup check lock-check test-assess test-scripts test-contract lint catalog regen
+.PHONY: help setup check lock-check test-assess test-scripts test-contract lint catalog regen fold
+
+# The test targets run each suite on every core with pytest-xdist, one test
+# file per worker, as CI does. For a serial run to debug a failure:
+#   make check XDIST="-p no:xdist"
+XDIST = -n auto --dist loadfile
 
 help:
 	@echo "make setup          sync the locked dev environments for skills/assess and scripts"
@@ -22,6 +27,7 @@ help:
 	@echo "make lint           ruff and mypy gates for both packages"
 	@echo "make catalog        regenerate docs/what-we-measure.md and references/measures.json"
 	@echo "make regen          regenerate every generated file and golden (run after a conflict in one)"
+	@echo "make fold RELEASE=x release PR only: fold skills/assess/changes/ into the counter histories, then regen"
 
 # ripgrep is not a Python dependency: the promissory-marker tests shell out to
 # it and degrade without it, so setup warns rather than fails.
@@ -37,13 +43,14 @@ lock-check:
 	cd scripts && uv lock --check
 
 test-assess:
-	cd skills/assess && uv run --locked pytest -v --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
+	cd skills/assess && uv run --locked pytest -v $(XDIST) --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
+	cd skills/assess && uv run --locked pytest -v -p no:xdist -m cpu_budget --no-cov
 
 test-scripts:
-	cd scripts && uv run --locked pytest -v --cov=. --cov-report=term --cov-report=xml:coverage.xml
+	cd scripts && uv run --locked pytest -v $(XDIST) --cov=. --cov-report=term --cov-report=xml:coverage.xml
 
 test-contract:
-	uv run --with pytest --with pyyaml pytest -v tests/
+	uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
 
 # The measures catalog, generated from skills/assess/checks/core.toml (and its fragments), the default
 # maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and
@@ -88,3 +95,13 @@ lint:
 	cd scripts && uv run --locked ruff check .
 	cd skills/assess && uv run --locked mypy
 	cd scripts && uv run --locked mypy
+
+# Release PR only (#1011): write the version notes in skills/assess/changes/ into
+# each counter's history comment, bump each counter once and delete the notes,
+# then regenerate, because schemas, the catalog and goldens stamp the counter
+# values. Not part of regen: regen is safe after any conflict, the fold runs once
+# per release. FOLD_ARGS passes --date or --set counter=value to fold_changes.py.
+fold:
+	@test -n "$(RELEASE)" || { echo "usage: make fold RELEASE=3.0.0 [FOLD_ARGS='--set artifact_schema=2.0.0']" >&2; exit 2; }
+	cd scripts && uv run --locked python fold_changes.py --release $(RELEASE) $(FOLD_ARGS)
+	$(MAKE) regen

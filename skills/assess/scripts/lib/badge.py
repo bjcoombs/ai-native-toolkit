@@ -18,6 +18,16 @@ colour and message come from run data alone, and it only claims what the
 producing run measured. A run whose level result is unavailable reads "Step not
 measured" in grey, never a guessed Step. No colour is red: a Step is a
 milestone reached, not a grade.
+
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). The message is the
+run's deterministic headline summary (`headline.summary` from `headline.py`, #747:
+"Step 3 · 4 of 4 measured"), the colour a pure function of the Step (`step_color`:
+blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
+"Step not measured" when the level result is unavailable). `assess_core` writes
+it through `write_headline_badge` on every run, stamping a `link` to
+`assess-report.md` and the `run_id`, and rewrites it after the opt-in mutation
+recount; `assess_finalize` never touches it. The layered "X / 8" score badge and
+its band ladder are retired. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
 """
 from __future__ import annotations
 

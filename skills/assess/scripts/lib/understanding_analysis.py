@@ -36,6 +36,13 @@ This module is **standalone**: it consumes the JSON-serialisable outputs of
 complexity treemap (``complexity-stats.json``), and returns a JSON-serialisable
 dict. It never imports or edits ``assess_core`` - wiring the ``understanding``
 block into ``run-context.json`` is a separate task's job.
+
+Signals B4 + D2. Per module: human anchor (has a confirmed human authored it?), intent
+source (is there an externalised spec/doc?), authorship class, and the velocity clock
+(days from the last comprehension event - a human-authored commit - to HEAD's
+committer time, issue #773, rather than calendar age; None without a HEAD). Primary finding: orphaned understanding - high complexity with no human
+anchor and no externalised spec. Reuses `change_coupling.authorship_analysis` so the
+conservative agent/human classification is defined one way.
 """
 from __future__ import annotations
 

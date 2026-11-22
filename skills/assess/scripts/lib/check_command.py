@@ -10,6 +10,90 @@ such as ``npm ci`` or ``uv sync --extra test`` is never a check.
 ``may_lint`` (#782) feed ``ci_checks.lint_runs``: a linter that runs, and a
 check whose recipe may run one. Pure: no file or network
 access, so a scan that only classifies commands stays offline.
+
+Pure classifier, split from `agent_environment.py` (issue #698) so an offline scan
+can use it without reaching `gh_cli`. `is_check_command(text)` is true for a test
+or check target of a runner `command_resolver.RUNNERS` models (`make test`, `npm
+run ci`, `tox`, the program after `uv run`), or a committed script named for a
+check; an install (`npm ci`, `uv sync --extra test`) never is. `is_check_name(name)`
+splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
+`is_lint_command(text)` walks the same program/target anchoring with `LINT_WORDS`
+(`lint`, `vet`, `clippy` and the linters) and `LINT_PROGRAMS` (`ruff`, `eslint`,
+`mypy` ... run directly), so `make lint` and `npx eslint` count and an install
+naming a linter does not; instruction-file classification does not use it. Used by
+`agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
+lines). `is_lint_run(text)` (issue #782) is the lint test `ci_checks.lint_runs`
+reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
+--version` runs no lint) and without the package-manager test aliases
+`is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
+(`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
+ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
+on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
+program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
+`nox` (elsewhere `-V` can run the work: `mvn -B -V verify`, `./gradlew -V test`); `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
+script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
+`--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
+read through every wrapper `check_command` knows (`_info_program`: `uv run`, `npx`, `python
+-m`, the #920 wrappers and `hatch run`, so `bundle exec rspec -h`, `docker compose run app
+pytest --co` and `hatch run pytest -V` are info calls, #936), and `ci_checks` drops such a
+command from every CI line test, `may_check` included, so
+`pytest --version` is no Layer 5 check and a version-only step makes
+`test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
+`is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
+`type-check` targets such as `npm run typecheck` or `make type-check`), so
+`is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
+`npm exec`, `pnpm exec` / `dlx`, `yarn exec` / `dlx`) is read by the program it runs:
+a linter or type checker is a lint run, a test runner (`jest`, `vitest`, `playwright
+test`) is neither, and any other program is `may_lint` (null, never false). A lone
+type-checker item (`- tsc` under `needs:`) is a value like a lone linter. `may_lint(text)` is a check that may run a linter the line cannot
+show: a check target of a runner or script (`make check`, `npm test`, `tox`,
+`./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
+(`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
+call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
+jest`). `is_lint_command` keeps its meaning.
+Test runners and wrappers beyond `RUNNERS` (issue #920): `check_verdict(text)` is
+`is_check_command` as three states. True for a test program (`TEST_PROGRAMS`: `ctest`,
+`phpunit`, `pest`, `rspec` and the JS test runners, matched by basename so
+`vendor/bin/phpunit` counts), the `test` subcommand of a toolchain (`TEST_SUBCOMMANDS`:
+`dotnet`, `swift`, `mix`, `deno`, `bazel`, `bazelisk`, `hatch`, `flutter`, `rails`, `dart`), `php artisan test`, a
+Gradle test task (`./gradlew testDebugUnitTest`, `connectedAndroidTest`), the
+`test` action of `xcodebuild` or a check-named target of
+a target runner (`TARGET_RUNNERS`: `make`, `just`, `task`, `rake`, `turbo`, `nx`, with
+`nx affected -t test` and `nx run app:test` read). A wrapper is read by the program it
+runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`,
+`npx`, `pnpm exec`, `hatch run`), in `is_lint_command`, `is_lint_run` and `may_lint`
+too. None (`may_check(text)`) for a target whose recipe is not read: any other target
+of a target runner, its default target (a bare `make`), a `hatch run` script that is not
+check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
+(`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
+file or a path passed to `bash`/`sh`/`zsh`, read by file name so `./ci/deploy.sh` is
+false), and a container's default command or an unknown
+program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
+`poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
+Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
+`format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
+absolute paths and a container running a plain program (`echo`) or a modelled runner.
+A target runner asked for `--version` or its list (`task --list`, `rake -T`) is false.
+`may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
+`bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
+lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
+(`ci_checks._lone_check`). Other ecosystems (issue #926): `LINT_PROGRAMS` takes the
+analysers of `lint_vocabulary.ANALYSER_PROGRAMS`, and `is_lint_command` and `is_lint_run`
+also accept `lint_vocabulary.ecosystem_lint` (a formatter in its check mode, `mix credo`,
+`dart analyze`, a Gradle lint task). `_plain_wrapper` reads `xargs [flags] <program>` and
+`dotnet tool run <program>` as the program they run, in `_wrapped` too, where a non-check
+program behind them stays false (`xargs rm` is not a target whose recipe is unread).
+`is_format_rewrite(text)` is a formatter that rewrites files (`clang-format -i`,
+`xargs clang-format-21 -i`, `mix format`), read by `ci_lint_gates`. `is_info_invocation`
+reads the program by `lint_vocabulary.program_name` (`clang-tidy-18 -h`). `nx graph`,
+`nx show`, `nx list`, `nx report`, `nx reset` and `nx daemon` print information:
+`check_verdict` reads them false, not null, and so do `npx nx graph`, `pnpm exec nx graph`
+(`may_lint` too) and `pnpm nx graph` / `yarn nx graph` (a package-manager head running a
+target runner is read as that runner). Tests: `tests/test_check_command.py`,
+`tests/test_check_runners.py` (#920), `tests/test_lint_vocabulary.py` (#926),
+`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
+(`test_lint_runs_per_command`).
 """
 from __future__ import annotations
 
@@ -18,6 +102,8 @@ import shlex
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
+from lib.lint_vocabulary import (
+    ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
 
 CHECK_WORDS = frozenset({
     "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
@@ -32,11 +118,12 @@ _JS_TEST_RUNNERS = frozenset({"jest", "vitest", "mocha", "ava", "jasmine", "cypr
 # Linters run as their own program (``ruff check .``, ``npx eslint``, ``uv run mypy``),
 # and the words a lint target, script or subcommand is named by (``make lint``,
 # ``go vet``, ``cargo clippy``). A bare ``lint`` is never a program: a YAML list
-# item such as ``stages: [lint]`` is not a command.
+# item such as ``stages: [lint]`` is not a command. The analysers of other ecosystems
+# (``phpstan``, ``clang-tidy``, #926) come from ``lib.lint_vocabulary``.
 LINT_PROGRAMS = frozenset({
     "ruff", "eslint", "flake8", "pylint", "mypy", "golangci-lint", "shellcheck", "rubocop",
     "stylelint", "ktlint", "biome",
-})
+}) | ANALYSER_PROGRAMS
 LINT_WORDS = LINT_PROGRAMS | {"lint", "lints", "linter", "vet", "clippy"}
 _VALUED_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd", "--prefix", "--project",
@@ -146,8 +233,10 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
+    if _no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
+        return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
-            words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS):
+            words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
         return True
     program = _wrapped(words) or _hatch_run(words)
     return program is not None and bool(program) and _lint_words(program)
@@ -193,7 +282,7 @@ def is_info_invocation(text: str) -> bool:
     program = _info_program(words)
     if not program:
         return False
-    head = PurePosixPath(program[0]).name
+    head = program_name(program[0])   # clang-tidy-18 -h, vendor/bin/phpstan -V
     rest = set(program[1:])
     return (("-V" in rest and head in _V_VERSION) or ("-h" in rest and head in _H_HELP)
             or bool(rest & _LIST_FLAGS.get(head, frozenset())))
@@ -323,13 +412,18 @@ def is_lint_run(text: str) -> bool:
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
     meaning: ``lib.ci_checks.test_or_lint_configured`` and Layer 5 read it unchanged.
     """
-    outer = _outer_wrapper(command_words(text))
-    if outer:   # docker compose run app ruff check ., bundle exec rubocop: the program runs
+    first = command_words(text)
+    outer = (_outer_wrapper(first) or _plain_wrapper(first)) if first else None
+    if outer:   # docker compose run app ruff check ., bundle exec rubocop, xargs clang-tidy
         return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or is_info_invocation(text):
         return False
+    if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
+        return False
+    if ecosystem_lint(words):   # phpstan, mix credo, ./gradlew ktlintCheck, pint --test (#926)
+        return True
     program = _exec_program(words)
     if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run
         return bool(program) and (is_check_name(program[0], _RUN_WORDS)
@@ -367,6 +461,9 @@ def may_lint(text: str) -> bool:
             return False
         if runner[0] == "playwright" and _positionals(runner[1:])[:1] == ["test"]:
             return False
+        if runner[0] == "nx" and _positionals(runner[1:])[:1] and _positionals(
+                runner[1:])[0] in _NX_INFO:
+            return False   # npx nx graph: information only, as at Layer 5 (#926)
         return not is_check_name(_TYPE_CHECK.sub("typecheck", runner[0]), _RUN_WORDS)
     program = _program(words)
     if program[:2] == ["pre-commit", "run"]:
@@ -430,6 +527,8 @@ _COMPOSE_FLAGS = frozenset({
     "--user", "--publish", "-l", "--label", "--pull",
 })
 _NX_TARGET_FLAGS = ("-t", "--target", "--targets")
+# nx commands that print workspace information and run no target.
+_NX_INFO = frozenset({"graph", "show", "list", "report", "reset", "daemon"})
 _GRADLE = frozenset({"gradle", "gradlew", "./gradlew"})
 # A Gradle test task: ``test``, ``testDebugUnitTest``, ``:app:testReleaseUnitTest``,
 # ``connectedAndroidTest`` (Android variants and instrumented tests).
@@ -496,7 +595,43 @@ def _wrapped(words: list[str]) -> list[str] | None:
         return _drop_leading_flags(words[words.index("run", 1) + 1:], _WRAPPER_FLAGS) or None
     if head == "uvx":
         return _drop_leading_flags(words[1:], _WRAPPER_FLAGS) or None
-    return _outer_wrapper(words) or _exec_program(words) or None
+    return _outer_wrapper(words) or _exec_program(words) or _plain_wrapper(words)
+
+
+def _no_analysis(words: list[str]) -> bool:
+    """``lint_vocabulary.runs_no_analysis`` on the command and on the program it runs: a
+    wrapper (``npx phpcs --config-set``, ``uv run clang-tidy -fix``) or a package bin
+    (``yarn phpstan --generate-baseline``) runs no analysis either."""
+    inner = _info_program(words)
+    bin_form = words[1:] if words[0] in ("pnpm", "yarn", "bun") else []
+    return (runs_no_analysis(words) or runs_no_analysis(inner)
+            or (bool(bin_form) and runs_no_analysis(bin_form)))
+
+
+# xargs flags that take the next word as a value (``xargs -n 1 clang-tidy``).
+_XARGS_FLAGS = frozenset({
+    "-I", "-n", "-P", "-L", "-s", "-d", "-a", "-E", "--max-args", "--max-procs", "--delimiter",
+    "--arg-file", "--replace", "--max-lines", "--max-chars", "--eof",
+})
+
+
+def _plain_wrapper(words: list[str]) -> list[str] | None:
+    """The program ``xargs [flags]`` or ``dotnet tool run`` runs (#926): ``xargs clang-format-21
+    -i`` -> ``clang-format-21 -i``; None for any other command or no program."""
+    if words[0] == "xargs":
+        return _drop_leading_flags(words[1:], _XARGS_FLAGS) or None
+    if words[:3] == ["dotnet", "tool", "run"]:
+        return words[3:] or None
+    return None
+
+
+def is_format_rewrite(text: str) -> bool:
+    """A formatter run that rewrites files in place (``clang-format -i``, ``mix format``,
+    ``xargs clang-format-21 -i``): ``lib.ci_lint_gates`` reads it as a gate only when a
+    later line of the job runs ``git diff --exit-code`` (#926)."""
+    words = command_words(text)
+    return bool(words) and not is_info_invocation(text) and formatter_mode(
+        _info_program(words)) == "rewrite"
 
 
 def _targets(head: str, args: list[str]) -> list[str]:
@@ -549,6 +684,8 @@ def _js_script_verdict(head: str, words: list[str]) -> bool | None:
     if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
         return False
     rest = words[words.index(pos[0], 1):]   # pnpm turbo run test: a bin of the package
+    if rest[0] in TARGET_RUNNERS:   # pnpm nx graph, yarn turbo run build: read the runner
+        return _check_verdict(rest)
     return True if _check_verdict(rest) is True else _target_verdict(pos[:1])
 
 
@@ -611,7 +748,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     program = _wrapped(words)
     if program is not None:
         verdict = _check_verdict(program)
-        if verdict is False and not _setup_program(program) and program[0] not in _KNOWN_PROGRAMS:
+        if (verdict is False and not _setup_program(program) and program[0] not in _KNOWN_PROGRAMS
+                and _plain_wrapper(words) is None):   # xargs rm: a known wrapper stays false
             return None   # uv run foo, npx foo, docker run img foo: a program this scan does not know
         return verdict
     if head == "deno" and _positionals(words[1:])[:1] == ["task"]:   # deno task foo: not read
@@ -622,6 +760,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     if head in TARGET_RUNNERS:
         if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
             return False
+        if head == "nx" and _positionals(words[1:])[:1] and _positionals(words[1:])[0] in _NX_INFO:
+            return False   # nx graph, nx show projects: information only (#926)
         return _target_verdict(_targets(head, words[1:]), rake=head == "rake")
     if head in ("npm", "pnpm", "yarn", "bun"):
         return _js_script_verdict(head, words)

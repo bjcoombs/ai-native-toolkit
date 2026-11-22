@@ -31,6 +31,42 @@ reaches no clone. Untracked entries are listed with ``tracked: false`` and left
 out of ``ci_source_ids`` and ``marketplace_ids``. Deterministic and offline:
 file reads plus ``git ls-files``. YAML is read line by line (stdlib only); a
 file it cannot read yields no entries rather than an error.
+
+Shared CI sources and agent marketplaces, per repository (issue #566), the
+file-content half of the organisation-wide evidence in #550.
+`scan_shared_tooling(repo_root)` writes `{available, ci_includes[], marketplaces[],
+ci_source_ids[], marketplace_ids[]}`. `ci_includes` rows (`kind`, `source`, `id`,
+`ref`, `ref_variable`, `path`, `line`, `tracked`) come from the top-level `include:` section of
+`.gitlab-ci.yml` (`project:` -> `gitlab_project`, `component:` ->
+`gitlab_component` with the host and `@version` dropped) and from `uses:
+<owner>/<repo>/.github/workflows/...` in `.github/workflows/*.yml`
+(`github_reusable_workflow`, keyed on the repository). `ref` is the pin kept apart
+from the id (#674): a GitLab include item's own `ref:` (joined by include item, so a
+`ref:` under `inputs:` is not it), a component's or workflow's `@ref`, `null` when
+unpinned. A ref holding a CI variable (`$TPL_REF`, `@${VERSION}`) is recorded as `ref`
+`null` with `ref_variable` true (#684): pinned, to a value the file does not say, so `--full`
+and counts-only agree and the map draws it as "pin unknown". Counts-only keeps a `ref` that is a token (`v4`, `1.2.0`, a SHA) and drops it otherwise (`release/1.2`). Local includes, templates,
+`./.github/workflows` references, a job's `trigger:`, keys in nested lists
+(`inputs:`, `rules:`), step-level `uses:` and `run:` script text are skipped.
+Symlinks and paths resolving outside the repository are not read. `marketplaces`
+rows (`kind`, `name`, `source`, `id`, `path`, `tracked`) are the
+`.claude-plugin/marketplace.json` manifest (`manifest`) and each
+`extraKnownMarketplaces` entry in `.claude/settings.json` (`settings`, `source` as
+`<kind>:<repo|url|path>`). A marketplace's `id` is its lowercased name, the key
+Claude Code tells marketplaces apart by, so a manifest and a settings entry naming
+it count once. The two id lists credit git-tracked files only, as `agent_ops` does. Outside a git checkout (or when git fails) the block is `available: false` with a `reason`, so a roll-up never reads unknown tracking as "shares nothing"; entries are still listed. `is_tracked` lives in `git_churn` beside `tracked_files`, shared with `agent_ops`.
+`distinct_ids(blocks)` is the fleet roll-up: the union of the id lists, skipping
+`available: false` blocks. YAML is read line by line (stdlib); offline, no `gh`.
+`step_uses(text)` (#696) is the step-level reader the block itself does not use: (line,
+value) for each `uses:` that is a step's own key (on its `- ` line or at its key column)
+inside a job's `steps:` list, skipping job-level `uses:`, a `uses:` nested under `with:`, and the
+body of a block scalar (`run: |`, `prompt: |`); `action_repo(value)` turns one into
+`owner/repo` (lowercased; None for `./` and `docker://`). Actions are not shared CI
+sources, so they never enter `ci_includes` or `ci_source_ids`. `workflow_events(text)`
+reads the top-level `on:` (a scalar, a flow list or mapping, a block list or mapping of
+events; `ON_KEY` also accepts the YAML 1.1 `true:` spelling, shared with
+`agent_harness`); None when there is none it can read. `include_lines` and
+`component_source` expose the include-section reader to `ci_includes`.
 """
 from __future__ import annotations
 

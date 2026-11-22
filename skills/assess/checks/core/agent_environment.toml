@@ -60,6 +60,7 @@ collector = "core.agent_environment"
 path = "agent_environment.pinning.unlocked_total"
 type = "number"
 evidence = "head_text"
+null_means = "no_manifests: no dependency manifest is read (pinning.manifests_total 0), so there is nothing to lock"
 
 [[entries]]
 id = "core.cond.layer-0-instructions.2.named_total"

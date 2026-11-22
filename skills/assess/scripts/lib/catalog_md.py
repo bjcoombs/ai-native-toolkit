@@ -13,6 +13,17 @@ tags it carries; its other tags name it in an "Also carries this tag" line. The 
 matters") is one more entry and a tag's ``why`` one more opening line. Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
 manifest, so an edit there shows here once ``make catalog`` regenerates the file.
+
+"How the tags relate" holds the shared-condition matrix (``tag_pairs``; the diagonal is each
+tag's own count), the Step gates table (the gates new at each Step, the conditions they
+cover and their tags) and the requires, guard and equality links. A tag with no condition,
+a model with no Steps, and no guard or equality link are each said in words.
+
+**Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
+root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
+`tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
+so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml` or `level_signals.py` regenerates the catalog.
+`make check` runs it through `test-assess`.
 """
 from __future__ import annotations
 
