@@ -6,8 +6,9 @@ model as a flat list of **conditions**, one per row level (``<row id>.<level>``,
 with no prior run, no stored state and no model in the path:
 
 - each condition's **state**: ``met``, ``unmet`` or ``not_measured`` (with a
-  reason code). ``not_applicable`` and ``declined`` are reserved states that no
-  rule produces yet (#827, #828), so readers accept all five;
+  reason code), or ``not_applicable`` when the owner excluded it (below).
+  ``declined`` is a reserved state that no rule produces yet (#828), so readers
+  accept all five;
 - each condition's **grade**, the weakest ``lib.level_signals.criterion_grade``
   of its criteria. ``measured`` and ``verified`` conditions are **counted**;
   ``config_only`` and ``declared`` ones, and any criterion signal with no
@@ -26,11 +27,23 @@ takes the state of the first required condition that is not met (``unmet``, or
 ``not_measured`` with that condition's reason), with reason
 ``requires:<condition id>``.
 
+**Owner exclusions** (``lib/owner_exclusions.py``, #910) are passed in, never
+read from the signals. An excluded condition reads ``not_applicable`` with
+``disposition: excluded_by_owner`` and its ``exclusion_kind``, whatever its own
+criteria say; it is neither counted nor in the denominator, so it neither earns
+nor costs. A condition that requires it takes ``not_applicable`` with reason
+``requires:<id>``: an exclusion never unlocks a dependent. The result lists the
+exclusions under ``excluded`` (ids and kinds only; the owner's reason stays in the
+run context's ``owner_exclusions`` block). With no exclusions the result is
+byte-identical to one computed without them.
+
 Gates read state, never grade. A declared condition (an instruction file) or a
 config-only one (an enforced coverage gate) holds its gate while staying out of
 the tally (#783 decision). A gate holds when every condition of its row up to
 its level is ``met``; a blocker names the first condition that is not, with its
-state and reason.
+state and reason, and its disposition when the owner excluded it. An excluded
+gate condition never holds its gate, so its Step cannot be reached while the
+exclusion stands (#744 decision).
 
 Reason codes of a ``not_measured`` condition (the first unknown criterion's):
 
@@ -63,16 +76,19 @@ schema is ``skills/fleet/references/level.schema.json``.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 from lib.reason_codes import reason_code, reason_token
-from lib.level_result_types import Blocker, ConditionResult, LevelResult, NextStep
+from lib.level_result_types import Blocker, ConditionResult, ExcludedCondition, LevelResult, NextStep
 from lib.levels import CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef, condition_id, evaluate_row
 from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
+# Unreleased (run 4 version freeze, the release PR bumps it): owner exclusions
+# add the optional ``excluded`` list and the condition and blocker fields
+# ``disposition`` and ``exclusion_kind`` (#910); results without exclusions are unchanged.
 LEVEL_RESULT_VERSION = 2
 
 STATES = ("met", "unmet", "not_applicable", "not_measured", "declined")
@@ -84,6 +100,7 @@ NEEDS_PLATFORM = "needs_platform"
 _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM}
 # The codes lib.levels gives a criterion whose signal is a statistic over an empty set.
 EMPTY_SET_CODES = frozenset(code for _, code in EMPTY_DENOMINATORS.values())
+EXCLUDED_BY_OWNER = "excluded_by_owner"
 
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
@@ -136,7 +153,8 @@ def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[s
     return "not_measured", _block_reason(data, first["signal"])
 
 
-def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[ConditionResult]:
+def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
+                excluded: Mapping[str, ExcludedCondition]) -> list[ConditionResult]:
     own: dict[str, tuple[str, str | None]] = {}
     built: list[ConditionResult] = []
     requires: dict[str, list[str]] = {}
@@ -144,12 +162,16 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[Co
         evaluation: Evaluation = evaluate_row(row, dict(data) if data is not None else None)
         for outcome, level in zip(evaluation["levels"], row["levels"]):
             cid = condition_id(row["id"], level["level"])
-            state, reason = _own_state(outcome, data)
+            state, reason = ("not_applicable", None) if cid in excluded else _own_state(outcome, data)
             own[cid] = (state, reason)
             requires[cid] = level.get("requires", [])
             grade = _grade(row, level["level"])
-            built.append({"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
-                          "counted": grade in COUNTED_GRADES, "state": state})
+            entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
+                                      "counted": grade in COUNTED_GRADES and cid not in excluded, "state": state}
+            if cid in excluded:
+                entry["disposition"] = EXCLUDED_BY_OWNER
+                entry["exclusion_kind"] = excluded[cid]["kind"]
+            built.append(entry)
     final: dict[str, tuple[str, str | None]] = {}
 
     def resolve(cid: str) -> tuple[str, str | None]:
@@ -180,6 +202,10 @@ def _gate_blocker(gate_id: str, row_id: str, level: int,
             blocker: Blocker = {"kind": "gate", "gate": gate_id, "condition": cond["id"], "state": cond["state"]}
             if "reason" in cond:
                 blocker["reason"] = cond["reason"]
+            if "disposition" in cond:
+                blocker["disposition"] = cond["disposition"]
+            if "exclusion_kind" in cond:
+                blocker["exclusion_kind"] = cond["exclusion_kind"]
             return blocker
     return None
 
@@ -191,9 +217,30 @@ def _blockers(step: StepDef, met: int, by_id: Mapping[str, ConditionResult]) -> 
     return found
 
 
-def level_result(model: MaturityModel, data: Mapping[str, Any] | None) -> LevelResult:
-    """The tally and the Step of one repository's signals (``scans`` or a run context)."""
-    conditions = _conditions(model, data)
+def condition_ids(model: MaturityModel) -> frozenset[str]:
+    """Every condition id of a model."""
+    return frozenset(condition_id(row["id"], level["level"]) for row in model["rows"] for level in row["levels"])
+
+
+def _excluded(model: MaturityModel, exclusions: Sequence[Mapping[str, Any]]) -> dict[str, ExcludedCondition]:
+    """The exclusions that name a condition of the model, first entry per id."""
+    known: Collection[str] = condition_ids(model)
+    out: dict[str, ExcludedCondition] = {}
+    for e in exclusions:
+        cid = e.get("id")
+        if isinstance(cid, str) and cid in known and cid not in out:
+            out[cid] = {"id": cid, "kind": str(e.get("kind") or "other"), "source": str(e.get("source") or "repo")}
+    return out
+
+
+def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
+                 exclusions: Sequence[Mapping[str, Any]] = ()) -> LevelResult:
+    """The tally and the Step of one repository's signals (``scans`` or a run context).
+
+    ``exclusions`` are the owner's (``OwnerExclusion`` entries, ``lib/owner_exclusions.py``);
+    an id the model does not define is ignored."""
+    excluded = _excluded(model, exclusions)
+    conditions = _conditions(model, data, excluded)
     counted = [c for c in conditions if c["counted"]]
     met = sum(c["state"] == "met" for c in counted)
     by_id = {c["id"]: c for c in conditions}
@@ -205,7 +252,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None) -> LevelR
             next_step = {"step": definition["step"], "threshold": definition["threshold"], "blockers": blockers}
             break
         step = definition["step"]
-    return {
+    result: LevelResult = {
         "level_result_version": LEVEL_RESULT_VERSION,
         "levels_version": model["version"],
         "tally": {"met": met, "measured": sum(c["state"] in ("met", "unmet") for c in counted),
@@ -218,6 +265,9 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None) -> LevelR
         "step": step,
         "next_step": next_step,
     }
+    if excluded:
+        result["excluded"] = [excluded[c["id"]] for c in conditions if c["id"] in excluded]
+    return result
 
 
 def default_model() -> MaturityModel:
@@ -232,13 +282,25 @@ def model_blocks(model: MaturityModel) -> tuple[str, ...]:
                          for level in row["levels"] for c in level["criteria"]}))
 
 
-# The run-context blocks the ``level`` entry reads (lib/scan_registry.py).
+# The run-context blocks the default model's criteria read.
 DEFAULT_BLOCKS = model_blocks(default_model())
+# The run-context block holding the owner's exclusions (lib/owner_exclusions.py).
+EXCLUSIONS_BLOCK = "owner_exclusions"
+# The run-context blocks the ``level`` entry reads, in order (lib/scan_registry.py).
+LEVEL_READS = (*DEFAULT_BLOCKS, EXCLUSIONS_BLOCK)
+
+
+def run_exclusions(ctx: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The exclusions in a run context's ``owner_exclusions`` block; none when it is absent or degraded."""
+    block = ctx.get(EXCLUSIONS_BLOCK)
+    entries = block.get("exclusions") if isinstance(block, Mapping) else None
+    return [e for e in entries if isinstance(e, Mapping)] if isinstance(entries, list) else []
 
 
 def run_context_level(ctx: Mapping[str, Any]) -> LevelResult:
-    """The run context's ``level`` block: the default maturity model over the run context."""
-    return level_result(default_model(), ctx)
+    """The run context's ``level`` block: the default maturity model over the run context,
+    with the owner's exclusions from its ``owner_exclusions`` block."""
+    return level_result(default_model(), ctx, run_exclusions(ctx))
 
 
 def dumps_level(result: Any) -> str:

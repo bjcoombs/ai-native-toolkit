@@ -1555,7 +1555,7 @@ of literal accounts, #765), read through `identities_section` by `ai_usage.match
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
-any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/references/fleet-config.md`.
 A scan reads the merged config through the registry input `fleet_config` (a private setup
 spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
 the fleet file in the headless run). The value is private, never a run-context block, so it
@@ -1992,8 +1992,10 @@ the one a single file declares, and an error names the fragment
 (`core/ci_checks.toml entries[0] (core.ci_checks).stage`). Layout errors:
 `MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
 would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
-the file) and `FRAGMENTS_AND_ENTRIES`. An id declared in two fragments is `DUPLICATE_ID`,
-naming both files. A new collector adds its fragment and one line to `fragments`; a change
+the file), `FRAGMENT_OWNER` (#994: an entry outside the fragment of its owner, naming the
+entry, its fragment and the expected one; an owner that does not resolve or that two fragments claim, or an id
+declared twice, is left to validation) and `FRAGMENTS_AND_ENTRIES`. An id declared in two
+fragments is `DUPLICATE_ID`, naming both files. A new collector adds its fragment and one line to `fragments`; a change
 to an existing check edits its own fragment only. `read_manifest(path)` returns the merged
 document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
 list. A single-file manifest (any third-party owner) loads as before.
@@ -2115,7 +2117,9 @@ counts-only patterns, split by block for a spread collector), `used_by` (`rows`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
 (every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
-them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
+them, not manifest order, since fragments group signals by collector) and `findings`. `sources` (`catalog.SOURCES`) lists the
+files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
+manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -2184,6 +2188,23 @@ provenance, `reoffer_mutation` (true only for a stale mutation-tool decline, the
 SKILL.md Step 2d re-offer flag), and one-line `disclosures` so an active decline is
 never invisible in the report. Legacy markers have no version and are never
 re-offered. Pure stdlib; never raises. Called by `assess_core.py`.
+
+**`owner_exclusions.py`**
+Reads the owner's condition exclusions from `.assess/config.toml` (#910):
+`[checks] exclude = [{id, reason, kind?, excluded_by?, excluded_at?, plugin_version?}]`.
+`id` is a default-model condition id (`<row id>.<level>`) and `reason` is required;
+`kind` is one of `KINDS` (`not_applicable`, `measured_elsewhere`, `tool_unsupported`,
+`false_positive`, `other`, the default when the key is left out; a written kind that is not
+one of them is skipped). The provenance keys are named as a decline marker's.
+`parse_exclusions(config, known)` returns the run-context `owner_exclusions` block
+(`OwnerExclusionsBlock`): the `exclusions` in force (with `source: "repo"`), the `skipped`
+entries with a `PROBLEMS` code (`not_a_list` for a `[checks]` or `exclude` of the wrong type, `not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
+`unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
+line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
+reads the repository's config and warns on stderr per skipped entry; never raises. A
+`scan_registry` entry (`core_scans.owner_exclusions`), core-only, so the headless runner and
+`/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
+ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
 
 **`interactivity.py`**
 Decides whether a run may prompt a human. Interactive is the default; the run is
@@ -2502,9 +2523,18 @@ not need the level below; `requires` states a real dependency). `level_result(mo
 returns a `LevelResult` (shapes in `level_result_types.py`):
 
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
-  null for a signal with no producer class), `counted` (grade `measured` or `verified`),
-  `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
-  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
+  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
+  that is not met, a `reason` code. An owner-excluded condition also carries
+  `disposition: "excluded_by_owner"` and `exclusion_kind`.
+- Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
+  entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
+  criteria say, out of the tally and the denominator; a condition that `requires` it is
+  `not_applicable` with `requires:<id>`; an excluded gate condition never holds its gate, so
+  its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
+  (`{id, kind, source}`) is present only when an exclusion applies, so a result without
+  exclusions is unchanged. Ids the model does not define are ignored.
 - `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
@@ -2523,8 +2553,8 @@ is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, 
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
-the `level` block, a `scan_registry` entry (`core_scans.level`, which reads the blocks the default
-model names, `level_tally.DEFAULT_BLOCKS`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads `level_tally.LEVEL_READS`:
+the blocks the default model names, `DEFAULT_BLOCKS`, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
 byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
 `$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
 fixtures through `/fleet` and `/assess` on the same commit.
@@ -3172,7 +3202,8 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Both reads classify the remote with
+blocks and they describe the same changes; the private `external_ci` spec (#928) reads it
+too. Both reads classify the remote with
 `remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
 `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
 `gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
@@ -3192,8 +3223,8 @@ window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state me
 --search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
 (an update is never before its merge, so the newest merges are among the most
 recently updated), then the same search from the 30th newest `mergedAt` with
-`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
-for the heavy fields. GitLab, one read:
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid`)
+for the heavy fields; `headRefOid` is the head commit `external_ci.py` reads (#928). GitLab, one read:
 `projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
 then filtered and ordered by `merged_at` client-side (works on GitLab versions
 without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
@@ -3371,9 +3402,12 @@ the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when 
 count still falls short once the gates hold and their counted conditions join the
 tally, "N more verified practices are met, for example `<first unmet counted
 condition>`"; a not-measured gate says
-so with its reason; at the top Step it says the Step holds while its gates hold),
-and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
-model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+so with its reason, and a gate whose condition the owner excluded says "excluded by
+owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
+Step holds while its gates hold), and "Verified practices: N of M measured · K not
+measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes), with
+"E not applicable (excluded by owner)" before the model when the level lists exclusions,
+E counting the excluded conditions and those whose `requires` names one (#910). Also `markdown` (the lines, the
 first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
 badge message and the `log.md` readiness line), `step`, `next_step`,
 `levels_version` and `headline_version`. A missing or degraded `level` block gives
@@ -3615,13 +3649,14 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
 on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
 program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
-`nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+`nox` (elsewhere `-V` can run the work: `mvn -B -V verify`, `./gradlew -V test`); `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
 cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
 script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
 `--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
-read through the #920 wrappers (`_info_program`: `bundle exec rspec -h`, `docker compose
-run app pytest --co`), and `ci_checks` drops an info invocation from `may_check` too (elsewhere `-V` can run the work: `mvn -B -V verify`,
-`./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
+read through every wrapper `check_command` knows (`_info_program`: `uv run`, `npx`, `python
+-m`, the #920 wrappers and `hatch run`, so `bundle exec rspec -h`, `docker compose run app
+pytest --co` and `hatch run pytest -V` are info calls, #936), and `ci_checks` drops such a
+command from every CI line test, `may_check` included, so
 `pytest --version` is no Layer 5 check and a version-only step makes
 `test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
@@ -3747,18 +3782,25 @@ target or script that may lint inside it; recipes are not read), `not_enforced`
 (false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
 `no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
 caps the row; a stored scan without the key reads unknown there.
-CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
-`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
-`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
-`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
-root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
+CI systems the scan does not parse (issues #787, #928): `unread_ci_files` counts the
+tracked files at the unread-CI paths of `unread_ci.py` (listed there). With no own, included or merged check line and no pending
 included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_configured` stays false),
 and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
 `enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
 beside it still reads null). With no lint line on ordinary triggers and no check target,
 one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
 unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Off-repository CI (issue #928), after `unread_ci_system` and before the false cases:
+`external_ci` when the private `external_ci` reading (`external_ci.py`, `--platform`
+only) applies, else `external_ci_marker` when the tree tracks no CI file of any kind
+(no workflow, no `.gitlab-ci.yml`, no unread CI file) and the root holds a Prow
+`OWNERS_ALIASES` file. Either makes `enforced_check_runs` and `lint_runs` null with that
+basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_ci`, and
+`basis` reads it with `test_or_lint_configured` still false. Neither gives credit: a read
+enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
+environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_external_ci.py` (#928),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
 
@@ -3791,18 +3833,43 @@ a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
 step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
 statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
 grammar read only in a bash or sh body and only `{ }` / `( )` nesting in a pwsh,
-powershell, cmd or python body; `_depths`, `_not_code`) masks the statements
-before it, unless one of them or a statement between
-re-raises a status. The default `bash -e` stops at the failing check first, so
+powershell, cmd or python body; `_depths`, `_not_code`; a `{`, `(` or `<<EOF` inside
+quotes opens nothing) masks the statements before it, unless one of them or a statement
+between re-raises a status. Issue #936 adds the errexit-exempt positions
+(`ci_exempt.py`): with errexit on, a later top-level `exit 0` masks the segments bash
+does not stop on (the left of `&&` / `||`, a pipeline but its last command with pipefail
+off, an `if` / `elif` / `while` condition, a `!` pipeline). `run_errexit` returns
+`(errexit, bash grammar, pipefail)`: pipefail is on for `shell: bash` and a custom
+`-o pipefail`, off for the default `bash -e {0}` and `sh`, and `set -o pipefail` /
+`set +o pipefail` in the body move it; a statement in or opening a `( )` / `{ }` group
+is not read (`_depths` second value). After an exit-zero segment that ends its
+pipeline, the `||` pipelines up to the next `&&` are dropped (`ruff check . --exit-zero
+|| pytest` drops `pytest`), and a folded block scalar (`run: >`) is folded into one
+line before any rule reads it. The default `bash -e` stops at the failing check first, so
 `pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
 `exit 0` rule; a literal `if: false`,
 `if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
 `\` continuations are joined first.
-Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
-wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+Known limits (module docstring): `|| echo`, an exempt check with no later `exit 0`
+(a lone `pytest | tee log` without pipefail, `pytest && echo ok` followed by any passing
+statement), an `until` loop that breaks out, an exempt check inside a `( )` / `{ }` group
+(a subshell or function returns its status, so it is not read as exempt), `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
-shared with `ci_triggers.py`. Tests for the #919 rules: `tests/test_ci_false_credit.py`.
+shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
+
+**`ci_exempt.py`**
+Which segments of one shell statement errexit does not stop on (issue #936), read by
+`ci_masking` on a GitHub `run:` body with errexit on, per the bash manual's `set -e`
+text. `exempt_segments(statement, pipefail)` takes `split_statements` output and returns
+the indices of the segments in every pipeline before the final `&&` / `||`, of a `!`
+pipeline, and, with pipefail off, of the last pipeline but its last command;
+`condition_flags(statements)` marks the statements of an `if` / `elif` / `while`
+condition, up to its `then` / `do` (an `until` condition loops until the check passes,
+so it is not read as exempt); `pipefail_after` reads `set -o pipefail` / `set -euo
+pipefail` / `set +o pipefail`; `shell_pipefail` reads a custom shell's flags;
+`unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
+`{` or `<<EOF` inside quotes. Tests: `tests/test_ci_false_credit.py`.
 
 **`ci_triggers.py`**
 Does a CI line run on ordinary changes (issue #775)? It makes
@@ -3821,6 +3888,60 @@ outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other l
 so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
 anchors and `workflow: rules:` are not resolved; branch and path filters are not
 read. Tests: `tests/test_ci_triggers.py`.
+
+**`unread_ci.py`**
+The unread-CI paths (issues #787, #928): CI files of systems `ci_checks` and `coverage_ci`
+do not parse, shared by both through `unread_ci_paths(tracked)` / `is_unread_ci_path(rel)`.
+Every path is relative to the repository root; the same name in a subdirectory is not
+the repository's pipeline. The unread-CI path list:
+
+- Exact paths (`UNREAD_CI_FILES`): Jenkins `Jenkinsfile`; CircleCI `.circleci/config.yml`;
+  Bitbucket `bitbucket-pipelines.yml`; Travis CI `.travis.yml`; Azure Pipelines
+  `azure-pipelines.yml`, `azure-pipelines.yaml`, `.azure-pipelines.yml` and
+  `.azure-pipelines.yaml`; Buildkite `.buildkite/pipeline.yml`, `.buildkite/pipeline.yaml`,
+  `buildkite.yml` and `buildkite.yaml`; Flutter Cocoon / LUCI `.ci.yaml`; Prow
+  `.prow.yaml`; Zuul `.zuul.yaml`; Drone `.drone.yml`; Woodpecker `.woodpecker.yml`;
+  Cirrus CI `.cirrus.yml`; AppVeyor `appveyor.yml`; Semaphore `.semaphore/semaphore.yml`;
+  Google Cloud Build `cloudbuild.yaml`; Bitrise `bitrise.yml`; Codemagic `codemagic.yaml`.
+- Patterns (`UNREAD_CI_PATTERNS`, any depth below the directory): LUCI project
+  configuration `infra/config/**/*.star` and `infra/config/**/*.cfg`; Azure Pipelines
+  `.azure/pipelines/**/*.yml|yaml`, `eng/pipelines/**/*.yml|yaml` (the .NET Arcade
+  layout), `.azure-pipelines/**/*.yml|yaml` and `azure-pipelines/**/*.yml|yaml`;
+  Woodpecker `.woodpecker/**/*.yml|yaml`; Zuul any file under `zuul.d/`.
+
+The files are counted, never parsed or published. Tests: `tests/test_external_ci.py`.
+
+**`external_ci_rules.py`**
+The `external_ci` value type and allowlist (#928), apart from `external_ci.py` so
+`ci_checks` stays an offline module: `ExternalCi(sampled, external)`, `NOT_READ`,
+`as_external(value)` (anything else, such as a degraded spec's dict, is `NOT_READ`), and
+`ExternalCi.applies`, the majority rule (more than half of the sampled changes carry a
+known system). The allowlist of known CI systems: a check run's app slug in
+`EXTERNAL_CI_APPS` (`buildkite`, `circleci-checks`, `travis-ci`, `appveyor`, `cirrus-ci`,
+`azure-pipelines`, `google-cloud-build`, `flutter-dashboard` for LUCI, and others), or a
+status context equal to an entry of `EXTERNAL_CI_CONTEXTS` (`buildkite/`, `ci/circleci`,
+`continuous-integration/travis-ci`, `azure pipelines`, `luci`, Prow's `tide`, and others)
+or the entry followed by `/`, `:`, a space or `-` (so `tide` never matches `tidelift`),
+case-insensitive. An app or context on neither list
+(`github-actions`, `codecov`, `coderabbitai`, a CLA bot) changes nothing. Tests:
+`tests/test_external_ci.py`.
+
+**`external_ci.py`**
+The `--platform` external-CI reading.
+The private `network` spec `external_ci` (#928), read by `ci_checks`:
+`read_external_ci(merged_sample)`; offline the runner calls `no_external_ci`, which reads
+nothing. Under `--platform` it runs because `ci_checks` is in `signals.PLATFORM_SCANS`; a
+full `/assess` run reads it too. For each sampled merged pull request
+(`merged_sample.py`, up to `SAMPLE_CAP` = 30) with a `headRefOid`, at most
+`CALLS_PER_CHANGE` = 2 calls, both GET: `gh api repos/<o>/<r>/commits/<sha>/check-runs`
+(the app slug of each check run on the first page), then
+`gh api repos/<o>/<r>/commits/<sha>/status` (each status context), skipped when the check
+runs already name a known system. Both are made with `cache=False` (check-run output and
+status descriptions are free text); only the two counts leave the module. `external_ci`
+in `ci_checks` means an external check context on merged changes under `--platform`: more
+than half of the sampled merges carry a known external CI system. A GitLab sample, an
+empty or unread sample and any refused call (`GhUnavailable`) read `NOT_READ`, so the
+offline result stands; a `not_found` head counts that change as not external instead. Tests: `tests/test_external_ci.py`.
 
 **`merged_ci.py`**
 The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
@@ -4284,7 +4405,7 @@ test`, `tox`, `mvn test`, a target or script named for coverage such as `make co
 `make cov`, `npm run coverage` or `just coverage`, or a Jest / Vitest run with no
 `--coverage`),
 `included_jobs` (`shared_tooling.pulls_jobs_from_elsewhere`), `unread_ci_system`
-(`ci_checks.UNREAD_CI_FILES` tracked, or the gate written in one or in a composite
+(a tracked file at an `unread_ci.py` path, the predicate `ci_checks` shares (#928), or the gate written in one or in a composite
 action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:
 GitHub step and job `if:`, branch filters, matrix values and composite-action
 internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
