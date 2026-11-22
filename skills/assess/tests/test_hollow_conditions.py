@@ -89,8 +89,9 @@ CASES = [
     # #919: a check that cannot fail its job, never runs, or sits where GitHub does not run it.
     _case("l3-1-exit-zero", "layer-3-linters", 1,
           {".github/workflows/ci.yml": _workflow("ruff check . --exit-zero")}, None),
-    _case("l5-1-semicolon-exit-0", "layer-5-ci", 1,
-          {".github/workflows/ci.yml": _workflow("pytest; exit 0")}, None),
+    _case("l5-1-pwsh-exit-0", "layer-5-ci", 1, {".github/workflows/ci.yml": (
+        "on: pull_request\njobs:\n  t:\n    runs-on: windows-latest\n"
+        "    steps:\n      - run: pytest; exit 0\n")}, None),
     _case("l5-1-if-false", "layer-5-ci", 1, {".github/workflows/ci.yml": (
         "on: pull_request\njobs:\n  t:\n    if: false\n    runs-on: ubuntu-latest\n"
         "    steps:\n      - run: pytest\n")}, None),

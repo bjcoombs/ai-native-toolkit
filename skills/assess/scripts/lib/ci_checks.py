@@ -91,7 +91,8 @@ configuration was read in full and holds none. ``basis`` names which case applie
 ``enforced_check_runs`` (issue #775) is the same test with masked checks left
 out: a check that runs but cannot fail its job (``pytest || true``,
 ``continue-on-error: true``, ``allow_failure: true``, ``set +e``, an exit-zero
-flag such as ``--exit-zero``, a later ``exit 0``, a literal ``if: false``; the rules and
+flag such as ``--exit-zero``, a later ``exit 0`` in a shell without errexit, a literal
+``if: false``; the rules and
 their known limits are in ``lib.ci_masking``), and with checks that do not
 run on ordinary changes left out too (a ``workflow_dispatch``- or
 ``schedule``-only workflow, a GitLab ``when: manual`` job; ``lib.ci_triggers``).
@@ -139,7 +140,8 @@ lint line such a check reads null. A direct test-program call (``pytest``,
 - ``no_lint_command`` / ``no_ci`` (false): CI files with no lint or
   may-lint line, or no CI file.
 
-``test_or_lint_configured`` and ``enforced_check_runs`` keep their meaning.
+``test_or_lint_configured`` and ``enforced_check_runs`` keep their meaning, apart
+from #919: a version-only command and a subfolder workflow count in no signal.
 
 ``masked_check_commands`` counts the masked check lines and
 ``off_trigger_check_commands`` the unmasked ones that do not run on ordinary

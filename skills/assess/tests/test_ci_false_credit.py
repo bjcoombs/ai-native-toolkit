@@ -1,8 +1,9 @@
 """CI lines that run but cannot fail their job, or never run, earn no credit (#919).
 
 Five holes found by the #776 parent check: a version-only step, an exit-zero
-flag, a later ``exit 0``, a literal ``if: false`` and a workflow in a subfolder
-of ``.github/workflows/``. Each reads unmet for Layer 3 level 1 (``lint_runs``)
+flag, a later ``exit 0`` in a shell without errexit (``pwsh``, a Windows runner,
+``set +e``; GitHub's default ``bash -e`` stops at the failing check first), a
+literal ``if: false`` and a workflow in a subfolder of ``.github/workflows/``. Each reads unmet for Layer 3 level 1 (``lint_runs``)
 and Layer 5 level 1 (``enforced_check_runs``).
 """
 from __future__ import annotations
@@ -21,9 +22,17 @@ def _wf(run: str) -> str:
     return f"on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: {run}\n"
 
 
-def _block(text: str) -> str:
+def _block(text: str, shell: str = "") -> str:
     body = "".join(f"          {line}\n" for line in text.splitlines())
-    return f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: |\n{body}"
+    step_shell = f"        shell: {shell}\n" if shell else ""
+    return f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: |\n{body}{step_shell}"
+
+
+def _shell(run: str, step: str = "", runs_on: str = "ubuntu-latest", job: str = "") -> str:
+    """One ``run:`` step with an optional step ``shell:`` line, job keys and ``runs-on``."""
+    step = step.replace("    shell:", "        shell:") if step else ""
+    return (f"on: pull_request\njobs:\n  t:\n    runs-on: {runs_on}\n{job}    steps:\n"
+            f"      - run: {run}\n{step}")
 
 
 def _scan(tmp_path: Path, files: dict[str, str]) -> tuple[bool | None, bool | None]:
@@ -47,7 +56,9 @@ def test_an_info_invocation_runs_no_check(text: str) -> None:
     assert not is_lint_run(text)
 
 
-@pytest.mark.parametrize("text", ["mvn -B -V verify", "pytest -v", "ruff check ."])
+@pytest.mark.parametrize("text", [
+    "mvn -B -V verify", "./gradlew -V test", "./scripts/test.sh -V", "pytest -v", "ruff check .",
+])
 def test_a_flag_that_is_not_a_version_query_still_counts(text: str) -> None:
     assert not is_info_invocation(text)
     assert check_commands(_wf(text)) == 1
@@ -62,10 +73,16 @@ def test_ctest_v_is_verbose_not_a_version_query() -> None:
     pytest.param(_wf("flake8 --exit-zero ."), id="flake8_exit_zero"),
     pytest.param(_wf("golangci-lint run --issues-exit-code=0"), id="golangci_equals"),
     pytest.param(_wf("golangci-lint run --issues-exit-code 0"), id="golangci_space"),
-    pytest.param(_wf("ruff check .; exit 0"), id="semicolon_exit_0"),
-    pytest.param(_wf("pytest; exit 0"), id="pytest_semicolon_exit_0"),
-    pytest.param(_block("pytest\necho done\nexit 0"), id="later_exit_0_in_block"),
-    pytest.param("test:\n  script:\n    - pytest\n    - exit 0\n", id="gitlab_later_exit_0"),
+    pytest.param(_shell("pytest; exit 0", "    shell: pwsh\n"), id="pwsh_semicolon_exit_0"),
+    pytest.param(_shell("ruff check .; exit 0", "    shell: powershell\n"), id="powershell_exit_0"),
+    pytest.param(_shell("pytest; exit 0", "    shell: bash {0}\n"), id="custom_bash_without_e"),
+    pytest.param(_shell("pytest; exit 0", runs_on="windows-latest"), id="windows_runner_default_pwsh"),
+    pytest.param(_shell("pytest; exit 0", runs_on="[self-hosted, windows]"), id="windows_label_list"),
+    pytest.param(_shell("pytest; exit 0", job="    defaults:\n      run:\n        shell: pwsh\n"),
+                 id="job_defaults_pwsh"),
+    pytest.param("defaults:\n  run:\n    shell: pwsh\n" + _wf("pytest; exit 0"), id="workflow_defaults_pwsh"),
+    pytest.param(_block("set +e\npytest\necho done\nexit 0"), id="set_plus_e_then_exit_0"),
+    pytest.param(_block("pytest\nexit 0", shell="pwsh"), id="pwsh_block_exit_0"),
     pytest.param("jobs:\n  t:\n    runs-on: x\n    steps:\n      - if: false\n        run: pytest\n",
                  id="step_if_false"),
     pytest.param("jobs:\n  t:\n    if: false\n    runs-on: x\n    steps:\n      - run: pytest\n",
@@ -81,12 +98,30 @@ def test_a_check_that_cannot_fail_or_never_runs_is_masked(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", [
-    pytest.param(_wf("pytest || exit 1; exit 0"), id="own_reraise_before_exit_0"),
+    pytest.param(_wf("pytest; exit 0"), id="default_bash_stops_at_the_failing_check"),
+    pytest.param(_wf("ruff check .; exit 0"), id="default_bash_lint_then_exit_0"),
+    pytest.param(_block("pytest\necho done\nexit 0"), id="default_bash_block_exit_0"),
+    pytest.param(_shell("pytest; exit 0", "    shell: bash\n"), id="named_bash"),
+    pytest.param(_shell("pytest; exit 0", "    shell: sh\n"), id="named_sh"),
+    pytest.param(_shell("pytest; exit 0", "    shell: bash -e {0}\n"), id="custom_bash_with_e"),
+    pytest.param(_shell("pytest; exit 0", "    shell: bash --noprofile --norc -eo pipefail {0}\n"),
+                 id="custom_bash_eo_pipefail"),
+    pytest.param(_shell("pytest; exit 0", runs_on="${{ matrix.os }}"), id="runs_on_expression_not_read"),
+    pytest.param("test:\n  script:\n    - pytest\n    - exit 0\n", id="gitlab_items_are_each_checked"),
+    pytest.param("test:\n  script:\n    - pytest; exit 0\n", id="gitlab_semicolon_exit_0"),
+    pytest.param(_block("cat > s.sh <<EOF\nexit 0\nEOF\npytest", shell="pwsh"), id="exit_0_in_a_heredoc"),
+    pytest.param(_block("cat > s.sh <<-'END'\n  exit 0\n  END\npytest", shell="pwsh"),
+                 id="exit_0_in_a_quoted_heredoc"),
+    pytest.param(_block('python -c "\nimport sys\nexit 0\n"\npytest', shell="pwsh"),
+                 id="exit_0_in_a_multi_line_string"),
+    pytest.param(_shell("pytest || exit 1; exit 0", "    shell: pwsh\n"), id="own_reraise_before_exit_0"),
     pytest.param(_wf("pytest; echo exit 0"), id="exit_0_as_an_argument"),
-    pytest.param(_wf("pytest; [ -f x ] && exit 0"), id="conditional_exit_0"),
-    pytest.param(_block('if [ -z "$X" ]; then exit 0; fi\npytest'), id="early_exit_guard_one_line"),
-    pytest.param(_block('if [ -z "$X" ]; then\n  exit 0\nfi\npytest'), id="early_exit_guard_block"),
-    pytest.param(_block("cleanup() {\n  exit 0\n}\npytest"), id="exit_0_in_a_function"),
+    pytest.param(_shell("pytest; [ -f x ] && exit 0", "    shell: bash {0}\n"), id="conditional_exit_0"),
+    pytest.param(_block('if [ -z "$X" ]; then exit 0; fi\npytest', shell="bash {0}"),
+                 id="early_exit_guard_one_line"),
+    pytest.param(_block('if [ -z "$X" ]; then\n  exit 0\nfi\npytest', shell="bash {0}"),
+                 id="early_exit_guard_block"),
+    pytest.param(_block("cleanup() {\n  exit 0\n}\npytest", shell="bash {0}"), id="exit_0_in_a_function"),
     pytest.param("jobs:\n  t:\n    runs-on: x\n    steps:\n      - run: pytest\n      - run: exit 0\n",
                  id="exit_0_in_another_step"),
     pytest.param("jobs:\n  t:\n    if: github.event_name == 'pull_request'\n    runs-on: x\n"
@@ -111,7 +146,8 @@ def test_a_workflow_in_a_subfolder_is_not_a_ci_file() -> None:
 @pytest.mark.parametrize("files", [
     pytest.param({".github/workflows/ci.yml": _wf("ruff --version")}, id="version_only"),
     pytest.param({".github/workflows/ci.yml": _wf("ruff check . --exit-zero")}, id="exit_zero"),
-    pytest.param({".github/workflows/ci.yml": _wf("ruff check .; pytest; exit 0")}, id="exit_0"),
+    pytest.param({".github/workflows/ci.yml": _shell("ruff check .; pytest; exit 0", runs_on="windows-latest")},
+                 id="exit_0_on_windows"),
     pytest.param({".github/workflows/ci.yml": (
         "on: pull_request\njobs:\n  t:\n    if: false\n    runs-on: x\n    steps:\n"
         "      - run: ruff check .\n      - run: pytest\n")}, id="if_false"),

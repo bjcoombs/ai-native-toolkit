@@ -3473,9 +3473,11 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 `is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
 (`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
 ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
-on its own: `--version` or `--help` anywhere, or `-V` unless the program uses it for
-something else (`mvn -B -V verify`, `ctest -V`); `ci_checks` drops such a command from
-every CI line test, so `pytest --version` is no Layer 5 check either. Type checkers count as linters there, in a vocabulary local to
+on its own: `--version` or `--help` anywhere, or `-V` when the program is a linter, type
+checker, `pytest`, `tox` or `nox` (elsewhere `-V` can run the work: `mvn -B -V verify`,
+`./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
+`pytest --version` is no Layer 5 check and a version-only step makes
+`test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
 `type-check` targets such as `npm run typecheck` or `make type-check`), so
 `is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
@@ -3549,7 +3551,8 @@ off those triggers are `off_trigger_check_commands`, and an unsettled trigger re
 null with `enforced_basis: unknown_trigger`), else null under the
 same `included_jobs` rule, else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
-still describes `test_or_lint_configured`, which keeps its meaning.
+still describes `test_or_lint_configured`, which keeps its meaning apart from #919's
+version-only and subfolder cases, which count nowhere.
 `lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
 and trigger rules, the same own, included and merged files, with
 `count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
@@ -3606,10 +3609,15 @@ everything under it (a step or a job); `set +e` masks the rest of its script bod
 exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
 `[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). Issue #919 adds
 three: a segment with an exit-zero flag (`--exit-zero`, `--issues-exit-code=0` or `0` as
-the next word) is masked on its own; a top-level `exit 0` statement (outside `if`, loops,
-`case` and `{ }`, read by `_depths`) masks the statements before it in its script body,
-unless one of them or a statement between re-raises a status (conservative: `bash -e`
-would stop at the failing check, another shell would not); a literal `if: false`,
+the next word) is masked on its own; in a GitHub `run:` body with errexit off (`set +e`,
+`shell: pwsh` / `powershell` / `cmd` / `python`, a custom `shell:` without `-e` such as
+`bash {0}`, or a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
+step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
+statement (outside `if`, loops, `case`, `{ }`, heredocs and multi-line quotes; `_depths`,
+`_not_code`) masks the statements before it, unless one of them or a statement between
+re-raises a status. The default `bash -e` stops at the failing check first, so
+`pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
+`exit 0` rule; a literal `if: false`,
 `if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
 `\` continuations are joined first.
 Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`

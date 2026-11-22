@@ -32,15 +32,21 @@ parser (the core has no YAML dependency). Only literal values count.
 - Exit-zero flags (#919). A segment run with ``--exit-zero`` (ruff, flake8,
   pylint) or ``--issues-exit-code=0`` / ``--issues-exit-code 0`` (golangci-lint)
   is masked on its own: ``ruff check . --exit-zero && pytest`` keeps ``pytest``.
-- A later ``exit 0`` (#919). A statement that is ``exit 0`` alone, at the top
-  level of a script body (not inside ``if`` / ``fi``, a loop, ``case`` or
-  ``{ }``), masks every statement before it in that body, unless the statement or
-  one between it and the ``exit 0`` re-raises a status (``pytest || exit 1;
-  exit 0`` keeps ``pytest``). ``x && exit 0``, ``echo exit 0`` and an early-exit
-  guard (``if nothing-changed; then exit 0; fi``) mask nothing. This is a
-  conservative reading: GitHub's default ``bash -e`` and GitLab's runner stop at
-  the failing check before ``exit 0``, but a step with another shell (``pwsh``,
-  a Windows runner) does not, and the line alone cannot tell which.
+- A later ``exit 0`` (#919), in a GitHub ``run:`` body read with errexit off. A
+  statement that is ``exit 0`` alone, at the top level of the body (not inside
+  ``if`` / ``fi``, a loop, ``case``, ``{ }``, a heredoc or a multi-line quote such
+  as ``python -c "..."``), masks the statements before it that ran with errexit
+  off, unless the statement or one between it and the ``exit 0`` re-raises a
+  status (``pytest || exit 1; exit 0`` keeps ``pytest``). Errexit is off after
+  ``set +e``, under ``shell: pwsh`` / ``powershell`` / ``cmd`` / ``python``, a custom
+  ``shell:`` command without ``-e`` (``bash {0}``), or on a Windows ``runs-on``
+  with no ``shell:`` (``pwsh`` is the default there); the step's ``shell:``, then
+  the job's and the workflow's ``defaults.run.shell`` are read (``run_errexit``).
+  GitHub's default ``bash -e`` and ``sh -e`` stop at the failing check before
+  ``exit 0``, so ``pytest; exit 0`` there is enforced. GitLab checks each
+  ``script:`` item's status, so it has no ``exit 0`` rule. ``x && exit 0``,
+  ``echo exit 0`` and an early-exit guard (``if nothing-changed; then exit 0;
+  fi``) mask nothing. A ``runs-on`` expression (``${{ matrix.os }}``) is not read.
 - A literal never-true ``if:`` (#919): ``if: false``, ``if: 'false'`` or
   ``if: ${{ false }}`` on a step or job masks that mapping and everything under
   it, like ``continue-on-error: true``: it never runs. Any other ``if:``
@@ -392,19 +398,129 @@ def _exit_zero(statement: list[tuple[str, str]]) -> bool:
     return len(statement) == 1 and " ".join(statement[0][1].split()) == "exit 0"
 
 
-def _masked_in_body(refs: list[tuple[int, int]],
-                    parsed: dict[int, list[list[tuple[str, str]]]]) -> list[tuple[int, int]]:
+# Shells GitHub Actions runs without errexit: ``pwsh`` / ``powershell`` (a Windows runner's
+# default), ``cmd`` and ``python``. ``bash`` and ``sh`` run with ``-e``.
+_NO_ERREXIT_SHELLS = frozenset({"pwsh", "powershell", "cmd", "python"})
+_ERREXIT_FLAG = re.compile(r"(?:^|\s)(?:-[a-zA-Z]*e[a-zA-Z]*|-o\s+errexit)(?=\s|$)")
+_HEREDOC = re.compile(r"(?<!<)<<-?\s*(['\"]?)([A-Za-z_]\w*)\1")
+
+
+def _shell_errexit(shell: str | None, windows: bool) -> bool:
+    """Does a ``run:`` body start with errexit on? ``shell`` is the step's, job's or
+    workflow's ``shell:`` value, None when none is set.
+
+    Unset: on, unless ``runs-on`` names Windows (default ``pwsh``). ``bash`` / ``sh``: on.
+    A named shell in ``_NO_ERREXIT_SHELLS``: off. A custom command (``bash {0}``): on only
+    with ``-e`` or ``-o errexit``. An expression or an unknown name: on (not read).
+    """
+    if shell is None:
+        return not windows
+    value = shell.strip().strip("'\"")
+    if "{0}" in value:
+        return _ERREXIT_FLAG.search(value.replace("{0}", "")) is not None
+    return value.lower() not in _NO_ERREXIT_SHELLS
+
+
+def _child(tree: IndentTree, line: int, *path: str) -> int | None:
+    """The key line under ``line`` reached by the key names in ``path``, or None."""
+    for name in path:
+        found = [k for k in tree.children(line) if tree.lines[k].key == name]
+        if not found:
+            return None
+        line = found[0]
+    return line
+
+
+def _defaults_shell(tree: IndentTree, line: int) -> str | None:
+    shell = _child(tree, line, "defaults", "run", "shell")
+    return tree.lines[shell].value if shell is not None else None
+
+
+def _runs_on_windows(tree: IndentTree, job: int) -> bool:
+    runs_on = _child(tree, job, "runs-on")
+    if runs_on is None:
+        return False
+    values = [tree.lines[runs_on].value] + [tree.lines[k].value for k in tree.children(runs_on)]
+    text = " ".join(values).lower()
+    return "${{" not in text and "windows" in text
+
+
+def run_errexit(tree: IndentTree, body: int) -> bool:
+    """Whether the GitHub ``run:`` body at line ``body`` starts with errexit on (#919).
+
+    Reads the step's ``shell:``, then the job's and the workflow's ``defaults.run.shell``,
+    then the job's ``runs-on`` (a Windows runner defaults to ``pwsh``).
+    """
+    step = tree.siblings[tree.mapping_of[body]] if body in tree.mapping_of else []
+    shell = next((tree.lines[k].value for k in step if tree.lines[k].key == "shell"), None)
+    ancestors = tree.ancestors(body)
+    job = next((below for below, above in zip(ancestors, ancestors[1:])
+                if tree.lines[above].key == "jobs" and tree.lines[above].level == 0), None)
+    if shell is None and job is not None:
+        shell = _defaults_shell(tree, job)
+    if shell is None:
+        top = [i for i, line in enumerate(tree.lines)
+               if line.structural and line.level == 0 and line.key == "defaults"]
+        found = _child(tree, top[0], "run", "shell") if top else None
+        shell = tree.lines[found].value if found is not None else None
+    return _shell_errexit(shell, job is not None and _runs_on_windows(tree, job))
+
+
+def _not_code(texts: list[str]) -> list[bool]:
+    """Per line of one script body: does it start inside a heredoc or an open multi-line
+    quote (``python -c "`` ... ``"``)? Such a line is data, not a shell statement."""
+    out: list[bool] = []
+    delimiter = ""
+    quote = ""
+    for text in texts:
+        if delimiter:
+            out.append(True)
+            if text.strip() == delimiter:
+                delimiter = ""
+            continue
+        out.append(bool(quote))
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            if quote:
+                if ch == "\\" and quote == '"':
+                    i += 1
+                elif ch == quote:
+                    quote = ""
+            elif ch in "'\"":
+                quote = ch
+            elif ch == "#" and (i == 0 or text[i - 1].isspace()):
+                break
+            i += 1
+        match = _HEREDOC.search(text) if not quote else None
+        if match:
+            delimiter = match.group(2)
+    return out
+
+
+def _masked_in_body(refs: list[tuple[int, int]], parsed: dict[int, list[list[tuple[str, str]]]],
+                    texts: dict[int, str], run_shell: bool | None) -> list[tuple[int, int]]:
     """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``.
 
     ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
     ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
+    ``run_shell`` is whether a GitHub ``run:`` body starts with errexit on, None for any
+    other body: only a ``run:`` body read with errexit off (``set +e``, ``pwsh``, a Windows
+    runner, ``shell: bash {0}``) is masked by a later ``exit 0``. With errexit on the failing
+    check stops the step first, and GitLab checks each ``script:`` item's status.
     """
     errexit = True
+    shell_errexit = True if run_shell is None else run_shell
     state: list[bool] = []
+    off: list[bool] = []
     for first, k in refs:
         errexit = _errexit(parsed[first][k], errexit)
+        shell_errexit = _errexit(parsed[first][k], shell_errexit)
         state.append(not errexit)
-    depths = _depths([parsed[first][k] for first, k in refs])
+        off.append(run_shell is not None and not shell_errexit)
+    data = dict(zip(texts, _not_code(list(texts.values())), strict=True))
+    code = [not data.get(first, False) for first, _ in refs]
+    depths = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
     out: list[tuple[int, int]] = []
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
@@ -412,9 +528,9 @@ def _masked_in_body(refs: list[tuple[int, int]],
     for idx in range(len(refs) - 1, -1, -1):
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
-        if (state[idx] and not reraised) or (exited and not (exit_reraised or own)):
+        if (state[idx] and not reraised) or (exited and off[idx] and not (exit_reraised or own)):
             out.append((first, k))
-        if depths[idx] == 0 and _exit_zero(parsed[first][k]):
+        if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):
             exited, exit_reraised = True, False
         reraised = reraised or own
         exit_reraised = exit_reraised or own
@@ -427,6 +543,7 @@ def unmasked_lines(text: str) -> list[str]:
     tree = IndentTree(parse_lines(lines))
     spans = _logical_lines(lines)
     parsed = {span[0]: split_statements(_joined(lines, span)) for span in spans}
+    span_at = {span[0]: span for span in spans}
     masked: dict[int, set[int]] = {}
     changed: set[int] = set()
     bodies: dict[int, list[tuple[int, int]]] = {}
@@ -452,8 +569,10 @@ def unmasked_lines(text: str) -> list[str]:
             else:
                 masked.setdefault(first, set()).add(k)
         bodies.setdefault(tree.body(first), []).extend((first, k) for k in range(len(statements)))
-    for refs in bodies.values():
-        for first, k in _masked_in_body(refs, parsed):
+    for body, refs in bodies.items():
+        run_shell = run_errexit(tree, body) if tree.lines[body].key == "run" else None
+        texts = {first: _joined(lines, span_at[first]) for first in dict.fromkeys(f for f, _ in refs)}
+        for first, k in _masked_in_body(refs, parsed, texts, run_shell):
             masked.setdefault(first, set()).add(k)
     out = list(lines)
     for span in spans:

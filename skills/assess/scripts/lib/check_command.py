@@ -147,16 +147,16 @@ def is_lint_command(text: str) -> bool:
 
 # A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
 _INFO_FLAGS = frozenset({"--version", "--help", "-V"})
-# Programs whose ``-V`` runs the work: Maven prints its version and builds, ctest is verbose.
-_V_RUNS = frozenset({"mvn", "mvnw", "./mvnw", "ctest"})
 
 
 def is_info_invocation(text: str) -> bool:
     """A command that asks only for a version or usage, so it runs no check (#919).
 
-    ``--version`` or ``--help`` anywhere, or ``-V`` unless the program it runs uses
-    ``-V`` for something else (``mvn -B -V verify``, ``ctest -V``). ``ruff --version``,
-    ``pytest --version`` and ``uv run tox --version`` are info invocations.
+    ``--version`` or ``--help`` anywhere, or ``-V`` when the program it runs is one
+    whose ``-V`` is its version flag (``_V_VERSION``: the linters, type checkers,
+    ``pytest``, ``tox``, ``nox``). Elsewhere ``-V`` can run the work (``mvn -B -V
+    verify``, ``./gradlew -V test``, ``ctest -V``), so it is not read. ``ruff
+    --version``, ``pytest --version`` and ``uv run tox --version`` are info invocations.
     """
     words = command_words(text)
     if not words or not _INFO_FLAGS.intersection(words):
@@ -164,7 +164,7 @@ def is_info_invocation(text: str) -> bool:
     if {"--version", "--help"}.intersection(words):
         return True
     program = _program(words)
-    return not program or program[0] not in _V_RUNS
+    return bool(program) and program[0] in _V_VERSION
 # Test programs that run tests and nothing else: no linter can hide inside them.
 _DIRECT_TESTS = (ALWAYS_CHECK - {"tox", "nox"}) | _JS_TEST_RUNNERS
 
@@ -193,6 +193,8 @@ def _task_target(words: list[str], names: frozenset[str]) -> bool:
 # ``is_lint_command`` (Layer 5, ``test_or_lint_configured``) keeps its vocabulary.
 TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
 _RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
+# Programs whose ``-V`` prints the version and exits (``is_info_invocation``).
+_V_VERSION = _RUN_PROGRAMS | ALWAYS_CHECK
 # Package-manager forms that run a named program: ``npm exec``, ``pnpm dlx``, ``bun x``.
 _EXEC_SUBCOMMANDS = frozenset({"exec", "dlx", "x"})
 
