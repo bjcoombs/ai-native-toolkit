@@ -111,7 +111,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_review_reality_gitlab.py` | `lib/gitlab_cli.py` + the GitLab path of `lib/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
 | `test_gitlab_protected_branches.py` | `lib/gitlab_cli.branch_protection` + the GitLab paths of `lib/config_drift.py` and `lib/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
-| `test_coverage_gate.py` | `lib/coverage_gate.py` - enforced coverage-threshold detector |
+| `test_coverage_gate.py` | `lib/coverage_gate.py` - configured coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
 | `test_dart_capabilities.py` | `lib/dart_capabilities.py` - Dart linting and liveness capability entries |
 | `test_dart_complexity.py` | `lib/dart_complexity.py` - the approximate Dart per-function scanner |

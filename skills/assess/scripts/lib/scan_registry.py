@@ -459,9 +459,9 @@ SCANS: tuple[ScanSpec, ...] = (
              ("merged_sample", "review_reality", "fleet_config", "gitlab_note_facts"),
              STAGE_READ_SIDE, network=True),
     ScanSpec("gate_cost_estimate", estimate_gate_cost, ("repo_root",), STAGE_READ_SIDE, network=True),
-    # Layer 6: is a coverage threshold *enforced*, not just measured? Each gate
+    # Layer 6: is a coverage threshold *configured*, not just measured? Each gate
     # names its file, line and threshold as written; none found reads
-    # enforced: false, never inferred from coverage_report. A scoped run reads
+    # configured: false, never inferred from coverage_report. A scoped run reads
     # the scope plus the root CI and task-runner files (issue #488).
     ScanSpec(
         "coverage_gate", detect_coverage_gate,

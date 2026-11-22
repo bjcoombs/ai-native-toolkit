@@ -244,11 +244,17 @@ constant each.
 # pointer line per unlinked system. nested_instructions also discovers the
 # Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-# 1.42.0: run-context.json structure_drift is the unavailable marker
-# {"available": false, "reason": "no_ownership_map: ..."} when the repository
-# commits no ownership or boundary map, where it was omitted (issue #908), so the
-# level block reads the same reason as fleet. A scan failure still omits it.
-ARTIFACT_SCHEMA_VERSION = "1.42.0"
+# Unreleased (the release PR assigns the version):
+# - two run-context.json fields that read configuration text are renamed so
+#   their names no longer claim a run (issue #783): ci_checks.test_or_lint_runs is
+#   test_or_lint_configured and coverage_gate.enforced is configured. Values and
+#   meaning are unchanged; the fleet re-score reads a stored scan's old path under the
+#   new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+# - run-context.json structure_drift is the unavailable marker
+#   {"available": false, "reason": "no_ownership_map: ..."} when the repository
+#   commits no ownership or boundary map, where it was omitted (issue #908), so the
+#   level block reads the same reason as fleet. A scan failure still omits it.
+ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

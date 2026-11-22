@@ -142,7 +142,7 @@
 #   the reader cannot settle (no on: key, a custom rules: if:) read unknown.
 #   A stored scan from before this signal has no enforced_check_runs and
 #   reads unknown. The
-#   command test is the one ci_checks.test_or_lint_runs uses (pytest,
+#   command test is the one ci_checks.test_or_lint_configured uses (pytest,
 #   make check, npm test, a ./scripts/test.sh, as
 #   check_command.is_check_command classifies an instruction file's
 #   commands, or a lint target or linter: make lint, ruff, eslint). Branch and
