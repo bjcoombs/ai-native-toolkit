@@ -15,13 +15,15 @@ import types
 from pathlib import Path
 
 import pytest
+from test_complexity_treemap import _StubNumpy
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "doc-graph-svg.py"
 
 
 def _load_svg():
-    for name in ("matplotlib", "matplotlib.pyplot", "numpy"):
+    for name in ("matplotlib", "matplotlib.pyplot"):
         sys.modules.setdefault(name, types.ModuleType(name))
+    sys.modules.setdefault("numpy", _StubNumpy("numpy"))  # with percentile (#831)
     sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
     spec = importlib.util.spec_from_file_location("doc_graph_svg", _SCRIPT)
     mod = importlib.util.module_from_spec(spec)

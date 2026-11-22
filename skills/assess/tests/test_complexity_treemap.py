@@ -38,7 +38,10 @@ def _load_treemap():
     """Import complexity-treemap.py with heavy deps stubbed out."""
     for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify"):
         sys.modules.setdefault(name, types.ModuleType(name))
-    sys.modules.setdefault("numpy", _StubNumpy("numpy"))
+    # Another file's loader may have left a bare numpy stub in sys.modules
+    # (test_scope, test_doc_graph_svg); this one needs percentile (#831).
+    if not hasattr(sys.modules.get("numpy"), "percentile"):
+        sys.modules["numpy"] = _StubNumpy("numpy")
     # complexity-treemap does `import matplotlib.pyplot as plt`
     sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
     spec = importlib.util.spec_from_file_location("complexity_treemap", _SCRIPT)

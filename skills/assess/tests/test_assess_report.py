@@ -616,10 +616,10 @@ def test_main_stdout_does_not_write_file(tmp_path: Path,
 
 def test_main_stdout_is_utf8_under_a_cp1252_console(tmp_path: Path,
                                                    monkeypatch: pytest.MonkeyPatch) -> None:
-    """A Windows console is cp1252; the report's "·" must still reach a pipe as UTF-8."""
+    """A Windows console is cp1252 with CRLF; the report's "·" must still reach a pipe as UTF-8, LF."""
     _seed_run_context(tmp_path, _full_ctx())
     raw = io.BytesIO()
-    console = io.TextIOWrapper(raw, encoding="cp1252", newline="")
+    console = io.TextIOWrapper(raw, encoding="cp1252", newline="\r\n")
     monkeypatch.setattr("sys.stdout", console)
     monkeypatch.setattr("assess_report.render_report", lambda _ctx, _name: "Step 3 \u00b7 next\n")
     assert main([str(tmp_path), "--stdout"]) == 0

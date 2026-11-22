@@ -39,7 +39,7 @@ jobs:
       # Without this, checkout converts every text file to CRLF and fixture
       # byte and line counts stop matching the Linux goldens. The step "Shell
       # scripts are LF in a CRLF checkout" below checks the default a Windows
-      # user gets (core.autocrlf=true) in a second worktree.
+      # user gets (core.autocrlf=true) in a fresh clone.
       - name: Keep LF line endings
         run: git config --global core.autocrlf false
 
@@ -91,20 +91,25 @@ jobs:
       # .gitattributes (`*.sh text eol=lf`) must keep every *.sh LF in the
       # core.autocrlf=true checkout a Windows user gets: a fresh clone of this
       # commit made with that setting. README.md turning CRLF there proves the
-      # conversion really ran.
+      # conversion really ran. The bytes are read in Python: Git for Windows'
+      # grep strips CR before matching, so `grep $'\r'` never finds one.
       - name: Shell scripts are LF in a CRLF checkout
         shell: bash
         run: |
           crlf="$RUNNER_TEMP/crlf-clone"
           git clone -q --no-local --no-checkout -c core.autocrlf=true "$GITHUB_WORKSPACE" "$crlf"
           git -C "$crlf" checkout -q --detach "$(git rev-parse HEAD)"
-          git -C "$crlf" config --get core.autocrlf
-          grep -q $'\r' "$crlf/README.md" || { echo "autocrlf=true did not convert README.md"; exit 1; }
-          bad=0
-          while IFS= read -r -d '' f; do
-            if grep -q $'\r' "$crlf/$f"; then echo "CRLF: $f"; bad=1; fi
-          done < <(git -C "$crlf" ls-files -z '*.sh')
-          exit $bad
+          git -C "$crlf" ls-files -z '*.sh' > "$RUNNER_TEMP/sh-files"
+          python -c '
+          import sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          assert b"\r\n" in (root / "README.md").read_bytes(), "autocrlf=true did not convert README.md"
+          names = [n for n in Path(sys.argv[2]).read_bytes().decode("utf-8").split("\0") if n]
+          bad = [n for n in names if b"\r" in (root / n).read_bytes()]
+          print(len(names), "shell scripts checked;", "CRLF:", bad or "none")
+          sys.exit(1 if bad or not names else 0)
+          ' "$crlf" "$RUNNER_TEMP/sh-files"
 
       # --- Test suites ----------------------------------------------------------
 

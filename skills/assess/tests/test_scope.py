@@ -23,6 +23,7 @@ from lib.headline import as_headline
 from lib.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
 from lib.run_scope import resolve_scope
+from test_complexity_treemap import _StubNumpy
 from lib.wiki_writer import HotspotEntry, write_index
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "complexity-treemap.py"
@@ -130,8 +131,9 @@ def test_build_doc_graph_scope_confines_docs(git_repo) -> None:
 # treemap collect scope (lizard/scc stubbed - no heavy deps in the test env)
 # --------------------------------------------------------------------------
 def _load_treemap():
-    for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify", "numpy"):
+    for name in ("lizard", "matplotlib", "matplotlib.pyplot", "squarify"):
         sys.modules.setdefault(name, types.ModuleType(name))
+    sys.modules.setdefault("numpy", _StubNumpy("numpy"))  # with percentile (#831)
     sys.modules["matplotlib"].pyplot = sys.modules["matplotlib.pyplot"]
     spec = importlib.util.spec_from_file_location("complexity_treemap_scope", _SCRIPT)
     mod = importlib.util.module_from_spec(spec)

@@ -644,10 +644,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     report = render_report(ctx, repo_root.name)
     if to_stdout:
-        # UTF-8 whatever the console code page: the report holds "·" and other
-        # non-ASCII text, which cp1252 on Windows would garble or refuse (#754).
+        # UTF-8 and LF whatever the console: the report holds "·" and other
+        # non-ASCII text, which cp1252 on Windows would garble or refuse, and
+        # Windows text mode would turn every "\n" into "\r\n" (#754).
         if isinstance(sys.stdout, io.TextIOWrapper):
-            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stdout.reconfigure(encoding="utf-8", newline="\n")
         sys.stdout.write(report)
     else:
         out_path = repo_root / ".assess" / "deterministic-report.md"
