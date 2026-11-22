@@ -206,7 +206,15 @@ def _rules(tree: IndentTree, key: int) -> list[Rule] | None:
     items = tree.items(key)
     if not items or not all(tree.lines[item[0]].dash for item in items):
         return None
-    return [Rule({tree.lines[k].key: tree.lines[k].value for k in item}) for item in items]
+    rules: list[Rule] = []
+    for item in items:
+        fields = {tree.lines[k].key: tree.lines[k].value for k in item}
+        # A plain scalar continued on the next line (``if: $A == "push"`` then ``&& $B``)
+        # parses as a keyless child: the rule is not read whole, so it is unread.
+        if any(tree.lines[k].key in ("if", "when") and tree.children(k) for k in item):
+            fields[""] = "continued"
+        rules.append(Rule(fields))
+    return rules
 
 
 def _rules_outcomes(tree: IndentTree, key: int, default_when: str = "on_success") -> _Outcomes:

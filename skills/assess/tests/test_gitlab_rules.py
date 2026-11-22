@@ -134,6 +134,9 @@ def _trigger(text: str) -> str:
     ("    - if: $CI_MERGE_REQUEST_IID\n      when: never\n    - if: $CI_COMMIT_BRANCH\n", "ordinary"),
     ("    - !reference [.default_rules, rules]\n", "unknown"),
     ("    - <<: *mr_rule\n", "unknown"),
+    # A plain if: continued on the next line is not read whole.
+    ('    - if: $CI_PIPELINE_SOURCE == "push"\n        && $CI_COMMIT_TAG\n', "unknown"),
+    (f"    - if: {_SCHEDULE}\n        || $CI_PIPELINE_SOURCE == 'push'\n", "unknown"),
 ])
 def test_gitlab_job_rules(rules: str, trigger: str) -> None:
     assert _trigger(_job(rules)) == trigger

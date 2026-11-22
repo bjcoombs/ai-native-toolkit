@@ -3895,7 +3895,7 @@ job-level `when:` is each rule's default), `only:` names merge requests or branc
 `when: manual` / `never` / `on_failure` on a job without rules runs in neither, and a
 top-level `workflow: rules:` decides which of the two pipelines exist (#884), for
 lines outside a job (`default:`) too; a branch-limited job in a branch-limited
-workflow is `unknown`. `keep(lines, triggers, wanted)` blanks the other lines,
+workflow is `unknown`, and so is a rule whose plain `if:` continues on the next line. `keep(lines, triggers, wanted)` blanks the other lines,
 so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
 anchors, `except:` and a `workflow: rules:` in an included file are not resolved;
 branch and path filters are not read. Tests: `tests/test_ci_triggers.py`,
