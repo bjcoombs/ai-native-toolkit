@@ -48,6 +48,7 @@ from lib.level_tally import run_context_level
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
+from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
@@ -179,6 +180,9 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
         write_headline_badge(
             assess_dir, as_headline(ctx["headline"]), run_id=ctx.get("run_id"),
             scope=ctx.get("scope"),
+        )
+        refresh_log_readiness(
+            assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
         )
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.

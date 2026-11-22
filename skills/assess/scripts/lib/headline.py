@@ -3,8 +3,8 @@
 The headline is a pure function of the run's ``level`` block (``lib/level_tally.py``)
 and the maturity model that produced it, so the same commit always prints the same
 headline and the LLM never sets it. It retires the old layered "X / 8" score and
-its band names. Three lines, in the order the scoring model fixes
-(``skills/assess/references/scoring-model.md``):
+its band names. Three lines, in the order the scoring-model decisions on #740
+fix:
 
 1. the Step, phrased as the contracts in place: ``Step 3 · Unattended agent PRs ·
    contracts in place``;

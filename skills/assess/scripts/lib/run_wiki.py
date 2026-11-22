@@ -7,6 +7,7 @@ placeholders the LLM fills later through ``assess_finalize``.
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,9 @@ from lib.wiki_state import (
 from lib.wiki_writer import (
     LOG_PLACEHOLDER,
     UNFINALIZED_ACTIONS_POINTER,
+    find_log_entry,
+    read_log_entries,
+    rewrite_log_entry,
     HotspotEntry,
     LogEntry,
     append_log_entry,
@@ -322,3 +326,29 @@ def write_run_wiki(
         log_valid=log_valid,
         log_broken_at=log_broken_at,
     )
+
+
+_READINESS_LINE = re.compile(r"^- \*\*Readiness:\*\* .*$", re.MULTILINE)
+
+
+def refresh_log_readiness(assess_dir: Path, run_id: str | None, readiness: str) -> bool:
+    """Rewrite the readiness line of this run's ``log.md`` entry (#747).
+
+    The opt-in mutation pass recounts the level, so the headline summary the core
+    wrote into the entry can move; the entry is found by its ``assess:run_id``
+    stamp and re-chained through ``rewrite_log_entry``. Returns False (nothing
+    written) when the run has no id, no stamped entry, no readiness line, or the
+    line already reads ``readiness``.
+    """
+    if not run_id:
+        return False
+    idx = find_log_entry(assess_dir, run_id)
+    if idx is None:
+        return False
+    text = read_log_entries(assess_dir)[idx]
+    new = _READINESS_LINE.sub(lambda _m: f"- **Readiness:** {readiness}", text, count=1)
+    if new == text:
+        return False
+    rewrite_log_entry(assess_dir, idx, new)
+    return True
+

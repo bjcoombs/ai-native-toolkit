@@ -228,6 +228,9 @@ def test_mutation_recount_rewrites_headline_and_badge(ci2: Path, monkeypatch: py
     stale = copy.deepcopy(ctx)
     stale["headline"]["summary"] = "stale"
     ctx_path.write_text(json.dumps(stale), encoding="utf-8")
+    from lib.run_wiki import refresh_log_readiness
+
+    assert refresh_log_readiness(ci2 / ".assess", ctx["run_id"], "stale")
     monkeypatch.setattr(assess_core, "mutation_scope", lambda focus: ["src/a.py"])
     monkeypatch.setattr(assess_core, "scan_test_pressure", lambda *a, **k: ctx["test_pressure"])
     assert assess_core.run_opt_in_mutation(ci2) == 0
@@ -235,3 +238,30 @@ def test_mutation_recount_rewrites_headline_and_badge(ci2: Path, monkeypatch: py
     assert after["headline"] == ctx["headline"]
     badge = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
     assert badge["message"] == ctx["headline"]["summary"]
+    log = (ci2 / ".assess" / "log.md").read_text(encoding="utf-8")
+    assert f"- **Readiness:** {ctx['headline']['summary']}" in log
+
+
+def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
+    from lib.run_wiki import refresh_log_readiness
+    from lib.wiki_writer import verify_log_chain
+
+    ctx = _run(ci2, "2026-11-22")
+    assess = ci2 / ".assess"
+    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 of 1 measured")
+    assert "- **Readiness:** Step 9 · 1 of 1 measured" in (assess / "log.md").read_text(encoding="utf-8")
+    assert verify_log_chain(assess) == (True, None)
+    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 of 1 measured")
+    assert not refresh_log_readiness(assess, None, "x")
+    assert not refresh_log_readiness(assess, "no-such-run", "x")
+
+
+def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
+    """#770's lesson: fail when a numeric headline field is dropped from counts-only output."""
+    from lib.counts_only import counts_only
+
+    head = headline(_level(), default_model())
+    kept = counts_only({"headline": head})["headline"]
+    # a dropped string list is kept as its length, a dropped string goes
+    assert kept == {**{k: v for k, v in head.items() if k not in ("markdown", "summary")},
+                    "lines": len(head["lines"])}
