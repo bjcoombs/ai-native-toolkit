@@ -11,6 +11,7 @@ import jsonschema
 import pytest
 
 import assess_signals
+from lib import merged_sample
 from lib import scan_registry as reg
 from lib import signals
 from lib.scan_registry import ScanSpec
@@ -92,6 +93,31 @@ def test_platform_only_block_is_absent_without_platform(fixture_repo, no_gh):
     offline = signals.collect(fixture_repo, ["review_reality", "delivery"])
     assert set(offline) == {"review_reality"}
     assert offline["review_reality"] == {"available": False, "reason": signals.NETWORK_REASON}
+    assert not no_gh.exists()
+
+
+@pytest.mark.parametrize("remote", [None, "not a url"])
+def test_review_blocks_read_no_remote_offline_without_a_remote(fixture_repo, no_gh, remote):
+    """With no remote (or one neither parser reads) offline review reads ``no_remote``, as
+    ``/assess`` and ``--platform`` do, not ``network`` (#908); a github remote keeps ``network``."""
+    _git(fixture_repo, "remote", "remove", "origin")
+    if remote is not None:
+        _git(fixture_repo, "remote", "add", "origin", remote)
+    offline = signals.collect(fixture_repo, ["review_reality", "review_evidence"])
+    assert offline["review_reality"] == {"available": False, "reason": merged_sample.NO_REMOTE_REASON}
+    assert offline["review_evidence"]["reason"] == merged_sample.NO_REMOTE_REASON
+    assert not no_gh.exists()
+
+
+def test_offline_merged_sample_reads_the_remote_only(fixture_repo, no_gh):
+    assert merged_sample.offline_merged_sample(fixture_repo, "6mo", "2026-11-22") == {
+        "available": False, "reason": signals.NETWORK_REASON}
+    _git(fixture_repo, "remote", "set-url", "origin", "git@gitlab.example.com:team/app.git")
+    assert merged_sample.offline_merged_sample(fixture_repo, None, "2026-11-22") == {
+        "available": False, "reason": signals.NETWORK_REASON}
+    _git(fixture_repo, "remote", "remove", "origin")
+    assert merged_sample.offline_merged_sample(fixture_repo, None, "2026-11-22")["reason"].startswith(
+        "no_remote: ")
     assert not no_gh.exists()
 
 

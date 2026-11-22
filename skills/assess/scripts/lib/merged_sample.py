@@ -59,8 +59,11 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 from lib.fleet_activity import window_start
-from lib.gh_cli import GhUnavailable, GithubRepo, gh_api, gh_json, open_github, unavailable
-from lib.gitlab_cli import GitlabProject, glab_api, open_gitlab
+from lib.gh_cli import (
+    NETWORK_REASON, GhUnavailable, GithubRepo, gh_api, gh_json, git_remote_url, open_github,
+    parse_github_remote, unavailable,
+)
+from lib.gitlab_cli import GITHUB_HOSTS, GitlabProject, glab_api, open_gitlab, parse_remote
 
 # Changes in the sample: the most recently merged in the window.
 SAMPLE_CAP = 30
@@ -233,7 +236,52 @@ def merged_sample(repo_root: Path, history_window: str | None, run_date: str) ->
         if project is not None:
             return MergedSample("gitlab", tuple(gitlab_changes(project, since)), since,
                                 gitlab=project)
+        if remote_kind(git_remote_url(repo_root)) == "platform":
+            # A host that is neither GitHub nor a GitLab glab reaches: the remote
+            # exists, so this is a platform gap, as the offline read says (#908).
+            return unavailable(UNREACHED_HOST_REASON)
         repo = open_github(repo_root)
         return MergedSample("github", tuple(github_changes(repo, since)), since, github=repo)
     except GhUnavailable as e:
         return unavailable(e.reason)
+
+
+NO_REMOTE_REASON = "no_remote: no GitHub or GitLab remote to read merged changes from"
+UNREACHED_HOST_REASON = ("network: the remote's host is not GitHub, and glab does not reach it "
+                         "as a GitLab host")
+
+RemoteKind = Literal["none", "github", "platform"]
+
+
+def remote_kind(url: str | None) -> RemoteKind:
+    """What a remote URL is, read from the URL alone (no ``gh`` or ``glab``, #908).
+
+    ``github``: a URL ``parse_github_remote`` reads. ``none``: no URL, one neither
+    parser reads, or a GitHub host whose path ``parse_github_remote`` rejects;
+    :func:`merged_sample` ends at ``no_remote`` for each. ``platform``: any other
+    host, a GitLab candidate only a ``glab`` probe can settle.
+    """
+    if url is None:
+        return "none"
+    if parse_github_remote(url) is not None:
+        return "github"
+    parsed = parse_remote(url)
+    if parsed is None or parsed[0] in GITHUB_HOSTS:
+        return "none"
+    return "platform"
+
+
+def offline_merged_sample(repo_root: Path, history_window: str | None, run_date: str) -> SampleOrReason:
+    """The ``merged_sample`` value of a headless run without ``--platform`` (#908).
+
+    Pure git, no ``gh`` or ``glab``. A :func:`remote_kind` of ``none`` gets
+    ``no_remote``, the answer :func:`merged_sample` reaches (``open_gitlab``
+    returns None, ``open_github`` raises ``no_remote``). Any other remote needs
+    the platform to read: ``network``, the code :func:`merged_sample` also gives
+    a host glab does not reach. So ``/assess``, fleet and ``fleet --platform``
+    give one reason for one remote.
+    """
+    del history_window, run_date  # the offline value reads the remote only
+    if remote_kind(git_remote_url(repo_root)) == "none":
+        return unavailable(NO_REMOTE_REASON)
+    return unavailable(NETWORK_REASON)

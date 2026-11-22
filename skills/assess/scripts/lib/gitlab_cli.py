@@ -76,7 +76,7 @@ GLAB_TIMEOUT_SECONDS = 20
 # made no network call before; keep its worst case short.
 GLAB_PROBE_TIMEOUT_SECONDS = 8
 
-_GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
+GITHUB_HOSTS = frozenset({"github.com", "www.github.com"})
 
 # A host as it may reach argv and a network probe: a DNS name with an optional
 # port, nothing else. The remote comes from the assessed (untrusted) repo.
@@ -227,7 +227,7 @@ def open_gitlab(repo_root: Path) -> GitlabProject | None:
     if parsed is None:
         return None
     host, path = parsed
-    if host in _GITHUB_HOSTS:
+    if host in GITHUB_HOSTS:
         return None
     project = GitlabProject(host=host, path=path)
     if host == GITLAB_COM:

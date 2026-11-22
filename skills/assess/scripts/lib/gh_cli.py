@@ -82,6 +82,11 @@ class GithubRepo:
         return f"{self.owner}/{self.name}"
 
 
+# The reason a platform read gets in a headless run without ``--platform`` (lib/signals.py).
+NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headless runner makes no "
+                  "network calls without --platform")
+
+
 def unavailable(reason: str) -> dict[str, Any]:
     """The degraded block shape every gh-backed scan emits on failure."""
     return {"available": False, "reason": reason or "unavailable"}

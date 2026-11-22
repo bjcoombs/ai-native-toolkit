@@ -182,7 +182,8 @@ Review and approval shares over the sampled merged changes, read through gh or g
 - Used by: row `layer-7-review`.
 - Evidence: `review_reality.reviewed_share` platform (verified), `review_reality.approved_share` platform (verified).
 - Not measured when:
-  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `network`: A headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
+  - `no_remote`: The repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes.
 
 ### `delivery`: Delivery figures
 
@@ -301,7 +302,9 @@ An AI review step committed in CI, or a reviewed merged change.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `review_evidence.reason` drop.
 - Used by: row `layer-7-review`.
 - Evidence: `review_evidence.present` head_text (declared).
-- Not measured when: it cannot read its input; the block says why.
+- Not measured when:
+  - `network`: No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read. Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in.
+  - `no_remote`: No AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read. Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes.
 
 ### `ci_checks`: CI runs a test or lint command
 
@@ -438,10 +441,11 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Collector: `core.structure_drift_block`, reading `repo_root`, `keyhole`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `structure_drift.tier_0.empty_ownership_patterns.declared_in` drop, `structure_drift.tier_0.empty_ownership_patterns.owners` drop, `structure_drift.tier_0.empty_ownership_patterns.pattern` drop, `structure_drift.tier_1.static_lens_reason` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `structure_drift.reason` reason, `structure_drift.tier_0.empty_ownership_patterns.declared_in` drop, `structure_drift.tier_0.empty_ownership_patterns.owners` drop, `structure_drift.tier_0.empty_ownership_patterns.pattern` drop, `structure_drift.tier_1.static_lens_reason` token.
 - Used by: row `layer-4-architecture`, finding `hidden_coupling`.
 - Evidence: `structure_drift.tier_0.boundary_patterns` config_text (config_only).
-- Not measured when: it cannot read its input; the block says why.
+- Not measured when:
+  - `no_ownership_map`: The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read. Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it.
 
 ### `observability`: Liveness blocks: observability
 
