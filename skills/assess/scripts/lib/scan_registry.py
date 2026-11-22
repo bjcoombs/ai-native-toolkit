@@ -510,6 +510,9 @@ SCANS: tuple[ScanSpec, ...] = (
           spread=("decline_markers", "reoffer_mutation", "decline_disclosures")),
     # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
     _spec("owner_exclusions", cs.owner_exclusions),
+    # Monorepo units (#862): the shallowest build-manifest folders, a workspace root's
+    # declared members in its place, or the [[units]] of .assess/config.toml. Core-only.
+    _spec("units", cs.units),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     _spec("offers_block", cs.offers_blocks, spread=("interactive", "offers")),
     _spec("uninstall_instructions_path", cs.uninstall_instructions_path),

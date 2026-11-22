@@ -11,6 +11,8 @@ CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts a
 grades only, no paths or code) so they are safe to include in self-feedback issues.
 `COMPLEXITY_UNRELIABLE` fires when `stats_summary.complexity_unreliable` is non-empty
 (`scc_coverage.py`); its detail counts files and languages and gives the largest NLOC.
+`ZERO_FILES_SCORED` fires on `files_scored` 0 and on a null `files_scored` (no
+`complexity-stats.json`, detail `files_scored=null`, #959).
 """
 from __future__ import annotations
 
@@ -38,7 +40,14 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
     ccn = stats.get("ccn", {})
     hotspots = stats.get("top_hotspots", [])
 
-    if files_scored == 0:
+    if files_scored is None:  # no complexity-stats.json: the treemap step wrote nothing (#959)
+        found.append(Anomaly(
+            code="ZERO_FILES_SCORED",
+            description="Treemap wrote no complexity-stats.json, so the scored-file count is unknown.",
+            detail="files_scored=null",
+        ))
+        files_scored = 0
+    elif files_scored == 0:
         found.append(Anomaly(
             code="ZERO_FILES_SCORED",
             description="Treemap reported 0 files scored.",

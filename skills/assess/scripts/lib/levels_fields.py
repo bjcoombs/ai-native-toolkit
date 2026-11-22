@@ -101,6 +101,12 @@ from typing import Any, Mapping
 
 TRUTH_TAGS: tuple[str, ...] = ("behaviour", "contracts", "docs", "structure", "agent_context",
                                "agent_runtime", "governance", "supply_chain")
+# The display title of each tag, in TRUTH_TAGS order: the catalog's tag section headings (#870).
+TRUTH_TAG_TITLES: dict[str, str] = {
+    "behaviour": "Behaviour", "contracts": "Contracts", "docs": "Docs", "structure": "Structure",
+    "agent_context": "Agent context", "agent_runtime": "Agent runtime", "governance": "Governance",
+    "supply_chain": "Supply chain",
+}
 POLARITIES: tuple[str, ...] = ("positive", "hazard")
 DEFAULT_POLARITY = "positive"
 HAZARD = "hazard"

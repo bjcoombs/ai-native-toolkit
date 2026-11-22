@@ -474,6 +474,23 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `owner_exclusions.skipped.problem` | token |
 | `owner_exclusions.disclosures` | dropped |
 
+## units
+
+| Field | Kept as |
+|---|---|
+| `units.source` | token |
+| `units.unit_count_reason` | token |
+| `units.units.path` | dropped |
+| `units.units.origin` | token |
+| `units.units.ecosystem` | token |
+| `units.units.workspace` | dropped |
+| `units.units.name` | dropped |
+| `units.aggregators.path` | dropped |
+| `units.aggregators.ecosystem` | token |
+| `units.skipped.path` | dropped |
+| `units.skipped.problem` | token |
+| `units.unreadable_manifests` | dropped |
+
 ## offers_block
 
 | Field | Kept as |
@@ -572,6 +589,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_environment.pinning.manifests.ecosystem` | token |
 | `agent_environment.pinning.manifests.manifest` | path (hashed when hashing is on) |
 | `agent_environment.pinning.manifests.lockfile` | path (hashed when hashing is on) |
+| `agent_environment.pinning.manifests.note` | token |
 | `agent_environment.ci_duration.reason` | dropped |
 | `agent_environment.ci_duration.branch` | dropped |
 | `agent_environment.ci_duration.workflows.workflow` | dropped |

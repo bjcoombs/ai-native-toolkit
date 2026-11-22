@@ -64,7 +64,9 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
   criterion as unknown, so the row level and the condition agree, and a real
   unmet sibling criterion still makes the condition unmet;
 - ``needs_full_run``: the block is ``not_registered`` in a headless run;
-- ``needs_platform``: the block needs GitHub or GitLab (``network``);
+- ``needs_platform``: the block needs GitHub or GitLab (``network``). A remote
+  on a host no platform read supports (Bitbucket, GitHub Enterprise) is the
+  block's own ``unsupported_host`` instead, since ``--platform`` cannot read it (#959);
 - the block's own reason code (``lib.counts_only.reason_code``, or the code a
   known reason sentence maps to, ``reason_token``), when a block on
   the path reports ``available: false``;
@@ -113,7 +115,8 @@ Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a se
 is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906, and
 `agent_environment.pinning.unlocked_total` with `manifests_total` 0: `no_manifests`, #927); an
 `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
-`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+`needs_platform` for a `network` one; another unavailable block's own code, such as
+`unsupported_host` or `no_complexity_stats` (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
