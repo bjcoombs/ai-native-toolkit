@@ -18,8 +18,8 @@ excludes, with the lockfile found for it. Read from the files at HEAD
 | ``Package.swift`` (with a ``.package(`` dependency) | ``Package.resolved`` beside it, or under ``<name>.xcworkspace/xcshareddata/swiftpm/`` (also inside an ``.xcodeproj``) in its directory | ``swift`` |
 | ``*.csproj``, ``*.fsproj`` (with a ``PackageReference``) | ``packages.lock.json`` beside the project | ``dotnet`` |
 | ``build.gradle``, ``build.gradle.kts`` (with a ``dependencies`` block outside ``buildscript``) | ``gradle.lockfile`` beside it, or ``gradle/verification-metadata.xml`` in its directory or a parent (the build root) | ``jvm`` |
-| ``vcpkg.json`` (with dependencies) | a ``builtin-baseline`` key in the manifest itself | ``cpp`` |
-| ``conanfile.py``, ``conanfile.txt`` | ``conan.lock`` | ``cpp`` |
+| ``vcpkg.json`` (with dependencies) | a baseline: ``builtin-baseline``, or ``default-registry.baseline`` in an embedded ``vcpkg-configuration`` or a ``vcpkg-configuration.json`` beside it | ``cpp`` |
+| ``conanfile.py``, ``conanfile.txt`` (not a recipe's ``test_package/``) | ``conan.lock`` | ``cpp`` |
 
 A lock is looked for in the manifest's directory and then each parent (a
 workspace root), except the per-project .NET and Gradle locks, which sit beside
@@ -102,7 +102,9 @@ _SWIFT_DEPENDENCY = re.compile(r"\.package\s*\(")
 # A string literal is matched first and kept, so `"**/*IT.class"` never opens a comment.
 _C_COMMENTS = re.compile(r"""("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|/\*.*?\*/|//[^\n]*""", re.DOTALL)
 _BUILDSCRIPT = re.compile(r"\bbuildscript\s*\{")
-_GRADLE_DEPS = re.compile(r"^\s*dependencies\s*\{", re.MULTILINE)
+# A dependencies block with something in it: `dependencies { }` has nothing to lock.
+_GRADLE_DEPS = re.compile(r"^\s*dependencies\s*\{\s*[^\s}]", re.MULTILINE)
+_CONAN = frozenset({"conanfile.py", "conanfile.txt"})
 _PACKAGE_REFERENCE = re.compile(r"<PackageReference\b")
 
 
@@ -276,7 +278,7 @@ def _lock_for(index: RepoIndex, rel: str, name: str) -> tuple[str, str | None, P
         return "swift", _swift_lock(index, rel), None
     if name == "vcpkg.json":
         data = _json(index.root, rel)
-        return "cpp", rel if isinstance(data, dict) and data.get("builtin-baseline") else None, None
+        return "cpp", _vcpkg_baseline(index, rel, data), None
     if name in _GRADLE:
         # The build root (with its gradle/ directory) may sit below the repository root.
         lock = _beside(index, rel, "gradle.lockfile") or _lock_near(index, rel, (_GRADLE_VERIFICATION,))
@@ -284,6 +286,20 @@ def _lock_for(index: RepoIndex, rel: str, name: str) -> tuple[str, str | None, P
         return "jvm", lock, "direct_pins_only" if pins_only else None
     lock = _beside(index, rel, "packages.lock.json")  # a .csproj or .fsproj
     return "dotnet", lock, "direct_pins_only" if lock is None and _cpm_above(index, rel) else None
+
+
+def _has_baseline(config: object) -> bool:
+    registry = config.get("default-registry") if isinstance(config, dict) else None
+    return isinstance(registry, dict) and bool(registry.get("baseline"))
+
+
+def _vcpkg_baseline(index: RepoIndex, rel: str, data: object) -> str | None:
+    """The file that pins a vcpkg manifest's registry baseline, or None."""
+    if isinstance(data, dict) and (data.get("builtin-baseline")
+                                   or _has_baseline(data.get("vcpkg-configuration"))):
+        return rel
+    config = _beside(index, rel, "vcpkg-configuration.json")
+    return config if config and _has_baseline(_json(index.root, config)) else None
 
 
 def _row(index: RepoIndex, rel: str) -> PinRow | None:
@@ -298,6 +314,8 @@ def _row(index: RepoIndex, rel: str) -> PinRow | None:
                 "lockfile": rel if pinned else None, "note": None}
     if not _is_manifest(name) or not _declares_deps(index.root, rel):
         return None
+    if name in _CONAN and "test_package" in PurePosixPath(rel).parts:
+        return None  # a Conan recipe's consumer test, not a manifest of the repository
     ecosystem, lock, note = _lock_for(index, rel, name)
     if lock is None and _is_library(index.root, rel, name):
         note = "skipped_library"

@@ -137,7 +137,7 @@ def test_direct_pins_only_read_unlocked_with_a_note(
 
 def test_gradle_verification_metadata_covers_every_project(tmp_path: Path) -> None:
     lock = "gradle/verification-metadata.xml"
-    pinning = _pinning(tmp_path, {"app/build.gradle": "dependencies {\n}\n", lock: "x\n",
+    pinning = _pinning(tmp_path, {"app/build.gradle": GRADLE_DEPS, lock: "x\n",
                                   "gradle/libs.versions.toml": "[versions]\n"})
     assert _rows(pinning) == {"app/build.gradle": (True, lock, None)}
 
@@ -154,6 +154,34 @@ def test_a_buildscript_classpath_is_not_a_dependency_block(tmp_path: Path) -> No
     assert _pinning(tmp_path / "a", {"build.gradle": classpath})["manifests"] == []
     both = _pinning(tmp_path / "b", {"build.gradle": classpath + "// dependencies {\n" + GRADLE_DEPS})
     assert _rows(both) == {"build.gradle": (False, None, None)}
+
+
+@pytest.mark.parametrize("files, lock", [
+    pytest.param({"vcpkg.json": json.dumps(VCPKG),
+                  "vcpkg-configuration.json": json.dumps({"default-registry": {"kind": "git", "baseline": "3426db05"}})},
+                 "vcpkg-configuration.json", id="configuration-file"),
+    pytest.param({"vcpkg.json": json.dumps({**VCPKG, "vcpkg-configuration": {
+        "default-registry": {"kind": "builtin", "baseline": "3426db05"}}})}, "vcpkg.json", id="embedded"),
+    pytest.param({"vcpkg.json": json.dumps(VCPKG),
+                  "vcpkg-configuration.json": json.dumps({"default-registry": {"kind": "builtin"}})},
+                 None, id="configuration-without-baseline"),
+])
+def test_a_vcpkg_registry_baseline_locks_the_manifest(
+        tmp_path: Path, files: dict[str, str], lock: str | None) -> None:
+    pinning = _pinning(tmp_path, files)
+    assert _rows(pinning) == {"vcpkg.json": (lock is not None, lock, None)}
+
+
+def test_a_conan_test_package_is_not_a_manifest(tmp_path: Path) -> None:
+    recipe = "from conan import ConanFile\nclass Pkg(ConanFile):\n    requires = 'fmt/10.2.1'\n"
+    pinning = _pinning(tmp_path, {"conanfile.py": recipe, "test_package/conanfile.py": recipe,
+                                  "conan.lock": "{}"})
+    assert _rows(pinning) == {"conanfile.py": (True, "conan.lock", None)}
+
+
+def test_an_empty_dependencies_block_has_nothing_to_lock(tmp_path: Path) -> None:
+    for i, body in enumerate(("dependencies { }\n", "dependencies {\n}\n", "dependencies {}\n")):
+        assert _pinning(tmp_path / str(i), {"build.gradle.kts": body})["manifests"] == []
 
 
 def test_a_glob_string_does_not_open_a_comment(tmp_path: Path) -> None:
