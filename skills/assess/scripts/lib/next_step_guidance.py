@@ -356,7 +356,7 @@ _WORDING: dict[str, Wording] = {
         "Commit a lockfile beside every dependency manifest (`uv.lock`, `package-lock.json`, "
         "`go.sum`, `Cargo.lock` or similar), or pin every requirement with `==`.",
         "Every dependency manifest has its lockfile committed in its directory or a parent."),
-    "ci_checks.test_or_lint_runs": _flag(
+    "ci_checks.test_or_lint_configured": _flag(
         "Run the test suite or linter in CI: a GitHub Actions workflow or `.gitlab-ci.yml` job "
         "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
@@ -397,7 +397,7 @@ _WORDING: dict[str, Wording] = {
     "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
     "agent_consistency.unlinked": _agents_linked,
-    "coverage_gate.enforced": _flag(
+    "coverage_gate.configured": _flag(
         "Make the test run exit non-zero when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
         "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it exits non-zero."),

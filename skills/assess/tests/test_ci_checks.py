@@ -87,7 +87,7 @@ def test_no_ci_files_is_false_with_basis_no_ci(tmp_path: Path) -> None:
     assert block == {"available": True, "ci_files": 0, "check_commands": 0, "included_files": 0,
                      "included_check_commands": 0, "resolved_includes": 0, "unresolved_includes": 0,
                      "includes": [], "merged_config": "not_read", "merged_config_reason": None,
-                     "merged_check_commands": 0, "test_or_lint_runs": False, "basis": "no_ci",
+                     "merged_check_commands": 0, "test_or_lint_configured": False, "basis": "no_ci",
                      "enforced_check_runs": False, "enforced_basis": "no_ci",
                      "masked_check_commands": 0, "off_trigger_check_commands": 0,
                      "lint_runs": False, "lint_basis": "no_ci",
@@ -100,12 +100,12 @@ def test_a_workflow_running_a_test_is_true(tmp_path: Path) -> None:
         ".github/workflows/deploy.yaml": "jobs:\n  d:\n    steps:\n      - run: make deploy\n",
     }))
     assert (block["ci_files"], block["check_commands"]) == (2, 1)
-    assert (block["test_or_lint_runs"], block["basis"]) == (True, "check_command")
+    assert (block["test_or_lint_configured"], block["basis"]) == (True, "check_command")
 
 
 def test_ci_with_no_check_is_false(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": "build:\n  script:\n    - make build\n"}))
-    assert (block["test_or_lint_runs"], block["basis"]) == (False, "no_check_command")
+    assert (block["test_or_lint_configured"], block["basis"]) == (False, "no_check_command")
 
 
 @pytest.mark.parametrize("files", [
@@ -115,7 +115,7 @@ def test_ci_with_no_check_is_false(tmp_path: Path) -> None:
 ])
 def test_jobs_only_from_includes_is_unknown(tmp_path: Path, files: dict[str, str]) -> None:
     block = scan_ci_checks(_write(tmp_path, files))
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "included_jobs")
     assert block["included_files"] == 1
 
 
@@ -123,7 +123,7 @@ def test_a_local_check_beats_an_include(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {
         ".gitlab-ci.yml": "include:\n  - component: gitlab.com/acme/c@1\nlint:\n  script:\n    - make lint\n",
     }))
-    assert (block["test_or_lint_runs"], block["included_files"]) == (True, 1)
+    assert (block["test_or_lint_configured"], block["included_files"]) == (True, 1)
 
 
 _NEEDS = ("name: ci\non: [pull_request]\njobs:\n  pytest:\n    runs-on: ubuntu-latest\n"
@@ -137,19 +137,19 @@ _MATRIX = ("name: ci\non: [pull_request]\njobs:\n  t:\n    runs-on: ubuntu-lates
 def test_a_lone_always_check_value_is_not_a_ci_run(tmp_path: Path, workflow: str) -> None:
     """Issue #725: ``needs: - pytest`` and ``matrix: ... - tox`` name a job or axis value."""
     block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": workflow}))
-    assert (block["check_commands"], block["test_or_lint_runs"], block["basis"]) == (
+    assert (block["check_commands"], block["test_or_lint_configured"], block["basis"]) == (
         0, False, "no_check_command")
 
 
 def test_a_lone_always_check_value_with_an_include_is_unknown(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": (
         "include: 'ci/jobs.yml'\ndeploy:\n  needs:\n    - pytest\n  script:\n    - make deploy\n")}))
-    assert (block["check_commands"], block["test_or_lint_runs"]) == (0, None)
+    assert (block["check_commands"], block["test_or_lint_configured"]) == (0, None)
 
 
 def test_a_gitlab_script_item_running_pytest_counts(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": "test:\n  script:\n    - pytest -q\n"}))
-    assert (block["check_commands"], block["test_or_lint_runs"]) == (1, True)
+    assert (block["check_commands"], block["test_or_lint_configured"]) == (1, True)
 
 
 def test_parent_keys_come_from_the_context_lines() -> None:
@@ -301,7 +301,7 @@ _WF = "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\
 
 def test_masked_only_ci_is_not_enforced_but_still_runs(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": _WF.format("pytest || true")}))
-    assert block["test_or_lint_runs"] is True
+    assert block["test_or_lint_configured"] is True
     assert block["enforced_check_runs"] is False
     assert block["masked_check_commands"] == 1
     assert block["basis"] == "check_command"
@@ -310,13 +310,13 @@ def test_masked_only_ci_is_not_enforced_but_still_runs(tmp_path: Path) -> None:
 def test_masked_check_with_include_is_unknown(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": (
         "include:\n  - project: grp/tpl\n    file: /t.yml\ntest:\n  script:\n    - pytest || true\n")}))
-    assert (block["test_or_lint_runs"], block["enforced_check_runs"]) == (True, None)
+    assert (block["test_or_lint_configured"], block["enforced_check_runs"]) == (True, None)
 
 
 def test_allow_failure_job_with_a_coverage_gate_is_not_enforced(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": (
         "test:\n  allow_failure: true\n  script:\n    - pytest --cov-fail-under=80\n")}))
-    assert (block["test_or_lint_runs"], block["enforced_check_runs"]) == (True, False)
+    assert (block["test_or_lint_configured"], block["enforced_check_runs"]) == (True, False)
 
 
 def test_one_unmasked_check_is_enforced(tmp_path: Path) -> None:
@@ -356,7 +356,7 @@ _MATRIX_MYPY = {".github/workflows/ci.yml": (
     "          - mypy\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.tool }}\n")}
 
 
-# The issue #782 fixture table: (files, lint_runs, lint_basis, test_or_lint_runs as before #782).
+# The issue #782 fixture table: (files, lint_runs, lint_basis, test_or_lint_configured as before #782).
 LINT_STATES = [
     pytest.param(_gha("ruff check ."), True, "lint_command", True, id="ruff-check"),
     pytest.param({**_gha("ruff check ."), "app.py": "import os  # noqa: F401\n"},
@@ -378,7 +378,7 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     block = scan_ci_checks(_write(tmp_path, files))
     assert block["lint_runs"] is lint
     assert block["lint_basis"] == basis
-    assert block["test_or_lint_runs"] is test_or_lint   # unchanged by #782
+    assert block["test_or_lint_configured"] is test_or_lint   # unchanged by #782
 
 
 @pytest.mark.parametrize(("run", "lint"), [
@@ -464,7 +464,7 @@ def _uses(action: str, extra: str = "", on: str = "[pull_request]") -> dict[str,
 def test_a_known_lint_action_is_a_lint_step(tmp_path: Path, action: str) -> None:
     block = scan_ci_checks(_write(tmp_path, _uses(action)))
     assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
-    assert block["test_or_lint_runs"] is False   # unchanged by #782: actions are not read there
+    assert block["test_or_lint_configured"] is False   # unchanged by #782: actions are not read there
 
 
 @pytest.mark.parametrize("action", [
@@ -502,7 +502,7 @@ def test_a_lone_linter_runs_only_under_a_script_key(tmp_path: Path, files: dict[
                                                     lint: bool) -> None:
     block = scan_ci_checks(_write(tmp_path, files))
     assert block["lint_runs"] is lint
-    assert block["test_or_lint_runs"] is False   # unchanged: a lone linter never counted there
+    assert block["test_or_lint_configured"] is False   # unchanged: a lone linter never counted there
 
 
 def test_a_lint_action_with_continue_on_error_is_not_enforced(tmp_path: Path) -> None:
@@ -560,7 +560,7 @@ def test_unread_ci_system_is_not_measured(
         expected: tuple[bool | None, bool, str, str, int]) -> None:
     """Issue #787: a CI system the scan does not parse is not measured, never 0."""
     block = scan_ci_checks(_write(tmp_path, files))
-    assert (block["enforced_check_runs"], block["test_or_lint_runs"], block["basis"],
+    assert (block["enforced_check_runs"], block["test_or_lint_configured"], block["basis"],
             block["enforced_basis"], block["unread_ci_files"]) == expected
 
 

@@ -48,7 +48,7 @@ def _model(*rows: dict[str, Any], steps: list[dict[str, Any]] | None = None) -> 
 
 DOC = "doc_staleness.summary.stale_pct"  # git_history: counted
 INSTR = "layer_grades.instruction_file_present"  # head_text: listed
-CI = "ci_checks.test_or_lint_runs"  # head_text: listed until #775
+CI = "ci_checks.test_or_lint_configured"  # head_text: listed until #775
 MUT = "test_pressure.mutation_run"  # execution_artifact: counted
 
 
@@ -114,7 +114,7 @@ def test_counted_and_listed_conditions_are_split_by_grade():
 def test_a_counted_ci_condition_raises_the_tally(monkeypatch):
     """I744-1's "the CI condition counts": once the CI signal grades verified (#775)."""
     model = _model(_row("ci", [_eq(CI)]))
-    signals = {"ci_checks": {"available": True, "test_or_lint_runs": True}}
+    signals = {"ci_checks": {"available": True, "test_or_lint_configured": True}}
     assert lt.level_result(model, signals)["tally"]["met"] == 0
     monkeypatch.setitem(level_signals.SIGNAL_INPUTS, CI, "ci_executed")
     monkeypatch.setitem(lt.SIGNAL_INPUTS, CI, "ci_executed")
@@ -268,7 +268,7 @@ def test_a_missing_gate_blocks_the_next_step_and_names_it():
 
 def test_a_declared_gate_holds_while_staying_out_of_the_tally():
     signals = {**_fresh(), "layer_grades": {"instruction_file_present": True},
-               "ci_checks": {"test_or_lint_runs": True}}
+               "ci_checks": {"test_or_lint_configured": True}}
     result = lt.level_result(_stepped(), signals)
     assert result["step"] == 3 and result["next_step"] is None
     assert result["tally"]["met"] == 2 and "instr.1" in result["listed"]
