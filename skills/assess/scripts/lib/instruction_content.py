@@ -215,18 +215,23 @@ def _uncheckable_slash_path(index: RepoIndex, ref: str) -> bool:
 
 
 def _gitignored(root: Path, paths: list[str]) -> set[str]:
+    """Which ``paths`` git ignores, asked as NUL-separated bytes (``check-ignore -z``).
+
+    Bytes keep Windows text-mode newline translation off stdin, and ``-z`` turns off
+    git's quoting of unusual names, so each match comes back spelled as queried.
+    """
     if not paths:
         return set()
+    payload = b"\0".join(p.encode("utf-8", "surrogateescape") for p in paths) + b"\0"
     try:
         proc = subprocess.run(
-            ["git", "-C", str(root), "check-ignore", "--stdin"],
-            input="\n".join(paths), capture_output=True, text=True,
-            encoding="utf-8", errors="surrogateescape",
+            ["git", "-C", str(root), "check-ignore", "-z", "--stdin"],
+            input=payload, capture_output=True,
             timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return set()
-    return set(proc.stdout.splitlines())
+    return {p for p in proc.stdout.decode("utf-8", "surrogateescape").split("\0") if p}
 
 
 def _symbols_present(root: Path, names: list[str], self_rel: str) -> set[str] | None:
