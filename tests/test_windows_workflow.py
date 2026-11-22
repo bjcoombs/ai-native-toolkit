@@ -17,7 +17,17 @@ REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github" / "workflows" / "windows.yml"
 REQUIRED_NAME = "windows suites + smoke runs"
 LEGS = {"assess", "scripts-contract", "ghsync", "smoke"}
-GHSYNC_SUITE = "ghsync and ghreport suites under Git Bash"
+# The shared setup every leg runs (plus the unnamed actions/checkout step).
+SETUP_STEPS = {
+    "Keep LF line endings",
+    "Fetch the PR base ref",
+    "Set up Python",
+    "Install uv",
+    "Install ripgrep",
+    "Git Bash tools",
+    "Python version",
+}
+GHSYNC_SUITE ="ghsync and ghreport suites under Git Bash"
 # Every non-setup step and the one leg it runs in.
 STEP_LEG = {
     "Shell scripts are LF in a CRLF checkout": "smoke",
@@ -127,8 +137,11 @@ def test_no_step_names_an_unknown_leg() -> None:
         if "matrix.suite" in cond:
             assert step.get("name") in STEP_LEG, f"leg step missing from STEP_LEG: {step.get('name')}"
         else:
-            # Unguarded steps are the shared setup; none of them may be a suite step.
-            assert step.get("name") not in STEP_LEG
+            # A step with no leg guard runs in all four legs: only shared setup may.
+            label = step.get("name", step.get("uses", ""))
+            assert label in SETUP_STEPS or str(label).startswith("actions/checkout@"), (
+                f"{label!r} has no matrix.suite guard, so it runs in every leg"
+            )
 
 
 def test_superseded_pr_runs_cancel() -> None:
