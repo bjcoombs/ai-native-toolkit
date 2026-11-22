@@ -78,9 +78,20 @@ def test_a_repeated_id_keeps_its_first_entry():
     assert block["skipped"] == [{"index": 1, "id": "ci.1", "problem": "duplicate"}]
 
 
-@pytest.mark.parametrize("config", [{}, {"checks": "x"}, {"checks": {}}, {"checks": {"exclude": "ci.1"}}])
-def test_no_or_malformed_section_excludes_nothing(config):
+@pytest.mark.parametrize("config", [{}, {"checks": {}}, {"checks": {"other": 1}}])
+def test_no_exclude_list_excludes_nothing_silently(config):
     assert parse_exclusions(config, KNOWN) == {"exclusions": [], "skipped": [], "disclosures": []}
+
+
+@pytest.mark.parametrize("config, named", [
+    ({"checks": "x"}, None),
+    ({"checks": {"exclude": "ci.1"}}, None),
+    ({"checks": {"exclude": {"id": "ci.1", "reason": "r"}}}, "ci.1"),  # one inline table, not a list
+])
+def test_a_malformed_section_is_skipped_visibly_and_excludes_nothing(config, named):
+    block = parse_exclusions(config, KNOWN)
+    assert block["exclusions"] == []
+    assert block["skipped"] == [{"index": 0, "id": named, "problem": "not_a_list"}]
 
 
 def test_every_kind_is_accepted():

@@ -22,7 +22,10 @@ the maturity-model version and the committed config::
   provenance, named as a decline marker's (``lib/decline_markers.py``).
 
 Every skipped entry is listed with a ``PROBLEMS`` code and a one-line warning on
-stderr; nothing here raises. A repeated id keeps its first entry.
+stderr, and the report lists it too; nothing here raises. A repeated id keeps its
+first entry. A ``[checks]`` that is not a table, or an ``exclude`` that is not a
+list (a single inline table, say), is one skipped entry with index 0 and code
+``not_a_list``, never a silent no-op.
 
 ``lib.level_tally`` reads the exclusions in force: an excluded condition reads
 ``not_applicable`` with ``disposition: excluded_by_owner``, leaves the
@@ -49,7 +52,7 @@ DISPOSITION = "excluded_by_owner"
 KINDS = ("not_applicable", "measured_elsewhere", "tool_unsupported", "false_positive", "other")
 DEFAULT_KIND = "other"
 # Why an entry was skipped, as SkippedExclusion.problem holds it.
-PROBLEMS = ("not_a_table", "no_id", "no_reason", "unknown_kind", "unknown_condition", "duplicate")
+PROBLEMS = ("not_a_list", "not_a_table", "no_id", "no_reason", "unknown_kind", "unknown_condition", "duplicate")
 
 
 def _text(entry: Mapping[str, Any], key: str) -> str | None:
@@ -82,6 +85,11 @@ def parse_exclusions(config: Mapping[str, Any], known: Collection[str]) -> Owner
     entries = section.get(KEY) if isinstance(section, Mapping) else None
     exclusions: list[OwnerExclusion] = []
     skipped: list[SkippedExclusion] = []
+    written_badly = SECTION in config and (not isinstance(section, Mapping)
+                                           or (KEY in section and not isinstance(entries, list)))
+    if written_badly:
+        named = _text(entries, "id") if isinstance(entries, Mapping) else None
+        skipped.append({"index": 0, "id": named, "problem": "not_a_list"})
     if not isinstance(entries, list):
         entries = []
     for index, entry in enumerate(entries):

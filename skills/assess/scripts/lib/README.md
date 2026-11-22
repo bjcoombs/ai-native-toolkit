@@ -2163,7 +2163,7 @@ Reads the owner's condition exclusions from `.assess/config.toml` (#910):
 one of them is skipped). The provenance keys are named as a decline marker's.
 `parse_exclusions(config, known)` returns the run-context `owner_exclusions` block
 (`OwnerExclusionsBlock`): the `exclusions` in force (with `source: "repo"`), the `skipped`
-entries with a `PROBLEMS` code (`not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
+entries with a `PROBLEMS` code (`not_a_list` for a `[checks]` or `exclude` of the wrong type, `not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
 `unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
 line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
 reads the repository's config and warns on stderr per skipped entry; never raises. A
