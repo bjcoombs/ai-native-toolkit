@@ -97,3 +97,23 @@ def test_type_checkers_leave_is_lint_command_unchanged() -> None:
     # Layer 5 and test_or_lint_runs keep is_lint_command's vocabulary.
     assert not is_lint_command("pyright") and not is_lint_command("tsc --noEmit")
     assert not is_lint_run("tsc --version") and not is_lint_run("npm run build:types")
+
+
+@pytest.mark.parametrize(("text", "lint", "maybe"), [
+    ("pnpm exec eslint .", True, False),
+    ("pnpm dlx eslint .", True, False),
+    ("yarn dlx eslint .", True, False),
+    ("yarn exec tsc --noEmit", True, False),
+    ("npm exec -- eslint .", True, False),
+    ("bunx eslint .", True, False),
+    ("bun x tsc", True, False),
+    ("pnpm exec vitest run", False, False),       # a test runner runs tests only
+    ("npx playwright test", False, False),
+    ("npx prettier --check .", False, True),      # unrecognised: unknown, never false
+    ("pnpm dlx some-tool", False, True),
+    ("yarn exec custom-check", False, True),
+    ("pnpm exec", False, False),
+])
+def test_package_manager_runner_forms(text: str, lint: bool, maybe: bool) -> None:
+    # Issue #782: the program a runner form runs decides the reading, as the npx branch does.
+    assert (is_lint_run(text), may_lint(text)) == (lint, maybe)

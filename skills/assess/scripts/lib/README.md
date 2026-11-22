@@ -3276,7 +3276,11 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 ruff check .`). Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
 `type-check` targets such as `npm run typecheck` or `make type-check`), so
-`is_lint_command` and Layer 5 are unchanged. `may_lint(text)` is a check that may run a linter the line cannot
+`is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
+`npm exec`, `pnpm exec` / `dlx`, `yarn exec` / `dlx`) is read by the program it runs:
+a linter or type checker is a lint run, a test runner (`jest`, `vitest`, `playwright
+test`) is neither, and any other program is `may_lint` (null, never false). A lone
+type-checker item (`- tsc` under `needs:`) is a value like a lone linter. `may_lint(text)` is a check that may run a linter the line cannot
 show: a check target of a runner or script (`make check`, `npm test`, `tox`,
 `./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
 (`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program

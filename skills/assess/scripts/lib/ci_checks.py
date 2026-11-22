@@ -137,7 +137,7 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.check_command import (
-    ALWAYS_CHECK, LINT_PROGRAMS, is_check_command, is_lint_command, is_lint_run, may_lint)
+    ALWAYS_CHECK, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_lint_command, is_lint_run, may_lint)
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
@@ -289,9 +289,10 @@ def _line_commands(line: str) -> list[Command]:
 
 
 def _lone_linter(text: str) -> bool:
-    """A linter name with no argument: under ``matrix:`` / ``needs:`` / ``stages:`` a value, not a run."""
+    """A linter or type-checker name with no argument (``- mypy``, ``- tsc``): under
+    ``matrix:`` / ``needs:`` / ``stages:`` a value, not a run."""
     words = command_words(text)
-    return len(words) == 1 and words[0] in LINT_PROGRAMS
+    return len(words) == 1 and (words[0] in LINT_PROGRAMS or words[0] in TYPE_PROGRAMS)
 
 
 def _lone_check(text: str) -> bool:

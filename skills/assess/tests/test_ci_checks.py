@@ -491,6 +491,11 @@ def test_pre_commit_action_reads_as_pre_commit_run(tmp_path: Path) -> None:
                  False, id="stages-mypy"),
     pytest.param({".gitlab-ci.yml": "t:\n  needs:\n    - ruff\n  script:\n    - echo hi\n"},
                  False, id="needs-ruff"),
+    pytest.param({".gitlab-ci.yml": "t:\n  needs:\n    - tsc\n  script:\n    - echo hi\n"},
+                 False, id="needs-tsc"),
+    pytest.param({".gitlab-ci.yml": "stages:\n  - pyright\nt:\n  script:\n    - echo hi\n"},
+                 False, id="stages-pyright"),
+    pytest.param({".gitlab-ci.yml": "lint:\n  script:\n    - pyright\n"}, True, id="gitlab-script-pyright"),
 ])
 def test_a_lone_linter_runs_only_under_a_script_key(tmp_path: Path, files: dict[str, str],
                                                     lint: bool) -> None:
