@@ -464,3 +464,13 @@ def test_lint_runs_guidance_names_a_linter_command_in_ci():
     words = guidance("ci_checks.lint_runs", "eq", True)
     assert words is not None
     assert "`.gitlab-ci.yml`" in words["done_when"] and "`ruff check .`" in words["done_when"]
+
+
+def test_a_level_0_row_opens_with_nothing_confirmed_in_team_and_org_branches(tmp_path):
+    """Level 0 confirms nothing, so its opening line says so instead of reading as a level held (#743)."""
+    pages = _pages(tmp_path)
+    org = pages["teams/grpc/sub.md"].split("## Group settings\n", 1)[1].split("\n## ", 1)[0]
+    assert org.startswith("\nIn place: nothing confirmed on this row yet (level 0 of ")
+    team = pages["teams/grpb.md"].split("## Shared tooling\n", 1)[1].split("\n## ", 1)[0]
+    assert team.startswith("\nIn place: nothing confirmed on this row yet (level 0 of ")
+    assert not any(re.search(r"^In place: level 0 ", page, flags=re.M) for page in pages.values())

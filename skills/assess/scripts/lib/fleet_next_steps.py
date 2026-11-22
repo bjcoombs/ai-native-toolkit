@@ -317,6 +317,13 @@ def _unknown_section(row: Row, result: RowResult, settings_scope: str | None,
     return lines
 
 
+def _held(level: int, top: int) -> str:
+    """The opening line of a known row below its top: level 0 confirms nothing, so it says so."""
+    if level == 0:
+        return f"{IN_PLACE} nothing confirmed on this row yet (level 0 of {top})"
+    return f"{IN_PLACE} level {level} of {top}"
+
+
 def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[str, str],
                  signals: Mapping[str, JsonDict]) -> list[str]:
     top = len(row["levels"])
@@ -330,13 +337,13 @@ def _row_section(row: Row, result: RowResult, group: GroupRow, failed: Mapping[s
     if result["scope"] == "team":
         evaluations = result.get("repos", {})
         reached = sum(1 for ev in evaluations.values() if ev["bounds"][0] >= target)
-        lines.append(f"{IN_PLACE} level {level} of {top}; {reached} of {_repos(len(evaluations))} "
+        lines.append(f"{_held(level, top)}; {reached} of {_repos(len(evaluations))} "
                      f"already at level {target}.")
         lines.append("")
         lines.append(f"To reach level {target}: the rule needs {_needed(result, len(evaluations))}.")
         lines.append("")
         return lines + _team_steps(row, result, target, failed, signals)
-    lines += [f"{IN_PLACE} level {level} of {top}.", "", f"To reach level {target}:", ""]
+    lines += [f"{_held(level, top)}.", "", f"To reach level {target}:", ""]
     return lines + _org_steps(row, result, target, group["settings_scope"], group["repos"])
 
 

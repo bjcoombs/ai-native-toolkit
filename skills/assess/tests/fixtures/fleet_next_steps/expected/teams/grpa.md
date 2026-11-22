@@ -88,7 +88,7 @@ In place: nothing confirmed on this row yet; the level is not measured (between 
 
 ## Agent environment
 
-In place: level 0 of 1; 1 of 3 repositories already at level 1.
+In place: nothing confirmed on this row yet (level 0 of 1); 1 of 3 repositories already at level 1.
 
 To reach level 1: the rule needs 3.
 

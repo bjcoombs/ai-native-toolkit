@@ -39,7 +39,7 @@ To reach level 2: the rule needs 1.
 
 ## Coverage \| mutation
 
-In place: level 0 of 2; 0 of 1 repository already at level 1.
+In place: nothing confirmed on this row yet (level 0 of 2); 0 of 1 repository already at level 1.
 
 To reach level 1: the rule needs 1.
 
@@ -61,7 +61,7 @@ In place: level 1 of 1, the top level. No next step.
 
 ## Shared tooling
 
-In place: level 0 of 1; 0 of 1 repository already at level 1.
+In place: nothing confirmed on this row yet (level 0 of 1); 0 of 1 repository already at level 1.
 
 To reach level 1: the rule needs 1.
 
@@ -71,7 +71,7 @@ To reach level 1: the rule needs 1.
 
 ## Agent environment
 
-In place: level 0 of 1; 0 of 1 repository already at level 1.
+In place: nothing confirmed on this row yet (level 0 of 1); 0 of 1 repository already at level 1.
 
 To reach level 1: the rule needs 1.
 

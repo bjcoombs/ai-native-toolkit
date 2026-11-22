@@ -22,7 +22,7 @@ In place: 6 of 7 rows measured for this group, each with the roll-up rule it use
 
 ## Group settings
 
-In place: level 0 of 2.
+In place: nothing confirmed on this row yet (level 0 of 2).
 
 To reach level 1:
 
