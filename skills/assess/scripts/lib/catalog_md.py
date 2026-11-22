@@ -1,16 +1,27 @@
 """``docs/what-we-measure.md``: the measures catalog (``lib.catalog``) as Markdown (#794).
 
 ``render_markdown(catalog)`` is pure and deterministic. It writes, in order: how grades
-count, each maturity-model row with its conditions in plain words, each scan the
-headless runner reports, the derived findings, and every registry scan. Links are
+count, the conditions organised by truth tag (#870), how the tags relate (shared
+conditions, Step gates, links), the maturity-model rows, each scan the headless runner
+reports, the derived findings, and every registry scan.
+
+A tag section is a ``### <tag title>`` heading, then the tag's opening lines
+(``_tag_opening``), then one table of the conditions listed under that tag. Each condition
+has one table row per criterion, under its first tag only, so it appears once however many
+tags it carries; its other tags name it under "Shared". The table's columns are
+``CONDITION_COLUMNS``, one ``(header, cell)`` entry each, so a later column (the #939 "Why it
+matters") is one more entry and a tag's ``why`` one more opening line. Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
 manifest, so an edit there shows here once ``make catalog`` regenerates the file.
 """
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterable
+from typing import NamedTuple
 
-from lib.catalog import UNCLASSIFIED, Catalog, CatalogScan
+from lib.catalog import UNCLASSIFIED, Catalog, CatalogCriterion, CatalogLevel, CatalogRow, CatalogScan
+from lib.catalog_tags import CatalogTag, tag_title
 
 HEADER = """# What /assess measures
 
@@ -40,6 +51,11 @@ def _code(value: object) -> str:
     return f"`{value}`"
 
 
+def _codes(values: Iterable[str]) -> str:
+    """Backticked values joined by commas, or "-" when there are none."""
+    return ", ".join(f"`{v}`" for v in values) or "-"
+
+
 def _cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
@@ -58,24 +74,164 @@ def _grades(catalog: Catalog) -> list[str]:
     return lines
 
 
+class Line(NamedTuple):
+    """One condition table row: a criterion of a condition (level) of a row."""
+
+    row: CatalogRow
+    level: CatalogLevel
+    criterion: CatalogCriterion
+
+
+def _condition_cell(line: Line) -> str:
+    others = [tag_title(t) for t in line.level["truth"][1:]]
+    shared = f" (shared with {', '.join(others)})" if others else ""
+    return f"`{line.level['id']}` {_cell(line.criterion['title'])}{shared}"
+
+
+def _criterion_cell(line: Line) -> str:
+    c = line.criterion
+    compared = c["eq_signal"] if c["eq_signal"] is not None else json.dumps(c["value"])
+    return f"{_cell(c['text'])} (`{_cell(c['signal'] + ' ' + c['op'] + ' ' + compared)}`)"
+
+
+def _links_cell(line: Line) -> str:
+    level, parts = line.level, []
+    parts += [f"requires `{r}`" for r in level["requires"]]
+    if level["guarded_by"] is not None:
+        parts.append(f"guarded by `{level['guarded_by']}`")
+    if line.criterion["eq_signal"] is not None:
+        parts.append(f"equals `{line.criterion['eq_signal']}`")
+    return "; ".join(parts) or "-"
+
+
+# The columns of a condition table, in order: (header, cell). A new column is one entry.
+CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
+    ("Condition", _condition_cell),
+    ("Producer", lambda line: f"`{line.criterion['producer']['scan']}`"),
+    ("Criterion", _criterion_cell),
+    ("Grade", lambda line: f"`{line.criterion['grade']}`"),
+    ("Counts", lambda line: "yes" if line.criterion["counts"] else "no, listed"),
+    ("Step gate", lambda line: _codes(line.level["step_gates"])),
+    ("Polarity", lambda line: line.level["polarity"]),
+    ("Links", _links_cell),
+    ("Next step", lambda line: _cell(line.criterion["fix"])),
+)
+
+
+def _table(lines: list[Line]) -> list[str]:
+    out = ["| " + " | ".join(h for h, _ in CONDITION_COLUMNS) + " |",
+           "|" + "---|" * len(CONDITION_COLUMNS)]
+    out += ["| " + " | ".join(cell(line) for _, cell in CONDITION_COLUMNS) + " |" for line in lines]
+    return out
+
+
+def _lines(catalog: Catalog) -> dict[str, list[Line]]:
+    """Each condition id to its table rows, in model order."""
+    out: dict[str, list[Line]] = {}
+    for row in catalog["rows"]:
+        for level in row["levels"]:
+            out[level["id"]] = [Line(row, level, c) for c in level["criteria"]]
+    return out
+
+
+def _tag_opening(tag: CatalogTag) -> list[str]:
+    """The lines that open a tag section, before its table."""
+    listed, shared = len(tag["conditions"]), len(tag["shared"])
+    if not listed:
+        return [f"Tag `{tag['id']}`. No condition carries this tag yet.", ""]
+    noun = "condition" if listed == 1 else "conditions"
+    if not shared:
+        share = "none shared with another tag"
+    elif shared == listed:
+        share = "all shared with another tag" if listed > 1 else "shared with another tag"
+    else:
+        share = f"{shared} shared with another tag"
+    return [f"Tag `{tag['id']}`: {listed} {noun}, {share}.", ""]
+
+
+def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str, str]) -> list[str]:
+    out = [f"### {tag['title']}", "", *_tag_opening(tag)]
+    rows = [line for cid in tag["listed"] for line in lines[cid]]
+    if rows:
+        out += [*_table(rows), ""]
+    elsewhere = [cid for cid in tag["conditions"] if cid not in tag["listed"]]
+    if elsewhere:
+        out += ["Also carries this tag, listed under its first tag: "
+                + ", ".join(f"`{cid}` ({tag_title(first[cid])})" for cid in elsewhere) + ".", ""]
+    return out
+
+
+def _by_tag(catalog: Catalog) -> list[str]:
+    conditions = [lv for r in catalog["rows"] for lv in r["levels"]]
+    multi = sum(len(lv["truth"]) > 1 for lv in conditions)
+    out = ["## Conditions by truth tag", "",
+           "Each condition carries one or more truth tags: the truth it keeps honest. A condition "
+           "holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. "
+           "A condition with several tags is listed under its first tag and named under the others "
+           f"as shared; it counts once. There are {len(conditions)} conditions, {multi} of them "
+           "with more than one tag.", "",
+           "| Tag | Conditions | Listed here | Shared |", "|---|---|---|---|"]
+    out += [f"| {t['title']} (`{t['id']}`) | {len(t['conditions'])} | {len(t['listed'])} | "
+            f"{len(t['shared'])} |" for t in catalog["tags"]]
+    out.append("")
+    lines = _lines(catalog)
+    first = {lv["id"]: lv["truth"][0] for lv in conditions if lv["truth"]}
+    for tag in catalog["tags"]:
+        out += _tag_section(tag, lines, first)
+    return out
+
+
+def _relations(catalog: Catalog) -> list[str]:
+    ids = [t["id"] for t in catalog["tags"]]
+    shared = {tuple(p["tags"]): len(p["conditions"]) for p in catalog["tag_pairs"]}
+    own = {t["id"]: len(t["conditions"]) for t in catalog["tags"]}
+    out = ["## How the tags relate", "", "### Shared conditions", "",
+           "How many conditions each pair of tags shares. The diagonal is the tag's own count.", "",
+           "| Tag | " + " | ".join(f"`{i}`" for i in ids) + " |", "|---|" + "---|" * len(ids)]
+    for a in ids:
+        cells = [str(own[a]) if a == b else str(shared.get((a, b), shared.get((b, a), 0))) for b in ids]
+        out.append(f"| `{a}` | " + " | ".join(cells) + " |")
+    out.append("")
+    for pair in catalog["tag_pairs"]:
+        out.append(f"- `{pair['tags'][0]}` and `{pair['tags'][1]}`: "
+                   + ", ".join(f"`{c}`" for c in pair["conditions"]) + ".")
+    if not catalog["tag_pairs"]:
+        out.append("No two tags share a condition yet.")
+    out += ["", "### Step gates", "",
+            "The autonomy Steps in order. A Step needs its threshold of met, counted conditions and "
+            "every gate, whatever the gate's grade; gates accumulate, so each Step keeps the gates "
+            "below it.", "",
+            "| Step | Name | Threshold | New gates | Gate covers | Tags |", "|---|---|---|---|---|---|"]
+    for step in catalog["steps"]:
+        new = [g for g in step["gates"] if g["id"] in step["added_gates"]]
+        out.append(f"| {step['step']} | {_cell(step['name'])} | {step['threshold']} | "
+                   f"{_codes(g['id'] for g in new)} | {_codes(c for g in new for c in g['conditions'])} | "
+                   f"{_codes(t for g in new for t in g['tags'])} |")
+    if not catalog["steps"]:
+        out.append("| - | The model defines no Steps | - | - | - | - |")
+    out += ["", "### Requires, guard and equality links", ""]
+    words = {"requires": "requires", "guarded_by": "is guarded by", "eq_signal": "compares with signal"}
+    out += [f"- `{link['source']}` {words[link['kind']]} `{link['target']}`." for link in catalog["links"]]
+    kinds = {link["kind"] for link in catalog["links"]}
+    absent = [none for kind, none in (("requires", "No condition requires another yet."),
+                                      ("guarded_by", "No condition is guarded yet."),
+                                      ("eq_signal", "No criterion compares two signals yet."))
+              if kind not in kinds]
+    if absent:
+        out += ["", " ".join(absent)] if catalog["links"] else [" ".join(absent)]
+    out.append("")
+    return out
+
+
 def _rows(catalog: Catalog) -> list[str]:
     lines = ["## Maturity-model rows", "",
-             "Each row holds conditions in order. A condition holds when all of its criteria "
-             "hold, and its key is `<row>.<n>:<signal>`. Truth names the truth tags the condition "
-             "keeps honest; a condition with several counts once.", ""]
+             "The rows the conditions come from. A row's level is the highest level whose "
+             "conditions, and every one below, hold.", "",
+             "| Row | Title | Scope | Aggregated by | Levels |", "|---|---|---|---|---|"]
     for row in catalog["rows"]:
-        lines += [f"### {row['title']}", "",
-                  f"Row `{row['id']}`, {row['scope']} scope, aggregated by `{row['aggregation']}`.", "",
-                  "| Condition | Truth | Criterion | Grade | Counts | Next step |", "|---|---|---|---|---|---|"]
-        for level in row["levels"]:
-            for c in level["criteria"]:
-                lines.append(
-                    f"| `{row['id']}.{level['level']}` {_cell(c['title'])} | "
-                    f"{', '.join(f'`{t}`' for t in level['truth'])} | {_cell(c['text'])} "
-                    f"(`{_cell(c['signal'] + ' ' + c['op'] + ' ' + json.dumps(c['value']))}`) | "
-                    f"`{c['grade']}` | "
-                    f"{'yes' if c['counts'] else 'no, listed'} | {_cell(c['fix'])} |")
-        lines.append("")
+        lines.append(f"| `{row['id']}` | {_cell(row['title'])} | {row['scope']} | `{row['aggregation']}` | "
+                     f"{_codes(lv['id'] for lv in row['levels'])} |")
+    lines.append("")
     return lines
 
 
@@ -148,7 +304,7 @@ def _collectors(catalog: Catalog) -> list[str]:
 
 def render_markdown(catalog: Catalog) -> str:
     """The catalog page, ending in one newline."""
-    lines = [HEADER, *_grades(catalog), *_rows(catalog),
+    lines = [HEADER, *_grades(catalog), *_by_tag(catalog), *_relations(catalog), *_rows(catalog),
              "## Scans", "", "Every scan name `assess_signals.py --scans` accepts, in run order.", ""]
     for scan in catalog["scans"]:
         lines += _scan(scan)

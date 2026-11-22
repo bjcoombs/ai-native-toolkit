@@ -21,7 +21,8 @@ import pytest
 from lib import check_manifest as cm
 from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
                          grade_of, render_json)
-from lib.catalog_md import render_markdown
+from lib.catalog_md import CONDITION_COLUMNS, render_markdown
+from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
 from lib.keyhole_signals import FINDING_ORDER
 from lib.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
@@ -174,7 +175,7 @@ def test_a_pipe_in_a_criterion_value_keeps_the_table_columns() -> None:
     row_lines = [line for line in render_markdown(build_catalog(model=model)).splitlines()
                  if "x.y in" in line]
     assert len(row_lines) == 1
-    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == 7  # six columns
+    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == len(CONDITION_COLUMNS) + 1
 
 
 def test_markdown_avoids_the_retired_vocabulary() -> None:
@@ -199,3 +200,123 @@ def test_gen_catalog_writes_and_checks(tmp_path: Path, monkeypatch: pytest.Monke
     assert json.loads(js.read_text(encoding="utf-8"))["catalog_version"] == CATALOG_VERSION
     assert b"\r\n" not in md.read_bytes()
     assert gen_catalog.main(["--check"]) == 0
+
+
+# ---------- the truth-tag frame (#870) ----------
+
+def _tagged_model() -> Any:
+    """The default model with a three-tag condition, a guard, an equality criterion and a hazard."""
+    model = copy.deepcopy(load_default_levels())
+    rows = {r["id"]: r for r in model["rows"]}
+    rows["layer-5-ci"]["levels"][0]["truth"] = ["behaviour", "contracts", "governance"]
+    rows["layer-6-coverage"]["levels"][1]["guarded_by"] = "layer-5-ci.1"
+    rows["doc-freshness"]["levels"][0]["criteria"].append(
+        {"signal": "structure.modularity_q", "op": "eq", "value": "structure.front_door_ratio",
+         "eq_signal": "structure.front_door_ratio"})
+    rows["layer-7-review"]["levels"][0]["polarity"] = "hazard"
+    return model
+
+
+def _section(text: str, heading: str) -> str:
+    start = text.index(f"\n{heading}\n")
+    nxt = re.search(r"\n#{2,3} ", text[start + len(heading) + 2:])
+    return text[start:start + len(heading) + 2 + nxt.start()] if nxt else text[start:]
+
+
+def test_every_condition_carries_its_frame_fields() -> None:
+    catalog = build_catalog()
+    model = load_default_levels()
+    for row, mrow in zip(catalog["rows"], model["rows"]):
+        for level, mlevel in zip(row["levels"], mrow["levels"]):
+            assert level["id"] == f"{row['id']}.{level['level']}"
+            assert level["truth"] == mlevel["truth"]
+            assert level["polarity"] == "positive" and level["guarded_by"] is None
+            assert level["requires"] == mlevel.get("requires", [])
+            assert level["grade"] == min((c["grade"] for c in level["criteria"]), key=GRADE_ORDER.index)
+            assert level["counts"] is counts(level["grade"])
+            for c in level["criteria"]:
+                assert c["producer"]["scan"] == c["signal"].split(".", 1)[0]
+                assert c["eq_signal"] is None
+    gated = {lv["id"]: lv["step_gates"] for r in catalog["rows"] for lv in r["levels"] if lv["step_gates"]}
+    assert gated == {"layer-0-instructions.1": ["instructions"], "layer-5-ci.1": ["ci_runs_tests"],
+                     "layer-6-coverage.1": ["coverage_gate"]}
+
+
+def test_tags_list_each_condition_once_under_its_first_tag() -> None:
+    catalog = build_catalog()
+    conditions = [lv for r in catalog["rows"] for lv in r["levels"]]
+    assert [t["id"] for t in catalog["tags"]] == list(TRUTH_TAGS)
+    assert [t["title"] for t in catalog["tags"]] == [TRUTH_TAG_TITLES[t] for t in TRUTH_TAGS]
+    listed = [cid for t in catalog["tags"] for cid in t["listed"]]
+    assert sorted(listed) == sorted(lv["id"] for lv in conditions)  # every condition, once
+    for tag in catalog["tags"]:
+        assert tag["conditions"] == [lv["id"] for lv in conditions if tag["id"] in lv["truth"]]
+        assert tag["shared"] == [lv["id"] for lv in conditions
+                                 if tag["id"] in lv["truth"] and len(lv["truth"]) > 1]
+    assert next(t for t in catalog["tags"] if t["id"] == "contracts")["conditions"] == []
+
+
+def test_tag_pairs_steps_and_links() -> None:
+    catalog = build_catalog(model=_tagged_model())
+    pairs = {tuple(p["tags"]): p["conditions"] for p in catalog["tag_pairs"]}
+    assert pairs[("behaviour", "contracts")] == ["layer-5-ci.1"]
+    assert pairs[("behaviour", "governance")] == ["layer-5-ci.1"]
+    assert pairs[("contracts", "governance")] == ["layer-5-ci.1"]
+    assert all(TRUTH_TAGS.index(a) < TRUTH_TAGS.index(b) for a, b in pairs)
+    steps = catalog["steps"]
+    assert [s["step"] for s in steps] == [1, 2, 3, 4]
+    assert [s["added_gates"] for s in steps] == [[], ["instructions"], ["ci_runs_tests"], ["coverage_gate"]]
+    ci = next(g for g in steps[2]["gates"] if g["id"] == "ci_runs_tests")
+    assert ci["conditions"] == ["layer-5-ci.1"] and ci["tags"] == ["behaviour", "contracts", "governance"]
+    links = catalog["links"]
+    assert {"kind": "guarded_by", "source": "layer-6-coverage.2", "target": "layer-5-ci.1"} in links
+    assert {"kind": "eq_signal", "source": "doc-freshness.1:structure.modularity_q",
+            "target": "structure.front_door_ratio"} in links
+    assert {"kind": "requires", "source": "layer-6-coverage.2", "target": "layer-5-ci.1"} in links
+    levels = {lv["id"]: lv for r in catalog["rows"] for lv in r["levels"]}
+    assert levels["layer-7-review.1"]["polarity"] == "hazard" and not levels["layer-7-review.1"]["counts"]
+    assert levels["layer-6-coverage.2"]["guarded_by"] == "layer-5-ci.1"
+    eq = levels["doc-freshness.1"]["criteria"][-1]
+    assert eq["eq_signal"] == "structure.front_door_ratio"
+
+
+def test_markdown_has_one_section_per_tag_and_each_criterion_once() -> None:
+    catalog = build_catalog(model=_tagged_model())
+    text = render_markdown(catalog)
+    for title in TRUTH_TAG_TITLES.values():
+        assert text.count(f"\n### {title}\n") == 1
+    keys = [c["key"] for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]]
+    table_rows = text.splitlines()
+    for row in catalog["rows"]:
+        for lv in row["levels"]:
+            mine = [line for line in table_rows if line.startswith(f"| `{lv['id']}` ")]
+            assert len(mine) == len(lv["criteria"]), lv["id"]  # one row per criterion, never repeated
+    assert len(keys) == len(set(keys))
+    behaviour, contracts = _section(text, "### Behaviour"), _section(text, "### Contracts")
+    assert "`layer-5-ci.1` CI runs your tests" in behaviour and "(shared with Contracts, Governance)" in behaviour
+    assert "| `layer-5-ci.1`" not in contracts and "`layer-5-ci.1` (Behaviour)" in contracts
+    assert "guarded by `layer-5-ci.1`" in _section(text, "### Behaviour")
+    assert "equals `structure.front_door_ratio`" in _section(text, "### Docs")
+    assert "| hazard |" in _section(text, "### Governance")
+    assert "`layer-6-coverage.2` is guarded by `layer-5-ci.1`." in text
+    assert "| 3 | Unattended agent PRs | 3 | `ci_runs_tests` | `layer-5-ci.1` |" in text
+    headers = [line for line in text.splitlines() if line.startswith("| Condition |")]
+    assert headers and all(line == headers[0] for line in headers)
+
+
+def test_markdown_tag_section_opens_on_its_own_line_and_degrades_honestly() -> None:
+    text = render_markdown(build_catalog())
+    contracts = _section(text, "### Contracts").strip().splitlines()
+    assert contracts[0] == "### Contracts" and contracts[1] == ""
+    assert contracts[2] == "Tag `contracts`. No condition carries this tag yet."
+    assert "No condition is guarded yet. No criterion compares two signals yet." in text
+    model = load_default_levels()
+    model.pop("steps")
+    for row in model["rows"]:
+        for lv in row["levels"]:
+            lv.pop("requires", None)
+            lv["truth"] = lv["truth"][:1]
+    bare = render_markdown(build_catalog(model=model))
+    assert "The model defines no Steps" in bare and "No two tags share a condition yet." in bare
+    assert "No condition requires another yet. No condition is guarded yet." in bare
+    assert "| Step gate |" in bare and "Also carries this tag" not in bare

@@ -2107,7 +2107,7 @@ Meridian's distance and closest-match tables.
 fragments), the default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
 1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
-row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
+row's levels, each one condition with its `id`, `truth`, `polarity`, `requires`, `guarded_by`, `step_gates`, `grade` (the weakest signal its criteria read, `eq_signal` included) and `counts`, and its criteria with the condition `key`, `producer` (`scan`, `collector`), `eq_signal`, plain-words `text`, `title` and `fix` from
 the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
 `collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
 `unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
@@ -2119,13 +2119,26 @@ them, not manifest order, since fragments group signals by collector) and `findi
 files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
 manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
-every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
+every relation a named key, so a later field (the #939 `why`) is an added key. `tags`, `tag_pairs`, `steps` and `links` come from `catalog_tags.py`. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
 
+**`catalog_tags.py`** *(#870)*
+The truth-tag frame of the catalog. `tags(conditions)`: one entry per `levels_fields.TRUTH_TAGS` tag
+(empty ones included) with its `title` (`TRUTH_TAG_TITLES`), the `conditions` carrying it, the
+`listed` ones whose first tag it is, and the `shared` ones carrying another tag too.
+`tag_pairs(conditions)`: each pair of tags with the conditions both carry. `steps(model, truth)`: the
+Steps in order, each gate with the conditions it covers and their tags, and `added_gates`.
+`gates_by_condition(steps)`: each gated condition to its gate ids. `links(model)`: every `requires`,
+`guarded_by` and `eq_signal` relation as `{kind, source, target}`.
+
 **`catalog_md.py`**
-`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, each row's
-conditions in plain words, each scan, the findings and the registry, linking `measures.json`
-relatively.
+`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, the conditions by
+truth tag (one `### <tag title>` section per tag: its opening lines from `_tag_opening`, then one
+table row per criterion of each condition listed under it; a condition sits under its first tag
+only and is named as shared under the others, so it appears once), how the tags relate (the
+shared-condition matrix, the Step gates, the links), the rows, each scan, the findings and the
+registry, linking `measures.json` relatively. The condition table's columns are
+`CONDITION_COLUMNS`, one `(header, cell)` entry each: a new column is one entry.
 
 **Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
 root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
