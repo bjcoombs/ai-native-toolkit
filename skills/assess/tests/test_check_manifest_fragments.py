@@ -245,3 +245,9 @@ def test_the_core_manifest_rejects_a_signal_moved_to_another_collector(tmp_path:
     assert error["path"] == "core/working_notes.toml"
     assert "core:agent_consistency.conflicts" in error["message"]
     assert "core/agent_consistency.toml" in error["message"]
+
+
+def test_a_block_two_collectors_publish_names_no_owner(tmp_path: Path) -> None:
+    both = SCAN_B.replace('publishes = ["scan_b"]', 'publishes = ["scan_b", "scan_a"]').replace(
+        '"scan_b.rows", "scan_a"', '"scan_a", "scan_b.rows"')
+    assert "FRAGMENT_OWNER" not in _codes(_layout(tmp_path, {"scan_a": SCAN_A, "scan_b": both}))

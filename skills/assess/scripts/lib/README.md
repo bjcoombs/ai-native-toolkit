@@ -1986,7 +1986,7 @@ the one a single file declares, and an error names the fragment
 `MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
 would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
 the file), `FRAGMENT_OWNER` (#994: an entry outside the fragment of its owner, naming the
-entry, its fragment and the expected one; an owner that does not resolve, or an id
+entry, its fragment and the expected one; an owner that does not resolve or that two fragments claim, or an id
 declared twice, is left to validation) and `FRAGMENTS_AND_ENTRIES`. An id declared in two
 fragments is `DUPLICATE_ID`, naming both files. A new collector adds its fragment and one line to `fragments`; a change
 to an existing check edits its own fragment only. `read_manifest(path)` returns the merged

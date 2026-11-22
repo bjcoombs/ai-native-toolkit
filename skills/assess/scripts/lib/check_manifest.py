@@ -612,30 +612,36 @@ def _owners(loaded: Sequence[tuple[str, list[Any]]],
     """``FRAGMENT_OWNER`` for each entry outside the fragment of its owning collector (#994):
     a signal's ``collector``, a condition's signal (its key after ``:``), a finding's first
     input (the collector that publishes that block, or the collector with that scan key).
-    An owner that cannot be resolved, or an id declared twice, is left to validation, which
+    An owner that cannot be resolved or is ambiguous (two fragments claim the same collector,
+    block, scan key or signal path), or an id declared twice, is left to validation, which
     names the bad reference or both declarations."""
     entries = [(label, e) for label, es in loaded for e in es if isinstance(e, dict)]
     seen = [e.get("id") for _, e in entries]
-    home: dict[str, str] = {}  # collector id, published block, scan key -> fragment label
+    home: dict[str, str | None] = {}  # collector id, block, scan key, signal path -> fragment
+
+    def place(key: str, label: str | None) -> None:
+        home[key] = label if home.get(key, label) == label else None
+
     for label, e in entries:
         if e.get("kind") == "collector" and isinstance(e.get("id"), str):
-            home[e["id"]] = label
-            home.setdefault("." + e["id"].split(".", 1)[-1], label)
+            place(e["id"], label)
+            place("." + e["id"].split(".", 1)[-1], label)
             for block in e.get("publishes", []) if isinstance(e.get("publishes"), list) else []:
-                home.setdefault(f"block:{block}", label)
-    signal_home = {e["path"]: home[e["collector"]] for _, e in entries
-                   if e.get("kind") == "signal" and isinstance(e.get("path"), str)
-                   and isinstance(e.get("collector"), str) and e["collector"] in home}
+                place(f"block:{block}", label)
+    for _, e in entries:
+        if e.get("kind") == "signal" and isinstance(e.get("path"), str) \
+                and isinstance(e.get("collector"), str):
+            place(f"signal:{e['path']}", home.get(e["collector"]))
     for label, e in entries:
         kind, expected = e.get("kind"), None
         if kind == "signal" and isinstance(e.get("collector"), str):
             expected = home.get(e["collector"])
         elif kind == "condition" and isinstance(e.get("key"), str) and ":" in e["key"]:
-            expected = signal_home.get(e["key"].split(":", 1)[1])
+            expected = home.get(f"signal:{e['key'].split(':', 1)[1]}")
         elif kind == "finding" and isinstance(e.get("inputs"), list) and e["inputs"] \
                 and isinstance(e["inputs"][0], str):
             first = e["inputs"][0].split(".")[0]
-            expected = home.get(f"block:{first}") or home.get(f".{first}")
+            expected = home[f"block:{first}"] if f"block:{first}" in home else home.get(f".{first}")
         if expected is not None and expected != label and seen.count(e.get("id")) == 1:
             out.append(finding(label, "FRAGMENT_OWNER",
                                f"{e.get('id')!r} belongs in {expected}, the fragment of its "
