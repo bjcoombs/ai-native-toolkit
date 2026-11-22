@@ -5,6 +5,7 @@ import json
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import jsonschema
 import pytest
@@ -36,7 +37,7 @@ V2 = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-2"
 # ci 1 reads a signal no stored scan holds
 V3 = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-3"')
             .replace('{ signal = "ci.required", op = "eq", value = true }',
-                     '{ signal = "ci_checks.test_or_lint_runs", op = "eq", value = true }'))
+                     '{ signal = "ci_checks.test_or_lint_configured", op = "eq", value = true }'))
 
 # repo -> (docs lines, docs grade, ci required); a None docs entry: docs block unavailable
 Spec = dict[str, tuple[int, str, bool] | tuple[None, None, bool]]
@@ -134,9 +135,39 @@ def test_signal_aliases_read_a_renamed_signal_under_its_new_name() -> None:
     assert fr.recount(stored, aliased, renamed, DATES[0], "fleet-data-1")["lines"] == []
     assert {line["direction"] for line in fr.recount(stored, plain, renamed, DATES[0], "fleet-data-1")["lines"]} \
         == {fr.NOT_MEASURED}
-    assert fr.SIGNAL_ALIASES == {}  # pure renames land with #783
     assert fr.aliased({"ci": {"enforced": False, "required": True}}, {"ci.required": "ci.enforced"}) \
         == {"ci": {"enforced": False, "required": True}}  # never overwrites the new name
+
+
+def test_the_783_config_only_renames_are_aliased_so_a_stored_scan_reads_the_new_names() -> None:
+    assert fr.SIGNAL_ALIASES == {"ci_checks.test_or_lint_runs": "ci_checks.test_or_lint_configured",
+                                 "coverage_gate.enforced": "coverage_gate.configured"}
+    stored = {"ci_checks": {"available": True, "test_or_lint_runs": True},
+              "coverage_gate": {"available": True, "enforced": False}}
+    read = fr.aliased(stored)
+    assert read["ci_checks"]["test_or_lint_configured"] is True
+    assert read["coverage_gate"]["configured"] is False
+    assert stored == {"ci_checks": {"available": True, "test_or_lint_runs": True},
+                      "coverage_gate": {"available": True, "enforced": False}}  # input untouched
+
+
+def test_a_model_reading_a_renamed_signal_gives_no_recount_over_scans_stored_under_the_old_name() -> None:
+    old = _model(LEVELS.replace('{ signal = "ci.required", op = "eq", value = true }',
+                                '{ signal = "coverage_gate.enforced", op = "eq", value = true }'))
+    new = _model(LEVELS.replace('version = "fleet-data-1"', 'version = "fleet-data-2"')
+                 .replace('{ signal = "ci.required", op = "eq", value = true }',
+                          '{ signal = "coverage_gate.configured", op = "eq", value = true }'))
+    rows = _rows(BASE)
+    for row in rows:  # a scan stored before #783: the gate under its old name
+        scans: dict[str, Any] = row["scans"]  # type: ignore[assignment]
+        scans["coverage_gate"] = {"available": True, "enforced": scans["ci"]["required"]}
+    stored = build_fleet_data(_stamp(DATES[0], old), rows, old,
+                              build_trees(sorted(BASE), empty_map(), {}, {}), privacy=Privacy())
+    rescored = fr.rescore(stored, rows, new, KEY)
+    assert rescored is not None
+    assert fr.recount(stored, rescored, new, DATES[0], "fleet-data-1")["lines"] == []
+    plain = fr.rescore(stored, rows, new, KEY, {})
+    assert plain is not None and fr.recount(stored, plain, new, DATES[0], "fleet-data-1")["lines"]
 
 
 # --- the history reader ---------------------------------------------------------
@@ -288,7 +319,7 @@ def test_recount_unknown_to_known_and_known_to_unknown_are_attributed_to_the_rul
     down = {(ln["repo"], ln["row"]): ln for ln in (_doc(org, V3, spec)["recount"] or {"lines": []})["lines"]}
     line = down[("grp/sub/a", "ci")]
     assert (line["direction"], line["cause"], line["signal"]) == (
-        fr.NOT_MEASURED, "Not measured under the new rules", "ci_checks.test_or_lint_runs")
+        fr.NOT_MEASURED, "Not measured under the new rules", "ci_checks.test_or_lint_configured")
     assert line["text"].startswith("`grp/sub/a` CI gate: level 1 -> unknown under maturity model fleet-data-3")
     assert {ln["attributed_to"] for ln in [*up.values(), *down.values()]} == {fr.RULES}
 

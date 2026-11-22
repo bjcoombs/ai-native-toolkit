@@ -1,9 +1,9 @@
 """Contract suite for the coverage-gate detector.
 
-``detect_coverage_gate`` reports whether a line-coverage threshold is enforced,
+``detect_coverage_gate`` reports whether a line-coverage threshold is configured,
 where (file and 1-based line) and the threshold exactly as written. These tests
 pin one small fixture per detected form, the absent case, and the honesty rules:
-a measured-but-ungated repo reads ``enforced: false``, a JaCoCo ratio is never
+a measured-but-ungated repo reads ``configured: false``, a JaCoCo ratio is never
 rescaled, and ``fail_under = 0`` is reported but gates nothing.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ def _only_gate(root: Path) -> dict:
 
 def test_no_config_reports_not_enforced(tmp_path: Path) -> None:
     block = detect_coverage_gate(tmp_path)
-    assert block["enforced"] is False
+    assert block["configured"] is False
     assert block["gates"] == []
     assert any("Go" in form for form in block["not_detected"])
 
@@ -45,7 +45,7 @@ def test_measurement_alone_is_not_a_gate(tmp_path: Path) -> None:
     _write(tmp_path, "pyproject.toml",
            "[tool.coverage.run]\nbranch = true\n[tool.coverage.report]\nshow_missing = true\n")
     block = detect_coverage_gate(tmp_path)
-    assert block["enforced"] is False
+    assert block["configured"] is False
     assert block["gates"] == []
 
 
@@ -59,7 +59,7 @@ def test_pyproject_fail_under(tmp_path: Path) -> None:
                     "form": "[tool.coverage.report] fail_under",
                     "threshold": 85.0, "unit": "percent", "threshold_percent": 85.0,
                     "metric": "lines"}
-    assert detect_coverage_gate(tmp_path)["enforced"] is True
+    assert detect_coverage_gate(tmp_path)["configured"] is True
 
 
 def test_section_header_with_trailing_comment(tmp_path: Path) -> None:
@@ -102,7 +102,7 @@ def test_fail_under_zero_is_reported_but_not_enforced(tmp_path: Path) -> None:
     _write(tmp_path, ".coveragerc", "[report]\nfail_under = 0\n")
     block = detect_coverage_gate(tmp_path)
     assert block["gates"][0]["threshold"] == 0.0
-    assert block["enforced"] is False
+    assert block["configured"] is False
 
 
 def test_ci_workflow_cov_fail_under(tmp_path: Path) -> None:
@@ -181,10 +181,10 @@ def test_unread_jest_threshold_is_reported_but_not_enforced(tmp_path: Path) -> N
     _write(tmp_path, "jest.config.js", "module.exports = { coverageThreshold: {} };\n")
     block = detect_coverage_gate(tmp_path)
     assert block["gates"][0]["threshold"] is None
-    assert block["enforced"] is False
+    assert block["configured"] is False
 
     _write(tmp_path, ".nycrc", '{ "check-coverage": true }\n')
-    assert detect_coverage_gate(tmp_path)["enforced"] is True
+    assert detect_coverage_gate(tmp_path)["configured"] is True
 
 
 def test_vitest_thresholds(tmp_path: Path) -> None:
@@ -317,7 +317,7 @@ def test_templated_threshold_is_a_gate_with_null_threshold(tmp_path: Path) -> No
         ("Makefile", 2, "pytest-cov", None),
         ("Makefile", 3, "pytest-cov", None),
     ]
-    assert block["enforced"] is True
+    assert block["configured"] is True
 
 
 def test_single_line_c8_config_is_counted_once(tmp_path: Path) -> None:
@@ -514,7 +514,7 @@ def test_go_or_rust_with_no_readable_gate_is_not_measured(
         _write(tmp_path, rel, text)
     block = detect_coverage_gate(tmp_path)
     assert block["gates"] == []
-    assert block["enforced"] is False
+    assert block["configured"] is False
     assert block["threshold_meets_minimum"] is expected
     assert block["unmeasured_reason"] == reason
 
@@ -561,7 +561,7 @@ def test_zero_testcoverage_total_gates_nothing(tmp_path: Path) -> None:
     _write(tmp_path, "go.mod", _GO_MOD)
     _write(tmp_path, ".testcoverage.yml", _testcoverage("  total: 0\n"))
     block = detect_coverage_gate(tmp_path)
-    assert (block["enforced"], block["threshold_meets_minimum"]) == (False, False)
+    assert (block["configured"], block["threshold_meets_minimum"]) == (False, False)
 
 
 @pytest.mark.parametrize(("run", "expected"), [
@@ -589,7 +589,7 @@ def test_templated_rust_threshold_still_gates(tmp_path: Path) -> None:
     _write(tmp_path, "Cargo.toml", _CARGO)
     _write(tmp_path, _CI, _workflow("cargo tarpaulin --fail-under $COV_MIN"))
     block = detect_coverage_gate(tmp_path)
-    assert (block["enforced"], block["threshold_meets_minimum"]) == (True, None)
+    assert (block["configured"], block["threshold_meets_minimum"]) == (True, None)
     assert block["unmeasured_reason"] is None
 
 

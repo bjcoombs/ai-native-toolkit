@@ -16,9 +16,11 @@ key does not join to a scanned row under this run's key function (another salt),
 stored row holds no scans while ok: the caller then passes the entry over.
 
 **Signal aliases.** ``SIGNAL_ALIASES`` maps an old signal path to its new name for pure
-renames (#783 fills it). Before evaluation a stored scan that holds the old path and not the
-new one is read under the new name too, so a rename causes no Recount line. A change of
-meaning is never aliased (#774).
+renames. #783 renamed two signals that read configuration text but were named as if
+something ran: ``ci_checks.test_or_lint_runs`` is ``ci_checks.test_or_lint_configured``
+and ``coverage_gate.enforced`` is ``coverage_gate.configured``. Before evaluation a stored
+scan that holds the old path and not the new one is read under the new name too, so a
+rename causes no Recount line. A change of meaning is never aliased (#774).
 
 **Recount.** Shown on the first run under a new maturity-model version: the newest earlier
 entry's stored cells (its scans under its own rules) against the same entry re-scored (the
@@ -64,8 +66,12 @@ from lib.fleet_maturity import SCOPE
 from lib.fleet_next_steps import code, text
 from lib.levels import MaturityModel
 
-# Pure renames only: old signal path -> new signal path. Empty until #783 renames a signal.
-SIGNAL_ALIASES: Mapping[str, str] = {}
+# Pure renames only: old signal path -> new signal path. #783 renamed the config-only
+# signals whose names claimed a run: each reads configuration text at HEAD, meaning unchanged.
+SIGNAL_ALIASES: Mapping[str, str] = {
+    "ci_checks.test_or_lint_runs": "ci_checks.test_or_lint_configured",
+    "coverage_gate.enforced": "coverage_gate.configured",
+}
 
 RULES = "rules"
 DOWN, UP, NOW_MEASURED, NOT_MEASURED = "down", "up", "now_measured", "not_measured"
