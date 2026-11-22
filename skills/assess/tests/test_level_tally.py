@@ -373,6 +373,8 @@ def test_an_uncommitted_change_keeps_the_step_of_the_commit(estate, tmp_path):
     assert dirty["commits"] == {"ci2/r": {"head_sha": head, "dirty": True}}
     row = json.loads((tmp_path / "dirty" / "repos.jsonl").read_text(encoding="utf-8"))
     assert (row["head_sha"], row["dirty"]) == (head, True)
+    clean_row = json.loads((tmp_path / "clean" / "repos.jsonl").read_text(encoding="utf-8"))
+    assert {**row, "dirty": False} == clean_row  # every scan block reads the commit, not the copy
     assert not (repo / "CLAUDE.md").exists()
 
 
