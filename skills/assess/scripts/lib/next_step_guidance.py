@@ -453,7 +453,10 @@ _MEASURE_HINTS = {
                  "source at all. An import graph with no edges leaves "
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
                  "that never import each other have no community structure to measure.",
-    "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)"),
+    "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)")
+                     + " With no file scored (`files_scored` 0, a docs-only repository) "
+                     "the file size is not measured (`no_scored_files`): a percentile of "
+                     "no files says nothing.",
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",

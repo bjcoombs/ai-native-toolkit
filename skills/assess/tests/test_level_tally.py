@@ -174,6 +174,55 @@ def test_thin_history_is_not_measured_not_unmet():
     assert _state(result, "lint.1") == ("not_measured", "degenerate_history")
 
 
+P95 = "stats_summary.loc.p95"
+
+
+@pytest.mark.parametrize("stats", [
+    {"files_scored": 0, "loc": {"p50": 0.0, "p95": 0.0, "max": 0.0}},  # the headless block
+    {"files_scored": 0, "loc": {}},  # a full run whose treemap scored nothing
+])
+def test_a_statistic_over_no_files_is_not_measured_in_both_run_kinds(stats):
+    """#906 A: a p95 of no files is 0 in fleet and absent in /assess; both read no_scored_files."""
+    model = _model(_row("size", [{"signal": P95, "op": "lte", "value": 500}]))
+    assert _state(lt.level_result(model, {"stats_summary": stats}), "size.1") == (
+        "not_measured", "no_scored_files")
+
+
+def test_a_scored_set_or_an_unavailable_block_keeps_the_usual_rules():
+    model = _model(_row("size", [{"signal": P95, "op": "lte", "value": 500}]))
+    scored = {"stats_summary": {"files_scored": 3, "loc": {"p95": 3.0}}}
+    big = {"stats_summary": {"files_scored": 3, "loc": {"p95": 900.0}}}
+    no_lizard = {"stats_summary": {"available": False, "reason": "no_lizard: lizard not installed"}}
+    assert _state(lt.level_result(model, scored), "size.1") == ("met", None)
+    assert _state(lt.level_result(model, big), "size.1") == ("unmet", None)
+    assert _state(lt.level_result(model, no_lizard), "size.1") == ("not_measured", "no_lizard")
+
+
+def _default_state(signals: dict[str, Any], cid: str) -> tuple[str, str | None]:
+    return _state(lt.level_result(lt.default_model(), signals), cid)
+
+
+def test_a_tangled_graph_does_not_count_front_door_imports():
+    """#906 C: three Go packages a->b->c and a->c have modularity 0, so level 2 waits on level 1."""
+    tangled = {"structure": {"modularity_q": 0.0, "cross_package_edges": 3, "front_door_ratio": 1.0}}
+    assert _default_state(tangled, "layer-2-design.1") == ("unmet", None)
+    assert _default_state(tangled, "layer-2-design.2") == ("unmet", "requires:layer-2-design.1")
+    modular = {"structure": {"modularity_q": 0.5, "cross_package_edges": 3, "front_door_ratio": 1.0}}
+    assert _default_state(modular, "layer-2-design.2") == ("met", None)
+
+
+def test_file_size_counts_only_beside_a_boundary_map():
+    small = {"stats_summary": {"files_scored": 4, "loc": {"p95": 40.0}}}
+    no_map = {**small, "structure_drift": {"available": False, "reason": "no_ownership_map: none"}}
+    assert _default_state(no_map, "layer-4-architecture.2") == (
+        "not_measured", "requires:layer-4-architecture.1")
+    mapped = {**small, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    assert _default_state(mapped, "layer-4-architecture.2") == ("met", None)
+    empty = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
+             "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    assert _default_state(empty, "layer-4-architecture.2") == ("not_measured", "no_scored_files")
+
+
 def test_a_real_unmet_criterion_outweighs_an_unknown_one():
     model = _model(_row("x", [_eq(INSTR), {"signal": DOC, "op": "lte", "value": 50}]))
     result = lt.level_result(model, {"layer_grades": {"instruction_file_present": False}})
