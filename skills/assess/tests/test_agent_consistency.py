@@ -283,3 +283,34 @@ def test_a_prose_mention_still_points_a_text_system(tmp_path: Path) -> None:
     block = scan_agent_consistency(root)
     assert {f["path"]: f["link"] for f in block["files"]}[".windsurfrules"] == "pointer"
     assert block["consistent"] is True
+
+
+def test_the_pointer_step_names_the_primary_file_over_a_rule_file(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS,
+                            ".claude/rules/style.md": "Keep functions short.\n",
+                            "CLAUDE.md": "Run `npm test` before pushing.\n"})
+    step = scan_agent_consistency(root)["next_steps"][0]
+    assert (step["system"], step["path"], step["pointer"], step["symlink"]) == (
+        "claude_code", "CLAUDE.md", "@AGENTS.md", "ln -sf AGENTS.md CLAUDE.md")
+
+
+def test_a_system_with_only_rule_files_still_gets_a_rule_file_step(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS,
+                            ".claude/rules/style.md": "Keep functions short.\n"})
+    step = scan_agent_consistency(root)["next_steps"][0]
+    assert (step["path"], step["pointer"], step["symlink"]) == (
+        ".claude/rules/style.md", "@../../AGENTS.md", None)
+
+
+def test_a_heading_ordinal_is_no_threshold(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": "## 2. Coverage\n\nKeep it high.\n",
+                            "CLAUDE.md": "Coverage stays at 90.\n"})
+    assert scan_agent_consistency(root)["conflicts"] == 0
+
+
+def test_heading_and_list_ordinals_are_stripped_before_numbers() -> None:
+    assert thresholds("## 2. Coverage\n") == {}
+    assert thresholds("### 3.1 Coverage floor 90\n") == {"coverage": {90.0}}
+    assert thresholds("1. Coverage at 85\n2) Complexity under 15\n") == {
+        "coverage": {85.0}, "complexity": {15.0}}
+    assert thresholds("Coverage 2. Keep 90.\n") == {"coverage": {2.0, 90.0}}

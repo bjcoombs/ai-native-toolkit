@@ -26,13 +26,15 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    ``command``: a test or lint command (``check_command.is_check_command`` /
    ``is_lint_command``, including a bare inline ```pytest```) one system names
    and another does not; ``threshold``: two systems whose numbers on lines
-   naming ``coverage``, ``complexity`` or ``line length`` share none.
+   naming ``coverage``, ``complexity`` or ``line length`` share none (a
+   leading heading or list ordinal, ``## 2. Coverage``, is no number).
 
 ``conflicts`` (divergences, the level 1 signal of the ``agent-consistency``
 row) and ``unlinked`` (systems not linked, level 2) are null, and
 ``applicable`` false, when fewer than two systems are present: one system has
 nothing to agree with, so the row reads not measured, never 0. Each unlinked
-system gets a ``next_steps`` entry with the exact pointer line for its tool
+system gets a ``next_steps`` entry, on its own single-file location (``CLAUDE.md``)
+before a supplementary rule file, with the exact pointer line for its tool
 (``@AGENTS.md`` for an import-capable tool, ``#[[file:AGENTS.md]]`` for Kiro,
 ``read: AGENTS.md`` in ``.aider.conf.yml`` for Aider, a markdown pointer line
 otherwise) and, for the system's own single-file location only, a symlink
@@ -63,6 +65,9 @@ THRESHOLD_KEYWORDS: dict[str, re.Pattern[str]] = {
     "line_length": re.compile(r"\bline[ -]length\b|\bmax-line-length\b", re.IGNORECASE),
 }
 _NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?!\w|\.\d)")
+# A heading or list ordinal (``## 2. Coverage``, ``### 3.1 Coverage``, ``1. ``,
+# ``2) ``) numbers the line, it states no threshold (issue #960).
+_ORDINAL = re.compile(r"^\s*(?:#{1,6}[ \t]+\d+(?:\.\d+)*[.)]?|\d+[.)])(?=\s|$)")
 _INLINE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 _FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 NOT_READ = [
@@ -148,10 +153,14 @@ def check_commands(text: str) -> set[str]:
 
 
 def thresholds(text: str) -> dict[str, set[float]]:
-    """Numbers stated on lines naming a threshold keyword, per keyword."""
+    """Numbers stated on lines naming a threshold keyword, per keyword.
+
+    A leading heading or list ordinal is dropped first, so ``## 2. Coverage``
+    states no number.
+    """
     out: dict[str, set[float]] = {}
     for line in text.splitlines():
-        numbers = {float(n) for n in _NUMBER.findall(line)}
+        numbers = {float(n) for n in _NUMBER.findall(_ORDINAL.sub("", line, count=1))}
         if not numbers:
             continue
         for key, pattern in THRESHOLD_KEYWORDS.items():
@@ -288,8 +297,11 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
     unlinked = [s for s in systems if not linked[s]] if applicable else []
     steps: list[ConsistencyStep] = []
     for system in unlinked:
-        path = next(r["path"] for r in rows
-                    if r["system"] == system and r["link"] not in LINKED)
+        # The system's own single-file location (CLAUDE.md) takes the pointer
+        # before a supplementary rule file (.claude/rules/x.md) that sorts first.
+        candidates = [r["path"] for r in rows
+                      if r["system"] == system and r["link"] not in LINKED]
+        path = next((c for c in candidates if _primary(system, c)), candidates[0])
         assert canon is not None  # two or more systems hold at least one file
         steps.append({
             "system": system,

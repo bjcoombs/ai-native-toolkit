@@ -458,4 +458,10 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
+# Unreleased (bumped once by the 3.0.0 release PR):
+# - agent_consistency drops a leading heading or list ordinal before reading
+#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
+#   conflict, so agent-consistency level 1 can move from unmet to met. A
+#   next step for an unlinked system names its primary file (CLAUDE.md) before
+#   a supplementary rule file.
 ASSESS_METHOD_VERSION = 37
