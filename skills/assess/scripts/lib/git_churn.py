@@ -6,10 +6,6 @@ two things: a per-file commit count over a window, and a way to pick a window
 that gives a visible gradient. This module is the single source for both so
 churn is computed one way, not three (PRD: "do not reinvent churn").
 
-Pure subprocess + git. No heavy dependencies, so it imports cleanly in the
-deterministic core (which runs with only networkx) as well as in the treemap
-scripts (which also pull in lizard/matplotlib/squarify).
-
 Shared git-churn machinery: per-file commit counts over a configurable window, plus
 `git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
 code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed

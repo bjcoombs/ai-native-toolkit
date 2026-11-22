@@ -1,7 +1,7 @@
 """Layer 1 inputs: runtime legibility / liveness signals.
 
-Two tiers, both deterministic and best-effort -- they degrade to "not assessed"
-rather than ever blocking the assessment.
+Three tiers (the capability-offer tier is in the list below), all deterministic and
+best-effort -- they degrade to "not assessed" rather than ever blocking the assessment.
 
 **Dead-code tier (cheap, traditional).** Flags *intra-repo* candidate-dead code
 (unused exports / unreferenced symbols) using a language-appropriate tool when

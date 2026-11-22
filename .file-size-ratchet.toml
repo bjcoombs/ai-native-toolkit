@@ -53,6 +53,10 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 1493
 reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
 
+[ceilings."skills/assess/scripts/lib/check_manifest.py"]
+lines = 835
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+
 [ceilings."skills/assess/scripts/lib/coverage_gate.py"]
 lines = 874
 reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
@@ -60,10 +64,6 @@ reason = "#981: the module's lib/README.md entry moved into its docstring (docum
 [ceilings."skills/assess/scripts/lib/doc_graph.py"]
 lines = 1171
 reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet); raised to 1171 by #981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
-
-[ceilings."skills/assess/scripts/lib/git_churn.py"]
-lines = 801
-reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
 lines = 1614
@@ -74,10 +74,6 @@ lines = 806
 reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 
 [ceilings."skills/assess/scripts/lib/promissory_markers.py"]
-lines = 812
-reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
-
-[ceilings."skills/assess/scripts/lib/run_context_types.py"]
 lines = 812
 reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
 

@@ -2,9 +2,9 @@
 
 Coverage says a line *ran*; it never says an assertion would *fail* if that line
 were wrong. This package gathers the signals that distinguish a suite which
-holds the code to account from one that merely visits it. Three tiers, cheapest
-first, each degrading to "not assessed" rather than ever blocking the
-assessment:
+holds the code to account from one that merely visits it. Two tiers and the
+step that merges them, each tier degrading to "not assessed" rather than ever
+blocking the assessment:
 
 **Mutation tier (decisive, expensive, opt-in)** - ``mutation.py``. Config
 detection plus a bounded, opt-in mutation run and survivor aggregation.
