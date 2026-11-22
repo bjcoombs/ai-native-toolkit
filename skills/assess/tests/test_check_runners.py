@@ -71,7 +71,7 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "docker run -v a:b img ./scripts/deploy.sh", "./gradlew testClasses",
     "./gradlew compileTestJava", "./gradlew assembleAndroidTest",
     "./gradlew assembleDebugAndroidTest", "./gradlew bundleDebugAndroidTest",
-    "./gradlew installDebugAndroidTest", "nx run app:build:test", "docker run -d img pytest", "docker compose run -d app pytest",
+    "./gradlew installDebugAndroidTest", "./gradlew testFixturesJar", "./gradlew :lib:testFixturesClasses", "nx run app:build:test", "docker run -d img pytest", "docker compose run -d app pytest",
     "docker run --entrypoint echo img pytest", "npm ci", "uv sync --extra test",
     "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",

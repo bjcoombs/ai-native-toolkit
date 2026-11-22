@@ -369,9 +369,9 @@ _GRADLE = frozenset({"gradle", "gradlew", "./gradlew"})
 # A Gradle test task: ``test``, ``testDebugUnitTest``, ``:app:testReleaseUnitTest``,
 # ``connectedAndroidTest`` (Android variants and instrumented tests).
 # Build-only tasks that compile, package or install the tests without running them
-# (``assembleAndroidTest``, ``compileTestJava``, ``testClasses``) are not.
+# (``assembleAndroidTest``, ``compileTestJava``, ``testClasses``, ``testFixturesJar``) are not.
 _GRADLE_TEST = re.compile(
-    r"^(?!compile|assemble|bundle|package|install)(?:test[A-Z0-9]\w*|\w*Test)$")
+    r"^(?!compile|assemble|bundle|package|install|testFixtures)(?:test[A-Z0-9]\w*|\w*Test)$")
 # xcodebuild options that take a value (``-scheme App``); its actions are bare words.
 _XCODE_FLAGS = frozenset({
     "-scheme", "-project", "-workspace", "-destination", "-configuration", "-sdk", "-target",
