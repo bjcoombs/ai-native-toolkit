@@ -52,6 +52,29 @@ is already a short token (``on``, ``off``, ``full``) is kept, any other
 (ruleset or push-rule names) becomes ``set``; reasons are dropped. Evaluation
 always sees the full values. Rows are sorted by group with sorted keys, so a
 rerun over the same inputs is byte-identical.
+
+The group roll-up behind `groups.jsonl` (issue #568). `roll_up` groups `FleetRow`s by
+`group` (sorted) and `group_row` builds each `GroupRow`: repository counts, distinct
+shared CI sources and marketplaces through `shared_tooling.distinct_ids` (scanned rows
+only; null with no available block, `shared_tooling_repos` counting the evidence), the agent-building class counts (`fleet_agent_building.group_counts`, #689; `NotRequired`, absent in older rows), the joined settings, and each maturity model row's level through `levels.evaluate` with its
+`top_level` (the row's number of levels, #684, so a history entry reads as a share of top
+level without the model file; additive and `NotRequired`, absent in older rows), with
+no threshold config of its own. `load_settings` reads ghreport settings fragments
+(#565) from a file, an array or a directory (a render dir's `settings/`), keyed by
+`scope`, and raises `SettingsError` on a directory with no `*.json` fragment file;
+`settings_for` joins a group to the exact scope or the nearest ancestor;
+`normalise_settings` keeps each `{value, reason}` or, for `unknown`, turns it into
+`{available: false, reason}` so `levels.resolve_signal` reads it unavailable and the
+org row is unknown, never 0; a fragment's `teams` list (#703, read by `fleet_units`) is not a
+setting (`NOT_SETTINGS`). `reduce_settings` is the counts-only form (token values,
+else `set`; a value's reason `null`, an unavailable one's `unknown`). Maturity model data follows
+`level_signals`' namespaces: `repo_signals` is a
+repository's `scans` map (a failed repository's is empty, so it is an unknown
+repository, never a passing one) and `settings_signals` the normalised settings plus
+the fragment's `scope` and `provider`. The CLI loads the maturity model with
+`level_signals.signal_path_validator()`.
+`write_groups` writes atomically with sorted keys.
+Since #697 an `unknown` level row carries an optional `floor` (the confirmed low bound, when at least 1) and `full_run_only` (`full_run_only_signals`: missing signals whose block is unavailable for a `signals.FULL_RUN_ONLY_REASONS` code in every repository missing them, leaving out `signals.PLATFORM_SCANS` blocks, which `fleet --platform` measures: `platform_signals` names those for next steps' `PLATFORM_HINT`, including a `signals.PLATFORM_ONLY_SCANS` block absent from the row, #779); both keys are absent otherwise, `status` stays `level` or `unknown`, and `fleet_group_version` is unchanged.
 """
 from __future__ import annotations
 

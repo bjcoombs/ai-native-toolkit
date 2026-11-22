@@ -3,6 +3,13 @@
 Pure data with no imports from ``lib``, so the tally engine (``lib/level_tally.py``)
 and the run context's ``level`` entry can read it without reaching the scanners.
 ``lib.level_signals`` re-exports every name and documents the classes and rulings.
+
+The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
+to its set's count and the code when that count is 0, read by `levels.py`: `no_scored_files`,
+`no_manifests`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
+`tests/test_level_tally.py`.
 """
 from __future__ import annotations
 

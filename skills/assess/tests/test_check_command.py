@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 from lib.check_command import (
-    is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint, script_path)
+    is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint)
+from lib.ci_scripts import script_path
 
 
 @pytest.mark.parametrize(("text", "expected"), [

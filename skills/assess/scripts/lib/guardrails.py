@@ -55,6 +55,43 @@ built from a template and the gate's own figures, never from file text.
 
 ``stated_pct`` is the share of gates stated, as a percentage; null when no gate
 is found, so the maturity-model row reads unknown rather than a false 0.
+
+Guardrails stated (#767): does an instruction file tell an agent what the gates
+enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate, excludes)` runs from the
+scan table (`guardrails`, post-offers stage, headless `registered`) and returns the
+`guardrails` block (`GuardrailsBlock`): `{available, gates, enforced, stated, unstated,
+stated_pct, instruction_files_read, not_read}`. Each gate (`Guardrail`) is `{kind, tool,
+rule, threshold, file, line, stated, stated_in, snippet}`, one per configuring file:
+`complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, ruff's
+default 10 when unset, in `pyproject.toml`, `ruff.toml` or `.ruff.toml`; flake8
+`max-complexity` or `max_complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (per file
+of the `coverage_gate` block, its counted gate with the highest `threshold_percent`, through
+`coverage_gate.gates_something`, never re-parsed), `pre_commit` (a root
+`.pre-commit-config.yaml` with at least one `- id:` hook, one gate whatever its hook
+count) and `type_strictness` (mypy `strict = true` in `[tool.mypy]`, `mypy.ini`,
+`.mypy.ini` or `setup.cfg`). Ruff, flake8 and mypy configs are read wherever they sit
+(`config_files`, through `coverage_gate.walk_named`: the coverage scan's bounded walk with
+the built-in and user excludes), so each package's own `pyproject.toml` is a gate of its
+own and a monorepo's package gates are counted beside its coverage floor. Every kind counts
+one gate per configuring file. Within a directory only the config the tool reads counts
+(`_applied`): the first, in the tool's own order, that configures it (ruff `.ruff.toml`,
+`ruff.toml`, a `pyproject.toml` with `[tool.ruff]`; flake8 the first of `setup.cfg`, `tox.ini`,
+`.flake8` with `[flake8]`; mypy `mypy.ini`, `.mypy.ini`, a `pyproject.toml` with `[tool.mypy]`,
+`setup.cfg` with `[mypy]`). A gate is stated (`states`) when one line of a graded instruction file
+(the keys of `instruction_files`, an aliased file read once) names its rule and its
+threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
+`coverage` plus the floor (with no readable floor, `coverage` beside `fail_under`,
+`threshold`, `floor` or `minimum`), `pre-commit`, or `mypy` plus `strict`. The local
+command is not required. An unstated gate carries `snippet`, a one-line sentence built
+from a template and the gate's own figures (never from file text) naming the rule, the
+threshold, the configuring file and the command that checks it. `stated_pct` is
+`stated / enforced` as a percentage, one decimal; null with no gate, so the default
+model's `guardrails-stated` row (level 1 at 50, level 2 at 100; `head_structure`, graded
+measured) reads unknown, never 0. `not_read` names the gate forms not read yet (eslint
+`complexity`, TypeScript `strict`, file-size ratchets, architecture tests, required CI
+checks and branch protection, sign-off rules). Counts-only keeps `kind`, `tool`, `rule`,
+the numbers, `file` and `stated_in` as paths, and drops `snippet` (and `not_read` to its
+length). Stdlib plus `lib.coverage_gate`. Tests: `tests/test_guardrails.py`.
 """
 from __future__ import annotations
 

@@ -61,6 +61,38 @@ A risky file we know nothing about is surfaced, not silently blessed as clean.
 
 Inward-only imports: stdlib and `lib.sibling_tests`; imported by the orchestrator
 (`assess_core.py`), never importing one itself.
+
+Cross-joins four inputs - the hotspot risk band (position in
+`complexity_stats.top_hotspots`), the parsed coverage report, the
+`test_pressure` cheap heuristics, and an optional `repo_root` - into one ranked
+focus list. `compute_test_focus` classifies each top-10 hot file
+(`no_covering_test` / `covered_but_hollow` / `covered_clean` /
+`unknown_no_coverage` / `unsupported` / `sibling_test_only`), filters out
+`covered_clean`, and ranks by risk band then signal severity (less tested ranks
+higher: `no_covering_test` > `covered_but_hollow` > `unsupported` >
+`sibling_test_only`). Test-file evidence comes from `sibling_tests.has_sibling_test`,
+so the focus table and the hotspot pages agree. With a `repo_root`, a file with a
+test file but no coverage record - no report at all, or a partial report that
+omits it - is `sibling_test_only` (test file present, coverage unmeasured; never
+a covered bucket); a file with no report and no sibling or parallel-tree test
+file is `unsupported`; both
+carry action `measure_coverage`. A report that records a 0 rate, or omits a file
+with no test file, gives `no_covering_test`. Without `repo_root` a no-report file
+is `unknown_no_coverage`. It never raises and records `coverage_present`. The
+only file I/O is the sibling-test probe (one repository index plus existence
+checks), and only under `repo_root`; the index is built on first use, or passed
+in as `index` (`assess_core` hands over the one its hotspot pages built); imports no
+orchestrator. This block is the SINGLE source both the report focus table and
+the mutation offer consume. The mutation scope is `mutation_scope(block)`: the
+entries with test evidence (`covered_but_hollow`, `sibling_test_only`) in ranked
+order, minus any hot file that is itself a test (`sibling_tests.is_test_path`),
+so neither a file with no test nor a test file heads the mutation pass and comes
+back as an `untrusted_hotspot` for tests that do not exist, and limited to
+`MUTABLE_SUFFIXES` (the suffixes a mutation tool handles), so a credited `.sh`
+does not push a mutable file out of the capped pass; `assess_core --opt-in-mutation`
+and the SKILL.md Step 2d `jq` both apply it. Add cases in
+`tests/test_test_focus.py` alongside any change to a classification, ranking,
+or scope rule.
 """
 from __future__ import annotations
 

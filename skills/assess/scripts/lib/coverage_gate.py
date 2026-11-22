@@ -44,6 +44,8 @@ reads unknown, never 0.
 
 Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule and
 ``lib.assess_config.is_user_excluded``; never an orchestrator.
+
+Full reference: lib/docs/coverage_gate.md.
 """
 from __future__ import annotations
 

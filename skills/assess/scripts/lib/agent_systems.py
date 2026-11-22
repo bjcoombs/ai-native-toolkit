@@ -37,6 +37,25 @@ Also classified here: the root ``.cursorrules`` (Cursor) and
 ``.github/copilot-instructions.md`` (Copilot), always loaded. Those two are
 graded by ``lib.instruction_files`` as root locations, so discovery keeps them
 for the consistency check only. Pure: no file access beyond the text passed in.
+
+The agent systems table (#768): `SYSTEMS` holds one `AgentSystem` (`id`, `name`,
+`locations`, `pointer` style: `import`, `kiro_include`, `text` or `aider_read`) per
+system `/assess` reads instruction files for: `agents_md`, `claude_code`, `codex`,
+`gemini`, `copilot`, `cursor`, `windsurf`, `cline`, `aider`, `junie`, `amazon_q`, `kiro`,
+`continue`, `zed`, in that order (`SYSTEM_ORDER`). The single list for any reader of
+non-Claude agent configuration (#846). `match_system_file(rel, text, aider_reads)`
+classifies a root-located file into a `SystemMatch` (system, kind, globs,
+always_loaded, body) by each tool's documented scope: `.windsurfrules` and
+`.windsurf/rules/*.md` (`trigger` other than `always_on` is not always loaded; `globs`
+for `glob`), `.clinerules` as a file or a directory of `.md` / `.txt` (`paths` scopes a
+rule), `CONVENTIONS.md` (always loaded only when `.aider.conf.yml` names it under
+`read:`, since Aider loads nothing by default), `.junie/guidelines.md`,
+`.amazonq/rules/**/*.md`, `.kiro/steering/*.md` (`inclusion: fileMatch` with
+`fileMatchPattern`, or `manual`, is not always loaded), `.continue/rules/*.md`
+(`alwaysApply`, else always loaded only with no `globs`), `.rules` (Zed), plus the root
+`.cursorrules` and `.github/copilot-instructions.md`. `might_match` is discovery's cheap
+prefilter. `aider_read_files(config_text)` reads `read:` as a scalar, an inline list or a
+block list. Pure. Tests: `tests/test_agent_consistency.py`.
 """
 from __future__ import annotations
 

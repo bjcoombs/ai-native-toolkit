@@ -150,6 +150,7 @@ def test_dart_scanner_run_boundaries_keep_the_token_rules(
 # past the 1s budget; no_cover pauses tracing for this test so the budget stays
 # exact instead of being widened to fit the tracer.
 @pytest.mark.no_cover
+@pytest.mark.cpu_budget
 @pytest.mark.parametrize("text", [
     "void f() {" + "{" * 200_000,
     "void f() {" * 100_000,
@@ -164,9 +165,10 @@ def test_dart_scanner_run_boundaries_keep_the_token_rules(
 def test_dart_scanner_pathological_input_is_fast(text: str) -> None:
     """Each pathological input scans in under 1 s, the fastest of 3 runs by CPU time.
 
-    CPU time, not wall time: parallel workers (xdist on the Windows CI job)
-    stretch the wall clock without making the scanner slower. The fastest of 3
-    drops first-run and scheduler noise. The 1 s bound itself is unchanged.
+    CPU time, not wall time, and the fastest of 3, to drop first-run and
+    scheduler noise. CPU time still doubles when a busy xdist worker shares the
+    core, so ``cpu_budget`` keeps this test in the serial pass (conftest.py,
+    #930). The 1 s bound itself is unchanged.
     """
     def cpu_seconds() -> float:
         start = time.process_time()

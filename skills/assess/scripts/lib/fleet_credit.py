@@ -20,6 +20,13 @@ model, before the diagrams, so the report opens on credit and the next step:
 The section opens with a line starting ``In place:`` (``lib/vocabulary.IN_PLACE``, #743)
 that says what is already earned or held before any next step. Every line is phrased as
 credit or as a next step. Deterministic; no date.
+
+`credit_section` renders `report.md`'s first section, "What changed and who earned it",
+from `achievements.json`, opening with an `In place:` line (#743): this run's credit lines by kind (capped per kind), each unit's
+nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
+distances (in levels, or in share for a share target), plus a `### Recount` subsection
+after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
+first). `fleet_diagrams.report_markdown` places it before the diagrams.
 """
 from __future__ import annotations
 

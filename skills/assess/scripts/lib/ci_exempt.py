@@ -15,6 +15,18 @@ exempt position runs on past its failure, so a later top-level ``exit 0`` masks 
 An ``until`` condition is not read as exempt: ``until pytest; do sleep 5; done`` loops
 until the check passes, so it never reaches the ``exit 0`` on a failure unless the loop
 breaks out (a known limit: a ``break`` in the loop body is not read).
+
+Which segments of one shell statement errexit does not stop on (issue #936), read by
+`ci_masking` on a GitHub `run:` body with errexit on, per the bash manual's `set -e`
+text. `exempt_segments(statement, pipefail)` takes `split_statements` output and returns
+the indices of the segments in every pipeline before the final `&&` / `||`, of a `!`
+pipeline, and, with pipefail off, of the last pipeline but its last command;
+`condition_flags(statements)` marks the statements of an `if` / `elif` / `while`
+condition, up to its `then` / `do` (an `until` condition loops until the check passes,
+so it is not read as exempt); `pipefail_after` reads `set -o pipefail` / `set -euo
+pipefail` / `set +o pipefail`; `shell_pipefail` reads a custom shell's flags;
+`unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
+`{` or `<<EOF` inside quotes. Tests: `tests/test_ci_false_credit.py`.
 """
 from __future__ import annotations
 
