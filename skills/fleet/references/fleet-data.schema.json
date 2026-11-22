@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/fleet-data.schema.json",
   "title": "fleet data bundle",
-  "description": "fleet-data.json written by skills/fleet/scripts/fleet.py: the run stamp, the maturity model rows, the ownership and system unit trees with rolled-up levels, and per repository its units, web URL and per-row level, value and reason. Generated from lib/fleet_data.py by lib/fleet_data_schema.py.",
+  "description": "fleet-data.json written by skills/fleet/scripts/fleet.py: the run stamp, the maturity model rows, the ownership and system unit trees with rolled-up levels, and per repository its units, web URL, per-row level, value and reason, and its Step, next Step, tally and owner exclusions as level.json gives them, with each unit's Step roll-up. Generated from lib/fleet_data.py by lib/fleet_data_schema.py.",
   "type": "object",
   "properties": {
     "fleet_data_version": {
@@ -232,6 +232,97 @@
                     ],
                     "additionalProperties": false
                   }
+                },
+                "step": {
+                  "type": "object",
+                  "properties": {
+                    "measured": {
+                      "type": "integer"
+                    },
+                    "repos": {
+                      "type": "integer"
+                    },
+                    "lowest_step": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "next_step": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "step": {
+                              "type": "integer"
+                            },
+                            "threshold": {
+                              "type": "integer"
+                            },
+                            "held": {
+                              "type": "integer"
+                            },
+                            "gates": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "gate": {
+                                    "type": "string"
+                                  },
+                                  "row": {
+                                    "type": "string"
+                                  },
+                                  "level": {
+                                    "type": "integer"
+                                  },
+                                  "held": {
+                                    "type": "integer"
+                                  },
+                                  "not_measured": {
+                                    "type": "integer"
+                                  },
+                                  "excluded": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "excluded",
+                                  "gate",
+                                  "held",
+                                  "level",
+                                  "not_measured",
+                                  "row"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "below_threshold": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "below_threshold",
+                            "gates",
+                            "held",
+                            "step",
+                            "threshold"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "lowest_step",
+                    "measured",
+                    "next_step",
+                    "repos"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -244,6 +335,7 @@
                 "parent",
                 "repos",
                 "source",
+                "step",
                 "view"
               ],
               "additionalProperties": false
@@ -380,16 +472,171 @@
               ],
               "additionalProperties": false
             }
+          },
+          "step": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer"
+                  },
+                  "threshold": {
+                    "type": "integer"
+                  },
+                  "blockers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "gate",
+                            "threshold"
+                          ]
+                        },
+                        "gate": {
+                          "type": "string"
+                        },
+                        "condition": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "enum": [
+                            "met",
+                            "unmet",
+                            "not_applicable",
+                            "not_measured",
+                            "declined"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "threshold": {
+                          "type": "integer"
+                        },
+                        "met": {
+                          "type": "integer"
+                        },
+                        "disposition": {
+                          "enum": [
+                            "excluded_by_owner"
+                          ]
+                        },
+                        "exclusion_kind": {
+                          "enum": [
+                            "not_applicable",
+                            "measured_elsewhere",
+                            "tool_unsupported",
+                            "false_positive",
+                            "other"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "blockers",
+                  "step",
+                  "threshold"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tally": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "met": {
+                    "type": "integer"
+                  },
+                  "measured": {
+                    "type": "integer"
+                  },
+                  "not_measured": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "measured",
+                  "met",
+                  "not_measured"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "not_applicable",
+                    "measured_elsewhere",
+                    "tool_unsupported",
+                    "false_positive",
+                    "other"
+                  ]
+                },
+                "source": {
+                  "enum": [
+                    "repo"
+                  ]
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "reason",
+                "source"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
           "active",
+          "exclusions",
           "key",
+          "next_step",
           "owner_count",
           "owners",
           "reason",
           "rows",
           "status",
+          "step",
+          "tally",
           "units",
           "web_url"
         ],

@@ -2805,6 +2805,43 @@
       ]
     },
     {
+      "name": "owner_exclusions",
+      "title": "Owner exclusions",
+      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.",
+      "collector": "core.owner_exclusions",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "owner_exclusions.disclosures": "drop",
+          "owner_exclusions.exclusions.excluded_at": "token",
+          "owner_exclusions.exclusions.excluded_by": "drop",
+          "owner_exclusions.exclusions.id": "token",
+          "owner_exclusions.exclusions.kind": "token",
+          "owner_exclusions.exclusions.reason": "drop",
+          "owner_exclusions.exclusions.source": "token",
+          "owner_exclusions.exclusions.version": "token",
+          "owner_exclusions.skipped.id": "drop",
+          "owner_exclusions.skipped.problem": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
       "name": "diff",
       "title": "Run header: diff",
       "summary": "",

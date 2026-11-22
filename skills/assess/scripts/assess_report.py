@@ -569,9 +569,10 @@ def _render_loc_split(loc: dict[str, Any]) -> str:
 def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None = None) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
-    Pure: takes the loaded context and the repo name, returns the report string.
-    ``assess_dir`` (the CLI passes ``<repo>/.assess``) lets the diagram sections say
-    ``Not drawn:`` for a diagram whose file is not there instead of linking it.
+    Takes the loaded context and the repo name, returns the report string. Pure when
+    ``assess_dir`` is None; with it (the CLI passes ``<repo>/.assess``), it checks each
+    drawn diagram's file on disk and says ``Not drawn:`` for one that is not there
+    instead of linking it.
     ``Template.substitute`` is strict - a missing key raises, which surfaces a
     template/data drift at the seam rather than silently emitting ``$placeholder``.
     """
