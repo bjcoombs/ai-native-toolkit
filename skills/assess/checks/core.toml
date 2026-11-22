@@ -1148,6 +1148,7 @@ unknown_reasons = [
   { code = "no_ownership_map", means = "The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read.", next_step = "Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it." },
 ]
   [entries.privacy]
+  "structure_drift.reason" = "reason"
   "structure_drift.tier_0.empty_ownership_patterns.pattern" = "drop"
   "structure_drift.tier_0.empty_ownership_patterns.declared_in" = "drop"
   "structure_drift.tier_0.empty_ownership_patterns.owners" = "drop"

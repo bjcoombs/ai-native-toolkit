@@ -18,6 +18,7 @@ from assess_core_helpers import (
     _write_min_stats,
 )
 from lib import context_blocks, core_scans, headless_layers
+from lib.counts_only import counts_only
 
 
 def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:
@@ -442,6 +443,8 @@ def test_structure_drift_block_is_the_no_ownership_map_marker_without_one(git_re
         "available": False, "reason": "no_ownership_map: no supported ownership or boundary map"}
     layer_4 = next(c for c in ctx["level"]["conditions"] if c["id"] == "layer-4-architecture.1")
     assert (layer_4["state"], layer_4["reason"]) == ("not_measured", "no_ownership_map")
+    # counts-only keeps the marker's code, never the sentence
+    assert counts_only(ctx)["structure_drift"] == {"available": False, "reason": "no_ownership_map"}
 
 
 def test_structure_drift_block_omitted_when_the_scan_raises(git_repo, monkeypatch) -> None:

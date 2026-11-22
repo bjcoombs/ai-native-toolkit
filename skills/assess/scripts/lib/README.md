@@ -2137,7 +2137,7 @@ one set of flags. `counts_only_scans` applies the filter to the `scans` map of a
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
 reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
-allow-list `import_graph.STRUCTURE_REASON_CODES` names it (so a path or a name never leaks), the code of
+allow-list `import_graph.STRUCTURE_REASON_CODES` or `reason_codes.BLOCK_REASON_CODES` (`no_ownership_map`, the `structure_drift.reason` marker, #908) names it (so a path or a name never leaks), the code of
 a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
 so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
 Tests: `tests/test_counts_only_reason.py`. `render_doc`
@@ -2424,7 +2424,7 @@ without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 
 **`reason_codes.py`**
 `reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
-(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map`, or the code a known sentence maps to), moved out of `counts_only.py`,
 which re-exports both, so the tally reads the same codes as counts-only output (#744).
 Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
