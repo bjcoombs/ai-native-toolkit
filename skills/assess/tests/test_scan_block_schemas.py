@@ -19,7 +19,7 @@ from lib.delivery import DeliveryBlock  # noqa: E402
 from lib.fleet_schema import build_schema as build_row_schema  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.signals import collect  # noqa: E402
-from lib.signals_schema import build_schema, described_block  # noqa: E402
+from lib.signals_schema import REASON_KEPT, build_schema, described_block  # noqa: E402
 
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "delivery": DeliveryBlock}
 
@@ -65,9 +65,22 @@ def test_each_block_describes_only_its_own_reason_codes() -> None:
         for code in ("no_grimp", "no_networkx", "grimp_failed", "no_python_packages",
                      "no_import_graph_<language>", "invalid_import_graph", "no_source_files"):
             assert code in structure
-        assert "keeps the code only" in structure
+        assert structure.endswith(REASON_KEPT)
         assert "no_grimp" not in " ".join(_reason_texts(scans["additionalProperties"]))
-    assert "drops it" in _reason_texts(described_block("ai_usage"))[-1]
+    assert _reason_texts(described_block("ai_usage"))[-1].endswith(REASON_KEPT)
+
+
+@pytest.mark.parametrize(("name", "reason", "code"), [
+    ("ai_usage", "git is not installed", "unavailable"),
+    ("ci_checks", "no_ci: no CI file", "no_ci"),
+    ("delivery", "no_access: HTTP 403", "no_access"),
+    ("structure", "no_grimp: grimp not installed; static structure not assessed", "no_grimp"),
+])
+def test_the_reason_text_matches_the_counts_only_reduction(name: str, reason: str, code: str) -> None:
+    """Every block's reason survives counts-only as its leading code, as REASON_KEPT says."""
+    kept = counts_only_scans({name: {"available": False, "reason": reason}})[name]
+    assert kept == {"available": False, "reason": code}
+    jsonschema.validate(kept, described_block(name))
 
 
 def _git(repo: Path, *args: str) -> None:

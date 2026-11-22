@@ -32,7 +32,6 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lib.check_manifest import core_manifest, reason_codes  # noqa: E402
-from lib.counts_only_rules import DROP, REASON, TOKEN, classify  # noqa: E402
 from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.scan_registry import ScanSpec  # noqa: E402
@@ -43,12 +42,11 @@ SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/referen
 
 _SCALARS: dict[Any, str] = {str: "string", int: "integer", bool: "boolean", type(None): "null"}
 
-# How a counts-only document keeps a block's ``reason`` (its ``counts_only_rules`` class).
-_REASON_KEPT = {
-    REASON: "A counts-only document keeps the code only.",
-    DROP: "A counts-only document drops it.",
-    TOKEN: "A counts-only document keeps it while it is a short token.",
-}
+# How a counts-only document keeps an unavailable block's ``reason``: every block, as
+# ``counts_only.counts_only_scans`` reduces it with ``reason_code`` (the leading code
+# before a colon, else ``unavailable``); the sentence never survives.
+REASON_KEPT = ("A counts-only document keeps only the leading code, or unavailable when the "
+               "reason has no code.")
 
 
 def reason_description(block: str | None = None) -> str:
@@ -56,18 +54,18 @@ def reason_description(block: str | None = None) -> str:
 
     A block whose collector declares reason codes (``unknown_reasons`` carried in
     ``reason``) lists them with what each means; ``None`` is the shared text of every
-    other block. So one block's codes never appear under another block.
+    other block. So one block's codes never appear under another block. Every text ends
+    with :data:`REASON_KEPT`: the signals document's counts-only reduction is the same for
+    every block, whatever the run-context privacy class of ``<block>.reason``.
     """
     if block is None:
         return ("Why the block is unavailable: a sentence, or 'code: sentence' for a block "
-                "whose codes are listed under its own entry. A counts-only document keeps at "
-                "most the code.")
+                f"whose codes are listed under its own entry. {REASON_KEPT}")
     codes = reason_codes(core_manifest(), block)
     text = ("'code: sentence'. The codes name the missing piece: "
             + "; ".join(f"{r['code']} ({r['means'][:1].lower()}{r['means'][1:].rstrip('.')})" for r in codes) + "."
             if codes else "Why the block is unavailable.")
-    kept = _REASON_KEPT.get(classify(f"{block}.reason") or DROP, "")
-    return f"{text} {kept}".strip()
+    return f"{text} {REASON_KEPT}"
 
 
 def scan_block(block: str | None = None) -> JsonDict:

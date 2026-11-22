@@ -961,8 +961,9 @@ blocks, and an `if`/`then` rule that an `"available": false` block carries a str
 also name and describe their fields (`described_block`), loosely: no required field, and a
 string list may be its counts-only length. Each block's `reason` description is generated
 from the check manifest (`reason_description`, #795): the codes its collector declares in
-`unknown_reasons` (carried in `reason`, for that block) with what each means, and how
-counts-only output keeps the field (its `counts_only_rules` class). `described_blocks`
+`unknown_reasons` (carried in `reason`, for that block) with what each means, then
+`REASON_KEPT`: a counts-only signals document keeps an unavailable block's reason as its
+leading code, or `unavailable` (`counts_only.reason_code`), for every block. `described_blocks`
 adds every known block that declares codes (`structure`), so the structure codes
 (`no_grimp` and the rest) are described under `structure` only and the shared text of
 every other block names no code. `fleet_schema` uses the same blocks for `repos.schema.json`.
