@@ -36,7 +36,7 @@ By tag: behaviour 3 of 4 · structure 4 of 5 · agent_context 2 of 2 · governan
 - **The inputs.** The headline is computed by the deterministic core from the run's `level` block and is never set by the LLM. That block depends on the commit, the maturity-model version, the committed config, and what this run could measure (for example, whether it had GitHub access). Two runs at one commit with the same access print the same headline. Changes are attributed by cause: repo, rules or scanner (https://github.com/bjcoombs/ai-native-toolkit/issues/771, https://github.com/bjcoombs/ai-native-toolkit/issues/774).
 - **There is no "Level N", no 0-8 score, no mean and no band name.** The "X / 8" headline was retired in https://github.com/bjcoombs/ai-native-toolkit/pull/894. The `/fleet` roll-up shows, per unit and `team` row, the lowest level plus "N of M measured" (https://github.com/bjcoombs/ai-native-toolkit/issues/772). There N and M count **repositories**, not conditions: M is the unit's repositories and N those measured on that row, so an unknown or failed repository stays in M and is never read as 0 (`skills/fleet/references/fleet-data.md`, Roll-ups). It is a different number from the per-repository tally above. Diagrams that still average repository levels are open in https://github.com/bjcoombs/ai-native-toolkit/issues/806.
 
-- **The badge summary** is `Step 3 · 9 of 12 in place`; the `log.md` readiness line is the same text.
+- **The badge summary** is `Step 3 · 9 in place of 12 measured`; the `log.md` readiness line is the same text.
 
 ## Steps
 

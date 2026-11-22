@@ -54,7 +54,7 @@ def test_three_lines_step_next_and_tally():
         "Practices in place: 4 of 6 measured, 0 verified · 3 not measured (needs a full run: 1, no remote: 2)"
         " · model m-1",
     ]
-    assert h["summary"] == "Step 3 · 4 of 6 in place"
+    assert h["summary"] == "Step 3 · 4 in place of 6 measured"
     assert h["markdown"].startswith("**Step 3 · Unattended agent PRs · contracts in place**\n\n")
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
 
@@ -218,7 +218,7 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     assert first["headline"] == second["headline"]
     assert badge1["message"] == badge2["message"]
     level, head = second["level"], second["headline"]
-    assert badge2["message"] == f"Step {level['step']} · {level['tally']['met']} of {level['tally']['measured']} in place"
+    assert badge2["message"] == f"Step {level['step']} · {level['tally']['met']} in place of {level['tally']['measured']} measured"
     assert head["lines"][0].startswith(f"Step {level['step']} · ") and "contracts in place" in head["lines"][0]
     assert head["lines"][1].startswith(f"Next: Step {level['next_step']['step']} · ")
     assert f"{level['tally']['not_measured']} not measured" in head["lines"][2]
@@ -278,10 +278,10 @@ def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
 
     ctx = _run(ci2, "2026-11-22")
     assess = ci2 / ".assess"
-    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 of 1 in place")
-    assert "- **Readiness:** Step 9 · 1 of 1 in place" in (assess / "log.md").read_text(encoding="utf-8")
+    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 in place of 1 measured")
+    assert "- **Readiness:** Step 9 · 1 in place of 1 measured" in (assess / "log.md").read_text(encoding="utf-8")
     assert verify_log_chain(assess) == (True, None)
-    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 of 1 in place")
+    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 in place of 1 measured")
     assert not refresh_log_readiness(assess, None, "x")
     assert not refresh_log_readiness(assess, "no-such-run", "x")
 
@@ -330,7 +330,7 @@ def test_tally_line_shows_the_verified_share_of_n():
     assert h["lines"][0] == ("Practices in place: 2 of 2 measured, 1 verified · 1 not measured "
                              "(no remote: 1) · model t-1")
     assert h["verified"] == 1
-    assert h["summary"] == "2 of 2 in place"
+    assert h["summary"] == "2 in place of 2 measured"
 
 
 def test_strip_counts_a_multi_tagged_condition_in_each_cell_and_once_in_n():

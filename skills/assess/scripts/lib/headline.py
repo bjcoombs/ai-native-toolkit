@@ -15,10 +15,10 @@ and #844 fix:
    alone reach the threshold the line names only them; otherwise it adds "and N
    more practices are in place";
 3. the tally: ``Practices in place: N of M measured, V verified · K not measured
-   (reasons) · model V``. N is ``tally.met``, M is ``tally.measured`` (measured
+   (reasons) · model <version>``. N is ``tally.met``, M is ``tally.measured`` (measured
    conditions only), V the share of N graded ``verified`` (CI-executed or
    platform-measured; the rest of N is graded ``measured``),
-   K is ``tally.not_measured`` with each reason code and its count, V the
+   K is ``tally.not_measured`` with each reason code and its count, <version> the
    maturity-model version. When the owner excluded conditions (#910), the line
    adds "E not applicable (excluded by owner)" before the model, where E counts
    every condition that left the denominator that way, the excluded ones and those
@@ -33,7 +33,7 @@ and #844 fix:
    non-zero. A result with no tagged condition has no strip line.
 
 ``summary`` is the one-line form the badge and the ``log.md`` entry carry
-(``Step 3 · 4 of 4 in place``). ``verified`` and ``tags`` (``TagCell`` per cell)
+(``Step 3 · 4 in place of 4 measured``). ``verified`` and ``tags`` (``TagCell`` per cell)
 hold the same numbers for counts-only readers, which drop the text lines. A run whose ``level`` block is missing or
 unavailable gets ``available: false`` and a headline that says the Step was not
 measured, never a guessed Step.
@@ -50,7 +50,7 @@ condition>`"; a not-measured gate says
 so with its reason, and a gate whose condition the owner excluded says "excluded by
 owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
 Step holds while its gates hold), "Practices in place: N of M measured, V verified ·
-K not measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes;
+K not measured (reason: count, ...) · model <version>" (`REASON_WORDS` words the reason codes;
 V counts the met, counted conditions graded `verified`), with "E not applicable
 (excluded by owner)" before the model when the level lists exclusions, E counting the
 excluded conditions and those whose `requires` names one (#910), then the per-tag strip
@@ -58,7 +58,7 @@ excluded conditions and those whose `requires` names one (#910), then the per-ta
 the model's `truth`, badges only when non-zero, no line when no condition is tagged).
 Also `markdown` (the lines, the first bold, pasted verbatim by the report and
 `assess_report.py`), `summary` (the badge message and the `log.md` readiness line,
-"Step 3 · 4 of 4 in place"), `verified` and `tags` (`TagCell` per strip cell), `step`,
+"Step 3 · 4 in place of 4 measured"), `verified` and `tags` (`TagCell` per strip cell), `step`,
 `next_step`, `levels_version` and `headline_version`. A missing or degraded `level` block gives
 `available: false` and "Step not measured", never a guessed Step; `as_headline`
 returns that form for a degraded `headline` block. Shape: `Headline` in
@@ -263,7 +263,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     if cells:
         lines.append(_strip_line(cells))
     nxt = level["next_step"]
-    counts = f"{tally['met']} of {tally['measured']} in place"
+    counts = f"{tally['met']} in place of {tally['measured']} measured"
     summary = f"Step {step} · {counts}" if step is not None else counts
     markdown = "\n\n".join([f"**{lines[0]}**", *lines[1:]])
     return {"headline_version": HEADLINE_VERSION, "available": True,
