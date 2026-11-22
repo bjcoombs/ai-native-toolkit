@@ -212,10 +212,14 @@ constant each.
 # not_measured), the autonomy Step and the next Step's blockers
 # (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
 # unchanged.
-# 1.35.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# 1.35.0: run-context.json derived_findings rows gain an optional reviewed list of
+# {path, completed_sha, note} (issue #721): the paths a done review in the
+# committed .assess/actions.json clears. actions.json gains an optional completed
+# list for done entries that left the Top 3. Additive.
+# 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.35.0"
+ARTIFACT_SCHEMA_VERSION = "1.36.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -343,10 +347,15 @@ ARTIFACT_SCHEMA_VERSION = "1.35.0"
 #     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
 #     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
 #     level 1 as not measured (threshold_meets_minimum null) where it read 0.
-# 30: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+# 30: a self_referential_tests path whose done review is recorded in the committed
+#     .assess/actions.json (status done, completed_sha an ancestor of HEAD, the path
+#     in files) and untouched since that commit leaves the attention list,
+#     prescribed_actions and the keyhole summary (issue #721), so the Top 3 can move.
+#     It stays in derived_findings with a reviewed note; a later change re-flags it.
+# 31: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
 #     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
 #     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
 #     or person never does. The same matcher serves ``delivery`` and the GitLab
 #     note classifier (``gitlab_notes``) under --platform, so a confirmed account
 #     moves their agent counts too. Without the section nothing changes.
-ASSESS_METHOD_VERSION = 30
+ASSESS_METHOD_VERSION = 31
