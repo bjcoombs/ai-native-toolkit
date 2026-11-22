@@ -14,6 +14,7 @@ access, so a scan that only classifies commands stays offline.
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
@@ -49,7 +50,7 @@ def is_check_name(name: str, words: frozenset[str] = CHECK_WORDS) -> bool:
     return any(part in words for part in re.split(r"[:_./-]", name.lower()))
 
 
-def _positionals(args: list[str]) -> list[str]:
+def _positionals(args: list[str], valued: frozenset[str] = _VALUED_FLAGS) -> list[str]:
     """Non-flag words, with the value of a known valued flag (``--with pytest``) dropped."""
     out: list[str] = []
     skip = False
@@ -57,17 +58,17 @@ def _positionals(args: list[str]) -> list[str]:
         if skip:
             skip = False
         elif word.startswith("-"):
-            skip = word in _VALUED_FLAGS
+            skip = word in valued
         else:
             out.append(word)
     return out
 
 
-def _drop_leading_flags(args: list[str]) -> list[str]:
+def _drop_leading_flags(args: list[str], valued: frozenset[str] = _VALUED_FLAGS) -> list[str]:
     """``args`` from the first positional on: the program ``uv run --with x`` runs."""
     i = 0
     while i < len(args) and args[i].startswith("-"):
-        i += 2 if args[i] in _VALUED_FLAGS else 1
+        i += 2 if args[i] in valued else 1
     return args[i:]
 
 
@@ -119,14 +120,16 @@ def _check_target(words: list[str], names: frozenset[str] = CHECK_WORDS,
 
 
 def is_check_command(text: str) -> bool:
-    """A command an agent runs to check its work: a check target of a modelled runner or script."""
-    words = command_words(text)
-    if not words:
-        return False
-    head = words[0]
-    if head not in RUNNERS and not head.startswith("./"):
-        return False
-    return _check_target(words)
+    """A command an agent runs to check its work: a check target of a modelled runner or
+    script, a test runner (``dotnet test``, ``vendor/bin/phpunit``, ``turbo run test``) or a
+    wrapper around one (``docker compose run app pytest``, ``bundle exec rspec``)."""
+    return check_verdict(text) is True
+
+
+def may_check(text: str) -> bool:
+    """A target whose recipe is not read, so it may run a check (#920): ``make build``,
+    ``task foo``, a bare ``make``, ``hatch run foo``, ``docker compose run app``."""
+    return check_verdict(text) is None
 
 
 def is_lint_command(text: str) -> bool:
@@ -137,12 +140,17 @@ def is_lint_command(text: str) -> bool:
     ``uv sync --group lint`` (installs) never count.
     """
     words = command_words(text)
-    if not words:
-        return False
+    return bool(words) and _lint_words(words)
+
+
+def _lint_words(words: list[str]) -> bool:
+    """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
-    if head not in RUNNERS and not head.startswith("./") and head not in LINT_PROGRAMS:
-        return False
-    return _check_target(words, LINT_WORDS, LINT_PROGRAMS)
+    if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
+            words, LINT_WORDS, LINT_PROGRAMS):
+        return True
+    program = _wrapped(words) or _hatch_run(words)
+    return program is not None and bool(program) and _lint_words(program)
 
 
 # A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
@@ -166,9 +174,10 @@ def _program(words: list[str]) -> list[str]:
 
 
 def _task_target(words: list[str], names: frozenset[str]) -> bool:
-    """A go-task target (``task lint``): ``task`` is not a modelled runner, so it is read here."""
-    pos = _positionals(words[1:])
-    return words[0] == "task" and bool(pos) and is_check_name(pos[0], names)
+    """A go-task, turbo or nx target (``task lint``, ``turbo run lint``, ``nx affected -t lint``):
+    these are not modelled runners, so they are read here."""
+    return words[0] in ("task", "turbo", "nx") and any(
+        is_check_name(t, names) for t in _targets(words[0], words[1:]))
 
 
 # Type checkers Layer 3 credits as lint runs (#782), local to ``is_lint_run`` so
@@ -251,6 +260,9 @@ def is_lint_run(text: str) -> bool:
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
     meaning: ``lib.ci_checks.test_or_lint_configured`` and Layer 5 read it unchanged.
     """
+    outer = _outer_wrapper(command_words(text))
+    if outer:   # docker compose run app ruff check ., bundle exec rubocop: the program runs
+        return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or _INFO_FLAGS.intersection(words):
@@ -280,6 +292,9 @@ def may_lint(text: str) -> bool:
     words = command_words(text)
     if not words:
         return False
+    outer = _outer_wrapper(words)
+    if outer is not None:   # docker compose run app (its default command) may lint
+        return not outer or may_lint(shlex.join(outer))
     runner = _exec_program(words)
     if runner is not None:
         # npx / pnpm exec / yarn dlx <program>: a linter is a lint run and a test runner runs
@@ -299,8 +314,136 @@ def may_lint(text: str) -> bool:
         return True
     if not is_check_command(text) or not program:
         return False
-    if program[0] in _DIRECT_TESTS:
+    if program[0] in _DIRECT_TESTS or PurePosixPath(program[0]).name in TEST_PROGRAMS:
         return False
+    if program[0] in _TEST_ONLY_SUBCOMMANDS:   # dotnet test, mix test, hatch test: tests only
+        return _positionals(program[1:])[:1] != ["test"]
     if program[0] in ("go", "cargo", "bun"):   # go test, cargo test, bun test: built-in runners
         return _positionals(program[1:])[:1] != ["test"]
     return not (program[0] == "playwright" and _positionals(program[1:])[:1] == ["test"])
+
+
+# --- Test runners and wrappers beyond ``command_resolver.RUNNERS`` (#920) ----------
+# Test programs that run tests and nothing else, matched by basename (``vendor/bin/phpunit``).
+TEST_PROGRAMS = frozenset({"ctest", "phpunit", "pest", "rspec"}) | _JS_TEST_RUNNERS
+# Toolchains whose ``test`` subcommand runs the tests (``dotnet test``, ``bazel test //...``).
+TEST_SUBCOMMANDS = frozenset({"dotnet", "swift", "mix", "deno", "bazel", "bazelisk", "hatch"})
+# The ones whose ``test`` runs tests only, never a linter (``bazel test`` may run lint targets).
+_TEST_ONLY_SUBCOMMANDS = TEST_SUBCOMMANDS - {"bazel", "bazelisk"}
+# Runners of named targets whose recipe this scan does not read: a check-named target is a
+# check, a setup target is not, and any other target (or the default one) may be (null).
+TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "turbo", "nx"})
+SETUP_TARGETS = frozenset({
+    "install", "deps", "dependencies", "setup", "bootstrap", "clean", "help", "init",
+    "deploy", "release", "publish", "docs",
+})
+# A program named alone as a bare YAML list item (``- rspec``, ``- make`` under ``needs:``)
+# is a value unless its parent key is a script key (``lib.ci_checks._lone_check``).
+BARE_RUN_PROGRAMS = ALWAYS_CHECK | TEST_PROGRAMS | TARGET_RUNNERS
+_TARGET_FLAGS = frozenset({
+    "-C", "-f", "--file", "--makefile", "--directory", "--dir", "-d", "--taskfile",
+    "--justfile", "--working-directory", "-I", "--include-dir", "--filter", "-F", "--rakefile",
+})
+_COMPOSE_FLAGS = frozenset({
+    "-f", "--file", "-p", "--project-name", "--env-file", "--profile", "--project-directory",
+    "-e", "--env", "-w", "--workdir", "--entrypoint", "-v", "--volume", "--name", "-u",
+    "--user", "--publish", "-l", "--label",
+})
+_NX_TARGET_FLAGS = ("-t", "--target", "--targets")
+
+
+def _outer_wrapper(words: list[str]) -> list[str] | None:
+    """The command ``docker compose run|exec <service>`` or ``bundle exec`` runs, ``[]`` when
+    a compose service runs its default command, None for any other command."""
+    if not words:
+        return None
+    if words[:2] == ["docker", "compose"]:
+        words = ["docker-compose", *words[2:]]
+    if words[0] == "bundle":
+        pos = _positionals(words[1:])
+        if pos[:1] != ["exec"]:
+            return None
+        rest = _drop_leading_flags(words[words.index("exec") + 1:])
+        return rest or None
+    if words[0] != "docker-compose":
+        return None
+    pos = _positionals(words[1:], _COMPOSE_FLAGS)
+    if pos[:1] not in (["run"], ["exec"]):
+        return None
+    rest = _drop_leading_flags(words[words.index(pos[0], 1) + 1:], _COMPOSE_FLAGS)
+    return rest[1:]   # rest[0] is the service
+
+
+def _wrapped(words: list[str]) -> list[str] | None:
+    """The program a wrapper runs (#920): ``docker compose run``, ``bundle exec``, ``uv run``,
+    ``poetry run``, ``npx`` and ``pnpm exec``; None for any other command or no program."""
+    head = words[0]
+    if head in ("uv", "poetry") and _positionals(words[1:])[:1] == ["run"]:
+        return _drop_leading_flags(words[words.index("run") + 1:]) or None
+    return _outer_wrapper(words) or _exec_program(words) or None
+
+
+def _targets(head: str, args: list[str]) -> list[str]:
+    """The targets a target runner is asked for (``make -C x VAR=1 test`` -> ``["test"]``)."""
+    args = args[:args.index("--")] if "--" in args else args
+    if head == "nx":
+        targets: list[str] = []
+        for i, word in enumerate(args):
+            if word in _NX_TARGET_FLAGS:
+                targets += args[i + 1].split(",") if i + 1 < len(args) else []
+            elif word.split("=", 1)[0] in _NX_TARGET_FLAGS[1:] and "=" in word:
+                targets += word.split("=", 1)[1].split(",")
+        pos = [w for w in args if not w.startswith("-") and w not in targets]
+        if pos[:1] in (["affected"], ["run-many"]):
+            return targets
+        if pos[:1] == ["run"]:   # nx run app:test
+            return [pos[1].rsplit(":", 1)[-1]] if len(pos) > 1 else []
+        return [pos[0].rsplit(":", 1)[-1]] if pos else []   # nx test app, nx affected:test
+    pos = [w for w in _positionals(args, _TARGET_FLAGS) if "=" not in w]
+    if head == "turbo":
+        return pos[1:] if pos[:1] == ["run"] else pos[:1]
+    return pos
+
+
+def _target_verdict(targets: list[str], *, rake: bool = False) -> bool | None:
+    """True for a check-named target, False when every target is a setup one, else None."""
+    if any(is_check_name(t) or (rake and t in ("spec", "specs")) for t in targets):
+        return True
+    if targets and all(t in SETUP_TARGETS for t in targets):
+        return False
+    return None
+
+
+def _check_verdict(words: list[str]) -> bool | None:
+    """Whether a command runs a check: True, False, or None for a target whose recipe is not read."""
+    head = words[0]
+    if (head in RUNNERS or head.startswith("./")) and _check_target(words):
+        return True
+    if PurePosixPath(head).name in TEST_PROGRAMS:
+        return True
+    hatch = _hatch_run(words)
+    if hatch is not None:   # hatch run test, hatch run pytest; another script is not read
+        if not hatch or _check_verdict(hatch) is True or is_check_name(hatch[0]):
+            return bool(hatch)
+        return None
+    compose = _outer_wrapper(words)
+    if compose == []:   # docker compose run app: the service's default command is not read
+        return None
+    program = _wrapped(words)
+    if program is not None:
+        return _check_verdict(program)
+    pos = _positionals(words[1:])
+    if head == "deno" and pos[:1] == ["task"]:
+        return _target_verdict(pos[1:2])
+    if head in TEST_SUBCOMMANDS or head == "playwright":
+        return pos[:1] == ["test"]
+    if head in TARGET_RUNNERS:
+        return _target_verdict(_targets(head, words[1:]), rake=head == "rake")
+    return False
+
+
+def check_verdict(text: str) -> bool | None:
+    """``is_check_command`` as three states (#920): None for an unrecognised target of a
+    runner whose recipe is not read, so CI reads it unknown rather than absent."""
+    words = command_words(text)
+    return _check_verdict(words) if words else False
