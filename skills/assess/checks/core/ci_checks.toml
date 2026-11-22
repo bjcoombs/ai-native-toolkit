@@ -26,6 +26,8 @@ unknown_reasons = [
   { code = "unread_ci_system", carried_in = "basis", means = "No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; lib/README.md lists the paths); unread_ci_files counts them.", next_step = "Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent." },
   { code = "external_ci", carried_in = "basis", means = "Under --platform only: no readable CI line settles the signal, and over half of the sampled merged pull requests carry a check run or status of a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit.", next_step = "Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent." },
   { code = "external_ci_marker", carried_in = "basis", means = "The tree tracks no CI file of any kind and the root holds a Prow OWNERS_ALIASES file, so presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker.", next_step = "Nothing to change: run with --platform to read the checks on merged pull requests instead." },
+  { code = "analysers_in_build", carried_in = "basis", means = "In lint_basis: no CI line runs a linter, but a CI dotnet build runs the analysers a committed Directory.Build.props or .csproj turns on (EnforceCodeStyleInBuild, AnalysisLevel). Their severities live in .editorconfig, which the scan does not evaluate.", next_step = "Nothing to change if the analysers fail the build on a finding; a CI step running dotnet format --verify-no-changes lets the scan read a lint run." },
+  { code = "compiler_gate_only", carried_in = "basis", means = "In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors (mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror, TreatWarningsAsErrors in Directory.Build.props). It is not counted as a lint run.", next_step = "Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run." },
 ]
   [entries.privacy]
   "ci_checks.reason" = "drop"
@@ -47,7 +49,7 @@ collector = "core.ci_checks"
 path = "ci_checks.lint_runs"
 type = "bool"
 evidence = "ci_executed"
-null_means = "included_jobs: in an included file; unknown_trigger: triggers unsettled; script_not_found: its script is not committed; check_target: a target may run one; unread_ci_system: an unparsed CI system may; external_ci: merged changes carry external checks; external_ci_marker: a root Prow OWNERS_ALIASES"
+null_means = "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
 
 [[entries]]
 id = "core:ci_checks.enforced_check_runs"

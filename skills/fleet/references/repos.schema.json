@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json",
   "title": "fleet repository row",
-  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans, active, head_sha and dirty. An ok row's active says whether its HEAD was committed inside the run's window; head_sha is the HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's committed tree was scanned (untracked files and .assess/ outputs never count); dirty is null on an ok row when the checkout has no commit or git status fails. Generated from lib/fleet.py by lib/fleet_schema.py.",
+  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans, active, head_sha, dirty and dirty_reason. An ok row's active says whether its HEAD was committed inside the run's window; head_sha is the HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's committed tree was scanned (untracked files, .assess/ outputs and a submodule's own edits never count). dirty is null on an ok row only when the state is unknown, and dirty_reason then says why: no_commit (scanned in place), status_error, index_read_error, sparse_checkout, skip_worktree or assume_unchanged (git status never compares those entries); with a HEAD, an unknown state is scanned from the committed tree like a dirty one. Generated from lib/fleet.py by lib/fleet_schema.py.",
   "type": "object",
   "properties": {
     "fleet_row_version": {
@@ -576,7 +576,7 @@
                     "boolean",
                     "null"
                   ],
-                  "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, else false."
+                  "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog), null when none does but included jobs, unsettled triggers, a lint script the tree does not hold or a check target or script that may lint inside it could hold one, or when the only static gate is a compiler run with warnings as errors or a .NET build's analysers (issue #926), else false. A formatter that rewrites files counts only when a later line of its job runs git diff --exit-code."
                 },
                 "lint_basis": {
                   "enum": [
@@ -589,11 +589,13 @@
                     "unread_ci_system",
                     "external_ci",
                     "external_ci_marker",
+                    "analysers_in_build",
+                    "compiler_gate_only",
                     "not_enforced",
                     "no_lint_command",
                     "no_ci"
                   ],
-                  "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or external_ci_marker (null; as enforced_basis), not_enforced, no_lint_command or no_ci (false)."
+                  "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or external_ci_marker (null; as enforced_basis), analysers_in_build (null: a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in .editorconfig, which the scan does not evaluate), compiler_gate_only (null: the only static gate is a compiler run with warnings as errors, such as mix compile --warnings-as-errors, -Werror or TreatWarningsAsErrors; issue #926), not_enforced, no_lint_command or no_ci (false)."
                 },
                 "unread_ci_files": {
                   "type": "integer",
@@ -1136,11 +1138,29 @@
         "boolean",
         "null"
       ]
+    },
+    "dirty_reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "no_commit",
+            "status_error",
+            "index_read_error",
+            "sparse_checkout",
+            "skip_worktree",
+            "assume_unchanged"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
     "active",
     "dirty",
+    "dirty_reason",
     "fleet_row_version",
     "group",
     "head_sha",
@@ -1191,6 +1211,9 @@
             "type": "null"
           },
           "dirty": {
+            "type": "null"
+          },
+          "dirty_reason": {
             "type": "null"
           }
         }

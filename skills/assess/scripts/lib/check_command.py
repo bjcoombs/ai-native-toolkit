@@ -19,6 +19,8 @@ from itertools import takewhile
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
+from lib.lint_vocabulary import (
+    ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
 
 CHECK_WORDS = frozenset({
     "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
@@ -33,11 +35,12 @@ _JS_TEST_RUNNERS = frozenset({"jest", "vitest", "mocha", "ava", "jasmine", "cypr
 # Linters run as their own program (``ruff check .``, ``npx eslint``, ``uv run mypy``),
 # and the words a lint target, script or subcommand is named by (``make lint``,
 # ``go vet``, ``cargo clippy``). A bare ``lint`` is never a program: a YAML list
-# item such as ``stages: [lint]`` is not a command.
+# item such as ``stages: [lint]`` is not a command. The analysers of other ecosystems
+# (``phpstan``, ``clang-tidy``, #926) come from ``lib.lint_vocabulary``.
 LINT_PROGRAMS = frozenset({
     "ruff", "eslint", "flake8", "pylint", "mypy", "golangci-lint", "shellcheck", "rubocop",
     "stylelint", "ktlint", "biome",
-})
+}) | ANALYSER_PROGRAMS
 LINT_WORDS = LINT_PROGRAMS | {"lint", "lints", "linter", "vet", "clippy"}
 _VALUED_FLAGS = frozenset({
     "-C", "-f", "--file", "--makefile", "--directory", "--dir", "--cwd", "--prefix", "--project",
@@ -147,8 +150,10 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
+    if _no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
+        return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
-            words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS):
+            words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
         return True
     program = _wrapped(words) or _hatch_run(words)
     return program is not None and bool(program) and _lint_words(program)
@@ -194,7 +199,7 @@ def is_info_invocation(text: str) -> bool:
     program = _info_program(words)
     if not program:
         return False
-    head = PurePosixPath(program[0]).name
+    head = program_name(program[0])   # clang-tidy-18 -h, vendor/bin/phpstan -V
     rest = set(program[1:])
     return (("-V" in rest and head in _V_VERSION) or ("-h" in rest and head in _H_HELP)
             or bool(rest & _LIST_FLAGS.get(head, frozenset())))
@@ -324,13 +329,18 @@ def is_lint_run(text: str) -> bool:
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
     meaning: ``lib.ci_checks.test_or_lint_configured`` and Layer 5 read it unchanged.
     """
-    outer = _outer_wrapper(command_words(text))
-    if outer:   # docker compose run app ruff check ., bundle exec rubocop: the program runs
+    first = command_words(text)
+    outer = (_outer_wrapper(first) or _plain_wrapper(first)) if first else None
+    if outer:   # docker compose run app ruff check ., bundle exec rubocop, xargs clang-tidy
         return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or is_info_invocation(text):
         return False
+    if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
+        return False
+    if ecosystem_lint(words):   # phpstan, mix credo, ./gradlew ktlintCheck, pint --test (#926)
+        return True
     program = _exec_program(words)
     if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run
         return bool(program) and (is_check_name(program[0], _RUN_WORDS)
@@ -368,6 +378,9 @@ def may_lint(text: str) -> bool:
             return False
         if runner[0] == "playwright" and _positionals(runner[1:])[:1] == ["test"]:
             return False
+        if runner[0] == "nx" and _positionals(runner[1:])[:1] and _positionals(
+                runner[1:])[0] in _NX_INFO:
+            return False   # npx nx graph: information only, as at Layer 5 (#926)
         return not is_check_name(_TYPE_CHECK.sub("typecheck", runner[0]), _RUN_WORDS)
     program = _program(words)
     if program[:2] == ["pre-commit", "run"]:
@@ -431,6 +444,8 @@ _COMPOSE_FLAGS = frozenset({
     "--user", "--publish", "-l", "--label", "--pull",
 })
 _NX_TARGET_FLAGS = ("-t", "--target", "--targets")
+# nx commands that print workspace information and run no target.
+_NX_INFO = frozenset({"graph", "show", "list", "report", "reset", "daemon"})
 _GRADLE = frozenset({"gradle", "gradlew", "./gradlew"})
 # A Gradle test task: ``test``, ``testDebugUnitTest``, ``:app:testReleaseUnitTest``,
 # ``connectedAndroidTest`` (Android variants and instrumented tests).
@@ -497,7 +512,43 @@ def _wrapped(words: list[str]) -> list[str] | None:
         return _drop_leading_flags(words[words.index("run", 1) + 1:], _WRAPPER_FLAGS) or None
     if head == "uvx":
         return _drop_leading_flags(words[1:], _WRAPPER_FLAGS) or None
-    return _outer_wrapper(words) or _exec_program(words) or None
+    return _outer_wrapper(words) or _exec_program(words) or _plain_wrapper(words)
+
+
+def _no_analysis(words: list[str]) -> bool:
+    """``lint_vocabulary.runs_no_analysis`` on the command and on the program it runs: a
+    wrapper (``npx phpcs --config-set``, ``uv run clang-tidy -fix``) or a package bin
+    (``yarn phpstan --generate-baseline``) runs no analysis either."""
+    inner = _info_program(words)
+    bin_form = words[1:] if words[0] in ("pnpm", "yarn", "bun") else []
+    return (runs_no_analysis(words) or runs_no_analysis(inner)
+            or (bool(bin_form) and runs_no_analysis(bin_form)))
+
+
+# xargs flags that take the next word as a value (``xargs -n 1 clang-tidy``).
+_XARGS_FLAGS = frozenset({
+    "-I", "-n", "-P", "-L", "-s", "-d", "-a", "-E", "--max-args", "--max-procs", "--delimiter",
+    "--arg-file", "--replace", "--max-lines", "--max-chars", "--eof",
+})
+
+
+def _plain_wrapper(words: list[str]) -> list[str] | None:
+    """The program ``xargs [flags]`` or ``dotnet tool run`` runs (#926): ``xargs clang-format-21
+    -i`` -> ``clang-format-21 -i``; None for any other command or no program."""
+    if words[0] == "xargs":
+        return _drop_leading_flags(words[1:], _XARGS_FLAGS) or None
+    if words[:3] == ["dotnet", "tool", "run"]:
+        return words[3:] or None
+    return None
+
+
+def is_format_rewrite(text: str) -> bool:
+    """A formatter run that rewrites files in place (``clang-format -i``, ``mix format``,
+    ``xargs clang-format-21 -i``): ``lib.ci_lint_gates`` reads it as a gate only when a
+    later line of the job runs ``git diff --exit-code`` (#926)."""
+    words = command_words(text)
+    return bool(words) and not is_info_invocation(text) and formatter_mode(
+        _info_program(words)) == "rewrite"
 
 
 def _targets(head: str, args: list[str]) -> list[str]:
@@ -550,6 +601,8 @@ def _js_script_verdict(head: str, words: list[str]) -> bool | None:
     if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
         return False
     rest = words[words.index(pos[0], 1):]   # pnpm turbo run test: a bin of the package
+    if rest[0] in TARGET_RUNNERS:   # pnpm nx graph, yarn turbo run build: read the runner
+        return _check_verdict(rest)
     return True if _check_verdict(rest) is True else _target_verdict(pos[:1])
 
 
@@ -638,7 +691,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     program = _wrapped(words)
     if program is not None:
         verdict = _check_verdict(program)
-        if verdict is False and not _setup_program(program) and program[0] not in _KNOWN_PROGRAMS:
+        if (verdict is False and not _setup_program(program) and program[0] not in _KNOWN_PROGRAMS
+                and _plain_wrapper(words) is None):   # xargs rm: a known wrapper stays false
             return None   # uv run foo, npx foo, docker run img foo: a program this scan does not know
         return verdict
     if head == "deno" and _positionals(words[1:])[:1] == ["task"]:   # deno task foo: not read
@@ -649,6 +703,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     if head in TARGET_RUNNERS:
         if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
             return False
+        if head == "nx" and _positionals(words[1:])[:1] and _positionals(words[1:])[0] in _NX_INFO:
+            return False   # nx graph, nx show projects: information only (#926)
         return _target_verdict(_targets(head, words[1:]), rake=head == "rake")
     if head in ("npm", "pnpm", "yarn", "bun"):
         return _js_script_verdict(head, words)

@@ -207,15 +207,25 @@ CI_CHECKS: JsonDict = {
             "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
             "null when none does but included "
             "jobs, unsettled triggers, a lint script the tree does not hold or a check target or "
-            "script that may lint inside it could hold one, else false."),
+            "script that may lint inside it could "
+            "hold one, or when the only static gate is a compiler run with warnings as errors or "
+            "a .NET build's analysers (issue #926), else false. A formatter that rewrites files "
+            "counts only when a later line of its job runs git diff --exit-code."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
                       "script_not_found", "check_target", "unread_ci_system", "external_ci",
-                      "external_ci_marker", "not_enforced", "no_lint_command", "no_ci"]},
+                      "external_ci_marker", "analysers_in_build", "compiler_gate_only", "not_enforced",
+                      "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
             "unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or "
-            "external_ci_marker (null; as enforced_basis), not_enforced, no_lint_command or "
-            "no_ci (false)."),
+            "external_ci_marker "
+            "(null; as enforced_basis), analysers_in_build (null: "
+            "a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns "
+            "on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in "
+            ".editorconfig, which the scan does not evaluate), compiler_gate_only (null: the only "
+            "static gate is a compiler run with warnings as errors, such as mix compile "
+            "--warnings-as-errors, -Werror or TreatWarningsAsErrors; issue #926), not_enforced, "
+            "no_lint_command or no_ci (false)."),
         "unread_ci_files": _field(
             _INT, "Tracked CI files of systems the scan does not parse, at the unread-CI paths "
             "the block description lists; a count, never the paths."),
