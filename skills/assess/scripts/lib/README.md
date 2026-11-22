@@ -1180,13 +1180,17 @@ read gives no URL and no owners.
 
 **`fleet_hashed.py`**
 Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
-(#909). `public_rows` hashes each row's `repo` with `counts_only.hash_value` under the
-run's salt and re-sorts by the new id; `public_groups` hashes each team row's
-`unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
+(#909). `public_rows` hashes each row's `repo` and `group` with `counts_only.hash_value`
+under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
+`settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
 hashed id set the history entry is chosen and compared by. The ids equal the
 `fleet-data.json` repository keys, so every file joins on them. The scan, the coverage
-reconcile and `build_fleet_data` keep the real ids. Without a salt every function is the
-identity, so default counts-only output is unchanged. Group names stay in clear. Tests:
+reconcile, the group roll-up (the settings join) and `build_fleet_data` keep the real ids.
+Without a salt every function is the identity, so default counts-only output is
+unchanged. `fleet_next_steps.page_path` writes a hashed group as `teams/h-<hex>.md` and
+`group_scopes` rejoins `--settings` through the recorded `settings_scope` under the run's
+salt; `fleet_achievements_runs` passes over a re-score of an entry whose hashed ids share
+none with this run (another salt). Tests:
 `tests/test_fleet_hashed.py` (every file under `--out`, SVGs and team pages included,
 holds no repository id; the joins; fixed-salt reruns are byte-identical).
 

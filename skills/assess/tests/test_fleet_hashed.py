@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 from types import ModuleType
 
+import jsonschema
 import pytest
 
 from lib import fleet
@@ -18,9 +20,10 @@ from test_fleet_cli import fleet_cli
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 LEVELS = ROOT_DIR / "skills" / "assess" / "levels" / "default.toml"
+SCHEMAS = ROOT_DIR / "skills" / "fleet" / "references"
 NEXT_STEPS = ROOT_DIR / "skills" / "fleet" / "scripts" / "fleet_next_steps.py"
-REPOS = ("zqorg/zqalpha", "zqorg/zqbeta", "zqorg/zqgamma")
-NAMES = ("zqalpha", "zqbeta", "zqgamma", "zqorg/")
+REPOS = ("zqorg/zqalpha", "zqorg/zqbeta", "zqorg/zqgamma", "zqorg/zqteam/zqdelta")
+NAMES = ("zqalpha", "zqbeta", "zqgamma", "zqdelta", "zqorg", "zqteam")
 DESCRIBES = '[[describes]]\npath = "docs/alpha.md"\nrepo = "zqorg/zqalpha"\nscope = ["src/"]\n'
 
 
@@ -45,6 +48,7 @@ def zroot(tmp_path: Path) -> Path:
     })
     make_repo(root, "zqorg/zqbeta", files={"docs/alpha.md": "# Alpha\n", ".assess/config.toml": DESCRIBES})
     (root / "zqorg" / "zqgamma" / "zqgamma-main").mkdir(parents=True)
+    make_repo(root, "zqorg/zqteam/zqdelta")
     return root
 
 
@@ -53,19 +57,27 @@ def _files(out: Path) -> dict[str, str]:
             for p in sorted(out.rglob("*")) if p.is_file()}
 
 
+SHA_RE = re.compile(r"\b[0-9a-f]{40}\b")
+
+
 def _leaks(files: dict[str, str]) -> list[str]:
-    return [f"{path}: {name}" for path, text in files.items() for name in NAMES
-            if name in path or name in text]
+    """Every repository or group name in a path or a file, and any 40-hex commit sha other
+    than ``run.json``'s ``toolkit_commit`` (the toolkit's own, not a target's)."""
+    toolkit = json.loads(files["run.json"])["toolkit_commit"] if "run.json" in files else None
+    names = [f"{path}: {name}" for path, text in files.items() for name in NAMES
+             if name in path or name in text]
+    shas = [f"{path}: {sha}" for path, text in files.items() for sha in SHA_RE.findall(text) if sha != toolkit]
+    return names + shas
 
 
 def _jsonl(text: str) -> list[dict[str, object]]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _run(root: Path, out: Path, hist: Path, *extra: str) -> None:
+def _run(root: Path, out: Path, hist: Path, *extra: str, pages: list[str] | None = None) -> None:
     assert fleet_cli.main([str(root), "--out", str(out), "--levels", str(LEVELS),
                            "--history-dir", str(hist), *extra]) == 0
-    assert next_steps_cli.main([str(out), "--levels", str(LEVELS)]) == 0
+    assert next_steps_cli.main([str(out), "--levels", str(LEVELS), *(pages or [])]) == 0
 
 
 @pytest.mark.parametrize("flag", [["--hash-paths"], ["--hash-salt", "s909"]])
@@ -100,13 +112,22 @@ def test_hashed_ids_join_across_the_files_and_reruns_are_byte_identical(zroot, t
     assert {(f["docs_repo"], f["repo"]) for f in fresh} == {
         (hash_value("zqorg/zqbeta", "s909"), hash_value("zqorg/zqalpha", "s909"))}
     groups = {row["group"] for row in rows}
+    assert groups == {hash_value(g, "s909") for g in ("zqorg", "zqorg/zqteam")}
     assert groups == {g["group"] for g in _jsonl(files["groups.jsonl"])}
+    assert {f"teams/{g.replace(':', '-')}.md" for g in groups} <= set(files)
+    for name in ("repos.jsonl", "groups.jsonl"):
+        schema = json.loads((SCHEMAS / name.replace(".jsonl", ".schema.json")).read_text(encoding="utf-8"))
+        for line in _jsonl(files[name]):
+            jsonschema.validate(line, schema)
+    jsonschema.validate(json.loads(files["level.json"]),
+                        json.loads((SCHEMAS / "level.schema.json").read_text(encoding="utf-8")))
 
 
 def test_a_fixed_salt_rerun_compares_against_the_kept_hashed_run(zroot, tmp_path):
     hist = tmp_path / "hist"
     _run(zroot, tmp_path / "o1", hist, "--hash-salt", "s909")
     _run(zroot, tmp_path / "o2", hist, "--hash-salt", "s909", "--compare")
+    assert _leaks(_files(tmp_path / "o2")) == []  # compare.json and slope.svg included
     comparison = json.loads((tmp_path / "o2" / "compare.json").read_text(encoding="utf-8"))
     assert comparison["comparable"] is True
     assert comparison["repositories"]["added"] == [] and comparison["repositories"]["removed"] == []
@@ -129,7 +150,7 @@ def test_public_helpers_are_the_identity_without_a_salt():
     assert public_ids(["g/r"], None) == frozenset({"g/r"})
     hashed = public_rows([row, {**row, "repo": "g/a"}], "s")
     assert [r["repo"] for r in hashed] == sorted(hash_value(r, "s") for r in ("g/r", "g/a"))
-    assert all(r["group"] == "g" for r in hashed)
+    assert all(r["group"] == hash_value("g", "s") for r in hashed)
 
 
 def test_privacy_key_keeps_an_id_the_outputs_already_hashed():
@@ -150,3 +171,60 @@ def test_no_stderr_log_is_written_under_hashing(tmp_path, monkeypatch):
     assert row["reason"] == "scan_exit_4"
     assert not logs.exists() or not any(logs.rglob("*"))
 
+
+
+def _kept_earlier(hist: Path, date: str = "2026-01-05") -> None:
+    """Move the one kept entry to an earlier date, so the next run replays it."""
+    (entry,) = sorted(hist.glob("*/*"))
+    moved = entry.parent / date
+    entry.rename(moved)
+    stamp = json.loads((moved / "run.json").read_text(encoding="utf-8"))
+    (moved / "run.json").write_text(json.dumps({**stamp, "scan_date": date}), encoding="utf-8")
+
+
+@pytest.mark.parametrize(("salt", "rescored"), [("s909", True), ("other", False)])
+def test_a_version_bump_rescores_a_hashed_entry_only_under_the_same_salt(zroot, tmp_path, salt, rescored):
+    hist, bumped = tmp_path / "hist", tmp_path / "bumped.toml"
+    text = LEVELS.read_text(encoding="utf-8")
+    version = text.split('version = "', 1)[1].split('"', 1)[0]
+    bumped.write_text(text.replace(f'version = "{version}"', f'version = "{version}-bumped"', 1), encoding="utf-8")
+    _run(zroot, tmp_path / "o1", hist, "--hash-salt", "s909")
+    _kept_earlier(hist)
+    assert fleet_cli.main([str(zroot), "--out", str(tmp_path / "o2"), "--levels", str(bumped),
+                           "--history-dir", str(hist), "--hash-salt", salt]) == 0
+    doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
+    assert bool(doc["rescored_runs"]) is rescored
+
+
+ORG_ROW = """
+
+[[rows]]
+id = "org2fa"
+title = "Two-factor"
+scope = "org"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
+"""
+
+
+def test_team_pages_rejoin_settings_through_the_run_salt(zroot, tmp_path, capsys):
+    levels = tmp_path / "levels.toml"
+    levels.write_text(LEVELS.read_text(encoding="utf-8") + ORG_ROW, encoding="utf-8")
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps([{"scope": "zqorg", "provider": "github",
+                                     "two_factor": {"value": "on", "reason": None}}]), encoding="utf-8")
+    out = tmp_path / "out"
+    assert fleet_cli.main([str(zroot), "--out", str(out), "--levels", str(levels), "--no-history",
+                           "--hash-salt", "s909", "--settings", str(settings)]) == 0
+    pages = [str(out), "--levels", str(levels), "--settings", str(settings)]
+    assert next_steps_cli.main([*pages, "--hash-salt", "s909"]) == 0
+    files = _files(out)
+    assert _leaks(files) == []
+    groups = _jsonl(files["groups.jsonl"])
+    assert {g["settings_scope"] for g in groups} == {hash_value("zqorg", "s909")}  # nested: the ancestor's
+    assert all(lv["level"] == 1 for g in groups for lv in g["levels"] if lv["id"] == "org2fa")
+    assert next_steps_cli.main(pages) == 2
+    assert "pass the --hash-salt" in capsys.readouterr().err
+    assert next_steps_cli.main([*pages, "--hash-salt", "wrong"]) == 2  # no fragment joins: levels disagree

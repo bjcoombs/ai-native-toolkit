@@ -161,7 +161,7 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 |-----|-------|
 | `fleet_row_version` | Row envelope version (2; 2 added `active`). |
 | `repo` | The repository id: its path under the root, prefixed with the root's own name when that path is one segment (a GitHub org root gives `org/repo`). A listed entry outside `ROOT` (or with no `ROOT`) takes its `origin` remote's path, else its last two directory names. The same checkout gets the same id from a root run or a list run. |
-| `group` | `repo` without its last segment (`grpa/svc1` is in `grpa`). |
+| `group` | `repo` without its last segment (`grpa/svc1` is in `grpa`); hashed on its own under `--hash-paths` ([Hashed runs](#hashed-runs)). |
 | `status` | `ok` or `failed`. |
 | `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
@@ -178,21 +178,24 @@ files a previous run left under `DIR/logs/` (nothing else there is touched).
 Rows carry no absolute path, timing, error text or per-repository stamp, so
 two runs over unchanged checkouts on the same day are byte-identical (except
 with `--hash-paths` and no salt). With `--hash-paths` or `--hash-salt` the
-`repo` id is hashed; see [Hashed runs](#hashed-runs).
+`repo` and `group` ids are hashed; see [Hashed runs](#hashed-runs).
 
 ### Hashed runs
 
-With `--hash-paths` or `--hash-salt`, every file under `--out` names a repository by its
-hashed id (`h:` plus 16 hex digits under the run's salt), never by its path:
-`repos.jsonl` `repo`, `groups.jsonl` `unknown_repos`, the `level.json` keys,
-`doc_freshness.jsonl` `docs_repo` and `repo`, `agent_clusters.json` `repo_ids`,
-`compare.json`, the team pages and every diagram and `report.md`. The hashed id equals
-the `fleet-data.json` repository key, so the files join on it. The kept history entry
-holds the same hashed ids. Hashes join across runs only under one `--hash-salt`: a
+With `--hash-paths` or `--hash-salt`, every file under `--out` names a repository and a
+group by its hashed id (`h:` plus 16 hex digits under the run's salt), never by its path:
+`repos.jsonl` `repo` and `group`, `groups.jsonl` `group`, `settings_scope` and
+`unknown_repos`, the `level.json` keys, `doc_freshness.jsonl` `docs_repo` and `repo`,
+`agent_clusters.json` `repo_ids` and `group_ids`, `compare.json`, the team pages
+(`teams/h-<hex>.md`, no colon in the file name) and every diagram and `report.md`. The
+hashed repository id equals the `fleet-data.json` repository key, so the files join on it;
+a hashed `group` is one value, so it is no longer `repo` without its last segment. The
+kept history entry holds the same hashed ids. Hashes join across runs only under one `--hash-salt`: a
 `--hash-paths` run with no salt never joins an earlier run's repositories, and a
 same-day rerun goes to a suffixed history entry instead of replacing the day's one.
-Group names (`group`, `teams/<group>.md`) stay in clear, so a `--settings` join and the
-team pages still work; `fleet-data.json` hashes them with its unit keys. Terminal output
+The group roll-up joins `--settings` by the real group name before hashing. To rebuild
+team pages for such a run with `--settings`, pass `fleet_next_steps.py` the same
+`--hash-salt`; a `--hash-paths` run with no salt cannot rejoin settings. Terminal output
 (stderr) still names repositories. A history entry kept by a hashed run before this
 change holds clear ids, so the first comparison against it shows every repository as
 added and removed.
@@ -1043,9 +1046,10 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --levels leve
 
 | Flag | Meaning |
 |------|---------|
-| `OUT` | The run's `--out` directory. Pages go to `OUT/teams.md` (index) and `OUT/teams/<group>.md`; the previous run's `*.md` pages there are removed first. |
+| `OUT` | The run's `--out` directory. Pages go to `OUT/teams.md` (index) and `OUT/teams/<group>.md` (`teams/h-<hex>.md` for a hashed group); the previous run's `*.md` pages there are removed first. |
 | `--levels FILE` | The maturity model the run used (default: the shipped `skills/assess/levels/default.toml`). A different `version` exits 2. |
 | `--settings PATH` | The ghreport settings the run used, in the `fleet.py --settings` forms. |
+| `--hash-salt VALUE` | The `--hash-salt` the run used. Needed with `--settings` when the run hashed its group names ([Hashed runs](#hashed-runs)); the recorded `settings_scope` is joined through it. |
 
 Each page holds (every heading opening with an `In place:` line, as above):
 

@@ -1,18 +1,21 @@
-"""Hashed repository ids in every fleet output file (issue #909, parent #740).
+"""Hashed repository and group ids in every fleet output file (issue #909, parent #740).
 
-Under ``--hash-paths`` or ``--hash-salt`` the fleet run hashes each repository id once,
+Under ``--hash-paths`` or ``--hash-salt`` the fleet run hashes each repository and group id once,
 at the output boundary, with ``lib.counts_only.hash_value`` under the run's salt
 (``h:`` plus 16 hex digits). The ids are the same ones ``fleet-data.json`` already writes
 as repository keys, so ``repos.jsonl``, ``groups.jsonl``, ``level.json``,
 ``doc_freshness.jsonl``, ``agent_clusters.json``, the run history entry, ``compare.json``,
 the team pages and every diagram join with it and with each other.
 
-The scan itself, the ``--discovered`` coverage and ``fleet-data.json`` still read the
-real ids: the unit trees, CODEOWNERS owners and web URLs are keyed by them, and
-``fleet_data.Privacy`` hashes its own keys.
+The scan itself, the ``--discovered`` coverage, the group roll-up and ``fleet-data.json``
+still read the real ids: the ghreport settings join by group name and ancestor, the unit
+trees, CODEOWNERS owners and web URLs are keyed by them, and ``fleet_data.Privacy``
+hashes its own keys. A hashed group id is one segment, so it no longer derives from the
+hashed ``repo`` by dropping the last segment.
 
-- ``public_rows``: the rows with ``repo`` hashed, re-sorted by the new id.
-- ``public_groups``: each team row's ``unknown_repos`` hashed and sorted.
+- ``public_rows``: the rows with ``repo`` and ``group`` hashed, re-sorted by the new id.
+- ``public_groups``: ``group`` and ``settings_scope`` hashed, and each team row's
+  ``unknown_repos`` hashed and sorted; re-sorted by the new group id.
 - ``public_freshness``: ``docs_repo`` and ``repo`` hashed.
 - ``public_ids``: the hashed id set the history entry is chosen and compared by.
 
@@ -42,7 +45,8 @@ def public_ids(repos: Iterable[str], salt: str | None) -> frozenset[str]:
 def public_rows(rows: Sequence[FleetRow], salt: str | None) -> list[FleetRow]:
     if salt is None:
         return list(rows)
-    hashed: list[FleetRow] = [{**row, "repo": hash_value(row["repo"], salt)} for row in rows]
+    hashed: list[FleetRow] = [{**row, "repo": hash_value(row["repo"], salt), "group": hash_value(row["group"], salt)}
+                              for row in rows]
     return sorted(hashed, key=lambda r: r["repo"])
 
 
@@ -56,8 +60,10 @@ def public_groups(groups: Sequence[GroupRow], salt: str | None) -> list[GroupRow
             hashed = copy.copy(level)
             hashed["unknown_repos"] = sorted(hash_value(r, salt) for r in level["unknown_repos"])
             levels.append(hashed)
-        out.append({**group, "levels": levels})
-    return out
+        scope = group["settings_scope"]
+        out.append({**group, "group": hash_value(group["group"], salt), "levels": levels,
+                    "settings_scope": None if scope is None else hash_value(scope, salt)})
+    return sorted(out, key=lambda g: g["group"])
 
 
 def public_freshness(rows: Sequence[FreshnessRow], salt: str | None) -> list[FreshnessRow]:
