@@ -264,7 +264,7 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-# Unreleased (the 3.0.0 release PR sets the version):
+# Unreleased (the next release PR sets the version):
 # - ci_checks basis, enforced_basis and lint_basis gain external_ci and
 #   external_ci_marker (issue #928): under --platform, more than half of the sampled
 #   merged pull requests carry a check of a known external CI system; offline, a root
