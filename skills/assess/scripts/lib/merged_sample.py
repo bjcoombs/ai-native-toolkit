@@ -42,7 +42,8 @@ listing returns ``{"available": False, "reason"}`` (``no_access`` on 403,
 ``not_found`` on 404), which each reader passes through as its own block;
 a refusal is never an empty sample. A remote on a host neither read supports
 (Bitbucket, Azure DevOps, or a host glab does not reach: GitHub Enterprise, an
-unsigned GitLab) is ``unsupported_host``, never ``network``: no scan option reads it.
+unsigned GitLab) is ``unsupported_host``, never ``network``: no scan option reads it
+as things stand. For a GitLab host the remedy is glab, so the reason sentence says so.
 
 The value holds titles, logins and comment text in memory only. It is private:
 no run-context block, counts-only document or fleet row carries it. Nor does
@@ -254,7 +255,8 @@ def merged_sample(repo_root: Path, history_window: str | None, run_date: str) ->
 
 NO_REMOTE_REASON = "no_remote: no GitHub or GitLab remote to read merged changes from"
 UNSUPPORTED_HOST_REASON = ("unsupported_host: the remote's host is not GitHub or a GitLab host glab "
-                           "reaches; merged changes are read from GitHub and GitLab only")
+                           "reaches; merged changes are read from GitHub and GitLab only (if the "
+                           "host is a GitLab, install glab and sign it in to the host)")
 
 # Hosts no merged-changes read supports, known from the URL alone (#959). Any other
 # non-GitHub host may be a self-managed GitLab, which only a glab probe settles.
