@@ -169,13 +169,21 @@ def fallback_badge(
 
 
 def concern_count_from_findings(derived_findings: list[dict[str, Any]]) -> int:
-    """Count negative findings that actually fired (non-empty paths)."""
+    """Count negative findings that actually fired (an open path left).
+
+    A path a done review cleared (its row's ``reviewed`` list, #721) is not
+    open, so a finding whose every path is reviewed does not count.
+    """
+    def open_paths(f: dict[str, Any]) -> set[Any]:
+        reviewed = {r.get("path") for r in f.get("reviewed") or [] if isinstance(r, dict)}
+        return set(f.get("paths") or []) - reviewed
+
     return sum(
         1
         for f in derived_findings
         if isinstance(f, dict)
         and f.get("name") != "refactor_boundary"
-        and f.get("paths")
+        and open_paths(f)
     )
 
 

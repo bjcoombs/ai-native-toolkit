@@ -1702,7 +1702,12 @@ JSON, an unknown or non-ancestor sha) leaves the finding open. `carried_complete
 actions.json `completed`, so a review that took its finding out of the Top 3 is not lost
 on the next finalize. Counts-only keeps `derived_findings.reviewed.path` and drops the
 sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
-rebuild. Tests: `tests/test_reviewed_findings.py`.
+rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
+gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a
+reviewed path neither counts nor fails the gate. The committed `findings.json` snapshot
+and the method-change diff keep the full `paths`, so a review never reads as a finding
+that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
+`.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
 
 **`untrusted_hotspot.py`**
 The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity

@@ -997,7 +997,9 @@ shapes = [
   { path = "keyhole_summary", type = "lib.run_context_types:KeyholeSummary" },
   { path = "structure", type = "lib.structure_graph:StructureBlock" },
 ]
-revision = 1
+# 2: attention, prescribed_actions and keyhole_summary leave out a path a done
+# review in the committed actions.json clears (#721).
+revision = 2
 unknown_reasons = [
   { code = "no_grimp", block = "structure", means = "grimp, the Python import-graph builder, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
   { code = "no_networkx", block = "structure", means = "networkx, which the structure metrics need, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
