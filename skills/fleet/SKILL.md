@@ -938,7 +938,8 @@ repositories hold its top level), then the biggest lift with its change and "don
 each shared template's lift, and **Recent progress**: the units that reached a new level
 since the previous comparable run, read from this run's `level_up` achievements. Recent
 progress is display only: it comes from the run history and never feeds a level or
-`fleet-data.json`; on the first run it says the run is the starting line. Without `--levels`
+`fleet-data.json`. On the first kept run it says the run is the starting line; under
+`--no-history` or `--full` it says the run is not kept in the history. Without `--levels`
 the section is left out. Logic: `lib/fleet_opportunities_section.py`.
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the

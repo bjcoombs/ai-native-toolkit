@@ -1159,8 +1159,9 @@ rank or position field. Tests: `tests/test_fleet_opportunities.py`.
 `opportunities_section` renders `report.md`'s "Opportunities" section from a built
 `FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
 "Already in place" first, then the biggest lift, the shared templates and the display-only
-recent progress (this run's `level_up` achievements, from the history; a starting-line or
-nothing-new line otherwise). None when `opportunities` is null. Names are listed in key
+recent progress (this run's `level_up` achievements, from the history; otherwise a
+nothing-new line, a starting-line line on a kept first run (`fleet_achievements.BASELINE_NOTE`),
+or the achievements note when the run is not kept). None when `opportunities` is null. Names are listed in key
 order, at most `PER_LIST` per line. Tests: `tests/test_fleet_opportunities.py`.
 
 **`fleet_data_schema.py`**

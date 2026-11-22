@@ -45,7 +45,7 @@ def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tm
     report = (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
     assert report.index("## What changed and who earned it") < report.index("## Opportunities") \
         < report.index("## Activity and maturity")  # #746: opportunities after credit, before diagrams
-    assert "This run is the starting line, so there is no earlier run" in report
+    assert "This run is the starting line, so there is no earlier run" in report  # kept: a real first run
     data = json.loads((tmp_path / "o1" / "fleet-data.json").read_text(encoding="utf-8"))
     assert data["fleet_data_version"] == 3 and data["opportunities"]["measured"] == 2
     (today,) = (tmp_path / "hist" / "grpa+grpb").iterdir()

@@ -228,6 +228,10 @@ def test_recent_progress_on_the_starting_line_and_with_nothing_new() -> None:
     now = _data(fleet())
     first = build_achievements(HistoryRun("2026-11-20", now), [], model())
     assert "This run is the starting line" in (opportunities_section(now, first) or "")
+    note = "this run is not kept in the run history (--no-history or --full)"
+    unkept = build_achievements(HistoryRun("2026-11-20", now), [], model(), note=note)
+    section = opportunities_section(now, unkept) or ""
+    assert f"Not shown: {note}, so there is no earlier run" in section and "starting line" not in section
     _, earlier = _history(fleet())
     same = build_achievements(HistoryRun("2026-11-20", now), earlier, model())
     assert "No unit reached a new level since `2026-11-13`" in (opportunities_section(now, same) or "")

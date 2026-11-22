@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from lib.fleet_achievements import LEVEL_UP, Achievements
+from lib.fleet_achievements import BASELINE_NOTE, LEVEL_UP, Achievements
 from lib.fleet_data import FleetData
 from lib.fleet_next_steps import code, text
 from lib.fleet_opportunities import PER_LIST, TITLE, Opportunities
@@ -64,6 +64,8 @@ def _progress(doc: Achievements | None) -> list[str]:
         return lines + ["Not shown: this run's achievements were not written."]
     ups = sorted((a for a in doc["achievements"] if a["run"] == doc["run"] and a["kind"] == LEVEL_UP),
                  key=lambda a: (a["view"], a["unit"], a["evidence"]["row"] or ""))
+    if len(doc["runs"]) < 2 and doc["note"] not in (None, BASELINE_NOTE):  # --no-history, --full: say why
+        return lines + [f"Not shown: {doc['note']}, so there is no earlier run to show progress against."]
     if len(doc["runs"]) < 2:
         return lines + ["This run is the starting line, so there is no earlier run to show progress against."]
     if not ups:
