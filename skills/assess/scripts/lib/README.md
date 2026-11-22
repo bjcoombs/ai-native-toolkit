@@ -4145,7 +4145,8 @@ test`, `tox`, `mvn test`, or a Jest / Vitest run with no `--coverage`),
 action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:
 GitHub step and job `if:`, branch filters, matrix values and composite-action
 internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
-phase reads null. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+phase reads null. A run whose own flag overrides the config threshold
+(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
 `lib.command_index`, `lib.command_resolver`, `lib.check_command` and
 `lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
 Tests: `tests/test_coverage_ci.py`.
