@@ -279,7 +279,7 @@ def test_a_scoped_run_counts_only_the_gates_inside_the_scope(tmp_path: Path) -> 
     assert [(g["kind"], g["file"]) for g in scoped["gates"]] == [
         ("complexity_limit", "pkg/pyproject.toml"), ("coverage_floor", "pkg/pyproject.toml"),
         ("pre_commit", ".pre-commit-config.yaml")]
-    assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 1
+    assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 2
     absolute = scan_guardrails(root, [], None, None, root / "pkg")
     assert [(g["kind"], g["file"]) for g in absolute["gates"]] == [
         ("complexity_limit", "pkg/pyproject.toml"), ("pre_commit", ".pre-commit-config.yaml")]
@@ -289,7 +289,8 @@ def test_a_scoped_run_counts_only_the_gates_inside_the_scope(tmp_path: Path) -> 
 
 @pytest.mark.parametrize(("select", "ignore", "on"), [
     ("['C901']", "['C']", True), ("['C9']", "['C90']", False), ("['ALL']", "['C']", False),
-    ("['C901']", "['C901']", False), ("['C']", "['ALL']", True)])
+    ("['C901']", "['C901']", False), ("['C']", "['ALL']", True),
+    ("['C90']", "['C9']", False), ("['C9']", "['C901']", False)])
 def test_ruff_select_and_ignore_resolve_by_the_longest_prefix(
         tmp_path: Path, select: str, ignore: str, on: bool) -> None:
     root = _write(tmp_path, {"ruff.toml": f"[lint]\nselect = {select}\nignore = {ignore}\n"})
@@ -299,7 +300,8 @@ def test_ruff_select_and_ignore_resolve_by_the_longest_prefix(
 
 @pytest.mark.parametrize(("line", "stated"), [
     ("Run coverage in step 1.", False), ("Coverage must reach 100 percent.", True),
-    ("Coverage ratio 1.0 is enforced.", True), ("Coverage 1.5 is not it.", False)])
+    ("Coverage ratio 1.0 is enforced.", True), ("Coverage 1.5 is not it.", False),
+    ("See the coverage v1.0 docs.", False)])
 def test_a_floor_of_100_needs_a_decimal_point_in_its_ratio_form(
         tmp_path: Path, line: str, stated: bool) -> None:
     coverage = {"available": True, "enforced": True, "gates": [
@@ -308,3 +310,30 @@ def test_a_floor_of_100_needs_a_decimal_point_in_its_ratio_form(
     root = _write(tmp_path, {"AGENTS.md": f"{line}\n"})
     (gate,) = scan_guardrails(root, ["AGENTS.md"], coverage)["gates"]
     assert gate["stated"] is stated
+
+
+ROOT_RUFF = "[tool.ruff.lint]\nselect = ['C901']\n\n[tool.ruff.lint.mccabe]\nmax-complexity = 5\n"
+
+
+@pytest.mark.parametrize(("files", "scope", "expected"), [
+    ({"pyproject.toml": ROOT_RUFF, "svc/m.py": "x = 1\n"}, "svc", ("pyproject.toml", 5.0)),
+    ({"pyproject.toml": ROOT_RUFF, "svc/pyproject.toml": "[project]\nname = 'svc'\n"}, "svc",
+     ("pyproject.toml", 5.0)),
+    ({"pyproject.toml": ROOT_RUFF,
+      "svc/ruff.toml": "[lint]\nselect = ['C90']\n\n[lint.mccabe]\nmax-complexity = 8\n",
+      "svc/sub/m.py": "x = 1\n"}, "svc/sub", ("svc/ruff.toml", 8.0)),
+])
+def test_a_scope_without_a_ruff_config_is_gated_by_the_nearest_one_above(
+        tmp_path: Path, files: dict[str, str], scope: str, expected: tuple[str, float]) -> None:
+    root = _write(tmp_path, files)
+    block = scan_guardrails(root, [], None, None, Path(scope))
+    assert [(g["file"], g["threshold"]) for g in block["gates"]
+            if g["kind"] == "complexity_limit"] == [expected]
+    assert not any("ruff" in line for line in block["not_read"])
+
+
+def test_a_scope_with_its_own_ruff_config_does_not_add_the_root_one(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": ROOT_RUFF,
+                             "svc/.ruff.toml": "[lint]\nselect = ['C901']\n"})
+    block = scan_guardrails(root, [], None, None, Path("svc"))
+    assert [g["file"] for g in block["gates"]] == ["svc/.ruff.toml"]
