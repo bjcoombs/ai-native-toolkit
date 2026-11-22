@@ -186,3 +186,19 @@ def test_the_guardrails_stated_row(stated: int, level: int) -> None:
 
 def test_the_guardrails_stated_row_is_unknown_with_no_gate() -> None:
     assert _row({"guardrails": {"available": True, "stated_pct": None}})["status"] == "unknown"
+
+
+def test_ruff_all_with_c901_ignored_is_not_a_complexity_gate(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": "[tool.ruff.lint]\nselect = ['ALL']\n"
+                                               "ignore = ['C901']\n"})
+    assert scan_guardrails(root, [], None)["gates"] == []
+
+
+@pytest.mark.parametrize("line", ["Coverage minimum is 0.80 (JaCoCo).", "Keep coverage at 80%."])
+def test_a_ratio_floor_is_stated_as_a_ratio_or_a_percentage(tmp_path: Path, line: str) -> None:
+    coverage = {"available": True, "enforced": True, "gates": [
+        {"file": "pom.xml", "line": 9, "tool": "jacoco", "form": "minimum", "threshold": 0.8,
+         "unit": "ratio", "threshold_percent": 80.0, "metric": "lines"}]}
+    root = _write(tmp_path, {"AGENTS.md": f"{line}\n"})
+    (gate,) = scan_guardrails(root, ["AGENTS.md"], coverage)["gates"]
+    assert (gate["rule"], gate["threshold"], gate["stated"]) == ("threshold", 80.0, True)

@@ -31,8 +31,8 @@ core's ``instruction_files``) names its rule and, where the gate has a threshold
 the threshold as a standalone number:
 
 - ``complexity_limit``: ``complexity``, ``C901`` or ``mccabe`` and the limit;
-- ``coverage_floor``: ``coverage`` and the threshold (as written or as a
-  percentage); with no readable threshold, ``coverage`` beside ``fail_under``,
+- ``coverage_floor``: ``coverage`` and the threshold as a percentage (``80``) or
+  a ratio (``0.80``); with no readable threshold, ``coverage`` beside ``fail_under``,
   ``threshold``, ``floor`` or ``minimum``;
 - ``pre_commit``: ``pre-commit``;
 - ``type_strictness``: ``mypy`` and ``strict``.
@@ -59,6 +59,8 @@ GateKind = Literal["complexity_limit", "coverage_floor", "pre_commit", "type_str
 
 RUFF_DEFAULT_MAX_COMPLEXITY = 10
 _C901_SELECTORS = frozenset({"C901", "C90", "C9", "C", "ALL"})
+_C901_IGNORES = frozenset({"C901", "C90", "C9", "C"})
+_FAIL_UNDER_TOOLS = frozenset({"coverage.py", "pytest-cov"})
 _RUFF_FILES = ("pyproject.toml", "ruff.toml", ".ruff.toml")
 _FLAKE8_FILES = (".flake8", "setup.cfg", "tox.ini")
 _MYPY_FILES = ("mypy.ini", "setup.cfg")
@@ -125,13 +127,21 @@ def _table(data: Mapping[str, Any], dotted: str) -> Mapping[str, Any]:
     return node if isinstance(node, Mapping) else {}
 
 
-def _selects_c901(*tables: Mapping[str, Any]) -> bool:
+def _names_any(tables: Iterable[Mapping[str, Any]], keys: tuple[str, ...],
+               codes: frozenset[str]) -> bool:
     for table in tables:
-        for key in ("select", "extend-select"):
-            codes = table.get(key)
-            if isinstance(codes, list) and any(str(code) in _C901_SELECTORS for code in codes):
+        for key in keys:
+            listed = table.get(key)
+            if isinstance(listed, list) and any(str(code) in codes for code in listed):
                 return True
     return False
+
+
+def _selects_c901(*tables: Mapping[str, Any]) -> bool:
+    """C901 is selected and not ignored (``select = ["ALL"]`` beside ``ignore = ["C901"]``)."""
+    if _names_any(tables, ("ignore", "extend-ignore"), _C901_IGNORES):
+        return False
+    return _names_any(tables, ("select", "extend-select"), _C901_SELECTORS)
 
 
 def _number(value: Any) -> float | None:
@@ -226,7 +236,8 @@ def _coverage_gate(block: Mapping[str, Any] | None) -> Guardrail | None:
     if not counted:
         return None
     best = max(counted, key=lambda gate: gate["threshold_percent"] or -1.0)
-    return _gate("coverage_floor", best["tool"], "fail_under", best["threshold_percent"],
+    rule = "fail_under" if best["tool"] in _FAIL_UNDER_TOOLS else "threshold"
+    return _gate("coverage_floor", best["tool"], rule, best["threshold_percent"],
                  best["file"], best["line"])
 
 
@@ -251,8 +262,9 @@ def _figure(value: float) -> str:
 
 
 def _number_re(value: float) -> re.Pattern[str]:
-    figure = re.escape(_figure(value))
-    return re.compile(rf"(?<![\d.]){figure}(?:\.0+)?(?!\.?\d)")
+    figure = _figure(value)
+    zeros = "0*" if "." in figure else r"(?:\.0+)?"
+    return re.compile(rf"(?<![\d.]){re.escape(figure)}{zeros}(?!\.?\d)")
 
 
 _RULE_WORDS: dict[GateKind, re.Pattern[str]] = {
@@ -277,7 +289,8 @@ def states(gate: Guardrail, line: str) -> bool:
         return True
     if threshold is None:
         return kind != "coverage_floor" or bool(_COVERAGE_FLOOR_WORDS.search(line))
-    return bool(_number_re(threshold).search(line))
+    figures = [threshold, threshold / 100] if kind == "coverage_floor" else [threshold]
+    return any(_number_re(figure).search(line) for figure in figures)
 
 
 def snippet(gate: Guardrail) -> str:
