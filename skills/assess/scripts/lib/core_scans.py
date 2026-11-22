@@ -48,9 +48,10 @@ from lib.instruction_files import (
 from lib.interactivity import build_offers_block
 from lib.keyhole_signals import integrate
 from lib.headline import Headline, run_context_headline
-from lib.level_result_types import LevelResult
-from lib.level_tally import DEFAULT_BLOCKS, run_context_level
+from lib.level_result_types import LevelResult, OwnerExclusionsBlock
+from lib.level_tally import LEVEL_READS, run_context_level
 from lib.liveness_scan import scan_liveness
+from lib.owner_exclusions import owner_exclusions_block
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
 from lib.run_context_types import DocGraphBlock, KeyholeIntegration
@@ -316,6 +317,11 @@ def decline_blocks(assess_dir: Path, plugin_version: str) -> dict[str, Any]:
     }
 
 
+def owner_exclusions(repo_root: Path) -> OwnerExclusionsBlock:
+    """The owner's ``[checks] exclude`` entries from .assess/config.toml (#910)."""
+    return owner_exclusions_block(repo_root)
+
+
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:
     """The interactive flag and the pre-recorded offers of a headless run."""
     block = build_offers_block(non_interactive=non_interactive)
@@ -336,9 +342,9 @@ def anomalies(header: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def level(*blocks: Any) -> LevelResult:
-    """The run context's ``level`` block (#744): the tally over ``level_tally.DEFAULT_BLOCKS``,
-    which the registry entry reads in that order."""
-    return run_context_level(dict(zip(DEFAULT_BLOCKS, blocks)))
+    """The run context's ``level`` block (#744): the tally over ``level_tally.LEVEL_READS``
+    (the model's blocks, then the owner's exclusions), which the registry entry reads in that order."""
+    return run_context_level(dict(zip(LEVEL_READS, blocks)))
 
 
 def headline(level_block: Any) -> Headline:

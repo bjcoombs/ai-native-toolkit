@@ -1190,6 +1190,34 @@ revision = 1
   decline_disclosures = "drop"
 
 [[entries]]
+id = "core.owner_exclusions"
+kind = "collector"
+title = "Owner exclusions"
+summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why."
+issues = [910]
+callable = "lib.core_scans:owner_exclusions"
+publishes = ["owner_exclusions"]
+reads = ["repo_root"]
+stage = "read_side"
+degrade = false
+gate_reason = "self_degrading"
+shapes = [
+  { path = "owner_exclusions", type = "lib.level_result_types:OwnerExclusionsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "owner_exclusions.exclusions.id" = "token"
+  "owner_exclusions.exclusions.kind" = "token"
+  "owner_exclusions.exclusions.reason" = "drop"
+  "owner_exclusions.exclusions.source" = "token"
+  "owner_exclusions.exclusions.excluded_by" = "drop"
+  "owner_exclusions.exclusions.excluded_at" = "token"
+  "owner_exclusions.exclusions.version" = "token"
+  "owner_exclusions.skipped.id" = "drop"
+  "owner_exclusions.skipped.problem" = "token"
+  "owner_exclusions.disclosures" = "drop"
+
+[[entries]]
 id = "core.offers_block"
 kind = "collector"
 title = "End-of-run offers"
@@ -1675,7 +1703,7 @@ summary = "The default maturity model's conditions with state, grade and reason,
 issues = [744]
 callable = "lib.core_scans:level"
 publishes = ["level"]
-reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
+reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure", "owner_exclusions"]
 stage = "post_offers"
 shapes = [
   { path = "level", type = "lib.level_result_types:LevelResult" },
@@ -1697,6 +1725,13 @@ revision = 1
   "level.next_step.blockers.condition" = "token"
   "level.next_step.blockers.state" = "token"
   "level.next_step.blockers.reason" = "token"
+  "level.conditions.disposition" = "token"
+  "level.conditions.exclusion_kind" = "token"
+  "level.next_step.blockers.disposition" = "token"
+  "level.next_step.blockers.exclusion_kind" = "token"
+  "level.excluded.id" = "token"
+  "level.excluded.kind" = "token"
+  "level.excluded.source" = "token"
 
 [[entries]]
 id = "core.headline"

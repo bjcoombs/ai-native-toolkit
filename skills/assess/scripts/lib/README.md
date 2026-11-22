@@ -2154,6 +2154,22 @@ SKILL.md Step 2d re-offer flag), and one-line `disclosures` so an active decline
 never invisible in the report. Legacy markers have no version and are never
 re-offered. Pure stdlib; never raises. Called by `assess_core.py`.
 
+**`owner_exclusions.py`**
+Reads the owner's condition exclusions from `.assess/config.toml` (#910):
+`[checks] exclude = [{id, reason, kind?, excluded_by?, excluded_at?, plugin_version?}]`.
+`id` is a default-model condition id (`<row id>.<level>`) and `reason` is required;
+`kind` is one of `KINDS` (`not_applicable`, `measured_elsewhere`, `tool_unsupported`,
+`false_positive`, `other`, the default). The provenance keys are named as a decline marker's.
+`parse_exclusions(config, known)` returns the run-context `owner_exclusions` block
+(`OwnerExclusionsBlock`): the `exclusions` in force (with `source: "repo"`), the `skipped`
+entries with a `PROBLEMS` code (`not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
+`unknown_condition`, `duplicate`; the first entry per id wins) and one report `disclosures`
+line per exclusion. A skipped entry leaves its condition in force. `owner_exclusions_block`
+reads the repository's config and warns on stderr per skipped entry; never raises. A
+`scan_registry` entry (`core_scans.owner_exclusions`), core-only, so the headless runner and
+`/fleet` do not read it: the fleet side waits on the method stamp (#952). Counts-only keeps
+ids, kinds and dates and drops the reason and the owner. Tests: `tests/test_owner_exclusions.py`.
+
 **`interactivity.py`**
 Decides whether a run may prompt a human. Interactive is the default; the run is
 non-interactive only on an explicit signal - the orchestrator's `--non-interactive`
@@ -2471,9 +2487,18 @@ not need the level below; `requires` states a real dependency). `level_result(mo
 returns a `LevelResult` (shapes in `level_result_types.py`):
 
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
-  null for a signal with no producer class), `counted` (grade `measured` or `verified`),
-  `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
-  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`, and
+  not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
+  excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
+  that is not met, a `reason` code. An owner-excluded condition also carries
+  `disposition: "excluded_by_owner"` and `exclusion_kind`.
+- Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
+  entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
+  criteria say, out of the tally and the denominator; a condition that `requires` it is
+  `not_applicable` with `requires:<id>`; an excluded gate condition never holds its gate, so
+  its Step stays unreachable and the blocker carries the disposition and kind. `excluded[]`
+  (`{id, kind, source}`) is present only when an exclusion applies, so a result without
+  exclusions is unchanged. Ids the model does not define are ignored.
 - `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
@@ -2491,8 +2516,8 @@ is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, 
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
 counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
-the `level` block, a `scan_registry` entry (`core_scans.level`, which reads the blocks the default
-model names, `level_tally.DEFAULT_BLOCKS`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads `level_tally.LEVEL_READS`:
+the blocks the default model names, `DEFAULT_BLOCKS`, then `owner_exclusions`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
 byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
 `$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
 fixtures through `/fleet` and `/assess` on the same commit.
@@ -3327,9 +3352,11 @@ the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when 
 count still falls short once the gates hold and their counted conditions join the
 tally, "N more verified practices are met, for example `<first unmet counted
 condition>`"; a not-measured gate says
-so with its reason; at the top Step it says the Step holds while its gates hold),
-and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
-model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+so with its reason, and a gate whose condition the owner excluded says "excluded by
+owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
+Step holds while its gates hold), and "Verified practices: N of M measured · K not
+measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes), with
+"E excluded by owner" before the model when the level lists exclusions (#910). Also `markdown` (the lines, the
 first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
 badge message and the `log.md` readiness line), `step`, `next_step`,
 `levels_version` and `headline_version`. A missing or degraded `level` block gives
