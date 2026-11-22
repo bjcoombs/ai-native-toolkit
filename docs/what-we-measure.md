@@ -26,123 +26,165 @@ Each signal has an input class: what its producer read. The class fixes a grade.
 
 A scan that feeds no maturity-model criterion is `unclassified` until its evidence is classified (#789 step 6).
 
+## Conditions by truth tag
+
+Each condition carries one or more truth tags: the truth it keeps honest. A condition holds when all of its criteria hold, and each criterion's key is `<row>.<n>:<signal>`. A condition with several tags is listed under its first tag and named under the others as shared; it counts once. There are 24 conditions, 2 of them with more than one tag.
+
+| Tag | Conditions | Listed here | Shared |
+|---|---|---|---|
+| Behaviour (`behaviour`) | 3 | 3 | 0 |
+| Contracts (`contracts`) | 0 | 0 | 0 |
+| Docs (`docs`) | 3 | 2 | 1 |
+| Structure (`structure`) | 6 | 6 | 0 |
+| Agent context (`agent_context`) | 6 | 6 | 1 |
+| Agent runtime (`agent_runtime`) | 4 | 4 | 1 |
+| Governance (`governance`) | 3 | 3 | 0 |
+| Supply chain (`supply_chain`) | 1 | 0 | 1 |
+
+### Behaviour
+
+Tag `behaviour`: 3 conditions, none shared with another tag.
+
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
+|---|---|---|---|---|---|---|---|---|
+| `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `ci_checks` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | `ci_runs_tests` | positive | - | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
+| `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | `coverage_gate` | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | `coverage_gate` | positive | - | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error, so CI holds the line you have reached. |
+| `layer-6-coverage.2` A mutation run has completed | `test_pressure` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | - | positive | requires `layer-5-ci.1` | Run the opt-in mutation pass to see which tests pin behaviour. |
+
+### Contracts
+
+Tag `contracts`. No condition carries this tag yet.
+
+### Docs
+
+Tag `docs`: 3 conditions, 1 shared with another tag.
+
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
+|---|---|---|---|---|---|---|---|---|
+| `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | Refresh the docs the report lists under doc freshness. |
+| `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | Refresh the docs the report lists under doc freshness, oldest first. |
+
+Also carries this tag, listed under its first tag: `layer-0-instructions.2` (Agent context).
+
+### Structure
+
+Tag `structure`: 6 conditions, none shared with another tag.
+
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
+|---|---|---|---|---|---|---|---|---|
+| `layer-2-design.1` The import graph has module structure | `structure` | Import-graph modularity: is at least 0.3 (`structure.modularity_q gte 0.3`) | `measured` | yes | - | positive | - | Group related modules into packages that mostly import within themselves. |
+| `layer-2-design.2` Packages import one another | `structure` | Cross-package imports: is above 0 (`structure.cross_package_edges gt 0`) | `measured` | yes | - | positive | requires `layer-2-design.1` | Nothing to change on its own: this is met once one package imports another. |
+| `layer-2-design.2` Cross-package imports use a package's front door | `structure` | Cross-package imports through a package's front door: is at least 0.9 (`structure.front_door_ratio gte 0.9`) | `measured` | yes | - | positive | requires `layer-2-design.1` | Import other packages through their public API rather than their submodules. |
+| `layer-3-linters.1` CI runs a linter or type checker | `ci_checks` | A CI line runs a linter on ordinary changes and can stop its job: is true (`ci_checks.lint_runs eq true`) | `verified` | yes | - | positive | - | Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without \|\| true, continue-on-error or allow_failure. |
+| `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `promissory_markers` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | Revisit the oldest suppression comments and fix or remove them. |
+| `layer-3-linters.2` Suppression ages can be read from history | `promissory_markers` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | - | positive | requires `layer-3-linters.1` | Run on a full clone so suppression ages can be measured. |
+| `layer-4-architecture.1` A boundary or ownership map names a module path | `structure_drift` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | - | positive | - | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
+| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `stats_summary` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | - | positive | requires `layer-4-architecture.1` | Split the largest files along their natural seams. |
+
+### Agent context
+
+Tag `agent_context`: 6 conditions, 1 shared with another tag.
+
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
+|---|---|---|---|---|---|---|---|---|
+| `layer-0-instructions.1` An instruction file is committed | `layer_grades` | A committed instruction file exists: is true (`layer_grades.instruction_file_present eq true`) | `declared` | no, listed | `instructions` | positive | - | Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works. |
+| `layer-0-instructions.2` An instruction file names a check command (shared with Docs) | `agent_environment` | Instruction files name a check command: is above 0 (`agent_environment.check.named_total gt 0`) | `declared` | no, listed | - | positive | - | Name the command that checks a change (for example make check) in your instruction file. |
+| `layer-0-instructions.2` Every checkable instruction claim holds (shared with Docs) | `instruction_claims` | Instruction claims that do not hold: is 0 (`instruction_claims.failed eq 0`) | `declared` | no, listed | - | positive | - | Update the instruction lines whose claims no longer match the repository. |
+| `layer-0-instructions.2` Always-loaded instructions fit in 200 lines (shared with Docs) | `nested_instructions` | Always-loaded Claude Code instruction lines: is at most 200 (`nested_instructions.budget.claude_code.lines lte 200`) | `declared` | no, listed | - | positive | - | Move detail that is needed only sometimes into files the instructions point to. |
+| `guardrails-stated.1` Half the configured gates are stated | `guardrails` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | - | positive | - | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it. |
+| `guardrails-stated.2` Every configured gate is stated | `guardrails` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | - | positive | requires `guardrails-stated.1` | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
+| `agent-consistency.1` Every agent system names the same checks | `agent_consistency` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | - | positive | - | Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives. |
+| `agent-consistency.2` Every agent system reads one canonical file | `agent_consistency` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | - | positive | requires `agent-consistency.1` | Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool. |
+
+### Agent runtime
+
+Tag `agent_runtime`: 4 conditions, 1 shared with another tag.
+
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
+|---|---|---|---|---|---|---|---|---|
+| `layer-1-liveness.1` Some runtime telemetry is committed | `observability` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | - | positive | - | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
+| `layer-1-liveness.2` Runtime telemetry reaches rung 3 | `observability` | Observability rung: is at least 3 (`observability.rung gte 3`) | `declared` | no, listed | - | positive | - | Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill. |
+| `layer-5-ci.2` Every dependency manifest has its lockfile (shared with Supply chain) | `agent_environment` | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | - | positive | - | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking. |
+| `layer-8-agent-ops.2` Agent hooks are committed | `agent_ops` | Agent hooks are committed: is true (`agent_ops.summary.hooks_present eq true`) | `config_only` | no, listed | - | positive | - | Commit the hooks that run checks around agent actions. |
+| `layer-8-agent-ops.2` Agent routines are committed | `agent_ops` | Agent routines are committed: is true (`agent_ops.summary.routines_present eq true`) | `config_only` | no, listed | - | positive | - | Commit the routines agents run on a schedule or trigger. |
+
+### Governance
+
+Tag `governance`: 3 conditions, none shared with another tag.
+
+| Condition | Producer | Criterion | Grade | Counts | Step gate | Polarity | Links | Next step |
+|---|---|---|---|---|---|---|---|---|
+| `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | Commit an AI review step in CI, or review merged changes before they land. |
+| `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | - | Aim for a review on at least four in five merged changes. |
+| `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | - | Approve changes explicitly when you review them. |
+| `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | Commit the agent permission allowlist your team uses, so every clone shares it. |
+
+### Supply chain
+
+Tag `supply_chain`: 1 condition, shared with another tag.
+
+Also carries this tag, listed under its first tag: `layer-5-ci.2` (Agent runtime).
+
+## How the tags relate
+
+### Shared conditions
+
+How many conditions each pair of tags shares. The diagonal is the tag's own count.
+
+| Tag | `behaviour` | `contracts` | `docs` | `structure` | `agent_context` | `agent_runtime` | `governance` | `supply_chain` |
+|---|---|---|---|---|---|---|---|---|
+| `behaviour` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `contracts` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `docs` | 0 | 0 | 3 | 0 | 1 | 0 | 0 | 0 |
+| `structure` | 0 | 0 | 0 | 6 | 0 | 0 | 0 | 0 |
+| `agent_context` | 0 | 0 | 1 | 0 | 6 | 0 | 0 | 0 |
+| `agent_runtime` | 0 | 0 | 0 | 0 | 0 | 4 | 0 | 1 |
+| `governance` | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 0 |
+| `supply_chain` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
+
+- `docs` and `agent_context`: `layer-0-instructions.2`.
+- `agent_runtime` and `supply_chain`: `layer-5-ci.2`.
+
+### Step gates
+
+The autonomy Steps in order. A Step needs its threshold of met, counted conditions and every gate, whatever the gate's grade; gates accumulate, so each Step keeps the gates below it.
+
+| Step | Name | Threshold | New gates | Gate covers | Tags |
+|---|---|---|---|---|---|
+| 1 | Assisted | 0 | - | - | - |
+| 2 | Supervised agent PRs | 1 | `instructions` | `layer-0-instructions.1` | `agent_context` |
+| 3 | Unattended agent PRs | 3 | `ci_runs_tests` | `layer-5-ci.1` | `behaviour` |
+| 4 | Autonomous loops | 5 | `coverage_gate` | `layer-6-coverage.1` | `behaviour` |
+
+### Requires, guard and equality links
+
+- `layer-2-design.2` requires `layer-2-design.1`.
+- `layer-3-linters.2` requires `layer-3-linters.1`.
+- `layer-4-architecture.2` requires `layer-4-architecture.1`.
+- `layer-6-coverage.2` requires `layer-5-ci.1`.
+- `guardrails-stated.2` requires `guardrails-stated.1`.
+- `agent-consistency.2` requires `agent-consistency.1`.
+
+No condition is guarded yet. No criterion compares two signals yet.
+
 ## Maturity-model rows
 
-Each row holds conditions in order. A condition holds when all of its criteria hold, and its key is `<row>.<n>:<signal>`. Truth names the truth tags the condition keeps honest; a condition with several counts once.
+The rows the conditions come from. A row's level is the highest level whose conditions, and every one below, hold.
 
-### Layer 0: agent instructions
-
-Row `layer-0-instructions`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-0-instructions.1` An instruction file is committed | `agent_context` | A committed instruction file exists: is true (`layer_grades.instruction_file_present eq true`) | `declared` | no, listed | Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works. |
-| `layer-0-instructions.2` An instruction file names a check command | `agent_context`, `docs` | Instruction files name a check command: is above 0 (`agent_environment.check.named_total gt 0`) | `declared` | no, listed | Name the command that checks a change (for example make check) in your instruction file. |
-| `layer-0-instructions.2` Every checkable instruction claim holds | `agent_context`, `docs` | Instruction claims that do not hold: is 0 (`instruction_claims.failed eq 0`) | `measured` | yes | Update the instruction lines whose claims no longer match the repository. |
-| `layer-0-instructions.2` Always-loaded instructions fit in 200 lines | `agent_context`, `docs` | Always-loaded Claude Code instruction lines: is at most 200 (`nested_instructions.budget.claude_code.lines lte 200`) | `measured` | yes | Move detail that is needed only sometimes into files the instructions point to. |
-
-### Layer 1: runtime legibility
-
-Row `layer-1-liveness`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-1-liveness.1` Some runtime telemetry is committed | `agent_runtime` | Observability rung: is at least 1 (`observability.rung gte 1`) | `declared` | no, listed | Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run. |
-| `layer-1-liveness.2` Runtime telemetry reaches rung 3 | `agent_runtime` | Observability rung: is at least 3 (`observability.rung gte 3`) | `declared` | no, listed | Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill. |
-
-### Layer 2: code design (module structure)
-
-Row `layer-2-design`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-2-design.1` The import graph has module structure | `structure` | Import-graph modularity: is at least 0.3 (`structure.modularity_q gte 0.3`) | `measured` | yes | Group related modules into packages that mostly import within themselves. |
-| `layer-2-design.2` Packages import one another | `structure` | Cross-package imports: is above 0 (`structure.cross_package_edges gt 0`) | `measured` | yes | Nothing to change on its own: this is met once one package imports another. |
-| `layer-2-design.2` Cross-package imports use a package's front door | `structure` | Cross-package imports through a package's front door: is at least 0.9 (`structure.front_door_ratio gte 0.9`) | `measured` | yes | Import other packages through their public API rather than their submodules. |
-
-### Layer 3: linters run in CI, suppression cap
-
-Row `layer-3-linters`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-3-linters.1` CI runs a linter or type checker | `structure` | A CI line runs a linter on ordinary changes and can stop its job: is true (`ci_checks.lint_runs eq true`) | `verified` | yes | Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without \|\| true, continue-on-error or allow_failure. |
-| `layer-3-linters.2` Stale suppressions stay at 10 or fewer | `structure` | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | Revisit the oldest suppression comments and fix or remove them. |
-| `layer-3-linters.2` Suppression ages can be read from history | `structure` | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | Run on a full clone so suppression ages can be measured. |
-
-### Layer 4: architecture boundaries and size
-
-Row `layer-4-architecture`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-4-architecture.1` A boundary or ownership map names a module path | `structure` | Ownership-map patterns naming a module path: is above 0 (`structure_drift.tier_0.boundary_patterns gt 0`) | `config_only` | no, listed | Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths. |
-| `layer-4-architecture.2` 95% of files are 500 lines or fewer | `structure` | File size at the 95th percentile: is at most 500 (`stats_summary.loc.p95 lte 500`) | `measured` | yes | Split the largest files along their natural seams. |
-
-### Layer 5: CI and the agent's local check
-
-Row `layer-5-ci`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | `behaviour` | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
-| `layer-5-ci.2` Every dependency manifest has its lockfile | `agent_runtime`, `supply_chain` | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking. |
-
-### Layer 6: coverage gates and truth pressure
-
-Row `layer-6-coverage`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-6-coverage.1` CI runs a coverage gate of at least 50 percent | `behaviour` | CI runs a coverage gate of at least 50 percent: is true (`coverage_gate.enforced_meets_minimum eq true`) | `verified` | yes | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without \|\| true or continue-on-error, so CI holds the line you have reached. |
-| `layer-6-coverage.2` A mutation run has completed | `behaviour` | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | Run the opt-in mutation pass to see which tests pin behaviour. |
-
-### Layer 7: review on merged pull requests
-
-Row `layer-7-review`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-7-review.1` Changes get reviewed | `governance` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | Commit an AI review step in CI, or review merged changes before they land. |
-| `layer-7-review.2` Most merged changes are reviewed | `governance` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | Aim for a review on at least four in five merged changes. |
-| `layer-7-review.2` Half of merged changes are approved | `governance` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | Approve changes explicitly when you review them. |
-
-### Layer 8: AI project management
-
-Row `layer-8-agent-ops`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `layer-8-agent-ops.1` Agent permissions are committed | `governance` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | Commit the agent permission allowlist your team uses, so every clone shares it. |
-| `layer-8-agent-ops.2` Agent hooks are committed | `agent_runtime` | Agent hooks are committed: is true (`agent_ops.summary.hooks_present eq true`) | `config_only` | no, listed | Commit the hooks that run checks around agent actions. |
-| `layer-8-agent-ops.2` Agent routines are committed | `agent_runtime` | Agent routines are committed: is true (`agent_ops.summary.routines_present eq true`) | `config_only` | no, listed | Commit the routines agents run on a schedule or trigger. |
-
-### Documentation freshness
-
-Row `doc-freshness`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `doc-freshness.1` Most mapped docs keep pace with their code | `docs` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | Refresh the docs the report lists under doc freshness. |
-| `doc-freshness.2` Four in five mapped docs keep pace | `docs` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | Refresh the docs the report lists under doc freshness, oldest first. |
-
-### Guardrails stated
-
-Row `guardrails-stated`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `guardrails-stated.1` Half the configured gates are stated | `agent_context` | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it. |
-| `guardrails-stated.2` Every configured gate is stated | `agent_context` | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
-
-### Cross-agent instruction consistency
-
-Row `agent-consistency`, team scope, aggregated by `min`.
-
-| Condition | Truth | Criterion | Grade | Counts | Next step |
-|---|---|---|---|---|---|
-| `agent-consistency.1` Every agent system names the same checks | `agent_context` | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives. |
-| `agent-consistency.2` Every agent system reads one canonical file | `agent_context` | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool. |
+| Row | Title | Scope | Aggregated by | Levels |
+|---|---|---|---|---|
+| `layer-0-instructions` | Layer 0: agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
+| `layer-1-liveness` | Layer 1: runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
+| `layer-2-design` | Layer 2: code design (module structure) | team | `min` | `layer-2-design.1`, `layer-2-design.2` |
+| `layer-3-linters` | Layer 3: linters run in CI, suppression cap | team | `min` | `layer-3-linters.1`, `layer-3-linters.2` |
+| `layer-4-architecture` | Layer 4: architecture boundaries and size | team | `min` | `layer-4-architecture.1`, `layer-4-architecture.2` |
+| `layer-5-ci` | Layer 5: CI and the agent's local check | team | `min` | `layer-5-ci.1`, `layer-5-ci.2` |
+| `layer-6-coverage` | Layer 6: coverage gates and truth pressure | team | `min` | `layer-6-coverage.1`, `layer-6-coverage.2` |
+| `layer-7-review` | Layer 7: review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
+| `layer-8-agent-ops` | Layer 8: AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
+| `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
+| `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
+| `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
 
 ## Scans
 
