@@ -50,6 +50,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "layer-0-instructions.1:layer_grades.instruction_file_present",
@@ -67,6 +70,10 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context",
+            "docs"
+          ],
           "criteria": [
             {
               "key": "layer-0-instructions.2:agent_environment.check.named_total",
@@ -116,6 +123,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-1-liveness.1:observability.rung",
@@ -133,6 +143,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-1-liveness.2:observability.rung",
@@ -158,6 +171,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-2-design.1:structure.modularity_q",
@@ -175,6 +191,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-2-design.2:structure.cross_package_edges",
@@ -212,6 +231,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-3-linters.1:ci_checks.lint_runs",
@@ -229,6 +251,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-3-linters.2:promissory_markers.families.suppression.stale",
@@ -266,6 +291,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns",
@@ -283,6 +311,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-4-architecture.2:stats_summary.loc.p95",
@@ -308,6 +339,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-5-ci.1:ci_checks.enforced_check_runs",
@@ -325,6 +359,10 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime",
+            "supply_chain"
+          ],
           "criteria": [
             {
               "key": "layer-5-ci.2:agent_environment.pinning.unlocked_total",
@@ -350,6 +388,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-6-coverage.1:coverage_gate.enforced_meets_minimum",
@@ -367,6 +408,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-6-coverage.2:test_pressure.mutation_run",
@@ -392,6 +436,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-7-review.1:review_evidence.present",
@@ -409,6 +456,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-7-review.2:review_reality.reviewed_share",
@@ -446,6 +496,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
@@ -463,6 +516,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
@@ -500,6 +556,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "docs"
+          ],
           "criteria": [
             {
               "key": "doc-freshness.1:doc_staleness.summary.stale_pct",
@@ -517,6 +576,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "docs"
+          ],
           "criteria": [
             {
               "key": "doc-freshness.2:doc_staleness.summary.stale_pct",
@@ -542,6 +604,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "guardrails-stated.1:guardrails.stated_pct",
@@ -559,6 +624,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "guardrails-stated.2:guardrails.stated_pct",
@@ -584,6 +652,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "agent-consistency.1:agent_consistency.conflicts",
@@ -601,6 +672,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "agent-consistency.2:agent_consistency.unlinked",
@@ -1335,6 +1409,18 @@
           "code": "external_ci_marker",
           "means": "The tree tracks no CI file of any kind and the root holds a Prow OWNERS_ALIASES file, so presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker.",
           "next_step": "Nothing to change: run with --platform to read the checks on merged pull requests instead.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "analysers_in_build",
+          "means": "In lint_basis: no CI line runs a linter, but a CI dotnet build runs the analysers a committed Directory.Build.props or .csproj turns on (EnforceCodeStyleInBuild, AnalysisLevel). Their severities live in .editorconfig, which the scan does not evaluate.",
+          "next_step": "Nothing to change if the analysers fail the build on a finding; a CI step running dotnet format --verify-no-changes lets the scan read a lint run.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "compiler_gate_only",
+          "means": "In lint_basis: no CI line runs a linter, and the only static gate is a compiler run with warnings as errors (mix compile --warnings-as-errors, -Werror, dotnet build -warnaserror, TreatWarningsAsErrors in Directory.Build.props). It is not counted as a lint run.",
+          "next_step": "Running a linter or analyser in its own CI step (mix credo, clang-tidy, dotnet format --verify-no-changes) lets the scan read a lint run.",
           "carried_in": "basis"
         }
       ],
@@ -4044,7 +4130,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: it may be in an included file; unknown_trigger: its triggers are not settled; check_target: a target may run one; unread_ci_system: an unparsed CI system may run one; external_ci: merged changes carry external CI checks; external_ci_marker: a root Prow OWNERS_ALIASES, no CI file"
+      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET build analysers; compiler_gate_only: only warnings as errors"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -4098,7 +4184,7 @@
       "collector": "core.agent_environment",
       "input_class": "head_text",
       "grade": "declared",
-      "null_means": ""
+      "null_means": "no_manifests: no dependency manifest is read (pinning.manifests_total 0), so there is nothing to lock"
     },
     {
       "path": "coverage_gate.enforced_meets_minimum",

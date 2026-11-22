@@ -35,8 +35,11 @@ at HEAD (``lib.command_index.repo_files``):
   ``composer.json``) outside the built-in and ``.assess/config.toml`` excludes,
   and the lockfile beside it or in a parent directory. A
   ``requirements*.txt`` counts as its own lock when every requirement is
-  pinned with ``==``. ``unlocked_total`` counts the manifests with no lock (0
-  when there is no manifest); Layer 5 level 2 reads it (#786).
+  pinned with ``==``. ``manifests_total`` counts the manifests the lock check
+  reads (every row); ``unlocked_total`` counts those with no lock. Layer 5
+  level 2 reads ``unlocked_total`` (#786), and reads not measured
+  (``no_manifests``, ``signal_grades.EMPTY_DENOMINATORS``) when
+  ``manifests_total`` is 0, since there is nothing to lock (#927).
 - ``findings``: a ``copilot-setup-steps.yml`` that breaks GitHub's documented
   constraints: one job named ``copilot-setup-steps``, only ``steps``,
   ``permissions``, ``runs-on``, ``services``, ``snapshot`` and
@@ -187,6 +190,7 @@ class PinningBlock(TypedDict):
     manifests: list[PinRow]
     all_locked: bool | None
     unlocked_total: int
+    manifests_total: int
 
 
 class CiDuration(TypedDict):
@@ -623,7 +627,8 @@ def scan_agent_environment(
                   "named_total": len(resolved),
                   "unresolved": [n for n in named if n["verdict"] != "resolved"][:MAX_NAMED]},
         "pinning": {"manifests": pins, "all_locked": all(p["locked"] for p in pins) if pins else None,
-                    "unlocked_total": sum(1 for p in pins if not p["locked"])},
+                    "unlocked_total": sum(1 for p in pins if not p["locked"]),
+                    "manifests_total": len(pins)},
         "ci_duration": ci_duration(repo_root) if probe_ci else {
             "available": False, "reason": "not_probed: the CI-duration probe was turned off"},
         "findings": findings,

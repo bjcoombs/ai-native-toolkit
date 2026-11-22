@@ -281,6 +281,16 @@ constant each.
 # - run-context.json delivery gains sample_page_size (issue #995): the changes per
 #   heavy read the merged sample finished at, or null when none was made. Additive:
 #   no existing key moves.
+# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
+#   #926), both with lint_runs null: a CI .NET build whose committed project files
+#   turn on the analysers, and a compiler run with warnings as errors as the only
+#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
+#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
+#   --exit-code in its job counts, and a target whose recipe is not read reads
+#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
+# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
+#   the number of dependency manifests the lockfile check reads. Additive: no
+#   existing key moves, and complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -469,6 +479,11 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
 # Unreleased (bumped once by the 3.0.0 release PR):
+# - agent_consistency drops a leading heading or list ordinal before reading
+#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
+#   conflict, so agent-consistency level 1 can move from unmet to met. A
+#   next step for an unlinked system names its primary file (CLAUDE.md) before
+#   a supplementary rule file.
 # - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
 #   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
 #   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
@@ -476,6 +491,9 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
 #   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
 #   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
+# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
+#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
+#   read met. Fewer conditions count on repositories with no dependency manifest.
 # - GitLab `rules:` are read as GitLab runs them (issue #884): the first matching rule
 #   decides, `if:` expressions are evaluated per merge request and branch push pipeline,
 #   and a top-level `workflow: rules:` gates every job of its file. A job gated by

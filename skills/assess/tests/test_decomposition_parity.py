@@ -16,10 +16,15 @@ This module pins that invariant two ways:
 2. **Structural contract.** The decomposed units exist on disk and the
    orchestrator SKILL.md delegates to each of them, so a future edit that
    re-inlines or drops a unit fails loudly.
+
+After a deliberate report change, regenerate the golden (``make regen`` runs this):
+
+    cd skills/assess && PARITY_GOLDEN_REGEN=1 uv run --locked pytest tests/test_decomposition_parity.py
 """
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from assess_core import build_and_publish_run
@@ -65,7 +70,10 @@ def _render_parity_report(repo: Path) -> str:
 def test_report_parity_matches_golden(tmp_path):
     """The deterministic report must reproduce the committed golden byte-for-byte."""
     repo = _build_parity_fixture(tmp_path / "repo")
-    assert _render_parity_report(repo) == GOLDEN.read_text(encoding="utf-8")
+    report = _render_parity_report(repo)
+    if os.environ.get("PARITY_GOLDEN_REGEN") == "1":
+        GOLDEN.write_text(report, encoding="utf-8", newline="\n")
+    assert report == GOLDEN.read_text(encoding="utf-8")
 
 
 def test_report_render_is_deterministic(tmp_path):
