@@ -153,8 +153,67 @@ def _lint_words(words: list[str]) -> bool:
     return program is not None and bool(program) and _lint_words(program)
 
 
-# A linter asked only for its version or usage runs no lint (``ruff --version``, #782).
-_INFO_FLAGS = frozenset({"--version", "--help", "-V"})
+# Flags that ask any program for its version or usage and run no check (#919).
+_INFO_FLAGS = frozenset({"--version", "--help"})
+# Runners whose ``-h`` is help (``_H_HELP`` adds the linters, type checkers, pytest, tox
+# and nox). A committed script is never one: ``./scripts/test.sh -h db`` names a host.
+_H_RUNNERS = frozenset({
+    "dart", "flutter", "dotnet", "go", "cargo", "ctest", "rspec", "make", "just", "bazel",
+    "jest", "vitest", "mocha", "swift", "deno", "phpunit",
+})
+# Programs that list their tests without running them: ``pytest --collect-only`` /
+# ``--co``, ``dotnet test --list-tests``.
+_LIST_FLAGS: dict[str, frozenset[str]] = {
+    "pytest": frozenset({"--collect-only", "--co"}),
+    "py.test": frozenset({"--collect-only", "--co"}),
+    "dotnet": frozenset({"--list-tests"}),
+    "phpunit": frozenset({"--list-tests"}),
+    "swift": frozenset({"--list-tests"}),
+    "ctest": frozenset({"-N", "--show-only"}),
+    "vstest.console": frozenset({"--list-tests", "/ListTests"}),
+}
+
+
+def is_info_invocation(text: str) -> bool:
+    """A command that asks only for a version, usage or a test list, so it runs no check (#919).
+
+    ``--version`` or ``--help`` anywhere; ``rspec --init``, which writes a config and runs
+    no spec; and flags read only for the program they belong to (``_info_program`` unwraps
+    ``uv run``, ``npx``, ``python -m``, ``bundle exec``, ``docker compose run``): ``-V`` for a program in ``_V_VERSION`` (the
+    linters, type checkers, ``pytest``, ``tox``, ``nox``; elsewhere it can run the work,
+    as in ``mvn -B -V verify`` or ``./gradlew -V test``), ``-h`` for those and the runners
+    in ``_H_RUNNERS``, never for a script (``./scripts/test.sh -h db``), and the
+    test-listing flags in ``_LIST_FLAGS`` (``pytest --co``, ``dotnet test --list-tests``).
+    """
+    words = command_words(text)
+    if not words:
+        return False
+    if _INFO_FLAGS.intersection(words) or ("rspec" in words and "--init" in words):
+        return True
+    program = _info_program(words)
+    if not program:
+        return False
+    head = PurePosixPath(program[0]).name
+    rest = set(program[1:])
+    return (("-V" in rest and head in _V_VERSION) or ("-h" in rest and head in _H_HELP)
+            or bool(rest & _LIST_FLAGS.get(head, frozenset())))
+
+
+def _info_program(words: list[str]) -> list[str]:
+    """The program a command finally runs, through ``_program`` and the #920 wrappers
+    (``bundle exec rspec -h`` -> ``rspec -h``, ``docker compose run app pytest --co``)."""
+    for _ in range(8):   # wrappers nest a few deep at most
+        if not words:
+            return []
+        inner = _program(words)
+        if inner == words:
+            inner = _wrapped(words) or words
+        if inner == words:
+            return words
+        words = inner
+    return words
+
+
 # Test programs that run tests and nothing else: no linter can hide inside them.
 _DIRECT_TESTS = (ALWAYS_CHECK - {"tox", "nox"}) | _JS_TEST_RUNNERS
 
@@ -184,6 +243,10 @@ def _task_target(words: list[str], names: frozenset[str]) -> bool:
 # ``is_lint_command`` (Layer 5, ``test_or_lint_configured``) keeps its vocabulary.
 TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
 _RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
+# Programs whose ``-V`` prints the version and exits (``is_info_invocation``).
+# ``pytype -V`` is ``--python-version`` and runs the check, so pytype is left out.
+_V_VERSION = (_RUN_PROGRAMS | ALWAYS_CHECK) - {"pytype"}
+_H_HELP = _V_VERSION | _H_RUNNERS
 # Package-manager forms that run a named program: ``npm exec``, ``pnpm dlx``, ``bun x``.
 _EXEC_SUBCOMMANDS = frozenset({"exec", "dlx", "x"})
 
@@ -265,7 +328,7 @@ def is_lint_run(text: str) -> bool:
         return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
-    if not words or _INFO_FLAGS.intersection(words):
+    if not words or is_info_invocation(text):
         return False
     program = _exec_program(words)
     if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run

@@ -17,6 +17,8 @@ evidence is static, read from the files at HEAD:
   it did not find them absent. ``test_or_lint_configured`` keeps its meaning and stays
   false there. An empty ``Jenkinsfile`` reads the same (accepted: the scan
   cannot tell an empty pipeline from one it cannot parse).
+- Only workflow files directly under ``.github/workflows/`` are read: GitHub
+  does not run one in a subfolder (#919).
 - Each line with its ``- `` / ``run:`` / ``script:`` lead dropped
   (``command_index.ci_line_text``), split into shell segments and tokenised the
   way instruction-file commands are (``command_resolver.extract_commands``),
@@ -28,6 +30,10 @@ evidence is static, read from the files at HEAD:
   ``turbo run test``, ``nx affected -t test``, ``task test``, ``hatch test``)
   and a wrapper read by the program it runs (``docker compose run app pytest``,
   ``bundle exec rspec``, ``pnpm exec vitest run``, ``hatch run test``; #920).
+  A command that only asks for a version, usage or a test list (``ruff
+  --version``, ``dotnet test --list-tests``, ``pytest --co``;
+  ``check_command.is_info_invocation``, #919) runs no check, so it counts in no
+  signal.
 - ``is_check_command`` knows test and check targets but not lint ones
   (``make lint`` is not a check it credits in an instruction file), so a CI
   line also counts when ``check_command.is_lint_command`` credits it: a linter
@@ -90,7 +96,9 @@ configuration was read in full and holds none. ``basis`` names which case applie
 
 ``enforced_check_runs`` (issue #775) is the same test with masked checks left
 out: a check that runs but cannot fail its job (``pytest || true``,
-``continue-on-error: true``, ``allow_failure: true``, ``set +e``; the rules and
+``continue-on-error: true``, ``allow_failure: true``, ``set +e``, an exit-zero
+flag such as ``--exit-zero``, a later ``exit 0`` in a shell without errexit, a literal
+``if: false``; the rules and
 their known limits are in ``lib.ci_masking``), and with checks that do not
 run on ordinary changes left out too (a ``workflow_dispatch``- or
 ``schedule``-only workflow, a GitLab ``when: manual`` job; ``lib.ci_triggers``).
@@ -143,7 +151,8 @@ lint line such a check reads null. A direct test-program call (``pytest``,
 - ``no_lint_command`` / ``no_ci`` (false): CI files with no lint or
   may-lint line, or no CI file.
 
-``test_or_lint_configured`` and ``enforced_check_runs`` keep their meaning.
+``test_or_lint_configured`` and ``enforced_check_runs`` keep their meaning, apart
+from #919: a version-only command and a subfolder workflow count in no signal.
 
 ``masked_check_commands`` counts the masked check lines and
 ``off_trigger_check_commands`` the unmasked ones that do not run on ordinary
@@ -159,8 +168,8 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.check_command import (
-    BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_lint_command, is_lint_run,
-    may_check, may_lint)
+    BARE_RUN_PROGRAMS, LINT_PROGRAMS, TYPE_PROGRAMS, is_check_command, is_info_invocation,
+    is_lint_command, is_lint_run, may_check, may_lint)
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
@@ -259,8 +268,9 @@ def _line_runs_check(line: str, *, script_item: bool = True) -> bool:
     commands = extract_commands(f"```bash\n{text}\n```\n")
     bare_item = _BARE_ITEM.match(line) is not None
     return any(
-        (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
-        or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text)))
+        not is_info_invocation(c.text) and (
+            (is_check_command(c.text) and not (bare_item and not script_item and _lone_check(c.text)))
+            or (is_lint_command(c.text) and not (bare_item and _lone_linter(c.text))))
         for c in commands
     )
 
@@ -312,7 +322,8 @@ def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
     if _action(line) in MAY_LINT_ACTIONS:
         return True
     bare_item = _BARE_ITEM.match(line) is not None
-    return any(may_lint(c.text) and not (bare_item and not script_item and _lone_check(c.text))
+    return any(may_lint(c.text) and not is_info_invocation(c.text)
+               and not (bare_item and not script_item and _lone_check(c.text))
                for c in _line_commands(line))
 
 
@@ -320,7 +331,8 @@ def _line_may_check(line: str, *, script_item: bool = True) -> bool:
     """One CI line whose target's recipe is not read, so it may run a check (#920):
     ``make foo``, ``npm run foo``, ``./scripts/foo.sh``, ``docker compose run app``."""
     bare_item = _BARE_ITEM.match(line) is not None
-    return any(may_check(c.text) and not (bare_item and not script_item and _lone_check(c.text))
+    return any(may_check(c.text) and not is_info_invocation(c.text)
+               and not (bare_item and not script_item and _lone_check(c.text))
                for c in _line_commands(line))
 
 

@@ -3568,7 +3568,18 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 --version` runs no lint) and without the package-manager test aliases
 `is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
 (`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
-ruff check .`). Type checkers count as linters there, in a vocabulary local to
+ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
+on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
+program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
+`nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
+script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
+`--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
+read through the #920 wrappers (`_info_program`: `bundle exec rspec -h`, `docker compose
+run app pytest --co`), and `ci_checks` drops an info invocation from `may_check` too (elsewhere `-V` can run the work: `mvn -B -V verify`,
+`./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
+`pytest --version` is no Layer 5 check and a version-only step makes
+`test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
 `type-check` targets such as `npm run typecheck` or `make type-check`), so
 `is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
@@ -3617,7 +3628,8 @@ it run a linter (#782)?
 Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
 the instruction file; Layer 3 level 1 reads `lint_runs`.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
-selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
+selects (GitHub Actions workflows directly under `.github/workflows/`, never a subfolder,
+which GitHub does not run (#919); `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_configured, basis, enforced_check_runs,
@@ -3670,7 +3682,8 @@ same `included_jobs` rule, else null with `enforced_basis: check_target` when an
 unmasked line on ordinary changes runs a target whose recipe is not read
 (`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
-still describes `test_or_lint_configured`, which keeps its meaning.
+still describes `test_or_lint_configured`, which keeps its meaning apart from #919's
+version-only and subfolder cases, which count nowhere.
 `lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
 and trigger rules, the same own, included and merged files, with
 `count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
@@ -3725,13 +3738,27 @@ true` (literal, a trailing comment ignored) masks the mapping that holds it and
 everything under it (a step or a job); `set +e` masks the rest of its script body
 (a block scalar, or one `script:` list) until `set -e`, unless a later statement
 exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
-`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
-joined first.
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). Issue #919 adds
+three: a segment with an exit-zero flag (`--exit-zero`, `--issues-exit-code=0` or `0` as
+the next word) is masked on its own; in a GitHub `run:` body with errexit off (`set +e`,
+`shell: pwsh` / `powershell` / `cmd` / `python`, named or as a custom command's first
+word, a custom `bash` / `sh` / `dash` / `zsh` command without `-e` such as `bash {0}`, or
+a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
+step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
+statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
+grammar read only in a bash or sh body and only `{ }` / `( )` nesting in a pwsh,
+powershell, cmd or python body; `_depths`, `_not_code`) masks the statements
+before it, unless one of them or a statement between
+re-raises a status. The default `bash -e` stops at the failing check first, so
+`pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
+`exit 0` rule; a literal `if: false`,
+`if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
+`\` continuations are joined first.
 Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
 wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
-shared with `ci_triggers.py`.
+shared with `ci_triggers.py`. Tests for the #919 rules: `tests/test_ci_false_credit.py`.
 
 **`ci_triggers.py`**
 Does a CI line run on ordinary changes (issue #775)? It makes

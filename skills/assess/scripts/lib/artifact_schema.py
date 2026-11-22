@@ -427,4 +427,10 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #   layer-4-architecture.1. Fewer conditions count on docs-only repositories
 #   and tangled import graphs; no shape changes. The default maturity model's
 #   version moves with it.
+# - ci_checks closes five false-credit holes (issue #919). A version or usage
+#   query (`ruff --version`) runs no check; an exit-zero flag (`--exit-zero`,
+#   `--issues-exit-code=0`), a later top-level `exit 0` in a GitHub run: body
+#   without errexit (pwsh, a Windows runner, set +e) and a literal `if: false`
+#   step or job are masked; a workflow in a subfolder of .github/workflows/ is
+#   not a CI file. Layer 3 level 1 and Layer 5 level 1 can move from met to unmet.
 ASSESS_METHOD_VERSION = 36
