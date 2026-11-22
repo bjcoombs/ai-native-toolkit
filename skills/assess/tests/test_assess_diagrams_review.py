@@ -134,8 +134,9 @@ def test_drift_labels_are_hashed_under_counts_only() -> None:
         for root in doc["subject_roots"]:
             assert f"describes {root}" not in content
     assert "describes h:" in content
-    assert [float(b.attrib["data-ratio"]) for b in _rects(content, "data-ratio")] == \
-        [float(b.attrib["data-ratio"]) for b in _rects(_svg(CTX, rd.DRIFT_FILE), "data-ratio")]
+    full = _svg(CTX, rd.DRIFT_FILE)
+    for attr in ("data-ratio", "data-behind"):
+        assert [b.attrib[attr] for b in _rects(content, attr)] == [b.attrib[attr] for b in _rects(full, attr)]
 
 
 # --- review strip ---------------------------------------------------------------
@@ -213,6 +214,12 @@ def test_strip_not_drawn_says_why(block: object, reason: str, tmp_path: Path) ->
     assert not (tmp_path / rd.STRIP_FILE).exists()
 
 
+def test_strip_reads_an_unexpected_token_as_unknown() -> None:
+    content = _svg({"review_reality": {**REVIEW, "sequence": ["approved", "<odd>", 3]}}, rd.STRIP_FILE)
+    assert _ticks(content) == ["approved", "unknown", "unknown"]
+    assert "odd" not in content and "f-rv-unknown" not in content
+
+
 def test_strip_ignores_a_bot_list_of_another_length() -> None:
     content = _svg({"review_reality": {**REVIEW, "bot_sequence": ["bot"]}}, rd.STRIP_FILE)
     assert _bots(content) == 0
@@ -260,19 +267,28 @@ def test_counts_only_run_redraws_the_review_diagrams_from_the_hashed_copy(
     import assess_core
     repo = _build_parity_fixture(tmp_path / "repo")
     drawn: list[dict[str, Any]] = []
-    real = rd.review_diagrams
 
     def spy(ctx: Any) -> Any:
         drawn.append(ctx)
-        return real(ctx)
+        return rd.counts_only_diagrams(ctx)
 
-    monkeypatch.setattr(assess_core, "review_diagrams", spy)
+    monkeypatch.setattr(assess_core, "counts_only_diagrams", spy)
     assert assess_core.main([str(repo), "--non-interactive", "--counts-only", "--hash-salt", "s"]) == 0
     [copy_ctx] = drawn
     hashed = [d["path"] for d in copy_ctx["doc_staleness"]["docs"]]
     assert hashed and all(p.startswith("h:") for p in hashed)
     full = json.loads((repo / ".assess" / "run-context.json").read_text(encoding="utf-8"))
     real_paths = [d["path"] for d in full["doc_staleness"]["docs"]]
-    drift = repo / ".assess" / rd.DRIFT_FILE
+    drift = repo / ".assess" / rd.COUNTS_ONLY_FILES[0]
     if drift.exists():
         assert not any(path in drift.read_text(encoding="utf-8") for path in real_paths)
+    # The full-text pictures beside the report are left as the run drew them.
+    assert [(repo / ".assess" / d["file"]).exists() for d in rd.review_diagrams(full)] == \
+        [d["svg"] is not None for d in rd.review_diagrams(full)]
+
+
+def test_counts_only_diagrams_are_named_apart() -> None:
+    hashed = counts_only(CTX, hash_paths=True, salt="s")
+    drawn = rd.counts_only_diagrams(hashed)
+    assert [d["file"] for d in drawn] == ["doc-drift.counts-only.svg", "review-strip.counts-only.svg"]
+    assert all(d["svg"] is not None for d in drawn)

@@ -5,7 +5,8 @@
 one-line reason it was not drawn, in report order; it never raises (a renderer that
 raises becomes a "the renderer raised X" reason). ``write_diagrams`` writes the drawn
 SVGs into the artifact directory beside ``run-context.json`` and removes any diagram
-file this run did not draw, so a stale picture never sits beside new data; a symlink in
+file (of ``files``, by default ``DIAGRAM_FILES``; ``lib/assess_diagrams_review.py``
+passes its own, #943) this run did not draw, so a stale picture never sits beside new data; a symlink in
 a diagram's place is removed, never written through, and a path that cannot be written
 is named on stderr and skipped, so writing never stops a run either.
 ``run_publish.publish_run`` calls it, and ``assess_core.run_opt_in_mutation`` again

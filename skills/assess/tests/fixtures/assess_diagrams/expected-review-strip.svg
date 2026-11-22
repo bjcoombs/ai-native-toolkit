@@ -7,26 +7,26 @@
 <rect x="0" y="0" width="680" height="284" class="f-bg"/>
 <text x="16.0" y="28.0" font-size="15" text-anchor="start" class="t-fg" font-weight="600">Review on recent merges</text>
 <text x="16.0" y="48.0" font-size="12" text-anchor="start" class="t-muted">10 sampled merged changes, one tick each, in merge order</text>
-<rect x="16.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved" data-state="approved"><title>Approved by someone other than the author</title></rect>
-<rect x="36.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed" data-state="reviewed"><title>Reviewed, not approved, with review-bot output</title></rect>
+<rect x="16.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved"><title>Approved by someone other than the author</title></rect>
+<rect x="36.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1" data-state="reviewed"><title>Reviewed, not approved, with review-bot output</title></rect>
 <circle cx="44.0" cy="63.0" r="3.5" class="f-fg" data-bot="true"/>
-<rect x="56.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed" data-state="unreviewed"><title>Merged without review, with review-bot output</title></rect>
+<rect x="56.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review, with review-bot output</title></rect>
 <circle cx="64.0" cy="63.0" r="3.5" class="f-fg" data-bot="true"/>
-<rect x="76.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed" data-state="unreviewed"><title>Merged without review</title></rect>
-<rect x="96.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed" data-state="unreviewed"><title>Merged without review</title></rect>
+<rect x="76.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review</title></rect>
+<rect x="96.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review</title></rect>
 <rect x="116.0" y="70.0" width="16.0" height="32.0" rx="2" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1" data-state="unknown"><title>Not known: the platform left it undecided</title></rect>
-<rect x="136.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed" data-state="reviewed"><title>Reviewed, not approved</title></rect>
-<rect x="156.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved" data-state="approved"><title>Approved by someone other than the author, with review-bot output</title></rect>
+<rect x="136.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1" data-state="reviewed"><title>Reviewed, not approved</title></rect>
+<rect x="156.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved"><title>Approved by someone other than the author, with review-bot output</title></rect>
 <circle cx="164.0" cy="63.0" r="3.5" class="f-fg" data-bot="true"/>
-<rect x="176.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed" data-state="unreviewed"><title>Merged without review</title></rect>
-<rect x="196.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved" data-state="approved"><title>Approved by someone other than the author</title></rect>
+<rect x="176.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1" data-state="unreviewed"><title>Merged without review</title></rect>
+<rect x="196.0" y="70.0" width="16.0" height="32.0" rx="2" class="f-rv-approved s-muted" stroke-width="1" data-state="approved"><title>Approved by someone other than the author</title></rect>
 <text x="16.0" y="118.0" font-size="11" text-anchor="start" class="t-muted">oldest</text>
 <text x="212.0" y="118.0" font-size="11" text-anchor="end" class="t-muted">newest</text>
-<rect x="16.0" y="134.0" width="14.0" height="14.0" rx="2" class="f-rv-approved"/>
+<rect x="16.0" y="134.0" width="14.0" height="14.0" rx="2" class="f-rv-approved s-muted" stroke-width="1"/>
 <text x="38.0" y="145.0" font-size="12" text-anchor="start" class="t-fg">Approved by someone other than the author (3)</text>
-<rect x="16.0" y="154.0" width="14.0" height="14.0" rx="2" class="f-rv-reviewed"/>
+<rect x="16.0" y="154.0" width="14.0" height="14.0" rx="2" class="f-rv-reviewed s-muted" stroke-width="1"/>
 <text x="38.0" y="165.0" font-size="12" text-anchor="start" class="t-fg">Reviewed, not approved (2)</text>
-<rect x="16.0" y="174.0" width="14.0" height="14.0" rx="2" class="f-rv-unreviewed"/>
+<rect x="16.0" y="174.0" width="14.0" height="14.0" rx="2" class="f-rv-unreviewed s-muted" stroke-width="1"/>
 <text x="38.0" y="185.0" font-size="12" text-anchor="start" class="t-fg">Merged without review (4)</text>
 <rect x="16.0" y="194.0" width="14.0" height="14.0" rx="2" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1"/>
 <text x="38.0" y="205.0" font-size="12" text-anchor="start" class="t-fg">Not known: the platform left it undecided (1)</text>

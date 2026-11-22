@@ -300,6 +300,9 @@ def test_gitlab_review_reality_is_available(world: World) -> None:
     del block["oldest_merged_days_ago"]
     sequence = block.pop("sequence")
     assert sorted(sequence) == ["approved"] * 3 + ["unreviewed"] * 7
+    # The strip's counts equal the shares (#943).
+    assert round(sequence.count("approved") / 10, 3) == block["approved_share"]
+    assert round(sum(t in ("approved", "reviewed") for t in sequence) / 10, 3) == block["reviewed_share"]
     assert block.pop("bot_sequence") == ["none"] * 10
     assert block == {
         "available": True, "merged_count": 10, "reviewed_share": 0.3,
@@ -489,6 +492,7 @@ def test_gitlab_token_user_ai_review_on_every_mr(world: World, tmp_path: Path,
     assert block["required_approval_bypassed"] is True
     # AI review counts as review on GitLab: reviewed, with the bot marker (#943).
     assert block["sequence"] == ["reviewed"] * 5 and block["bot_sequence"] == ["bot"] * 5
+    assert block["sequence"].count("approved") / 5 == block["approved_share"]
     text = json.dumps(block)
     assert "SECRET" not in text and "project_42" not in text and "bob" not in text
     # Notes are read in memory only: never written to the response cache.

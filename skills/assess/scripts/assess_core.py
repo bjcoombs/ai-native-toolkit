@@ -38,7 +38,7 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.assess_diagrams_review import REVIEW_FILES, build_all, review_diagrams, write_all
+from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
 from lib.headline import as_headline, run_context_headline
 from lib.counts_only import COUNTS_ONLY_FILE
@@ -264,9 +264,9 @@ def main(argv: list[str] | None = None) -> int:
         assess_dir = assess_dir_for(repo_root, ctx.get("scope_slug") or "")
         out = assess_dir / COUNTS_ONLY_FILE
         out.write_text(json.dumps(content_free, indent=2), encoding="utf-8")
-        # The drift map names docs: under counts-only both review diagrams are redrawn from
-        # the counts-only copy, so a hashed run's pictures carry hashed labels (#943).
-        write_all(assess_dir, review_diagrams(content_free), REVIEW_FILES)
+        # The drift map names docs: the counts-only copies of both review diagrams are drawn
+        # from the counts-only document, beside it, so a hashed run has hashed pictures (#943).
+        write_all(assess_dir, counts_only_diagrams(content_free), COUNTS_ONLY_FILES)
     print(json.dumps(ctx["diff"]))
     return 0
 

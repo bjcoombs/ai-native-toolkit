@@ -6,8 +6,11 @@ drawn; it never raises. ``build_all(ctx)`` is ``assess_diagrams.build_diagrams``
 these two, in report order, and ``write_all`` writes every diagram file through
 ``assess_diagrams.write_diagrams`` with ``ALL_FILES``, so a file this run did not draw is
 removed. ``run_publish.publish_run``, ``assess_core.run_opt_in_mutation`` and
-``assess_report.py`` call these; under ``--counts-only``, ``assess_core.main`` redraws the two
-from the counts-only copy (``REVIEW_FILES``), so a hashed run's pictures carry hashed labels.
+``assess_report.py`` call these. Under ``--counts-only``, ``assess_core.main`` also draws the
+two from the counts-only document (``counts_only_diagrams``) as ``doc-drift.counts-only.svg``
+and ``review-strip.counts-only.svg`` (``COUNTS_ONLY_FILES``) beside
+``run-context.counts-only.json``, so a hashed run has pictures with hashed labels while the
+full-text ones beside the report stay as they are.
 The report section is ``assess_diagrams.diagrams_section``, one ``## `` section per diagram.
 
 Diagrams:
@@ -25,7 +28,8 @@ Diagrams:
   states: approved, reviewed and merged without review; an ``unknown`` change (GitLab notes
   that decide nothing) is hatched. A dot over a tick marks review-bot output
   (``bot_sequence``). The approved ticks over ``merged_count`` equal ``approved_share`` and
-  approved plus reviewed ticks equal ``reviewed_share``. An unavailable block draws nothing
+  approved plus reviewed ticks equal ``reviewed_share``; a token outside the four reads
+  unknown (``strip_tokens``). An unavailable block draws nothing
   and names its reason; nothing names a change, title, author or reviewer.
 
 Deterministic: input order, fixed formatting, no date; two renders are byte-identical. No
@@ -57,6 +61,7 @@ HEADINGS: dict[str, str] = {
     STRIP_FILE: "Review on recent merges",
 }
 REVIEW_FILES = tuple(HEADINGS)
+COUNTS_ONLY_FILES = tuple(f.removesuffix(".svg") + ".counts-only.svg" for f in REVIEW_FILES)
 ALL_FILES = (*DIAGRAM_FILES, *REVIEW_FILES)
 DRIFT_TOP = 15
 
@@ -256,6 +261,12 @@ def _drift(ctx: Mapping[str, Any]) -> AssessDiagram:
 # --- review strip ---------------------------------------------------------------
 
 
+def strip_tokens(sequence: Sequence[object]) -> list[str]:
+    """The sequence with any token outside ``SEQUENCE_STATES`` read as unknown, never drawn
+    as a state of its own."""
+    return [t if isinstance(t, str) and t in SEQUENCE_STATES else UNKNOWN for t in sequence]
+
+
 def strip_counts(sequence: Sequence[str]) -> dict[str, int]:
     """Ticks per state, in key order."""
     return {state: sum(t == state for t in sequence) for state in SEQUENCE_STATES}
@@ -284,12 +295,12 @@ def strip_in_place(sequence: Sequence[str]) -> str:
 def _tick_paint(state: str) -> str:
     if state == UNKNOWN:
         return f'fill="{svg.HATCH_FILL}" class="s-muted" stroke-width="1"'
-    return f'class="f-rv-{state}"'
+    return f'class="f-rv-{state} s-muted" stroke-width="1"'
 
 
 def render_strip(block: Mapping[str, Any]) -> str:
     """The review strip SVG for one available ``review_reality`` block with a sequence."""
-    sequence = [str(t) for t in block["sequence"]]
+    sequence = strip_tokens(block["sequence"])
     bots = _bots(block, len(sequence))
     n = len(sequence)
     width = max(MIN_W, 2 * PAD + n * (TICK_W + TICK_GAP))
@@ -335,7 +346,7 @@ def _strip(ctx: Mapping[str, Any]) -> AssessDiagram:
     elif not block["sequence"]:
         entry["skipped"] = "no change was merged in the sampled window."
     else:
-        entry["in_place"] = strip_in_place([str(t) for t in block["sequence"]])
+        entry["in_place"] = strip_in_place(strip_tokens(block["sequence"]))
         entry["caption"] = strip_caption()
         entry["svg"] = render_strip(block)
     return entry
@@ -358,6 +369,11 @@ def _guarded(build: Callable[[Mapping[str, Any]], AssessDiagram], ctx: Mapping[s
 def review_diagrams(ctx: Mapping[str, Any]) -> list[AssessDiagram]:
     """The doc-drift map and the review strip for one run context; never raises."""
     return [_guarded(_drift, ctx, DRIFT_FILE), _guarded(_strip, ctx, STRIP_FILE)]
+
+
+def counts_only_diagrams(content_free: Mapping[str, Any]) -> list[AssessDiagram]:
+    """Both diagrams drawn from a counts-only document, named ``COUNTS_ONLY_FILES``."""
+    return [{**d, "file": name} for d, name in zip(review_diagrams(content_free), COUNTS_ONLY_FILES)]
 
 
 def build_all(ctx: Mapping[str, Any],
