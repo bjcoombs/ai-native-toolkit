@@ -59,7 +59,7 @@ exit 1
 PROJECT = "grp/sub/app"
 ENC = "grp%2Fsub%2Fapp"
 # The shared sample's listing (lib/merged_sample.py) with no window: newest updated first.
-MRS = f"projects/{ENC}/merge_requests?state=merged&order_by=updated_at&sort=desc&per_page=100"
+MRS = f"projects/{ENC}/merge_requests?state=merged&order_by=updated_at&sort=desc&per_page=20&page=1"
 
 ALICE = {"username": "Alice"}
 BOB = {"username": "bob"}
@@ -591,7 +591,7 @@ def test_gitlab_delivery_and_review_reality_share_one_notes_read(world: World) -
     since = sample_since("6mo", now.date().isoformat())
     assert since is not None
     world.serve(f"projects/{ENC}/merge_requests?state=merged&updated_after={since.isoformat()}"
-                f"T00:00:00Z&order_by=updated_at&sort=desc&per_page=100", mrs)
+                f"T00:00:00Z&order_by=updated_at&sort=desc&per_page=20&page=1", mrs)
     for i in (1, 2):
         world.serve(f"projects/{ENC}/merge_requests/{i}/approvals", _approvals())
     world.policy([])

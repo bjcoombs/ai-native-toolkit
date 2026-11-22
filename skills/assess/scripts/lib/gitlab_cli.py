@@ -194,7 +194,7 @@ def _run_glab(args: list[str], timeout: int = GLAB_TIMEOUT_SECONDS, cache: bool 
         raise GhUnavailable(f"no_access: `{shown}` was refused ({detail})")
     if status == "404":
         raise GhUnavailable(f"not_found: `{shown}` ({detail})")
-    raise GhUnavailable(f"glab_error: `{shown}` failed ({detail})")
+    raise GhUnavailable(f"glab_error: `{shown}` failed ({detail})", status)
 
 
 def glab_auth(host: str, timeout: int = GLAB_TIMEOUT_SECONDS) -> None:

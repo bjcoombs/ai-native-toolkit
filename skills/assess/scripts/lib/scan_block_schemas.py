@@ -310,6 +310,10 @@ DELIVERY: JsonDict = {
         "self_merged_share": _share("changes merged by their author (copied from "
                                     "review_reality)"),
         "agent_authored_share": _share("changes an agent identity authored"),
+        "sample_page_size": _field(
+            {"type": ["integer", "null"]},
+            "Changes per heavy read of the sample (lib/merged_sample.py PAGE_SIZE, or half "
+            "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
     },
 }
 

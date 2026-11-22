@@ -177,6 +177,12 @@
                   "false_positive",
                   "other"
                 ]
+              },
+              "polarity": {
+                "enum": [
+                  "hazard"
+                ],
+                "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"
               }
             },
             "required": [
