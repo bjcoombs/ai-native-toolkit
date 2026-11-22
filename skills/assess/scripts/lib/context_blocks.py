@@ -142,9 +142,8 @@ def _structure_drift_block(
 
     Tier 0 (``detect_path_existence_drift``) is the zero-threshold cut: declared
     ownership patterns matching no tracked file. It runs whenever an ownership
-    map exists; when none does it degrades to ``available: False`` and the whole
-    block is omitted (the caller drops a ``None``), keeping non-owned repos'
-    run-context byte-stable.
+    map exists; when none does it degrades to ``available: False`` and this
+    returns ``None`` (the caller writes the ``no_ownership_map`` marker).
 
     ``tier_1`` is the grouping-disagreement result ``keyhole_signals.integrate``
     already computed from the behaviour block's co-change pairs (no second
@@ -153,8 +152,8 @@ def _structure_drift_block(
     unavailable or no ownership map existed. The seam allowlist was applied
     inside the detector, so the counts here are already post-allowlist.
 
-    Returns ``None`` when Tier 0 is unavailable (no ownership map) - a graceful,
-    half-block-free omission. Otherwise returns a JSON-serialisable block whose
+    Returns ``None`` when Tier 0 is unavailable (no ownership map), never a
+    half-block. Otherwise returns a JSON-serialisable block whose
     ``tier_0`` always carries data and whose ``tier_1`` is either the six
     disagreement counts or ``{"available": False}``.
     """
@@ -191,6 +190,14 @@ def _structure_drift_block(
     return block
 
 
+NO_OWNERSHIP_MAP_REASON = "no_ownership_map: no supported ownership or boundary map"
+
+
+def no_ownership_map() -> dict[str, Any]:
+    """The unavailable ``structure_drift`` block of a repository with no ownership map."""
+    return {"available": False, "reason": NO_OWNERSHIP_MAP_REASON}
+
+
 def structure_drift_tier_0(repo_root: Path) -> dict[str, Any] | None:
     """The ``structure_drift`` block with tier 0 only (tier 1 marked unavailable).
 
@@ -203,20 +210,24 @@ def structure_drift_tier_0(repo_root: Path) -> dict[str, Any] | None:
 def attach_structure_drift(
     ctx: dict[str, Any], repo_root: Path, tier_1: dict[str, Any],
 ) -> None:
-    """Attach the structure_drift block to ctx, or omit it on a graceful degrade.
+    """Attach the structure_drift block to ctx, the ``no_ownership_map`` marker, or nothing.
 
     Builds the block via :func:`_structure_drift_block` (Tier 0 + the supplied
-    Tier 1 result) under :func:`_safe`. Attaches only a real block (one carrying
-    a ``tier_0``): the no-ownership-map path returns ``None`` and a scan failure
-    returns ``_safe``'s degrade dict (no ``tier_0``); both omit the block rather
-    than emit a half-block, keeping the contract that absence means "nothing to
-    drift against / not assessed", never "no drift".
+    Tier 1 result) under :func:`_safe`. A real block (one carrying a ``tier_0``)
+    is attached as built. With no ownership map the block is the
+    :func:`no_ownership_map` marker, the same one the headless runner writes, so
+    ``/assess`` and fleet give the maturity model the same reason (#908). A scan
+    failure returns ``_safe``'s degrade dict (no ``tier_0``) and the block is
+    omitted rather than emitted as a half-block: absence means "not assessed",
+    never "no drift".
     """
     block = _safe(
         "structure_drift",
         lambda: _structure_drift_block(repo_root, tier_1),
     )
-    if isinstance(block, dict) and "tier_0" in block:
+    if block is None:
+        ctx["structure_drift"] = no_ownership_map()
+    elif isinstance(block, dict) and "tier_0" in block:
         ctx["structure_drift"] = block
 
 

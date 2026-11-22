@@ -219,3 +219,38 @@ def test_the_plain_checks_still_read_met(tmp_path: Path) -> None:
 def test_a_script_with_a_host_flag_is_still_a_check() -> None:
     assert check_commands(_wf("./scripts/test.sh -h db")) == 1
     assert enforced_check_commands(_wf("./scripts/test.sh -h db")) == (1, 0)
+
+
+# The #920 runners and wrappers (#924): each is a check alone, and the info flags drop it.
+_RUNNER_INFO = [
+    ("swift test", "swift test --help"), ("swift test", "swift test --list-tests"),
+    ("mix test", "mix test --help"), ("deno test", "deno test --help"),
+    ("deno test", "deno test -h"), ("vendor/bin/phpunit", "vendor/bin/phpunit --version"),
+    ("vendor/bin/phpunit", "vendor/bin/phpunit --list-tests"), ("ctest", "ctest --version"),
+    ("ctest", "ctest -N"), ("bazel test //...", "bazel test --help"),
+    ("dotnet test", "dotnet test --list-tests"), ("dotnet test", "dotnet test -h"),
+    ("turbo run test", "turbo run test --help"), ("hatch test", "hatch test --help"),
+    ("docker compose run app pytest", "docker compose run app pytest --co"),
+    ("docker compose run app pytest", "docker compose run app pytest -h"),
+    ("bundle exec rspec", "bundle exec rspec -h"), ("bundle exec rspec", "bundle exec rspec --init"),
+    ("pnpm exec vitest run", "pnpm exec vitest --help"),
+]
+
+
+@pytest.mark.parametrize(("runs", "info"), _RUNNER_INFO, ids=[i for _, i in _RUNNER_INFO])
+def test_a_runner_check_is_dropped_by_its_info_flag(runs: str, info: str) -> None:
+    assert check_commands(_wf(runs)) == 1, runs
+    assert is_info_invocation(info)
+    assert check_commands(_wf(info)) == 0
+    assert enforced_check_commands(_wf(info)) == (0, 0)
+
+
+@pytest.mark.parametrize("text", ["ctest -V", "bundle exec rspec spec/a_spec.rb", "dotnet test -c Release"])
+def test_a_runner_flag_that_runs_the_work_stays_a_check(text: str) -> None:
+    assert not is_info_invocation(text)
+    assert check_commands(_wf(text)) == 1
+
+
+def test_a_may_check_target_asking_for_help_is_not_a_pending_check(tmp_path: Path) -> None:
+    files = {".github/workflows/ci.yml": _wf("make --help")}
+    assert _scan(tmp_path, files) == (False, False)

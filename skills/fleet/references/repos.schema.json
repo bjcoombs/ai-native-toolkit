@@ -543,19 +543,20 @@
                     "boolean",
                     "null"
                   ],
-                  "description": "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary changes, null when none does but included jobs, unsettled triggers or a CI system the scan does not parse may hold one, else false."
+                  "description": "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary changes, null when none does but included jobs, unsettled triggers, a target whose recipe is not read or a CI system the scan does not parse may hold one, else false."
                 },
                 "enforced_basis": {
                   "enum": [
                     "enforced_check",
                     "included_jobs",
                     "unknown_trigger",
+                    "check_target",
                     "unread_ci_system",
                     "not_enforced",
                     "no_check_command",
                     "no_ci"
                   ],
-                  "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs or unknown_trigger or unread_ci_system (null), not_enforced, no_check_command or no_ci (false)."
+                  "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs, unknown_trigger, check_target or unread_ci_system (null), not_enforced, no_check_command or no_ci (false)."
                 },
                 "masked_check_commands": {
                   "type": "integer",
@@ -927,6 +928,54 @@
                 }
               }
             },
+            "review_evidence": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: network (no AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read); no_remote (no AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "review_reality": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub or GitLab read); no_remote (the repository has no GitHub or GitLab remote, so there are no merged changes to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
             "structure": {
               "type": "object",
               "if": {
@@ -944,6 +993,30 @@
                   "reason": {
                     "type": "string",
                     "description": "'code: sentence'. The codes name the missing piece: no_grimp (grimp, the Python import-graph builder, is not installed); no_networkx (networkx, which the structure metrics need, is not installed); grimp_failed (grimp could not build the Python import graph); no_python_packages (a Python repository with no importable package); no_import_graph_<language> (no import graph builder exists yet for the dominant source language, for example no_import_graph_rust); invalid_import_graph (a builder returned a graph that breaks the module-graph contract); no_source_files (the scope holds no source file in a language the assess skill recognises). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "structure_drift": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: no_ownership_map (the repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [

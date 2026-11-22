@@ -831,9 +831,12 @@ worst first, capped at `MAX_ACCRETION_FILES` (12); `accretion_lookup` gives the 
 pages a per-path view of the same scan. `excluded_generated` and `generated_exclusion`
 read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
 0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
-Tier 1 counts `keyhole_signals` computed, omitting the block when no ownership map
-exists; `structure_drift_tier_0` builds the same block with Tier 1 unavailable, or
-None with no map, for the headless runner (`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+Tier 1 counts `keyhole_signals` computed. With no ownership map the block is
+`no_ownership_map()`, the bare marker the headless runner writes too (reason
+`NO_OWNERSHIP_MAP_REASON`, #908), so `/assess` and fleet give the level the same
+reason; a raising scan still omits the block. `structure_drift_tier_0` builds the
+same block with Tier 1 unavailable, or None with no map, for the headless runner
+(`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
@@ -932,7 +935,9 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
-both providers), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
+both providers; defined in `gh_cli.py`, re-exported here). Offline, `merged_sample`
+runs `offline_merged_sample` and `review_reality` passes that value through, so a
+repository with no remote reads `no_remote` as `/assess` and `--platform` do (#908), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
 out of the document offline: absent, never a placeholder. `platform_only_error` makes
 `assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
 `offline_scans` strips those names from the `--scans` of a fleet run's offline child
@@ -976,9 +981,9 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
 `code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
-and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
-map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
-lizard's languages only. Tests:
+and a maturity model row reads `unknown`. No ownership map reads `no_ownership_map`,
+the same marker the full run writes (`context_blocks.no_ownership_map`, #908). It
+diverges from the full run in one place: `stats_summary` covers lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
 **`headless_static.py`**
@@ -2210,7 +2215,7 @@ one set of flags. `counts_only_scans` applies the filter to the `scans` map of a
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
 reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
-allow-list `import_graph.STRUCTURE_REASON_CODES` names it (so a path or a name never leaks), the code of
+allow-list `import_graph.STRUCTURE_REASON_CODES` or `reason_codes.BLOCK_REASON_CODES` (`no_ownership_map`, the `structure_drift.reason` marker, #908) names it (so a path or a name never leaks), the code of
 a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
 so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
 Tests: `tests/test_counts_only_reason.py`. `render_doc`
@@ -2501,7 +2506,7 @@ without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 
 **`reason_codes.py`**
 `reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
-(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map`, or the code a known sentence maps to), moved out of `counts_only.py`,
 which re-exports both, so the tally reads the same codes as counts-only output (#744).
 Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
@@ -3128,7 +3133,15 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+blocks and they describe the same changes. Both reads classify the remote with
+`remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
+`gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
+`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
+`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
+without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
+`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
+`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
+so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
@@ -3559,9 +3572,11 @@ ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usag
 on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
 program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
 `nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
-cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha), never a script
-(`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest and
-`--list-tests` for `dotnet test` (elsewhere `-V` can run the work: `mvn -B -V verify`,
+cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
+script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
+`--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
+read through the #920 wrappers (`_info_program`: `bundle exec rspec -h`, `docker compose
+run app pytest --co`), and `ci_checks` drops an info invocation from `may_check` too (elsewhere `-V` can run the work: `mvn -B -V verify`,
 `./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
 `pytest --version` is no Layer 5 check and a version-only step makes
 `test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
@@ -3576,9 +3591,36 @@ show: a check target of a runner or script (`make check`, `npm test`, `tox`,
 `./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
 (`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
 call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
-jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
-`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
-(`test_lint_runs_per_command`).
+jest`). `is_lint_command` keeps its meaning.
+Test runners and wrappers beyond `RUNNERS` (issue #920): `check_verdict(text)` is
+`is_check_command` as three states. True for a test program (`TEST_PROGRAMS`: `ctest`,
+`phpunit`, `pest`, `rspec` and the JS test runners, matched by basename so
+`vendor/bin/phpunit` counts), the `test` subcommand of a toolchain (`TEST_SUBCOMMANDS`:
+`dotnet`, `swift`, `mix`, `deno`, `bazel`, `bazelisk`, `hatch`, `flutter`, `rails`, `dart`), `php artisan test`, a
+Gradle test task (`./gradlew testDebugUnitTest`, `connectedAndroidTest`), the
+`test` action of `xcodebuild` or a check-named target of
+a target runner (`TARGET_RUNNERS`: `make`, `just`, `task`, `rake`, `turbo`, `nx`, with
+`nx affected -t test` and `nx run app:test` read). A wrapper is read by the program it
+runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`,
+`npx`, `pnpm exec`, `hatch run`), in `is_lint_command`, `is_lint_run` and `may_lint`
+too. None (`may_check(text)`) for a target whose recipe is not read: any other target
+of a target runner, its default target (a bare `make`), a `hatch run` script that is not
+check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
+(`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
+file or a path passed to `bash`/`sh`/`zsh`, read by file name so `./ci/deploy.sh` is
+false), and a container's default command or an unknown
+program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
+`poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
+Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
+`format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
+absolute paths and a container running a plain program (`echo`) or a modelled runner.
+A target runner asked for `--version` or its list (`task --list`, `rake -T`) is false.
+`may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
+`bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
+lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
+(`ci_checks._lone_check`). Tests: `tests/test_check_command.py`,
+`tests/test_check_runners.py` (#920), `tests/test_agent_environment.py`
+(`test_is_check_command`), `tests/test_ci_checks.py` (`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
@@ -3636,7 +3678,9 @@ in the merged configuration when those hold none)
 whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
 off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
 null with `enforced_basis: unknown_trigger`), else null under the
-same `included_jobs` rule, else false. Layer 5 level 1 reads
+same `included_jobs` rule, else null with `enforced_basis: check_target` when an
+unmasked line on ordinary changes runs a target whose recipe is not read
+(`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
 still describes `test_or_lint_configured`, which keeps its meaning apart from #919's
 version-only and subfolder cases, which count nowhere.
