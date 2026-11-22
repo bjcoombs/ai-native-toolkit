@@ -8,6 +8,7 @@ consumer; each consumer issue adds its keys to ``SECTION_KEYS``:
 [ai_usage]   # agent identities (#695)
 [review]     # AI review components (#696)
 [platform]   # --platform settings (#714)
+[identities] # confirmed bot and agent accounts (#765)
 ```
 
 API:
@@ -17,7 +18,8 @@ API:
   not a table, a key a section does not define, or a value of the wrong kind
   raises ``FleetConfigError``, whose message names the key (``review.foo``) and
   the expected kind, never the value. The CLIs exit 2 on it.
-- ``ai_usage_section`` / ``review_section`` / ``platform_section``: the typed
+- ``ai_usage_section`` / ``review_section`` / ``platform_section`` /
+  ``identities_section``: the typed
   view of one section. A section the file leaves out is empty.
 - ``merge_repo_sections(fleet, repo_config)`` and ``repo_fleet_config(repo_root,
   fleet)``: the config one repository's scans read (the merge rule below).
@@ -155,6 +157,8 @@ SECTION_KEYS: Mapping[str, SectionKeys] = {
         "ai_review_components": string_list,  # #696
     },
     "platform": {"jobs": positive_int, "timeout": positive_int},  # #714
+    # #765: literal accounts (an e-mail, a login such as ``codecov[bot]``), never a pattern.
+    "identities": {"agents": string_list, "bots": string_list, "people": string_list},
 }
 
 # Keys that set how a run goes, never what it measures: left out of
@@ -198,24 +202,37 @@ class PlatformSection(TypedDict, total=False):
     timeout: int
 
 
+class IdentitiesSection(TypedDict, total=False):
+    """``[identities]`` (#765): accounts the human confirmed, each a literal e-mail or
+    login matched case-insensitively (``lib.agent_identity.ConfirmedIdentities``).
+    ``agents`` count as agent authors; ``bots`` (automation) and ``people`` never do."""
+
+    agents: list[str]
+    bots: list[str]
+    people: list[str]
+
+
 class FleetConfig(TypedDict):
     """A validated config: every known section, empty when the file leaves it out."""
 
     ai_usage: AiUsageSection
     review: ReviewSection
     platform: PlatformSection
+    identities: IdentitiesSection
 
 
 class FleetConfigEntries(TypedDict):
-    """Entries per section: a list key counts its items, any other key counts 1."""
+    """Entries per section: a list key counts its items, any other key counts 1.
+    A stamp written before #765 has no ``identities`` count."""
 
     ai_usage: int
     review: int
     platform: int
+    identities: int
 
 
 def empty_config() -> FleetConfig:
-    return {"ai_usage": {}, "review": {}, "platform": {}}
+    return {"ai_usage": {}, "review": {}, "platform": {}, "identities": {}}
 
 
 def ai_usage_section(config: FleetConfig) -> AiUsageSection:
@@ -228,6 +245,11 @@ def review_section(config: FleetConfig) -> ReviewSection:
 
 def platform_section(config: FleetConfig) -> PlatformSection:
     return config["platform"]
+
+
+def identities_section(config: FleetConfig) -> IdentitiesSection:
+    """Empty for a config validated against a schema without the section."""
+    return config.get("identities", {})
 
 
 def _validate_section(name: str, table: object, keys: SectionKeys) -> dict[str, object]:
@@ -299,6 +321,7 @@ def section_entries(config: FleetConfig) -> FleetConfigEntries:
         "ai_usage": _entries(config["ai_usage"]),
         "review": _entries(config["review"]),
         "platform": _entries(config["platform"]),
+        "identities": _entries(identities_section(config)),
     }
 
 

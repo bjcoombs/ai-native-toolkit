@@ -1554,7 +1554,7 @@ revision = 1
 id = "core.ai_usage"
 kind = "collector"
 title = "AI-assisted change share"
-issues = [547]
+issues = [547, 765]
 callable = "lib.ai_usage:scan_ai_usage"
 publishes = ["ai_usage"]
 reads = ["repo_root", "scope", "history_window", "fleet_config"]
@@ -1563,7 +1563,7 @@ headless = { ai_usage = "registered" }
 shapes = [
   { path = "ai_usage", type = "lib.ai_usage:AiUsageBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "ai_usage.reason" = "drop"
   "ai_usage.window" = "token"

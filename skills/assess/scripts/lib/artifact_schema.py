@@ -216,11 +216,14 @@ constant each.
 # {path, completed_sha, note} (issue #721): the paths a done review in the
 # committed .assess/actions.json clears. actions.json gains an optional completed
 # list for done entries that left the Top 3. Additive.
-# 1.36.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
+# 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# #765): the window's accounts that look automated and are not yet classified in
+# the [identities] config section, a count with no identity. Additive.
+# 1.37.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
 # #782): whether an unmasked CI line on ordinary triggers runs a linter (null
 # when a check target or script may lint inside it). Additive: no existing
 # key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.36.0"
+ARTIFACT_SCHEMA_VERSION = "1.37.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -353,8 +356,14 @@ ARTIFACT_SCHEMA_VERSION = "1.36.0"
 #     in files) and untouched since that commit leaves the attention list,
 #     prescribed_actions and the keyhole summary (issue #721), so the Top 3 can move.
 #     It stays in derived_findings with a reviewed note; a later change re-flags it.
-# 31: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
+# 31: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+#     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
+#     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
+#     or person never does. The same matcher serves ``delivery`` and the GitLab
+#     note classifier (``gitlab_notes``) under --platform, so a confirmed account
+#     moves their agent counts too. Without the section nothing changes.
+# 32: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
 #     in CI, not a suppression comment. One suppression comment no longer earns the row,
 #     and a clean repository that lints in CI reads at least 1 where it was
 #     unknown, so the Layer 3 row can move.
-ASSESS_METHOD_VERSION = 31
+ASSESS_METHOD_VERSION = 32
