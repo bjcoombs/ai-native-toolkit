@@ -128,6 +128,7 @@ Any of these blocks can instead be `{"available": false, "reason": ...}` when it
 **Scoring rule:** start from the deterministic grade, then apply the integrity overrides below.
 - `instructions_grade` is `null` → read `.layer_grades.instruction_presence` first. The top-level `instructions_grade` grades root locations only.
   - `nested_only` → **Partial**: instruction files exist below the root (`.nested_instructions.files`), but a session that starts at the root reads none of them. Score from `.layer_grades.instructions_grade`, the best nested grade, capped at Partial. The remediation is the `gap_actions` entry whose `signal` is `layer_grades`: add a root `AGENTS.md` or `CLAUDE.md` that names the check command. Never write "no instruction file" here.
+  - `root` → the only root-context file is one `instruction_files` does not grade (`.windsurfrules`, an unscoped `.claude/rules` file, a root `.claude/CLAUDE.md`). Score from `.layer_grades.instructions_grade` with the grade rule below.
   - `none` → **Missing** (no committed instruction file at any known location).
 - A/A-/B+ → **Present**
 - B/C → **Partial**

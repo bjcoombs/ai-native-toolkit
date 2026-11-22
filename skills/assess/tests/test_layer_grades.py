@@ -40,6 +40,15 @@ def test_nested_only_is_present_with_the_best_nested_grade() -> None:
         "instruction_presence": "nested_only"}
 
 
+@pytest.mark.parametrize(("grades", "best"), [
+    (["A-"], "A-"), (["C", "A-"], "A-"), (["B", "B+"], "B+"), (["F", "D"], "D"),
+])
+def test_the_best_nested_grade_ranks_every_grader_letter(grades: list[str], best: str) -> None:
+    """The grader also gives A- and B+; neither is dropped or outranked by a lower letter."""
+    nested = {"available": True, "files": [_file(f"p{i}/AGENTS.md", g) for i, g in enumerate(grades)]}
+    assert scan_layer_grades(({}, None), nested)["instructions_grade"] == best
+
+
 def test_an_always_loaded_discovered_file_reads_root() -> None:
     nested = {"available": True, "files": [_file("pkg/AGENTS.md", "A"),
                                            _file(".windsurfrules", "C", always=True)]}

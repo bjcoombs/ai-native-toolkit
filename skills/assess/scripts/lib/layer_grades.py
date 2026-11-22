@@ -52,14 +52,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal, TypedDict
 
+from lib.instruction_files import GRADE_RANK
+
 InstructionPresence = Literal["root", "nested_only", "none"]
 
 ROOT: InstructionPresence = "root"
 NESTED_ONLY: InstructionPresence = "nested_only"
 NONE: InstructionPresence = "none"
-
-# Best first, as agent_instructions_grader assigns them.
-_GRADE_ORDER = ("A", "B", "C", "D", "F")
 
 
 class LayerGradesBlock(TypedDict):
@@ -69,8 +68,8 @@ class LayerGradesBlock(TypedDict):
 
 
 def _best(grades: list[str]) -> str | None:
-    ranked = [g for g in _GRADE_ORDER if g in grades]
-    return ranked[0] if ranked else None
+    """The best grade, ranked as the root grading ranks them (A, A-, B+, B, C, D, F)."""
+    return max(grades, key=lambda g: GRADE_RANK.get(g, 0)) if grades else None
 
 
 def _nested_files(nested: Any) -> list[Mapping[str, Any]] | None:
