@@ -52,6 +52,7 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "agent_ops.summary.hooks_present": "config_text",
     "agent_ops.summary.routines_present": "config_text",
     "doc_staleness.summary.stale_pct": "git_history",
+    "guardrails.stated_pct": "head_structure",
 }
 
 

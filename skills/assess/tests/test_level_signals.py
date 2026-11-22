@@ -67,7 +67,8 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / "CLAUDE.md").write_text("# Guide\n\nRun `make check` before pushing.\n", encoding="utf-8")
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")
     (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
-    (repo / "pyproject.toml").write_text("[project]\nname = 'x'\nversion = '0'\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        "[project]\nname = 'x'\nversion = '0'\n\n[tool.mypy]\nstrict = true\n", encoding="utf-8")
     (repo / ".claude").mkdir()
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
@@ -277,6 +278,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-7-review": None,      # needs GitHub
             "layer-8-agent-ops": 0,
             "doc-freshness": 2,          # docs and code committed together: none stale
+            "guardrails-stated": None,   # no configured gate: nothing to state
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -307,6 +309,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "layer-7-review": None,
         "layer-8-agent-ops": None,
         "doc-freshness": None,  # the capture predates doc_staleness.summary
+        "guardrails-stated": None,  # the capture predates the guardrails block
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]

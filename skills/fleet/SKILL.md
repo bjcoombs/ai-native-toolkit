@@ -72,7 +72,10 @@ committed to CI (`review_automation`) sets offline, so such a repository reads
 "at least 1" on Layer 7 without `--platform`. Doc
 staleness reads unavailable (`not_git_root`) outside a git work tree, and its
 stale share is null on a shallow clone, so the doc-freshness row is `unknown`
-there.
+there. The guardrails-stated row reads `guardrails.stated_pct`, the share of the
+gates a repository configures (complexity limit, coverage floor, pre-commit
+hooks, mypy strict) that an instruction file states; with no gate found it is
+`unknown`.
 
 | Flag | Meaning |
 |------|---------|
