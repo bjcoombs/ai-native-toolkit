@@ -343,8 +343,9 @@ SETUP_TARGETS = frozenset({
     "build", "compile", "deploy", "release", "publish", "docs", "format", "fmt", "prepare",
     "start", "serve", "dev", "watch", "configure", "generate", "codegen", "package", "dist",
 })
-# Programs a container may run that are known not to be a check (``docker run img echo hi``).
+# Programs a wrapper may run that are known not to be a check (``docker run img echo hi``).
 _PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
+_WRAPPER_FLAGS = _VALUED_FLAGS | {"--spec"}
 _DOCKER_RUN_FLAGS = frozenset({
     "-e", "--env", "--env-file", "-v", "--volume", "--mount", "-w", "--workdir", "--name",
     "-u", "--user", "-p", "--publish", "--network", "--net", "--entrypoint", "-l", "--label",
@@ -424,10 +425,13 @@ def _container_command(flags: list[str], rest: list[str]) -> list[str] | None:
 
 def _wrapped(words: list[str]) -> list[str] | None:
     """The program a wrapper runs (#920): ``docker compose run``, ``bundle exec``, ``uv run``,
-    ``poetry run``, ``npx`` and ``pnpm exec``; None for any other command or no program."""
+    ``poetry run``, ``pipx run``, ``uvx``, ``npx``, ``bunx`` and ``pnpm exec`` / ``yarn dlx``;
+    None for any other command or no program."""
     head = words[0]
-    if head in ("uv", "poetry") and _positionals(words[1:])[:1] == ["run"]:
-        return _drop_leading_flags(words[words.index("run") + 1:]) or None
+    if head in ("uv", "poetry", "pipx") and _positionals(words[1:])[:1] == ["run"]:
+        return _drop_leading_flags(words[words.index("run", 1) + 1:], _WRAPPER_FLAGS) or None
+    if head == "uvx":
+        return _drop_leading_flags(words[1:], _WRAPPER_FLAGS) or None
     return _outer_wrapper(words) or _exec_program(words) or None
 
 
@@ -543,9 +547,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     program = _wrapped(words)
     if program is not None:
         verdict = _check_verdict(program)
-        if container and verdict is False and not _setup_name(program[0]) and program[
-                0] not in _PLAIN_PROGRAMS | frozenset(RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS:
-            return None   # docker run img some-tool: a program this scan does not know
+        if verdict is False and not _setup_name(program[0]) and program[0] not in _KNOWN_PROGRAMS:
+            return None   # uv run foo, npx foo, docker run img foo: a program this scan does not know
         return verdict
     if head == "deno" and _positionals(words[1:])[:1] == ["task"]:   # deno task foo: not read
         return _target_verdict(_positionals(words[1:])[1:2])
@@ -566,3 +569,10 @@ def check_verdict(text: str) -> bool | None:
     runner whose recipe is not read, so CI reads it unknown rather than absent."""
     words = command_words(text)
     return _check_verdict(words) if words else False
+
+
+# Programs whose non-check forms this scan reads as definite (``uv run python -m build``,
+# ``npx eslint .`` is a lint line, not a check): behind a wrapper they stay false, where
+# any other program reads null (#920).
+_KNOWN_PROGRAMS = (_PLAIN_PROGRAMS | frozenset(RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS
+                   | LINT_PROGRAMS | TYPE_PROGRAMS)

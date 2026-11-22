@@ -3597,8 +3597,9 @@ of a target runner, its default target (a bare `make`), a `hatch run` script tha
 check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
 (`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
 file or a path passed to `bash`/`sh`/`zsh`, read by file name so `./ci/deploy.sh` is
-false), and a container's default command or unknown
-program (`docker compose run app`, `docker run img`, `docker run img some-tool`).
+false), and a container's default command or an unknown
+program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
+`poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
 Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
 `format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
 absolute paths and a container running a plain program (`echo`) or a modelled runner.

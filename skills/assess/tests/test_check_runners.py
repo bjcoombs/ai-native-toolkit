@@ -194,3 +194,24 @@ def test_a_script_named_like_its_package_manager_terminates(text: str, expected:
 def test_scan_survives_a_repeated_package_manager_word(tmp_path: Path) -> None:
     assert _scan(tmp_path, _gha("pnpm pnpm foo", "yarn yarn", "bun bun x"))[1] in (
         "check_target", "no_check_command")
+
+
+@pytest.mark.parametrize("text", [
+    "uv run foo", "poetry run foo", "npx foo", "pnpm exec foo", "yarn dlx foo", "bunx foo",
+    "pipx run foo", "pipx run --spec foo==1 foo", "uvx foo", "bundle exec foo",
+    "uv run mkdocs build --strict",
+])
+def test_an_unknown_program_behind_a_wrapper_reads_null(text: str) -> None:
+    """Unknown beats wrong: the wrapper runs a program whose checks are not read."""
+    assert check_verdict(text) is None
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("uv run pytest", True), ("poetry run pytest -q", True), ("npx jest", True),
+    ("pipx run tox", True), ("uvx nox", True), ("bunx vitest run", True),
+    ("uv run deploy", False), ("npx build-thing", False), ("uv run python -m build", False),
+    ("npx eslint .", False), ("uv run echo hi", False),
+    ("npx", False), ("uv run", False), ("pipx install foo", False),
+])
+def test_known_programs_behind_a_wrapper_stay_definite(text: str, expected: bool) -> None:
+    assert check_verdict(text) is expected
