@@ -35,8 +35,11 @@ at HEAD (``lib.command_index.repo_files``):
   ``composer.json``) outside the built-in and ``.assess/config.toml`` excludes,
   and the lockfile beside it or in a parent directory. A
   ``requirements*.txt`` counts as its own lock when every requirement is
-  pinned with ``==``. ``unlocked_total`` counts the manifests with no lock (0
-  when there is no manifest); Layer 5 level 2 reads it (#786).
+  pinned with ``==``. ``manifests_total`` counts the manifests the lock check
+  reads (every row); ``unlocked_total`` counts those with no lock. Layer 5
+  level 2 reads ``unlocked_total`` (#786), and reads not measured
+  (``no_manifests``, ``signal_grades.EMPTY_DENOMINATORS``) when
+  ``manifests_total`` is 0, since there is nothing to lock (#927).
 - ``findings``: a ``copilot-setup-steps.yml`` that breaks GitHub's documented
   constraints: one job named ``copilot-setup-steps``, only ``steps``,
   ``permissions``, ``runs-on``, ``services``, ``snapshot`` and
@@ -65,7 +68,7 @@ Can an agent set up the repository and check its own work (issue #514)?
 `scan_agent_environment(repo_root, instruction_files, agent_harness, excludes)` reads the
 files at HEAD through `command_index.build_index` and writes `{available,
 setup{present, sources[]}, check{entry_points[], named[], named_total,
-unresolved[]}, pinning{manifests[], all_locked, unlocked_total}, ci_duration, findings[],
+unresolved[]}, pinning{manifests[], all_locked, unlocked_total, manifests_total}, ci_duration, findings[],
 setup_ready, layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
 `copilot-setup-steps.yml` (credited only when it passes the checks), a dev
 container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
@@ -80,8 +83,10 @@ constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `setup_ready` is the
 setup half of that cap on its own (committed setup, or every manifest locked, or
-no manifest). `pinning.unlocked_total` counts manifests with no lock (0 with no
-manifest); Layer 5 level 2 of the maturity model reads it `eq 0`, so committed
+no manifest). `pinning.manifests_total` counts the manifests the lock check reads
+and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
+model reads `unlocked_total` `eq 0`, and reads not measured (`no_manifests`,
+`signal_grades.EMPTY_DENOMINATORS`, #927) when `manifests_total` is 0, so committed
 setup does not stand in for a lockfile and the named check is read once, by
 Layer 0 level 2 (issue #786). The cap itself is unchanged for
 the /assess scorer. `ci_duration` is the one
@@ -216,6 +221,7 @@ class PinningBlock(TypedDict):
     manifests: list[PinRow]
     all_locked: bool | None
     unlocked_total: int
+    manifests_total: int
 
 
 class CiDuration(TypedDict):
@@ -652,7 +658,8 @@ def scan_agent_environment(
                   "named_total": len(resolved),
                   "unresolved": [n for n in named if n["verdict"] != "resolved"][:MAX_NAMED]},
         "pinning": {"manifests": pins, "all_locked": all(p["locked"] for p in pins) if pins else None,
-                    "unlocked_total": sum(1 for p in pins if not p["locked"])},
+                    "unlocked_total": sum(1 for p in pins if not p["locked"]),
+                    "manifests_total": len(pins)},
         "ci_duration": ci_duration(repo_root) if probe_ci else {
             "available": False, "reason": "not_probed: the CI-duration probe was turned off"},
         "findings": findings,

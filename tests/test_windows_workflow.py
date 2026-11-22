@@ -33,6 +33,7 @@ STEP_LEG = {
     "Shell scripts are LF in a CRLF checkout": "smoke",
     "Fleet golden run against the committed Linux repos.jsonl": "assess",
     "skills/assess pytest": "assess",
+    "skills/assess CPU-budget tests": "assess",
     "scripts/ pytest": "scripts-contract",
     "plugin contract pytest": "scripts-contract",
     "Decide whether the ghsync and ghreport suites run": "ghsync",

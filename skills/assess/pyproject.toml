@@ -21,6 +21,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.6,<4",
     "pyyaml>=6.0",
     "jsonschema>=4.18",
     "ruff>=0.6",
@@ -44,6 +45,9 @@ norecursedirs = ["tests/fixtures"]
 # unknown-marker warning.
 markers = [
     "no_cover: run this test with coverage tracing paused (pytest-cov)",
+    # tests/conftest.py skips these in a pytest-xdist worker; the serial
+    # `-p no:xdist -m cpu_budget --no-cov` pass runs them (#930).
+    "cpu_budget: asserts an absolute CPU-time budget, so it runs outside the xdist pool",
     # Windows skip markers (#713); tests/conftest.py skips them on Windows.
     "needs_symlink: creates a symlink; skipped on Windows",
     "needs_posix_perms: relies on chmod/getuid permission semantics; skipped on Windows",

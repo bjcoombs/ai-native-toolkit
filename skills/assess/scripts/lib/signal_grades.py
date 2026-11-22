@@ -6,7 +6,8 @@ and the run context's ``level`` entry can read it without reaching the scanners.
 
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
 `INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
-to its set's count and the code when that count is 0, read by `levels.py`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+to its set's count and the code when that count is 0, read by `levels.py`: `no_scored_files`,
+`no_manifests`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`.
 """
@@ -75,4 +76,6 @@ UNMEASURED_VALUES: dict[str, tuple[bool, str]] = {
 # would pass any "at most" test (#906).
 EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
     "stats_summary.loc.p95": ("stats_summary.files_scored", "no_scored_files"),
+    # No manifest to lock is not a lockfile check passed (#927).
+    "agent_environment.pinning.unlocked_total": ("agent_environment.pinning.manifests_total", "no_manifests"),
 }

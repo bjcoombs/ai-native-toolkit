@@ -110,7 +110,8 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
-is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906); an
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906, and
+`agent_environment.pinning.unlocked_total` with `manifests_total` 0: `no_manifests`, #927); an
 `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
 `needs_platform` for a `network` one; another unavailable block's own code (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
