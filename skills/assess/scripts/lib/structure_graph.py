@@ -81,9 +81,12 @@ measured graph with its non-blank lines of code (`loc`, the sum over its modules
 module count, largest first, capped at `MAX_PACKAGES` with `package_count` the total;
 `package_edges` lists per ordered package pair (`from`, `to`) the cross-package import
 edges (`imports`) and how many reach past the target's front door (`bypass`), among the
-kept packages. `bypass` counts a burrow exactly as A3 does, so below the caps the bypass
-total equals the length of `internal_burrow_edges`. Package ids are `path` class under
-counts-only. Both are empty on an unavailable block.
+kept packages. `bypass` counts a burrow exactly as A3 does, so below the package cap the
+bypass total equals `burrow_edge_count`, the uncapped number of burrowing edges
+(`internal_burrow_edges` lists at most `MAX_BURROW_EDGES` of them). Above the package cap,
+edges to or from a package not kept are left out: `cross_package_edges` minus the
+`imports` total counts them. Package ids are `path` class under counts-only. The lists
+are empty, and the counts 0, on an unavailable block.
 Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py` (the Python golden),
 `tests/test_level_signals.py`, `tests/test_headless_layers.py` (a full signals run and a
 counts-only one).
@@ -195,6 +198,7 @@ class StructureBlock(TypedDict):
     front_door_ratio: float | None
     cross_package_edges: int
     internal_burrow_edges: list[BurrowEdge]
+    burrow_edge_count: int
     breakup_candidates: list[BreakupCandidate]
     module_count: int
     edge_count: int
@@ -229,6 +233,8 @@ class StructureGraphResult:
     # A3: the burrowing edges (imports that reach into another package's
     # internals instead of its public API).
     internal_burrow_edges: list[BurrowEdge] = field(default_factory=list)
+    # A3: every burrowing edge, before the MAX_BURROW_EDGES cap on the list above (#942).
+    burrow_edge_count: int = 0
     # A4: packages proposed for splitting, with their clusters as cut-lines.
     breakup_candidates: list[BreakupCandidate] = field(default_factory=list)
     module_count: int = 0
@@ -257,6 +263,7 @@ class StructureGraphResult:
                 None if self.front_door_ratio is None else round(self.front_door_ratio, 4)),
             "cross_package_edges": self.cross_package_edges,
             "internal_burrow_edges": self.internal_burrow_edges,
+            "burrow_edge_count": self.burrow_edge_count,
             "breakup_candidates": self.breakup_candidates,
             "module_count": self.module_count,
             "edge_count": self.edge_count,
@@ -419,7 +426,8 @@ def package_graph(
     import edges and how many of them bypass the target's front door, sorted by pair.
 
     ``bypass`` is counted exactly as ``compute_front_door_ratio`` counts a burrow, so
-    the bypass total equals the uncapped burrow-edge count.
+    the bypass total equals ``burrow_edge_count`` (the list ``internal_burrow_edges`` is
+    capped at ``MAX_BURROW_EDGES``).
     """
     members: dict[str, list[str]] = {pkg: [] for pkg in mg.packages}
     for module in mg.modules:
@@ -587,6 +595,7 @@ def analyze_structure(
         front_door_ratio=front_door_ratio if cross_package_edges else None,
         cross_package_edges=cross_package_edges,
         internal_burrow_edges=burrow_edges[:MAX_BURROW_EDGES],
+        burrow_edge_count=len(burrow_edges),
         breakup_candidates=_all_breakup_candidates(graph, mg),
         module_count=graph.number_of_nodes(),
         edge_count=graph.number_of_edges(),

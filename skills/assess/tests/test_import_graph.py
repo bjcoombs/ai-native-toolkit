@@ -38,7 +38,7 @@ def _dump(value: object) -> str:
 
 
 # The package map's fields (#942) postdate the frozen golden, which no current code rewrites.
-PACKAGE_MAP_KEYS = ("packages", "package_count", "package_edges")
+PACKAGE_MAP_KEYS = ("packages", "package_count", "package_edges", "burrow_edge_count")
 
 
 def _without_language(block: dict) -> dict:
@@ -216,13 +216,23 @@ def test_the_package_map_data_counts_imports_and_front_door_bypasses(tmp_path: P
         {"from": "web", "to": "lib", "imports": 1, "bypass": 1},
     ]
     assert sum(e["imports"] for e in block["package_edges"]) == block["cross_package_edges"]
-    assert sum(e["bypass"] for e in block["package_edges"]) == len(block["internal_burrow_edges"])
+    assert sum(e["bypass"] for e in block["package_edges"]) == block["burrow_edge_count"] == 2
+
+
+def test_the_bypass_total_counts_every_burrow_past_the_listed_cap(tmp_path: Path) -> None:
+    modules = ["app/index", "lib/index", *(f"lib/m{i:03}" for i in range(120))]
+    builder = _StubBuilder("typescript", modules, {"app/index": {f"lib/m{i:03}" for i in range(120)}})
+    block = analyze_structure(tmp_path, builders=(builder,)).as_dict()
+    assert len(block["internal_burrow_edges"]) == 100
+    assert block["burrow_edge_count"] == 120
+    assert block["package_edges"] == [{"from": "app", "to": "lib", "imports": 120, "bypass": 120}]
 
 
 def test_the_golden_repo_package_data_matches_its_burrows_and_sizes() -> None:
     block = analyze_structure(REPO).as_dict()
     assert block["packages"] and block["package_count"] == len(block["packages"])
-    assert sum(e["bypass"] for e in block["package_edges"]) == len(block["internal_burrow_edges"]) > 0
+    assert sum(e["bypass"] for e in block["package_edges"]) == block["burrow_edge_count"] > 0
+    assert block["burrow_edge_count"] == len(block["internal_burrow_edges"])  # below the list cap
     assert sum(e["imports"] for e in block["package_edges"]) == block["cross_package_edges"]
     assert sum(p["loc"] for p in block["packages"]) == sum(fp["size"] for fp in block["footprints"])
     assert sum(p["modules"] for p in block["packages"]) == block["module_count"]
@@ -256,12 +266,14 @@ def test_counts_only_hashes_package_ids_and_keeps_every_count() -> None:
     assert [(e["imports"], e["bypass"]) for e in out["package_edges"]] == \
         [(e["imports"], e["bypass"]) for e in block["package_edges"]]
     assert out["package_count"] == block["package_count"]
+    assert out["burrow_edge_count"] == block["burrow_edge_count"]
 
 
 def test_an_unavailable_block_has_no_package_data(tmp_path: Path) -> None:
     block = analyze_structure(tmp_path).as_dict()
     assert block["available"] is False
-    assert (block["packages"], block["package_count"], block["package_edges"]) == ([], 0, [])
+    assert (block["packages"], block["package_count"], block["package_edges"],
+            block["burrow_edge_count"]) == ([], 0, [], 0)
 
 
 def test_a_tie_on_modules_goes_to_edges_then_language(tmp_path: Path) -> None:
