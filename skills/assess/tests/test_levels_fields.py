@@ -281,3 +281,35 @@ def test_the_hazard_marker_survives_counts_only() -> None:
     model = parse_levels(_model({"criteria": _crit(), "truth": ["docs"], "polarity": "hazard"}))
     level = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": 0}}})
     assert counts_only({"level": level})["level"] == level
+
+
+@pytest.mark.parametrize(("data", "missing", "reason"), [
+    ({"a": {"x": 1}}, ["b.x"], "block_absent"),
+    ({"b": {"x": 1}}, ["a.x"], "block_absent"),
+    ({"a": {"x": 1}, "b": {"available": False, "reason": "network"}}, ["b.x"], "needs_platform"),
+])
+def test_an_unavailable_side_is_the_signal_named(data: dict[str, Any], missing: list[str], reason: str) -> None:
+    row = _eq_row()
+    assert evaluate_row(row, data)["missing_signals"] == missing
+    model = parse_levels(_model({"truth": ["contracts"],
+                                 "criteria": [{"signal": "a.x", "op": "eq", "eq_signal": "b.x"}]}))
+    assert lt.level_result(model, data)["not_measured"] == [{"id": "r.1", "reason": reason}]
+
+
+def test_the_catalog_never_counts_a_hazard() -> None:
+    from lib import catalog
+
+    raw = _default()
+    raw["rows"][5]["levels"][0]["polarity"] = "hazard"  # layer-5-ci.1, a counted ci_executed signal
+    signals = {"ci_checks.enforced_check_runs": {"evidence": "ci_executed", "title": "CI"}}
+    rows = catalog._rows(parse_levels(raw), signals, {})  # type: ignore[arg-type]
+    assert rows[5]["levels"][0]["criteria"][0]["counts"] is False
+    assert rows[5]["levels"][1]["criteria"][0]["grade"] is not None
+
+
+def test_next_step_wording_names_both_paths_of_an_eq_signal_criterion() -> None:
+    from lib.fleet_next_steps import _step
+
+    (criterion,) = _eq_row()["levels"][0]["criteria"]
+    text = "\n".join(_step(1, criterion, ["repo"]))
+    assert "`a.x`" in text and "`b.x`" in text and "No repository-native wording" in text

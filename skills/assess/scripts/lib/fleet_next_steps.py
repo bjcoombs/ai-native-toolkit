@@ -200,7 +200,9 @@ def _outcomes(evaluation: Evaluation | RowResult, target: int) -> dict[tuple[str
 
 def _step(number: int, criterion: Criterion, where: Sequence[str],
           unmet_parts: Sequence[str] = ()) -> list[str]:
-    words = guidance(criterion["signal"], criterion["op"], criterion["value"], unmet_parts)
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    words = None if "eq_signal" in criterion else guidance(
+        criterion["signal"], criterion["op"], criterion["value"], unmet_parts)
     if words is None:
         return [f"{number}. **Meet {expression(criterion)}.** No repository-native wording exists "
                 "for this signal.",

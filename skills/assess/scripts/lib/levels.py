@@ -620,6 +620,15 @@ def _empty_set(data: JsonDict | None, signal: str) -> str | None:
     return None
 
 
+def unavailable_signal(criterion: Criterion, data: Any) -> str:
+    """The path to name for an unknown criterion: its ``eq_signal`` when that is the side
+    unavailable and ``signal`` is not, else ``signal``."""
+    if ("eq_signal" in criterion and resolve_signal(data, criterion["signal"]) is not _UNAVAILABLE
+            and resolve_signal(data, criterion["eq_signal"]) is _UNAVAILABLE):
+        return criterion["eq_signal"]
+    return criterion["signal"]
+
+
 def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> CriterionOutcome:
     op, value = criterion["op"], criterion["value"]
     actual = resolve_signal(data, criterion["signal"])
@@ -667,9 +676,9 @@ def evaluate_row(row: Row, data: JsonDict | None) -> Evaluation:
     high = len(row["levels"])
     climbing = True
     for level in row["levels"]:
-        results = [_evaluate_criterion(c, data) for c in level["criteria"]]
-        unmet = [r for r in results if r["status"] != "met"]
-        missing.update(r["signal"] for r in unmet if r["status"] == "unknown")
+        results = [(c, _evaluate_criterion(c, data)) for c in level["criteria"]]
+        unmet = [r for _, r in results if r["status"] != "met"]
+        missing.update(unavailable_signal(c, data) for c, r in results if r["status"] == "unknown")
         met: bool | None
         if any(r["status"] == "unmet" for r in unmet):
             met = False

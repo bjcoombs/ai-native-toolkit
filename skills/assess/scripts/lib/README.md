@@ -2497,8 +2497,10 @@ calls them, and the module docstring is the reference.
   with no `value`; default absent (compare with `value`). The criterion compares the two
   measured signals: either unavailable is `unknown`, different kinds or a non-scalar
   `type_mismatch`. The parsed criterion keeps the second path as its `value` as well, so the
-  catalog and next-step text show what it compares with; the `PathValidator` checks both
-  paths.
+  catalog shows what it compares with; the `PathValidator` checks both paths. The fleet
+  next-step wording skips the signal's repository-native guidance for such a criterion and names
+  both paths. `levels.unavailable_signal` names the unavailable side in `missing_signals` and in
+  the tally's `not_measured` reason. The catalog never counts a hazard.
 
 Tests: `tests/test_levels_fields.py`.
 

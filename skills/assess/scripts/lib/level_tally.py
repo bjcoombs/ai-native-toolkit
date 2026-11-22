@@ -73,7 +73,8 @@ from typing import Any
 
 from lib.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, LevelResult, NextStep
-from lib.levels import CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef, condition_id, evaluate_row
+from lib.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
+from lib.levels import condition_id, evaluate_row, unavailable_signal
 from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
@@ -128,7 +129,8 @@ def _unmeasured(outcome: CriterionOutcome) -> str | None:
     return rule[1]
 
 
-def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[str, str | None]:
+def _own_state(outcome: LevelOutcome, criteria: list[Criterion],
+               data: Mapping[str, Any] | None) -> tuple[str, str | None]:
     """A condition's state from its own criteria, with the reason when not measured."""
     if any(u["status"] == "unmet" and _unmeasured(u) is None for u in outcome["unmet"]):
         return "unmet", None
@@ -140,7 +142,9 @@ def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[s
         return "not_measured", code
     if first["reason"] in EMPTY_SET_CODES or first["reason"] == "type_mismatch":
         return "not_measured", first["reason"]
-    return "not_measured", _block_reason(data, first["signal"])
+    criterion = next(c for c in criteria if (c["signal"], c["op"], c["value"])
+                     == (first["signal"], first["op"], first["value"]))
+    return "not_measured", _block_reason(data, unavailable_signal(criterion, data))
 
 
 def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[ConditionResult]:
@@ -152,7 +156,7 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[Co
         evaluation: Evaluation = evaluate_row(row, dict(data) if data is not None else None)
         for outcome, level in zip(evaluation["levels"], row["levels"]):
             cid = condition_id(row["id"], level["level"])
-            state, reason = _own_state(outcome, data)
+            state, reason = _own_state(outcome, level["criteria"], data)
             own[cid] = (state, reason)
             requires[cid] = level.get("requires", [])
             if "guarded_by" in level:
