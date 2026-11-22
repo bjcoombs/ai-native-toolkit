@@ -69,6 +69,8 @@ import tomllib
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict
 
+from lib.check_manifest import core_manifest, finding_tables
+
 # A parsed ``.assess/config.toml`` (or one of its sections): whatever TOML the
 # user wrote, validated key by key by the loaders below.
 TomlTable = dict[str, Any]
@@ -194,24 +196,12 @@ def load_structure_config(repo_root: Path) -> StructureConfig:
     return {"keyhole_budget": budget}
 
 
-# The findings that represent a concern (everything except the one positive
-# finding, ``refactor_boundary``). The canonical order + the positive finding
-# live in ``keyhole_signals.FINDING_ORDER``; the gate only needs the concern set
-# and must not import back up into a sibling lib module, so the list is repeated
-# here deliberately. ``test_gate_concerns_match_keyhole_signals`` pins the two in
-# sync so a new finding can't silently escape the default warn set.
-GATE_CONCERN_FINDINGS = [
-    "hidden_coupling",
-    "lying_map",
-    "unexplained_complexity",
-    "untrusted_hotspot",
-    "self_referential_tests",
-    "unactioned_intent",
-    "accretion_ratchet",
-    "orphaned_understanding",
-    "candidate_dead_weight",
-    "override_contradicts_signals",
-]
+# The findings that represent a concern (the manifest's ``concern = true``: every
+# finding except the one positive, ``refactor_boundary``), in the canonical finding
+# order. Loaded from ``checks/core.toml`` (#795), the same source as
+# ``keyhole_signals.FINDING_ORDER``, so a new finding cannot escape the default
+# warn set.
+GATE_CONCERN_FINDINGS = finding_tables(core_manifest())["concern"]
 
 
 def _positive_number(section: TomlTable, key: str) -> float | None:

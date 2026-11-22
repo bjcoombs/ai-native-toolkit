@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from lib.assess_config import is_user_excluded
+from lib.check_manifest import core_manifest, finding_tables
 from lib.change_coupling import (
     RenameMap, authorship_analysis, build_rename_map, change_coupling_pairs, containment_ratio,
     find_self_referential_tests, fold_renames, parse_commit_file_sets, repo_top,
@@ -66,43 +67,18 @@ MAX_ATTENTION_UNITS = 10
 # commits can't establish whether edits "stay contained").
 MIN_DIR_COMMITS_FOR_CONTAINMENT = 5
 
-# The named derived findings, in a fixed report order (worst-first, the one
-# positive last). The action strings are the deterministic recommendation the
-# report leads with; the LLM elaborates but never contradicts them.
-FINDING_ORDER = [
-    "hidden_coupling",
-    "lying_map",
-    "unexplained_complexity",
-    "untrusted_hotspot",  # E1: complex churning code with hollow tests
-    "self_referential_tests",  # E2: tests authored with the code they cover
-    "unactioned_intent",  # stale promissory markers that survived many edits
-    "accretion_ratchet",  # files that only ever grow - never meaningfully cut back
-    "orphaned_understanding",
-    "candidate_dead_weight",
-    "override_contradicts_signals",  # archetype marker disagrees with the signals
-    "refactor_boundary",
-]
-FINDING_ACTIONS = {
-    "hidden_coupling": "investigate the seam",
-    "lying_map": "fix or delete the doc",
-    "unexplained_complexity": "write the missing contract (do NOT auto-generate)",
-    "untrusted_hotspot": "strengthen tests to pin observable behaviour (not internal state)",
-    "self_referential_tests": "request human review - tests verify internal consistency, not truth",
-    "unactioned_intent": "action the promise: fix it, ticket it, or delete the marker/skip",
-    "accretion_ratchet": "refactor down: extract, delete dead code, or split the file",
-    "orphaned_understanding": "assign a human anchor before further change",
-    "candidate_dead_weight": "verify liveness, then delete if dead",
-    "override_contradicts_signals": (
-        "Review archetype marker - deterministic signals suggest a different "
-        "classification"
-    ),
-    "refactor_boundary": "safe to hand an agent in isolation",
-}
+# The named derived findings and their tables load from the check manifest
+# (``checks/core.toml``, #795): ``order`` is the fixed report order (worst-first,
+# the one positive last) and ``action`` the deterministic recommendation the report
+# leads with; the LLM elaborates but never contradicts it.
+_TABLES = finding_tables(core_manifest())
+FINDING_ORDER = _TABLES["order"]
+FINDING_ACTIONS = _TABLES["actions"]
 
-# The execution *mode* each finding type warrants - the deterministic posture an
-# executor should take before touching the code, derived from the finding, never
-# guessed by the LLM. Three modes, each tracing to one of the write-side
-# tendencies the toolkit guards against:
+# The execution *mode* each finding type warrants (the manifest's ``mode``) - the
+# deterministic posture an executor should take before touching the code, derived
+# from the finding, never guessed by the LLM. Three modes, each tracing to one of
+# the write-side tendencies the toolkit guards against:
 #
 #   characterize_first  - understand/contract the code before changing it. The
 #       risk is acting blind on a seam or a complexity nobody has pinned, so the
@@ -119,19 +95,7 @@ FINDING_ACTIONS = {
 # without a mapping (or an action with no finding attribution) falls back to
 # DEFAULT_FINDING_MODE - characterize_first, the conservative "understand before
 # you touch it" posture.
-FINDING_MODES = {
-    "hidden_coupling": "characterize_first",
-    "lying_map": "verify_then_retire",
-    "unexplained_complexity": "characterize_first",
-    "untrusted_hotspot": "characterize_first",
-    "self_referential_tests": "verify_then_retire",
-    "unactioned_intent": "verify_then_retire",
-    "accretion_ratchet": "refactor_safe",
-    "orphaned_understanding": "characterize_first",
-    "candidate_dead_weight": "verify_then_retire",
-    "override_contradicts_signals": "characterize_first",
-    "refactor_boundary": "refactor_safe",
-}
+FINDING_MODES = _TABLES["modes"]
 DEFAULT_FINDING_MODE = "characterize_first"
 # The closed set of modes, exposed for validators/tests that assert coverage.
 FINDING_MODE_VALUES = frozenset(FINDING_MODES.values())
@@ -558,9 +522,10 @@ def apply_config_excludes(
     return filtered, sorted(dropped)
 
 
-# Findings built from git-log path strings. Only these can name a path that no
-# longer exists: every other finding reads the working tree or the stats file.
-GIT_HISTORY_FINDINGS = frozenset({"hidden_coupling", "refactor_boundary"})
+# Findings built from git-log path strings (the manifest's ``prune_missing_paths``).
+# Only these can name a path that no longer exists: every other finding reads the
+# working tree or the stats file.
+GIT_HISTORY_FINDINGS = _TABLES["prune_missing_paths"]
 
 
 def prune_missing_finding_paths(
@@ -1354,7 +1319,8 @@ def _override_contradiction_paths(archetype: JsonDict | None) -> list[str]:
 # confidence cap in the join; hidden_coupling is dropped here. Both blocks keep
 # their raw data (honest); only the *counted findings* degrade. The structure
 # drift hidden-seam dirs are co-change-derived too, so they ride the same gate.
-_CHURN_DERIVED_FINDINGS = frozenset({"lying_map", "hidden_coupling"})
+# The manifest marks them ``suppressed_when = "doc_staleness.churn_degenerate == true"``.
+_CHURN_DERIVED_FINDINGS = _TABLES["churn_suppressed"]
 
 
 def _finding_path_inputs(

@@ -66,7 +66,8 @@
       "properties": {
         "code": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]{0,39}$"
+          "pattern": "^[a-z][a-z0-9_]{0,39}(<[a-z]+>)?$",
+          "description": "A trailing <name> stands for a family of codes, for example no_import_graph_<language>."
         },
         "carried_in": {
           "enum": [
@@ -74,6 +75,11 @@
             "basis"
           ],
           "description": "reason: the block's available-false reason code; basis: a token on a null leaf"
+        },
+        "block": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "The published block whose reason carries the code; omitted, every block the collector publishes. The published signals schema lists each block's codes under that block."
         },
         "means": {
           "type": "string",
@@ -465,7 +471,8 @@
         },
         "suppressed_when": {
           "type": "string",
-          "maxLength": 1024
+          "const": "doc_staleness.churn_degenerate == true",
+          "description": "Until the rule evaluator (#789 step 5) the loader accepts one expression only: doc_staleness.churn_degenerate == true."
         },
         "prune_missing_paths": {
           "type": "boolean",
