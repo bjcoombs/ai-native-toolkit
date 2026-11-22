@@ -59,6 +59,36 @@ def test_three_lines_step_next_and_tally():
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
 
 
+_COUNTED_GATE = {"id": "layer-6-coverage.1", "row": "layer-6-coverage", "level": 1, "grade": "measured",
+                 "counted": True, "state": "unmet"}
+
+
+def _gate_and_threshold(threshold: int) -> dict[str, Any]:
+    return _level(conditions=[_COUNTED_GATE, _level()["conditions"][0]], next_step={
+        "step": 4, "threshold": threshold, "blockers": [
+            {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"},
+            {"kind": "threshold", "threshold": threshold, "met": 4}]})
+
+
+def test_a_counted_gate_that_also_meets_the_threshold_is_the_one_change():
+    h = headline(_gate_and_threshold(5), default_model())
+    assert h["lines"][1] == "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced"
+
+
+def test_the_shortfall_after_the_gate_holds_is_added_and_never_names_the_gate():
+    h = headline(_gate_and_threshold(7), default_model())
+    assert h["lines"][1] == ("Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced "
+                             "and 2 more verified practices are met, for example `c.1`")
+
+
+def test_a_gate_listed_not_counted_adds_nothing_to_the_tally():
+    listed = {**_COUNTED_GATE, "grade": "config_only", "counted": False}
+    lvl = _gate_and_threshold(5)
+    lvl["conditions"][0] = listed
+    assert headline(lvl, default_model())["lines"][1].endswith(
+        "a coverage gate is enforced and 1 more verified practice is met, for example `c.1`")
+
+
 def test_not_measured_gate_says_so_and_threshold_only_names_the_count():
     gate = {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1",
             "state": "not_measured", "reason": "needs_platform"}

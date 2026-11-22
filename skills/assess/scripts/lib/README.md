@@ -3014,8 +3014,10 @@ The deterministic `/assess` headline (#747): `headline(level, model)` words a
 (the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
 default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
 Unattended agent PRs · contracts in place"), the Next line naming the next Step and
-each blocker's change (`GATE_CHANGE` per gate id, then "N more verified practices
-are met, for example `<first unmet counted condition>`"; a not-measured gate says
+the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
+count still falls short once the gates hold and their counted conditions join the
+tally, "N more verified practices are met, for example `<first unmet counted
+condition>`"; a not-measured gate says
 so with its reason; at the top Step it says the Step holds while its gates hold),
 and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
 model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the

@@ -10,7 +10,10 @@ fix:
    contracts in place``;
 2. the Next line, naming the next Step and the one change that reaches it:
    ``Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced``.
-   Each blocker of the next Step is named, gates first, in the engine's order;
+   The blocking gates come first. The count shortfall is worked out after they
+   hold (a counted gate condition adds to the tally itself), so when the gates
+   alone reach the threshold the line names only them; otherwise it adds "and N
+   more verified practices are met";
 3. the tally: ``Verified practices: N of M measured · K not measured (reasons) ·
    model V``. N is ``tally.met``, M is ``tally.measured`` (measured conditions only),
    K is ``tally.not_measured`` with each reason code and its count, V the
@@ -67,27 +70,59 @@ def _reason_word(code: str) -> str:
     return REASON_WORDS.get(code, code.replace("_", " "))
 
 
-def _blocker_change(blocker: Blocker, level: LevelResult) -> str:
-    if blocker["kind"] == "gate":
-        gate = blocker.get("gate", "")
-        change = GATE_CHANGE.get(gate, f"the {gate} gate holds")
-        if blocker.get("state") == "not_measured":
-            change += f" (not measured here: {_reason_word(blocker.get('reason', ''))})"
-        return change
-    short = blocker.get("threshold", 0) - blocker.get("met", 0)
+def _gate_change(blocker: Blocker) -> str:
+    gate = blocker.get("gate", "")
+    change = GATE_CHANGE.get(gate, f"the {gate} gate holds")
+    if blocker.get("state") == "not_measured":
+        change += f" (not measured here: {_reason_word(blocker.get('reason', ''))})"
+    return change
+
+
+def _gate_gain(level: LevelResult, model: MaturityModel, step: int,
+               gates: list[Blocker]) -> tuple[int, set[str]]:
+    """The tally the blocking gates add once they hold, and the conditions they cover.
+
+    A gate holds when its row's conditions up to its level are all met; each of
+    those not met yet that is counted adds one to ``tally.met`` when the gate holds.
+    """
+    blocked = {b.get("gate") for b in gates}
+    step_def = next((s for s in model.get("steps", []) if s["step"] == step), None)
+    covered: set[str] = set()
+    for gate in (step_def["gates"] if step_def else []):
+        if gate["id"] in blocked:
+            covered |= {f"{gate['row']}.{n}" for n in range(1, gate["level"] + 1)}
+    gain = sum(1 for c in level["conditions"]
+               if c["id"] in covered and c["counted"] and c["state"] != "met")
+    return gain, covered
+
+
+def _threshold_change(short: int, level: LevelResult, covered: set[str]) -> str:
     noun = "practice is" if short == 1 else "practices are"
     example = next((c["id"] for c in level["conditions"]
-                    if c["counted"] and c["state"] == "unmet"), None)
+                    if c["counted"] and c["state"] == "unmet" and c["id"] not in covered), None)
     tail = f", for example `{example}`" if example else ""
     return f"{short} more verified {noun} met{tail}"
 
 
-def _next_line(level: LevelResult, names: Mapping[int, str]) -> str:
+def _next_line(level: LevelResult, model: MaturityModel, names: Mapping[int, str]) -> str:
+    """The next Step and the change that reaches it.
+
+    The gates come first. The count shortfall is worked out after the gates hold,
+    because a counted gate condition adds to the tally itself: when the gates alone
+    reach the threshold, the line names only them.
+    """
     nxt = level["next_step"]
     if nxt is None:
         top = level["step"]
         return f"Next: Step {top} is the top Step; it holds while its gates hold"
-    changes = [_blocker_change(b, level) for b in nxt["blockers"]]
+    gates = [b for b in nxt["blockers"] if b["kind"] == "gate"]
+    gain, covered = _gate_gain(level, model, nxt["step"], gates)
+    changes = [_gate_change(b) for b in gates]
+    for b in nxt["blockers"]:
+        if b["kind"] == "threshold":
+            short = b.get("threshold", 0) - b.get("met", 0) - gain
+            if short > 0:
+                changes.append(_threshold_change(short, level, covered))
     unlock = " and ".join(changes) if changes else "its gates hold"
     return f"Next: Step {nxt['step']} · {names.get(nxt['step'], '')} unlocks when {unlock}"
 
@@ -120,7 +155,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     tally = level["tally"]
     if step is not None:
         lines.append(f"Step {step} · {names.get(step, '')} · contracts in place")
-        lines.append(_next_line(level, names))
+        lines.append(_next_line(level, model, names))
     lines.append(_tally_line(level))
     nxt = level["next_step"]
     counts = f"{tally['met']} of {tally['measured']} measured"

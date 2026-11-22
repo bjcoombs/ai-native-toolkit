@@ -6,7 +6,7 @@ _Generated <<normalized>>._
 
 **Step 2 · Supervised agent PRs · contracts in place**
 
-Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests and 2 more verified practices are met, for example `layer-5-ci.1`
+Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests and 1 more verified practice is met
 
 Verified practices: 1 of 2 measured · 10 not measured (scan did not run: 1, needs a full run: 1, no remote: 2, no source files: 2, no value read: 2, unavailable: 2) · model <<normalized>>
 
