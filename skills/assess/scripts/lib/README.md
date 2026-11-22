@@ -1048,7 +1048,8 @@ ghsync root or a list, one JSONL row per repository. `discover_root` walks
 checkout is reported rather than skipped), never descending into a found repository,
 `worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
 directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
-expanded is a `ValueError`, a usage error); `layout_id` gives both inputs the
+expanded is a `ValueError`, a usage error, and so is one whose expanded home directory
+does not exist, since Windows expands `~name` without checking the account, #965); `layout_id` gives both inputs the
 same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
@@ -4434,7 +4435,13 @@ Layer 1 write-side truth pressure. Two tiers:
   puts the last line of its error output (skipping Python warning lines, such as
   mutmut's `paths_to_mutate` deprecation) in the result's `reason` (surfaced as
   `mutation_note`), and the mutmut 3 path appends `; first failure:` with the first
-  import error, else pytest's first failing test, scratch and home paths labelled. mutmut
+  import error, else pytest's first failing test, scratch and home paths labelled
+  (`test_pressure/reason_paths.py`, `cut_prefix`: each spelling of a directory, as given
+  and resolved, is cut under `/`, `\` and a repr's doubled `\\` (an `OSError` quotes its
+  filename that way), longest first and only before a separator, so a Windows path the
+  tool printed with `/` is cut too and the rest of the path reads with `/`; on Windows the
+  match ignores case; a root home is never a label, issue #964). Directory entries are mirrored and
+  `.meta` files read in code-point name order on every platform (#965). mutmut
   runs pytest under the interpreter that launches it, so `_resolve_runner` picks one that
   can import the suite's dependencies (`runner`): a package `.venv` / `venv` that already
   holds mutmut 3 (read only, no bytecode written), else `uv run --project` with

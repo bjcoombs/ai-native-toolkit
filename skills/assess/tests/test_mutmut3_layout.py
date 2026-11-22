@@ -19,7 +19,6 @@ from collections.abc import Callable
 from fnmatch import fnmatch
 from pathlib import Path
 
-import pytest
 
 import lib.test_pressure as tp
 from lib import doc_graph, structure_graph
@@ -407,7 +406,6 @@ def test_package_root_is_the_nearest_marker(tmp_path: Path) -> None:
     assert mutmut3._package_root(tmp_path, "top.py") == ""
 
 
-@pytest.mark.windows_followup
 def test_ancestors_are_mirrored_one_level_down(tmp_path: Path) -> None:
     for rel in (".git/HEAD", ".assess/x", "README.md", "shared.txt", "docs/a.md",
                 "pkgs/shared.txt", "pkgs/other/x", "pkgs/tool/pyproject.toml",

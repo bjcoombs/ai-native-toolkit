@@ -464,7 +464,6 @@ def _load_heatmap_cli() -> ModuleType:
     return module
 
 
-@pytest.mark.windows_followup
 def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     from test_fleet_groups import LEVELS_TOML
     heatmap = _load_heatmap_cli()
@@ -481,8 +480,8 @@ def test_heatmap_compare_uses_the_fleet_comparison_rule(froot2, tmp_path):
     assert "window changed" in (tmp_path / "w.svg").read_text(encoding="utf-8")
 
     (froot2 / "acme" / "svc2" / "svc2-main" / "CLAUDE.md").write_text("x\n", encoding="utf-8")
-    import shutil
-    shutil.rmtree(froot2 / "acme" / "svc2")
+    from lib.fleet_cleanup import _rmtree
+    _rmtree(froot2 / "acme" / "svc2")  # git objects are read-only on Windows
     fewer = run("c")
     assert heatmap.main([str(fewer), "--compare", str(first), "--output", str(tmp_path / "s.svg")]) == 0
     assert "measured set changed in acme" in (tmp_path / "s.svg").read_text(encoding="utf-8")

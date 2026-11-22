@@ -14,6 +14,7 @@ import jsonschema
 import pytest
 
 from lib.counts_only import classify
+from lib.fleet_cleanup import _rmtree
 from lib.fleet_schema import build_schema
 from test_fleet import make_repo
 
@@ -286,12 +287,11 @@ def test_a_diagram_write_failure_keeps_exit_0(tmp_path, monkeypatch, capsys):
     assert "fleet: diagrams: not written (ValueError: render bug)" in capsys.readouterr().err
 
 
-@pytest.mark.windows_followup
 def test_a_broken_checkout_is_a_failed_row_and_the_run_completes(froot, tmp_path, capsys):
     root = tmp_path / "froot"
     shutil.copytree(froot, root, symlinks=True)
     lib1 = root / "grpb" / "lib1" / "lib1-main"
-    shutil.rmtree(lib1 / ".git")
+    _rmtree(lib1 / ".git")  # git objects are read-only on Windows
     (lib1 / ".git").write_text("", encoding="utf-8")
 
     assert fleet_cli.main([str(root), "--out", str(tmp_path / "out")]) == 0
