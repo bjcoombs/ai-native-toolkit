@@ -11,6 +11,7 @@ publishes = ["shared_tooling"]
 reads = ["repo_root"]
 stage = "post_offers"
 headless = { shared_tooling = "registered" }
+whys.shared_tooling = "exempt: plumbing"
 shapes = [
   { path = "shared_tooling", type = "lib.shared_tooling:SharedToolingBlock" },
 ]

@@ -10,6 +10,7 @@ publishes = ["promissory_markers"]
 reads = ["promissory"]
 stage = "read_side"
 headless = { promissory_markers = "headless_variant" }
+whys.promissory_markers = "TODOs, suppressions and disabled tests that survive many edits are promises nobody kept; an agent cannot tell from the code whether one is still meant."
 headless_variants = [
   { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
 ]
@@ -48,6 +49,7 @@ id = "core.cond.layer-3-linters.2.stale"
 kind = "condition"
 title = "Stale suppressions stay at 10 or fewer"
 key = "layer-3-linters.2:promissory_markers.families.suppression.stale"
+why = "A suppression that survives many edits switches a check off in code that keeps changing, and an agent editing nearby gets no sign the warning still matters."
 fix = "Revisit the oldest suppression comments and fix or remove them."
 
 [[entries]]
@@ -55,4 +57,5 @@ id = "core.cond.layer-3-linters.2.aging_reliable"
 kind = "condition"
 title = "Suppression ages can be read from history"
 key = "layer-3-linters.2:promissory_markers.aging_reliable"
+why = "A guard for the suppression count: on a shallow or squashed history every suppression looks new, so a count of 0 would say nothing."
 fix = "Run on a full clone so suppression ages can be measured."

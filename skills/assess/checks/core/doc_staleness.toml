@@ -11,6 +11,7 @@ publishes = ["doc_staleness"]
 reads = ["repo_root", "doc_graph", "excludes", "scope"]
 stage = "read_side"
 headless = { doc_staleness = "headless_variant" }
+whys.doc_staleness = "It compares each doc's last change with the churn in the code it describes, so a doc whose code moved on is found before an agent relies on it."
 headless_variants = [
   { block = "doc_staleness", callable = "lib.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },
 ]
@@ -54,6 +55,7 @@ id = "core.cond.doc-freshness.1.stale_pct"
 kind = "condition"
 title = "Most mapped docs keep pace with their code"
 key = "doc-freshness.1:doc_staleness.summary.stale_pct"
+why = "An agent reads the docs as true. A doc whose code has moved on misleads it about that code."
 fix = "Refresh the docs the report lists under doc freshness."
 
 [[entries]]
@@ -61,4 +63,5 @@ id = "core.cond.doc-freshness.2.stale_pct"
 kind = "condition"
 title = "Four in five mapped docs keep pace"
 key = "doc-freshness.2:doc_staleness.summary.stale_pct"
+why = "With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word."
 fix = "Refresh the docs the report lists under doc freshness, oldest first."

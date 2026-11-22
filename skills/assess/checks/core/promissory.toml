@@ -18,6 +18,7 @@ id = "core.finding.unactioned_intent"
 kind = "finding"
 title = "Unactioned intent"
 name = "unactioned_intent"
+why = "A TODO or skip that survives many edits reads to an agent as a live plan or a settled exception, and it cannot tell which."
 order = 5
 action = "action the promise: fix it, ticket it, or delete the marker/skip"
 mode = "verify_then_retire"

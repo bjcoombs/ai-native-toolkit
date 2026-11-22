@@ -10,6 +10,7 @@ publishes = ["accretion_ratchet"]
 reads = ["accretion_scan", "current"]
 stage = "read_side"
 headless = { accretion_ratchet = "unregistered" }
+whys.accretion_ratchet = "Files that only ever grow get harder to read whole with every addition; this names them before an agent adds the next feature to one."
 revision = 1
   [entries.privacy]
   "accretion_ratchet.reason" = "drop"
@@ -19,6 +20,7 @@ id = "core.finding.accretion_ratchet"
 kind = "finding"
 title = "Accretion ratchet"
 name = "accretion_ratchet"
+why = "A file that has only ever grown gets harder to read whole with each change, and each agent addition makes the next one harder."
 order = 6
 action = "refactor down: extract, delete dead code, or split the file"
 mode = "refactor_safe"

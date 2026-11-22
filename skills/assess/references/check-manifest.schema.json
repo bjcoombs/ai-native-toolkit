@@ -13,7 +13,11 @@
   "properties": {
     "manifest_version": {
       "type": "integer",
-      "const": 1
+      "enum": [
+        1,
+        2
+      ],
+      "description": "1 loads with no whys; 2 requires every why (lib/manifest_whys.py, #939)."
     },
     "owner": {
       "type": "string",
@@ -26,6 +30,30 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/entry"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "description": "Truth tag (lib/levels_fields.py TRUTH_TAGS) -> its why, at manifest_version 2 (#939). In the root manifest, not a fragment.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "why"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "why": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "What the check protects for an agent (#939, lib/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
+          },
+          "why_source": {
+            "type": "string",
+            "pattern": "^(https://\\S+|(?![/~])(?!.*\\.\\.)[A-Za-z0-9_.][A-Za-z0-9_./-]*)$",
+            "description": "Where the why's claim comes from: an https:// URL or a repository-relative path, only beside a real why."
+          }
+        }
       }
     }
   },
@@ -351,6 +379,24 @@
             "$ref": "#/$defs/privacy"
           },
           "description": "Counts-only field pattern -> class (counts_only_rules.RULES)"
+        },
+        "whys": {
+          "type": "object",
+          "description": "Scan (a key of headless) -> its why, or exactly 'exempt: plumbing' for a scan no row or finding reads, directly or through another scan (#939).",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "why_sources": {
+          "type": "object",
+          "description": "Scan -> the source of its why (an https:// URL or a repository-relative path).",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(https://\\S+|(?![/~])(?!.*\\.\\.)[A-Za-z0-9_.][A-Za-z0-9_./-]*)$",
+            "description": "Where the why's claim comes from: an https:// URL or a repository-relative path, only beside a real why."
+          }
         }
       }
     },
@@ -389,7 +435,8 @@
         },
         "evidence": {
           "$ref": "#/$defs/evidence"
-        }
+        },
+        "why": false
       }
     },
     "condition": {
@@ -418,6 +465,17 @@
           "type": "string",
           "maxLength": 300,
           "description": "The supportive next step shown when unmet"
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "What the check protects for an agent (#939, lib/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
+        },
+        "why_source": {
+          "type": "string",
+          "pattern": "^(https://\\S+|(?![/~])(?!.*\\.\\.)[A-Za-z0-9_.][A-Za-z0-9_./-]*)$",
+          "description": "Where the why's claim comes from: an https:// URL or a repository-relative path, only beside a real why."
         }
       }
     },
@@ -484,6 +542,17 @@
             "registered",
             "unregistered"
           ]
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "What the check protects for an agent (#939, lib/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
+        },
+        "why_source": {
+          "type": "string",
+          "pattern": "^(https://\\S+|(?![/~])(?!.*\\.\\.)[A-Za-z0-9_.][A-Za-z0-9_./-]*)$",
+          "description": "Where the why's claim comes from: an https:// URL or a repository-relative path, only beside a real why."
         }
       }
     }
