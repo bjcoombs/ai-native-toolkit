@@ -327,3 +327,14 @@ def test_a_guard_cannot_be_a_hazard() -> None:
     with pytest.raises(LevelsError, match=r"condition 'r.1': 'guarded_by' names hazard condition 'r.2'"):
         parse_levels(_model({"criteria": _crit(), "truth": ["docs"], "guarded_by": "r.2"},
                             {"criteria": _crit(), "truth": ["docs"], "polarity": "hazard"}))
+
+
+@pytest.mark.parametrize(("other", "grade"), [
+    ("ci_checks.lint_runs", "verified"),
+    ("doc_staleness.summary.stale_pct", "measured"),
+    ("no_such.signal", None),
+])
+def test_an_eq_signal_condition_takes_the_weaker_grade_of_its_two_signals(other: str, grade: str | None) -> None:
+    model = parse_levels(_model({"truth": ["contracts"], "criteria": [
+        {"signal": "ci_checks.enforced_check_runs", "op": "eq", "eq_signal": other}]}))
+    assert lt.level_result(model, {})["conditions"][0]["grade"] == grade

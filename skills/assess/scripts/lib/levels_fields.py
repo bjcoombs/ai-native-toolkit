@@ -57,7 +57,7 @@ Layer to truth, the documented mapping of the alias:
   or a value that is not a scalar, ``type_mismatch``; either side an empty-set
   statistic (``signal_grades.EMPTY_DENOMINATORS``) takes that signal's code. The parsed criterion
   keeps the path as its ``value`` too, so every reader of ``value`` shows the
-  path it compares with.
+  path it compares with. The condition's grade is the weaker of the two signals'.
 """
 from __future__ import annotations
 

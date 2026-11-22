@@ -114,8 +114,10 @@ def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
 
 
 def _grade(row: Row, level: int) -> str | None:
-    grades = [INPUT_GRADES[SIGNAL_INPUTS[c["signal"]]] if c["signal"] in SIGNAL_INPUTS else None
-              for c in row["levels"][level - 1]["criteria"]]
+    # an eq_signal criterion reads two signals, so both grade it (lib/levels_fields.py)
+    paths = [p for c in row["levels"][level - 1]["criteria"]
+             for p in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))]
+    grades = [INPUT_GRADES[SIGNAL_INPUTS[p]] if p in SIGNAL_INPUTS else None for p in paths]
     if any(g is None for g in grades):
         return None
     return min((g for g in grades if g is not None), key=_GRADE_ORDER.index)
