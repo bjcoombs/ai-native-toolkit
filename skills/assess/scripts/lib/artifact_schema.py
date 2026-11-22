@@ -290,6 +290,13 @@ a run produces on unchanged code. `assess_core` stamps it in run-context.json an
 # - run-context.json delivery gains sample_page_size (issue #995): the changes per
 #   heavy read the merged sample finished at, or null when none was made. Additive:
 #   no existing key moves.
+# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
+#   #926), both with lint_runs null: a CI .NET build whose committed project files
+#   turn on the analysers, and a compiler run with warnings as errors as the only
+#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
+#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
+#   --exit-code in its job counts, and a target whose recipe is not read reads
+#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.

@@ -313,7 +313,7 @@ def test_scan_failures_become_reason_tokens(tmp_path, monkeypatch, body, reason)
     row = fleet.scan_target(target, tmp_path, ScanOptions(timeout=2))
     assert row == {"fleet_row_version": fleet.FLEET_ROW_VERSION, "repo": "grp/r", "group": "grp",
                    "status": "failed", "reason": reason, "signals_schema_version": None, "scans": None,
-                   "active": None, "head_sha": None, "dirty": None}
+                   "active": None, "head_sha": None, "dirty": None, "dirty_reason": None}
     jsonschema.validate(row, build_schema())
 
 
@@ -368,7 +368,8 @@ def _git_dir_state(checkout: Path) -> dict[str, bytes]:
 def test_commit_state_uses_the_assess_definition_of_dirty(tmp_path, change, dirty):
     repo = make_checkout(tmp_path / "r", GUIDE)
     change(repo)
-    assert fleet.commit_state(repo) == {"head_sha": _git(repo, "rev-parse", "HEAD").strip(), "dirty": dirty}
+    assert fleet.commit_state(repo) == {"head_sha": _git(repo, "rev-parse", "HEAD").strip(), "dirty": dirty,
+                                        "dirty_reason": None}
 
 
 def test_an_inherited_repository_env_never_redirects_the_reads(tmp_path, monkeypatch):
@@ -396,7 +397,7 @@ def test_commit_state_without_a_commit(tmp_path):
     repo = tmp_path / "r"
     repo.mkdir()
     _git(repo, "init", "-q")
-    assert fleet.commit_state(repo) == {"head_sha": None, "dirty": None}
+    assert fleet.commit_state(repo) == {"head_sha": None, "dirty": None, "dirty_reason": fleet.NO_COMMIT}
 
 
 def test_a_clean_checkout_is_scanned_in_place(tmp_path):
