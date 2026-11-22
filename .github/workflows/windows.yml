@@ -41,6 +41,13 @@ on:
 permissions:
   contents: read
 
+# A run is five jobs, so a new push to a PR cancels that PR's older run. The
+# required check is per commit, so the cancelled run's aggregator reports only
+# on the superseded commit. Pushes to main never cancel each other.
+concurrency:
+  group: windows-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   suites:
     name: windows / ${{ matrix.suite }}

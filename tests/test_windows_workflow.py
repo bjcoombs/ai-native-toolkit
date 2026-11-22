@@ -7,6 +7,7 @@ run and must be green only when every leg is green: a failed, cancelled or
 skipped leg turns it red. The ghsync/ghreport path gate (#971) stays a step
 inside its leg, so no leg is ever skipped at job level on purpose.
 """
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,25 @@ REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github" / "workflows" / "windows.yml"
 REQUIRED_NAME = "windows suites + smoke runs"
 LEGS = {"assess", "scripts-contract", "ghsync", "smoke"}
+GHSYNC_SUITE = "ghsync and ghreport suites under Git Bash"
+# Every non-setup step and the one leg it runs in.
+STEP_LEG = {
+    "Shell scripts are LF in a CRLF checkout": "smoke",
+    "Fleet golden run against the committed Linux repos.jsonl": "assess",
+    "skills/assess pytest": "assess",
+    "scripts/ pytest": "scripts-contract",
+    "plugin contract pytest": "scripts-contract",
+    "Decide whether the ghsync and ghreport suites run": "ghsync",
+    GHSYNC_SUITE: "ghsync",
+    "Standalone skill ZIPs": "smoke",
+    "Eval scaffolds build their fixtures": "smoke",
+    "Smoke fixture estate": "smoke",
+    "Smoke assess_signals.py": "smoke",
+    "Smoke assess_core.py": "smoke",
+    "Smoke fleet.py over a ghsync-layout root": "smoke",
+    "Smoke fleet.py --from-list": "smoke",
+    "Smoke start_gate.py and complete_gate.py": "smoke",
+}
 
 
 def _jobs() -> dict[str, Any]:
@@ -85,13 +105,35 @@ def test_ghsync_gate_stays_a_step_in_its_leg() -> None:
     assert "matrix.suite == 'ghsync'" in suite["if"]
 
 
-def test_every_suite_step_belongs_to_one_leg() -> None:
+def test_every_suite_step_runs_in_exactly_its_leg() -> None:
+    # An exact `if:` per step: a typo'd leg name or an extra `&& false` would
+    # otherwise drop the step while its leg stays green.
     _, job = _matrix_job(_jobs())
-    seen: set[str] = set()
+    steps = {s.get("name"): s for s in job["steps"]}
+    missing = sorted(set(STEP_LEG) - set(steps))
+    assert not missing, f"steps the map expects but the workflow lacks: {missing}"
+    for name, leg in STEP_LEG.items():
+        extra = " && steps.ghsync_gate.outputs.run != 'false'" if name == GHSYNC_SUITE else ""
+        expected = f"${{{{ !cancelled() && matrix.suite == '{leg}'{extra} }}}}"
+        assert steps[name].get("if") == expected, name
+
+
+def test_no_step_names_an_unknown_leg() -> None:
+    _, job = _matrix_job(_jobs())
     for step in job["steps"]:
         cond = str(step.get("if", ""))
-        for leg in LEGS:
-            if f"matrix.suite == '{leg}'" in cond:
-                seen.add(leg)
-                assert "!cancelled()" in cond, step.get("name")
-    assert seen == LEGS
+        for leg in re.findall(r"matrix\.suite == '([^']*)'", cond):
+            assert leg in LEGS, f"{step.get('name')}: unknown leg {leg!r}"
+        if "matrix.suite" in cond:
+            assert step.get("name") in STEP_LEG, f"leg step missing from STEP_LEG: {step.get('name')}"
+        else:
+            # Unguarded steps are the shared setup; none of them may be a suite step.
+            assert step.get("name") not in STEP_LEG
+
+
+def test_superseded_pr_runs_cancel() -> None:
+    doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    assert doc["concurrency"] == {
+        "group": "windows-${{ github.event.pull_request.number || github.sha }}",
+        "cancel-in-progress": "${{ github.event_name == 'pull_request' }}",
+    }
