@@ -186,8 +186,8 @@ def test_tokens_removing_a_token_is_a_floor_change_that_goes_red(floor_repo):
     strict=True,
     raises=AssertionError,
     reason=(
-        "floor-core finding (#898): removed_tokens compares raw substring "
-        "counts, so a gate name inside a longer name (restart_gate.py for "
+        "floor-core finding (#898, FLOOR.md Tokens): removed_tokens compares raw "
+        "substring counts, so a gate name inside a longer name (restart_gate.py for "
         "start_gate.py) still counts as naming the gate"
     ),
 )
