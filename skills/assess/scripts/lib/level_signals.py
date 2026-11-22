@@ -84,6 +84,12 @@ runs (``needs_full_run``, never unmet: #740 decision), and
 suppression (``degenerate_history``; the huddle's "stale-suppression aging
 requires reliable history").
 
+``EMPTY_DENOMINATORS`` names the signals that are a statistic over a set, with
+the count of that set and the reason code the tally gives when the count is 0:
+``stats_summary.loc.p95`` over ``stats_summary.files_scored``
+(``no_scored_files``, #906). A p95 of no files is 0, which would pass an "at
+most 500 lines" test, so the condition reads not measured instead.
+
 Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 
 - Platform-read signals are their own class, ``platform``, not an execution
@@ -108,6 +114,7 @@ from lib.counts_only_schema import ROOTS
 from lib.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
 from lib.signals_schema import SCHEMA_PATH
 from lib.signal_grades import DEFAULT_LEVELS as DEFAULT_LEVELS
+from lib.signal_grades import EMPTY_DENOMINATORS as EMPTY_DENOMINATORS
 from lib.signal_grades import INPUT_GRADES as INPUT_GRADES
 from lib.signal_grades import LISTED_GRADES as LISTED_GRADES
 from lib.signal_grades import SIGNAL_INPUTS as SIGNAL_INPUTS

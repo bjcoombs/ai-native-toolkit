@@ -59,6 +59,7 @@ REASON_WORDS = {
     "no_remote": "no remote",
     "no_ownership_map": "no ownership map",
     "scan_failed": "scan did not complete",
+    "no_scored_files": "no files scored",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
 _SUPPORTIVE = (("failed", "did not complete"), ("missing", "not found"))

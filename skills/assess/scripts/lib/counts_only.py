@@ -222,6 +222,14 @@ def hash_path(value: str, salt: str) -> str | None:
     return _Filter(True, salt).path(value, allow_space=True)
 
 
+HASHED_RE = re.compile(r"h:[0-9a-f]{16}")
+
+
+def is_hashed(value: str) -> bool:
+    """``value`` is already a ``hash_value`` output: a stored id hashed at the output boundary (#909)."""
+    return HASHED_RE.fullmatch(value) is not None
+
+
 def hash_value(value: str, salt: str) -> str:
     """``value`` as ``h:`` plus 16 hex digits under ``salt``, the hash every kept path gets,
     for a key that must always hash (a fleet unit or repository key, #703)."""
