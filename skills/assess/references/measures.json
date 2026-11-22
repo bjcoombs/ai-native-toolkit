@@ -738,8 +738,13 @@
       "unknown_reasons": [
         {
           "code": "network",
-          "means": "It reads GitHub or GitLab, and a run makes no network call without --platform.",
-          "next_step": "Run the fleet or assess_signals.py with --platform, with gh or glab signed in."
+          "means": "A headless run without --platform makes no GitHub or GitLab read.",
+          "next_step": "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in."
+        },
+        {
+          "code": "no_remote",
+          "means": "The repository has no GitHub or GitLab remote, so there are no merged changes to read.",
+          "next_step": "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes."
         }
       ],
       "evidence": [
@@ -1225,7 +1230,18 @@
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "network",
+          "means": "No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read.",
+          "next_step": "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in."
+        },
+        {
+          "code": "no_remote",
+          "means": "No AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read.",
+          "next_step": "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes."
+        }
+      ],
       "evidence": [
         {
           "signal": "review_evidence.present",
@@ -1839,6 +1855,7 @@
       "privacy": {
         "written": true,
         "strings_kept": {
+          "structure_drift.reason": "reason",
           "structure_drift.tier_0.empty_ownership_patterns.declared_in": "drop",
           "structure_drift.tier_0.empty_ownership_patterns.owners": "drop",
           "structure_drift.tier_0.empty_ownership_patterns.pattern": "drop",
@@ -1856,7 +1873,13 @@
           "hidden_coupling"
         ]
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "no_ownership_map",
+          "means": "The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read.",
+          "next_step": "Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it."
+        }
+      ],
       "evidence": [
         {
           "signal": "structure_drift.tier_0.boundary_patterns",

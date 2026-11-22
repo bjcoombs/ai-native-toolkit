@@ -120,14 +120,21 @@ NO_RUNS = CiRuns((), frozenset(), False, False)
 
 def _command_groups(lines: list[str], unmasked: list[str]) -> list[tuple[range, str]]:
     """``(span, text)`` per command line; a folded block scalar (``run: >-``) is one text
-    per paragraph, attributed to its first line."""
+    per paragraph, and lines joined by a trailing ``\\`` are one text, attributed to
+    their first line."""
     out: list[tuple[range, str]] = []
     i = 0
     while i < len(lines):
         folded = _FOLDED.match(lines[i])
         if folded is None:
-            out.append((range(i, i + 1), ci_line_text(unmasked[i])))
-            i += 1
+            # A line ending in ``\\`` continues on the next, as the shell reads it.
+            j = i
+            while j + 1 < len(lines) and lines[j].rstrip().endswith("\\"):
+                j += 1
+            parts = [ci_line_text(unmasked[i])] + [unmasked[k].strip() for k in range(i + 1, j + 1)]
+            text = " ".join(p.removesuffix("\\").strip() for p in parts if p.strip())
+            out.append((range(i, j + 1), text))
+            i = j + 1
             continue
         indent = len(folded.group(1))
         j = i + 1

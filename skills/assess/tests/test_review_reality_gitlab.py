@@ -32,6 +32,9 @@ from lib.gitlab_cli import (  # noqa: E402
 from lib.fleet_config import parse_fleet_config  # noqa: E402
 from lib.platform_cli import CACHE_ENV  # noqa: E402
 from lib.review_reality import scan_review_reality  # noqa: E402
+from lib import merged_sample as merged_sample_module  # noqa: E402
+from lib.merged_sample import merged_sample  # noqa: E402
+from lib.reason_codes import reason_code  # noqa: E402
 
 FAKE_GLAB = """#!/bin/sh
 echo "$*" >> "$FAKE_GLAB/log"
@@ -222,6 +225,29 @@ def test_self_managed_host_without_glab_is_not_gitlab(world: World, break_glab: 
     assert open_gitlab(world.root) is None
 
 
+@pytest.mark.parametrize("url,code", [
+    (None, "no_remote"),
+    ("not a url", "no_remote"),
+    # a github.com host parse_remote reads but parse_github_remote rejects
+    ("https://github.com/acme/widget/extra", "no_remote"),
+    # a self-managed host glab does not reach: a platform gap, not no_remote
+    ("https://git.example.com/team/app.git", "network"),
+])
+def test_full_and_offline_samples_give_one_reason_per_remote(world: World, url: str | None,
+                                                             code: str) -> None:
+    """``merged_sample`` and ``offline_merged_sample`` read the same reason from one
+    remote (#908); the full read probes glab only for the self-managed host."""
+    if url is not None:
+        world.remote(url)
+    world.no_auth()
+    full = merged_sample(world.root, None, "2026-11-22")
+    offline = merged_sample_module.offline_merged_sample(world.root, None, "2026-11-22")
+    assert isinstance(full, dict) and isinstance(offline, dict)
+    assert reason_code(full["reason"]) == reason_code(offline["reason"]) == code
+    probes = [c for c in world.calls() if c.startswith("auth")]
+    assert probes == (["auth status --hostname git.example.com"] if code == "network" else [])
+
+
 @pytest.mark.parametrize("stderr,reason", [
     ("x gitlab.com: api call failed: 401 Unauthorized", "not_authenticated"),
     ("dial tcp: lookup gitlab.com: no such host", "unreachable"),
@@ -405,15 +431,16 @@ def test_gitlab_com_unauthenticated_is_unavailable(world: World) -> None:
 
 
 @pytest.mark.parametrize("break_glab", ["noauth", "missing"])
-def test_unknown_host_without_glab_degrades_exactly_as_before(world: World,
-                                                              break_glab: str) -> None:
+def test_unknown_host_without_glab_is_a_platform_gap(world: World, break_glab: str) -> None:
+    """The remote exists, so it reads ``network`` as the offline read does, never
+    ``no_remote`` (#908); gh is still never called."""
     world.remote(f"https://git.example.com/{PROJECT}.git")
     if break_glab == "noauth":
         world.no_auth()
     else:
         world.without("glab")
     assert scan_review_reality(world.root) == {
-        "available": False, "reason": "no_remote: no github.com remote to compare against",
+        "available": False, "reason": merged_sample_module.UNREACHED_HOST_REASON,
     }
     assert world.calls("ghlog") == []
 

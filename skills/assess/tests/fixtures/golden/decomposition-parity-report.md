@@ -8,7 +8,7 @@ _Generated <<normalized>>._
 
 Next: Step 2 · Supervised agent PRs unlocks when 1 more verified practice is met, for example `layer-3-linters.1`
 
-Verified practices: 0 of 3 measured · 14 not measured (scan did not run: 1, needs a full run: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
+Verified practices: 0 of 3 measured · 14 not measured (needs a full run: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
 ## Metrics Dashboard
 
@@ -71,7 +71,7 @@ In place: over 1 repository, 27 scans were measured everywhere, 16 ran but were 
 - `structure`: not measured in 1 of 1 (no_source_files)
 - `stats_summary`
 - `promissory_markers`: not measured in 1 of 1 (unavailable)
-- `structure_drift`: not measured in 1 of 1 (no_block)
+- `structure_drift`: not measured in 1 of 1 (no_ownership_map)
 - `observability`
 - `doc_graph`
 - `doc_staleness`

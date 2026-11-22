@@ -250,6 +250,10 @@ constant each.
 #   test_or_lint_configured and coverage_gate.enforced is configured. Values and
 #   meaning are unchanged; the fleet re-score reads a stored scan's old path under the
 #   new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+# - run-context.json structure_drift is the unavailable marker
+#   {"available": false, "reason": "no_ownership_map: ..."} when the repository
+#   commits no ownership or boundary map, where it was omitted (issue #908), so the
+#   level block reads the same reason as fleet. A scan failure still omits it.
 # - run-context.json coverage_gate gains enforced_meets_minimum and enforced_basis
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /

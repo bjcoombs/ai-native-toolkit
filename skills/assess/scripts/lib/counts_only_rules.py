@@ -16,7 +16,8 @@ Five classes:
   is a short slug (``TOKEN_RE``); anything longer or with spaces is dropped.
 - ``REASON``: an unavailable block's reason, kept as its code only: the
   ``code`` of a ``code: sentence`` reason when it is a known structure code
-  (``import_graph.STRUCTURE_REASON_CODES``, a fixed allow-list), or the code a
+  (``import_graph.STRUCTURE_REASON_CODES``, a fixed allow-list) or
+  ``no_ownership_map`` (``reason_codes.BLOCK_REASON_CODES``), or the code a
   known sentence maps to (``REASON_SENTENCE_CODES``), else ``unavailable``. The sentence never
   survives; an empty reason (an available block) is dropped.
 - ``ID``: a stable identifier of another repository or marketplace, the join
