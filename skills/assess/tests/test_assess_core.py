@@ -430,8 +430,9 @@ def test_test_pressure_passes_hotspots_as_hot_files(tmp_path: Path, monkeypatch)
 
 
 def test_core_always_writes_deterministic_badge_linking_to_report(tmp_path: Path) -> None:
-    """The shipped badge is the deterministic findings form, written on every
-    run and linking to the report - never an LLM-authored score number."""
+    """The shipped badge is the deterministic headline summary (the Step and the
+    verified tally, #747), written on every run and linking to the report -
+    never an LLM-authored score number."""
     repo = tmp_path / "repo"
     repo.mkdir()
     assess_dir = repo / ".assess"
@@ -444,8 +445,10 @@ def test_core_always_writes_deterministic_badge_linking_to_report(tmp_path: Path
     build_and_publish_run(repo_root=repo, run_date="2026-06-12")
     badge = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
     assert badge["label"] == "AI-readiness"
-    assert "findings" in badge["message"]        # deterministic form
-    assert "/8" not in badge["message"]           # no LLM score fraction
+    ctx = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
+    assert badge["message"] == ctx["headline"]["summary"]  # deterministic form
+    assert badge["message"].startswith("Step ")
+    assert "/8" not in badge["message"]           # no layered score fraction
     assert badge["link"] == "./assess-report.md"  # funnels to the report
 
     # A stale LLM-scored badge from a prior run is overwritten by the
@@ -456,7 +459,7 @@ def test_core_always_writes_deterministic_badge_linking_to_report(tmp_path: Path
     }), encoding="utf-8")
     build_and_publish_run(repo_root=repo, run_date="2026-06-13")
     badge2 = json.loads((assess_dir / "badge.json").read_text(encoding="utf-8"))
-    assert "findings" in badge2["message"]
+    assert badge2["message"] == badge["message"]
     assert badge2["message"] != "7.0/8 · AI-Native"
     assert badge2["link"] == "./assess-report.md"
 
@@ -601,7 +604,7 @@ def test_run_opt_in_mutation_degrades_on_scan_failure(tmp_path: Path, monkeypatc
 def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     repo = _minimal_repo(tmp_path)
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-07-07")
-    assert ctx["artifact_schema_version"] == artifact_schema.ARTIFACT_SCHEMA_VERSION == "1.34.0"
+    assert ctx["artifact_schema_version"] == artifact_schema.ARTIFACT_SCHEMA_VERSION == "1.35.0"
     # run_id shape: YYYYMMDDHHMMSS-<8 hex>
     run_id = ctx["run_id"]
     stamp, _, suffix = run_id.partition("-")
@@ -610,7 +613,7 @@ def test_run_context_carries_run_id_and_schema_version(tmp_path: Path) -> None:
     # The same id is persisted to run-context.json on disk.
     on_disk = json.loads((repo / ".assess" / "run-context.json").read_text())
     assert on_disk["run_id"] == run_id
-    assert on_disk["artifact_schema_version"] == "1.34.0"
+    assert on_disk["artifact_schema_version"] == "1.35.0"
 
 
 def test_run_context_run_id_is_unique_per_run(tmp_path: Path) -> None:

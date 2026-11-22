@@ -696,6 +696,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.next_step.blockers.state` | token |
 | `level.next_step.blockers.reason` | token |
 
+## headline
+
+| Field | Kept as |
+|---|---|
+| `headline.levels_version` | token |
+| `headline.lines` | dropped |
+| `headline.markdown` | dropped |
+| `headline.summary` | dropped |
+| `headline.reason` | token |
+
 ## fleet-data.json (the fleet skill)
 
 Patterns from the top of `fleet-data.json`, not of a run-context. A

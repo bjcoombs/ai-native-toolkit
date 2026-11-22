@@ -991,7 +991,7 @@ def _format_summary(concerns: list[KeyholeConcern], safe_zones: int) -> str:
     """One-line human-readable keyhole-readiness summary.
 
     Pure count with a positive/negative split (PRD: never imply commensurability
-    with the 0-8 score). Singular/plural handled for the headline count and the
+    with the headline's verified tally). Singular/plural handled for the headline count and the
     safe-zone count; the per-finding labels use ``finding_display_name`` (plain
     underscore->space, e.g. ``2 hidden coupling``, with explicit overrides for
     compound adjectives, e.g. ``self-referential tests``).
@@ -1013,8 +1013,8 @@ def _format_summary(concerns: list[KeyholeConcern], safe_zones: int) -> str:
 def build_keyhole_summary(findings: list[DerivedFinding]) -> KeyholeSummary:
     """Roll the derived findings into a count/severity readiness summary.
 
-    Reported *alongside* the 0-8 layered score, never merged into it: the score
-    asks "is the scaffolding in place to catch problems?", this asks "where is
+    Reported *alongside* the headline (the Step and verified tally), never merged
+    into it: the headline asks "which contracts are in place to catch problems?", this asks "where is
     today's structural pain?". Returns ``{concerns, safe_zones, total_concerns,
     summary_text}`` where ``concerns`` is the per-finding ``{name, count}`` for
     every negative finding with paths and ``safe_zones`` is the

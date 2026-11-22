@@ -108,11 +108,12 @@ def _unavailable(reason: str) -> Headline:
             "summary": "Step not measured", "reason": reason}
 
 
-def headline(level: Any, model: MaturityModel) -> Headline:
+def headline(value: Any, model: MaturityModel) -> Headline:
     """The headline for one ``LevelResult`` under the model that produced it."""
-    if not isinstance(level, dict) or "tally" not in level:
-        reason = level.get("reason") if isinstance(level, dict) else None
+    if not isinstance(value, dict) or "tally" not in value:
+        reason = value.get("reason") if isinstance(value, dict) else None
         return _unavailable(str(reason or "no_level_result"))
+    level: LevelResult = value  # type: ignore[assignment]
     names = _step_names(model)
     lines: list[str] = []
     step = level["step"]

@@ -49,7 +49,7 @@
 
 ### Recommended (passed through when the LLM supplies them)
 
-`layer`, `effort`, `files`, `first_step`, and `finding` are carried through verbatim if present. `finding` is the finding type the action addresses; it drives `mode` derivation and, together with `files`, forms the action's identity for status carry-forward, so supplying both is what keeps a completed action's lifecycle attached to it.
+`layer`, `condition`, `effort`, `files`, `first_step`, and `finding` are carried through verbatim if present. `condition` is the **condition id** of the maturity-model condition the action moves (`<row id>.<level>`, e.g. `layer-5-ci.1`), as the run's level result lists it in `run-context.json` `level.conditions[].id`; it ties the advice to the same conditions as the headline's Step and verified tally (#747). `assess_finalize.py` checks it before writing anything: an id the level result does not list, or a condition named on a run with no level result, is refused with a non-zero exit naming the id, and `actions.json` is left unchanged. An action without `condition` (a finding-driven action) is accepted as before. `finding` is the finding type the action addresses; it drives `mode` derivation and, together with `files`, forms the action's identity for status carry-forward, so supplying both is what keeps a completed action's lifecycle attached to it.
 
 ## `status` lifecycle
 
