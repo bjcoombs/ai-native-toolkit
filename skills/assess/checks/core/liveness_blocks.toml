@@ -1,0 +1,74 @@
+# Check manifest fragment: the liveness_blocks collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.liveness_blocks"
+kind = "collector"
+title = "Liveness blocks"
+callable = "lib.core_scans:liveness_blocks"
+publishes = ["dead_code", "observability", "capability_offers", "language_capabilities"]
+reads = ["liveness"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+headless = { dead_code = "unregistered", observability = "headless_variant" }
+headless_variants = [
+  { block = "observability", callable = "lib.headless_static:observability", reads = ["repo_root", "excludes"], stage = "read_side" },
+]
+shapes = [
+  { path = "dead_code", type = "lib.run_context_types:DeadCodeBlock" },
+  { path = "observability", type = "lib.liveness_scan:ObservabilityBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "dead_code.caveat" = "drop"
+  "dead_code.candidates.kind" = "token"
+  "dead_code.candidates.symbol" = "drop"
+  "dead_code.tools.language" = "token"
+  "dead_code.tools.tool" = "token"
+  "dead_code.tools.status" = "token"
+  "dead_code.tools.reason" = "drop"
+  "dead_code.tools.consent" = "drop"
+  "observability.boundary" = "drop"
+  "observability.instrumented.signals" = "drop"
+  "observability.discoverable.signals" = "drop"
+  "observability.reachable.signals" = "drop"
+  "capability_offers.build_system" = "token"
+  "capability_offers.build_files" = "path"
+
+[[entries]]
+id = "core:observability.rung"
+kind = "signal"
+title = "Observability rung"
+collector = "core.liveness_blocks"
+path = "observability.rung"
+type = "number"
+evidence = "head_text"
+
+[[entries]]
+id = "core.cond.layer-1-liveness.1.rung"
+kind = "condition"
+title = "Some runtime telemetry is committed"
+key = "layer-1-liveness.1:observability.rung"
+fix = "Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run."
+
+[[entries]]
+id = "core.cond.layer-1-liveness.2.rung"
+kind = "condition"
+title = "Runtime telemetry reaches rung 3"
+key = "layer-1-liveness.2:observability.rung"
+fix = "Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill."
+
+[[entries]]
+id = "core.finding.candidate_dead_weight"
+kind = "finding"
+title = "Candidate dead weight"
+name = "candidate_dead_weight"
+order = 8
+action = "verify liveness, then delete if dead"
+mode = "verify_then_retire"
+concern = true
+inputs = ["dead_code"]
+derive = "lib.keyhole_signals:candidate_dead_weight_paths"
+headless = "unregistered"

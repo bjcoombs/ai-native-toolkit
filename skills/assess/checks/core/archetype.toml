@@ -1,0 +1,34 @@
+# Check manifest fragment: the archetype collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.archetype"
+kind = "collector"
+title = "Repository archetype"
+callable = "lib.core_scans:archetype"
+publishes = ["archetype"]
+reads = ["repo_root"]
+stage = "read_side"
+headless = { archetype = "headless_variant" }
+headless_variants = [
+  { block = "archetype", callable = "lib.headless_static:archetype", reads = ["repo_root"], stage = "read_side" },
+]
+revision = 1
+  [entries.privacy]
+  "archetype.archetype" = "token"
+  "archetype.detected_via" = "token"
+  "archetype.reason" = "drop"
+  "archetype.kb_maintenance.gist" = "drop"
+
+[[entries]]
+id = "core.finding.override_contradicts_signals"
+kind = "finding"
+title = "Archetype override contradicts the signals"
+name = "override_contradicts_signals"
+order = 9
+action = "Review archetype marker - deterministic signals suggest a different classification"
+mode = "characterize_first"
+concern = true
+inputs = ["archetype"]
+derive = "lib.keyhole_signals:_override_contradiction_paths"
+headless = "unregistered"

@@ -1,0 +1,14 @@
+# Check manifest fragment: the uninstall_instructions_path collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.uninstall_instructions_path"
+kind = "collector"
+title = "Uninstall instructions path"
+callable = "lib.core_scans:uninstall_instructions_path"
+publishes = ["uninstall_instructions_path"]
+reads = []
+stage = "read_side"
+revision = 1
+  [entries.privacy]
+  uninstall_instructions_path = "drop"

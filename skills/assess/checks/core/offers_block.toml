@@ -1,0 +1,20 @@
+# Check manifest fragment: the offers_block collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.offers_block"
+kind = "collector"
+title = "End-of-run offers"
+callable = "lib.core_scans:offers_blocks"
+publishes = ["interactive", "offers"]
+reads = ["non_interactive"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  "offers.type" = "token"
+  "offers.status" = "token"
+  "offers.reason" = "token"
+  "offers.tool" = "token"

@@ -1,0 +1,14 @@
+# Check manifest fragment: the untracked_instruction_files collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.untracked_instruction_files"
+kind = "collector"
+title = "Untracked instruction files"
+callable = "lib.core_scans:untracked_instruction_files"
+publishes = ["untracked_instruction_files"]
+reads = ["instruction_grading"]
+stage = "read_side"
+revision = 1
+  [entries.privacy]
+  untracked_instruction_files = "path"

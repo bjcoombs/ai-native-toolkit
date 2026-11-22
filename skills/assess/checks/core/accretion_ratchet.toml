@@ -1,0 +1,28 @@
+# Check manifest fragment: the accretion_ratchet collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.accretion_ratchet"
+kind = "collector"
+title = "Accretion ratchet"
+callable = "lib.core_scans:accretion_ratchet"
+publishes = ["accretion_ratchet"]
+reads = ["accretion_scan", "current"]
+stage = "read_side"
+headless = { accretion_ratchet = "unregistered" }
+revision = 1
+  [entries.privacy]
+  "accretion_ratchet.reason" = "drop"
+
+[[entries]]
+id = "core.finding.accretion_ratchet"
+kind = "finding"
+title = "Accretion ratchet"
+name = "accretion_ratchet"
+order = 6
+action = "refactor down: extract, delete dead code, or split the file"
+mode = "refactor_safe"
+concern = true
+inputs = ["accretion_ratchet"]
+derive = "lib.keyhole_signals:_accretion_ratchet_finding"
+headless = "unregistered"

@@ -234,7 +234,6 @@ def test_reason_does_not_repeat_the_detail() -> None:
         "ModuleNotFoundError: No module named 'grimp'")
 
 
-@pytest.mark.windows_followup
 def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
                                                    monkeypatch) -> None:
     """An ImportError names the file it imported from: in the uv runner's
@@ -274,7 +273,6 @@ def test_reason_cuts_scratch_env_and_package_paths(tmp_path: Path,
         "ImportError: from pkg/.venv/lib/y.py")
 
 
-@pytest.mark.windows_followup
 def test_labels_stop_at_a_separator_and_skip_a_root_home(tmp_path: Path) -> None:
     proc = subprocess.CompletedProcess(
         ["m"], 1, stdout="", stderr="ImportError: x (/home/u/a.py) (/home/u2/b.py)\n")
@@ -284,6 +282,54 @@ def test_labels_stop_at_a_separator_and_skip_a_root_home(tmp_path: Path) -> None
     assert mutmut3._no_records_reason(
         "mutmut", proc, labels={Path("/"): "~"}).endswith(
         "ImportError: x (/home/u/a.py) (/home/u2/b.py)")
+
+
+def test_cut_prefix_cuts_either_separator_spelling(tmp_path: Path) -> None:
+    """Windows ``str(path)`` uses ``\\`` while a tool prints ``/`` (and the other
+    way round): both spellings of one directory are cut, and the rest of the
+    path reads with ``/`` (issue #964). Runs on every platform."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    back = scratch.as_posix().replace("/", "\\")
+    for spelling in (f"{scratch.as_posix()}/pkg/calc.py", f"{back}\\pkg\\calc.py",
+                     f"{back}/pkg\\calc.py"):
+        assert mutmut3._cut_prefix(f"bad input in {spelling}: x", scratch, None) == (
+            "bad input in pkg/calc.py: x")
+        assert mutmut3._cut_prefix(f"({spelling})", scratch, "<scratch>") == (
+            "(<scratch>/pkg/calc.py)")
+    assert mutmut3._cut_prefix(f"in {back}", scratch, None) == "in ."
+    assert mutmut3._cut_prefix(f"({back}2\\a.py)", scratch, "~") == f"({back}2\\a.py)"
+
+
+def test_cut_prefix_cuts_a_repr_spelling(tmp_path: Path) -> None:
+    """An OSError quotes its filename as a repr, doubling each Windows ``\\``:
+    the home and the scratch directory are cut from that spelling too."""
+    home, scratch = tmp_path / "bob", tmp_path / "scratch"
+    home.mkdir()
+    scratch.mkdir()
+
+    def repr_line(directory: Path) -> str:
+        doubled = directory.as_posix().replace("/", "\\\\")
+        return f"FileNotFoundError: [Errno 2] No such file: '{doubled}\\\\pkg\\\\a.py'"
+
+    assert mutmut3._cut_prefix(repr_line(home), home, "~") == (
+        "FileNotFoundError: [Errno 2] No such file: '~/pkg/a.py'")
+    assert mutmut3._cut_prefix(repr_line(scratch), scratch, None) == (
+        "FileNotFoundError: [Errno 2] No such file: 'pkg/a.py'")
+
+
+def test_cut_prefix_ignores_case_on_windows(tmp_path: Path, monkeypatch) -> None:
+    """Windows paths are case-insensitive, so ``c:\\users\\bob`` is the home
+    ``C:\\Users\\bob``; elsewhere case still counts."""
+    from lib.test_pressure import reason_paths
+    home = tmp_path / "Bob"
+    home.mkdir()
+    line = f"ImportError: x ({home.as_posix().upper()}/a.py)"
+    monkeypatch.setattr(reason_paths, "_case_insensitive", lambda: False)
+    assert mutmut3._cut_prefix(line, home, "~") == line
+    monkeypatch.setattr(reason_paths, "_case_insensitive", lambda: True)
+    assert mutmut3._cut_prefix(line, home, "~") == "ImportError: x (~/a.py)"
+    assert mutmut3._cut_prefix(f"in {home.as_posix().lower()}", home, None) == "in ."
 
 
 def test_mutmut_pin_matches_the_weekly_workflow() -> None:

@@ -1,0 +1,29 @@
+# Check manifest fragment: the instruction_placement collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.instruction_placement"
+kind = "collector"
+title = "Instruction placement"
+issues = [559]
+callable = "lib.instruction_placement:scan_instruction_placement"
+publishes = ["instruction_placement"]
+reads = ["repo_root", "instruction_files", "nested_instructions", "scope", "excludes"]
+stage = "post_offers"
+headless = { instruction_placement = "registered" }
+shapes = [
+  { path = "instruction_placement", type = "lib.instruction_placement:InstructionPlacementBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "instruction_placement.flagged" = "path"
+  "instruction_placement.files.kind" = "token"
+  "instruction_placement.files.relocatable.heading" = "drop"
+  "instruction_placement.files.relocatable.signals" = "token"
+  "instruction_placement.files.relocatable.home.kind" = "token"
+  "instruction_placement.files.relocatable.home.target" = "path"
+  "instruction_placement.loaded_in_full.kind" = "token"
+  "instruction_placement.loaded_in_full.relocatable.heading" = "drop"
+  "instruction_placement.loaded_in_full.relocatable.signals" = "token"
+  "instruction_placement.loaded_in_full.relocatable.home.kind" = "token"
+  "instruction_placement.loaded_in_full.relocatable.home.target" = "path"

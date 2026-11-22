@@ -1,0 +1,15 @@
+# Check manifest fragment: the hot_test_index collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.hot_test_index"
+kind = "collector"
+title = "Repository test index"
+callable = "lib.core_scans:hot_test_index"
+publishes = []
+reads = ["repo_root", "current"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

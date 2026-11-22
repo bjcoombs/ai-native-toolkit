@@ -1,0 +1,55 @@
+# Check manifest fragment: the test_pressure collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.test_pressure"
+kind = "collector"
+title = "Test pressure"
+callable = "lib.core_scans:test_pressure_block"
+publishes = ["test_pressure"]
+reads = ["test_pressure_scan"]
+stage = "read_side"
+degrade = false
+gate_reason = "self_degrading"
+headless = { test_pressure = "unregistered" }
+shapes = [
+  { path = "test_pressure", type = "lib.run_context_types:TestPressureBlock" },
+  { path = "test_pressure", type = "lib.run_context_types:TestPressureUnavailable" },
+]
+revision = 1
+  [entries.privacy]
+  "test_pressure.reason" = "drop"
+  "test_pressure.gap_signal" = "token"
+  "test_pressure.mutation_note" = "drop"
+  "test_pressure.mutation_tools_detected" = "token"
+  "test_pressure.mutation_scope" = "path"
+  "test_pressure.mutation_groups.root" = "path"
+  "test_pressure.mutation_groups.config" = "token"
+  "test_pressure.mutation_groups.scope" = "path"
+  "test_pressure.mutation_groups.runner" = "token"
+  "test_pressure.mutation_groups.unmeasured" = "path"
+  "test_pressure.mutation_groups.reason" = "drop"
+  "test_pressure.cheap_heuristics.confidence_note" = "drop"
+  "test_pressure.cheap_heuristics.assertion_on_internal.subject_function" = "drop"
+  "test_pressure.cheap_heuristics.assertion_on_internal.internal_field" = "drop"
+  "test_pressure.cheap_heuristics.assertion_on_internal.confidence" = "token"
+  "test_pressure.cheap_heuristics.untested_boundaries.operator" = "token"
+  "test_pressure.cheap_heuristics.duplicate_truth.field_name" = "drop"
+  "test_pressure.cheap_heuristics.duplicate_truth.derives_from" = "drop"
+  "test_pressure.cheap_heuristics.duplicate_truth.confidence" = "token"
+
+[[entries]]
+id = "core:test_pressure.mutation_run"
+kind = "signal"
+title = "A mutation run completed"
+collector = "core.test_pressure"
+path = "test_pressure.mutation_run"
+type = "bool"
+evidence = "execution_artifact"
+
+[[entries]]
+id = "core.cond.layer-6-coverage.2.mutation_run"
+kind = "condition"
+title = "A mutation run has completed"
+key = "layer-6-coverage.2:test_pressure.mutation_run"
+fix = "Run the opt-in mutation pass to see which tests pin behaviour."

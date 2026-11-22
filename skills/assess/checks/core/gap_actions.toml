@@ -1,0 +1,20 @@
+# Check manifest fragment: the gap_actions collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.gap_actions"
+kind = "collector"
+title = "Gap actions"
+callable = "lib.core_scans:gap_actions"
+publishes = ["gap_actions"]
+reads = ["coverage_report", "doc_graph", "current", "archetype", "layer_grades", "nested_instructions"]
+stage = "post_offers"
+headless = { gap_actions = "unregistered" }
+shapes = [
+  { path = "gap_actions", type = "lib.gap_actions:GapAction" },
+]
+revision = 1
+  [entries.privacy]
+  "gap_actions.signal" = "token"
+  "gap_actions.action" = "drop"
+  "gap_actions.paths" = "path"
