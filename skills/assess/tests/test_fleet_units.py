@@ -77,6 +77,17 @@ def test_codeowners_team_handle_is_the_placement_fallback() -> None:
     assert units["acme/platform"]["owners"] == ["@acme/platform"]
 
 
+def test_codeowners_owner_match_ignores_case() -> None:
+    """GitHub handles are case-insensitive: ``@Acme/Platform`` names a team of org ``acme`` (#733)."""
+    owners = {"acme/svc3": ["@Acme/Platform"], "acme/svc4": ["@acme/platform"]}
+    ownership, _ = fu.build_trees(["acme/svc3", "acme/svc4"], fu.empty_map(), {}, owners)
+    assert ownership["placement"] == {"acme/svc3": "acme/platform", "acme/svc4": "acme/platform"}
+    units = {u["id"]: u for u in ownership["units"]}
+    assert units["acme/platform"]["source"] == "codeowners"
+    assert units["acme/platform"]["parent"] == "acme"
+    assert units["acme/platform"]["owners"] == ["@Acme/Platform", "@acme/platform"]
+
+
 def test_codeowners_never_move_a_repo_out_of_a_nested_group() -> None:
     ownership, _ = fu.build_trees(["grp/sub/p"], fu.empty_map(), {}, {"grp/sub/p": ["@grp/sub/team"]})
     assert ownership["placement"] == {"grp/sub/p": "grp/sub"}

@@ -15,13 +15,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from lib.ai_usage import AiUsageBlock  # noqa: E402
 from lib.ci_checks import CiChecksBlock  # noqa: E402
 from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.coverage_gate import CoverageGateBlock  # noqa: E402
 from lib.delivery import DeliveryBlock  # noqa: E402
 from lib.fleet_schema import build_schema as build_row_schema  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.signals import collect  # noqa: E402
 from lib.signals_schema import build_schema, described_block  # noqa: E402
 
-TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "delivery": DeliveryBlock}
+TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
+         "delivery": DeliveryBlock}
 
 
 @pytest.mark.parametrize("name", sorted(BLOCK_SCHEMAS))
@@ -93,3 +95,16 @@ def test_delivery_blocks_validate_and_unavailable_needs_a_reason() -> None:
         jsonschema.validate({"available": False}, described_block("delivery"))
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({**full, "merged_count": "five"}, described_block("delivery"))
+
+
+def test_coverage_gate_blocks_validate_full_and_counts_only(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text(
+        "[tool.coverage.report]\nfail_under = 80\n", encoding="utf-8")
+    (repo / "pom.xml").write_text(
+        "<project><!-- jacoco -->\n<minimum>0.55</minimum>\n</project>\n", encoding="utf-8")
+    scans = collect(repo, ["coverage_gate"])
+    assert [g["threshold_percent"] for g in scans["coverage_gate"]["gates"]] == [55.0, 80.0]
+    assert scans["coverage_gate"]["threshold_meets_minimum"] is True
+    _validate(scans)
+    _validate(counts_only_scans(scans))
+    _validate({"coverage_gate": {"available": False, "reason": "scan_failed"}})
