@@ -5,7 +5,7 @@ import os
 import re
 import shutil
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _SKIP_PATTERN = re.compile(
     r"^[ \t]*<!-- chat-skip:start -->.*?^[ \t]*<!-- chat-skip:end -->\n?",
@@ -156,7 +156,7 @@ def localize_cross_skill_links(target_root: Path) -> None:
         text = md.read_text("utf-8")
         text = _CROSS_SKILL_LINK.sub(_link, text)
         text = _CROSS_SKILL_PATH.sub(_path, text)
-        md.write_text(text, "utf-8")
+        md.write_text(text, "utf-8", newline="\n")
 
 
 def strip_frontmatter(text: str) -> str:
@@ -213,16 +213,18 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
         dest = target_root / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         if src.suffix == ".md":
-            dest.write_text(_transform_md(src.read_text("utf-8"), replacements), "utf-8")
+            dest.write_text(_transform_md(src.read_text("utf-8"), replacements), "utf-8", newline="\n")
         else:
             shutil.copy2(src, dest)
 
     if bundle_files:
         for rel_dest, src_path in bundle_files.items():
             # Guard against config errors that would write outside the staging
-            # skill root: reject absolute paths and any '..' segments.
+            # skill root: reject absolute paths and any '..' segments. A ZIP
+            # path is POSIX, so "/etc/x" is absolute on Windows too.
             dest_path = Path(rel_dest)
-            if dest_path.is_absolute() or ".." in dest_path.parts:
+            if (dest_path.is_absolute() or dest_path.anchor
+                    or PurePosixPath(rel_dest).is_absolute() or ".." in dest_path.parts):
                 raise ValueError(
                     f"bundle_files dest must be a relative path within the skill "
                     f"root (got {rel_dest!r}); absolute paths and '..' segments are rejected"
@@ -240,7 +242,7 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
                 # plugin-only script paths); without transforming them here they
                 # would survive into the ZIP and trip check_orphan_markers.
                 body = strip_frontmatter(src_path.read_text("utf-8"))
-                dest.write_text(_transform_md(body, replacements), "utf-8")
+                dest.write_text(_transform_md(body, replacements), "utf-8", newline="\n")
             else:
                 shutil.copy2(src_path, dest)
 
@@ -251,6 +253,7 @@ def build_standalone_skill_zip(  # noqa: C901  # marker-transform + zip assembly
                 skill_md.read_text("utf-8"), standalone_name, standalone_description
             ),
             "utf-8",
+            newline="\n",
         )
 
     # After the full tree is staged (source + vendored bundle_files), rewrite any

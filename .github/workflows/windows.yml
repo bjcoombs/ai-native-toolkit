@@ -8,8 +8,10 @@ name: Windows
 #
 # One job, a required check: "windows suites + smoke runs". Every suite step
 # and smoke step runs even when an earlier one fails (`!cancelled()`), and -ra
-# lists every skip and failure, so one log read shows it all. No coverage gate
-# here: the Linux jobs own the floors.
+# lists every skip and failure, so one log read shows it all. The suites run on
+# every core with pytest-xdist (`-n auto`, added with `--with` so the lockfiles
+# and the serial Linux jobs are unchanged): serial, the job took over an hour.
+# No coverage gate here: the Linux jobs own the floors.
 #
 # Tests that need POSIX-only machinery carry one of the Windows skip markers
 # declared in skills/assess/tests/conftest.py (WINDOWS_SKIP_MARKERS:
@@ -31,7 +33,7 @@ jobs:
   windows:
     name: windows suites + smoke runs
     runs-on: windows-latest
-    timeout-minutes: 75
+    timeout-minutes: 45
     steps:
       # Without this, checkout converts every text file to CRLF and fixture
       # byte and line counts stop matching the Linux goldens. The step "Shell
@@ -86,19 +88,21 @@ jobs:
         working-directory: skills/assess
 
       # .gitattributes (`*.sh text eol=lf`) must keep every *.sh LF in the
-      # core.autocrlf=true checkout a Windows user gets. README.md turning CRLF
-      # there proves the conversion really ran.
+      # core.autocrlf=true checkout a Windows user gets: a fresh clone of this
+      # commit made with that setting. README.md turning CRLF there proves the
+      # conversion really ran.
       - name: Shell scripts are LF in a CRLF checkout
         shell: bash
         run: |
-          crlf="$RUNNER_TEMP/crlf-checkout"
-          git -c core.autocrlf=true worktree add -q --detach "$crlf" HEAD
+          crlf="$RUNNER_TEMP/crlf-clone"
+          git clone -q --no-local --no-checkout -c core.autocrlf=true "$GITHUB_WORKSPACE" "$crlf"
+          git -C "$crlf" checkout -q --detach "$(git rev-parse HEAD)"
+          git -C "$crlf" config --get core.autocrlf
           grep -q $'\r' "$crlf/README.md" || { echo "autocrlf=true did not convert README.md"; exit 1; }
           bad=0
           while IFS= read -r -d '' f; do
             if grep -q $'\r' "$crlf/$f"; then echo "CRLF: $f"; bad=1; fi
           done < <(git -C "$crlf" ls-files -z '*.sh')
-          git worktree remove --force "$crlf"
           exit $bad
 
       # --- Test suites ----------------------------------------------------------
@@ -115,13 +119,16 @@ jobs:
       - name: skills/assess pytest
         if: ${{ !cancelled() }}
         run: >-
-          uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
+          uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto
           --ignore=tests/test_fleet_golden.py
         working-directory: skills/assess
 
       - name: scripts/ pytest
         if: ${{ !cancelled() }}
-        run: uv run --locked --python 3.11 pytest -ra -p no:cacheprovider
+        run: >-
+          uv run --locked --python 3.11 --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto
         working-directory: scripts
 
       # Under Git Bash: some contract tests and every ghsync/ghreport test run
@@ -131,16 +138,16 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: >-
-          uv run --python 3.11 --with pytest --with pyyaml
-          pytest -ra -p no:cacheprovider tests/
+          uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto tests/
           --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
 
       - name: ghsync and ghreport suites under Git Bash
         if: ${{ !cancelled() }}
         shell: bash
         run: >-
-          uv run --python 3.11 --with pytest --with pyyaml
-          pytest -ra -p no:cacheprovider
+          uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          pytest -ra -p no:cacheprovider -n auto
           tests/test_ghsync*.py tests/test_ghreport*.py
 
       - name: Standalone skill ZIPs

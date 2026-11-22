@@ -68,4 +68,7 @@ def main(argv, stdin, stdout, stderr):
 
 
 if __name__ == "__main__":
+    # The payload is LF-terminated on every platform: parsers downstream split on
+    # "\n", and Windows text mode would otherwise write "\r\n".
+    sys.stdout.reconfigure(newline="\n")
     sys.exit(main(sys.argv, sys.stdin, sys.stdout, sys.stderr))
