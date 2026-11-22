@@ -33,7 +33,8 @@ each gap, counts only. It is null without a listing, and in a stamp written befo
 
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
-write a byte-identical ``run.json``.
+write a byte-identical ``run.json`` (with ``--discovered``, a list run that leaves
+out a checkout counts it in ``coverage``, so its stamp differs there).
 """
 from __future__ import annotations
 

@@ -55,22 +55,27 @@ class Coverage(TypedDict):
     not_in_listing: int  # scanned rows no discovered path names; outside the other counts
 
 
-def _clean(path: str) -> str:
-    return path.strip().strip("/")
+def _clean(path: str, number: int) -> str:
+    """``path`` without surrounding slashes; a path that names nothing, or a ``.`` or ``..``
+    segment that could reach outside the root, is a ``DiscoveryError``."""
+    cleaned = path.strip().strip("/")
+    if not cleaned or any(seg in ("", ".", "..") for seg in cleaned.split("/")):
+        raise DiscoveryError(f"line {number}: {path!r} is not a repository path")
+    return cleaned
 
 
 def _entry(line: str, number: int) -> Discovered:
     if not line.startswith(("{", "[")):  # JSON, never a path
-        return Discovered(_clean(line), False)
+        return Discovered(_clean(line, number), False)
     try:
         obj = json.loads(line)
     except json.JSONDecodeError as e:
         raise DiscoveryError(f"line {number}: not a JSON object ({e.msg})") from e
     path = obj.get("path") if isinstance(obj, dict) else None
-    if not isinstance(path, str) or not _clean(path):
+    if not isinstance(path, str):
         raise DiscoveryError(f"line {number}: no \"path\" string")
     branch = obj.get("default_branch", "main")
-    return Discovered(_clean(path), obj.get("archived") is True or not branch)
+    return Discovered(_clean(path, number), obj.get("archived") is True or not branch)
 
 
 def parse_discovery(text: str) -> list[Discovered]:
@@ -95,9 +100,11 @@ def read_discovery(listing: Path, root: Path) -> list[Discovered]:
     cache = root / ARCHIVED_CACHE
     if cache.is_file():
         listed = {e.path for e in entries}
-        for path in parse_discovery(cache.read_text(encoding="utf-8", errors="replace")):
-            if path.path not in listed:
-                entries.append(Discovered(path.path, True))
+        try:
+            archived = parse_discovery(cache.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, DiscoveryError) as e:
+            raise DiscoveryError(f"ghsync's archived-repos cache {cache}: {e}") from e
+        entries += [Discovered(a.path, True) for a in archived if a.path not in listed]
     return entries
 
 

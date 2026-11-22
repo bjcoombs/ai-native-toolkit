@@ -3,15 +3,18 @@ and ``fleet.py --discovered``."""
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import get_type_hints
 
 import jsonschema
 import pytest
 
+from lib import fleet_compare, fleet_history
 from lib import fleet_coverage as fc
 from lib.fleet import STATUS_FAILED, STATUS_OK, FleetRow
 from lib.fleet_schema import build_stamp_schema
+from lib.fleet_stamp import build_stamp
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli
 
@@ -47,6 +50,9 @@ def test_both_ghsync_listing_formats_parse_and_a_repeat_counts_once():
     ('{"default_branch": "main"}', 1),
     ('["grp/a"]', 1),
     ('{"path": "/"}', 1),
+    ("grp/a\n/", 2),
+    ("grp/../../etc", 1),
+    ('{"path": "grp/./a"}', 1),
 ])
 def test_a_malformed_line_names_its_number(text, line):
     with pytest.raises(fc.DiscoveryError, match=f"line {line}:"):
@@ -58,6 +64,13 @@ def test_ghsyncs_archived_cache_adds_the_archived_repositories_its_listing_leave
     (tmp_path / fc.ARCHIVED_CACHE).write_text("grp/b\ngrp/old\n", encoding="utf-8")
     assert fc.read_discovery(tmp_path / "list.txt", tmp_path) == [
         fc.Discovered("grp/a", False), fc.Discovered("grp/b", False), fc.Discovered("grp/old", True)]
+
+
+def test_a_malformed_archived_cache_is_named(tmp_path):
+    (tmp_path / "list.txt").write_text("grp/a\n", encoding="utf-8")
+    (tmp_path / fc.ARCHIVED_CACHE).write_text("../outside\n", encoding="utf-8")
+    with pytest.raises(fc.DiscoveryError, match="archived-repos cache .*line 1:"):
+        fc.read_discovery(tmp_path / "list.txt", tmp_path)
 
 
 def test_an_unreadable_listing_is_a_discovery_error(tmp_path):
@@ -181,3 +194,15 @@ def test_discovered_needs_root_and_a_well_formed_listing(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "error: --discovered" in err and "line 2:" in err
     assert not out.exists()
+
+
+def test_coverage_is_no_comparability_key():
+    """A run with --discovered still matches and compares with one without it."""
+    coverage: fc.Coverage = {"discoverable": 1, "assessed": 1, "archived_or_empty": 0, "not_cloned": 0,
+                             "failed_scan": 0, "excluded_by_filters": 0, "not_in_listing": 0}
+    kwargs = dict(toolkit_commit="c", plugin_version="2.1.0", today=date(2026, 11, 22), window="6mo",
+                  levels_version=None, counts_only=True, paths_hashed=False, scans=None)
+    without = build_stamp([_row("grp/a")], **kwargs)  # type: ignore[arg-type]
+    with_coverage = build_stamp([_row("grp/a")], coverage=coverage, **kwargs)  # type: ignore[arg-type]
+    assert fleet_compare.comparability(without, with_coverage) == ([], [])
+    assert "coverage" not in fleet_history._MATCH_KEYS

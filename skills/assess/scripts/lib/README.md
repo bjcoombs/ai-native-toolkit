@@ -1389,7 +1389,8 @@ false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discover
 counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
 comparability key). No path,
 salt, timing or input mode, so a
-root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+root run, a list run and any `--jobs` give the same bytes on the same day (with
+`--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
 writes atomically with sorted keys.
 
 **`fleet_config.py`**

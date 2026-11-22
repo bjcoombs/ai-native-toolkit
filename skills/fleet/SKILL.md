@@ -507,7 +507,9 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `coverage` | The [`--discovered`](#coverage---discovered) counts: `discoverable`, `assessed`, `archived_or_empty`, `not_cloned`, `failed_scan`, `excluded_by_filters` and `not_in_listing`. `null` without `--discovered` (coverage unknown), and absent in a run from before #745. Counts only, and not a comparability key. |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
-any `--jobs` over unchanged checkouts on the same day write the same bytes.
+any `--jobs` over unchanged checkouts on the same day write the same bytes. With
+`--discovered`, a list run that leaves a checkout out counts it under `coverage`
+(`excluded_by_filters`), so only that key differs.
 
 ## Fleet settings: `--fleet-config`
 
