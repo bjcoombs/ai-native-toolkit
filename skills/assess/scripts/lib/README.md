@@ -128,9 +128,12 @@ source, a real fleet run with the shipped maturity model (`report.md`, every dia
 map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
 fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
 naming the word, the output and the line, when one of these words appears in the prose as a
-whole word, case-insensitive. Fenced code, backticked spans and identifiers containing an
-underscore are not prose (`prose`), so machine field names, JSON keys, finding names and
-signal paths (`lying_map`, `instruction_claims.failed`, `fail_under`) stay unchanged.
+whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
+target) and identifiers containing an underscore are not prose (`prose`), so machine field
+names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
+`fail_under`) and links into the toolkit repository stay unchanged. The retired label
+`AI-Native` matches, in any case, only as a whole token not followed by `-toolkit`, because
+`ai-native-toolkit` is the product's own name (#794).
 
 | Word | Say instead |
 |------|-------------|
@@ -1057,7 +1060,8 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+`run_salt` draws one salt per run for `--hash-paths`; under a salt a failed scan's
+stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
 `fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
@@ -1184,6 +1188,22 @@ CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab 
 headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
 read gives no URL and no owners.
 
+**`fleet_hashed.py`**
+Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
+(#909). `public_rows` hashes each row's `repo` and `group` with `counts_only.hash_value`
+under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
+`settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
+hashed id set the history entry is chosen and compared by. The ids equal the
+`fleet-data.json` repository keys, so every file joins on them. The scan, the coverage
+reconcile, the group roll-up (the settings join) and `build_fleet_data` keep the real ids.
+Without a salt every function is the identity, so default counts-only output is
+unchanged. `fleet_next_steps.page_path` writes a hashed group as `teams/h-<hex>.md` and
+`group_scopes` rejoins `--settings` through the recorded `settings_scope` under the run's
+salt; `fleet_achievements_runs` passes over a re-score of an entry whose hashed ids share
+none with this run (another salt). Tests:
+`tests/test_fleet_hashed.py` (every file under `--out`, SVGs and team pages included,
+holds no repository id; the joins; fixed-salt reruns are byte-identical).
+
 **`fleet_data.py`**
 `fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
 #704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
@@ -1195,7 +1215,9 @@ per team row, `measured` of `repos` and `lowest_level`, the lowest known level b
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
-repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written;
+`Privacy.key` keeps an id that is already hashed (`counts_only.is_hashed`), so the re-score
+joins a stored `repos.jsonl` row hashed at the output boundary (#909).
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
 Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
 without a model).
@@ -1422,7 +1444,8 @@ is the trend's runs (`fleet_trends`), `None` when the run is not kept in the his
 `fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then the `fleet_opportunities_section` section when
 given, then embeds each with a relative clickable image link or says
-why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
+why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
+built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
@@ -2044,6 +2067,50 @@ Structured validation findings ported from meridianhub/meridian
 target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
 Meridian's distance and closest-match tables.
 
+### Measures catalog
+
+**`catalog.py`** *(#789 step 2, #794)*
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
+default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
+grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
+row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
+the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
+`collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
+`unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
+counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
+`findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
+reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
+(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
+every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
+commit or version string is read, so a version-only bump of the model leaves it unchanged.
+
+**`catalog_md.py`**
+`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, each row's
+conditions in plain words, each scan, the findings and the registry, linking `measures.json`
+relatively.
+
+**Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
+root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
+`tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
+so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+`make check` runs it through `test-assess`.
+
+**`measured_appendix.py`**
+`measured_section(documents, names=None, absent=...)`: the "How this was measured" section. One
+`{block: block}` mapping per repository (a fleet row's `scans`, or a run-context); for each
+known scan, **Ran** when its block exists without a `not_registered` or `network` reason in at
+least one repository (with "not measured in k of n" and the reason codes where the block is
+unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
+a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
+`assess_report.py` instead passes `absent_code="no_block"`: a full run runs every scan, so a
+missing block, such as `structure_drift` with no ownership map, is listed under Ran as not
+measured). Its first line starts `In place:`
+(`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
+measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+Tests: `tests/test_measured_appendix.py`.
+
 ### Configuration
 
 **`run_scope.py`**
@@ -2487,7 +2554,9 @@ returns the signal's class grade whatever the operator (the #789 grades design: 
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
 conditions #744 lists without counting. The module doc records the rulings (platform
 reads are their own class; instruction files stay declared but still gate Steps).
-`level_tally.py` reads it to count conditions; `levels.py` does not. `UNMEASURED_VALUES`
+`level_tally.py` reads it to count conditions; `levels.py` does not.
+`counts_toward_level(grade)` is that rule for a grade (`measured` and `verified` count;
+`lib/catalog.py` reads it). `UNMEASURED_VALUES`
 names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
 false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).

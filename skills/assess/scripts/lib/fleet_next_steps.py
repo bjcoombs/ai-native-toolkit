@@ -39,7 +39,8 @@ next step; at level 0 or unknown it says so plainly and never implies credit.
 
 Output is deterministic: rows in maturity model order, repositories sorted, no date.
 ``write_pages`` writes ``<out>/teams.md`` (the index) and
-``<out>/teams/<group>.md`` (a group id's segments as directories), after
+``<out>/teams/<group>.md`` (a group id's segments as directories; a hashed id, #909,
+is ``teams/h-<hex>.md``), after
 removing the ``*.md`` pages a previous run left under ``<out>/teams/``.
 """
 from __future__ import annotations
@@ -52,6 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from lib.counts_only import hash_value, is_hashed
 from lib.counts_only_rules import TOKEN_RE
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import (GroupRow, full_run_only_signals, platform_signals, repo_signals, settings_for,
@@ -380,7 +382,10 @@ def group_page(maturity_model: MaturityModel, group: GroupRow, rows: Sequence[Fl
 
 
 def page_path(group: str) -> Path:
-    """``teams/<group>.md`` with the id's segments as directories; refuses an escaping id."""
+    """``teams/<group>.md`` with the id's segments as directories; refuses an escaping id.
+    A hashed group id (#909) is ``teams/h-<hex>.md``: no colon, which Windows refuses."""
+    if is_hashed(group):
+        return Path(TEAMS_DIR, f"{group.replace(':', '-')}.md")
     parts = group.split("/")
     if any(p in ("", ".", "..") or "\\" in p or p.startswith(".") for p in parts):
         raise NextStepsError(f"group id {group!r} cannot name a page path")
@@ -408,8 +413,22 @@ def index_page(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> str
     return "\n".join(lines) + "\n"
 
 
+def group_scopes(group: GroupRow, by_scope: Mapping[str, JsonDict],
+                 salt: str | None) -> Mapping[str, JsonDict]:
+    """The settings fragments ``group`` joins. A group hashed at the output boundary (#909)
+    joins the fragment its recorded ``settings_scope`` names, through the run's salt."""
+    if not is_hashed(group["group"]) or not by_scope:
+        return by_scope
+    if salt is None:
+        raise NextStepsError("groups.jsonl names hashed groups; pass the --hash-salt the fleet run "
+                             "used to join --settings (a --hash-paths run with no salt cannot)")
+    hashed = {hash_value(scope, salt): fragment for scope, fragment in by_scope.items()}
+    scope = group["settings_scope"]
+    return {group["group"]: hashed[scope]} if scope is not None and scope in hashed else {}
+
+
 def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups: Sequence[GroupRow],
-                by_scope: Mapping[str, JsonDict]) -> dict[str, str]:
+                by_scope: Mapping[str, JsonDict], salt: str | None = None) -> dict[str, str]:
     """Every page as ``{relative path: Markdown}``, checked against ``groups.jsonl``."""
     members: dict[str, list[FleetRow]] = {}
     for row in repos:
@@ -426,7 +445,7 @@ def build_pages(maturity_model: MaturityModel, repos: Iterable[FleetRow], groups
                 f"groups.jsonl was rolled up with maturity model {group['levels_version']!r}, not "
                 f"{maturity_model['version']!r}; pass the --levels the fleet run used")
         rows = sorted(members[group["group"]], key=lambda r: r["repo"])
-        results = evaluate_group(maturity_model, group["group"], rows, by_scope)
+        results = evaluate_group(maturity_model, group["group"], rows, group_scopes(group, by_scope, salt))
         _check_agrees(group, results)
         pages[page_path(group["group"]).as_posix()] = group_page(maturity_model, group, rows, results)
     return pages
