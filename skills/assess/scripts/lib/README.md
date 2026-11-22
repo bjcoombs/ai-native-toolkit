@@ -1698,9 +1698,12 @@ renders; `render_reviewed_markdown` appends a `### Reviewed` section to
 attention and `prescribed_actions`). The source path must be in `files`: an entry
 naming only the test file does not clear it. Any failure (no git, no committed file, bad
 JSON, an unknown or non-ancestor sha) leaves the finding open. `carried_completed` gives
-`assess_finalize` the prior `done` entries no new action matched; finalize writes them to
-actions.json `completed`, so a review that took its finding out of the Top 3 is not lost
-on the next finalize. Counts-only keeps `derived_findings.reviewed.path` and drops the
+`assess_finalize` the prior `done` entries of a reviewable finding that no new action
+matched; finalize writes them to actions.json `completed`, so a review that took its
+finding out of the Top 3 is not lost on the next finalize. Finalize reads `completed` back
+with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reopened` on an
+action that matches a done `completed` entry: the finding came back into the Top 3, so the
+old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
 sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
 rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
 gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a

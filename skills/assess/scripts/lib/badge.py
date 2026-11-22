@@ -28,7 +28,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from lib.reviewed_findings import open_findings
+from lib.run_context_types import DerivedFinding
 
 BADGE_FILENAME = "badge.json"
 LABEL = "AI-readiness"
@@ -172,18 +175,14 @@ def concern_count_from_findings(derived_findings: list[dict[str, Any]]) -> int:
     """Count negative findings that actually fired (an open path left).
 
     A path a done review cleared (its row's ``reviewed`` list, #721) is not
-    open, so a finding whose every path is reviewed does not count.
+    open (``reviewed_findings.open_findings``, the rule the Top 3 and the gate
+    read), so a finding whose every path is reviewed does not count.
     """
-    def open_paths(f: dict[str, Any]) -> set[Any]:
-        reviewed = {r.get("path") for r in f.get("reviewed") or [] if isinstance(r, dict)}
-        return set(f.get("paths") or []) - reviewed
-
+    rows = [f for f in derived_findings if isinstance(f, dict) and isinstance(f.get("paths"), list)]
     return sum(
         1
-        for f in derived_findings
-        if isinstance(f, dict)
-        and f.get("name") != "refactor_boundary"
-        and open_paths(f)
+        for f in open_findings(cast("list[DerivedFinding]", rows))
+        if f.get("name") != "refactor_boundary" and f["paths"]
     )
 
 

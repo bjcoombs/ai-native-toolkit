@@ -54,16 +54,39 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str] | None
         return None
 
 
-def action_entries(payload: Any) -> list[dict[str, Any]]:
-    """Every dict entry of an actions.json payload's action lists, in file order."""
+# In-memory marker on a prior entry read from ``completed`` (``tag_completed``);
+# never written: ``carried_completed`` strips it.
+_FROM_COMPLETED = "_from_completed"
+
+
+def action_entries(payload: Any, *, tag_completed: bool = False) -> list[dict[str, Any]]:
+    """Every dict entry of an actions.json payload's action lists, in file order.
+
+    With ``tag_completed`` an entry from ``completed`` is returned as a copy
+    carrying the in-memory ``_FROM_COMPLETED`` marker, which ``reopened_status``
+    reads to tell a returning action from one that never left the Top 3.
+    """
     if not isinstance(payload, dict):
         return []
     out: list[dict[str, Any]] = []
     for key in ACTION_LISTS:
         entries = payload.get(key)
         if isinstance(entries, list):
-            out.extend(e for e in entries if isinstance(e, dict))
+            for e in entries:
+                if isinstance(e, dict):
+                    tag = tag_completed and key == "completed"
+                    out.append({**e, _FROM_COMPLETED: True} if tag else e)
     return out
+
+
+def reopened_status(prior_entry: Mapping[str, Any], status: str) -> str:
+    """``reopened`` for a done action back in the Top 3 after leaving it, else ``status``.
+
+    An entry under ``completed`` had left the Top 3; an action that matches it
+    is that finding re-flagged (the source changed after the review, or the
+    finding regressed), so its old ``done`` must not carry forward.
+    """
+    return "reopened" if prior_entry.get(_FROM_COMPLETED) and status == "done" else status
 
 
 def carried_completed(
@@ -76,14 +99,17 @@ def carried_completed(
     commit's actions.json would lose it and the finding would come back.
     ``prior`` is finalize's carry-forward index (each prior entry under one or
     more keys); ``matched`` holds the prior entries the new actions inherited
-    from. Each entry is returned once, in the prior file's order.
+    from. Each entry is returned once, in the prior file's order, without the
+    in-memory marker. Only reviewable findings are kept: every other finding
+    clears on its own signal, so its record need not persist.
     """
     taken = {id(m) for m in matched}
     out: dict[int, dict[str, Any]] = {}
     for entries in prior.values():
         for e in entries:
-            if e.get("status") == "done" and id(e) not in taken:
-                out.setdefault(id(e), e)
+            if (e.get("status") == "done" and e.get("finding") in REVIEWABLE_FINDINGS
+                    and id(e) not in taken):
+                out.setdefault(id(e), {k: v for k, v in e.items() if k != _FROM_COMPLETED})
     return list(out.values())
 
 

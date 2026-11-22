@@ -274,3 +274,38 @@ def test_gate_does_not_fire_on_a_reviewed_path() -> None:
     assert check_finding_regressions({"derived_findings": [all_reviewed]}, gate) == ([], [])
     failures, _ = check_finding_regressions({"derived_findings": [_reviewed_finding()]}, gate)
     assert failures == [{"finding": "self_referential_tests", "count": 1, "paths": ["src/b.py"]}]
+
+
+def test_finalize_reopens_a_done_action_that_comes_back_into_the_top_3(tmp_path: Path) -> None:
+    """done, then leaving the Top 3, then coming back: the action reopens."""
+    assess_dir = tmp_path / ".assess"
+    assess_dir.mkdir()
+    done = _done_entry("abc1234")
+    (assess_dir / "actions.json").write_text(
+        json.dumps({"schema": 2, "actions": [done]}), encoding="utf-8",
+    )
+    other = {"rank": 1, "action": "split the parser", "done_when": "x", "scope_fence": "y",
+             "finding": "hidden_coupling", "files": ["src/parse.py"]}
+    _write_actions_contract(assess_dir, [other])  # the review cleared it: it left the Top 3
+    back = {k: done[k] for k in ("rank", "action", "done_when", "scope_fence", "finding", "files")}
+    _write_actions_contract(assess_dir, [back])  # the source changed: it is prescribed again
+    out = json.loads((assess_dir / "actions.json").read_text(encoding="utf-8"))
+    assert out["actions"][0]["status"] == "reopened"
+    assert out["actions"][0]["completed_sha"] == "abc1234"
+    assert "completed" not in out
+    assert "_from_completed" not in json.dumps(out)
+
+
+def test_finalize_keeps_only_reviewable_done_entries_under_completed(tmp_path: Path) -> None:
+    assess_dir = tmp_path / ".assess"
+    assess_dir.mkdir()
+    coupling = _done_entry("abc1234", finding="hidden_coupling", files=["src/x.py"],
+                           action="pin the seam")
+    (assess_dir / "actions.json").write_text(
+        json.dumps({"schema": 2, "actions": [coupling]}), encoding="utf-8",
+    )
+    fresh = {"rank": 1, "action": "split the parser", "done_when": "x", "scope_fence": "y",
+             "finding": "hidden_coupling", "files": ["src/parse.py"]}
+    _write_actions_contract(assess_dir, [fresh])
+    out = json.loads((assess_dir / "actions.json").read_text(encoding="utf-8"))
+    assert "completed" not in out
