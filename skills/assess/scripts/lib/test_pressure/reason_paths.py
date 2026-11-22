@@ -4,22 +4,32 @@ The mutmut 3 adapter stores the tail of a failed run's output in
 run-context.json, so the scratch copy, its environment and the home directory
 must not appear there. A tool can cite a directory with either separator (on
 Windows ``str(path)`` uses ``\\`` while pytest and the tool often print ``/``),
-so every spelling is cut under both, and what is left of a path reads with
-``/`` on every platform.
+or as a Python repr with each ``\\`` doubled (an ``OSError`` quotes its
+filename that way), so every spelling is cut under every separator, and what
+is left of a path reads with ``/`` on every platform. Windows paths are
+case-insensitive, so there the match ignores case.
 """
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 # The rest of a cited path: it ends at whitespace, a quote, a bracket or a list separator.
 _TAIL = r"[^\s'\"()\[\]<>,;]*"
+# ``/``, ``\`` or the doubled ``\\`` of a repr.
+_SEP = r"(?:/|\\{1,2})"
+
+
+def _case_insensitive() -> bool:
+    return sys.platform == "win32"
 
 
 def _spellings(path: Path) -> list[str]:
-    """``path`` as given and resolved, each with ``/`` and with ``\\``, longest first."""
-    forms = {str(path), str(path.resolve())}
-    every = {f.replace("\\", "/") for f in forms} | {f.replace("/", "\\") for f in forms}
+    """``path`` as given and resolved, each with ``/``, ``\\`` and a repr's
+    doubled ``\\``, longest first."""
+    forms = {f.replace("\\", "/") for f in (str(path), str(path.resolve()))}
+    every = forms | {f.replace("/", "\\") for f in forms} | {f.replace("/", "\\\\") for f in forms}
     return sorted(every, key=len, reverse=True)
 
 
@@ -34,9 +44,11 @@ def cut_prefix(detail: str, path: Path, label: str | None) -> str:
     if label is not None and path == Path(path.anchor):
         return detail  # a root home (HOME=/) would relabel every path separator
     lead = "" if label is None else label + "/"
+    flags = re.IGNORECASE if _case_insensitive() else 0
     for prefix in _spellings(path):
-        detail = re.sub(re.escape(prefix) + r"[/\\](" + _TAIL + ")",
-                        lambda m: lead + m.group(1).replace("\\", "/"), detail)
+        detail = re.sub(re.escape(prefix) + _SEP + "(" + _TAIL + ")",
+                        lambda m: lead + re.sub(r"\\{1,2}", "/", m.group(1)),
+                        detail, flags=flags)
         if label is None:
-            detail = detail.replace(prefix, ".")
+            detail = re.sub(re.escape(prefix), lambda _m: ".", detail, flags=flags)
     return detail

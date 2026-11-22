@@ -301,6 +301,37 @@ def test_cut_prefix_cuts_either_separator_spelling(tmp_path: Path) -> None:
     assert mutmut3._cut_prefix(f"({back}2\\a.py)", scratch, "~") == f"({back}2\\a.py)"
 
 
+def test_cut_prefix_cuts_a_repr_spelling(tmp_path: Path) -> None:
+    """An OSError quotes its filename as a repr, doubling each Windows ``\\``:
+    the home and the scratch directory are cut from that spelling too."""
+    home, scratch = tmp_path / "bob", tmp_path / "scratch"
+    home.mkdir()
+    scratch.mkdir()
+
+    def repr_line(directory: Path) -> str:
+        doubled = directory.as_posix().replace("/", "\\\\")
+        return f"FileNotFoundError: [Errno 2] No such file: '{doubled}\\\\pkg\\\\a.py'"
+
+    assert mutmut3._cut_prefix(repr_line(home), home, "~") == (
+        "FileNotFoundError: [Errno 2] No such file: '~/pkg/a.py'")
+    assert mutmut3._cut_prefix(repr_line(scratch), scratch, None) == (
+        "FileNotFoundError: [Errno 2] No such file: 'pkg/a.py'")
+
+
+def test_cut_prefix_ignores_case_on_windows(tmp_path: Path, monkeypatch) -> None:
+    """Windows paths are case-insensitive, so ``c:\\users\\bob`` is the home
+    ``C:\\Users\\bob``; elsewhere case still counts."""
+    from lib.test_pressure import reason_paths
+    home = tmp_path / "Bob"
+    home.mkdir()
+    line = f"ImportError: x ({home.as_posix().upper()}/a.py)"
+    monkeypatch.setattr(reason_paths, "_case_insensitive", lambda: False)
+    assert mutmut3._cut_prefix(line, home, "~") == line
+    monkeypatch.setattr(reason_paths, "_case_insensitive", lambda: True)
+    assert mutmut3._cut_prefix(line, home, "~") == "ImportError: x (~/a.py)"
+    assert mutmut3._cut_prefix(f"in {home.as_posix().lower()}", home, None) == "in ."
+
+
 def test_mutmut_pin_matches_the_weekly_workflow() -> None:
     """The uv runner's mutmut is the one the weekly mutation run uses, so the
     adapter's exit-code and key handling is the version CI exercises."""
