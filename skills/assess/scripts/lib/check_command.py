@@ -147,7 +147,7 @@ def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
-            words, LINT_WORDS, LINT_PROGRAMS):
+            words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS):
         return True
     program = _wrapped(words) or _hatch_run(words)
     return program is not None and bool(program) and _lint_words(program)
@@ -269,7 +269,8 @@ def is_lint_run(text: str) -> bool:
         return False
     program = _exec_program(words)
     if program is not None:   # npx / pnpm exec / yarn dlx <program>: the program names the run
-        return bool(program) and is_check_name(program[0], _RUN_WORDS)
+        return bool(program) and (is_check_name(program[0], _RUN_WORDS)
+                                  or _task_target(program, _RUN_WORDS))
     if words[0] in ("npm", "pnpm", "yarn", "bun"):
         return _js_lint(words[0], _positionals(words[1:]))
     hatch = _hatch_run(words)
@@ -335,7 +336,6 @@ _TEST_ONLY_SUBCOMMANDS = TEST_SUBCOMMANDS - {"bazel", "bazelisk"}
 TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "turbo", "nx"})
 SETUP_TARGETS = frozenset({
     "install", "deps", "dependencies", "setup", "bootstrap", "clean", "help", "init",
-    "deploy", "release", "publish", "docs",
 })
 # A program named alone as a bare YAML list item (``- rspec``, ``- make`` under ``needs:``)
 # is a value unless its parent key is a script key (``lib.ci_checks._lone_check``).

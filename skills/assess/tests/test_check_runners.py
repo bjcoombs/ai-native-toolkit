@@ -32,7 +32,7 @@ def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", [
-    "make foo", "task foo", "make", "task", "make build", "just foo", "turbo run build",
+    "make foo", "task foo", "make", "task", "make build", "make deploy", "just foo", "turbo run build",
     "npx nx affected -t build", "hatch run foo", "bundle exec rake", "uv run make foo",
     "docker compose run app", "deno task foo",
 ])
@@ -44,7 +44,7 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
 
 @pytest.mark.parametrize("text", [
     "dotnet build", "swift build", "mix compile", "bazel build //...", "make install",
-    "task deps", "make clean deploy", "bundle install", "npm ci", "uv sync --extra test",
+    "task deps", "make clean install", "bundle install", "npm ci", "uv sync --extra test",
     "npm run build", "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run",
 ])
@@ -75,9 +75,12 @@ def test_layer_three_reads_the_new_runners(text: str, maybe: bool) -> None:
     assert may_lint(text) is maybe
 
 
-@pytest.mark.parametrize("text", ["turbo run lint", "npx nx affected -t lint", "task lint"])
+@pytest.mark.parametrize("text", ["turbo run lint", "npx nx affected -t lint", "task lint",
+                                  "nx run app:lint"])
 def test_a_monorepo_lint_target_is_a_lint_run(text: str) -> None:
-    assert is_lint_run(text) or may_lint(text)
+    """Layer 3 and Layer 5 agree: a lint-named target of turbo, nx or task runs the linter."""
+    assert is_lint_run(text) is True
+    assert is_lint_command(text) is True
 
 
 def _gha(*runs: str, on: str = "pull_request") -> dict[str, str]:
