@@ -43,6 +43,7 @@ from typing import Any
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib.agent_building import scan_agent_building
+from lib.agent_consistency import scan_agent_consistency
 from lib.agent_environment import scan_agent_environment
 from lib.agent_harness import scan_agent_harness
 from lib.agent_ops import scan_agent_ops
@@ -61,7 +62,10 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
+from lib.level_tally import DEFAULT_BLOCKS
 from lib.merged_sample import merged_sample
+from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
+from lib.guardrails import scan_guardrails
 from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
@@ -134,7 +138,8 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
 
     Stages run in ``STAGES`` order, so a read must name a provided input or a
     key whose producer is declared earlier *and* runs at the same or an earlier
-    stage. The run-context keys the table writes (published keys and spread
+    stage; a key a spread entry copies into the run context counts as produced by it,
+    and reads None when that entry leaves it out. The run-context keys the table writes (published keys and spread
     keys) must be distinct.
     """
     produced_at: dict[str, int] = {name: -1 for name in provided}
@@ -179,13 +184,19 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
             raise ScanRegistryError(f"scan {spec.key!r} writes run-context key(s) {clash} written elsewhere")
         written.update(keys)
         produced_at[spec.key] = stage_index
+        # a spread key is readable too: it is in the run context from that stage on
+        for name in spec.spread:
+            produced_at[name] = stage_index
 
 
-def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any]) -> Any:
+def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any],
+             spread: frozenset[str] = frozenset()) -> Any:
     if name in inputs:
         return inputs[name]
     if name in ctx:
         return ctx[name]
+    if name in spread:  # a spread entry may leave one of its keys out (an omitted block)
+        return None
     raise ScanRegistryError(
         f"scan {spec.key!r} reads {name!r}, which is neither in the inputs the core "
         f"passed nor in the run context yet"
@@ -239,10 +250,11 @@ def run_scans(
         for each in STAGES:
             run_scans(ctx, inputs, each, table)
         return
+    spread = frozenset(name for each in table for name in each.spread)
     for spec in table:
         if spec.stage != stage:
             continue
-        args = tuple(_resolve(spec, name, inputs, ctx) for name in spec.reads)
+        args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
         value, degraded = _call(spec, args)
         if spec.spread:
             _spread(spec, ctx, value, degraded)
@@ -548,8 +560,13 @@ SCANS: tuple[ScanSpec, ...] = (
     # listed in [review] ai_review_components), or an AI review app's config
     # file. Offline file reads; review_evidence (Layer 7 level 1) reads it with
     # review_reality and is rebuilt by the --platform pass (PLATFORM_SCANS).
+    # GitLab's merged CI configuration (#796, lib/gitlab_ci_lint.py): the CI lint API,
+    # asked only where an include did not resolve offline. Private, held in memory;
+    # review_automation and ci_checks read it. Offline it reads nothing.
+    ScanSpec("gitlab_merged_ci", read_merged_ci, ("repo_root", "ghsync_root"), STAGE_POST_OFFERS,
+             private=True, network=True, offline_fn=no_merged_ci),
     ScanSpec("review_automation", scan_review_automation,
-             ("repo_root", "fleet_config", "ghsync_root"),
+             ("repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"),
              STAGE_POST_OFFERS),
     ScanSpec("review_evidence", review_evidence, ("review_automation", "review_reality"),
              STAGE_POST_OFFERS),
@@ -557,8 +574,14 @@ SCANS: tuple[ScanSpec, ...] = (
     # test or lint command (check_command.is_check_command); null when no
     # check is found but a CI file pulls jobs this run cannot read (an unresolved
     # include:, a remote reusable workflow; GitLab includes resolve offline against
-    # `ghsync_root`, #766). Layer 5 level 1 of the default maturity model. Offline.
-    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root"), STAGE_POST_OFFERS),
+    # `ghsync_root`, #766; under --platform, GitLab's merged configuration where one did
+    # not, #796). enforced_check_runs (#775) leaves out masked
+    # checks and checks off the ordinary triggers (lib/ci_masking.py,
+    # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
+    # lint_runs (#782) is the same test for lint lines; Layer 3 level 1 reads it.
+    # Offline itself.
+    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root", "gitlab_merged_ci"),
+             STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
     # configuration, a counts-only tool-call loop / MCP server heuristic and the
@@ -579,6 +602,13 @@ SCANS: tuple[ScanSpec, ...] = (
         ("repo_root", "instruction_files", "nested_instructions", "scope", "excludes"),
         STAGE_POST_OFFERS,
     ),
+    # Cross-agent instruction consistency (issue #768): whether the root
+    # instruction files of every agent system present (Claude Code, AGENTS.md,
+    # Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
+    # Zed; lib/agent_systems.py) name the same check commands and thresholds,
+    # and whether each links to one canonical file. Feeds the agent-consistency row.
+    ScanSpec("agent_consistency", scan_agent_consistency, ("repo_root", "excludes"),
+             STAGE_POST_OFFERS),
     # AI-assisted change share (issue #547): commits in the churn window with an
     # AI-assistant Co-authored-by trailer, as counts and a share. A lower bound
     # on agent use, never an estimate; merge commits and automation bots
@@ -597,6 +627,24 @@ SCANS: tuple[ScanSpec, ...] = (
         "doc_claims", scan_doc_claims,
         ("repo_root", "instruction_files", "scope", "excludes"), STAGE_POST_OFFERS,
     ),
+    # Guardrails stated (issue #767): the gates the repository configures (ruff or
+    # flake8 complexity limit, the coverage_gate floor, pre-commit hooks, mypy
+    # strict), each checked against the graded instruction files; an unstated gate
+    # carries a ready one-line snippet. stated_pct feeds the guardrails-stated row.
+    ScanSpec(
+        "guardrails", scan_guardrails,
+        ("repo_root", "instruction_files", "coverage_gate", "excludes"), STAGE_POST_OFFERS,
+    ),
 )
+
+
+# The verified tally and the autonomy Step (lib/level_tally.py, #744): the
+# default maturity model over the finished run context. Core-only: the
+# headless runner never reports it; /fleet computes the same from each row.
+SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
+# The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
+# "Verified practices: N of M measured", worded from the level block. The report
+# pastes it verbatim and the badge and log entry carry its summary.
+SCANS = (*SCANS, ScanSpec("headline", cs.headline, ("level",), STAGE_POST_OFFERS))
 
 validate(SCANS)

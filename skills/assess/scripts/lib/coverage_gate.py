@@ -9,10 +9,28 @@ the scorer noticing a threshold by hand.
 
 Honesty contract: every gate reported carries the file, the 1-based line and the
 threshold exactly as written (a JaCoCo ``0.80`` stays ``0.80`` with unit
-``ratio``; it is never rescaled or guessed). When nothing is found the block says
-``enforced: false`` with an empty ``gates`` list - a gate is never inferred from
-coverage *measurement*. ``not_detected`` names the common forms this scan does
+``ratio``; ``threshold`` is never rescaled or guessed). Beside it,
+``threshold_percent`` is the same number as a percentage (``80.0`` for that
+ratio), derived from ``unit`` alone, and null when it is not a percentage of
+coverage (an uncovered-line count) or was not read (a template, a tool default).
+When nothing is found the block says ``enforced: false`` with an empty ``gates``
+list - a gate is never inferred from coverage *measurement*.
+
+``threshold_meets_minimum`` is the Layer 6 level 1 signal (#781): true when a
+counted gate's ``threshold_percent`` is at least ``MINIMUM_THRESHOLD_PERCENT``
+(50), null when none is but a counted gate's percentage was not read (it could
+be 50 or more), false otherwise. It is read from config at HEAD only, never
+from measured coverage, so the level stays a function of the commit. ``not_detected`` names the common forms this scan does
 not read, so "no gate found" is never misread as "no gate exists".
+
+Go and Rust (#788): go-test-coverage's ``.testcoverage.yml`` ``threshold:``
+keys, ``cargo tarpaulin --fail-under N`` and ``cargo llvm-cov
+--fail-under-lines N`` are read. Their other common gate is a script comparing
+``go tool cover -func`` (or a report) to a number, which this scan cannot read,
+so when no gate at all is found and the walk holds a ``go.mod`` or a
+``Cargo.toml``, ``threshold_meets_minimum`` is null (not measured) and
+``unmeasured_reason`` is ``go_rust_gate_form_not_read``. Any gate found keeps
+the normal reading.
 
 A configured threshold is evidence the tooling fails below it *when coverage
 runs*; whether CI runs coverage at all is a separate read (Layer 5).
@@ -26,7 +44,7 @@ import os
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import is_excluded_path
@@ -88,12 +106,30 @@ _COVERAGE_CLI_RE = re.compile(
 _CHECK_COVERAGE_CLI_RE = re.compile(
     r"\b(nyc|c8)\b.*(?<![\w-])(?:--)?check-coverage\b(?![\"']?\s*:)")
 _LINES_FLAG_RE = re.compile(r"--lines[=\s]+" + _NUM)
+# Rust (#788): anchored on the tool, so a coverage.py ``--fail-under`` never
+# reads as one; tarpaulin's ``--fail-under`` is not llvm-cov's ``-lines`` flag.
+# A toolchain selector (``cargo +nightly tarpaulin``) may sit between; the flag
+# must be in the same command, not after a ``&&``, ``;`` or ``|``.
+_TARPAULIN_RE = re.compile(
+    r"\bcargo(?:\s+\+[\w.-]+)?[\s-]+tarpaulin\b[^;&|]*--fail-under(?![\w-])[=\s]+[\"']?" + _VALUE)
+_LLVM_COV_RE = re.compile(
+    r"\bcargo(?:\s+\+[\w.-]+)?[\s-]+llvm-cov\b[^;&|]*--fail-under-lines(?![\w-])[=\s]+[\"']?" + _VALUE)
+
+# go-test-coverage (#788): ``threshold:`` then ``file:``, ``package:`` and
+# ``total:`` percentages, one level deeper (or an inline ``{total: 80}`` map).
+_TESTCOVERAGE_FILES = {".testcoverage.yml", ".testcoverage.yaml"}
+_TC_THRESHOLD_RE = re.compile(r"^(\s*)threshold\s*:\s*(.*)$")
+_TC_KEY_RE = re.compile(r"\b(file|package|total)\s*:\s*[\"']?" + _NUM)
+# Manifests whose ecosystem gates coverage mostly in forms not read here.
+_GO_RUST_MANIFESTS = {"go.mod", "Cargo.toml"}
+GO_RUST_UNMEASURED = "go_rust_gate_form_not_read"
 
 # Read at the repo root even on a scoped run: CI and task-runner files run the
 # gates for the scoped package. Package configs (pyproject.toml, package.json,
-# tox.ini, ...) at the root belong to the root package and are dropped.
-_ROOT_CI_FILES = _CLI_FILES - {"pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
-                               "noxfile.py", "package.json"}
+# tox.ini, ...) at the root belong to the root package and are dropped. The root
+# module's go-test-coverage config gates every package below it, so it is kept.
+_ROOT_CI_FILES = (_CLI_FILES - {"pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
+                                "noxfile.py", "package.json"}) | _TESTCOVERAGE_FILES
 
 # JS/TS config files and the anchor key that opens a threshold block in each.
 _JEST_FILES = re.compile(r"^jest\.config\.(js|ts|mjs|cjs|json)$")
@@ -119,11 +155,13 @@ _GRADLE_COUNTER_RE = re.compile(r"\bcounter\s*=\s*[\"'](\w+)[\"']")
 # as "none of the detected forms", never as "no gate anywhere".
 NOT_DETECTED: tuple[str, ...] = (
     "Go: `go test -coverprofile` with a script comparing the `go tool cover "
-    "-func` total to a number, or go-test-coverage's `.testcoverage.yml`",
+    "-func` total to a number",
+    "Rust: `cargo llvm-cov` `--fail-under-regions` / `--fail-under-functions`, "
+    "and a tarpaulin `fail-under` in `tarpaulin.toml`",
     "Codecov / Coveralls status targets (server-side; a gate only when the "
     "status check is required)",
     "Kover `minBound`, sbt-scoverage `coverageMinimumStmtTotal`, "
-    "cargo-tarpaulin `--fail-under`, SimpleCov `minimum_coverage`",
+    "SimpleCov `minimum_coverage`",
     "JaCoCo rules built programmatically or in a shared Gradle convention plugin",
     "CLI thresholds in shell scripts or in CI and task files other than GitHub "
     "workflows and composite actions, `.gitlab-ci.yml`, CircleCI, Jenkinsfile, "
@@ -147,6 +185,9 @@ NOT_DETECTED_SCOPED: tuple[str, ...] = (
 
 Unit = Literal["percent", "ratio", "uncovered_count"]
 
+# The lowest configured threshold, as a percentage, that Layer 6 level 1 credits.
+MINIMUM_THRESHOLD_PERCENT = 50.0
+
 
 class CoverageGate(TypedDict):
     """One enforced threshold, as the ``coverage_gate.gates`` entries carry it."""
@@ -157,7 +198,20 @@ class CoverageGate(TypedDict):
     form: str
     threshold: float | None
     unit: Unit
+    threshold_percent: float | None
     metric: str | None
+
+
+class CoverageGateBlock(TypedDict):
+    """The ``coverage_gate`` run-context block."""
+
+    available: bool
+    enforced: bool
+    gates: list[CoverageGate]
+    max_threshold_percent: float | None
+    threshold_meets_minimum: bool | None
+    unmeasured_reason: str | None
+    not_detected: list[str]
 
 
 # Tools whose check runs at a built-in default when no number is given, so a
@@ -167,13 +221,24 @@ class CoverageGate(TypedDict):
 _DEFAULT_THRESHOLD_TOOLS = {"nyc", "c8", "nyc/c8"}
 # A null threshold from coverage.py or pytest-cov only arises from a templated
 # value (``--cov-fail-under=${{ env.COV_MIN }}``): the flag is set, so it gates.
-_NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov"}
+_NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov",
+                                                    "cargo-tarpaulin", "cargo-llvm-cov"}
+
+
+def threshold_percent(threshold: float | None, unit: Unit) -> float | None:
+    """``threshold`` as a percentage of coverage: as written for ``percent``, times
+    100 for ``ratio`` (rounded, so ``0.55`` is ``55.0``), and None for an
+    ``uncovered_count`` or a threshold that was not read."""
+    if threshold is None or unit == "uncovered_count":
+        return None
+    return threshold if unit == "percent" else round(threshold * 100, 6)
 
 
 def _gate(file: str, line: int, tool: str, form: str,
           threshold: float | None, unit: Unit, metric: str | None) -> CoverageGate:
     return {"file": file, "line": line, "tool": tool, "form": form,
-            "threshold": threshold, "unit": unit, "metric": metric}
+            "threshold": threshold, "unit": unit,
+            "threshold_percent": threshold_percent(threshold, unit), "metric": metric}
 
 
 def _num(text: str) -> float:
@@ -263,7 +328,43 @@ def _cli_line_gates(rel: str, idx: int, line: str, branch: bool) -> list[Coverag
         gates.append(_gate(rel, idx, match.group(1), "--check-coverage",
                            _num(lines_flag.group(1)) if lines_flag else None,
                            "percent", "lines" if lines_flag else None))
+    for pattern, tool, form in ((_TARPAULIN_RE, "cargo-tarpaulin", "--fail-under"),
+                                (_LLVM_COV_RE, "cargo-llvm-cov", "--fail-under-lines")):
+        match = pattern.search(line)
+        if match:
+            gates.append(_gate(rel, idx, tool, form, _value(match.group(1)),
+                               "percent", "lines"))
     return gates
+
+
+def _scan_testcoverage(rel: str, lines: list[str]) -> list[CoverageGate]:
+    """go-test-coverage ``threshold:`` keys; each gate's line holds its value."""
+    gates: list[CoverageGate] = []
+    for idx, line in enumerate(lines):
+        anchor = None if _is_comment(line) else _TC_THRESHOLD_RE.match(line)
+        if anchor is None:
+            continue
+        rest = anchor.group(2).split("#", 1)[0]
+        if rest.strip():
+            gates.extend(_testcoverage_gate(rel, idx + 1, m)
+                         for m in _TC_KEY_RE.finditer(rest))
+            continue
+        indent = len(anchor.group(1))
+        for row in range(idx + 1, len(lines)):
+            text = lines[row]
+            if not text.strip() or _is_comment(text):
+                continue
+            if len(text) - len(text.lstrip()) <= indent:
+                break
+            match = _TC_KEY_RE.match(text.strip().split("#", 1)[0])
+            if match:
+                gates.append(_testcoverage_gate(rel, row + 1, match))
+    return gates
+
+
+def _testcoverage_gate(rel: str, line: int, match: re.Match[str]) -> CoverageGate:
+    return _gate(rel, line, "go-test-coverage", f"threshold.{match.group(1)}",
+                 _num(match.group(2)), "percent", match.group(1))
 
 
 def _window_metric(window: list[str]) -> tuple[float | None, str | None]:
@@ -409,6 +510,8 @@ def _js_jvm_scanners(name: str) -> list[Callable[[str, list[str]], list[Coverage
         tool = "c8" if name.startswith(".c8") else "nyc"
         return [lambda r, ls: _scan_anchor(r, ls, _CHECK_COVERAGE_KEY, tool,
                                            "check-coverage", before=_WINDOW)]
+    if name in _TESTCOVERAGE_FILES:
+        return [_scan_testcoverage]
     if name == "pom.xml":
         return [lambda r, ls: _scan_jacoco(r, ls, _POM_MINIMUM_RE,
                                            _POM_COUNTER_RE, "<rules> <minimum>")]
@@ -431,9 +534,11 @@ def _is_workflow(name: str, rel_parts: tuple[str, ...]) -> bool:
     return rel_parts[:1] == (".circleci",)
 
 
-def _walk(root: Path, base: Path, excludes: Excludes) -> Iterator[Path]:
+def _walk(root: Path, base: Path, excludes: Excludes,
+          wanted: Callable[[str, tuple[str, ...]], object] | None = None) -> Iterator[Path]:
     """Repo-relative files under ``base`` (bounded depth below it, built-in and
-    user excludes) that have a scanner."""
+    user excludes) that have a scanner, or that ``wanted`` accepts."""
+    keep = wanted or _scanners_for
     extra_dirs, extra_patterns = excludes
     for dirpath, dirnames, filenames in os.walk(base):
         rel_dir = Path(dirpath).relative_to(root)
@@ -445,9 +550,15 @@ def _walk(root: Path, base: Path, excludes: Excludes) -> Iterator[Path]:
             and not is_user_excluded(rel_dir / d, extra_dirs, extra_patterns))
         for name in sorted(filenames):
             rel = rel_dir / name
-            if (_scanners_for(name, rel.parts)
+            if (keep(name, rel.parts)
                     and not is_user_excluded(rel, extra_dirs, extra_patterns)):
                 yield rel
+
+
+def walk_named(root: Path, excludes: Excludes, names: set[str]) -> Iterator[Path]:
+    """Repo-relative files under ``root`` whose name is in ``names``, by the same
+    bounded, excluding walk the coverage scan uses (``lib.guardrails`` reads it)."""
+    return _walk(root, root, excludes, lambda name, _parts: name in names)
 
 
 def _candidate_files(root: Path, scope: Path | None,
@@ -463,6 +574,23 @@ def _candidate_files(root: Path, scope: Path | None,
                  if _is_root_ci(rel) and rel not in rels]
     for rel in rels:
         yield root / rel, rel.as_posix()
+
+
+def _holds_go_or_rust(root: Path, scope: Path | None, excludes: Excludes) -> bool:
+    """A ``go.mod`` or ``Cargo.toml`` in the walk; on a scoped run, in the scope
+    or in a directory above it up to the repo root (the module or workspace the
+    scope belongs to, as Go and Cargo resolve it). A manifest under a ``testdata``
+    directory is a fixture (the Go tool ignores it too), so it does not count."""
+    def wanted(name: str, parts: tuple[str, ...]) -> bool:
+        return name in _GO_RUST_MANIFESTS and "testdata" not in parts
+    base = root if scope is None else scope
+    if next(_walk(root, base, excludes, wanted), None) is not None:
+        return True
+    ancestors = [d for d in base.parents if d == root or root in d.parents]
+    return any(
+        (d / name).is_file()
+        and not is_user_excluded((d / name).relative_to(root), *excludes)
+        for d in ancestors for name in _GO_RUST_MANIFESTS)
 
 
 def _is_root_ci(rel: Path) -> bool:
@@ -481,18 +609,45 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
-def _gates_something(gate: CoverageGate) -> bool:
+def gates_something(gate: CoverageGate) -> bool:
+    """A gate `enforced` counts: a non-zero threshold, or a null one from nyc/c8."""
     if gate["threshold"] is None:
         return gate["tool"] in _NULL_THRESHOLD_GATES
     return gate["threshold"] != 0
 
 
+def max_threshold_percent(gates: list[CoverageGate]) -> float | None:
+    """The highest non-null ``threshold_percent`` across ``gates``, or None."""
+    percents = [g["threshold_percent"] for g in gates if g["threshold_percent"] is not None]
+    return max(percents) if percents else None
+
+
+def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
+    """Layer 6 level 1: does a counted gate hold coverage at 50 percent or more?
+
+    Only the gates ``enforced`` counts are read, so a ``fail_under = 0`` still
+    gates nothing. True when one has ``threshold_percent`` of at least
+    ``MINIMUM_THRESHOLD_PERCENT``; otherwise None (not measured) when one has a
+    null ``threshold_percent`` (a template, an nyc/c8 default, an uncovered-line
+    count), since it could be 50 or more; otherwise False.
+    """
+    counted = [g for g in gates if gates_something(g)]
+    percents = [g["threshold_percent"] for g in counted]
+    if any(p is not None and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
+        return True
+    if any(p is None for p in percents):
+        return None
+    return False
+
+
 def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
-                         excludes: Excludes | None = None) -> dict[str, Any]:
+                         excludes: Excludes | None = None) -> CoverageGateBlock:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
 
-    ``{"available": True, "enforced": bool, "gates": [...], "not_detected": [...]}``
-    where each gate is ``{file, line, tool, form, threshold, unit, metric}``.
+    ``{"available": True, "enforced": bool, "gates": [...],
+    "max_threshold_percent": float | None, "threshold_meets_minimum": bool | None,
+    "unmeasured_reason": str | None, "not_detected": [...]}`` where each gate is ``{file, line, tool, form,
+    threshold, unit, threshold_percent, metric}``.
     ``enforced`` is true when at least one gate has a non-zero threshold, or a
     null one from a tool that checks at a built-in default (nyc/c8). A
     ``fail_under = 0``, and a Jest/Vitest anchor whose threshold was not read, are
@@ -512,10 +667,17 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
             continue
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
+    walk_excludes = excludes or (set(), [])
+    unmeasured = (GO_RUST_UNMEASURED if not gates
+                  and _holds_go_or_rust(root, scope_abs if scope_abs != root else None,
+                                        walk_excludes) else None)
     return {
         "available": True,
-        "enforced": any(_gates_something(g) for g in gates),
+        "enforced": any(gates_something(g) for g in gates),
         "gates": gates,
+        "max_threshold_percent": max_threshold_percent(gates),
+        "threshold_meets_minimum": None if unmeasured else threshold_meets_minimum(gates),
+        "unmeasured_reason": unmeasured,
         "not_detected": list(NOT_DETECTED) + (
             list(NOT_DETECTED_SCOPED) if scope_abs not in (None, root) else []),
     }

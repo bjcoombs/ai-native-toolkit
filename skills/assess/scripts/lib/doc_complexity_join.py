@@ -95,7 +95,7 @@ _RECOMMENDATIONS = {
     "lying_map": (
         "Fix or DELETE this doc. A stale summary over complex code is worse "
         "than none -- it lies to the next agent. Do not auto-generate a "
-        "replacement; a hollow summary is still a lying map."
+        "replacement; a hollow summary is still a stale map."
     ),
     "unexplained_complexity": (
         "Complex code with no doc and no intent source. A human should write "

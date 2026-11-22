@@ -203,7 +203,7 @@
     },
     {
       "id": "layer-3-linters",
-      "title": "Layer 3: linters (suppression footprint)",
+      "title": "Layer 3: linters run in CI, suppression cap",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -211,16 +211,16 @@
           "level": 1,
           "criteria": [
             {
-              "key": "layer-3-linters.1:promissory_markers.families.suppression.total",
-              "signal": "promissory_markers.families.suppression.total",
-              "op": "gt",
-              "value": 0,
-              "text": "Suppression comments: is above 0",
-              "title": "A linter or type checker leaves a footprint",
-              "fix": "Run a linter or type checker on the code; its suppression comments show it is in use.",
-              "input_class": "head_text",
-              "grade": "declared",
-              "counts": false
+              "key": "layer-3-linters.1:ci_checks.lint_runs",
+              "signal": "ci_checks.lint_runs",
+              "op": "eq",
+              "value": true,
+              "text": "A CI line runs a linter on ordinary changes and can stop its job: is true",
+              "title": "CI runs a linter or type checker",
+              "fix": "Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without || true, continue-on-error or allow_failure.",
+              "input_class": "ci_executed",
+              "grade": "verified",
+              "counts": true
             }
           ]
         },
@@ -307,16 +307,16 @@
           "level": 1,
           "criteria": [
             {
-              "key": "layer-5-ci.1:ci_checks.test_or_lint_runs",
-              "signal": "ci_checks.test_or_lint_runs",
+              "key": "layer-5-ci.1:ci_checks.enforced_check_runs",
+              "signal": "ci_checks.enforced_check_runs",
               "op": "eq",
               "value": true,
-              "text": "A CI line runs a test or lint command: is true",
-              "title": "CI runs your tests or linters",
-              "fix": "Add a CI step that runs your test or lint command on pull requests.",
-              "input_class": "head_text",
-              "grade": "declared",
-              "counts": false
+              "text": "A CI check runs on ordinary changes and can stop its job: is true",
+              "title": "CI runs your tests or linters, and an error stops the job",
+              "fix": "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure.",
+              "input_class": "ci_executed",
+              "grade": "verified",
+              "counts": true
             }
           ]
         },
@@ -349,13 +349,13 @@
           "level": 1,
           "criteria": [
             {
-              "key": "layer-6-coverage.1:coverage_gate.enforced",
-              "signal": "coverage_gate.enforced",
+              "key": "layer-6-coverage.1:coverage_gate.threshold_meets_minimum",
+              "signal": "coverage_gate.threshold_meets_minimum",
               "op": "eq",
               "value": true,
-              "text": "A coverage threshold is set: is true",
-              "title": "A coverage gate is configured",
-              "fix": "Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached.",
+              "text": "A coverage threshold of at least 50 percent is set: is true",
+              "title": "A coverage gate of at least 50 percent is configured",
+              "fix": "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, so CI holds the line you have reached.",
               "input_class": "config_text",
               "grade": "config_only",
               "counts": false
@@ -524,6 +524,90 @@
               "title": "Four in five mapped docs keep pace",
               "fix": "Refresh the docs the report lists under doc freshness, oldest first.",
               "input_class": "git_history",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guardrails-stated",
+      "title": "Guardrails stated",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "guardrails-stated.1:guardrails.stated_pct",
+              "signal": "guardrails.stated_pct",
+              "op": "gte",
+              "value": 50,
+              "text": "Share of configured gates an instruction file states: is at least 50",
+              "title": "Half the configured gates are stated",
+              "fix": "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "guardrails-stated.2:guardrails.stated_pct",
+              "signal": "guardrails.stated_pct",
+              "op": "gte",
+              "value": 100,
+              "text": "Share of configured gates an instruction file states: is at least 100",
+              "title": "Every configured gate is stated",
+              "fix": "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agent-consistency",
+      "title": "Cross-agent instruction consistency",
+      "scope": "team",
+      "aggregation": "min",
+      "levels": [
+        {
+          "level": 1,
+          "criteria": [
+            {
+              "key": "agent-consistency.1:agent_consistency.conflicts",
+              "signal": "agent_consistency.conflicts",
+              "op": "eq",
+              "value": 0,
+              "text": "Commands and thresholds the agent systems disagree on: is 0",
+              "title": "Every agent system names the same checks",
+              "fix": "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives.",
+              "input_class": "head_structure",
+              "grade": "measured",
+              "counts": true
+            }
+          ]
+        },
+        {
+          "level": 2,
+          "criteria": [
+            {
+              "key": "agent-consistency.2:agent_consistency.unlinked",
+              "signal": "agent_consistency.unlinked",
+              "op": "eq",
+              "value": 0,
+              "text": "Agent systems not linked to the canonical instruction file: is 0",
+              "title": "Every agent system reads one canonical file",
+              "fix": "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool.",
+              "input_class": "head_structure",
               "grade": "measured",
               "counts": true
             }
@@ -764,7 +848,8 @@
           "coverage_gate.gates.metric": "token",
           "coverage_gate.gates.tool": "token",
           "coverage_gate.gates.unit": "token",
-          "coverage_gate.not_detected": "drop"
+          "coverage_gate.not_detected": "drop",
+          "coverage_gate.unmeasured_reason": "token"
         }
       },
       "used_by": {
@@ -772,14 +857,21 @@
           "layer-6-coverage"
         ],
         "conditions": [
-          "layer-6-coverage.1:coverage_gate.enforced"
+          "layer-6-coverage.1:coverage_gate.threshold_meets_minimum"
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "go_rust_gate_form_not_read",
+          "means": "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
+          "next_step": "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.",
+          "carried_in": "unmeasured_reason"
+        }
+      ],
       "evidence": [
         {
-          "signal": "coverage_gate.enforced",
+          "signal": "coverage_gate.threshold_meets_minimum",
           "input_class": "config_text",
           "grade": "config_only"
         }
@@ -1075,10 +1167,11 @@
       "reads": [
         "repo_root",
         "fleet_config",
-        "ghsync_root"
+        "ghsync_root",
+        "gitlab_merged_ci"
       ],
       "network": false,
-      "platform": false,
+      "platform": true,
       "headless": "registered",
       "privacy": {
         "written": true,
@@ -1144,32 +1237,39 @@
     {
       "name": "ci_checks",
       "title": "CI runs a test or lint command",
-      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere.",
+      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked.",
       "collector": "core.ci_checks",
       "reads": [
         "repo_root",
-        "ghsync_root"
+        "ghsync_root",
+        "gitlab_merged_ci"
       ],
       "network": false,
-      "platform": false,
+      "platform": true,
       "headless": "registered",
       "privacy": {
         "written": true,
         "strings_kept": {
           "ci_checks.basis": "token",
+          "ci_checks.enforced_basis": "token",
           "ci_checks.includes.id": "id",
           "ci_checks.includes.kind": "token",
           "ci_checks.includes.ref_basis": "token",
           "ci_checks.includes.status": "token",
+          "ci_checks.lint_basis": "token",
+          "ci_checks.merged_config": "token",
+          "ci_checks.merged_config_reason": "token",
           "ci_checks.reason": "drop"
         }
       },
       "used_by": {
         "rows": [
+          "layer-3-linters",
           "layer-5-ci"
         ],
         "conditions": [
-          "layer-5-ci.1:ci_checks.test_or_lint_runs"
+          "layer-3-linters.1:ci_checks.lint_runs",
+          "layer-5-ci.1:ci_checks.enforced_check_runs"
         ],
         "findings": []
       },
@@ -1177,19 +1277,48 @@
         {
           "code": "included_jobs",
           "means": "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.",
-          "next_step": "Nothing to change: this reads as not measured until the included file can be read.",
+          "next_step": "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "merged_config_partial",
+          "means": "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.",
+          "next_step": "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "unknown_trigger",
+          "means": "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).",
+          "next_step": "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "check_target",
+          "means": "In lint_basis: no CI line calls a linter, but one runs a check target or script that may run one inside it (make check, npm test, tox, ./scripts/test.sh, pre-commit run); recipes are not read.",
+          "next_step": "Nothing to change if the target lints; calling the linter in its own CI step (ruff check ., make lint) lets the scan read it.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "unread_ci_system",
+          "means": "In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them.",
+          "next_step": "Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent.",
           "carried_in": "basis"
         }
       ],
       "evidence": [
         {
-          "signal": "ci_checks.test_or_lint_runs",
-          "input_class": "head_text",
-          "grade": "declared"
+          "signal": "ci_checks.lint_runs",
+          "input_class": "ci_executed",
+          "grade": "verified"
+        },
+        {
+          "signal": "ci_checks.enforced_check_runs",
+          "input_class": "ci_executed",
+          "grade": "verified"
         }
       ],
       "grades": [
-        "declared"
+        "verified"
       ]
     },
     {
@@ -1308,6 +1437,65 @@
       ]
     },
     {
+      "name": "agent_consistency",
+      "title": "Cross-agent instruction consistency",
+      "summary": "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system.",
+      "collector": "core.agent_consistency",
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_consistency.canonical": "path",
+          "agent_consistency.divergences.kind": "token",
+          "agent_consistency.divergences.missing_from": "token",
+          "agent_consistency.divergences.named_in": "token",
+          "agent_consistency.divergences.stated.system": "token",
+          "agent_consistency.divergences.value": "drop",
+          "agent_consistency.files.link": "token",
+          "agent_consistency.files.path": "path",
+          "agent_consistency.files.system": "token",
+          "agent_consistency.next_steps.path": "path",
+          "agent_consistency.next_steps.pointer": "drop",
+          "agent_consistency.next_steps.symlink": "drop",
+          "agent_consistency.next_steps.system": "token",
+          "agent_consistency.not_read": "drop",
+          "agent_consistency.systems": "token"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "agent-consistency"
+        ],
+        "conditions": [
+          "agent-consistency.1:agent_consistency.conflicts",
+          "agent-consistency.2:agent_consistency.unlinked"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "agent_consistency.conflicts",
+          "input_class": "head_structure",
+          "grade": "measured"
+        },
+        {
+          "signal": "agent_consistency.unlinked",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
       "name": "ai_usage",
       "title": "AI-assisted change share",
       "summary": "",
@@ -1382,6 +1570,53 @@
       ]
     },
     {
+      "name": "guardrails",
+      "title": "Guardrails stated",
+      "summary": "Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet.",
+      "collector": "core.guardrails",
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "coverage_gate",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "guardrails.gates.kind": "token",
+          "guardrails.gates.rule": "token",
+          "guardrails.gates.snippet": "drop",
+          "guardrails.gates.stated_in": "path",
+          "guardrails.gates.tool": "token",
+          "guardrails.not_read": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [
+          "guardrails-stated"
+        ],
+        "conditions": [
+          "guardrails-stated.1:guardrails.stated_pct",
+          "guardrails-stated.2:guardrails.stated_pct"
+        ],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [
+        {
+          "signal": "guardrails.stated_pct",
+          "input_class": "head_structure",
+          "grade": "measured"
+        }
+      ],
+      "grades": [
+        "measured"
+      ]
+    },
+    {
       "name": "structure",
       "title": "Keyhole blocks: structure",
       "summary": "",
@@ -1419,7 +1654,43 @@
         ],
         "findings": []
       },
-      "unknown_reasons": [],
+      "unknown_reasons": [
+        {
+          "code": "no_grimp",
+          "means": "grimp, the Python import-graph builder, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "no_networkx",
+          "means": "networkx, which the structure metrics need, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "grimp_failed",
+          "means": "grimp could not build the Python import graph.",
+          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
+        },
+        {
+          "code": "no_python_packages",
+          "means": "A Python repository with no importable package.",
+          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "invalid_import_graph",
+          "means": "A builder returned a graph that breaks the module-graph contract.",
+          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
+        },
+        {
+          "code": "no_source_files",
+          "means": "The scope holds no source file in a language the assess skill recognises.",
+          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
+        }
+      ],
       "evidence": [
         {
           "signal": "structure.modularity_q",
@@ -1528,7 +1799,6 @@
           "layer-3-linters"
         ],
         "conditions": [
-          "layer-3-linters.1:promissory_markers.families.suppression.total",
           "layer-3-linters.2:promissory_markers.families.suppression.stale",
           "layer-3-linters.2:promissory_markers.aging_reliable"
         ],
@@ -1536,11 +1806,6 @@
       },
       "unknown_reasons": [],
       "evidence": [
-        {
-          "signal": "promissory_markers.families.suppression.total",
-          "input_class": "head_text",
-          "grade": "declared"
-        },
         {
           "signal": "promissory_markers.families.suppression.stale",
           "input_class": "git_history",
@@ -1553,7 +1818,6 @@
         }
       ],
       "grades": [
-        "declared",
         "measured"
       ]
     },
@@ -1934,6 +2198,41 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
+        },
+        {
+          "code": "no_grimp",
+          "means": "grimp, the Python import-graph builder, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "no_networkx",
+          "means": "networkx, which the structure metrics need, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "grimp_failed",
+          "means": "grimp could not build the Python import graph.",
+          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
+        },
+        {
+          "code": "no_python_packages",
+          "means": "A Python repository with no importable package.",
+          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "invalid_import_graph",
+          "means": "A builder returned a graph that breaks the module-graph contract.",
+          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
+        },
+        {
+          "code": "no_source_files",
+          "means": "The scope holds no source file in a language the assess skill recognises.",
+          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -1980,6 +2279,41 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
+        },
+        {
+          "code": "no_grimp",
+          "means": "grimp, the Python import-graph builder, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "no_networkx",
+          "means": "networkx, which the structure metrics need, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "grimp_failed",
+          "means": "grimp could not build the Python import graph.",
+          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
+        },
+        {
+          "code": "no_python_packages",
+          "means": "A Python repository with no importable package.",
+          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "invalid_import_graph",
+          "means": "A builder returned a graph that breaks the module-graph contract.",
+          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
+        },
+        {
+          "code": "no_source_files",
+          "means": "The scope holds no source file in a language the assess skill recognises.",
+          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -2021,6 +2355,41 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
+        },
+        {
+          "code": "no_grimp",
+          "means": "grimp, the Python import-graph builder, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "no_networkx",
+          "means": "networkx, which the structure metrics need, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "grimp_failed",
+          "means": "grimp could not build the Python import graph.",
+          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
+        },
+        {
+          "code": "no_python_packages",
+          "means": "A Python repository with no importable package.",
+          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "invalid_import_graph",
+          "means": "A builder returned a graph that breaks the module-graph contract.",
+          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
+        },
+        {
+          "code": "no_source_files",
+          "means": "The scope holds no source file in a language the assess skill recognises.",
+          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -2063,6 +2432,41 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
+        },
+        {
+          "code": "no_grimp",
+          "means": "grimp, the Python import-graph builder, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "no_networkx",
+          "means": "networkx, which the structure metrics need, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "grimp_failed",
+          "means": "grimp could not build the Python import graph.",
+          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
+        },
+        {
+          "code": "no_python_packages",
+          "means": "A Python repository with no importable package.",
+          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "invalid_import_graph",
+          "means": "A builder returned a graph that breaks the module-graph contract.",
+          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
+        },
+        {
+          "code": "no_source_files",
+          "means": "The scope holds no source file in a language the assess skill recognises.",
+          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -2086,7 +2490,10 @@
         "strings_kept": {
           "derived_findings.action": "drop",
           "derived_findings.name": "token",
-          "derived_findings.paths": "path"
+          "derived_findings.paths": "path",
+          "derived_findings.reviewed.completed_sha": "drop",
+          "derived_findings.reviewed.note": "drop",
+          "derived_findings.reviewed.path": "path"
         }
       },
       "used_by": {
@@ -2099,6 +2506,41 @@
           "code": "not_registered",
           "means": "Only a full /assess run builds this block; a headless or fleet run reports it not measured.",
           "next_step": "Run /assess on the repository to measure it."
+        },
+        {
+          "code": "no_grimp",
+          "means": "grimp, the Python import-graph builder, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "no_networkx",
+          "means": "networkx, which the structure metrics need, is not installed.",
+          "next_step": "Install the assess skill's Python dependencies (uv run does this) and run again."
+        },
+        {
+          "code": "grimp_failed",
+          "means": "grimp could not build the Python import graph.",
+          "next_step": "Check that the packages import cleanly; the sentence after the code names grimp's error."
+        },
+        {
+          "code": "no_python_packages",
+          "means": "A Python repository with no importable package.",
+          "next_step": "Nothing to change if the code is scripts; a package with an __init__.py is measured."
+        },
+        {
+          "code": "no_import_graph_<language>",
+          "means": "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.",
+          "next_step": "Nothing to change: structure reads as not measured for this language."
+        },
+        {
+          "code": "invalid_import_graph",
+          "means": "A builder returned a graph that breaks the module-graph contract.",
+          "next_step": "Report it against the toolkit; structure reads as not measured meanwhile."
+        },
+        {
+          "code": "no_source_files",
+          "means": "The scope holds no source file in a language the assess skill recognises.",
+          "next_step": "Nothing to change if the scope has no code; check the scope and the excludes otherwise."
         }
       ],
       "evidence": [],
@@ -3259,6 +3701,17 @@
       "private": false
     },
     {
+      "name": "gitlab_merged_ci",
+      "title": "GitLab merged CI configuration",
+      "publishes": [],
+      "reads": [
+        "repo_root",
+        "ghsync_root"
+      ],
+      "network": true,
+      "private": true
+    },
+    {
       "name": "review_automation",
       "title": "AI review committed in CI",
       "publishes": [
@@ -3267,7 +3720,8 @@
       "reads": [
         "repo_root",
         "fleet_config",
-        "ghsync_root"
+        "ghsync_root",
+        "gitlab_merged_ci"
       ],
       "network": false,
       "private": false
@@ -3293,7 +3747,8 @@
       ],
       "reads": [
         "repo_root",
-        "ghsync_root"
+        "ghsync_root",
+        "gitlab_merged_ci"
       ],
       "network": false,
       "private": false
@@ -3339,6 +3794,19 @@
       "private": false
     },
     {
+      "name": "agent_consistency",
+      "title": "Cross-agent instruction consistency",
+      "publishes": [
+        "agent_consistency"
+      ],
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "ai_usage",
       "title": "AI-assisted change share",
       "publishes": [
@@ -3364,6 +3832,62 @@
         "instruction_files",
         "scope",
         "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "guardrails",
+      "title": "Guardrails stated",
+      "publishes": [
+        "guardrails"
+      ],
+      "reads": [
+        "repo_root",
+        "instruction_files",
+        "coverage_gate",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "level",
+      "title": "Verified tally and Step",
+      "publishes": [
+        "level"
+      ],
+      "reads": [
+        "agent_consistency",
+        "agent_environment",
+        "agent_ops",
+        "ci_checks",
+        "coverage_gate",
+        "doc_staleness",
+        "guardrails",
+        "instruction_claims",
+        "layer_grades",
+        "nested_instructions",
+        "observability",
+        "promissory_markers",
+        "review_evidence",
+        "review_reality",
+        "stats_summary",
+        "structure",
+        "structure_drift",
+        "test_pressure"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "headline",
+      "title": "Deterministic headline",
+      "publishes": [
+        "headline"
+      ],
+      "reads": [
+        "level"
       ],
       "network": false,
       "private": false
@@ -3443,13 +3967,13 @@
       "null_means": "null when no import crosses a package boundary"
     },
     {
-      "path": "promissory_markers.families.suppression.total",
-      "title": "Suppression comments",
-      "type": "number",
-      "collector": "core.promissory_markers",
-      "input_class": "head_text",
-      "grade": "declared",
-      "null_means": "absent when no suppression was found"
+      "path": "ci_checks.lint_runs",
+      "title": "A CI line runs a linter on ordinary changes and can stop its job",
+      "type": "bool",
+      "collector": "core.ci_checks",
+      "input_class": "ci_executed",
+      "grade": "verified",
+      "null_means": "included_jobs: the linter may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a check target or script may run one inside it"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -3488,13 +4012,13 @@
       "null_means": ""
     },
     {
-      "path": "ci_checks.test_or_lint_runs",
-      "title": "A CI line runs a test or lint command",
+      "path": "ci_checks.enforced_check_runs",
+      "title": "A CI check runs on ordinary changes and can stop its job",
       "type": "bool",
       "collector": "core.ci_checks",
-      "input_class": "head_text",
-      "grade": "declared",
-      "null_means": "included_jobs: the check may live in an included file"
+      "input_class": "ci_executed",
+      "grade": "verified",
+      "null_means": "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; unread_ci_system: the check may run in a CI system the scan does not parse"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",
@@ -3506,13 +4030,13 @@
       "null_means": ""
     },
     {
-      "path": "coverage_gate.enforced",
-      "title": "A coverage threshold is set",
+      "path": "coverage_gate.threshold_meets_minimum",
+      "title": "A coverage threshold of at least 50 percent is set",
       "type": "bool",
       "collector": "core.coverage_gate",
       "input_class": "config_text",
       "grade": "config_only",
-      "null_means": "never null; a block that could not be read is available: false"
+      "null_means": "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count), or no gate is found in a repository holding a go.mod or Cargo.toml (unmeasured_reason go_rust_gate_form_not_read)"
     },
     {
       "path": "test_pressure.mutation_run",
@@ -3585,6 +4109,33 @@
       "input_class": "git_history",
       "grade": "measured",
       "null_means": "a shallow or degenerate history, no git work tree or no mapped doc"
+    },
+    {
+      "path": "guardrails.stated_pct",
+      "title": "Share of configured gates an instruction file states",
+      "type": "number",
+      "collector": "core.guardrails",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "no gate found: nothing to state"
+    },
+    {
+      "path": "agent_consistency.conflicts",
+      "title": "Commands and thresholds the agent systems disagree on",
+      "type": "number",
+      "collector": "core.agent_consistency",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "fewer than two agent systems: nothing to agree with"
+    },
+    {
+      "path": "agent_consistency.unlinked",
+      "title": "Agent systems not linked to the canonical instruction file",
+      "type": "number",
+      "collector": "core.agent_consistency",
+      "input_class": "head_structure",
+      "grade": "measured",
+      "null_means": "fewer than two agent systems: nothing to link"
     }
   ],
   "findings": [
@@ -3604,7 +4155,7 @@
     },
     {
       "name": "lying_map",
-      "title": "Lying map",
+      "title": "Stale doc over complex code",
       "order": 1,
       "action": "fix or delete the doc",
       "mode": "verify_then_retire",
@@ -3619,7 +4170,7 @@
       "name": "unexplained_complexity",
       "title": "Unexplained complexity",
       "order": 2,
-      "action": "write the missing contract (do NOT auto-generate)",
+      "action": "write the contract the code needs (do NOT auto-generate)",
       "mode": "characterize_first",
       "concern": true,
       "inputs": [

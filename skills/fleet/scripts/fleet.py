@@ -10,6 +10,9 @@ line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
 ``--levels`` row's whole level, plus each group's agent-building class counts.
+With ``--levels`` each scanned repository's verified tally, condition states and
+autonomy Step go to ``<out>/level.json`` (``lib/fleet_level.py``, schema
+``skills/fleet/references/level.schema.json``; #744).
 Similar ``builds-agent`` repositories across groups are clustered into
 ``<out>/agent_clusters.json`` (``lib/fleet_agent_building.py``): counts and SDK
 slugs only, member repositories named only with ``--name-agent-clusters``.
@@ -34,7 +37,11 @@ It also draws the fleet diagrams (``lib/fleet_diagrams.py``): ``<out>/report.md`
 embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
 over the run history, ``lib/fleet_trends.py``), ``slope.svg`` (from the ``--compare``
 result) and ``layer-bars.svg``, or the reason each was skipped;
-``--no-diagrams`` turns them off.
+``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
+``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
+the discoverable repositories were assessed and each gap counted, also in ``run.json``
+(``lib/fleet_coverage.py``, #745); without it, coverage unknown. After the credit section
+comes "Opportunities" (``lib/fleet_opportunities.py``, #746), also in ``fleet-data.json``.
 
 ``--fleet-config FILE`` (``lib/fleet_config.py``, #706) is validated before any scan
 and every repository scan gets the same copy of it; a repository's own
@@ -78,13 +85,14 @@ Exit codes:
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, an unreadable --compare run, or an unreadable or invalid
-       --fleet-config (the message names the key)
+       --fleet-config (the message names the key), or an unreadable or malformed
+       --discovered listing (the message names the line)
 
 Run:
     uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters]
+        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
         [--platform [--platform-jobs N] [--platform-timeout SECONDS]]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
@@ -139,6 +147,7 @@ from lib.fleet_activity import window_start  # noqa: E402
 from lib.fleet_agent_building import clusters, write_clusters  # noqa: E402
 from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
+from lib.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile  # noqa: E402
 from lib.fleet_compare import (  # noqa: E402
     Comparison,
     FleetRun,
@@ -158,6 +167,7 @@ from lib.fleet_diagrams import (  # noqa: E402
 )
 from lib.fleet_achievements import (  # noqa: E402
     ACHIEVEMENTS_FILE,
+    Achievements,
     HistoryRun,
     build_achievements,
     clear_achievements,
@@ -165,6 +175,8 @@ from lib.fleet_achievements import (  # noqa: E402
 )
 from lib.fleet_achievements_runs import earlier_runs  # noqa: E402
 from lib.fleet_credit import credit_section  # noqa: E402
+from lib.fleet_opportunities_section import opportunities_section  # noqa: E402
+from lib.fleet_level import write_fleet_levels  # noqa: E402
 from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
@@ -333,6 +345,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              f"unavailable (default: [platform] timeout in --fleet-config, else {DEFAULT_PLATFORM_TIMEOUT}).",
     )
     parser.add_argument(
+        "--discovered", metavar="FILE",
+        help="What ghsync discovered: its --porcelain or --porcelain-json output (one path or "
+             "object per line). report.md and run.json then say how many of these repositories "
+             "were assessed and count each gap: archived or empty, not cloned, could not be "
+             "scanned, excluded by filters. Needs ROOT. Without it, coverage reads unknown.",
+    )
+    parser.add_argument(
         "--name-agent-clusters", action="store_true",
         help="Name the member repositories and groups of each agent cluster in "
              "OUT/agent_clusters.json. Off by default: a cluster carries counts and SDK slugs only.",
@@ -345,6 +364,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                      "(fleet.py ROOT --out DIR --compare [RUN_DIR]) or write --compare=RUN_DIR")
     if args.root is None and args.from_list is None:
         parser.error("give a ghsync ROOT or --from-list FILE")
+    if args.discovered is not None and args.root is None:
+        parser.error("--discovered needs ROOT, the ghsync root its paths are under")
     if args.full and (args.hash_paths or args.hash_salt is not None):
         parser.error("--hash-paths and --hash-salt apply to counts-only output, not --full")
     if args.hash_salt == "":
@@ -490,7 +511,8 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
 
 def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | None, rows: list[FleetRow],
               window: str, *, history: list[TrendRun] | None = None,
-              comparison: Comparison | None = None, credit: str | None = None) -> None:
+              comparison: Comparison | None = None, credit: str | None = None,
+              coverage: str | None = None, opportunities: Callable[[], str | None] | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
@@ -498,7 +520,8 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
         ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
-        write_diagrams(out_dir, diagrams, credit, measured_section(ok))
+        write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
+                       measured_section(ok))
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -510,9 +533,9 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
 
 def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_model: MaturityModel | None,
                   org_dir: Path | None, entry: Path | None, repos: frozenset[str], specs: list[TargetSpec],
-                  privacy_key: Callable[[str], str], firsts: bool = False) -> str | None:
-    """``OUT/achievements.json`` (lib/fleet_achievements.py) and the report's credit section;
-    None when not written. Never raises: achievements never fail a completed run."""
+                  privacy_key: Callable[[str], str], firsts: bool = False) -> tuple[str | None, Achievements | None]:
+    """``OUT/achievements.json`` (lib/fleet_achievements.py), the report's credit section and
+    the document; both None when not written. Never raises: achievements never fail a run."""
     try:
         if org_dir is None or entry is None:
             earlier, note = [], "this run is not kept in the run history (--no-history or --full)"
@@ -525,7 +548,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
     except Exception as e:  # noqa: BLE001 - achievements never fail a completed run
         clear_achievements(out_dir)
         print(f"fleet: achievements: not written ({type(e).__name__}: {e})", file=sys.stderr)
-        return None
+        return None, None
     mine = sum(1 for a in doc["achievements"] if a["run"] == doc["run"])
     print(f"fleet: achievements: {mine} earned this run over {len(doc['runs'])} comparable run(s) "
           f"-> {ACHIEVEMENTS_FILE}", file=sys.stderr)
@@ -533,7 +556,7 @@ def _achievements(out_dir: Path, data: FleetData, stamp: FleetStamp, maturity_mo
         if t["level"] is None:
             print(f"fleet: targets: {t['view']} {t['unit']} has no measured level on {t['row']}",
                   file=sys.stderr)
-    return section
+    return section, doc
 
 
 def _write_fleet_data(out_dir: Path, stamp: FleetStamp, rows: list[FleetRow],
@@ -597,6 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     units: UnitsMap = empty_map()
     fleet_config: FleetConfig | None = None
     fleet_config_text: str | None = None
+    discovered: list[Discovered] | None = None
     try:
         if args.fleet_config is not None:
             fleet_config_text = read_fleet_config(Path(args.fleet_config))
@@ -613,6 +637,11 @@ def main(argv: list[str] | None = None) -> int:
             parse_window(args.window)
         level_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
         targets = _targets(args)
+        if args.discovered is not None:
+            discovered = read_discovery(Path(args.discovered), Path(args.root).resolve())
+    except DiscoveryError as e:
+        print(f"error: --discovered {args.discovered}: {e}", file=sys.stderr)
+        return 2
     except TargetsError as e:
         print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
         return 2
@@ -708,24 +737,29 @@ def main(argv: list[str] | None = None) -> int:
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
+    coverage = (None if discovered is None else
+                reconcile(discovered, rows, Path(args.root).resolve(), frozenset(t.repo for t in targets)))
     agent_clusters = clusters(rows, name=args.name_agent_clusters)
     write_clusters(out_dir, agent_clusters)
     stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
-        fleet_config=fleet_config, platform=platform_ran,
+        fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
     )
     write_stamp(out_dir, stamp)
+    write_fleet_levels(out_dir, rows, maturity_model, toolkit_commit=stamp["toolkit_commit"],
+                       plugin_version=stamp["plugin_version"])
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups, row_signals(data)), earlier)
-    credit = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
+    credit, achieved = _achievements(out_dir, data, stamp, maturity_model, org_dir, entry,
                            frozenset(row["repo"] for row in rows), level_targets,
                            privacy_for(args.full, hash_salt).key, args.first_achievements)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
-              credit=credit)
+              credit=credit, coverage=coverage_line(coverage, len(rows)),
+              opportunities=lambda: opportunities_section(data, achieved))
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

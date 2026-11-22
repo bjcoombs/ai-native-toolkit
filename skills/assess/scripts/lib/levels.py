@@ -76,10 +76,23 @@ Semantics:
 - ``org`` rows run once against the group settings; settings of ``None`` (not
   gathered) make every org row unknown.
 
+Two optional additions feed the verified tally and the Steps (``lib/level_tally.py``,
+#744); neither changes a row's level above:
+
+- ``requires`` on a level: condition ids (``<row id>.<level>``) that must be met
+  for this condition to count as met, for a dependency that is real (mutation
+  credit needs CI running tests). The row's own level ignores it.
+- ``[[steps]]``: the autonomy Steps, numbered 1..K. Each has a ``name``, a
+  ``threshold`` (the met, counted conditions it needs) and ``gates``, each
+  ``{ id, row, level }``: the gate holds when that row's conditions up to
+  ``level`` are met. Step 1 has threshold 0 and no gates; each later Step keeps
+  every gate of the one below (gates accumulate) and never lowers the threshold.
+
 Loading raises ``LevelsError`` before any evaluation on a malformed maturity model: a
 missing version, an unset or invalid scope, a gap or duplicate in level
-numbering, an unknown operator or key, a team row with no aggregation rule, or
-a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
+numbering, an unknown operator or key, a team row with no aggregation rule,
+a ``requires`` naming a condition that does not exist (or itself, or a cycle),
+a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
 byte-identical JSON for identical inputs.
 """
 from __future__ import annotations
@@ -108,9 +121,11 @@ _MEMBER_OPS = ("in", "not_in")
 _EQUALITY_OPS = ("eq", "ne")
 OPERATORS = _EQUALITY_OPS + _ORDER_OPS + _MEMBER_OPS
 
-_ROOT_KEYS = frozenset({"version", "rows"})
+_ROOT_KEYS = frozenset({"version", "rows", "steps"})
 _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"})
-_LEVEL_KEYS = frozenset({"level", "criteria"})
+_LEVEL_KEYS = frozenset({"level", "criteria", "requires"})
+_STEP_KEYS = frozenset({"step", "name", "threshold", "gates"})
+_GATE_KEYS = frozenset({"id", "row", "level"})
 _CRITERION_KEYS = frozenset({"signal", "op", "value"})
 
 # The option that named the maturity-model file before 2.0.0 (#670). It is still
@@ -146,6 +161,8 @@ class Criterion(TypedDict):
 class Level(TypedDict):
     level: int
     criteria: list[Criterion]
+    # condition ids (``<row id>.<level>``) this condition needs met (#744)
+    requires: NotRequired[list[str]]
 
 
 class Aggregation(TypedDict):
@@ -161,9 +178,25 @@ class Row(TypedDict):
     levels: list[Level]
 
 
+class StepGate(TypedDict):
+    """A Step gate: ``row``'s conditions 1..``level`` must all be met (#744)."""
+
+    id: str
+    row: str
+    level: int
+
+
+class StepDef(TypedDict):
+    step: int
+    name: str
+    threshold: int  # met, counted conditions the Step needs
+    gates: list[StepGate]
+
+
 class MaturityModel(TypedDict):
     version: str
     rows: list[Row]
+    steps: NotRequired[list[StepDef]]  # absent: the model defines no Steps
 
 
 class Group(TypedDict):
@@ -262,9 +295,13 @@ def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None
             raise LevelsError(f"row {row['id']!r}: duplicate row id")
         seen.add(row["id"])
         rows.append(row)
+    _check_requires(rows)
     if validator is not None:
         _validate_paths(rows, validator)
-    return {"version": version, "rows": rows}
+    model: MaturityModel = {"version": version, "rows": rows}
+    if "steps" in data:
+        model["steps"] = _parse_steps(data["steps"], rows)
+    return model
 
 
 def _check_keys(table: Mapping[str, Any], allowed: frozenset[str], where: str) -> None:
@@ -331,7 +368,14 @@ def _parse_levels(raw: Any, where: str) -> list[Level]:
         if not isinstance(criteria, list) or not criteria:
             raise LevelsError(f"{where} level {number}: 'criteria' must be a non-empty array")
         parsed = [_parse_criterion(c, f"{where} level {number}") for c in criteria]
-        levels.append({"level": number, "criteria": parsed})
+        level: Level = {"level": number, "criteria": parsed}
+        if "requires" in entry:
+            requires = entry["requires"]
+            if (not isinstance(requires, list) or not requires
+                    or not all(isinstance(r, str) and r.strip() for r in requires)):
+                raise LevelsError(f"{where} level {number}: 'requires' must be a non-empty array of condition ids")
+            level["requires"] = list(requires)
+        levels.append(level)
     levels.sort(key=lambda lv: lv["level"])
     numbers = [lv["level"] for lv in levels]
     if numbers != list(range(1, len(numbers) + 1)):
@@ -367,6 +411,89 @@ def _check_operand(op: str, value: Any, where: str) -> None:
             raise LevelsError(f"{where}: '{op}' needs a non-empty array of one scalar type")
     elif _kind(value) is None:
         raise LevelsError(f"{where}: '{op}' needs a string, number or boolean")
+
+
+def condition_id(row_id: str, level: int) -> str:
+    """The id of one condition: a row's level, ``<row id>.<level>`` (#744)."""
+    return f"{row_id}.{level}"
+
+
+def _check_requires(rows: list[Row]) -> None:
+    """Every ``requires`` names an existing condition, never itself, with no cycle."""
+    edges = {condition_id(row["id"], lv["level"]): lv.get("requires", []) for row in rows for lv in row["levels"]}
+    for cid, needs in edges.items():
+        unknown = sorted(n for n in needs if n not in edges)
+        if unknown:
+            raise LevelsError(f"condition {cid!r}: 'requires' names unknown condition(s) {', '.join(unknown)}")
+    done: set[str] = set()
+
+    def visit(cid: str, path: tuple[str, ...]) -> None:
+        if cid in path:
+            raise LevelsError(f"condition {cid!r}: 'requires' forms a cycle ({' -> '.join((*path, cid))})")
+        if cid in done:
+            return
+        for need in edges[cid]:
+            visit(need, (*path, cid))
+        done.add(cid)
+
+    for cid in sorted(edges):
+        visit(cid, ())
+
+
+def _whole(value: Any) -> int | None:
+    """``value`` when it is a whole number (a bool is not), else None."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _parse_gate(raw: Any, where: str, rows: Mapping[str, Row]) -> StepGate:
+    if not isinstance(raw, dict):
+        raise LevelsError(f"{where}: each gate must be a table")
+    _check_keys(raw, _GATE_KEYS, where)
+    gate_id, row_id = _text(raw, "id", where), _text(raw, "row", where)
+    level = _whole(raw.get("level"))
+    if row_id not in rows:
+        raise LevelsError(f"{where} gate {gate_id!r}: unknown row {row_id!r}")
+    if level is None or not 1 <= level <= len(rows[row_id]["levels"]):
+        raise LevelsError(f"{where} gate {gate_id!r}: 'level' must be a level of row {row_id!r} "
+                          f"(got {raw.get('level')!r})")
+    return {"id": gate_id, "row": row_id, "level": level}
+
+
+def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
+    """``[[steps]]``: numbered 1..K, gates accumulating, thresholds never falling."""
+    if not isinstance(raw, list) or not raw:
+        raise LevelsError("maturity model: 'steps' must be a non-empty array of tables")
+    by_id = {row["id"]: row for row in rows}
+    steps: list[StepDef] = []
+    for index, entry in enumerate(raw):
+        where = f"step #{index + 1}"
+        if not isinstance(entry, dict):
+            raise LevelsError(f"{where}: must be a table")
+        _check_keys(entry, _STEP_KEYS, where)
+        number, threshold, gates = _whole(entry.get("step")), _whole(entry.get("threshold")), entry.get("gates", [])
+        if number != index + 1 or number is None:
+            raise LevelsError(f"{where}: steps must be numbered 1..K in order (got {entry.get('step')!r})")
+        if threshold is None or threshold < 0:
+            raise LevelsError(f"{where}: 'threshold' must be a whole number of at least 0 "
+                              f"(got {entry.get('threshold')!r})")
+        if not isinstance(gates, list):
+            raise LevelsError(f"{where}: 'gates' must be an array of tables")
+        step: StepDef = {"step": number, "name": _text(entry, "name", where), "threshold": threshold,
+                         "gates": [_parse_gate(g, where, by_id) for g in gates]}
+        if number == 1 and (threshold != 0 or step["gates"]):
+            raise LevelsError(f"{where}: step 1 is always reached: threshold 0 and no gates")
+        if steps:
+            below = steps[-1]
+            missing = [g["id"] for g in below["gates"] if g not in step["gates"]]
+            if missing:
+                raise LevelsError(f"{where}: gates accumulate; missing {', '.join(missing)} from step {number - 1}")
+            if threshold < below["threshold"]:
+                raise LevelsError(f"{where}: 'threshold' is below step {number - 1}'s")
+        ids = [g["id"] for g in step["gates"]]
+        if len(set(ids)) != len(ids):
+            raise LevelsError(f"{where}: duplicate gate id")
+        steps.append(step)
+    return steps
 
 
 def _validate_paths(rows: list[Row], validator: PathValidator) -> None:

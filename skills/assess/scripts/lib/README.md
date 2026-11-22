@@ -117,6 +117,59 @@ follow POSIX string order, so `src/foo.py` sorts before `src/foo/bar.py` (`.` < 
 the earlier `Path` ordering compared path parts and put `src/foo/bar.py` first. The windows-latest job
 (`.github/workflows/windows.yml`) checks both through `tests/test_fleet_golden.py`.
 
+### Supportive vocabulary
+
+**`vocabulary.py`**
+The one list of words user-facing output leaves out (#743, parent #740): every report reads
+as a readiness snapshot, never a verdict on the people who built the repository. A gap is
+the next goal. The banned-vocabulary guard is `tests/test_vocabulary_guard.py`
+(`cd skills/assess && uv run --locked pytest tests/test_vocabulary_guard.py`). It renders, from
+source, a real fleet run with the shipped maturity model (`report.md`, every diagram, the heat
+map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
+fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
+naming the word, the output and the line, when one of these words appears in the prose as a
+whole word, case-insensitive. Fenced code, backticked spans and identifiers containing an
+underscore are not prose (`prose`), so machine field names, JSON keys, finding names and
+signal paths (`lying_map`, `instruction_claims.failed`, `fail_under`) stay unchanged.
+
+| Word | Say instead |
+|------|-------------|
+| `tangled` | name the measured structure (cross-package edges, modularity) |
+| `penalty` | name the size or share the grade reads |
+| `weakest` | the row with the most room to grow |
+| `weak` | room to grow |
+| `lying` | stale, or reads better than it measures |
+| `missing` | not measured yet, or not in place yet |
+| `fail` | stop, or turn the job red |
+| `fails` | stops |
+| `failed` | could not be scanned, or did not run |
+| `failing` | erroring |
+| `failure` | an error, or a gap |
+| `Not Ready` | the Step the repository is ready for |
+| `Basic` | the Step name |
+| `Solid` | the Step name |
+| `AI-Native` | the Step name |
+
+The last four are the retired maturity band labels (`RETIRED_LABELS`); the Step names
+(1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops) replace them.
+
+**Opening line.** Every `## ` section of the fleet `report.md` and every heading of a team
+next-steps page (`teams.md` and `teams/<group>.md`) opens with a line that starts
+`In place:` (`IN_PLACE`) and says what is already in place before any next step: counts of
+what is measured or reached, and at level 0 or unknown a plain "nothing confirmed on this row
+yet", never implied credit. The guard checks it on every rendered page.
+
+**Wording elsewhere.** The quadrant names its shaded corner "Most room to grow: busy, early
+levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as
+"stale doc over complex code" (`keyhole_signals.FINDING_DISPLAY_NAMES`); and the headline words a
+reason code it has no entry for with "did not complete" and "not found" in place of "failed" and
+"missing" (`headline._reason_word`).
+
+**Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, heat map and layer bars) is the
+ColorBrewer YlGn growth palette, pale yellow to deep green, in place of the red OrRd ramp;
+unknown cells stay hatched. The complexity treemap and the doc graph keep their own ramps:
+they encode complexity and staleness, not maturity.
+
 ### Data collection
 
 **`git_churn.py`**
@@ -848,7 +901,8 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 The run's side effects, applied after every scan (#557) by
 `assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
-keys the run header reserved in place, writes `badge.json`, reads the previous
+keys the run header reserved in place, writes `badge.json` from the `headline` block
+(`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 
@@ -957,13 +1011,21 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. The `ai_usage`, `ci_checks` and `delivery` blocks (`scan_block_schemas.py`, #779)
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery`, `guardrails` and `agent_consistency` blocks (`scan_block_schemas.py`, #779, #781, #767, #768)
 also name and describe their fields (`described_block`), loosely: no required field, and a
-string list may be its counts-only length.
+string list may be its counts-only length. Each block's `reason` description is generated
+from the check manifest (`reason_description`, #795): the codes its collector declares in
+`unknown_reasons` (carried in `reason`, for that block) with what each means, then
+`REASON_KEPT`: a counts-only signals document keeps an unavailable block's reason as its
+leading code, or `unavailable` (`counts_only.reason_code`), for every block. `described_blocks`
+adds every known block that declares codes (`structure`), so the structure codes
+(`no_grimp` and the rest) are described under `structure` only and the shared text of
+every other block names no code. `fleet_schema` uses the same blocks for `repos.schema.json`.
 
 **`scan_block_schemas.py`**
-`BLOCK_SCHEMAS`: hand-written field descriptions (with units: delivery durations are hours)
-of the blocks a fleet reader compares, `ai_usage`, `ci_checks` and `delivery` (#779), read
+`BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
+of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
+`delivery` (#779), `guardrails` (#767) and `agent_consistency` (#768), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -1044,7 +1106,7 @@ Since #697 an `unknown` level row carries an optional `floor` (the confirmed low
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
-(issue #571). `build_pages` re-runs `levels.evaluate` per group on exactly the inputs
+(issue #571). Every heading opens with an `In place:` line (`vocabulary.IN_PLACE`, #743). `build_pages` re-runs `levels.evaluate` per group on exactly the inputs
 `fleet_groups` evaluated (`repo_signals`, `settings_for`, `settings_signals`), then
 checks each row's status and level against `groups.jsonl` and raises
 `NextStepsError` on any difference (a different `--levels` or `--settings`, or files
@@ -1095,9 +1157,9 @@ each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`
 `placement` map, repository id to unit id, so a repository sits once per view.
 `build_trees` infers the ownership view from repository paths (every prefix of a GitLab
 `path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
-a GitHub settings fragment (deepest team wins, then the first slug), then, for a
+a GitHub settings fragment (written by `ghreport`; deepest team wins, then the first slug), then, for a
 repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
-under that group, and
+under that group (matched ignoring case, the unit id's team part lower-cased; #733), and
 finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
 `[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
 with no repository left are dropped; their kind follows their place (root `org`, a unit
@@ -1128,6 +1190,33 @@ repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.
 names and owners and writes a non-token value as `set`; with a salt every unit and
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
+Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
+without a model).
+
+**`fleet_opportunities.py`**
+The `opportunities` object of `fleet-data.json` (#746, parent #740), from one run's rows and
+the maturity model with no history. `in_place`: per team row, measured repositories at its
+top level. `_sole_unmet` re-evaluates each row (`levels.evaluate_row`) and keeps a
+repository only when its level is known and exactly one criterion, status `unmet`, stands
+before its next level (unknown never counts). `biggest_lift` is the (row, level, signal)
+holding the most such repositories (ties: row order, level, signal), worded by
+`next_step_guidance.guidance`, with its Step gate (`[[steps]]`) when it is one.
+`shared_templates`: per `shared_tooling.ci_source_ids` id with at least `MIN_INCLUDERS`
+includers, the includers whose sole unmet criterion reads a `ci_checks.` signal, by row and
+level. Repository keys go through the run's `Privacy.key`; a source id is kept as the scan
+wrote it (clear, or the scan's salted hash, which joins `repos.jsonl`), and its `kind` comes
+from `ci_includes` (`FLEET_DATA_RULES` classes both ids `path`); `text` holds counts and
+model titles only. No
+rank or position field. Tests: `tests/test_fleet_opportunities.py`.
+
+**`fleet_opportunities_section.py`**
+`opportunities_section` renders `report.md`'s "Opportunities" section from a built
+`FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
+an `In place:` line first, then the biggest lift, the shared templates and the display-only
+recent progress (this run's `level_up` achievements, from the history; otherwise a
+nothing-new line, a starting-line line on a kept first run (`fleet_achievements.BASELINE_NOTE`),
+or the achievements note when the run is not kept). None when `opportunities` is null. Names are listed in key
+order, at most `PER_LIST` per line. Tests: `tests/test_fleet_opportunities.py`.
 
 **`fleet_data_schema.py`**
 Generates `skills/fleet/references/fleet-data.schema.json` from the `FleetData` TypedDict
@@ -1158,7 +1247,8 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 **`fleet_achievements_runs.py`**
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
 `fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
-`READABLE_FLEET_DATA_VERSIONS` (1 and 2: version 1's roll-up is not read, #772),
+`READABLE_FLEET_DATA_VERSIONS` (1, 2 and 3: version 1's roll-up is not read, #772;
+version 3 only adds `opportunities`, #746),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
@@ -1194,7 +1284,7 @@ the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming th
 
 **`fleet_credit.py`**
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
-from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
+from `achievements.json`, opening with an `In place:` line (#743): this run's credit lines by kind (capped per kind), each unit's
 nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
 distances (in levels, or in share for a share target), plus a `### Recount` subsection
 after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
@@ -1221,8 +1311,8 @@ without a maturity model is named as having none, not as maturity model `None`).
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
 `treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and maturity model
-rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer OrRd 9-class
-ramp (`ORRD_9`; `ramp_step` scales a level by its row's top level when a maturity model file
+rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer YlGn 9-class growth
+ramp (`LEVEL_RAMP`; `ramp_step` scales a level by its row's top level when a maturity model file
 gives one, else indexes the ramp), text colour from the per-step `STEP_TEXT` table, and
 every known cell prints its level. `unknown` is the hatched `UNKNOWN_FILL`, never a ramp
 colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in reading
@@ -1245,7 +1335,7 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 | `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
 | `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
 | `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
-| `ORRD_9`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
+| `LEVEL_RAMP`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
 | `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
 | `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
@@ -1315,14 +1405,16 @@ An unknown repository with a floor (#697) is named in `floored` and drawn first 
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
 `build_diagrams(levels, repos, window, *, history, comparison)` returns a `Diagram` per picture
-(`file`, `title`, `question`, and `svg` or the one-line `skipped` reason: no maturity model, no
+(`file`, `title`, `question`, `in_place`: the section's opening `In place:` line (#743), and `svg` or the one-line `skipped` reason: no maturity model, no
 team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
-`fleet_credit` section when given, then embeds each with a relative clickable image link or says
-why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it, built
-from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
+`fleet_coverage.coverage_line` paragraph when given, then the
+`fleet_credit` section when given, then the `fleet_opportunities_section` section when
+given, then embeds each with a relative clickable image link or says
+why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
+built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
@@ -1361,6 +1453,21 @@ described under `scans`), with a `status` enum, a reason-token pattern and an
 `tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
 `uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 
+**`fleet_coverage.py`**
+Fleet coverage against ghsync's discovery listing (issue #745). `read_discovery` parses
+`fleet.py --discovered FILE` (`parse_discovery`: ghsync `--porcelain` paths or
+`--porcelain-json` objects, `archived` and an empty `default_branch` read, a repeated path
+once, a malformed line a `DiscoveryError` naming its number) and adds the paths in the root's
+`.gh_archived_repos` cache as archived. `reconcile` puts each discovered path in one bucket,
+first match: `assessed` (ok row), `failed_scan` (failed row), `archived_or_empty`,
+`excluded_by_filters` (a checkout under the root this run was not given), `not_cloned`; the
+buckets sum to `discoverable`, and `not_in_listing` counts rows no path names. A path maps to
+a row id as `fleet.layout_id` does (`row_id`). `Coverage` is counts only and is stamped in
+`run.json` (`fleet_stamp.FleetStamp.coverage`, null without a listing, optional in the schema since a stamp from before #745 lacks it; not copied into
+`fleet-data.json`, `fleet_data.RUN_EXCLUDED`). `coverage_line` is the paragraph
+`fleet_diagrams.report_markdown` puts first in `report.md`; without a listing it says the
+coverage is unknown. Tests: `tests/test_fleet_coverage.py`.
+
 **`fleet_stamp.py`**
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
@@ -1369,14 +1476,17 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
 without one, absent before #706 and read as null, so the stamp version stays 1), and
 `platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
-false through `fleet_legacy.stamp_value`). No path,
+false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
+counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
+comparability key). No path,
 salt, timing or input mode, so a
-root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+root run, a list run and any `--jobs` give the same bytes on the same day (with
+`--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
 writes atomically with sorted keys.
 
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
-`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+`[ai_usage]`, `[review]`, `[platform]` and `[identities]` (empty allowed; their keys are added by #695,
 #696 and #714; `[review]` has `ai_review_components`, a string list read by
 `review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
 --platform-jobs` and `--platform-timeout`). API:
@@ -1400,7 +1510,9 @@ Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`
 required) and `field` (`one_of("email", "username", "name")`)) and
 `token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
 classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
-`gitlab_notes` (#716).
+`gitlab_notes` (#716); `[identities]` `agents`, `bots` and `people` (`string_list`
+of literal accounts, #765), read through `identities_section` by `ai_usage.matcher_from_config`
+(so also `delivery` and `gitlab_notes`) and counted in `section_entries`.
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
@@ -1494,7 +1606,8 @@ omits a block gives that block `available: false` with `platform_timeout`,
 counts-only output). Such a failed block never replaces an offline block that is
 available (`join`, #696): `review_evidence` credits an AI review step offline, and a slow
 host keeps that credit. Failed rows are not read. `names` is `platform_scans(--scans)`:
-`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+`signals.PLATFORM_SCANS` narrowed by `--scans` (`review_automation` and `ci_checks` are
+listed because they read GitLab's merged CI configuration, #796). All children share one response cache
 directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
 `--delete-after` hook) runs on each row after its platform read, so a clone outlives the
 read of its remote. A new platform block (#715, #716) needs no change here: see
@@ -1616,7 +1729,8 @@ Integration barrier between the individual signal modules and `assess_core`. Der
 the per-directory containment view from the commit-file sets the orchestrator parses
 once and passes in, then assembles all five run-context blocks from the upstream signal
 outputs. Emits the named derived findings as a fixed-order structured array (the single
-source of order is `FINDING_ORDER`): `hidden_coupling`, `lying_map`,
+source of order is `FINDING_ORDER`, loaded from the finding entries' `order` in
+`checks/core.toml`): `hidden_coupling`, `lying_map`,
 `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`,
 `unactioned_intent`, `accretion_ratchet`, `orphaned_understanding`,
 `candidate_dead_weight`, `override_contradicts_signals` (archetype marker disagrees with
@@ -1663,7 +1777,45 @@ input, with the degenerate-churn gate on `_CHURN_DERIVED_FINDINGS`) and `_filter
 `integrate`; the C901 gate keeps each step under ccn 15. The attention list and every
 product rendered from the findings (`findings_markdown`, `keyhole_summary`,
 `attention_low_signal`, `prescribed_actions`, `archived_finding_paths`) come from one
-function, `finding_products`, which `mutation_refresh.py` calls too.
+function, `finding_products`, which `mutation_refresh.py` calls too. After
+`_filter_findings`, `integrate` calls `reviewed_findings.mark_reviewed`, and
+`finding_products` reads every product from `reviewed_findings.open_findings`, so a
+reviewed path stays in `derived_findings` but not in the attention list, the
+prescribed actions, the summary or the rendered path lists.
+
+**`reviewed_findings.py`** *(#721)*
+A recorded human review clears `self_referential_tests` until the source changes. The
+finding keys on commit origin (a test co-committed with its code), which no later
+commit can change, so it could never clear before. `committed_reviews` reads
+`.assess/actions.json` **as committed at HEAD** (`git show HEAD:./.assess/actions.json`,
+never the working tree) and collects, from its `actions` and `completed` arrays
+(`action_entries`), every entry with `finding` in `REVIEWABLE_FINDINGS`
+(`self_referential_tests` only), `status: done`, a hex `completed_sha` and a `files`
+list. `mark_reviewed` marks a finding path reviewed when it is in such an entry's
+`files` and `unchanged_since` holds: the sha resolves to a commit that is an ancestor of
+HEAD and `git rev-list <sha>..HEAD -- <path>` is empty. The finding's
+`derived_findings` row keeps the path in `paths` and gains `reviewed`, a list of
+`{path, completed_sha, note}` (`ReviewedPath`; the full resolved sha, and `note` from
+`review_note`, which contains it), written only when non-empty. `open_findings` is the
+rows with reviewed paths taken out of `paths`, which `finding_products` ranks and
+renders; `render_reviewed_markdown` appends a `### Reviewed` section to
+`findings_markdown`. A later commit touching the path re-flags it (no `reviewed`, back in
+attention and `prescribed_actions`). The source path must be in `files`: an entry
+naming only the test file does not clear it. Any failure (no git, no committed file, bad
+JSON, an unknown or non-ancestor sha) leaves the finding open. `carried_completed` gives
+`assess_finalize` the prior `done` entries of a reviewable finding that no new action
+matched; finalize writes them to actions.json `completed`, so a review that took its
+finding out of the Top 3 is not lost on the next finalize. Finalize reads `completed` back
+with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reopened` on an
+action that matches a done `completed` entry: the finding came back into the Top 3, so the
+old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
+sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
+rebuild. The CI gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) reads open
+paths only, so a reviewed path does not fail the gate (the badge counts no findings since
+#747: it carries the Step and the verified tally). The committed `findings.json` snapshot
+and the method-change diff keep the full `paths`, so a review never reads as a finding
+that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
+`.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
 
 **`untrusted_hotspot.py`**
 The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity
@@ -1706,7 +1858,8 @@ A run-context with no `derived_findings` list is left untouched (returns `False`
 `assess_core` hands it this run's `complexity-stats.json` (the scoped one under
 `--scope`) and the excludes from `recorded_excludes` (the `excluded_by_config` dirs
 and patterns the default run applied and disclosed, or `load_excludes` when the
-block is absent), then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
+block is absent). The badge is no longer rebuilt here: `assess_core` recounts the `level`
+block, rewords the `headline` and rewrites `badge.json` from it before this runs (#747). Tests:
 `tests/test_mutation_refresh.py`.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
@@ -1794,11 +1947,15 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `headless_variant` or `unregistered`; an unlisted block is not reported headless),
   `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
   `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots
-  under its blocks), `privacy` (its `counts_only_rules.RULES` patterns and classes;
+  under its blocks), `privacy` (its counts-only patterns and classes, from which
+  `counts_only_rules.RULES` is generated; a pattern is classified by one collector only;
   `archived_finding_paths` sits with the private `keyhole` collector that produces it),
-  `unknown_reasons` (`code`, `carried_in` `reason` or `basis`, `means`, `next_step`),
-  `revision` (1 for every collector; bumped when a published value changes meaning,
-  #774) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
+  `unknown_reasons` (`code`, `carried_in` `reason`, `basis` or `unmeasured_reason`, an
+  optional `block` naming the published block whose reason carries it, `means`,
+  `next_step`; a trailing `<name>` in a code stands for a family, as in
+  `no_import_graph_<language>`),
+  `revision` (starts at 1; bumped when a published value changes meaning, #774, as
+  `ci_checks`, `review_automation` and `coverage_gate` have been) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
   signals carry it now.
 - `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
   (`bool` or `number` here), `collector` (the collector publishing its first segment),
@@ -1806,14 +1963,20 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `null_means`. No grade is authored: it follows from the class
   (`level_signals.INPUT_GRADES`).
 - `condition`: display metadata for one default criterion, keyed
-  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.enforced_check_runs`, unique per
   manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
   supportive `fix`. The criterion itself stays in
   `levels/default.toml`; a custom `--levels` file needs no entries.
-- `finding`: a derived finding, id `core.finding.<name>`, with `order`, `action`,
-  `mode`, `concern` (in `assess_config.GATE_CONCERN_FINDINGS`), `inputs`, `derive`,
-  `thresholds`, `suppressed_when` (the churn suppression, a #789 rule expression in
-  source form) and `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`).
+- `finding`: a derived finding, id `core.finding.<name>`, with `order` (the report and
+  severity order, `keyhole_signals.FINDING_ORDER`), `action` (`FINDING_ACTIONS`), `mode`
+  (`FINDING_MODES`), `concern` (`assess_config.GATE_CONCERN_FINDINGS`), `inputs`,
+  `derive`, `thresholds` (the `coupling_analysis` defaults for `hidden_coupling`),
+  `suppressed_when` (the churn suppression, `keyhole_signals._CHURN_DERIVED_FINDINGS`;
+  until the rule evaluator the loader accepts only `doc_staleness.churn_degenerate ==
+  true`), `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`) and `headless`.
+  `inputs`, `derive` and `headless` are documentary: no table is generated from them.
+  `inputs` is checked on its typed-root fields or first segment, `derive` as a callable,
+  and `headless` against the `derived_findings` block's headless status.
 
 Loader rules beyond types: an id has its kind's form; a private collector publishes
 nothing and is not spread; a plain collector publishes `[key]`; opting out of degrading
@@ -1823,24 +1986,44 @@ block is `headless_variant` exactly when a variant names it; every read is a cor
 or an earlier collector at the same or an earlier stage, and no key shadows a core
 input or publishes a block another collector publishes (the `scan_registry.validate`
 rules); a signal's collector exists and publishes its block; a condition key is unique and names a
-declared signal; finding orders are distinct and every finding input names a block or collector.
+declared signal; finding orders are distinct and every finding input names a block or collector; a
+privacy pattern is classified by one collector; a reason code's `block` is published by
+its collector; `suppressed_when` is the one supported expression.
 An unknown key or reference carries a "did you mean" `suggestion` and the `available`
-names. The module imports none of the tables it describes, because later steps make
-them load from it.
+names. The module imports none of the tables it describes; they load from it.
 
-Nothing reads the manifest at runtime yet. **Agreement test:**
+**Generated at import (#795, #789 steps 3 and 4).** `core_manifest()` loads and validates
+`checks/core.toml` once per process. `finding_tables` builds `FINDING_ORDER`,
+`FINDING_ACTIONS`, `FINDING_MODES`, `GIT_HISTORY_FINDINGS`, `_CHURN_DERIVED_FINDINGS`
+(`keyhole_signals`) and `GATE_CONCERN_FINDINGS` (`assess_config`); `finding_thresholds`
+gives the `coupling_analysis` defaults (`DEFAULT_LOW_CONTAINMENT`,
+`DEFAULT_HIGH_MODULARITY_Q`, `DEFAULT_HIGH_FRONT_DOOR_RATIO`); `privacy_rules` builds
+`counts_only_rules.RULES` (scan key to privacy table, in scan-table order); and
+`reason_codes(manifest, block)` feeds the per-block reason descriptions of
+`signals_schema`. Editing an entry's `order`, `action`, `mode`, `concern`,
+`prune_missing_paths`, `suppressed_when`, `thresholds` or `privacy` changes the runtime
+tables; after a `privacy` change regenerate `references/counts-only.md`, and after an
+`unknown_reasons` change regenerate the signals and fleet-row schemas.
+
+**Agreement test:**
 `tests/test_check_manifest.py` checks it in both directions against `scan_registry.SCANS`
 (`test_registry_matches_manifest`: one collector per scan key, equal `callable`, `reads`,
 `stage`, `publishes`, `private`, `spread`, `degrade`, `gate_reason`, `label`, `network`
 and `offline_callable`, in table order; a failure names the scan key), the headless
-tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the default
-model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
-against the schema. Until later steps generate those tables from the manifest, adding a
-scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+tables, `ROOTS`, the default model's signals and criteria, and `SIGNAL_INPUTS`; and it
+validates the loaded manifest against the schema. Until later steps generate those tables
+from the manifest, adding a scan, criterion or typed root also adds its manifest entry. A
+counts-only rule is added in the manifest only; a finding is added in the manifest plus
+its path derivation in `keyhole_signals._finding_path_inputs`
+(`test_every_finding_has_a_path_derivation` pins the two name sets). The generated tables are
+pinned through their builders (an edited copy of the manifest reorders the findings or
+reclassifies a field), the structure reason codes against
+`import_graph.STRUCTURE_REASON_CODES`, and the thresholds as all read.
 A finding `inputs` path under a typed root must name fields of its shape
 (`test_finding_inputs_under_a_typed_root_name_its_fields`, #793); one under an untyped
-block or a collector is checked on its first segment only. `derive` is checked as a
-callable only: it stays documentary until a later step generates the findings from it.
+block or a collector is checked on its first segment only. Map keys under a typed root
+are not checked. `derive` is checked as a callable only: it stays documentary until a
+later step generates the findings from it.
 Loader tests: `tests/test_check_manifest_loader.py`.
 
 **`check_validation.py`**
@@ -1890,9 +2073,11 @@ known scan, **Ran** when its block exists without a `not_registered` or `network
 least one repository (with "not measured in k of n" and the reason codes where the block is
 unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
 a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
-"this run wrote no block for it" for `assess_report.py`). Its first line says how many scans
-ran and were skipped. It links `docs/what-we-measure.md` by
-absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+"this run wrote no block for it" for `assess_report.py`). Its first line starts `In place:`
+(`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
+measured everywhere, or were skipped. It names `docs/what-we-measure.md` with its absolute
+URL, both in code spans: the repository name in the URL would otherwise trip the vocabulary
+guard's retired band label. The fleet `report.md` ends with it; the deterministic `/assess` report too.
 Tests: `tests/test_measured_appendix.py`.
 
 ### Configuration
@@ -1948,7 +2133,7 @@ no prompts and an audit trail. Pure stdlib, no side effects. Called by
 `ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
 writes (run-context.json, the badge, the wiki pages); the version history is in the
 module comment. `complexity-treemap.py` carries a copy that
-`tests/test_complexity_treemap.py` holds equal to it.
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
 It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
 independent of plugin releases, bumped by one in any change that moves which findings
 a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
@@ -2002,7 +2187,8 @@ the fleet's unit and repository keys (#703). Tests:
 `tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 
 **`counts_only_rules.py`**
-The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
+The counts-only allow-list: `RULES` maps each collector's field patterns (generated from
+the collector's `privacy` table in `checks/core.toml`, #795; dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
 an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
 with the paths), a `REASON` class for an unavailable block's reason kept as its code
@@ -2012,7 +2198,9 @@ field names and `classify`. Every other object is a record whose keys survive on
 they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
 fields and rule segments), so a map keyed by a login or a function name is dropped
 rather than kept unhashed. Adding a run-context string field or block means adding its
-rule or field name here and regenerating `references/counts-only.md`.
+rule to its collector's `privacy` table in `checks/core.toml` (or a field name here) and
+regenerating `references/counts-only.md`. The global leaves, the keyed-map sets,
+`EXTRA_FIELD_NAMES` and `FLEET_DATA_RULES` stay in this module.
 `FLEET_DATA_RULES` and `classify_fleet_data` classify the fleet's `fleet-data.json`
 fields (#703), kept apart from `RULES` so their names never widen the run-context field
 names. Tests: `tests/test_counts_only.py`, `tests/test_fleet_data.py`.
@@ -2142,7 +2330,7 @@ voids the diff (MAJOR also resets the trend); a MINOR/PATCH bump keeps it armed 
 complexity backend's version moved (`stats_tool_versions` reads the `<tool>_version`
 stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snapshot's
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
-`tests/test_complexity_treemap.py`.
+`tests/test_complexity_treemap_schema_versions.py`.
 
 **`stats_rows.py`**
 The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
@@ -2227,6 +2415,75 @@ parser, hidden from `--help`: any use of it exits 2 with one line naming `--leve
 Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
 flag in `tests/test_fleet_legacy.py`.
 An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
+Two optional model keys feed `level_tally.py` and leave every row level unchanged (#744):
+`requires` on a level (condition ids, `<row id>.<level>` from `condition_id`, that must be
+met for this condition to count as met; an unknown id, a self-reference or a cycle fails
+the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`, and
+`gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
+later Step keeps every gate of the one below and never lowers the threshold, or the load
+fails. A model without them loads exactly as before.
+
+**`level_tally.py`**
+The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
+one repository's signals with no prior run and no model in the path (#744). Each row level
+of the model is one condition, `<row id>.<level>`, read on its own criteria (a level does
+not need the level below; `requires` states a real dependency). `level_result(model, data)`
+returns a `LevelResult` (shapes in `level_result_types.py`):
+
+- `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
+  null for a signal with no producer class), `counted` (grade `measured` or `verified`),
+  `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
+  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+- `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
+  unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
+- `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
+  unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
+  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
+  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
+  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+
+Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+`needs_platform` for a `network` one; another unavailable block's own code (or the code its
+known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
+`requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
+counts-only output whole. `run_context_level(ctx)` runs the default model over a run context:
+the `level` block, a `scan_registry` entry (`core_scans.level`, which reads the blocks the default
+model names, `level_tally.DEFAULT_BLOCKS`; a spread key such as `structure` is readable) recounted by `assess_core.py --opt-in-mutation`. `dumps_level` is
+byte-identical on rerun. Schema: `skills/fleet/references/level.schema.json`,
+`$defs.level_result`. Tests: `tests/test_level_tally.py`, including the #744 contract
+fixtures through `/fleet` and `/assess` on the same commit.
+
+**`signal_grades.py`**
+The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES` and the `DEFAULT_LEVELS`
+path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
+`tests/test_level_tally.py`.
+
+**`reason_codes.py`**
+`reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
+(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+which re-exports both, so the tally reads the same codes as counts-only output (#744).
+Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
+
+**`level_result_types.py`**
+The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
+`NextStep`) and the run context's `Headline` (#747), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+import cycle. Tests: `tests/test_level_tally.py`.
+
+**`fleet_level.py`**
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
+over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
+stale file when the run has no model. Tests: `tests/test_level_tally.py`.
+
+**`fleet_level_schema.py`**
+Generates `skills/fleet/references/level.schema.json` from `FleetLevels` and `LevelResult`
+(`fleet_group_schema.type_schema`); `tests/test_level_tally.py` fails when the checked-in
+file drifts. Regenerate: `cd skills/assess && uv run --locked python scripts/lib/fleet_level_schema.py`.
 
 **`level_signals.py`**
 The real `PathValidator` for `levels.py`, and the default maturity model. A `team` path's first
@@ -2263,10 +2520,14 @@ its producer input class (`InputClass`: `config_text`, `head_text`, `head_struct
 each class to a grade (`config_only < declared < measured < verified`); `criterion_grade`
 returns the signal's class grade whatever the operator (the #789 grades design: no
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
-conditions #744 lists without counting; `counts_toward_level(grade)` is the one definition of
-that rule for a grade (`measured` and `verified` count; `lib/catalog.py` reads it). The module doc records the rulings (platform
-reads are their own class; instruction files stay declared but still gate Steps). Nothing
-in `levels.py` reads it yet. A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
+conditions #744 lists without counting. The module doc records the rulings (platform
+reads are their own class; instruction files stay declared but still gate Steps).
+`level_tally.py` reads it to count conditions; `levels.py` does not.
+`counts_toward_level(grade)` is that rule for a grade (`measured` and `verified` count;
+`lib/catalog.py` reads it). `UNMEASURED_VALUES`
+names the values that mean "could not be measured" with the tally's reason code
+(`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
+false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
 Tests: `tests/test_signal_inputs.py`, one case per default criterion signal.
 
 **`instruction_files.py`**
@@ -2317,7 +2578,77 @@ a comment only one file carries stays in the comparison, so an instruction
 hidden there makes the pair `claude_shadows_agents`, and a mirror whose paired
 notes differ says so in its detail (#632). Text after a header comment's `-->`
 ends the header unless it opens another comment, so an H1 there is body. Files and findings are capped with `_total` counts, informational
-mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
+mirrors last so the cap never drops a defect for one. The root files of the systems
+`agent_systems.py` classifies (Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
+Zed, #768) are discovered and graded the same way, `tool` naming the system;
+`.cursorrules` and `.github/copilot-instructions.md` are collected but graded only at their
+`INSTRUCTION_FILE_PATHS` entries. `collect_instruction_files(repo_root, tracked, dirs,
+patterns)` returns every discovered file (`InstructionCandidate`: path, kind, tool,
+directory, globs, always_loaded, body) and the paths `.aider.conf.yml` reads, for
+`agent_consistency.py`. Tests: `tests/test_instruction_discovery.py`.
+
+**`agent_systems.py`**
+The agent systems table (#768): `SYSTEMS` holds one `AgentSystem` (`id`, `name`,
+`locations`, `pointer` style: `import`, `kiro_include`, `text` or `aider_read`) per
+system `/assess` reads instruction files for: `agents_md`, `claude_code`, `codex`,
+`gemini`, `copilot`, `cursor`, `windsurf`, `cline`, `aider`, `junie`, `amazon_q`, `kiro`,
+`continue`, `zed`, in that order (`SYSTEM_ORDER`). The single list for any reader of
+non-Claude agent configuration (#846). `match_system_file(rel, text, aider_reads)`
+classifies a root-located file into a `SystemMatch` (system, kind, globs,
+always_loaded, body) by each tool's documented scope: `.windsurfrules` and
+`.windsurf/rules/*.md` (`trigger` other than `always_on` is not always loaded; `globs`
+for `glob`), `.clinerules` as a file or a directory of `.md` / `.txt` (`paths` scopes a
+rule), `CONVENTIONS.md` (always loaded only when `.aider.conf.yml` names it under
+`read:`, since Aider loads nothing by default), `.junie/guidelines.md`,
+`.amazonq/rules/**/*.md`, `.kiro/steering/*.md` (`inclusion: fileMatch` with
+`fileMatchPattern`, or `manual`, is not always loaded), `.continue/rules/*.md`
+(`alwaysApply`, else always loaded only with no `globs`), `.rules` (Zed), plus the root
+`.cursorrules` and `.github/copilot-instructions.md`. `might_match` is discovery's cheap
+prefilter. `aider_read_files(config_text)` reads `read:` as a scalar, an inline list or a
+block list. Pure. Tests: `tests/test_agent_consistency.py`.
+
+**`agent_consistency.py`**
+Cross-agent instruction consistency (#768): does every agent system get the same map?
+`scan_agent_consistency(repo_root, excludes)` runs from the scan table
+(`agent_consistency`, post-offers stage, headless `registered`) and returns the
+`agent_consistency` block (`AgentConsistencyBlock`): `{available, systems,
+systems_total, applicable, canonical, files, divergences, conflicts, unlinked,
+consistent, next_steps, not_read}`. It reads each system's root-context files (scope
+`always_loaded` at directory `.`, empty files dropped; Aider when `.aider.conf.yml`
+reads a file, as `config_read` when it reads the canonical file directly). The canonical
+file is the root `AGENTS.md`, else the first root file in `SYSTEMS` order, then path
+order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
+it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `pointer` (a
+line naming the canonical file's name, as a markdown link or Kiro's
+`#[[file:AGENTS.md]]` does; never for Claude Code or Gemini CLI, which load only
+imports, so a prose mention there links nothing, matching `claude_shadows_agents`), `mirror` (identical below the header, through
+`instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
+A system is linked when one of its files links (its other always-loaded files are
+supplementary rules, still compared for divergence). Each
+`Divergence` is `{kind, value, named_in, missing_from, stated}` over each system's
+effective text (its files, plus the canonical text where a file imports or points to
+it): `command`, a test or lint command (`check_command.is_check_command` or
+`is_lint_command`, plus a one-word inline `pytest`, `tox`, `nox` or linter) named by
+some systems and not others; `threshold`, two systems whose numbers on lines naming
+`coverage`, `complexity` or `line length` share none (a stray second number is no conflict). `conflicts` (divergences)
+and `unlinked` (systems not linked) are the default model's `agent-consistency` row
+signals, level 1 `conflicts == 0` and level 2 `unlinked == 0` with `requires` level 1,
+both `head_structure` (graded measured). With fewer than two systems `applicable` is
+false and `conflicts`, `unlinked` and `consistent` are null, so the row reads unknown,
+never 0. `next_steps` holds one `ConsistencyStep` per unlinked system: `pointer`, the
+exact line for its tool (`pointer_line`: `@AGENTS.md` relative to the file for Claude
+Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: AGENTS.md` in
+`.aider.conf.yml` for Aider, `Follow the project instructions in
+[AGENTS.md](AGENTS.md).` otherwise) and `symlink` (`ln -sf`, only for the system's own single-file location: null for
+Aider and for a supplementary rule file, which a symlink would overwrite), built from
+templates and paths, never file text; written into the file, each passes the link check.
+`not_read` names the forms not compared (thresholds without a keyword, Aider `--read`
+on the command line, user-level rules, scoped and nested files). Counts-only keeps the
+systems, links, kinds and counts, paths as paths, and drops `value`, `pointer`,
+`symlink` and `not_read`. Known limit: for a system that follows text, any line naming the canonical file's name counts
+as a pointer. Stdlib plus `lib.check_command`, `lib.command_resolver`,
+`lib.instruction_budget` and `lib.instruction_discovery`. Tests:
+`tests/test_agent_consistency.py`.
 
 **`instruction_budget.py`**
 The always-loaded instruction text per tool for the root context, in lines, words,
@@ -2633,7 +2964,8 @@ Only the fleet platform pass sets it, to a temporary directory it removes. A cal
 with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
 nor writes it. The cache never holds comment or review text on either provider: GitLab
 merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
-through `gitlab_cli.glab_api(..., cache=False)`, and the GitHub merged pull request read with
+through `gitlab_cli.glab_api(..., cache=False)`, GitLab's merged CI configuration
+(`gitlab_ci_lint.py`, #796, the same way), and the GitHub merged pull request read with
 reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
 in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
@@ -2919,26 +3251,48 @@ gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
 (`tracked_files`), never an orchestrator. Structured as an extensible dispatch
 (one archetype today, YAGNI on a general framework). Read by `assess_core`
 (writes the `archetype` block to `run-context.json`), the `assess-layer-scorer`
-agent (N/A scoring + denominator), and the `assess-findings` skill (renders N/A
-+ renormalised headline). Co-changes with `badge.py`/`assess_finalize.py` (the
-denominator) and its test `tests/test_archetype.py`.
+agent (N/A verdicts), and the `assess-findings` skill (renders N/A rows). The
+`denominator` field is kept for compatibility; nothing reads it since the layered
+score was retired (#747). Co-changes with its test `tests/test_archetype.py`.
 
 **`badge.py`**
-Shields.io endpoint badge for the wiki (`.assess/badge.json`). The shipped badge
-is deterministic by default: `assess_core` always writes the findings-count form
-through `write_findings_badge` (`fallback_badge`, "2 findings · 0 stale markers",
-colour banded from the counts), which stamps a `link` to `assess-report.md`, so a
-badge-clicker lands on the full report; the opt-in mutation pass rewrites it the
-same way once the refreshed findings are in. The LLM-derived headline
-(`score_badge`, "7.0/8 · AI-Native",
-renormalised over its `denominator` - 8 for software, the applicable-layer count
-for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
-written to the badge; it appears inside `assess-report.md`, so the badge never
-claims a grade a deterministic run cannot reproduce. Pure threshold functions,
-fixture-tested. Also exposes `maturity_band`
-(the same score/denominator fraction mapped to the named tier ladder), the
-single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
-against. Both producers accept an optional `run_id` provenance stamp.
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). The message is the
+run's deterministic headline summary (`headline.summary` from `headline.py`, #747:
+"Step 3 · 4 of 4 measured"), the colour a pure function of the Step (`step_color`:
+blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
+"Step not measured" when the level result is unavailable). `assess_core` writes
+it through `write_headline_badge` on every run, stamping a `link` to
+`assess-report.md` and the `run_id`, and rewrites it after the opt-in mutation
+recount; `assess_finalize` never touches it. The layered "X / 8" score badge and
+its band ladder are retired. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
+
+**`headline.py`**
+The deterministic `/assess` headline (#747): `headline(level, model)` words a
+`LevelResult` under the model that produced it, and `run_context_headline(level)`
+(the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
+default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
+Unattended agent PRs · contracts in place"), the Next line naming the next Step and
+the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
+count still falls short once the gates hold and their counted conditions join the
+tally, "N more verified practices are met, for example `<first unmet counted
+condition>`"; a not-measured gate says
+so with its reason; at the top Step it says the Step holds while its gates hold),
+and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
+model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
+badge message and the `log.md` readiness line), `step`, `next_step`,
+`levels_version` and `headline_version`. A missing or degraded `level` block gives
+`available: false` and "Step not measured", never a guessed Step; `as_headline`
+returns that form for a degraded `headline` block. Shape: `Headline` in
+`level_result_types.py`; under counts-only the text fields are dropped and the
+numbers kept. The per-tag strip is a later line (#844). Tests: `tests/test_headline.py`.
+
+**`action_conditions.py`**
+The condition an action moves (#747): `condition_errors(actions, level)` returns one
+message per `finalize-input.json` action whose optional `condition` is not an id the
+run's `level.conditions` lists (or when the run has no level result to check it
+against). `assess_finalize` raises on any, before writing, so `actions.json` is
+unchanged; a met condition is accepted. Tests: `tests/test_headline.py`.
 
 **`evidence_check.py`**
 Deterministic re-check of the evidence a layer verdict cites (issue #360). The
@@ -3158,17 +3512,39 @@ splits a target name on `:_./-` and looks for a `CHECK_WORDS` word.
 `mypy` ... run directly), so `make lint` and `npx eslint` count and an install
 naming a linter does not; instruction-file classification does not use it. Used by
 `agent_environment` (instruction-file commands, entry points) and `ci_checks` (CI
-lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
-(`test_is_check_command`).
+lines). `is_lint_run(text)` (issue #782) is the lint test `ci_checks.lint_runs`
+reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
+--version` runs no lint) and without the package-manager test aliases
+`is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
+(`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
+ruff check .`). Type checkers count as linters there, in a vocabulary local to
+`is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
+`type-check` targets such as `npm run typecheck` or `make type-check`), so
+`is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
+`npm exec`, `pnpm exec` / `dlx`, `yarn exec` / `dlx`) is read by the program it runs:
+a linter or type checker is a lint run, a test runner (`jest`, `vitest`, `playwright
+test`) is neither, and any other program is `may_lint` (null, never false). A lone
+type-checker item (`- tsc` under `needs:`) is a value like a lone linter. `may_lint(text)` is a check that may run a linter the line cannot
+show: a check target of a runner or script (`make check`, `npm test`, `tox`,
+`./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
+(`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
+call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
+jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
+`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
+(`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
-maturity model reads it, so the CI row measures CI, not the instruction file.
-`scan_ci_checks(repo_root, ghsync_root)` reads the files `command_index.ci_config_files`
+Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
+it run a linter (#782)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
+the instruction file; Layer 3 level 1 reads `lint_runs`.
+`scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
-unresolved_includes, includes[], test_or_lint_runs, basis}`. Each line,
+unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
+enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
+lint_basis, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3185,10 +3561,139 @@ line, own or included (`included_check_commands` counts the included ones); with
 is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
-false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
-every include resolved and holds no check reads false. Offline and headless.
-Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
+every include resolved and holds no check reads false. Its third argument is the
+`gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
+offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
+merged configuration, whose check lines are counted apart in `merged_check_commands`
+(the merged file repeats the own and resolved jobs). A check there makes the signal true
+(`basis: merged_config`, used only when no own or included line ran one: offline wins); a
+merged configuration read with none makes it false, unless it may lack jobs
+(`merged_partial`): a `rules:` key in the `include:` section of the repository's file or of a
+template read offline (`conditional_include`; the lint API may leave that include out), or a
+`trigger:` job in any of those or in the merged file (`child_pipeline`; a child or downstream
+pipeline is not expanded). Then the signal stays null with `basis: merged_config_partial`:
+unknown beats wrong. `merged_config` is `not_read`
+(offline), `not_needed`, `read`, `invalid` or `unavailable` (reason code in
+`merged_config_reason`); the merged text is never in the block. Known limit: a `rules:` include inside a
+template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
+`not_read`. The module itself is
+offline: it imports the value type, never a platform client.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line (own, included, or
+in the merged configuration when those hold none)
+whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
+off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
+null with `enforced_basis: unknown_trigger`), else null under the
+same `included_jobs` rule, else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_runs`, which keeps its meaning.
+`lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
+and trigger rules, the same own, included and merged files, with
+`count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
+per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
+mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
+`lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
+`merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
+triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+target or script that may lint inside it; recipes are not read), `not_enforced`
+(false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
+`no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
+caps the row; a stored scan without the key reads unknown there.
+CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
+`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
+`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
+`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
+root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`ci_masking.py`**
+Which CI shell statements cannot fail their job (issue #775), with no YAML parser
+(an indentation model over the lines). `unmasked_lines(text) -> list[str]` is the
+result shape other CI classifiers build on: one entry per input line, same index,
+with every masked statement removed (`pytest || true; ruff check .` becomes
+`ruff check .`) and a line whose statements are all masked replaced by `""`. A
+classifier counts what can fail the job by running its line test over this list,
+and the masked count as its count over the original lines minus that.
+`split_statements(text)` splits one shell line into top-level `;` statements of
+`(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
+operator. Rules: a top-level `|| true` / `|| :` / `|| /bin/true` / `|| exit 0`
+masks the segments before it in its statement (`mkdir -p x || true && pytest`
+keeps `pytest`), unless they send output to a file (`>`, `&>`, `| tee`; not
+`/dev/null` or `$GITHUB_STEP_SUMMARY`) that a later line of the same job names,
+with a non-zero exit at or after it (a capture, the grafana `lint:circular`
+pattern); `continue-on-error: true` or `allow_failure:
+true` (literal, a trailing comment ignored) masks the mapping that holds it and
+everything under it (a step or a job); `set +e` masks the rest of its script body
+(a block scalar, or one `script:` list) until `set -e`, unless a later statement
+exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
+joined first.
+Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
+wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+`before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
+`tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
+shared with `ci_triggers.py`.
+
+**`ci_triggers.py`**
+Does a CI line run on ordinary changes (issue #775)? It makes
+`ci_checks.enforced_check_runs` a `ci_executed` signal. `workflow_events(text)` lists a
+GitHub workflow's top-level `on` events (scalar, flow list or mapping, block list or
+mapping; `"on"` and YAML 1.1 `true` too), or None when it cannot; `workflow_trigger`
+maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
+`merge_group`), `called` (`workflow_call` / `workflow_run` only), `not_ordinary`
+(`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
+called workflow as `ordinary` when an ordinary workflow of the repository calls it
+(`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
+one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
+and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
+web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
+outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
+so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
+anchors and `workflow: rules:` are not resolved; branch and path filters are not
+read. Tests: `tests/test_ci_triggers.py`.
+
+**`merged_ci.py`**
+The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
+reason, text, include_sources)`, `NOT_READ`, `NOT_NEEDED`, `MERGED_STATUSES` and
+`as_merged(value)` (anything other than a `MergedCi`, such as a degraded spec's dict, is
+`NOT_READ`). Apart from `gitlab_ci_lint.py` so `ci_checks` and `review_automation` stay
+offline modules (`tests/test_signals.py` checks that a scan is `network` exactly when its
+module reaches a platform client). `text` is held in memory only. Tests:
+`tests/test_gitlab_ci_lint.py`.
+
+**`gitlab_ci_lint.py`**
+GitLab's merged CI configuration through the CI lint API (#796, #766 part 2): the private
+`network` spec `gitlab_merged_ci` (`read_merged_ci(repo_root, ghsync_root)`; offline the
+runner calls `no_merged_ci`, which reads nothing). Asked only when
+`ci_includes.resolve_includes` left an include unresolved (`not_needed` otherwise: a
+template resolved offline wins) and `gitlab_cli.open_gitlab` finds a GitLab remote
+(`not_gitlab` otherwise). One call, naming its target:
+`glab api --hostname <host> projects/<encoded>/ci/lint?content_ref=<HEAD sha>`, a GET (no
+file content uploaded), made with `cache=False` so the merged YAML never reaches the
+platform response cache (#778). `valid` true with a `merged_yaml` string is `read`; any
+other shape is `invalid`; a refusal is `unavailable` with the `GhUnavailable` reason code.
+`include_sources(includes)` reads the response's `includes` list (a `component` item's
+`location`, a `file` item's `extra.project`) for `review_automation`. Errors and warnings
+are never kept. Tests: `tests/test_gitlab_ci_lint.py`, `tests/test_platform_argv_contract.py`.
 
 **`ci_includes.py`**
 GitLab CI includes resolved offline (issue #766), read by `ci_checks` and
@@ -3259,8 +3764,33 @@ pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
 token's owner-chosen name), which is `agent` under `token_users_as_agents` and
 `token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
 `--timeout` bounds a pathological repository pattern).
+Confirmed identities (#765): `AuthorMatcher(..., confirmed=ConfirmedIdentities)` holds the
+`[identities]` section as lower-case literal sets (`ConfirmedIdentities.from_section`;
+entries are exact accounts, never patterns). Right after the dependency-bot check, an
+identity whose `identity_keys(email, name, username)` (the e-mail, the noreply login and
+a `[bot]` display name) is a confirmed person or bot is `other`, and a confirmed agent is
+`agent` (rule_index None), ahead of every config rule and pinned default; a person or
+bot entry wins over an agent entry for the same account.
 Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
-`tests/test_change_coupling.py`.
+`tests/test_identity_candidates.py`, `tests/test_change_coupling.py`.
+
+**`account_discovery.py`**
+Bot and agent account discovery (issue #765): suggestions for the human to confirm in
+`[identities]`. `discover(commits, matcher)` is pure: over `HistoryCommit(author_email,
+author_name, subject, coauthors)` rows (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
+returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
+commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
+`STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
+`agent_name_hint` from `AI_TOOL_NAMES`, `automation_name_hint`) makes a candidate, while
+`co_author_trailer`, `noreply_address` and `uniform_subjects` (at least
+`UNIFORM_MIN_COMMITS` commits, one folded subject shape covering `UNIFORM_SHARE`) only
+annotate one. An account the matcher already puts in `agent`, or one classified in
+`[identities]`, is never a candidate. A candidate holds an identity: `ai_usage` emits only
+`len(discover(...))` as `identities_awaiting_confirmation`, and the rows reach only the
+terminal through `scripts/identity_candidates.py` (list one repository or a fleet list
+aggregated by account; `--confirm CLASS=ACCOUNT` rewrites the `[identities]` section of
+`--config` or the repository's `.assess/config.toml`). Tests:
+`tests/test_identity_candidates.py`.
 
 **`ai_usage.py`**
 AI-assisted change share (issue #547), a lower bound on agent use.
@@ -3268,7 +3798,8 @@ AI-assisted change share (issue #547), a lower bound on agent use.
 `--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
 total_commits, agent_trailer_commits, agent_trailer_share, agent_authored_commits,
 agent_authored_share, agent_either_commits, agent_either_share, dependency_bot_commits,
-token_user_commits, agent_identity_rule_commits[], lower_bound, covered_agents[],
+token_user_commits, agent_identity_rule_commits[], identities_awaiting_confirmation,
+lower_bound, covered_agents[],
 covered_author_agents[], limits[]}`. A commit is a trailer commit when any `Co-authored-by` trailer names an
 AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded),
 and an authored commit when `agent_identity.AuthorMatcher` (built by
@@ -3276,6 +3807,9 @@ and an authored commit when `agent_identity.AuthorMatcher` (built by
 input) puts its author (`%ae`, `%an`) in the `agent` bucket; `agent_either_*` counts a
 commit with both once. `agent_identity_rule_commits[i]` counts the commits credited to
 config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
+`identities_awaiting_confirmation` counts the window's accounts `account_discovery.discover`
+lists (#765), a number only. `window_commits(repo_root, scope, window)` is the shared
+windowed read (`WindowCommits(commits, since)` or a fixed reason string).
 Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
@@ -3330,11 +3864,14 @@ events; `ON_KEY` also accepts the YAML 1.1 `true:` spelling, shared with
 
 **`review_automation.py`**
 AI review committed in CI and the Layer 7 level 1 signal (issue #696).
-`scan_review_automation(repo_root, fleet_config, ghsync_root)` writes `{available, present, kinds[],
+`scan_review_automation(repo_root, fleet_config, ghsync_root, merged_ci)` writes `{available, present, kinds[],
 matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked, on_changes, depth}`.
 The include entries of GitLab files `ci_includes.resolve_includes` read are matched as the
 repository's own are (#766), keeping the path and line of the repository's own include that
-led there, with `depth` the include level (0 for the repository's own file). Kinds:
+led there, with `depth` the include level (0 for the repository's own file). Its fourth
+argument is the `gitlab_merged_ci` reading (#796): the sources GitLab's CI lint API lists as
+merged in are matched the same way, once each (a source an offline entry names is skipped),
+with `line` null and `depth` 1. Kinds:
 `ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
 `anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
 pipelines is not read), `ci_component` (a
@@ -3379,7 +3916,10 @@ kind `framework`, `llm`, `mcp`, `tracker` or `git_host`; (b) `config` kinds
 `claude_agents` and `ci_agent_job` (`CI_AGENT_PATTERNS` in `.gitlab-ci.yml` and
 `.github/workflows/*.yml`); (c) the count of source files matching
 `TOOL_LOOP_PATTERNS` and `MCP_SERVER_PATTERNS`; (d) issue-tracker and Git-host clients
-from manifests or `ENDPOINT_PATTERNS`, `pairing` when both are present. Every string is
+from manifests or `ENDPOINT_PATTERNS`; a Git host already in `git_hosts` is also an issue
+tracker when the source calls both its issues API (`ISSUE_API_PATTERNS`) and its
+merge-request or pull-request API (`CHANGE_API_PATTERNS`), the same-host case of #731,
+credited after every file is read; `pairing` when both lists are non-empty. Every string is
 a vocabulary slug, so counts-only keeps the block whole. `classify` is the class rule,
 first match wins: `builds-agent` (an agent framework, or a model SDK with a tool-call
 loop or the pairing), `builds-mcp-server` (an MCP server pattern), `uses-agent-tooling`
@@ -3396,7 +3936,9 @@ The pinned vocabulary of `agent_building` (issue #689): `PACKAGES` maps a declar
 dependency name (exact, or a `*` prefix family) to `(slug, kind)`; `lookup` tries the
 name as written and PEP 503-normalised (`normalise`), exact before the longest prefix.
 `TOOL_LOOP_PATTERNS`, `MCP_SERVER_PATTERNS`, `ENDPOINT_PATTERNS` and
-`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics. Widening a table changes
+`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics; `ISSUE_API_PATTERNS` and
+`CHANGE_API_PATTERNS` (#731) tag a Git-host client's issues and merge-request or
+pull-request calls with the hosts whose clients use that form; a form two hosts share is credited only when exactly one of them is in `git_hosts`. Widening a table changes
 classes, so it is a change of its own. Tests: `tests/test_agent_building.py`.
 
 **`agent_manifests.py`**
@@ -3463,8 +4005,9 @@ package; a package-level config outside the scope is dropped. A root CI gate is
 reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
-`coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
-`{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
+`coverage_gate` block (`CoverageGateBlock`): `{available, enforced, gates,
+max_threshold_percent, threshold_meets_minimum, unmeasured_reason, not_detected}`, each gate
+`{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
 (`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
 and `coverage report|xml|json|html|lcov --fail-under` in GitHub workflows and
@@ -3473,7 +4016,14 @@ composite actions, CircleCI, `.gitlab-ci.yml`, Jenkins, Azure, Travis, Bitbucket
 task-runner files; Jest `coverageThreshold` (config or
 `package.json`); Vitest `coverage.thresholds`; nyc/c8 `check-coverage` (rc file,
 `package.json`, or `--check-coverage --lines N`); JaCoCo `<minimum>` in a `pom.xml`
-and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo. The threshold is
+and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo; go-test-coverage's
+`.testcoverage.yml` / `.testcoverage.yaml` (#788), one gate per `file:`, `package:` or
+`total:` key under `threshold:` (or in an inline `threshold: {total: 80}` map), with
+`metric` that key and `line` the line holding the value (read at the repo root on a
+scoped run too, like the root CI files); and `cargo tarpaulin
+--fail-under N` and `cargo llvm-cov --fail-under-lines N` in the CLI files (metric
+`lines`, anchored on the tool so a coverage.py `--fail-under` never reads as Rust, and a
+templated value still gates). The threshold is
 reported as written (`unit` `percent`, `ratio` for a JaCoCo `0.80`, or
 `uncovered_count` for a negative Jest value), never rescaled; a templated value
 (`--cov-fail-under=${{ env.COV_MIN }}`, `$COV_MIN`, `$(COV_MIN)`) is a gate with
@@ -3489,13 +4039,76 @@ typed by the `CoverageGate` TypedDict. `enforced` is true when
 any gate has a non-zero threshold, or a null one from nyc/c8 (which check at a
 built-in default) or a templated coverage.py / pytest-cov flag; `fail_under = 0` and a Jest/Vitest anchor whose threshold was
 not read are listed but gate nothing.
+
+The threshold reading (#781), which Layer 6 level 1 of the default maturity model
+reads. `threshold_percent` is the gate's threshold as a percentage, derived in `_gate`
+from `unit` alone by `threshold_percent()`: as written for `percent`, times 100 for
+`ratio` (rounded to 6 places, so `0.55` is `55.0`), and null for `uncovered_count` or
+a null threshold. `threshold` and `unit` stay as written. `max_threshold_percent` is the
+highest non-null `threshold_percent` across all gates, null when none has one.
+`threshold_meets_minimum` reads only the gates `enforced` counts (`gates_something`),
+in this order: true when one has `threshold_percent >= MINIMUM_THRESHOLD_PERCENT` (50);
+null (not measured) when none does but one has a null `threshold_percent` (a templated
+value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
+false otherwise, including no counted gate. Measured coverage is never read: a report
+is a working-tree file, so the level would stop being a function of the commit.
+Go and Rust (#788): when no gate at all is found and the walk holds a `go.mod` or a
+`Cargo.toml` (same depth and excludes; on a scoped run, in the scope or in any
+directory above it up to the repo root, as Go and Cargo resolve a module; one under a
+`testdata/` directory is a fixture and does not count), `threshold_meets_minimum` is null and `unmeasured_reason` is
+`go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because those ecosystems often gate
+in a script comparing `go tool cover -func` to a number, which is not read. Any gate
+found, even `fail_under = 0`, keeps the normal reading; `unmeasured_reason` is null then.
+The collector's manifest `revision` is 2 for this change of meaning.
+Adding a gate form: build the gate with `_gate` and the right
+`unit`; `threshold_percent` and both block fields follow with no other change. A form
+whose number is not a coverage percentage (a count) needs its own `unit`, mapped to
+null in `threshold_percent()`, so it reads unknown rather than credited.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
-other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty
+other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
 Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
 Tests: `tests/test_coverage_gate.py`.
+
+**`guardrails.py`**
+Guardrails stated (#767): does an instruction file tell an agent what the gates
+enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate, excludes)` runs from the
+scan table (`guardrails`, post-offers stage, headless `registered`) and returns the
+`guardrails` block (`GuardrailsBlock`): `{available, gates, enforced, stated, unstated,
+stated_pct, instruction_files_read, not_read}`. Each gate (`Guardrail`) is `{kind, tool,
+rule, threshold, file, line, stated, stated_in, snippet}`, one per configuring file:
+`complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, ruff's
+default 10 when unset, in `pyproject.toml`, `ruff.toml` or `.ruff.toml`; flake8
+`max-complexity` or `max_complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (per file
+of the `coverage_gate` block, its counted gate with the highest `threshold_percent`, through
+`coverage_gate.gates_something`, never re-parsed), `pre_commit` (a root
+`.pre-commit-config.yaml` with at least one `- id:` hook, one gate whatever its hook
+count) and `type_strictness` (mypy `strict = true` in `[tool.mypy]`, `mypy.ini`,
+`.mypy.ini` or `setup.cfg`). Ruff, flake8 and mypy configs are read wherever they sit
+(`config_files`, through `coverage_gate.walk_named`: the coverage scan's bounded walk with
+the built-in and user excludes), so each package's own `pyproject.toml` is a gate of its
+own and a monorepo's package gates are counted beside its coverage floor. Every kind counts
+one gate per configuring file. Within a directory only the config the tool reads counts
+(`_applied`): the first, in the tool's own order, that configures it (ruff `.ruff.toml`,
+`ruff.toml`, a `pyproject.toml` with `[tool.ruff]`; flake8 the first of `setup.cfg`, `tox.ini`,
+`.flake8` with `[flake8]`; mypy `mypy.ini`, `.mypy.ini`, a `pyproject.toml` with `[tool.mypy]`,
+`setup.cfg` with `[mypy]`). A gate is stated (`states`) when one line of a graded instruction file
+(the keys of `instruction_files`, an aliased file read once) names its rule and its
+threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
+`coverage` plus the floor (with no readable floor, `coverage` beside `fail_under`,
+`threshold`, `floor` or `minimum`), `pre-commit`, or `mypy` plus `strict`. The local
+command is not required. An unstated gate carries `snippet`, a one-line sentence built
+from a template and the gate's own figures (never from file text) naming the rule, the
+threshold, the configuring file and the command that checks it. `stated_pct` is
+`stated / enforced` as a percentage, one decimal; null with no gate, so the default
+model's `guardrails-stated` row (level 1 at 50, level 2 at 100; `head_structure`, graded
+measured) reads unknown, never 0. `not_read` names the gate forms not read yet (eslint
+`complexity`, TypeScript `strict`, file-size ratchets, architecture tests, required CI
+checks and branch protection, sign-off rules). Counts-only keeps `kind`, `tool`, `rule`,
+the numbers, `file` and `stated_in` as paths, and drops `snippet` (and `not_read` to its
+length). Stdlib plus `lib.coverage_gate`. Tests: `tests/test_guardrails.py`.
 
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,

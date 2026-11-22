@@ -110,6 +110,8 @@ LEVEL_UP, FIRST, TARGET_HIT, STREAK = "level_up", "first", "target_hit", "streak
 NEAREST_LEVEL_UP = "nearest_level_up"
 KINDS = (LEVEL_UP, FIRST, TARGET_HIT, STREAK)  # report and sort order
 STREAK_MILESTONES = (3, 5, 10, 25, 50, 100)
+# the note of a kept run with no earlier comparable run; any other note says why none was read
+BASELINE_NOTE = "no earlier comparable run in the history, so this run is the baseline"
 
 
 class Move(TypedDict):
@@ -571,7 +573,7 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
                if last is not None and last.stored is not None and last.rescored_from is not None
                and model is not None else None)
     if not earlier and note is None:
-        note = "no earlier comparable run in the history: this run is the baseline"
+        note = BASELINE_NOTE
     return {"achievements_version": ACHIEVEMENTS_VERSION, "fleet_data_version": FLEET_DATA_VERSION,
             "run": current.run_id, "levels_version": model["version"] if model is not None else None,
             "runs": [run.run_id for run in runs], "note": note if not earlier else None,

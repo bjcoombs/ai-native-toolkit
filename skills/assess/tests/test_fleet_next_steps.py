@@ -163,16 +163,16 @@ def test_every_row_below_top_names_an_unmet_criterion_and_its_repositories(tmp_p
     assert checked >= 5
 
 
-def test_unknown_names_missing_signals_and_never_reads_as_failure(tmp_path):
+def test_unknown_names_unmeasured_signals_and_reads_as_a_measurement_gap(tmp_path):
     page = _pages(tmp_path)["teams/grpa.md"]
     section = page.split("## Runtime legibility\n", 1)[1].split("\n## ", 1)[0]
-    assert "not a failure" in section
+    assert section.startswith("\nIn place: ") and "This is a measurement gap:" in section
     assert "`observability.rung`: not measured in 3 of 3 repositories" in section
-    assert "`grpa/svc3` (scan failed: `scan_timeout`)" in section
+    assert "`grpa/svc3` (scan did not complete: `scan_timeout`)" in section
     assert "Holding the group back" not in section
     instructions = page.split("## Agent instructions\n", 1)[1].split("\n## ", 1)[0]
-    assert "Level unknown (between 0 and 1 of 2)" in instructions
-    assert "The repository scan failed in each of them" in instructions
+    assert "In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 2 once measured)" in instructions
+    assert "The repository scan did not complete in each of them" in instructions
     assert "cap the group at level 1" in instructions and "`grpa/svc2` (now 340)" in instructions
     grpb = _pages(tmp_path / "b")["teams/grpb.md"]
     assert "No ghreport settings matched this group" in grpb
@@ -200,8 +200,8 @@ def test_non_token_values_print_as_set_never_in_clear(tmp_path):
 def test_failed_repository_below_target_is_listed_as_not_measured(tmp_path):
     page = _pages(tmp_path)["teams/grpa.md"]
     section = page.split("## Coverage \\| mutation\n", 1)[1].split("\n## ", 1)[0]
-    assert "0 of 3 repositories already there; the rule needs 2" in section
-    assert "`grpa/svc3` (scan failed: `scan_timeout`)" in section
+    assert "0 of 3 repositories already at level" in section and "the rule needs 2" in section
+    assert "`grpa/svc3` (scan did not complete: `scan_timeout`)" in section
 
 
 def test_unmapped_signal_falls_back_to_the_expression(tmp_path):
@@ -336,6 +336,7 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
     ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
     ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
+    ("coverage_gate.threshold_meets_minimum", "eq", True, "below 50 does not count"),
     ("structure_drift.tier_0.boundary_patterns", "gt", 0, "tracked, non-excluded source file"),
     ("structure_drift.tier_0.boundary_patterns", "gte", 1, "a `CODEOWNERS` line per module path"),
 ])
@@ -352,6 +353,7 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
 
 @pytest.mark.parametrize(("signal", "op", "value"), [
     ("coverage_gate.enforced", "eq", False), ("observability.rung", "gte", 9),
+    ("coverage_gate.threshold_meets_minimum", "eq", False),
     ("observability.rung", "lt", 2), ("nested_instructions.budget.claude_code.lines", "gt", 5),
     ("agent_environment.check.named_total", "gt", 3), ("instruction_claims.failed", "gt", 0),
     ("agent_environment.layer5_cap.applies", "eq", True), ("two_factor.value", "lt", 1),
@@ -372,8 +374,16 @@ def test_measure_hints():
     assert "shallow clone" in measure_hint("doc_staleness.summary.stale_pct")
     assert "ghreport" in measure_hint("two_factor.value")
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
+    assert "${{ env.COV_MIN }}" in measure_hint("coverage_gate.threshold_meets_minimum")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
     assert "no_import_edges" in measure_hint("structure.modularity_q")
+    hint = measure_hint("ci_checks.lint_runs")   # issue #782
+    assert "check_target" in hint and "`pre-commit run`" in hint
+    hint = measure_hint("ci_checks.enforced_check_runs")   # issue #775
+    assert "included_jobs" in hint and "unknown_trigger" in hint
+    assert "`push` or `pull_request`" in hint and "re-run the scan" in hint
+    assert "unread_ci_system" in hint and "Jenkins" in hint and "CircleCI" in hint   # #787
+    assert "cannot read those systems" in hint and "nothing in the repository needs to change" in hint
     assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")
     assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.boundary_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
@@ -398,7 +408,7 @@ def test_real_fleet_run_with_the_default_levels_renders_pages(froot, tmp_path): 
         for entry in group["levels"]:
             section = page.split(f"## {titles[entry['id']]}\n", 1)[1].split("\n## ", 1)[0]
             if entry["status"] == "unknown":
-                assert "not a failure" in section
+                assert "This is a measurement gap:" in section
             elif entry["level"] < tops[entry["id"]]:
                 assert "\n1. **" in section and "Holding the group back" in section
     assert "No repository-native wording" not in "".join(
@@ -447,3 +457,20 @@ def test_parts_reads_the_cap_tokens():
                  {"agent_environment": {"layer5_cap": {"unmet": "check_named"}}}) == ["check_named"]
     assert parts("agent_environment.layer5_cap.applies", {}) == []
     assert parts("coverage_gate.enforced", scans) == []
+
+
+def test_lint_runs_guidance_names_a_linter_command_in_ci():
+    """Issue #782 requirement 6: the done-when names a linter command in a CI file."""
+    words = guidance("ci_checks.lint_runs", "eq", True)
+    assert words is not None
+    assert "`.gitlab-ci.yml`" in words["done_when"] and "`ruff check .`" in words["done_when"]
+
+
+def test_a_level_0_row_opens_with_nothing_confirmed_in_team_and_org_branches(tmp_path):
+    """Level 0 confirms nothing, so its opening line says so instead of reading as a level held (#743)."""
+    pages = _pages(tmp_path)
+    org = pages["teams/grpc/sub.md"].split("## Group settings\n", 1)[1].split("\n## ", 1)[0]
+    assert org.startswith("\nIn place: nothing confirmed on this row yet (level 0 of ")
+    team = pages["teams/grpb.md"].split("## Shared tooling\n", 1)[1].split("\n## ", 1)[0]
+    assert team.startswith("\nIn place: nothing confirmed on this row yet (level 0 of ")
+    assert not any(re.search(r"^In place: level 0 ", page, flags=re.M) for page in pages.values())

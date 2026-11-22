@@ -24,7 +24,8 @@ from __future__ import annotations
 
 from typing import NotRequired, TypedDict
 
-from lib.coverage_gate import CoverageGate
+# Defined beside its builder (the return type of detect_coverage_gate); re-exported here.
+from lib.coverage_gate import CoverageGateBlock as CoverageGateBlock
 from lib.structure_drift import EmptyOwnershipPattern
 
 
@@ -71,15 +72,6 @@ class AgentOpsBlock(TypedDict):
 
 
 # -- coverage_gate -------------------------------------------------------------
-
-class CoverageGateBlock(TypedDict):
-    """``run-context.json`` ``coverage_gate``."""
-
-    available: bool
-    enforced: bool
-    gates: list[CoverageGate]
-    not_detected: list[str]
-
 
 # -- instruction_claims ----------------------------------------------------------
 

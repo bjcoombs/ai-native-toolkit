@@ -2,6 +2,14 @@
 
 _Generated <<normalized>>._
 
+## Headline
+
+**Step 2 · Supervised agent PRs · contracts in place**
+
+Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests and 1 more verified practice is met, for example `layer-3-linters.1`
+
+Verified practices: 1 of 3 measured · 13 not measured (scan did not run: 1, needs a full run: 1, no remote: 2, no source files: 2, no value read: 6, unavailable: 1) · model <<normalized>>
+
 ## Metrics Dashboard
 
 - **Files scored:** 3
@@ -30,13 +38,13 @@ _No prior run to compare against - this is the first recorded snapshot._
 
 ---
 
-_Deterministic portion of the assessment: metrics, hotspots, and cross-layer findings. The 0-8 layer scores, the per-layer prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 
 ## How this was measured
 
-Over 1 repository, 25 scans were measured everywhere, 15 ran but were not measured everywhere, and 1 was skipped. Every check is described in [docs/what-we-measure.md](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md). A scan that was skipped, or could not read its input, earns nothing and costs nothing.
+In place: over 1 repository, 27 scans were measured everywhere, 15 ran but were not measured everywhere, and 1 was skipped. Every check is described in `docs/what-we-measure.md` in the toolkit repository, `https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md`. A scan that was skipped, or could not read its input, earns nothing and costs nothing.
 
-### Ran (40)
+### Ran (42)
 
 - `agent_ops`
 - `config_drift`
@@ -56,8 +64,10 @@ Over 1 repository, 25 scans were measured everywhere, 15 ran but were not measur
 - `agent_building`: not measured in 1 of 1 (unavailable)
 - `layer_grades`
 - `instruction_placement`
+- `agent_consistency`
 - `ai_usage`: not measured in 1 of 1 (unavailable)
 - `doc_claims`
+- `guardrails`
 - `structure`: not measured in 1 of 1 (no_source_files)
 - `stats_summary`
 - `promissory_markers`: not measured in 1 of 1 (unavailable)

@@ -15,8 +15,9 @@ The three highest-frequency co-change pairs in the git history are:
 - **`test_assess_core.py` / `assess_core.py`** - the orchestrator and its end-to-end
   harness. Every time the core adds a signal or changes the `run-context.json` schema,
   both files move.
-- **`test_complexity_treemap.py` / `complexity-treemap.py`** - the heatmap CLI and its
-  filter, version-stamp and sidecar tests.
+- **`test_complexity_treemap*.py` / `complexity-treemap.py`** - the heatmap CLI and its
+  filter, version-stamp and sidecar tests, split by concern. A schema bump edits
+  `test_complexity_treemap_schema_versions.py` only.
 - **`test_doc_graph.py` / `lib/doc_graph.py`** - the navigability graph is the
   foundation for Layer 0 and feeds both the staleness and the understanding analysis,
   so its contract tests are touched on most doc-analysis changes.
@@ -39,7 +40,13 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_report.py` | `scripts/assess_report.py` - deterministic report renderer; template substitution, section renderers, conditional fallbacks |
 | `test_emit_workflow.py` | `scripts/assess_emit_workflow.py` - CLI wrapper for the frozen-harness workflow emitter; default derivation, arg parsing, path filters and the path-filter default |
 | `test_decomposition_parity.py` | `scripts/assess_core.py` + `scripts/assess_report.py` - parity harness; guards that the deterministic pipeline produces byte-for-byte identical output after the Part 3 SKILL.md decomposition |
-| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, stats-sidecar enrichment, the render summary, CLI argument and scope checks, and the `plural()` count helper (heavy deps are stubbed) |
+| `test_complexity_treemap.py` | `scripts/complexity-treemap.py` - build-artifact filter, plugin version stamp, the render summary, CLI argument and scope checks, and the `plural()` count helper; holds `_load_treemap`, the stubbed loader the sibling modules import (heavy deps are stubbed) |
+| `test_complexity_treemap_schema_versions.py` | `scripts/complexity-treemap.py` - `ARTIFACT_SCHEMA_VERSION`, `STATS_SCHEMA_VERSION` and tool-version stamps; the one module a schema bump edits |
+| `test_complexity_treemap_stats.py` | `scripts/complexity-treemap.py` - stats-sidecar enrichment: field naming, hotspot rank, per-function ccn, estimated tokens, code/data maxima and distribution blocks |
+| `test_complexity_treemap_exclusions.py` | `scripts/complexity-treemap.py` - `.assess` self-exclusion, `--exclude` and `config.toml` merging, generated-file sniffing and generated test reports |
+| `test_complexity_treemap_render.py` | `scripts/complexity-treemap.py` + `lib/treemap_render.py` - survivor-density hatch overlay, SVG legend, a11y title, tooltips and the size-by tree build |
+| `test_complexity_treemap_backends.py` | `scripts/complexity-treemap.py` - per-function backends per language (lizard, the approximate Dart scanner), `backend_by_language` and the worst function's name |
+| `test_complexity_treemap_ordering.py` | `scripts/complexity-treemap.py` - the scc-only hint and the tie-break by path across the top lists, the dominant-file warning and largest-first |
 
 ### lib/ suites
 
@@ -91,13 +98,14 @@ Every `test_*.py` file in this directory has a row below.
 | `test_agent_building.py` | `lib/agent_building.py`, `lib/agent_building_vocab.py`, `lib/agent_manifests.py` - one fixture repository per class, the class rule table, the vocabulary and manifest readers, test-file and untracked exclusion, counts-only round trip (#689) |
 | `test_fleet_agent_building.py` | `lib/fleet_agent_building.py` - per-group class counts, the cluster rule (Jaccard, pairing, connected components) and the counts-only, unnamed cluster output (#689) |
 | `test_ai_usage_authors.py` | `lib/ai_usage.py` author counts and `lib/agent_identity.py`'s `AuthorMatcher` (#695) - exact agent-authored, either, dependency-bot and token-user counts on a fixture, config rules credited by position (first match), token-user promotion, dependency bots never agents, display name only under `field = "name"`, the username form and GitLab token-user recognition, `[ai_usage]` validation messages that never quote a pattern, the fleet-then-repository rule order end to end through `signals.collect`, counts-only output with no pattern or identity, and a guard that the shared matchers are unchanged |
+| `test_identity_candidates.py` | Bot and agent account discovery (#765): `lib/account_discovery.py`, the `[identities]` section (`lib/fleet_config.py`, `ConfirmedIdentities` in `lib/agent_identity.py`) and `scripts/identity_candidates.py` on the issue's fixture - only `claude[bot]` counts before confirmation, the three automated-looking accounts await confirmation with their evidence, confirming moves `cursor` into the agent count and a rerun lists nothing, a confirmed class beats every pinned rule, entries are literal, weak evidence alone makes no candidate, the fleet listing aggregates and `--confirm` writes the fleet file, and no identity reaches the block or counts-only output |
 | `test_review_automation.py` | `lib/review_automation.py` and `shared_tooling.step_uses` - AI review committed in CI (pinned actions and GitLab components, the `[review] ai_review_components` list, review app config files, tracked-only credit), the `review_evidence` truth table, a headless Layer 7 floor of 1 on a GitHub and a GitLab fixture, and a failed platform read keeping the offline credit |
 | `test_shared_tooling.py` | `lib/shared_tooling.py` - shared CI sources and agent marketplaces: GitLab includes, GitHub reusable workflows, marketplace manifests and `extraKnownMarketplaces`, tracked-only credit, and the distinct-marketplace roll-up fixture from #550 |
 | `test_agent_ops.py` | `lib/agent_ops.py` - agent-operations guardrail scan (Layer 8 evidence) |
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
 | `test_archetype.py` | `lib/archetype.py` - repository archetype detection |
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
-| `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge and its producers |
+| `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
 | `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/gitlab_cli.py` + the GitLab path of `lib/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
@@ -135,6 +143,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_promissory_markers_literals.py` | `lib/promissory_markers.py` and `lib/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
 | `test_raw_source.py` | `lib/raw_source.py` - raw-source subtree detection |
 | `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
+| `test_reviewed_findings.py` | `lib/reviewed_findings.py` - a done review in the committed `.assess/actions.json` clears `self_referential_tests` from attention and the prescribed actions while the source is unchanged since `completed_sha` (the path keeps a `reviewed` note in `derived_findings`), a later source change re-flags it, entries that do not clear, the mutation refresh, counts-only, and `assess_finalize` keeping done entries under `completed` (#721) |
 | `test_delivery.py` | `lib/delivery.py` + `lib/merged_sample.py` - delivery figures over a recorded, scrubbed `gh pr list` response (`fixtures/platform/`), the windowed two-read GitHub sample and one-read GitLab sample |
 | `test_gitlab_notes.py` | `lib/gitlab_notes.py` - GitLab merge-request note classification (markers, agent accounts, unmarked access-token notes as automation, the author's own notes), the `gitlab_note_facts` spec and the GitLab `delivery` note figures |
 | `test_platform_argv_contract.py` | every `PLATFORM_SCANS` scan through recording `gh`/`glab` stubs: each argv names its target (`--repo`, `repos/<slug>`, `users/<login>`, `--hostname`), as the argv-keyed response cache needs |
@@ -152,10 +161,12 @@ Every `test_*.py` file in this directory has a row below.
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
 | `test_counts_only_reason.py` | `lib/counts_only.py` `reason_token` + the `REASON` rule - a full counts-only run keeps `structure.reason` as its code (`no_import_graph_rust` on a Rust repository), never the sentence (#764) |
 | `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
+| `test_headline.py` | `lib/headline.py`, `lib/action_conditions.py` - the deterministic headline (Step, Next line, verified tally), its badge, report and log forms on the ci2 contract shape, finalize's condition-id check, and the #741 guard that the X / 8 worked example stays retired |
+| `test_level_tally.py` | `lib/level_tally.py`, `lib/fleet_level.py`, `lib/fleet_level_schema.py` - the verified tally, condition states, Steps and their gates, `requires` and `[[steps]]` loading, `level.json` and the run context's `level` block, and the #744 contract fixtures through `/fleet` and `/assess` |
 | `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
 | `test_block_shapes.py` | `lib/block_shapes.py` - the typed shapes of the blocks a default criterion reads, against each builder's output and the fleet golden; a misspelt `--levels` sub-path under them fails at load (#793); their counts-only reduction |
 | `test_signal_inputs.py` | `lib/level_signals.py` - the producer input class of every default criterion signal, its grade and the declared predicate (#783) |
-| `test_check_manifest.py` | `checks/core.toml` against the scan registry, the headless tables, `ROOTS`, the counts-only `RULES`, the finding tables, the default maturity model and `level_signals.SIGNAL_INPUTS`, in both directions; the manifest against `references/check-manifest.schema.json`. The agreement test: each failure names the scan, signal, condition or finding that disagrees (`test_registry_matches_manifest` for a scan) |
+| `test_check_manifest.py` | `checks/core.toml` against the scan registry, the headless tables, `ROOTS`, the default maturity model and `level_signals.SIGNAL_INPUTS`, in both directions; the manifest against `references/check-manifest.schema.json`. The agreement test: each failure names the scan, signal, condition or finding that disagrees (`test_registry_matches_manifest` for a scan). The tables generated from the manifest (#795): the finding tables, the coupling thresholds and the counts-only `RULES` follow an edited copy of the manifest; the structure reason codes match `import_graph.STRUCTURE_REASON_CODES` |
 | `test_check_manifest_loader.py` | `lib/check_manifest.py` (the strict loader: allowed keys, types, ids, the registry rules and cross-references) and `lib/check_validation.py` (structured errors and the Levenshtein suggestion, with Meridian's test tables) |
 | `test_catalog.py` | The measures catalog (`lib/catalog.py`, `lib/catalog_md.py`, `scripts/gen_catalog.py`). `test_committed_catalog_is_current` is the staleness test: `docs/what-we-measure.md` and `references/measures.json` must equal what the generator writes (run `make catalog`). Also: every known scan, registry scan, row, criterion and finding is listed, grades and counting, determinism, and the retired vocabulary stays out |
 | `test_measured_appendix.py` | `lib/measured_appendix.py`: the "How this was measured" section of the fleet `report.md` and the deterministic `/assess` report (scans that ran, scans skipped with their reasons, the catalog link) |
@@ -174,8 +185,11 @@ Every `test_*.py` file in this directory has a row below.
 | `test_fleet_groups.py` | `lib/fleet_groups.py` - the group roll-up with maturity model levels and joined group settings |
 | `test_fleet_labels.py` | `lib/fleet_labels.py` + `skills/fleet/scripts/fleet_labels.py` - the closed label set, the `labels.jsonl` schema and its join to `repos.jsonl`; labels never touch a maturity model score |
 | `test_fleet_next_steps.py` | `lib/fleet_next_steps.py` + `lib/next_step_guidance.py` + `lib/fleet_view.py` + `skills/fleet/scripts/fleet_next_steps.py` - per-team next-steps pages against goldens in `fixtures/fleet_next_steps/expected/` |
+| `test_vocabulary_guard.py` | `lib/vocabulary.py` - the banned-vocabulary guard (#743): renders a real fleet run, the fleet fixtures and the /assess deterministic report from source and fails, naming the word, on a banned word or retired band label in prose, or on a report or next-steps section that does not open with `In place:` |
 | `test_fleet_heatmap.py` | `lib/fleet_view.py` + `lib/fleet_heatmap.py` + `skills/fleet/scripts/heatmap.py` - the leadership heat map SVG against goldens in `fixtures/fleet_heatmap/` |
 | `fleet_heatmap_fixture.py` | builds the `fixtures/fleet_heatmap/` runs from `lib/fleet_groups.roll_up` (not a test module; regenerate with `uv run --locked python tests/fleet_heatmap_fixture.py`) |
+| `test_fleet_opportunities.py` | `lib/fleet_opportunities.py` + `lib/fleet_opportunities_section.py` - fleet opportunities (#746): the biggest lift, shared-template leverage, unknown never counted, hashing, no rank, the report section and its display-only recent progress |
+| `test_fleet_coverage.py` | `lib/fleet_coverage.py` + `fleet.py --discovered` - fleet coverage against ghsync's discovery listing: the buckets, the report line and the `run.json` counts |
 | `test_fleet_run_stamp.py` | `lib/fleet_stamp.py` + `lib/fleet_cleanup.py` - the fleet run stamp, per-repository activity and `--delete-after` |
 | `test_windows_portability.py` | Windows correctness across every runtime Python tree (`skills/*/scripts/` and `scripts/`, #712, #752): every text-mode subprocess call names UTF-8 (checked under an emulated ASCII locale), every `git ls-files -z` decode uses `surrogateescape`, every fleet writer pins `newline="\n"`, repo-relative paths render with `/`, and `lib/fleet_cleanup.py` deletes read-only files under emulated Windows deletion semantics |
 | `test_fleet_legacy.py` | `lib/fleet_legacy.py` - a run written before the 2.0.0 maturity-model rename (`fixtures/fleet_legacy/`) loads, compares and counts in the history and trend |
@@ -221,7 +235,7 @@ ambient commit signing or hooks cannot break the git-backed tests.
 | `golden/` | `golden.py`, `test_decomposition_parity.py`, `test_golden_baseline.py` - the run-context and report baselines |
 | `golden-doc-repo/`, `golden-svg-repo/` | `test_golden_svg_render.py` - small repos the real renderers draw |
 | `hollow_test_repo/`, `honest_test_repo/` | `test_test_pressure.py` - weak versus real tests |
-| `mutmut-junitxml.xml` | `test_test_pressure.py`, `test_complexity_treemap.py` - mutation output |
+| `mutmut-junitxml.xml` | `test_test_pressure.py`, `test_complexity_treemap_render.py` - mutation output |
 | `good_instructions.md`, `bad_instructions.md`, `monolithic_instructions.md`, `lean_with_skills/` | the instruction grader and bloat suites |
 | `instruction_grading/` | the #512 fixture pair: `verified_commands.md` (59 lines of commands that resolve in `repo/`) and `directive_monolith.md` (400 lines of directives, overview and a directory tree) |
 | `coverage.xml`, `lcov.info` | `test_coverage_report.py` |

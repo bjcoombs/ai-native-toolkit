@@ -1,0 +1,388 @@
+"""The verified tally and the autonomy Step (lib/level_tally.py, #744).
+
+Unit cases run the engine over hand-built signals and small models; the
+end-to-end cases build the #744 contract fixtures (FL5 plus CI and an
+instruction file) and check that /fleet and /assess give the same result and
+that a rerun writes identical bytes.
+"""
+from __future__ import annotations
+
+import copy
+import json
+import os
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import jsonschema
+import pytest
+
+import lib.level_tally as lt
+from lib import level_signals
+from lib.counts_only import counts_only
+from lib.fleet import STATUS_FAILED, STATUS_OK
+from lib.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
+from lib.fleet_level_schema import SCHEMA_PATH, build_schema, render
+from lib.level_signals import DEFAULT_LEVELS, load_default_levels
+from lib.levels import LevelsError, MaturityModel, parse_levels
+from test_fleet_cli import fleet_cli
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+
+
+def _row(row_id: str, *levels: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
+    return {"id": row_id, "title": row_id, "scope": "team", "aggregation": "min",
+            "levels": [{"level": n, "criteria": c} | extra.get(f"l{n}", {}) for n, c in enumerate(levels, 1)]}
+
+
+def _eq(signal: str, value: Any = True) -> dict[str, Any]:
+    return {"signal": signal, "op": "eq", "value": value}
+
+
+def _model(*rows: dict[str, Any], steps: list[dict[str, Any]] | None = None) -> MaturityModel:
+    data: dict[str, Any] = {"version": "fixture-t1", "rows": list(rows)}
+    if steps is not None:
+        data["steps"] = steps
+    return parse_levels(data)
+
+
+DOC = "doc_staleness.summary.stale_pct"  # git_history: counted
+INSTR = "layer_grades.instruction_file_present"  # head_text: listed
+CI = "ci_checks.test_or_lint_runs"  # head_text: listed until #775
+MUT = "test_pressure.mutation_run"  # execution_artifact: counted
+
+
+def _fresh(pct: int = 0) -> dict[str, Any]:
+    return {"doc_staleness": {"available": True, "summary": {"stale_pct": pct}}}
+
+
+def _state(result: lt.LevelResult, cid: str) -> tuple[str, str | None]:
+    cond = next(c for c in result["conditions"] if c["id"] == cid)
+    return cond["state"], cond.get("reason")
+
+
+# --- loading: requires and Steps ---------------------------------------------
+
+STEPS = [
+    {"step": 1, "name": "Assisted", "threshold": 0},
+    {"step": 2, "name": "Supervised agent PRs", "threshold": 1,
+     "gates": [{"id": "instructions", "row": "instr", "level": 1}]},
+]
+
+
+def test_a_model_without_steps_or_requires_loads_as_before():
+    model = _model(_row("fresh", [{"signal": DOC, "op": "lte", "value": 50}]))
+    assert "steps" not in model and "requires" not in model["rows"][0]["levels"][0]
+
+
+@pytest.mark.parametrize("steps, message", [
+    ([{"step": 2, "name": "x", "threshold": 0}], "numbered 1..K"),
+    ([{"step": 1, "name": "x", "threshold": 1}], "always reached"),
+    ([STEPS[0], {**STEPS[1], "gates": [{"id": "g", "row": "nope", "level": 1}]}], "unknown row"),
+    ([STEPS[0], {**STEPS[1], "gates": [{"id": "g", "row": "instr", "level": 2}]}], "must be a level"),
+    ([*STEPS, {"step": 3, "name": "x", "threshold": 1, "gates": []}], "gates accumulate"),
+    ([*STEPS, {**STEPS[1], "step": 3, "threshold": 0}], "below step 2"),
+    ([STEPS[0], {**STEPS[1], "threshold": -1}], "at least 0"),
+    ([STEPS[0], {**STEPS[1], "extra": 1}], "unknown key"),
+])
+def test_a_malformed_step_fails_at_load(steps, message):
+    with pytest.raises(LevelsError, match=message):
+        _model(_row("instr", [_eq(INSTR)]), steps=steps)
+
+
+@pytest.mark.parametrize("requires, message", [
+    (["nope.1"], "unknown condition"),
+    (["mut.1"], "cycle"),
+    ([], "non-empty array"),
+])
+def test_a_bad_requires_fails_at_load(requires, message):
+    with pytest.raises(LevelsError, match=message):
+        _model(_row("mut", [_eq(MUT)], l1={"requires": requires}))
+
+
+# --- condition states, grades and the tally ----------------------------------
+
+def test_counted_and_listed_conditions_are_split_by_grade():
+    model = _model(_row("instr", [_eq(INSTR)]), _row("fresh", [{"signal": DOC, "op": "lte", "value": 50}]))
+    result = lt.level_result(model, {**_fresh(), "layer_grades": {"instruction_file_present": True}})
+    assert result["counted"] == ["fresh.1"] and result["listed"] == ["instr.1"]
+    assert result["tally"] == {"met": 1, "measured": 1, "not_measured": 0}
+    assert [(c["id"], c["grade"], c["counted"]) for c in result["conditions"]] == [
+        ("instr.1", "declared", False), ("fresh.1", "measured", True)]
+
+
+def test_a_counted_ci_condition_raises_the_tally(monkeypatch):
+    """I744-1's "the CI condition counts": once the CI signal grades verified (#775)."""
+    model = _model(_row("ci", [_eq(CI)]))
+    signals = {"ci_checks": {"available": True, "test_or_lint_runs": True}}
+    assert lt.level_result(model, signals)["tally"]["met"] == 0
+    monkeypatch.setitem(level_signals.SIGNAL_INPUTS, CI, "ci_executed")
+    monkeypatch.setitem(lt.SIGNAL_INPUTS, CI, "ci_executed")
+    assert lt.level_result(model, signals)["tally"]["met"] == 1
+
+
+def test_a_condition_takes_its_weakest_criterions_grade():
+    model = _model(_row("mix", [_eq(INSTR), {"signal": DOC, "op": "lte", "value": 50}]))
+    result = lt.level_result(model, {**_fresh(), "layer_grades": {"instruction_file_present": True}})
+    assert result["conditions"][0]["grade"] == "declared" and result["listed"] == ["mix.1"]
+
+
+def test_an_unclassified_signal_is_listed_never_raised():
+    """A caller's own model (the contract's LVX) reads signals the class map does not know."""
+    model = _model(_row("ckc", [{"signal": "ci_checks.check_commands", "op": "gt", "value": 0}]))
+    result = lt.level_result(model, {"ci_checks": {"check_commands": 2}})
+    assert result["conditions"][0]["grade"] is None and result["listed"] == ["ckc.1"]
+    assert result["step"] is None and result["next_step"] is None
+
+
+def test_an_unknown_never_counts_and_is_listed_with_its_reason():
+    model = _model(_row("fresh", [{"signal": DOC, "op": "lte", "value": 50}]))
+    blind = lt.level_result(model, {"doc_staleness": {"available": False, "reason": "shallow: truncated history"}})
+    assert blind["tally"] == {"met": 0, "measured": 0, "not_measured": 1}
+    assert blind["not_measured"] == [{"id": "fresh.1", "reason": "shallow"}]
+    assert lt.level_result(model, {})["not_measured"] == [{"id": "fresh.1", "reason": "block_absent"}]
+    # a null block (an omitted spread key in the run context's entry) reads the same
+    assert lt.level_result(model, {"doc_staleness": None})["not_measured"] == [
+        {"id": "fresh.1", "reason": "block_absent"}]
+    nulled = lt.level_result(model, {"doc_staleness": {"available": True, "summary": {"stale_pct": None}}})
+    assert nulled["not_measured"] == [{"id": "fresh.1", "reason": "no_value"}]
+    wrong = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": "x"}}})
+    assert wrong["not_measured"] == [{"id": "fresh.1", "reason": "type_mismatch"}]
+
+
+def test_a_known_reason_sentence_maps_to_its_code():
+    model = _model(_row("design", [{"signal": "structure.modularity_q", "op": "gte", "value": 0.3}]))
+    result = lt.level_result(model, {"structure": {"available": False,
+                                                   "reason": "no importable Python packages found"}})
+    assert result["not_measured"] == [{"id": "design.1", "reason": "no_python_packages"}]
+
+
+def test_mutation_not_run_is_not_measured_in_both_run_kinds():
+    """#740 decision: headless (not_registered) and a full run without the opt-in pass
+    (mutation_run false) both read needs_full_run, never unmet."""
+    model = _model(_row("mut", [_eq(MUT)]))
+    headless = {"test_pressure": {"available": False, "reason": "not_registered: assembled by assess_core"}}
+    full = {"test_pressure": {"mutation_run": False}}
+    for signals in (headless, full):
+        assert _state(lt.level_result(model, signals), "mut.1") == ("not_measured", "needs_full_run")
+    assert _state(lt.level_result(model, {"test_pressure": {"mutation_run": True}}), "mut.1") == ("met", None)
+
+
+def test_thin_history_is_not_measured_not_unmet():
+    model = _model(_row("lint", [_eq("promissory_markers.aging_reliable")]))
+    result = lt.level_result(model, {"promissory_markers": {"aging_reliable": False}})
+    assert _state(result, "lint.1") == ("not_measured", "degenerate_history")
+
+
+def test_a_real_unmet_criterion_outweighs_an_unknown_one():
+    model = _model(_row("x", [_eq(INSTR), {"signal": DOC, "op": "lte", "value": 50}]))
+    result = lt.level_result(model, {"layer_grades": {"instruction_file_present": False}})
+    assert _state(result, "x.1") == ("unmet", None)
+
+
+def test_a_network_block_needs_the_platform():
+    model = _model(_row("rev", [{"signal": "review_reality.reviewed_share", "op": "gte", "value": 0.8}]))
+    result = lt.level_result(model, {"review_reality": {"available": False, "reason": "network: reads GitHub"}})
+    assert result["not_measured"] == [{"id": "rev.1", "reason": "needs_platform"}]
+
+
+def test_a_condition_reads_its_own_criteria_not_the_level_below():
+    model = _model(_row("fresh", [{"signal": DOC, "op": "lte", "value": 10}],
+                        [{"signal": "stats_summary.loc.p95", "op": "lte", "value": 500}]))
+    result = lt.level_result(model, {**_fresh(40), "stats_summary": {"loc": {"p95": 20}}})
+    assert [c["state"] for c in result["conditions"]] == ["unmet", "met"]
+
+
+def test_requires_carries_the_required_conditions_state():
+    model = _model(_row("ci", [_eq(MUT)]), _row("mut", [_eq(DOC.replace("stale_pct", "ok"))], l1={"requires": ["ci.1"]}))
+    signals = {"doc_staleness": {"summary": {"ok": True}}}
+    assert _state(lt.level_result(model, {**signals, "test_pressure": {"mutation_run": True}}), "mut.1") == ("met", None)
+    assert _state(lt.level_result(model, signals), "mut.1") == ("not_measured", "requires:ci.1")
+
+
+# --- Steps -------------------------------------------------------------------
+
+def _stepped() -> MaturityModel:
+    return _model(
+        _row("instr", [_eq(INSTR)]), _row("ci", [_eq(CI)]),
+        _row("fresh", [{"signal": DOC, "op": "lte", "value": 50}], [{"signal": DOC, "op": "lte", "value": 20}]),
+        steps=[*STEPS, {"step": 3, "name": "Unattended agent PRs", "threshold": 2,
+                        "gates": [*STEPS[1]["gates"], {"id": "ci_runs_tests", "row": "ci", "level": 1}]}])
+
+
+def test_a_missing_gate_blocks_the_next_step_and_names_it():
+    result = lt.level_result(_stepped(), {**_fresh(), "layer_grades": {"instruction_file_present": False}})
+    assert result["step"] == 1
+    assert result["next_step"] == {"step": 2, "threshold": 1, "blockers": [
+        {"kind": "gate", "gate": "instructions", "condition": "instr.1", "state": "unmet"}]}
+
+
+def test_a_declared_gate_holds_while_staying_out_of_the_tally():
+    signals = {**_fresh(), "layer_grades": {"instruction_file_present": True},
+               "ci_checks": {"test_or_lint_runs": True}}
+    result = lt.level_result(_stepped(), signals)
+    assert result["step"] == 3 and result["next_step"] is None
+    assert result["tally"]["met"] == 2 and "instr.1" in result["listed"]
+
+
+def test_an_unmeasured_gate_and_a_short_tally_both_block():
+    signals = {**_fresh(40), "layer_grades": {"instruction_file_present": True}}
+    result = lt.level_result(_stepped(), signals)
+    assert result["step"] == 2
+    assert result["next_step"] == {"step": 3, "threshold": 2, "blockers": [
+        {"kind": "gate", "gate": "ci_runs_tests", "condition": "ci.1", "state": "not_measured",
+         "reason": "block_absent"},
+        {"kind": "threshold", "threshold": 2, "met": 1}]}
+
+
+def test_the_default_steps_stage_their_gates():
+    """I744-2: Step 2 gates on layer 0, Step 3 adds layer 5, Step 4 adds layer 6."""
+    steps = load_default_levels()["steps"]
+    assert [s["step"] for s in steps] == [1, 2, 3, 4]
+    assert [s["name"] for s in steps] == ["Assisted", "Supervised agent PRs", "Unattended agent PRs",
+                                           "Autonomous loops"]
+    prefixes = [[g["row"].split("-")[1] for g in s["gates"]] for s in steps]
+    assert prefixes == [[], ["0"], ["0", "5"], ["0", "5", "6"]]
+    assert [g["id"] for g in steps[3]["gates"]] == ["instructions", "ci_runs_tests", "coverage_gate"]
+    assert all(s["threshold"] >= 0 for s in steps)
+
+
+# --- output: determinism, schema, counts-only --------------------------------
+
+def test_the_result_is_identical_bytes_and_matches_the_schema():
+    model = load_default_levels()
+    signals = {**_fresh(), "layer_grades": {"instruction_file_present": True}}
+    first, second = lt.level_result(model, signals), lt.level_result(model, copy.deepcopy(signals))
+    assert lt.dumps_level(first) == lt.dumps_level(second)
+    schema = build_schema()
+    jsonschema.validate(first, {**schema["$defs"]["level_result"], "$defs": schema["$defs"]})
+
+
+def test_the_checked_in_schema_is_generated():
+    assert SCHEMA_PATH.read_text(encoding="utf-8") == render()
+
+
+def test_counts_only_keeps_every_field_of_the_level_block():
+    """#770's lesson: a counts-only test that fails when a level field is dropped."""
+    model = load_default_levels()
+    level = lt.level_result(model, {"doc_staleness": {"available": False, "reason": "shallow: x"},
+                                    "test_pressure": {"mutation_run": False}})
+    assert level["not_measured"] and level["next_step"]
+    assert counts_only({"level": level})["level"] == level
+
+
+def test_fleet_levels_skip_a_failed_row_and_a_run_without_a_model_removes_the_file(tmp_path):
+    model = _stepped()
+    rows: list[Any] = [
+        {"repo": "b", "status": STATUS_OK, "scans": _fresh()},
+        {"repo": "a", "status": STATUS_FAILED, "scans": None},
+    ]
+    doc = fleet_levels(rows, model, toolkit_commit="abc", plugin_version="9.9.9")
+    assert list(doc["repos"]) == ["b"] and doc["levels_version"] == "fixture-t1"
+    jsonschema.validate(doc, build_schema())
+    path = write_fleet_levels(tmp_path, rows, model, toolkit_commit="abc", plugin_version="9.9.9")
+    assert path is not None and json.loads(path.read_text(encoding="utf-8")) == doc
+    assert write_fleet_levels(tmp_path, rows, None, toolkit_commit="abc", plugin_version="9.9.9") is None
+    assert not (tmp_path / LEVEL_FILE).exists()
+
+
+# --- end to end: the contract fixtures through /fleet and /assess -----------
+
+FL5 = {
+    "src/a.py": "def f():\n    return 1\n",
+    "Makefile": "test:\n\tpython3 -m unittest discover -s tests\n",
+    "tests/test_a.py": "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_a(self):\n"
+                       "        self.assertTrue(True)\n",
+}
+CIWF = {".github/workflows/ci.yml": "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
+                                    "    steps:\n      - uses: actions/checkout@v4\n      - run: make test\n"}
+CLMD = {"CLAUDE.md": "# Project\n\nBefore every commit run `make test` and fix any failure.\n"}
+FIXTURES = {"ci0": {**FL5, **CLMD}, "ci1": {**FL5, **CIWF}, "ci2": {**FL5, **CIWF, **CLMD}, "nci": FL5,
+            "inc": {**FL5, ".gitlab-ci.yml": "include:\n  - component: gl.test/grp/comp/test@1.0\n"}}
+
+
+def _commit(repo: Path, date: str, message: str) -> None:
+    env = {**os.environ, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+    for args in (("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", message)):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
+
+
+@pytest.fixture(scope="module")
+def estate(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    root = tmp_path_factory.mktemp("tally")
+    for name, files in FIXTURES.items():
+        repo = root / name / "r"
+        repo.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True, capture_output=True)
+        for rel, text in files.items():
+            (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (repo / rel).write_text(text, encoding="utf-8", newline="\n")
+        _commit(repo, "2026-11-01T10:00:00Z", "one")
+        (repo / ".keep").write_text("2\n", encoding="utf-8")
+        _commit(repo, "2026-11-02T10:00:00Z", "two")
+    (root / "list.txt").write_text("".join(f"{name}/r\n" for name in FIXTURES), encoding="utf-8")
+    return root
+
+
+def _fleet(estate: Path, out: str) -> dict[str, Any]:
+    cwd = Path.cwd()
+    os.chdir(estate)
+    try:
+        assert fleet_cli.main(["--from-list", "list.txt", "--levels", str(DEFAULT_LEVELS), "--out", out,
+                               "--no-diagrams", "--no-history"]) == 0
+    finally:
+        os.chdir(cwd)
+    return json.loads((estate / out / LEVEL_FILE).read_text(encoding="utf-8"))
+
+
+def test_fleet_reruns_are_byte_identical_and_steps_follow_the_gates(estate):
+    first = _fleet(estate, "e1")
+    _fleet(estate, "e2")
+    assert (estate / "e1" / LEVEL_FILE).read_bytes() == (estate / "e2" / LEVEL_FILE).read_bytes()
+    repos = first["repos"]
+    for name in ("ci1", "ci2"):
+        assert _state(repos[f"{name}/r"], "layer-6-coverage.2") == ("not_measured", "needs_full_run")
+    assert repos["ci1/r"]["next_step"]["blockers"][0]["gate"] == "instructions"
+    for result in repos.values():
+        nxt = result["next_step"]
+        gates = {b.get("gate") for b in nxt["blockers"]} if nxt else set()
+        assert "ci_runs_tests" not in gates or nxt["step"] >= 3
+        assert "coverage_gate" not in gates or nxt["step"] >= 4
+    # the CI condition counts (layer 5 level 1 reads a ci_executed signal, #775)
+    assert repos["ci2/r"]["tally"]["met"] >= repos["ci0/r"]["tally"]["met"] + 1
+    assert repos["inc/r"]["tally"]["met"] == repos["nci/r"]["tally"]["met"]
+    assert repos["inc/r"]["tally"]["not_measured"] > repos["nci/r"]["tally"]["not_measured"]
+
+
+def test_assess_gives_the_fleet_level_and_step_on_the_same_commit(estate, tmp_path):
+    fleet = _fleet(estate, "e3")["repos"]["ci2/r"]
+    repo = tmp_path / "ci2"
+    subprocess.run(["git", "clone", "-q", str(estate / "ci2" / "r"), str(repo)], check=True, capture_output=True)
+    assess = repo / ".assess"
+    assess.mkdir()
+    treemap = subprocess.run(["uv", "run", "--script", str(SCRIPTS / "complexity-treemap.py"), str(repo), "-o",
+                              str(assess / "complexity-heatmap.svg"), "--stats", str(assess / "complexity-stats.json")],
+                             capture_output=True, encoding="utf-8", errors="replace")
+    assert treemap.returncode == 0, treemap.stderr
+    from assess_core import build_and_publish_run
+
+    level = build_and_publish_run(repo_root=repo, run_date="2026-11-21", non_interactive=True)["level"]
+    assert (level["tally"]["met"], level["step"], level["counted"], level["listed"]) == (
+        fleet["tally"]["met"], fleet["step"], fleet["counted"], fleet["listed"])
+    assert [n["id"] for n in level["not_measured"]] == [n["id"] for n in fleet["not_measured"]]
+    on_disk = json.loads((assess / "run-context.json").read_text(encoding="utf-8"))
+    # the --opt-in-mutation recount reads the stored run context: it agrees with the entry
+    assert lt.run_context_level(on_disk) == on_disk["level"]
+    on_disk = on_disk["level"]
+    assert on_disk == level
+
+
+@pytest.mark.parametrize("lint_runs", [False, None])
+def test_layer_three_suppressions_earn_no_tally_credit_without_a_linter(lint_runs: bool | None) -> None:
+    """Issue #782: layer-3-linters.2 requires a linter run in CI (layer-3-linters.1)."""
+    signals = {"ci_checks": {"lint_runs": lint_runs},
+               "promissory_markers": {"aging_reliable": True, "families": {"suppression": {"stale": 0}}}}
+    state, reason = _state(lt.level_result(load_default_levels(), signals), "layer-3-linters.2")
+    assert state != "met" and reason == "requires:layer-3-linters.1"
+    linted = {**signals, "ci_checks": {"lint_runs": True}}
+    assert _state(lt.level_result(load_default_levels(), linted), "layer-3-linters.2") == ("met", None)

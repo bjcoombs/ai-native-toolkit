@@ -67,7 +67,7 @@
           "properties": {
             "reason": {
               "type": "string",
-              "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+              "description": "Why the block is unavailable: a sentence, or 'code: sentence' for a block whose codes are listed under its own entry. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
             }
           },
           "required": [
@@ -79,6 +79,7 @@
         "enum": [
           "accretion_ratchet",
           "agent_building",
+          "agent_consistency",
           "agent_environment",
           "agent_harness",
           "agent_ops",
@@ -101,6 +102,7 @@
           "documentation",
           "gap_actions",
           "gate_cost_estimate",
+          "guardrails",
           "instruction_claims",
           "instruction_placement",
           "layer_grades",
@@ -121,6 +123,178 @@
         ]
       },
       "properties": {
+        "agent_consistency": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Cross-agent instruction consistency (lib/agent_consistency.py): the root instruction files of every agent system present at HEAD (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed), the check commands and thresholds they disagree on, and how each links to one canonical file.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the block is unavailable."
+            },
+            "systems": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+            },
+            "systems_total": {
+              "type": "integer",
+              "description": "Agent systems with a root instruction file."
+            },
+            "applicable": {
+              "type": "boolean",
+              "description": "False with fewer than two systems: nothing to agree with."
+            },
+            "canonical": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The canonical file: AGENTS.md when present, else the first root file in system order; null with no instruction file."
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "system": {
+                    "type": "string"
+                  },
+                  "link": {
+                    "enum": [
+                      "canonical",
+                      "symlink",
+                      "import",
+                      "pointer",
+                      "config_read",
+                      "mirror",
+                      "independent"
+                    ]
+                  }
+                }
+              },
+              "description": "Each root-context instruction file, its system and how it links to the canonical."
+            },
+            "divergences": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "command",
+                      "threshold"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "The command, or the threshold keyword; dropped from counts-only output."
+                  },
+                  "named_in": {
+                    "type": [
+                      "array",
+                      "integer"
+                    ],
+                    "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                  },
+                  "missing_from": {
+                    "type": [
+                      "array",
+                      "integer"
+                    ],
+                    "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                  },
+                  "stated": {
+                    "type": "array"
+                  }
+                }
+              },
+              "description": "A command one system names and another does not, or a threshold two state differently."
+            },
+            "conflicts": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "The agent-consistency row's level 1 signal: divergences; null when not applicable."
+            },
+            "unlinked": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "The level 2 signal: systems not linked to the canonical file; null when not applicable."
+            },
+            "consistent": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "No divergence and every system linked; null when not applicable."
+            },
+            "next_steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "system": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "pointer": {
+                    "type": "string",
+                    "description": "The exact pointer line for the tool; dropped from counts-only output."
+                  },
+                  "symlink": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "A symlink command; null for Aider (config-only)."
+                  }
+                }
+              },
+              "description": "One per unlinked system."
+            },
+            "not_read": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "A list of strings; counts-only output keeps only its length."
+            }
+          }
+        },
         "ai_usage": {
           "type": "object",
           "if": {
@@ -137,14 +311,14 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
               "reason"
             ]
           },
-          "description": "Agent involvement in the commits of the run window (lib/ai_usage.py), counted from git history. An agent identity is matched by trailer (Co-Authored-By and similar) or by author against the pinned agent rules plus any [[ai_usage.agent_identities]] rules of --fleet-config. Counts are commits; shares are of total_commits. A lower bound: an agent that leaves no trace is not counted.",
+          "description": "Agent involvement in the commits of the run window (lib/ai_usage.py), counted from git history. An agent identity is matched by trailer (Co-Authored-By and similar) or by author against the accounts confirmed in [identities], the pinned agent rules and any [[ai_usage.agent_identities]] rules of --fleet-config. Counts are commits; shares are of total_commits. A lower bound: an agent that leaves no trace is not counted.",
           "properties": {
             "available": {
               "type": "boolean"
@@ -216,6 +390,10 @@
               },
               "description": "Commits each [[ai_usage.agent_identities]] rule matched, a positional list in rule order; the rule patterns themselves are never written."
             },
+            "identities_awaiting_confirmation": {
+              "type": "integer",
+              "description": "Accounts in the window that look automated (a [bot] suffix, a GitLab token user, a bot or AI tool name) and are neither classified in the [identities] config section nor counted by an agent rule (#765). A next step for the human, never a score; the accounts are listed only by scripts/identity_candidates.py."
+            },
             "lower_bound": {
               "type": "boolean"
             },
@@ -261,14 +439,14 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
               "reason"
             ]
           },
-          "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which.",
+          "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which. Under --platform, a repository with an unresolved GitLab include also gets GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out (lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 level 1); a check target or script that may run a linter inside it reads null. Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no readable check one makes basis unread_ci_system and enforced_check_runs null (and lint_runs null with no readable lint line).",
           "properties": {
             "available": {
               "type": "boolean"
@@ -358,6 +536,27 @@
               },
               "description": "One record per include item, nested includes after their parent; no file name or text."
             },
+            "merged_config": {
+              "enum": [
+                "not_read",
+                "not_needed",
+                "read",
+                "invalid",
+                "unavailable"
+              ],
+              "description": "The CI lint API read: not_read (offline), not_needed (every include resolved offline), read, invalid (GitLab marked the configuration invalid) or unavailable."
+            },
+            "merged_config_reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The reason code when merged_config is unavailable (no_access, not_found, not_gitlab, ...); null otherwise."
+            },
+            "merged_check_commands": {
+              "type": "integer",
+              "description": "Lines of the merged configuration that run a test or lint check; the text is never published."
+            },
             "test_or_lint_runs": {
               "type": [
                 "boolean",
@@ -368,11 +567,180 @@
             "basis": {
               "enum": [
                 "check_command",
+                "merged_config",
                 "included_jobs",
+                "merged_config_partial",
+                "unread_ci_system",
                 "no_check_command",
                 "no_ci"
               ],
-              "description": "The reason for test_or_lint_runs: check_command (true), included_jobs (null), no_check_command or no_ci (false)."
+              "description": "The reason for test_or_lint_runs: check_command or merged_config (true; the second when only the merged configuration ran a check), included_jobs or merged_config_partial (null; the second when the merged configuration was read with no check but may lack jobs: an include under rules:, or a trigger: child pipeline), unread_ci_system (false: no readable check, but a CI file of a system the scan does not parse is tracked), no_check_command or no_ci (false)."
+            },
+            "enforced_check_runs": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary changes, null when none does but included jobs, unsettled triggers or a CI system the scan does not parse may hold one, else false."
+            },
+            "enforced_basis": {
+              "enum": [
+                "enforced_check",
+                "included_jobs",
+                "unknown_trigger",
+                "unread_ci_system",
+                "not_enforced",
+                "no_check_command",
+                "no_ci"
+              ],
+              "description": "The reason for enforced_check_runs: enforced_check (true), included_jobs or unknown_trigger or unread_ci_system (null), not_enforced, no_check_command or no_ci (false)."
+            },
+            "masked_check_commands": {
+              "type": "integer",
+              "description": "CI lines that run a check whose failure cannot fail the job."
+            },
+            "off_trigger_check_commands": {
+              "type": "integer",
+              "description": "Unmasked CI check lines whose workflow or job does not run on ordinary changes (workflow_dispatch or schedule only, a manual GitLab job)."
+            },
+            "lint_runs": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job on ordinary changes (not --version or --help), or a step uses a known lint action (golangci-lint-action, ruff-action, super-linter, reviewdog), null when none does but included jobs, unsettled triggers or a check target or script that may lint inside it could hold one, else false."
+            },
+            "lint_basis": {
+              "enum": [
+                "lint_command",
+                "included_jobs",
+                "merged_config_partial",
+                "unknown_trigger",
+                "check_target",
+                "unread_ci_system",
+                "not_enforced",
+                "no_lint_command",
+                "no_ci"
+              ],
+              "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, check_target or unread_ci_system (null), not_enforced, no_lint_command or no_ci (false)."
+            },
+            "unread_ci_files": {
+              "type": "integer",
+              "description": "Tracked root CI files of systems the scan does not parse (Jenkinsfile, .circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, .buildkite/pipeline.yml, and the Azure and Buildkite .yaml / buildkite.yml spellings)."
+            }
+          }
+        },
+        "coverage_gate": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI files at HEAD, never from measured coverage. Each gate keeps its threshold as written beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80).",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the block is unavailable."
+            },
+            "enforced": {
+              "type": "boolean",
+              "description": "True when any gate gates something (a non-zero threshold, or a null one from a tool default or a templated flag)."
+            },
+            "gates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": "integer"
+                  },
+                  "tool": {
+                    "type": "string"
+                  },
+                  "form": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "The threshold as written; null when not read (a template variable, a tool default)."
+                  },
+                  "unit": {
+                    "enum": [
+                      "percent",
+                      "ratio",
+                      "uncovered_count"
+                    ]
+                  },
+                  "threshold_percent": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "The threshold as a percentage: as written for percent, times 100 for ratio; null for uncovered_count or a threshold not read."
+                  },
+                  "metric": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "description": "Each gate found, with its file and 1-based line."
+            },
+            "max_threshold_percent": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The highest non-null threshold_percent across the gates; null when no gate has one."
+            },
+            "threshold_meets_minimum": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at least 50; null (unknown) when none is but a counted gate's percentage was not read, or when no gate is found in a repository holding a go.mod or Cargo.toml (see unmeasured_reason); false otherwise. Gates counted are those enforced counts."
+            },
+            "unmeasured_reason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Why threshold_meets_minimum is null with no gate found: go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml and its gate may be a script this scan does not read; null otherwise."
+            },
+            "not_detected": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "A list of strings; counts-only output keeps only its length."
             }
           }
         },
@@ -392,7 +760,7 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [
@@ -475,6 +843,150 @@
               ],
               "description": "Share (0 to 1) of changes an agent identity authored; null when nothing was counted."
             }
+          }
+        },
+        "guardrails": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "description": "Guardrails stated (lib/guardrails.py): the gates the repository configures at HEAD (a ruff or flake8 complexity limit, the coverage floor from coverage_gate, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold on one line.",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the block is unavailable."
+            },
+            "gates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "complexity_limit",
+                      "coverage_floor",
+                      "pre_commit",
+                      "type_strictness"
+                    ]
+                  },
+                  "tool": {
+                    "type": "string"
+                  },
+                  "rule": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "The limit or floor; null for a gate with none (pre-commit, mypy strict)."
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "stated": {
+                    "type": "boolean"
+                  },
+                  "stated_in": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "The first instruction file that states the gate."
+                  },
+                  "snippet": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "A ready one-line sentence for an unstated gate; null when stated. Dropped from counts-only output."
+                  }
+                }
+              },
+              "description": "Each gate found, one per configuring file."
+            },
+            "enforced": {
+              "type": "integer",
+              "description": "Gates found."
+            },
+            "stated": {
+              "type": "integer",
+              "description": "Gates a graded instruction file states."
+            },
+            "unstated": {
+              "type": "integer",
+              "description": "Gates no graded instruction file states."
+            },
+            "stated_pct": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "The guardrails-stated row's signal: stated as a percentage of enforced; null when no gate is found."
+            },
+            "instruction_files_read": {
+              "type": "integer",
+              "description": "Graded instruction files read."
+            },
+            "not_read": {
+              "type": [
+                "array",
+                "integer"
+              ],
+              "description": "A list of strings; counts-only output keeps only its length."
+            }
+          }
+        },
+        "structure": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: no_grimp (grimp, the Python import-graph builder, is not installed); no_networkx (networkx, which the structure metrics need, is not installed); grimp_failed (grimp could not build the Python import graph); no_python_packages (a Python repository with no importable package); no_import_graph_<language> (no import graph builder exists yet for the dominant source language, for example no_import_graph_rust); invalid_import_graph (a builder returned a graph that breaks the module-graph contract); no_source_files (the scope holds no source file in a language the assess skill recognises). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
           }
         }
       }

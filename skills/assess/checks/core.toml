@@ -1,8 +1,11 @@
 # The core check manifest (#789): every collector, signal, condition and finding the
 # toolkit ships, declared once. Contract: skills/assess/references/check-manifest.schema.json;
-# loader: skills/assess/scripts/lib/check_manifest.py; agreement with the scan registry,
-# the finding tables, the counts-only rules and the default maturity model:
-# skills/assess/tests/test_check_manifest.py. Collectors are in scan-table order.
+# loader: skills/assess/scripts/lib/check_manifest.py. The finding tables, the coupling
+# thresholds, the counts-only rules (each collector's privacy table) and the per-block
+# reason descriptions of the published schemas are generated from this file at import
+# (#795). Agreement with the scan registry, the headless tables, the typed roots and the
+# default maturity model: skills/assess/tests/test_check_manifest.py. Collectors are in
+# scan-table order.
 
 manifest_version = 1
 owner = "core"
@@ -922,14 +925,18 @@ reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
 headless = { coverage_gate = "registered" }
 shapes = [
-  { path = "coverage_gate", type = "lib.block_shapes:CoverageGateBlock" },
+  { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
-revision = 1
+revision = 2
+unknown_reasons = [
+  { code = "go_rust_gate_form_not_read", carried_in = "unmeasured_reason", means = "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.", next_step = "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines." },
+]
   [entries.privacy]
   "coverage_gate.gates.tool" = "token"
   "coverage_gate.gates.form" = "drop"
   "coverage_gate.gates.unit" = "token"
   "coverage_gate.gates.metric" = "token"
+  "coverage_gate.unmeasured_reason" = "token"
   "coverage_gate.not_detected" = "drop"
 
 [[entries]]
@@ -990,7 +997,18 @@ shapes = [
   { path = "keyhole_summary", type = "lib.run_context_types:KeyholeSummary" },
   { path = "structure", type = "lib.structure_graph:StructureBlock" },
 ]
-revision = 1
+# 2: attention, prescribed_actions and keyhole_summary leave out a path a done
+# review in the committed actions.json clears (#721).
+revision = 2
+unknown_reasons = [
+  { code = "no_grimp", block = "structure", means = "grimp, the Python import-graph builder, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "no_networkx", block = "structure", means = "networkx, which the structure metrics need, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "grimp_failed", block = "structure", means = "grimp could not build the Python import graph.", next_step = "Check that the packages import cleanly; the sentence after the code names grimp's error." },
+  { code = "no_python_packages", block = "structure", means = "A Python repository with no importable package.", next_step = "Nothing to change if the code is scripts; a package with an __init__.py is measured." },
+  { code = "no_import_graph_<language>", block = "structure", means = "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.", next_step = "Nothing to change: structure reads as not measured for this language." },
+  { code = "invalid_import_graph", block = "structure", means = "A builder returned a graph that breaks the module-graph contract.", next_step = "Report it against the toolkit; structure reads as not measured meanwhile." },
+  { code = "no_source_files", block = "structure", means = "The scope holds no source file in a language the assess skill recognises.", next_step = "Nothing to change if the scope has no code; check the scope and the excludes otherwise." },
+]
   [entries.privacy]
   "runtime.reason" = "drop"
   "runtime.static_reachability.caveat" = "drop"
@@ -1039,6 +1057,9 @@ revision = 1
   "derived_findings.name" = "token"
   "derived_findings.paths" = "path"
   "derived_findings.action" = "drop"
+  "derived_findings.reviewed.path" = "path"
+  "derived_findings.reviewed.completed_sha" = "drop"
+  "derived_findings.reviewed.note" = "drop"
   "attention.findings" = "token"
   "prescribed_actions.findings" = "token"
   "prescribed_actions.action" = "drop"
@@ -1371,19 +1392,34 @@ revision = 1
   "shared_tooling.marketplace_ids" = "id"
 
 [[entries]]
+id = "core.gitlab_merged_ci"
+kind = "collector"
+title = "GitLab merged CI configuration"
+issues = [796]
+callable = "lib.gitlab_ci_lint:read_merged_ci"
+offline_callable = "lib.gitlab_ci_lint:no_merged_ci"
+publishes = []
+reads = ["repo_root", "ghsync_root"]
+stage = "post_offers"
+private = true
+network = true
+revision = 1
+
+[[entries]]
 id = "core.review_automation"
 kind = "collector"
 title = "AI review committed in CI"
 issues = [696]
 callable = "lib.review_automation:scan_review_automation"
 publishes = ["review_automation"]
-reads = ["repo_root", "fleet_config", "ghsync_root"]
+reads = ["repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
+platform_pass = true
 headless = { review_automation = "registered" }
 shapes = [
   { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "review_automation.reason" = "drop"
   "review_automation.kinds" = "token"
@@ -1415,33 +1451,42 @@ revision = 1
 id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
-summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere."
-issues = [698]
+summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked."
+issues = [698, 775, 782, 787]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
-reads = ["repo_root", "ghsync_root"]
+reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
+platform_pass = true
 headless = { ci_checks = "registered" }
 shapes = [
   { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
 ]
-revision = 1
+revision = 3
 unknown_reasons = [
-  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read." },
+  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
+  { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
+  { code = "unknown_trigger", carried_in = "basis", means = "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).", next_step = "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it." },
+  { code = "check_target", carried_in = "basis", means = "In lint_basis: no CI line calls a linter, but one runs a check target or script that may run one inside it (make check, npm test, tox, ./scripts/test.sh, pre-commit run); recipes are not read.", next_step = "Nothing to change if the target lints; calling the linter in its own CI step (ruff check ., make lint) lets the scan read it." },
+  { code = "unread_ci_system", carried_in = "basis", means = "In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them.", next_step = "Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent." },
 ]
   [entries.privacy]
   "ci_checks.reason" = "drop"
   "ci_checks.basis" = "token"
+  "ci_checks.enforced_basis" = "token"
+  "ci_checks.lint_basis" = "token"
   "ci_checks.includes.kind" = "token"
   "ci_checks.includes.id" = "id"
   "ci_checks.includes.status" = "token"
   "ci_checks.includes.ref_basis" = "token"
+  "ci_checks.merged_config" = "token"
+  "ci_checks.merged_config_reason" = "token"
 
 [[entries]]
 id = "core.agent_building"
 kind = "collector"
 title = "Agent building"
-issues = [689]
+issues = [689, 731]
 callable = "lib.agent_building:scan_agent_building"
 publishes = ["agent_building"]
 reads = ["repo_root"]
@@ -1450,7 +1495,7 @@ headless = { agent_building = "registered" }
 shapes = [
   { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "agent_building.reason" = "drop"
   "agent_building.agent_class" = "token"
@@ -1507,10 +1552,42 @@ revision = 1
   "instruction_placement.loaded_in_full.relocatable.home.target" = "path"
 
 [[entries]]
+id = "core.agent_consistency"
+kind = "collector"
+title = "Cross-agent instruction consistency"
+summary = "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system."
+issues = [768]
+callable = "lib.agent_consistency:scan_agent_consistency"
+publishes = ["agent_consistency"]
+reads = ["repo_root", "excludes"]
+stage = "post_offers"
+headless = { agent_consistency = "registered" }
+shapes = [
+  { path = "agent_consistency", type = "lib.agent_consistency:AgentConsistencyBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_consistency.systems" = "token"
+  "agent_consistency.canonical" = "path"
+  "agent_consistency.files.path" = "path"
+  "agent_consistency.files.system" = "token"
+  "agent_consistency.files.link" = "token"
+  "agent_consistency.divergences.kind" = "token"
+  "agent_consistency.divergences.value" = "drop"
+  "agent_consistency.divergences.named_in" = "token"
+  "agent_consistency.divergences.missing_from" = "token"
+  "agent_consistency.divergences.stated.system" = "token"
+  "agent_consistency.next_steps.system" = "token"
+  "agent_consistency.next_steps.path" = "path"
+  "agent_consistency.next_steps.pointer" = "drop"
+  "agent_consistency.next_steps.symlink" = "drop"
+  "agent_consistency.not_read" = "drop"
+
+[[entries]]
 id = "core.ai_usage"
 kind = "collector"
 title = "AI-assisted change share"
-issues = [547]
+issues = [547, 765]
 callable = "lib.ai_usage:scan_ai_usage"
 publishes = ["ai_usage"]
 reads = ["repo_root", "scope", "history_window", "fleet_config"]
@@ -1519,7 +1596,7 @@ headless = { ai_usage = "registered" }
 shapes = [
   { path = "ai_usage", type = "lib.ai_usage:AiUsageBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "ai_usage.reason" = "drop"
   "ai_usage.window" = "token"
@@ -1551,6 +1628,81 @@ revision = 1
   "doc_claims.contradictions.kind" = "token"
   "doc_claims.contradictions.sites.value" = "drop"
   "doc_claims.contradictions.conflict_pair.value" = "drop"
+
+[[entries]]
+id = "core.guardrails"
+kind = "collector"
+title = "Guardrails stated"
+summary = "Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet."
+issues = [767]
+callable = "lib.guardrails:scan_guardrails"
+publishes = ["guardrails"]
+reads = ["repo_root", "instruction_files", "coverage_gate", "excludes"]
+stage = "post_offers"
+headless = { guardrails = "registered" }
+shapes = [
+  { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "guardrails.gates.kind" = "token"
+  "guardrails.gates.tool" = "token"
+  "guardrails.gates.rule" = "token"
+  "guardrails.gates.stated_in" = "path"
+  "guardrails.gates.snippet" = "drop"
+  "guardrails.not_read" = "drop"
+
+[[entries]]
+id = "core.level"
+kind = "collector"
+title = "Verified tally and Step"
+summary = "The default maturity model's conditions with state, grade and reason, the verified tally and the autonomy Step."
+issues = [744]
+callable = "lib.core_scans:level"
+publishes = ["level"]
+reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
+stage = "post_offers"
+shapes = [
+  { path = "level", type = "lib.level_result_types:LevelResult" },
+]
+revision = 1
+  [entries.privacy]
+  "level.levels_version" = "token"
+  "level.counted" = "token"
+  "level.listed" = "token"
+  "level.not_measured.id" = "token"
+  "level.not_measured.reason" = "token"
+  "level.conditions.id" = "token"
+  "level.conditions.row" = "token"
+  "level.conditions.grade" = "token"
+  "level.conditions.state" = "token"
+  "level.conditions.reason" = "token"
+  "level.next_step.blockers.kind" = "token"
+  "level.next_step.blockers.gate" = "token"
+  "level.next_step.blockers.condition" = "token"
+  "level.next_step.blockers.state" = "token"
+  "level.next_step.blockers.reason" = "token"
+
+[[entries]]
+id = "core.headline"
+kind = "collector"
+title = "Deterministic headline"
+summary = "The Step with its next unlock and 'Verified practices: N of M measured', worded from the level block; the report pastes it and the badge and log entry carry its summary."
+issues = [747]
+callable = "lib.core_scans:headline"
+publishes = ["headline"]
+reads = ["level"]
+stage = "post_offers"
+shapes = [
+  { path = "headline", type = "lib.level_result_types:Headline" },
+]
+revision = 1
+  [entries.privacy]
+  "headline.levels_version" = "token"
+  "headline.lines" = "drop"
+  "headline.markdown" = "drop"
+  "headline.summary" = "drop"
+  "headline.reason" = "token"
 
 # -- signals: the run-context leaves the default maturity model reads ---------------
 [[entries]]
@@ -1629,14 +1781,14 @@ evidence = "head_structure"
 null_means = "null when no import crosses a package boundary"
 
 [[entries]]
-id = "core:promissory_markers.families.suppression.total"
+id = "core:ci_checks.lint_runs"
 kind = "signal"
-title = "Suppression comments"
-collector = "core.promissory_markers"
-path = "promissory_markers.families.suppression.total"
-type = "number"
-evidence = "head_text"
-null_means = "absent when no suppression was found"
+title = "A CI line runs a linter on ordinary changes and can stop its job"
+collector = "core.ci_checks"
+path = "ci_checks.lint_runs"
+type = "bool"
+evidence = "ci_executed"
+null_means = "included_jobs: the linter may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a check target or script may run one inside it"
 
 [[entries]]
 id = "core:promissory_markers.families.suppression.stale"
@@ -1677,14 +1829,14 @@ type = "number"
 evidence = "head_structure"
 
 [[entries]]
-id = "core:ci_checks.test_or_lint_runs"
+id = "core:ci_checks.enforced_check_runs"
 kind = "signal"
-title = "A CI line runs a test or lint command"
+title = "A CI check runs on ordinary changes and can stop its job"
 collector = "core.ci_checks"
-path = "ci_checks.test_or_lint_runs"
+path = "ci_checks.enforced_check_runs"
 type = "bool"
-evidence = "head_text"
-null_means = "included_jobs: the check may live in an included file"
+evidence = "ci_executed"
+null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; unread_ci_system: the check may run in a CI system the scan does not parse"
 
 [[entries]]
 id = "core:agent_environment.pinning.unlocked_total"
@@ -1696,14 +1848,14 @@ type = "number"
 evidence = "head_text"
 
 [[entries]]
-id = "core:coverage_gate.enforced"
+id = "core:coverage_gate.threshold_meets_minimum"
 kind = "signal"
-title = "A coverage threshold is set"
+title = "A coverage threshold of at least 50 percent is set"
 collector = "core.coverage_gate"
-path = "coverage_gate.enforced"
+path = "coverage_gate.threshold_meets_minimum"
 type = "bool"
 evidence = "config_text"
-null_means = "never null; a block that could not be read is available: false"
+null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count), or no gate is found in a repository holding a go.mod or Cargo.toml (unmeasured_reason go_rust_gate_form_not_read)"
 
 [[entries]]
 id = "core:test_pressure.mutation_run"
@@ -1779,6 +1931,36 @@ type = "number"
 evidence = "git_history"
 null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
 
+[[entries]]
+id = "core:guardrails.stated_pct"
+kind = "signal"
+title = "Share of configured gates an instruction file states"
+collector = "core.guardrails"
+path = "guardrails.stated_pct"
+type = "number"
+evidence = "head_structure"
+null_means = "no gate found: nothing to state"
+
+[[entries]]
+id = "core:agent_consistency.conflicts"
+kind = "signal"
+title = "Commands and thresholds the agent systems disagree on"
+collector = "core.agent_consistency"
+path = "agent_consistency.conflicts"
+type = "number"
+evidence = "head_structure"
+null_means = "fewer than two agent systems: nothing to agree with"
+
+[[entries]]
+id = "core:agent_consistency.unlinked"
+kind = "signal"
+title = "Agent systems not linked to the canonical instruction file"
+collector = "core.agent_consistency"
+path = "agent_consistency.unlinked"
+type = "number"
+evidence = "head_structure"
+null_means = "fewer than two agent systems: nothing to link"
+
 # -- conditions: display metadata for each default criterion -----------------------
 [[entries]]
 id = "core.cond.layer-0-instructions.1.instruction_file_present"
@@ -1844,11 +2026,11 @@ key = "layer-2-design.2:structure.front_door_ratio"
 fix = "Import other packages through their public API rather than their submodules."
 
 [[entries]]
-id = "core.cond.layer-3-linters.1.total"
+id = "core.cond.layer-3-linters.1.lint_runs"
 kind = "condition"
-title = "A linter or type checker leaves a footprint"
-key = "layer-3-linters.1:promissory_markers.families.suppression.total"
-fix = "Run a linter or type checker on the code; its suppression comments show it is in use."
+title = "CI runs a linter or type checker"
+key = "layer-3-linters.1:ci_checks.lint_runs"
+fix = "Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without || true, continue-on-error or allow_failure."
 
 [[entries]]
 id = "core.cond.layer-3-linters.2.stale"
@@ -1879,11 +2061,11 @@ key = "layer-4-architecture.2:stats_summary.loc.p95"
 fix = "Split the largest files along their natural seams."
 
 [[entries]]
-id = "core.cond.layer-5-ci.1.test_or_lint_runs"
+id = "core.cond.layer-5-ci.1.enforced_check_runs"
 kind = "condition"
-title = "CI runs your tests or linters"
-key = "layer-5-ci.1:ci_checks.test_or_lint_runs"
-fix = "Add a CI step that runs your test or lint command on pull requests."
+title = "CI runs your tests or linters, and an error stops the job"
+key = "layer-5-ci.1:ci_checks.enforced_check_runs"
+fix = "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure."
 
 [[entries]]
 id = "core.cond.layer-5-ci.2.unlocked_total"
@@ -1893,11 +2075,11 @@ key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
 fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests."
 
 [[entries]]
-id = "core.cond.layer-6-coverage.1.enforced"
+id = "core.cond.layer-6-coverage.1.threshold_meets_minimum"
 kind = "condition"
-title = "A coverage gate is configured"
-key = "layer-6-coverage.1:coverage_gate.enforced"
-fix = "Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached."
+title = "A coverage gate of at least 50 percent is configured"
+key = "layer-6-coverage.1:coverage_gate.threshold_meets_minimum"
+fix = "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, so CI holds the line you have reached."
 
 [[entries]]
 id = "core.cond.layer-6-coverage.2.mutation_run"
@@ -1962,6 +2144,34 @@ title = "Four in five mapped docs keep pace"
 key = "doc-freshness.2:doc_staleness.summary.stale_pct"
 fix = "Refresh the docs the report lists under doc freshness, oldest first."
 
+[[entries]]
+id = "core.cond.guardrails-stated.1.stated_pct"
+kind = "condition"
+title = "Half the configured gates are stated"
+key = "guardrails-stated.1:guardrails.stated_pct"
+fix = "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it."
+
+[[entries]]
+id = "core.cond.guardrails-stated.2.stated_pct"
+kind = "condition"
+title = "Every configured gate is stated"
+key = "guardrails-stated.2:guardrails.stated_pct"
+fix = "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing."
+
+[[entries]]
+id = "core.cond.agent-consistency.1.conflicts"
+kind = "condition"
+title = "Every agent system names the same checks"
+key = "agent-consistency.1:agent_consistency.conflicts"
+fix = "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives."
+
+[[entries]]
+id = "core.cond.agent-consistency.2.unlinked"
+kind = "condition"
+title = "Every agent system reads one canonical file"
+key = "agent-consistency.2:agent_consistency.unlinked"
+fix = "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool."
+
 # -- findings -----------------------------------------------------------------------
 [[entries]]
 id = "core.finding.hidden_coupling"
@@ -1985,7 +2195,7 @@ headless = "unregistered"
 [[entries]]
 id = "core.finding.lying_map"
 kind = "finding"
-title = "Lying map"
+title = "Stale doc over complex code"
 name = "lying_map"
 order = 1
 action = "fix or delete the doc"
@@ -2001,7 +2211,7 @@ kind = "finding"
 title = "Unexplained complexity"
 name = "unexplained_complexity"
 order = 2
-action = "write the missing contract (do NOT auto-generate)"
+action = "write the contract the code needs (do NOT auto-generate)"
 mode = "characterize_first"
 concern = true
 inputs = ["documentation.unexplained_complexity"]

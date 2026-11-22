@@ -11,8 +11,10 @@ headless runner accepts (``signals.known_scans()``):
   (``network``, with or without a ``--platform`` remedy), it exists only on the platform
   (``signals.PLATFORM_ONLY_SCANS``), or a ``--scans`` selection left it out.
 
-The section links the catalog, ``docs/what-we-measure.md``, by absolute URL because a
-report is written outside the repository. Pure and deterministic; reasons are reduced to
+The section opens with an ``In place:`` line (``vocabulary.IN_PLACE``, #743) and names the
+catalog, ``docs/what-we-measure.md``, with its absolute URL because a report is written
+outside the repository; both sit in code spans so the vocabulary guard reads no band label
+in the repository name. Pure and deterministic; reasons are reduced to
 their codes (``counts_only.reason_code``), so counts-only and full rows read alike.
 """
 from __future__ import annotations
@@ -21,6 +23,7 @@ from collections.abc import Mapping, Sequence
 
 from lib.counts_only import reason_code
 from lib.signals import PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
+from lib.vocabulary import IN_PLACE
 
 HEADING = "## How this was measured"
 CATALOG_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md"
@@ -58,10 +61,14 @@ def measured_section(documents: Sequence[Mapping[str, object]],
     reason for a scan whose block no document holds (a fleet's ``--scans`` selection)."""
     names = known_scans() if names is None else names
     total = len(documents)
-    link = (f"Every check is described in [docs/what-we-measure.md]({CATALOG_URL}). A scan that "
-            "was skipped, or could not read its input, earns nothing and costs nothing.")
+    # The URL sits in a code span: the toolkit's repository name would otherwise read as a
+    # retired band label to the vocabulary guard (lib/vocabulary.py), which skips code spans.
+    link = (f"Every check is described in `docs/what-we-measure.md` in the toolkit repository, "
+            f"`{CATALOG_URL}`. A scan that was skipped, or could not read its input, earns "
+            "nothing and costs nothing.")
     if total == 0:
-        return "\n".join([HEADING, "", f"No repository was scanned, so no scan ran. {link}"])
+        return "\n".join([HEADING, "", f"{IN_PLACE} the catalog of every check. No repository was "
+                                       f"scanned, so no scan ran. {link}"])
     ran: list[str] = []
     skipped: list[str] = []
     unread = 0  # scans that ran but were unavailable or skipped in at least one repository
@@ -84,7 +91,7 @@ def measured_section(documents: Sequence[Mapping[str, object]],
         ran.append(line)
     scope = "1 repository" if total == 1 else f"{total} repositories"
     measured = len(ran) - unread
-    headline = (f"Over {scope}, {measured} {_scans(measured)} measured everywhere, {unread} "
+    headline = (f"{IN_PLACE} over {scope}, {measured} {_scans(measured)} measured everywhere, {unread} "
                 f"ran but {'was' if unread == 1 else 'were'} not measured everywhere, and "
                 f"{len(skipped)} {'was' if len(skipped) == 1 else 'were'} skipped.")
     lines = [HEADING, "", f"{headline} {link}",

@@ -60,13 +60,13 @@ Row `layer-2-design`, team scope, aggregated by `min`.
 | `layer-2-design.2` Packages import one another | Cross-package imports: is above 0 (`structure.cross_package_edges gt 0`) | `measured` | yes | Nothing to change on its own: this is met once one package imports another. |
 | `layer-2-design.2` Cross-package imports use a package's front door | Cross-package imports through a package's front door: is at least 0.9 (`structure.front_door_ratio gte 0.9`) | `measured` | yes | Import other packages through their public API rather than their submodules. |
 
-### Layer 3: linters (suppression footprint)
+### Layer 3: linters run in CI, suppression cap
 
 Row `layer-3-linters`, team scope, aggregated by `min`.
 
 | Condition | Criterion | Grade | Counts | Next step |
 |---|---|---|---|---|
-| `layer-3-linters.1` A linter or type checker leaves a footprint | Suppression comments: is above 0 (`promissory_markers.families.suppression.total gt 0`) | `declared` | no, listed | Run a linter or type checker on the code; its suppression comments show it is in use. |
+| `layer-3-linters.1` CI runs a linter or type checker | A CI line runs a linter on ordinary changes and can stop its job: is true (`ci_checks.lint_runs eq true`) | `verified` | yes | Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without \|\| true, continue-on-error or allow_failure. |
 | `layer-3-linters.2` Stale suppressions stay at 10 or fewer | Stale suppression comments: is at most 10 (`promissory_markers.families.suppression.stale lte 10`) | `measured` | yes | Revisit the oldest suppression comments and fix or remove them. |
 | `layer-3-linters.2` Suppression ages can be read from history | Marker aging is reliable: is true (`promissory_markers.aging_reliable eq true`) | `measured` | yes | Run on a full clone so suppression ages can be measured. |
 
@@ -85,7 +85,7 @@ Row `layer-5-ci`, team scope, aggregated by `min`.
 
 | Condition | Criterion | Grade | Counts | Next step |
 |---|---|---|---|---|
-| `layer-5-ci.1` CI runs your tests or linters | A CI line runs a test or lint command: is true (`ci_checks.test_or_lint_runs eq true`) | `declared` | no, listed | Add a CI step that runs your test or lint command on pull requests. |
+| `layer-5-ci.1` CI runs your tests or linters, and an error stops the job | A CI check runs on ordinary changes and can stop its job: is true (`ci_checks.enforced_check_runs eq true`) | `verified` | yes | Add a CI step that runs your test or lint command on pull requests, without \|\| true, continue-on-error or allow_failure. |
 | `layer-5-ci.2` Every dependency manifest has its lockfile | Dependency manifests without a committed lockfile: is 0 (`agent_environment.pinning.unlocked_total eq 0`) | `declared` | no, listed | Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. |
 
 ### Layer 6: coverage gates and truth pressure
@@ -94,7 +94,7 @@ Row `layer-6-coverage`, team scope, aggregated by `min`.
 
 | Condition | Criterion | Grade | Counts | Next step |
 |---|---|---|---|---|
-| `layer-6-coverage.1` A coverage gate is configured | A coverage threshold is set: is true (`coverage_gate.enforced eq true`) | `config_only` | no, listed | Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached. |
+| `layer-6-coverage.1` A coverage gate of at least 50 percent is configured | A coverage threshold of at least 50 percent is set: is true (`coverage_gate.threshold_meets_minimum eq true`) | `config_only` | no, listed | Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, so CI holds the line you have reached. |
 | `layer-6-coverage.2` A mutation run has completed | A mutation run completed: is true (`test_pressure.mutation_run eq true`) | `measured` | yes | Run the opt-in mutation pass to see which tests pin behaviour. |
 
 ### Layer 7: review on merged pull requests
@@ -125,6 +125,24 @@ Row `doc-freshness`, team scope, aggregated by `min`.
 |---|---|---|---|---|
 | `doc-freshness.1` Most mapped docs keep pace with their code | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | Refresh the docs the report lists under doc freshness, oldest first. |
+
+### Guardrails stated
+
+Row `guardrails-stated`, team scope, aggregated by `min`.
+
+| Condition | Criterion | Grade | Counts | Next step |
+|---|---|---|---|---|
+| `guardrails-stated.1` Half the configured gates are stated | Share of configured gates an instruction file states: is at least 50 (`guardrails.stated_pct gte 50`) | `measured` | yes | Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it. |
+| `guardrails-stated.2` Every configured gate is stated | Share of configured gates an instruction file states: is at least 100 (`guardrails.stated_pct gte 100`) | `measured` | yes | Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing. |
+
+### Cross-agent instruction consistency
+
+Row `agent-consistency`, team scope, aggregated by `min`.
+
+| Condition | Criterion | Grade | Counts | Next step |
+|---|---|---|---|---|
+| `agent-consistency.1` Every agent system names the same checks | Commands and thresholds the agent systems disagree on: is 0 (`agent_consistency.conflicts eq 0`) | `measured` | yes | Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives. |
+| `agent-consistency.2` Every agent system reads one canonical file | Agent systems not linked to the canonical instruction file: is 0 (`agent_consistency.unlinked eq 0`) | `measured` | yes | Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool. |
 
 ## Scans
 
@@ -195,10 +213,11 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Collector: `core.coverage_gate`, reading `repo_root`, `scope`, `excludes`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `coverage_gate.gates.form` drop, `coverage_gate.gates.metric` token, `coverage_gate.gates.tool` token, `coverage_gate.gates.unit` token, `coverage_gate.not_detected` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `coverage_gate.gates.form` drop, `coverage_gate.gates.metric` token, `coverage_gate.gates.tool` token, `coverage_gate.gates.unit` token, `coverage_gate.not_detected` drop, `coverage_gate.unmeasured_reason` token.
 - Used by: row `layer-6-coverage`.
-- Evidence: `coverage_gate.enforced` config_text (config_only).
-- Not measured when: it cannot read its input; the block says why.
+- Evidence: `coverage_gate.threshold_meets_minimum` config_text (config_only).
+- Not measured when:
+  - `go_rust_gate_form_not_read`: No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read. Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.
 
 ### `instruction_claims`: Instruction claims
 
@@ -264,7 +283,7 @@ Committed agent setup, the check command an instruction file names, lockfiles pe
 
 ### `review_automation`: AI review committed in CI
 
-- Collector: `core.review_automation`, reading `repo_root`, `fleet_config`, `ghsync_root`.
+- Collector: `core.review_automation`, reading `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `review_automation.kinds` token, `review_automation.matches.kind` token, `review_automation.matches.path` path, `review_automation.matches.reviewer` token, `review_automation.matches.rule` token, `review_automation.reason` drop.
@@ -286,16 +305,20 @@ An AI review step committed in CI, or a reviewed merged change.
 
 ### `ci_checks`: CI runs a test or lint command
 
-Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere.
+Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked.
 
-- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`.
+- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.status` token, `ci_checks.reason` drop.
-- Used by: row `layer-5-ci`.
-- Evidence: `ci_checks.test_or_lint_runs` head_text (declared).
+- Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.enforced_basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.status` token, `ci_checks.lint_basis` token, `ci_checks.merged_config` token, `ci_checks.merged_config_reason` token, `ci_checks.reason` drop.
+- Used by: row `layer-3-linters`, row `layer-5-ci`.
+- Evidence: `ci_checks.lint_runs` ci_executed (verified), `ci_checks.enforced_check_runs` ci_executed (verified).
 - Not measured when:
-  - `included_jobs`: A CI file pulls its jobs from a file this checkout does not hold, so the check may live there. Nothing to change: this reads as not measured until the included file can be read.
+  - `included_jobs`: A CI file pulls its jobs from a file this checkout does not hold, so the check may live there. Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.
+  - `merged_config_partial`: GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API. Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.
+  - `unknown_trigger`: In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable). Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.
+  - `check_target`: In lint_basis: no CI line calls a linter, but one runs a check target or script that may run one inside it (make check, npm test, tox, ./scripts/test.sh, pre-commit run); recipes are not read. Nothing to change if the target lints; calling the linter in its own CI step (ruff check ., make lint) lets the scan read it.
+  - `unread_ci_system`: In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them. Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent.
 
 ### `agent_building`: Agent building
 
@@ -329,6 +352,18 @@ The instruction-file grade republished as a block, so a maturity model can read 
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `agent_consistency`: Cross-agent instruction consistency
+
+Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system.
+
+- Collector: `core.agent_consistency`, reading `repo_root`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_consistency.canonical` path, `agent_consistency.divergences.kind` token, `agent_consistency.divergences.missing_from` token, `agent_consistency.divergences.named_in` token, `agent_consistency.divergences.stated.system` token, `agent_consistency.divergences.value` drop, `agent_consistency.files.link` token, `agent_consistency.files.path` path, `agent_consistency.files.system` token, `agent_consistency.next_steps.path` path, `agent_consistency.next_steps.pointer` drop, `agent_consistency.next_steps.symlink` drop, `agent_consistency.next_steps.system` token, `agent_consistency.not_read` drop, `agent_consistency.systems` token.
+- Used by: row `agent-consistency`.
+- Evidence: `agent_consistency.conflicts` head_structure (measured), `agent_consistency.unlinked` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
 ### `ai_usage`: AI-assisted change share
 
 - Collector: `core.ai_usage`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
@@ -349,6 +384,18 @@ The instruction-file grade republished as a block, so a maturity model can read 
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `guardrails`: Guardrails stated
+
+Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet.
+
+- Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop.
+- Used by: row `guardrails-stated`.
+- Evidence: `guardrails.stated_pct` head_structure (measured).
+- Not measured when: it cannot read its input; the block says why.
+
 ### `structure`: Keyhole blocks: structure
 
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
@@ -357,7 +404,14 @@ The instruction-file grade republished as a block, so a maturity model can read 
 - Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.reason` reason, `structure.sccs` path.
 - Used by: row `layer-2-design`.
 - Evidence: `structure.modularity_q` head_structure (measured), `structure.cross_package_edges` head_structure (measured), `structure.front_door_ratio` head_structure (measured).
-- Not measured when: it cannot read its input; the block says why.
+- Not measured when:
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `stats_summary`: Run header: stats_summary
 
@@ -376,7 +430,7 @@ The instruction-file grade republished as a block, so a maturity model can read 
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `promissory_markers.reason` drop, `promissory_markers.stale_by_file.{}.families` drop, `promissory_markers.top_offenders.commit` drop, `promissory_markers.top_offenders.family` token, `promissory_markers.top_offenders.text` drop.
 - Used by: row `layer-3-linters`.
-- Evidence: `promissory_markers.families.suppression.total` head_text (declared), `promissory_markers.families.suppression.stale` git_history (measured), `promissory_markers.aging_reliable` git_history (measured).
+- Evidence: `promissory_markers.families.suppression.stale` git_history (measured), `promissory_markers.aging_reliable` git_history (measured).
 - Not measured when: it cannot read its input; the block says why.
 
 ### `structure_drift`: Structure drift: structure_drift
@@ -474,6 +528,13 @@ Each doc's last content change against its code subject's churn, following renam
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `documentation`: Keyhole blocks: documentation
 
@@ -485,6 +546,13 @@ Each doc's last content change against its code subject's churn, following renam
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `understanding`: Keyhole blocks: understanding
 
@@ -496,6 +564,13 @@ Each doc's last content change against its code subject's churn, following renam
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `runtime`: Keyhole blocks: runtime
 
@@ -507,17 +582,31 @@ Each doc's last content change against its code subject's churn, following renam
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `derived_findings`: Keyhole blocks: derived_findings
 
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `derived_findings.action` drop, `derived_findings.name` token, `derived_findings.paths` path.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `derived_findings.action` drop, `derived_findings.name` token, `derived_findings.paths` path, `derived_findings.reviewed.completed_sha` drop, `derived_findings.reviewed.note` drop, `derived_findings.reviewed.path` path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when:
   - `not_registered`: Only a full /assess run builds this block; a headless or fleet run reports it not measured. Run /assess on the repository to measure it.
+  - `no_grimp`: grimp, the Python import-graph builder, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `no_networkx`: networkx, which the structure metrics need, is not installed. Install the assess skill's Python dependencies (uv run does this) and run again.
+  - `grimp_failed`: grimp could not build the Python import graph. Check that the packages import cleanly; the sentence after the code names grimp's error.
+  - `no_python_packages`: A Python repository with no importable package. Nothing to change if the code is scripts; a package with an __init__.py is measured.
+  - `no_import_graph_<language>`: No import graph builder exists yet for the dominant source language, for example no_import_graph_rust. Nothing to change: structure reads as not measured for this language.
+  - `invalid_import_graph`: A builder returned a graph that breaks the module-graph contract. Report it against the toolkit; structure reads as not measured meanwhile.
+  - `no_source_files`: The scope holds no source file in a language the assess skill recognises. Nothing to change if the scope has no code; check the scope and the excludes otherwise.
 
 ### `coverage_report`: Coverage report
 
@@ -581,8 +670,8 @@ In report order.
 | Finding | Reads | Next step | Mode | Rules |
 |---|---|---|---|---|
 | `hidden_coupling` Hidden coupling | `behaviour.hidden_coupling_findings`, `structure_drift.tier_1` | investigate the seam | `characterize_first` | emptied when `doc_staleness.churn_degenerate == true`; deleted paths pruned |
-| `lying_map` Lying map | `documentation.stale_doc_on_complexity` | fix or delete the doc | `verify_then_retire` | emptied when `doc_staleness.churn_degenerate == true` |
-| `unexplained_complexity` Unexplained complexity | `documentation.unexplained_complexity` | write the missing contract (do NOT auto-generate) | `characterize_first` | - |
+| `lying_map` Stale doc over complex code | `documentation.stale_doc_on_complexity` | fix or delete the doc | `verify_then_retire` | emptied when `doc_staleness.churn_degenerate == true` |
+| `unexplained_complexity` Unexplained complexity | `documentation.unexplained_complexity` | write the contract the code needs (do NOT auto-generate) | `characterize_first` | - |
 | `untrusted_hotspot` Untrusted hotspot | `current`, `test_pressure` | strengthen tests to pin observable behaviour (not internal state) | `characterize_first` | - |
 | `self_referential_tests` Self-referential tests | `current` | request human review - tests verify internal consistency, not truth | `verify_then_retire` | - |
 | `unactioned_intent` Unactioned intent | `promissory` | action the promise: fix it, ticket it, or delete the marker/skip | `verify_then_retire` | - |
@@ -671,11 +760,16 @@ The scan registry in run order, including the private inputs other scans read.
 | `agent_harness` | Committed agent harness | `repo_root`, `scope`, `excludes` | `agent_harness` | no |
 | `agent_environment` | Agent working environment | `repo_root`, `instruction_files`, `agent_harness`, `excludes` | `agent_environment` | yes |
 | `shared_tooling` | Shared tooling | `repo_root` | `shared_tooling` | no |
-| `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root` | `review_automation` | no |
+| `gitlab_merged_ci` | GitLab merged CI configuration | `repo_root`, `ghsync_root` | private input | yes |
+| `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
-| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root` | `ci_checks` | no |
+| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci` | `ci_checks` | no |
 | `agent_building` | Agent building | `repo_root` | `agent_building` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading` | `layer_grades` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
+| `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
+| `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes` | `guardrails` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure` | `level` | no |
+| `headline` | Deterministic headline | `level` | `headline` | no |

@@ -17,6 +17,8 @@ description: >
 Source-agnostic. Consumers pass: PR number, base branch, and bot-reviewer/CI rules
 from the project's `## Marathon Configuration` (defaults if absent).
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 ## Run-completion is gated elsewhere (floor)
 
 This skill takes one PR to merge — a **process** signal. A green, merged PR is not proof the run's assembled product works, and this skill never certifies run-completion. That is gated by the acceptance-contract scripts the marathon engine invokes, not here: `scripts/contract/start_gate.py` fails closed at run start unless the contract is frozen before decomposition, `scripts/contract/spawn_verifier.py` is the sole custody chokepoint that spawns the cold non-implementing verifier against the assembled product, and `scripts/contract/complete_gate.py` fails closed unless that verifier's completion record validates. Merging here never substitutes for those gates. This note is part of the constitutional floor (`FLOOR.md`); the retro may propose changes but never self-apply them.

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, TypeVar, cast
 
 from lib.assess_config import is_user_excluded
+from lib.check_manifest import core_manifest, finding_tables
 from lib.change_coupling import (
     RenameMap, authorship_analysis, build_rename_map, change_coupling_pairs, containment_ratio,
     find_self_referential_tests, fold_renames, parse_commit_file_sets, repo_top,
@@ -38,6 +39,7 @@ from lib.coupling_analysis import (
 from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
 from lib.import_graph import is_graph_source
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
+from lib.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown
 from lib.run_context_types import (
     AttentionRow, BehaviourBlock, BehaviourFields, CoChangePair, CouplingRow, DerivedFinding,
     DocumentationBlock, FindingPaths, FindingProducts, JsonDict, KeyholeConcern, KeyholeIntegration,
@@ -66,43 +68,18 @@ MAX_ATTENTION_UNITS = 10
 # commits can't establish whether edits "stay contained").
 MIN_DIR_COMMITS_FOR_CONTAINMENT = 5
 
-# The named derived findings, in a fixed report order (worst-first, the one
-# positive last). The action strings are the deterministic recommendation the
-# report leads with; the LLM elaborates but never contradicts them.
-FINDING_ORDER = [
-    "hidden_coupling",
-    "lying_map",
-    "unexplained_complexity",
-    "untrusted_hotspot",  # E1: complex churning code with hollow tests
-    "self_referential_tests",  # E2: tests authored with the code they cover
-    "unactioned_intent",  # stale promissory markers that survived many edits
-    "accretion_ratchet",  # files that only ever grow - never meaningfully cut back
-    "orphaned_understanding",
-    "candidate_dead_weight",
-    "override_contradicts_signals",  # archetype marker disagrees with the signals
-    "refactor_boundary",
-]
-FINDING_ACTIONS = {
-    "hidden_coupling": "investigate the seam",
-    "lying_map": "fix or delete the doc",
-    "unexplained_complexity": "write the missing contract (do NOT auto-generate)",
-    "untrusted_hotspot": "strengthen tests to pin observable behaviour (not internal state)",
-    "self_referential_tests": "request human review - tests verify internal consistency, not truth",
-    "unactioned_intent": "action the promise: fix it, ticket it, or delete the marker/skip",
-    "accretion_ratchet": "refactor down: extract, delete dead code, or split the file",
-    "orphaned_understanding": "assign a human anchor before further change",
-    "candidate_dead_weight": "verify liveness, then delete if dead",
-    "override_contradicts_signals": (
-        "Review archetype marker - deterministic signals suggest a different "
-        "classification"
-    ),
-    "refactor_boundary": "safe to hand an agent in isolation",
-}
+# The named derived findings and their tables load from the check manifest
+# (``checks/core.toml``, #795): ``order`` is the fixed report order (worst-first,
+# the one positive last) and ``action`` the deterministic recommendation the report
+# leads with; the LLM elaborates but never contradicts it.
+_TABLES = finding_tables(core_manifest())
+FINDING_ORDER = _TABLES["order"]
+FINDING_ACTIONS = _TABLES["actions"]
 
-# The execution *mode* each finding type warrants - the deterministic posture an
-# executor should take before touching the code, derived from the finding, never
-# guessed by the LLM. Three modes, each tracing to one of the write-side
-# tendencies the toolkit guards against:
+# The execution *mode* each finding type warrants (the manifest's ``mode``) - the
+# deterministic posture an executor should take before touching the code, derived
+# from the finding, never guessed by the LLM. Three modes, each tracing to one of
+# the write-side tendencies the toolkit guards against:
 #
 #   characterize_first  - understand/contract the code before changing it. The
 #       risk is acting blind on a seam or a complexity nobody has pinned, so the
@@ -119,19 +96,7 @@ FINDING_ACTIONS = {
 # without a mapping (or an action with no finding attribution) falls back to
 # DEFAULT_FINDING_MODE - characterize_first, the conservative "understand before
 # you touch it" posture.
-FINDING_MODES = {
-    "hidden_coupling": "characterize_first",
-    "lying_map": "verify_then_retire",
-    "unexplained_complexity": "characterize_first",
-    "untrusted_hotspot": "characterize_first",
-    "self_referential_tests": "verify_then_retire",
-    "unactioned_intent": "verify_then_retire",
-    "accretion_ratchet": "refactor_safe",
-    "orphaned_understanding": "characterize_first",
-    "candidate_dead_weight": "verify_then_retire",
-    "override_contradicts_signals": "characterize_first",
-    "refactor_boundary": "refactor_safe",
-}
+FINDING_MODES = _TABLES["modes"]
 DEFAULT_FINDING_MODE = "characterize_first"
 # The closed set of modes, exposed for validators/tests that assert coverage.
 FINDING_MODE_VALUES = frozenset(FINDING_MODES.values())
@@ -558,9 +523,10 @@ def apply_config_excludes(
     return filtered, sorted(dropped)
 
 
-# Findings built from git-log path strings. Only these can name a path that no
-# longer exists: every other finding reads the working tree or the stats file.
-GIT_HISTORY_FINDINGS = frozenset({"hidden_coupling", "refactor_boundary"})
+# Findings built from git-log path strings (the manifest's ``prune_missing_paths``).
+# Only these can name a path that no longer exists: every other finding reads the
+# working tree or the stats file.
+GIT_HISTORY_FINDINGS = _TABLES["prune_missing_paths"]
 
 
 def prune_missing_finding_paths(
@@ -1012,9 +978,8 @@ def render_findings_markdown(
 # Display-name overrides for finding identifiers whose naive underscore->space
 # form reads wrong (compound adjectives need a hyphen). Names not listed here
 # fall back to a plain underscore->space replace in ``finding_display_name``.
-FINDING_DISPLAY_NAMES = {
-    "self_referential_tests": "self-referential tests",
-}
+FINDING_DISPLAY_NAMES = {"self_referential_tests": "self-referential tests",
+                         "lying_map": "stale doc over complex code"}  # supportive wording (#743)
 
 
 def finding_display_name(name: str) -> str:
@@ -1026,7 +991,7 @@ def _format_summary(concerns: list[KeyholeConcern], safe_zones: int) -> str:
     """One-line human-readable keyhole-readiness summary.
 
     Pure count with a positive/negative split (PRD: never imply commensurability
-    with the 0-8 score). Singular/plural handled for the headline count and the
+    with the headline's verified tally). Singular/plural handled for the headline count and the
     safe-zone count; the per-finding labels use ``finding_display_name`` (plain
     underscore->space, e.g. ``2 hidden coupling``, with explicit overrides for
     compound adjectives, e.g. ``self-referential tests``).
@@ -1048,8 +1013,8 @@ def _format_summary(concerns: list[KeyholeConcern], safe_zones: int) -> str:
 def build_keyhole_summary(findings: list[DerivedFinding]) -> KeyholeSummary:
     """Roll the derived findings into a count/severity readiness summary.
 
-    Reported *alongside* the 0-8 layered score, never merged into it: the score
-    asks "is the scaffolding in place to catch problems?", this asks "where is
+    Reported *alongside* the headline (the Step and verified tally), never merged
+    into it: the headline asks "which contracts are in place to catch problems?", this asks "where is
     today's structural pain?". Returns ``{concerns, safe_zones, total_concerns,
     summary_text}`` where ``concerns`` is the per-finding ``{name, count}`` for
     every negative finding with paths and ``safe_zones`` is the
@@ -1354,7 +1319,8 @@ def _override_contradiction_paths(archetype: JsonDict | None) -> list[str]:
 # confidence cap in the join; hidden_coupling is dropped here. Both blocks keep
 # their raw data (honest); only the *counted findings* degrade. The structure
 # drift hidden-seam dirs are co-change-derived too, so they ride the same gate.
-_CHURN_DERIVED_FINDINGS = frozenset({"lying_map", "hidden_coupling"})
+# The manifest marks them ``suppressed_when = "doc_staleness.churn_degenerate == true"``.
+_CHURN_DERIVED_FINDINGS = _TABLES["churn_suppressed"]
 
 
 def _finding_path_inputs(
@@ -1442,20 +1408,22 @@ def finding_products(
     attic/ never ranks in attention (so never becomes a prescribed action);
     ``archived_finding_paths`` carries those out for the `excluded_as_archive`
     disclosure. Equal-score rows order by hotspot rank, then finding severity,
-    then path. A top score of 1 is a weak ranking: only its rank-1 row is
-    prescribed.
+    then path. A top score of 1 prescribes only its rank-1 row. A reviewed path
+    (``lib.reviewed_findings``) shows only in the markdown's "Reviewed" section.
     """
+    open_ = open_findings(findings)
     attention, archived = exclude_archive_from_attention(
-        findings, attention_tie_break(complexity_stats, promissory_markers, behaviour),
+        open_, attention_tie_break(complexity_stats, promissory_markers, behaviour),
     )
     low_signal = is_attention_low_signal(attention)
     return {
         "attention": attention,
-        "findings_markdown": render_findings_markdown(findings, attention),
-        "keyhole_summary": build_keyhole_summary(findings),
+        "findings_markdown": render_findings_markdown(open_, attention)
+        + render_reviewed_markdown(findings, finding_display_name),
+        "keyhole_summary": build_keyhole_summary(open_),
         "attention_low_signal": low_signal,
         "prescribed_actions": build_prescribed_actions(
-            attention, findings, 1 if low_signal else MAX_PRESCRIBED_ACTIONS,
+            attention, open_, 1 if low_signal else MAX_PRESCRIBED_ACTIONS,
         ),
         "archived_finding_paths": archived,
     }
@@ -1565,6 +1533,7 @@ def integrate(
     findings, pruned_finding_paths, excluded_finding_paths = _filter_findings(
         findings, top, rename_map, exclude_dirs, exclude_patterns,
     )
+    mark_reviewed(findings, repo_root)  # a done review clears a path (#721)
     return {
         "structure": structure,
         "behaviour": behaviour,
@@ -1573,18 +1542,14 @@ def integrate(
         "runtime": runtime,
         "derived_findings": findings,
         **finding_products(findings, complexity_stats, promissory_markers, behaviour),
-        # Paths dropped from the findings because a config exclude covered them -
-        # the raw material for the run-context `excluded_by_config` disclosure.
+        # Raw material for the `excluded_by_config` disclosure (config-excluded paths).
         "excluded_finding_paths": excluded_finding_paths,
-        # Git-history finding paths absent from the working tree (not HEAD: an
-        # uncommitted delete counts) - the raw material for the run-context
-        # `pruned_finding_paths` disclosure.
+        # Git-history finding paths absent from the working tree (an uncommitted
+        # delete counts), for the `pruned_finding_paths` disclosure.
         "pruned_finding_paths": pruned_finding_paths,
-        # False when the rename map could not be built: renames were not folded
-        # and the prune stood down, so the disclosure can say so.
+        # False when the rename map could not be built (nothing folded or pruned).
         "rename_map_complete": rename_map.complete,
-        # The Tier 1 grouping disagreement, computed once here from the behaviour
-        # block's co-change pairs, so the orchestrator can build the run-context
-        # structure_drift tier_1 sub-block from it without a second computation.
+        # The Tier 1 grouping disagreement, computed once from the co-change pairs,
+        # for the run-context structure_drift tier_1 sub-block.
         "structure_drift_tier1": structure_drift_tier1,
     }

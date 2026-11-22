@@ -1,6 +1,6 @@
 ---
 name: assess-layer-scorer
-description: Scores a codebase against the /assess 0-8 layered contract model, reading the deterministic run-context.json and assigning Present/Partial/Missing per layer with evidence.
+description: Scores a codebase against the /assess layered contract model (layers 0-8), reading the deterministic run-context.json and assigning Present/Partial/Missing per layer with evidence.
 model: inherit
 color: cyan
 ---
@@ -23,11 +23,11 @@ The orchestrator passes you `REPO_ROOT` (the absolute repo path). Everything you
 
 A scorecard the orchestrator forwards to the `assess-findings` step:
 
-- the **score** (one point per layer that is Present; half for Partial - see the scoring rule in the methodology) **and its denominator** (8 for a software repo; the applicable-layer count for a knowledge base - see Step 0),
 - the **per-layer verdict** (Present / Partial / Missing, or **N/A** for a layer the archetype excludes) with a one-line evidence note each,
-- the **maturity label** the score maps to (for a non-software archetype it **names the archetype and the applicable-layer count** - see Step 0),
 - any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
 - the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
+
+You return **no headline score, fraction or band name**. The report headline (the autonomy Step, its next unlock and "Verified practices: N of M measured") is the run context's `headline` block, computed by the deterministic core from the maturity model; your verdicts are the detail underneath it and never set it.
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
 
@@ -65,7 +65,7 @@ Existence claims are `path_exists` / `path_absent`; wiring claims ("CI runs the 
 
 ## Step 0: Read the archetype (do this before scoring any layer)
 
-The 0-8 model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Scoring them Missing is a lying score: it penalises the repo for not having tests on code it doesn't contain, so a well-run KB reads ~2.5/8 ("Not Ready") when it is actually well-run.
+The layered model assumes a software repo. A **knowledge / document base** - markdown sources, an LLM-maintained wiki, a `CLAUDE.md` schema, and no application code or runtime - has no code surface for the write-side layers (L2-L7). Marking them Missing is a lying verdict: it reports a gap for tests on code the repo doesn't contain, so a well-run KB reads as mostly missing when it is actually well-run.
 
 The deterministic core has already classified the repo. Read it first:
 
@@ -79,11 +79,9 @@ The block carries: `archetype` (`"software"` or `"knowledge-base"`), `detected_v
 
 - Score **N/A** (not Missing, not Partial) for every layer in `na_layers` (the write-side L2-L7). N/A means *not applicable* - the layer has no code surface to enforce, which is a different thing from a real gap. Use the literal status `N/A` in the scorecard you return, never `Missing`, for these layers. Do **not** propose remediation actions for an N/A layer.
 - Score **only** the `applicable_layers` (L0, L1, L8) on their merits using the methodology below.
-- **Compute the score over the applicable layers only**: sum Present=1 / Partial=0.5 over L0, L1, L8; the **denominator is `archetype.denominator`** (3 for a KB), not 8. Excluded N/A layers are out of both numerator and denominator.
-- **The maturity label names the archetype and the applicable-layer count**, e.g. `Knowledge Base · Solid (3 applicable layers)`. Map the *renormalised fraction* (score ÷ denominator) onto the same maturity ladder the findings skill uses (≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready).
-- Return `denominator` in your scorecard so the report headline, badge, and `finalize-input.json` renormalise (the findings skill reads it).
+- Name the archetype in your observations so the report's scorecard can label the N/A rows.
 
-**When `archetype == "software"`** (the default), nothing changes: score all 0-8 layers, denominator 8, exactly as before.
+**When `archetype == "software"`** (the default), nothing changes: give a verdict for every layer 0-8.
 
 This is intentionally **one** archetype (knowledge-base). The detection is dispatch-friendly so more archetypes are cheap to add later, but do not invent archetype rules beyond what `.archetype` reports.
 
@@ -510,7 +508,7 @@ rg 'threshold|min_coverage|coverageThreshold|branches.*[0-9]' "$REPO_ROOT"/{code
 rg 'coverage|codecov|coveralls' "$REPO_ROOT"/.github/workflows/*.yml 2>/dev/null | head -5
 ```
 
-**Read the deterministic gate signal first.** `coverage_gate` in `run-context.json` reports whether a line-coverage threshold is enforced: `enforced` (bool) and `gates`, each `{file, line, tool, form, threshold, unit, metric}` read from coverage.py `fail_under`, `--cov-fail-under` / `coverage report --fail-under`, Jest `coverageThreshold`, Vitest `thresholds`, nyc/c8 `check-coverage`, or JaCoCo `<minimum>` / `minimum =`. Cite a gate as `<file>:<line>` with its threshold and `unit` as written (a JaCoCo `0.80` is a ratio, not 0.80%). `metric: total` on a coverage.py / pytest-cov gate means branch coverage is on, so the threshold gates the line-and-branch total; `threshold: null` on one means the value is templated (`${{ env.COV_MIN }}`) and still gates. `metric: lines` on a gate in a workflow or `Makefile` means branch mode was not determined there; check the package's coverage config. On a scoped run, a gate in a root workflow or `Makefile` is reported whether or not its command targets the scope: read the cited line, and credit it to the scope only when the command runs the scope's suite (not `cd packages/other && pytest --cov-fail-under=90`). `enforced: false` means none of those forms was found - it is not proof no gate exists: check the forms listed in `coverage_gate.not_detected` (Go coverage scripts, CLI thresholds in shell scripts or other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) before scoring Missing, with the scan above plus `rg -n -- '--cov-fail-under|--fail-under|check-coverage' "$REPO_ROOT"` for thresholds outside the files the core reads. A coverage report (`coverage_report.available: true`) without a gate is measured-but-ungated: never read a gate into measurement. A gate configured in a file CI never runs coverage against gates nothing; corroborate with the Layer 5 CI read. When `coverage_gate.available` is false the scan errored: fall back to the manual scan above, and never score Missing on the block alone.
+**Read the deterministic gate signal first.** `coverage_gate` in `run-context.json` reports whether a line-coverage threshold is enforced: `enforced` (bool) and `gates`, each `{file, line, tool, form, threshold, unit, metric}` read from coverage.py `fail_under`, `--cov-fail-under` / `coverage report --fail-under`, Jest `coverageThreshold`, Vitest `thresholds`, nyc/c8 `check-coverage`, or JaCoCo `<minimum>` / `minimum =`. Go's go-test-coverage `.testcoverage.yml` (`threshold:` `total`, `package`, `file`), `cargo tarpaulin --fail-under` and `cargo llvm-cov --fail-under-lines` are read too; with no gate found in a repository holding a `go.mod` or `Cargo.toml`, `threshold_meets_minimum` is null and `unmeasured_reason` is `go_rust_gate_form_not_read`: not measured, not Missing, so look for a script comparing `go tool cover -func` to a number. Cite a gate as `<file>:<line>` with its threshold and `unit` as written (a JaCoCo `0.80` is a ratio, not 0.80%). `metric: total` on a coverage.py / pytest-cov gate means branch coverage is on, so the threshold gates the line-and-branch total; `threshold: null` on one means the value is templated (`${{ env.COV_MIN }}`) and still gates. `metric: lines` on a gate in a workflow or `Makefile` means branch mode was not determined there; check the package's coverage config. On a scoped run, a gate in a root workflow or `Makefile` is reported whether or not its command targets the scope: read the cited line, and credit it to the scope only when the command runs the scope's suite (not `cd packages/other && pytest --cov-fail-under=90`). `enforced: false` means none of those forms was found - it is not proof no gate exists: check the forms listed in `coverage_gate.not_detected` (Go coverage scripts, CLI thresholds in shell scripts or other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) before scoring Missing, with the scan above plus `rg -n -- '--cov-fail-under|--fail-under|check-coverage' "$REPO_ROOT"` for thresholds outside the files the core reads. A coverage report (`coverage_report.available: true`) without a gate is measured-but-ungated: never read a gate into measurement. A gate configured in a file CI never runs coverage against gates nothing; corroborate with the Layer 5 CI read. When `coverage_gate.available` is false the scan errored: fall back to the manual scan above, and never score Missing on the block alone.
 
 **Scan for mutation testing:**
 ```bash

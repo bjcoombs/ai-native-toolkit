@@ -98,6 +98,28 @@ GitHub reads `two_factor: unknown`, and on GitLab a `404` from `push_rule`
 own headline counts `off` and `unknown` separately, so an unreadable setting
 is never counted as off.
 
+**GitHub teams for `/fleet`.** The GitHub org fragment (`settings/org.json` in a
+`--keep-fragments` capture) also carries `teams`, `[{slug, parent, repos}]`,
+from `orgs/{org}/teams` and each team's `orgs/{org}/teams/{slug}/repos`:
+`parent` is the parent team's slug or `null`, `repos` the repository names.
+`fleet.py --settings` reads it to place repositories in the units tree. It is
+not a setting, so the report does not show it. The key is written only when
+the team list and every team's repository list were read; an unreadable one
+leaves it out (with a note on stderr), so an unread team list never reads as
+no teams. A personal account has no teams, so its fragment has no `teams` key
+and no note. GitHub's "List team repositories" docs do not say whether a child
+team's list also holds the repositories it inherits from its parent (only
+"Check team permissions" says inherited repositories are checked), so a repository a team lists with the same role as its parent
+team is taken as inherited and kept on the parent only: each repository stays
+with the most specific team that holds it directly. A child granted another
+role keeps it; one granted directly with the parent's role cannot be told
+apart from inheritance and stays on the parent. Team slugs are identities, and the fragment holds them in clear. In
+`/fleet`'s `fleet-data.json`, each team unit's key carries its slug
+(`ownership/acme/platform`) in clear by default; `--full` also writes the
+unit's name (the slug) and owners (`@acme/platform`), which counts-only output
+drops. With `--hash-paths` or `--hash-salt` the slug is hashed with the unit
+key and no name or owner is written.
+
 ### The no-access rule
 
 Security-alert and branch-protection endpoints require admin on the repo. When
@@ -213,6 +235,7 @@ replaying one shows the same warning; the report itself is unchanged.
 - **Windows:** the script is bash, so run it under Git Bash, which ships with
   Git for Windows (Claude Code on Windows already needs it). Install `jq`
   separately (`winget install jqlang.jq`); Git Bash does not include it.
+  Installs and PATH notes: the [Windows setup guide](../../docs/windows.md).
 - `jq` 1.6 or later. An endpoint that answers with an empty or non-JSON body
   reads as unreadable (`unknown` / `no-access`) on every jq version.
 - Very large orgs make many API calls (~5 per repo); use `--limit` to sample.

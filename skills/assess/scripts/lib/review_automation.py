@@ -40,7 +40,12 @@ match keeps the path and line of the repository's own include that led to it,
 tracked as that file is, with ``depth`` the include level it was found at (0
 for the repository's own file). Job scripts in a template are not read for
 review steps; a review is seen through a review component or project name, or a
-``[review] ai_review_components`` entry (a known limit). When git
+``[review] ai_review_components`` entry (a known limit). Under ``--platform``
+(and in a full ``/assess`` run), where an include did not resolve offline, the
+sources GitLab's CI lint API lists as merged in (``lib/gitlab_ci_lint.py``,
+#796: a component location, a project file's project) are matched the same way;
+a source an offline match already names is not listed twice. Such a match has
+``line`` null and ``depth`` 1 (the API does not say the level). When git
 tracking is unknown the block is unavailable. Counts-only output keeps
 ``present``, the ``kinds`` and each match's ``kind``, ``rule`` (``pinned`` or
 ``config``) and ``reviewer`` slug (``configured`` for a config match), never a
@@ -66,9 +71,16 @@ from pathlib import Path
 from typing import Any, Literal, NotRequired, TypeGuard, TypedDict
 
 from lib.ci_includes import resolve_includes
+from lib.merged_ci import MergedCi, as_merged
 from lib.fleet_config import FleetConfig
 from lib.git_churn import is_tracked, tracked_files
-from lib.shared_tooling import action_repo, gitlab_includes, step_uses, workflow_events
+from lib.shared_tooling import (
+    action_repo,
+    component_source,
+    gitlab_includes,
+    step_uses,
+    workflow_events,
+)
 
 ReviewKind = Literal["ci_action", "ci_component", "config_file"]
 ReviewRule = Literal["pinned", "config"]
@@ -213,7 +225,8 @@ def _read(path: Path) -> str | None:
 
 
 def _gitlab_matches(repo_root: Path, tracked: frozenset[Path] | None,
-                    configured: Sequence[str], ghsync_root: Path | None) -> list[ReviewMatch]:
+                    configured: Sequence[str], ghsync_root: Path | None,
+                    merged: MergedCi) -> list[ReviewMatch]:
     path = repo_root / _GITLAB_CI
     if not _in_repo_file(repo_root, path) or (text := _read(path)) is None:
         return []
@@ -221,14 +234,25 @@ def _gitlab_matches(repo_root: Path, tracked: frozenset[Path] | None,
     sources = [(text, None, 0)] + [(f.text, f.line, f.depth)
                                    for f in resolve_includes(repo_root, ghsync_root).files]
     out: list[ReviewMatch] = []
+    seen: set[str] = set()
     for body, top_line, depth in sources:
         for entry in gitlab_includes(body, _GITLAB_CI, own_tracked):
+            seen.add(component_source(entry["source"]).lower())
             pinned = "ai-review-component" if is_review_component(entry["source"]) else None
             match = _match("ci_component", entry["source"], pinned, configured, _GITLAB_CI,
                            entry["line"] if top_line is None else top_line, entry["tracked"],
                            depth=depth)
             if match is not None:
                 out.append(match)
+    for source in merged.include_sources if merged.read else ():
+        if component_source(source).lower() in seen:
+            continue
+        seen.add(component_source(source).lower())
+        pinned = "ai-review-component" if is_review_component(source) else None
+        match = _match("ci_component", source, pinned, configured, _GITLAB_CI, None,
+                       own_tracked, depth=1)
+        if match is not None:
+            out.append(match)
     return out
 
 
@@ -267,12 +291,14 @@ def _config_file_matches(repo_root: Path, tracked: frozenset[Path] | None) -> li
 
 
 def scan_review_automation(repo_root: Path, fleet_config: FleetConfig | None = None,
-                           ghsync_root: Path | None = None) -> ReviewAutomationBlock:
-    """Build the ``review_automation`` block for one repository."""
+                           ghsync_root: Path | None = None,
+                           merged_ci: object = None) -> ReviewAutomationBlock:
+    """Build the ``review_automation`` block for one repository. ``merged_ci`` is the
+    ``gitlab_merged_ci`` reading (``lib/gitlab_ci_lint.py``); anything else is not read."""
     repo_root = repo_root.resolve()
     tracked = tracked_files(repo_root)
     configured = configured_components(fleet_config)
-    matches = (_gitlab_matches(repo_root, tracked, configured, ghsync_root)
+    matches = (_gitlab_matches(repo_root, tracked, configured, ghsync_root, as_merged(merged_ci))
                + _workflow_matches(repo_root, tracked, configured)
                + _config_file_matches(repo_root, tracked))
     credited = {m["kind"] for m in matches if m["tracked"] and m["on_changes"]}

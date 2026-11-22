@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.coverage_gate import detect_coverage_gate
+import pytest
+
+from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -55,7 +57,8 @@ def test_pyproject_fail_under(tmp_path: Path) -> None:
     gate = _only_gate(tmp_path)
     assert gate == {"file": "pyproject.toml", "line": 5, "tool": "coverage.py",
                     "form": "[tool.coverage.report] fail_under",
-                    "threshold": 85.0, "unit": "percent", "metric": "lines"}
+                    "threshold": 85.0, "unit": "percent", "threshold_percent": 85.0,
+                    "metric": "lines"}
     assert detect_coverage_gate(tmp_path)["enforced"] is True
 
 
@@ -109,7 +112,8 @@ def test_ci_workflow_cov_fail_under(tmp_path: Path) -> None:
     gate = _only_gate(tmp_path)
     assert gate == {"file": ".github/workflows/tests.yml", "line": 4,
                     "tool": "pytest-cov", "form": "--cov-fail-under",
-                    "threshold": 88.0, "unit": "percent", "metric": "lines"}
+                    "threshold": 88.0, "unit": "percent", "threshold_percent": 88.0,
+                    "metric": "lines"}
 
 
 def test_commented_ci_line_is_ignored(tmp_path: Path) -> None:
@@ -225,7 +229,7 @@ def test_pom_jacoco_minimum_keeps_ratio(tmp_path: Path) -> None:
     gate = _only_gate(tmp_path)
     assert gate == {"file": "pom.xml", "line": 8, "tool": "jacoco",
                     "form": "<rules> <minimum>", "threshold": 0.8,
-                    "unit": "ratio", "metric": "line"}
+                    "unit": "ratio", "threshold_percent": 80.0, "metric": "line"}
 
 
 def test_pom_jacoco_percent_minimum_is_percent(tmp_path: Path) -> None:
@@ -356,3 +360,271 @@ def test_this_repository_block_is_unchanged() -> None:
     gates = [g for g in detect_coverage_gate(repo)["gates"]
              if g["file"] in {"skills/assess/pyproject.toml", "scripts/pyproject.toml"}]
     assert gates and all(g["metric"] == "lines" for g in gates)
+
+
+# --- the 50 percent minimum (#781) -----------------------------------------
+
+def _pom(minimum: str) -> str:
+    return ("<project>\n  <artifactId>jacoco-maven-plugin</artifactId>\n"
+            "  <counter>LINE</counter>\n"
+            f"  <minimum>{minimum}</minimum>\n</project>\n")
+
+
+def _gradle(minimum: str) -> str:
+    return ('plugins { jacoco }\ntasks.jacocoTestCoverageVerification {\n'
+            '  violationRules { rule { limit {\n'
+            f'    minimum = {minimum}\n'
+            '  } } }\n}\n')
+
+
+def _fail_under(value: str) -> str:
+    return f"[project]\nname = 'x'\n\n[tool.coverage.report]\nfail_under = {value}\n"
+
+
+def _workflow(run: str) -> str:
+    return f"jobs:\n  t:\n    steps:\n      - run: {run}\n"
+
+
+_TEMPLATED = "pytest --cov=src --cov-fail-under=${{ env.COV_MIN }}"
+
+
+@pytest.mark.parametrize(("rel", "text", "threshold", "percent"), [
+    ("pom.xml", _pom("0.80"), 0.8, 80.0),
+    ("pom.xml", _pom("0.55"), 0.55, 55.0),  # 0.55 * 100 is 55.00000000000001 unrounded
+    ("pom.xml", _pom("80%"), 80.0, 80.0),
+    ("build.gradle", _gradle("0.5"), 0.5, 50.0),
+    ("pyproject.toml", _fail_under("49.9"), 49.9, 49.9),
+])
+def test_threshold_percent_normalises_ratio_and_percent(
+        tmp_path: Path, rel: str, text: str, threshold: float, percent: float) -> None:
+    _write(tmp_path, rel, text)
+    gate = _only_gate(tmp_path)
+    assert gate["threshold_percent"] == percent
+    assert gate["threshold"] == threshold  # as written, never rescaled
+
+
+def test_threshold_percent_is_null_for_counts_and_unread_values(tmp_path: Path) -> None:
+    _write(tmp_path, "jest.config.js",
+           "module.exports = { coverageThreshold: { global: { lines: -10 } } };\n")
+    _write(tmp_path, ".github/workflows/ci.yml", _workflow(_TEMPLATED))
+    block = detect_coverage_gate(tmp_path)
+    assert [(g["unit"], g["threshold_percent"]) for g in block["gates"]] == [
+        ("uncovered_count", None), ("percent", None)]
+    assert block["max_threshold_percent"] is None
+
+
+_PY = "pyproject.toml"
+_CI = ".github/workflows/ci.yml"
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({_PY: _fail_under("1")}, False),
+    ({_PY: _fail_under("49.9")}, False),
+    ({_PY: _fail_under("50")}, True),
+    ({"pom.xml": _pom("0.80")}, True),
+    ({"pom.xml": _pom("0.01")}, False),
+    ({"pom.xml": _pom("80%")}, True),
+    ({"build.gradle": _gradle("0.5")}, True),
+    ({_CI: _workflow(_TEMPLATED)}, None),
+    ({"jest.config.js": "module.exports = { coverageThreshold: { global: { lines: -10 } } };\n"},
+     None),
+    ({_PY: _fail_under("1"), _CI: _workflow("pytest --cov=src --cov-fail-under=85")}, True),
+    ({_PY: _fail_under("1"), _CI: _workflow(_TEMPLATED)}, None),
+    ({_PY: _fail_under("0")}, False),
+    ({"jest.config.js": "module.exports = { coverageThreshold: {} };\n"}, False),
+    ({}, False),
+], ids=["fail-under-1", "fail-under-49.9", "fail-under-50", "jacoco-0.80", "jacoco-0.01",
+        "jacoco-80pct", "gradle-0.5", "templated-only", "jest-uncovered-count",
+        "max-wins", "low-plus-templated", "fail-under-0", "jest-empty", "no-gate"])
+def test_threshold_meets_minimum(tmp_path: Path, files: dict[str, str],
+                                 expected: bool | None) -> None:
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
+    block = detect_coverage_gate(tmp_path)
+    assert block["threshold_meets_minimum"] is expected
+
+
+def test_max_threshold_percent_is_the_highest_read_percentage(tmp_path: Path) -> None:
+    _write(tmp_path, _PY, _fail_under("1"))
+    _write(tmp_path, "pom.xml", _pom("0.70"))
+    _write(tmp_path, _CI, _workflow(_TEMPLATED))
+    assert detect_coverage_gate(tmp_path)["max_threshold_percent"] == 70.0
+    (tmp_path / "empty").mkdir()
+    assert detect_coverage_gate(tmp_path / "empty")["max_threshold_percent"] is None
+
+
+# --- Go and Rust (#788) -----------------------------------------------------
+
+_GO_MOD = "module example.com/x\n\ngo 1.22\n"
+_CARGO = "[package]\nname = 'x'\nversion = '0.1.0'\nedition = '2021'\n"
+
+
+def _testcoverage(body: str) -> str:
+    return f"profile: cover.out\nthreshold:\n{body}"
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({"go.mod": _GO_MOD, ".testcoverage.yml": _testcoverage("  total: 80\n")},
+     ("go-test-coverage", 80.0, "percent", ".testcoverage.yml", 3, "total")),
+    ({"go.mod": _GO_MOD, ".testcoverage.yml": _testcoverage("  total: 10\n")},
+     ("go-test-coverage", 10.0, "percent", ".testcoverage.yml", 3, "total")),
+    ({"Cargo.toml": _CARGO, _CI: _workflow("cargo tarpaulin --fail-under 80")},
+     ("cargo-tarpaulin", 80.0, "percent", _CI, 4, "lines")),
+    ({"Cargo.toml": _CARGO, _CI: _workflow("cargo llvm-cov --fail-under-lines 70")},
+     ("cargo-llvm-cov", 70.0, "percent", _CI, 4, "lines")),
+], ids=["go-80", "go-10", "tarpaulin-80", "llvm-cov-70"])
+def test_go_and_rust_gate_forms_are_read(tmp_path: Path, files: dict[str, str],
+                                         expected: tuple[object, ...]) -> None:
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
+    gate = _only_gate(tmp_path)
+    assert (gate["tool"], gate["threshold"], gate["unit"], gate["file"], gate["line"],
+            gate["metric"]) == expected
+    assert gate["threshold_percent"] == expected[1]
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({"go.mod": _GO_MOD, ".testcoverage.yml": _testcoverage("  total: 80\n")}, True),
+    ({"go.mod": _GO_MOD, ".testcoverage.yml": _testcoverage("  total: 10\n")}, False),
+    ({"Cargo.toml": _CARGO, _CI: _workflow("cargo tarpaulin --fail-under 80")}, True),
+    ({"Cargo.toml": _CARGO, _CI: _workflow("cargo llvm-cov --fail-under-lines 70")}, True),
+    ({"go.mod": _GO_MOD, _PY: _fail_under("85")}, True),
+], ids=["go-80", "go-10", "tarpaulin-80", "llvm-cov-70", "go-plus-python-85"])
+def test_go_and_rust_gates_feed_the_minimum(tmp_path: Path, files: dict[str, str],
+                                            expected: bool) -> None:
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
+    block = detect_coverage_gate(tmp_path)
+    assert block["threshold_meets_minimum"] is expected
+    assert block["unmeasured_reason"] is None
+
+
+@pytest.mark.parametrize(("files", "expected", "reason"), [
+    ({"go.mod": _GO_MOD, "main.go": "package main\n"}, None, "go_rust_gate_form_not_read"),
+    ({"Cargo.toml": _CARGO, "src/main.rs": "fn main() {}\n"}, None,
+     "go_rust_gate_form_not_read"),
+    ({"svc/go.mod": _GO_MOD}, None, "go_rust_gate_form_not_read"),
+    ({_PY: "[project]\nname = 'x'\n", "testdata/x/go.mod": _GO_MOD}, False, None),
+    ({_PY: "[project]\nname = 'x'\nversion = '0.1.0'\n"}, False, None),
+], ids=["go-only", "cargo-only", "nested-go-mod", "testdata-fixture", "pyproject-only"])
+def test_go_or_rust_with_no_readable_gate_is_not_measured(
+        tmp_path: Path, files: dict[str, str], expected: bool | None,
+        reason: str | None) -> None:
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
+    block = detect_coverage_gate(tmp_path)
+    assert block["gates"] == []
+    assert block["enforced"] is False
+    assert block["threshold_meets_minimum"] is expected
+    assert block["unmeasured_reason"] == reason
+
+
+def test_a_found_gate_keeps_the_normal_reading_beside_go(tmp_path: Path) -> None:
+    """Any gate found, even one gating nothing, keeps the normal evaluation."""
+    _write(tmp_path, "go.mod", _GO_MOD)
+    _write(tmp_path, _PY, _fail_under("0"))
+    block = detect_coverage_gate(tmp_path)
+    assert block["threshold_meets_minimum"] is False
+    assert block["unmeasured_reason"] is None
+
+
+def test_excluded_go_mod_does_not_make_the_reading_unknown(tmp_path: Path) -> None:
+    _write(tmp_path, "node_modules/dep/go.mod", _GO_MOD)
+    _write(tmp_path, "vendor/x/Cargo.toml", _CARGO)
+    block = detect_coverage_gate(tmp_path)
+    assert block["threshold_meets_minimum"] is False
+    assert block["unmeasured_reason"] is None
+
+
+@pytest.mark.parametrize(("body", "expected"), [
+    ("  file: 60\n  package: 70\n  total: 85  # project floor\n",
+     [("file", 60.0, 3), ("package", 70.0, 4), ("total", 85.0, 5)]),
+    ("  total: 0\n", [("total", 0.0, 3)]),
+    ("  # total: 90\n  total: 75\nexclude:\n  total: 99\n", [("total", 75.0, 4)]),
+], ids=["all-three", "zero", "comment-and-sibling-key"])
+def test_testcoverage_keys_map_to_metrics(tmp_path: Path, body: str,
+                                          expected: list[tuple[str, float, int]]) -> None:
+    _write(tmp_path, ".testcoverage.yml", _testcoverage(body))
+    gates = detect_coverage_gate(tmp_path)["gates"]
+    assert [(g["metric"], g["threshold"], g["line"]) for g in gates] == expected
+    assert all(g["tool"] == "go-test-coverage" for g in gates)
+
+
+def test_testcoverage_inline_threshold_map(tmp_path: Path) -> None:
+    _write(tmp_path, ".testcoverage.yaml", "threshold: {total: 80, file: 50}\n")
+    gates = detect_coverage_gate(tmp_path)["gates"]
+    assert sorted((g["metric"], g["threshold"], g["line"]) for g in gates) == [
+        ("file", 50.0, 1), ("total", 80.0, 1)]
+
+
+def test_zero_testcoverage_total_gates_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, "go.mod", _GO_MOD)
+    _write(tmp_path, ".testcoverage.yml", _testcoverage("  total: 0\n"))
+    block = detect_coverage_gate(tmp_path)
+    assert (block["enforced"], block["threshold_meets_minimum"]) == (False, False)
+
+
+@pytest.mark.parametrize(("run", "expected"), [
+    ("cargo tarpaulin --out Xml --fail-under=80", [("cargo-tarpaulin", 80.0)]),
+    ("cargo tarpaulin --fail-under ${{ env.COV_MIN }}", [("cargo-tarpaulin", None)]),
+    ("cargo llvm-cov --fail-under-lines=70", [("cargo-llvm-cov", 70.0)]),
+    ("cargo +nightly tarpaulin --fail-under 80", [("cargo-tarpaulin", 80.0)]),
+    ("cargo tarpaulin --out Xml && coverage report --fail-under=80", [("coverage.py", 80.0)]),
+    ("cargo llvm-cov --fail-under-regions 70", []),
+    ("cargo tarpaulin --fail-under-lines 70", []),
+    ("coverage report --fail-under=80", [("coverage.py", 80.0)]),
+    ("pytest --cov-fail-under=80", [("pytest-cov", 80.0)]),
+], ids=["tarpaulin-eq", "tarpaulin-templated", "llvm-cov-eq", "nightly-tarpaulin",
+        "tarpaulin-then-coverage-py",        "llvm-cov-regions",
+        "tarpaulin-not-llvm-flag", "coverage-py-not-rust", "pytest-cov-not-rust"])
+def test_rust_cli_forms_are_anchored_on_the_tool(tmp_path: Path, run: str,
+                                                 expected: list[tuple[str, float | None]]
+                                                 ) -> None:
+    _write(tmp_path, _CI, _workflow(run))
+    gates = detect_coverage_gate(tmp_path)["gates"]
+    assert [(g["tool"], g["threshold"]) for g in gates] == expected
+
+
+def test_templated_rust_threshold_still_gates(tmp_path: Path) -> None:
+    _write(tmp_path, "Cargo.toml", _CARGO)
+    _write(tmp_path, _CI, _workflow("cargo tarpaulin --fail-under $COV_MIN"))
+    block = detect_coverage_gate(tmp_path)
+    assert (block["enforced"], block["threshold_meets_minimum"]) == (True, None)
+    assert block["unmeasured_reason"] is None
+
+
+def test_read_forms_leave_not_detected(tmp_path: Path) -> None:
+    text = " ".join(detect_coverage_gate(tmp_path)["not_detected"])
+    assert "tarpaulin `--fail-under`" not in text and ".testcoverage.yml" not in text
+    assert "go tool cover" in text
+
+
+def test_scoped_run_reads_the_root_go_mod(tmp_path: Path) -> None:
+    """A Go package directory has no go.mod of its own: the root module counts."""
+    _write(tmp_path, "go.mod", _GO_MOD)
+    _write(tmp_path, "pkg/a/a.go", "package a\n")
+    block = detect_coverage_gate(tmp_path, scope=Path("pkg/a"))
+    assert block["unmeasured_reason"] == "go_rust_gate_form_not_read"
+    _write(tmp_path, "pkg/b/b.py", "x = 1\n")
+    (tmp_path / "go.mod").unlink()
+    assert detect_coverage_gate(tmp_path, scope=Path("pkg/a"))["unmeasured_reason"] is None
+
+
+def test_scoped_run_reads_the_root_testcoverage_config(tmp_path: Path) -> None:
+    _write(tmp_path, "go.mod", _GO_MOD)
+    _write(tmp_path, ".testcoverage.yml", _testcoverage("  total: 80\n"))
+    _write(tmp_path, "pkg/a/a.go", "package a\n")
+    block = detect_coverage_gate(tmp_path, scope=Path("pkg/a"))
+    assert [g["file"] for g in block["gates"]] == [".testcoverage.yml"]
+    assert block["threshold_meets_minimum"] is True
+
+
+def test_scoped_run_reads_an_intermediate_go_mod(tmp_path: Path) -> None:
+    """A manifest between the root and the scope is the scope's module."""
+    _write(tmp_path, "services/api/go.mod", _GO_MOD)
+    _write(tmp_path, "services/api/cmd/main.go", "package main\n")
+    _write(tmp_path, "services/web/x.py", "x = 1\n")
+    assert detect_coverage_gate(
+        tmp_path, scope=Path("services/api/cmd"))["unmeasured_reason"] == GO_RUST_UNMEASURED
+    assert detect_coverage_gate(
+        tmp_path, scope=Path("services/web"))["unmeasured_reason"] is None

@@ -1,10 +1,14 @@
 # Next steps: `grpc/sub`
 
-Maturity model `next-steps-fixture-1`. 1 repository: 1 scanned, 0 failed.
+In place: 5 of 7 rows at the top level and 5 at level 1 or above, across 1 repository.
+
+Maturity model `next-steps-fixture-1`. 1 repository: 1 scanned, 0 could not be scanned.
 
 Each numbered step is one change: take or leave it on its own. "Done when" is checkable in the repository or its platform settings; the re-run check is optional.
 
 ## Levels
+
+In place: 6 of 7 rows measured for this group, each with the roll-up rule it uses.
 
 | Row | Level | Roll-up |
 |-----|-------|---------|
@@ -18,7 +22,9 @@ Each numbered step is one change: take or leave it on its own. "Done when" is ch
 
 ## Group settings
 
-Level 0 of 2. To reach level 1:
+In place: nothing confirmed on this row yet (level 0 of 2).
+
+To reach level 1:
 
 1. **Set the group's two-factor authentication requirement to `on`.**
    - Done when: The group settings page shows the two-factor authentication requirement as `on`.
@@ -28,27 +34,27 @@ Level 0 of 2. To reach level 1:
 
 ## Agent instructions
 
-Level 2 of 2: the top level. No next step.
+In place: level 2 of 2, the top level. No next step.
 
 ## Coverage \| mutation
 
-Level 2 of 2: the top level. No next step.
+In place: level 2 of 2, the top level. No next step.
 
 ## Runtime legibility
 
-Level unknown (between 0 and 1 of 1). This is a measurement gap, not a failure: the run could not measure every signal the level depends on.
+In place: nothing confirmed on this row yet; the level is not measured (between 0 and 1 of 1 once measured). This is a measurement gap: the run could not measure every signal the level depends on.
 
 - `observability.rung`: not measured in 1 of 1 repository. Read from committed files by a full `/assess` run and a headless scan alike; unavailable when the scan raised (`scan_failed`) or the scan came from an older toolkit, which measured it in a full run only.
 - Repositories whose own level is undetermined (1): `grpc/sub/app`.
 
 ## Agent permissions
 
-Level 1 of 1: the top level. No next step.
+In place: level 1 of 1, the top level. No next step.
 
 ## Shared tooling
 
-Level 1 of 1: the top level. No next step.
+In place: level 1 of 1, the top level. No next step.
 
 ## Agent environment
 
-Level 1 of 1: the top level. No next step.
+In place: level 1 of 1, the top level. No next step.

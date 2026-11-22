@@ -37,9 +37,11 @@ from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
+from lib.agent_consistency import AgentConsistencyBlock
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
+from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
@@ -67,6 +69,7 @@ from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
 from lib.layer_grades import LayerGradesBlock
+from lib.level_result_types import Headline, LevelResult
 from lib.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
@@ -102,6 +105,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.complexity_unreliable", UnreliableCcnRow),
     ("excluded_generated", GeneratedExclusion),
     ("nested_instructions", NestedInstructionsBlock),
+    ("agent_consistency", AgentConsistencyBlock),
     ("agent_harness", AgentHarnessBlock),
     ("agent_environment", AgentEnvironmentBlock),
     ("claude_config", ClaudeConfigBlock),
@@ -122,6 +126,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ai_usage", AiUsageBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
+    ("guardrails", GuardrailsBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),
@@ -132,6 +137,8 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("instruction_claims", InstructionClaimsBlock),
     ("promissory_markers", PromissoryMarkersBlock),
     ("review_reality", ReviewRealityBlock),
+    ("level", LevelResult),
+    ("headline", Headline),
 )
 
 _UNIONS = (Union, types.UnionType)

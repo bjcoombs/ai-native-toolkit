@@ -202,7 +202,7 @@ def test_next_steps_say_at_least_and_needs_a_full_assess():
     results = ns.evaluate_group(model, "g", rows, {})
     page = ns.group_page(model, group, rows, results)
     assert "| Coverage | at least 1 of 2 (higher unknown) |" in page
-    assert "Level at least 1 of 2, unknown above it (up to 2)." in page
+    assert "In place: at least level 1 of 2, confirmed; higher levels are not measured yet (up to 2)." in page
     assert ns.FULL_RUN_HINT in page
 
 

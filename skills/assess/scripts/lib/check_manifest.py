@@ -16,12 +16,19 @@ and ``load_manifest`` raises ``CheckManifestError`` carrying all of them. The lo
 value is the TOML document itself, cast to ``CheckManifest``: no defaults are filled
 and nothing is re-keyed, so ``json.dumps`` of it validates against the schema.
 
-Step 1 of the #789 migration: nothing reads the manifest at runtime yet. The scan
-registry, the headless tables, the finding tables, the counts-only rules and the
-default maturity model are checked against it in both directions by
-``tests/test_check_manifest.py``; later steps generate those tables from it. This
-module imports none of them (they will import it), so the agreement checks live in
-the tests.
+Generated from it at import (#795, steps 3 and 4 of the #789 migration), through
+:func:`core_manifest` (loaded once per process): the finding tables
+(``keyhole_signals.FINDING_ORDER``, ``FINDING_ACTIONS``, ``FINDING_MODES``,
+``GIT_HISTORY_FINDINGS``, ``_CHURN_DERIVED_FINDINGS``,
+``assess_config.GATE_CONCERN_FINDINGS``) from :func:`finding_tables`, the
+``hidden_coupling`` threshold defaults (``coupling_analysis``) from
+:func:`finding_thresholds`, the counts-only ``counts_only_rules.RULES`` from
+:func:`privacy_rules`, and the per-block ``reason`` descriptions of the published
+signals and fleet-row schemas from :func:`reason_codes`. The scan registry, the
+headless tables, the typed roots and the default maturity model are still code, checked
+against the manifest in both directions by ``tests/test_check_manifest.py``. This
+module imports none of those modules (they import it), so the agreement checks live
+in the tests.
 
 Ids: a collector is ``<owner>.<scan key>`` (``core.ci_checks``), a signal
 ``<owner>:<run-context path>`` (``core:ci_checks.test_or_lint_runs``), a condition
@@ -33,6 +40,7 @@ follows from that class.
 """
 from __future__ import annotations
 
+import functools
 import re
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
@@ -59,13 +67,17 @@ EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
 HEADLESS = ("registered", "headless_variant", "unregistered")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
-CARRIED_IN = ("reason", "basis")
+CARRIED_IN = ("reason", "basis", "unmeasured_reason")
+# The one ``suppressed_when`` expression the finding tables evaluate until the rule
+# evaluator (#789 step 5): a finding that declares it is emptied on degenerate churn.
+CHURN_SUPPRESSION = "doc_staleness.churn_degenerate == true"
 
 _OWNER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _CALLABLE_RE = re.compile(r"^[a-z_][a-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*$")
-_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+# A reason code; a trailing ``<name>`` stands for a family (``no_import_graph_<language>``).
+_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}(<[a-z]+>)?$")
 _KEY_RE = re.compile(r"^([a-z0-9-]+)\.([0-9]+):([a-z0-9_.]+)$")
 
 
@@ -73,7 +85,8 @@ class UnknownReason(TypedDict):
     code: str
     means: str
     next_step: str
-    carried_in: NotRequired[Literal["reason", "basis"]]
+    carried_in: NotRequired[Literal["reason", "basis", "unmeasured_reason"]]
+    block: NotRequired[str]
 
 
 class HeadlessVariant(TypedDict):
@@ -261,7 +274,7 @@ _FIELDS: dict[str, dict[str, Check]] = {
         "shapes": _records({"path": _str(), "type": _str(_CALLABLE_RE)},
                            frozenset({"path", "type"})),
         "unknown_reasons": _records(
-            {"code": _str(_CODE_RE), "carried_in": _enum(CARRIED_IN),
+            {"code": _str(_CODE_RE), "carried_in": _enum(CARRIED_IN), "block": _str(_NAME_RE),
              "means": _str(max_len=300), "next_step": _str(max_len=300)},
             frozenset({"code", "means", "next_step"})),
         "privacy": _table(_enum(PRIVACY_CLASSES)),
@@ -414,10 +427,22 @@ def _collector_rules(c: CollectorEntry, where: str, out: list[ValidationError]) 
     for block in sorted(variants - set(c.get("headless", {}))):
         out.append(finding(f"{where}.headless_variants", "VARIANT_MISMATCH",
                            f"headless_variants names {block!r}, which headless does not list"))
+    _published_refs(c, where, out)
+
+
+def _published_refs(c: CollectorEntry, where: str, out: list[ValidationError]) -> None:
+    """A shape and a reason code's ``block`` sit under a block the collector publishes."""
+    name, pub = scan_key(c), c["publishes"]
     for shape in c.get("shapes", []):
         if shape["path"].split(".")[0] not in pub:
             out.append(finding(f"{where}.shapes", "UNPUBLISHED_BLOCK",
                                f"shape {shape['path']!r} is not under a block {name} publishes"))
+    for reason in c.get("unknown_reasons", []):
+        if "block" in reason and reason["block"] not in pub:
+            out.append(finding(f"{where}.unknown_reasons", "UNPUBLISHED_BLOCK",
+                               f"reason {reason['code']!r} names {reason['block']!r}, which "
+                               f"{name} does not publish", suggestion=closest(reason["block"], pub),
+                               available=pub))
 
 
 def _reads_graph(cols: Sequence[tuple[str, CollectorEntry]], out: list[ValidationError]) -> None:
@@ -442,6 +467,9 @@ def _reads_graph(cols: Sequence[tuple[str, CollectorEntry]], out: list[Validatio
                                    f"{block!r} is also published by {written[block]}"))
             written[block] = name
         produced[name] = stage
+        # as scan_registry.validate: a spread entry's keys are readable from its stage on
+        if c.get("spread"):
+            produced.update({block: stage for block in c["publishes"]})
 
 
 def _references(m: CheckManifest, where_of: Mapping[str, str], out: list[ValidationError]) -> None:
@@ -471,6 +499,13 @@ def _references(m: CheckManifest, where_of: Mapping[str, str], out: list[Validat
             out.append(finding(f"{where_of[c['id']]}.key", "UNKNOWN_SIGNAL",
                                f"condition reads {sig!r}, which no signal entry declares",
                                suggestion=closest(sig, signal_paths)))
+    classified: dict[str, str] = {}
+    for col in collectors(m):
+        for pattern in col.get("privacy", {}):
+            if pattern in classified:
+                out.append(finding(f"{where_of[col['id']]}.privacy", "DUPLICATE_PRIVACY",
+                                   f"{pattern!r} is also classified by {classified[pattern]}"))
+            classified[pattern] = col["id"]
     names = set(blocks) | {scan_key(c) for c in collectors(m)}
     orders: dict[int, str] = {}
     for f in findings(m):
@@ -479,6 +514,9 @@ def _references(m: CheckManifest, where_of: Mapping[str, str], out: list[Validat
             out.append(finding(f"{where}.order", "DUPLICATE_ORDER",
                                f"order {f['order']} is also {orders[f['order']]}"))
         orders[f["order"]] = f["name"]
+        if f.get("suppressed_when", CHURN_SUPPRESSION) != CHURN_SUPPRESSION:
+            out.append(finding(f"{where}.suppressed_when", "UNSUPPORTED_EXPRESSION",
+                               f"the only supported expression is {CHURN_SUPPRESSION!r}"))
         for read in f["inputs"]:
             if read.split(".")[0] not in names:
                 out.append(finding(f"{where}.inputs", "UNKNOWN_INPUT",
@@ -527,3 +565,55 @@ def load_manifest(path: Path = CORE_MANIFEST) -> CheckManifest:
     except tomllib.TOMLDecodeError as e:
         raise CheckManifestError(path.as_posix(), [finding("manifest", "TOML_ERROR", str(e))]) from e
     return parse_manifest(data, path.as_posix())
+
+
+@functools.cache
+def core_manifest() -> CheckManifest:
+    """The validated core manifest, loaded once per process (the tables below read it at import)."""
+    return load_manifest()
+
+
+# --- tables generated from a manifest (#795) ------------------------------------------
+
+class FindingTables(TypedDict):
+    """The finding tables ``keyhole_signals`` and ``assess_config`` expose, from the manifest."""
+
+    order: list[str]
+    actions: dict[str, str]
+    modes: dict[str, str]
+    concern: list[str]
+    prune_missing_paths: frozenset[str]
+    churn_suppressed: frozenset[str]
+
+
+def finding_tables(manifest: CheckManifest) -> FindingTables:
+    """Every table keyed by finding name, in ``order`` (the report and severity order)."""
+    entries = findings(manifest)
+    return {
+        "order": [f["name"] for f in entries],
+        "actions": {f["name"]: f["action"] for f in entries},
+        "modes": {f["name"]: f["mode"] for f in entries},
+        "concern": [f["name"] for f in entries if f["concern"]],
+        "prune_missing_paths": frozenset(f["name"] for f in entries if f.get("prune_missing_paths")),
+        "churn_suppressed": frozenset(f["name"] for f in entries
+                                      if f.get("suppressed_when") == CHURN_SUPPRESSION),
+    }
+
+
+def finding_thresholds(manifest: CheckManifest, name: str) -> dict[str, float]:
+    """The ``thresholds`` table of one finding (empty when it declares none)."""
+    return next((dict(f.get("thresholds", {})) for f in findings(manifest) if f["name"] == name), {})
+
+
+def privacy_rules(manifest: CheckManifest) -> dict[str, dict[str, str]]:
+    """Scan key -> its collector's privacy table, in manifest (scan-table) order."""
+    return {scan_key(c): dict(c["privacy"]) for c in collectors(manifest) if c.get("privacy")}
+
+
+def reason_codes(manifest: CheckManifest, block: str) -> list[UnknownReason]:
+    """The codes a block's ``reason`` may carry: its collector's ``unknown_reasons`` carried in
+    ``reason`` (the default) that name this block or no block."""
+    declared = [r for c in collectors(manifest) if block in c["publishes"]
+                for r in c.get("unknown_reasons", [])]
+    return [r for r in declared
+            if r.get("carried_in", "reason") == "reason" and r.get("block", block) == block]

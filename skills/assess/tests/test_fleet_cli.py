@@ -107,9 +107,10 @@ def test_root_run_is_byte_identical_and_matches_the_list_run(froot, tmp_path, mo
     assert first == (tmp_path / "out2" / "repos.jsonl").read_bytes()
     assert first == (tmp_path / "out3" / "repos.jsonl").read_bytes()
     assert sorted(p.name for p in (tmp_path / "out1").iterdir()) == [
-        "achievements.json", "agent_clusters.json", "fleet-data.json", "groups.jsonl", "report.md", "repos.jsonl", "run.json",
-        "shared-tooling.svg"]
-    for name in ("report.md", "shared-tooling.svg", "agent_clusters.json", "fleet-data.json", "achievements.json"):  # byte-identical across runs
+        "achievements.json", "agent_clusters.json", "fleet-data.json", "groups.jsonl", "level.json", "report.md",
+        "repos.jsonl", "run.json", "shared-tooling.svg"]
+    for name in ("report.md", "shared-tooling.svg", "agent_clusters.json", "fleet-data.json", "achievements.json",
+                 "level.json"):  # byte-identical across runs
         drawn = (tmp_path / "out1" / name).read_bytes()
         assert drawn == (tmp_path / "out2" / name).read_bytes()
         assert drawn == (tmp_path / "out3" / name).read_bytes()
@@ -213,8 +214,8 @@ def test_a_raising_renderer_keeps_exit_0_and_the_history(froot, tmp_path, monkey
     assert sorted(p.name for p in (tmp_path / "hist").glob("*/*/*")) == [
         "fleet-data.json", "groups.jsonl", "repos.jsonl", "run.json"]
     report = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
-    assert "Not drawn: skipped: drawing failed (RuntimeError)." in report
-    assert "shared-tooling.svg skipped: drawing failed (RuntimeError)." in capsys.readouterr().err
+    assert "Not drawn: skipped: the renderer raised RuntimeError." in report
+    assert "shared-tooling.svg skipped: the renderer raised RuntimeError." in capsys.readouterr().err
 
 
 def test_no_diagrams_draws_nothing_and_removes_a_previous_runs(froot, tmp_path, monkeypatch, capsys):

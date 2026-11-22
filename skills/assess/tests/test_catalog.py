@@ -20,11 +20,11 @@ import gen_catalog
 import pytest
 
 from lib import check_manifest as cm
-from lib.catalog import (CATALOG_VERSION, UNCLASSIFIED, build_catalog, counts, criterion_text,
-                         render_json)
+from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
+                         grade_of, render_json)
 from lib.catalog_md import render_markdown
 from lib.keyhole_signals import FINDING_ORDER
-from lib.level_signals import counts_toward_level, load_default_levels
+from lib.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
 from lib.signals import known_scans
 
@@ -95,20 +95,29 @@ def test_grades_and_counting() -> None:
     assert not counts(UNCLASSIFIED)
     assert [counts_toward_level(g) for g in ("config_only", "declared", "measured", "verified", "x")] \
         == [False, False, True, True, False]
-    by_key = {c["key"]: c for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]}
-    ci = by_key["layer-5-ci.1:ci_checks.test_or_lint_runs"]
-    assert (ci["input_class"], ci["grade"], ci["counts"]) == ("head_text", "declared", False)
-    assert ci["text"] == "A CI line runs a test or lint command: is true"
-    assert by_key["layer-7-review.2:review_reality.reviewed_share"]["counts"] is True
+    signals = {s["path"]: s for s in catalog["signals"]}
+    crits = [c for r in catalog["rows"] for lv in r["levels"] for c in lv["criteria"]]
+    assert crits
+    for c in crits:
+        assert c["key"] == f"{c['key'].split(':', 1)[0]}:{c['signal']}"
+        assert c["input_class"] == SIGNAL_INPUTS[c["signal"]]
+        assert c["grade"] == grade_of(c["input_class"]) and c["counts"] is counts(c["grade"])
+        assert c["text"].startswith(f"{signals[c['signal']]['title']}: ")
+    assert any(c["counts"] for c in crits) and any(not c["counts"] for c in crits)
 
 
 def test_scan_entries_carry_relations_reasons_and_privacy() -> None:
     scans = {s["name"]: s for s in build_catalog()["scans"]}
     ci = scans["ci_checks"]
-    assert ci["used_by"]["rows"] == ["layer-5-ci"]
-    assert [r["code"] for r in ci["unknown_reasons"]] == ["included_jobs"]
+    model = load_default_levels()
+    assert ci["used_by"]["rows"] == sorted({r["id"] for r in model["rows"] for lv in r["levels"]
+                                            for c in lv["criteria"] if c["signal"].startswith("ci_checks.")})
+    assert any(r.startswith("layer-5-") for r in ci["used_by"]["rows"])
+    declared = next(c for c in cm.collectors(cm.load_manifest()) if c["id"] == "core.ci_checks")
+    assert [r["code"] for r in ci["unknown_reasons"]] == [r["code"] for r in declared["unknown_reasons"]]
+    assert "included_jobs" in [r["code"] for r in ci["unknown_reasons"]]
     assert ci["privacy"]["strings_kept"]["ci_checks.basis"] == "token"
-    assert [r["code"] for r in scans["behaviour"]["unknown_reasons"]] == ["not_registered"]
+    assert [r["code"] for r in scans["behaviour"]["unknown_reasons"]][0] == "not_registered"
     assert "hidden_coupling" in scans["behaviour"]["used_by"]["findings"]
     assert scans["review_reality"]["unknown_reasons"][0]["code"] == "network"
     assert "--platform" in scans["review_reality"]["unknown_reasons"][0]["next_step"]
@@ -117,7 +126,8 @@ def test_scan_entries_carry_relations_reasons_and_privacy() -> None:
     # A spread collector's block keeps only its own privacy patterns.
     assert all(k.startswith("structure") for k in scans["structure"]["privacy"]["strings_kept"])
     assert scans["agent_harness"]["grades"] == [UNCLASSIFIED]
-    assert scans["promissory_markers"]["grades"] == ["declared", "measured"]
+    pm = {grade_of(c) for s, c in SIGNAL_INPUTS.items() if s.startswith("promissory_markers.")}
+    assert scans["promissory_markers"]["grades"] == [g for g in GRADE_ORDER if g in pm]
 
 
 def test_criterion_text_words() -> None:

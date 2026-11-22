@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from lib.ci_checks import scan_ci_checks
 from lib.counts_only import counts_only_scans
 from lib.promissory_markers import scan_promissory_markers
 from lib.structure_graph import analyze_structure
@@ -64,9 +65,12 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     repo = tmp_path_factory.mktemp("instructed") / "repo"
     shutil.copytree(FIXTURES / "golden-doc-repo", repo)
     (repo / "CLAUDE.md").write_text("# Guide\n\nRun `make check` before pushing.\n", encoding="utf-8")
+    # A second agent system, so agent_consistency compares two root files.
+    (repo / ".windsurfrules").write_text("Follow [CLAUDE.md](CLAUDE.md).\n", encoding="utf-8")
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")
     (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
-    (repo / "pyproject.toml").write_text("[project]\nname = 'x'\nversion = '0'\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        "[project]\nname = 'x'\nversion = '0'\n\n[tool.mypy]\nstrict = true\n", encoding="utf-8")
     (repo / ".claude").mkdir()
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
@@ -149,6 +153,7 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "review_reality.reviewed_share",               # typed since #793
     "instruction_claims.failed",                   # typed since #793
     "config_drift.anything.deeper",                # untyped block: open
+    "coverage_gate.threshold_meets_minimum",          # #781
     "agent_ops.available",                         # every block may report status
     "layer_grades.instructions_grade",             # deterministic layer grade (#620)
     "layer_grades.instruction_file_present",
@@ -167,6 +172,7 @@ def test_team_paths_accepted(path: str) -> None:
     "agent_environment.check.named.command",   # steps into a list
     "observability.rung.deeper",               # past a scalar
     "stats_summary.loc.no_such",
+    "coverage_gate.threshold_minimum",         # typed since #781
     "layer_grades.layer_3_grade",              # no such layer grade
     "layer_grades",                            # ends on an object
     # #793: the blocks a default criterion reads are typed, so a misspelt
@@ -267,13 +273,15 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-0-instructions": 0,   # no CLAUDE.md: level 0, not unknown
             "layer-1-liveness": 0,       # no telemetry committed: rung 0 (#699)
             "layer-2-design": None,      # no Python package: no_python_packages
-            "layer-3-linters": None,     # no lint suppression: no suppression family
+            "layer-3-linters": 0,        # no CI file: no linter runs in CI (#782)
             "layer-4-architecture": None,  # no ownership map: no_ownership_map
             "layer-5-ci": 0,
             "layer-6-coverage": 0,
             "layer-7-review": None,      # needs GitHub
             "layer-8-agent-ops": 0,
             "doc-freshness": 2,          # docs and code committed together: none stale
+            "guardrails-stated": None,   # no configured gate: nothing to state
+            "agent-consistency": None,   # no instruction file: nothing to agree with
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
         assert scans["structure"]["reason"].startswith("no_python_packages:")
@@ -304,6 +312,8 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "layer-7-review": None,
         "layer-8-agent-ops": None,
         "doc-freshness": None,  # the capture predates doc_staleness.summary
+        "guardrails-stated": None,  # the capture predates the guardrails block
+        "agent-consistency": None,  # the capture predates agent_consistency
     }
     assert "layer_grades.instruction_file_present" in _row(
         result, "layer-0-instructions")["missing_signals"]
@@ -368,23 +378,60 @@ def test_layer_two_is_unknown_on_an_import_graph_with_no_edges(tmp_path: Path) -
     assert "structure.modularity_q" in row["missing_signals"]
 
 
-def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
-    row = _row(_run({"r": suppressed_repo}), "layer-3-linters")
-    assert row["level"] == 2   # one fresh suppression: a linter runs, none stale
+_LINT_WORKFLOW = ("on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n"
+                  "      - run: ruff check .\n")
 
-    stale = copy.deepcopy(suppressed_repo)
+
+def _linted(repo: Path, files: dict[str, str]) -> dict[str, Any]:
+    for rel, text in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(text, encoding="utf-8")
+    _commit(repo)
+    return {"ci_checks": scan_ci_checks(repo),
+            "promissory_markers": scan_promissory_markers(repo).summary()}
+
+
+def test_layer_three_level_one_reads_a_linter_run_in_ci(tmp_path: Path) -> None:
+    """Issue #782: a linter in CI earns level 1; a suppression comment alone earns nothing."""
+    clean = _linted(tmp_path / "clean", {".github/workflows/ci.yml": _LINT_WORKFLOW,
+                                         "app.py": "import os\n"})
+    row = _row(_run({"r": clean}), "layer-3-linters")
+    assert row["repos"]["r"]["bounds"][0] == 1   # level 2 unknown: no suppression family
+    assert "promissory_markers.families.suppression.stale" in row["missing_signals"]
+
+    noqa_only = _linted(tmp_path / "noqa", {"app.py": "import os  # noqa: F401\n"})
+    row = _row(_run({"r": noqa_only}), "layer-3-linters")
+    assert (row["status"], row["level"]) == ("level", 0)
+
+    target = _linted(tmp_path / "target", {".github/workflows/ci.yml": _CI_WORKFLOW,
+                                           "Makefile": "check:\n\ttrue\n"})
+    row = _row(_run({"r": target}), "layer-3-linters")
+    assert row["status"] == "unknown" and row["repos"]["r"]["bounds"][0] == 0
+
+
+def test_layer_three_reads_the_suppression_footprint(suppressed_repo: dict[str, Any]) -> None:
+    linted = {**copy.deepcopy(suppressed_repo), "ci_checks": {"lint_runs": True}}
+    row = _row(_run({"r": linted}), "layer-3-linters")
+    assert row["level"] == 2   # a linter in CI, one fresh suppression, none stale
+
+    stale = copy.deepcopy(linted)
     stale["promissory_markers"]["families"]["suppression"]["stale"] = 11
     assert _row(_run({"r": stale}), "layer-3-linters")["level"] == 1
 
-    shallow = copy.deepcopy(suppressed_repo)   # degenerate history: stale 0 says nothing
+    shallow = copy.deepcopy(linted)   # degenerate history: stale 0 says nothing
     shallow["promissory_markers"]["aging_reliable"] = False
     assert _row(_run({"r": shallow}), "layer-3-linters")["level"] == 1
 
-    none = copy.deepcopy(suppressed_repo)
+    none = copy.deepcopy(linted)
     del none["promissory_markers"]["families"]["suppression"]
     row = _row(_run({"r": none}), "layer-3-linters")
-    assert (row["status"], row["level"]) == ("unknown", None)   # no footprint is not credit
-    assert "promissory_markers.families.suppression.total" in row["missing_signals"]
+    # No footprint leaves only level 2 unknown: level 1 still reads the linter run.
+    assert (row["status"], row["repos"]["r"]["bounds"]) == ("unknown", [1, 2])
+    assert row["missing_signals"] == ["promissory_markers.families.suppression.stale"]
+
+    unlinted = {**copy.deepcopy(suppressed_repo), "ci_checks": {"lint_runs": False}}
+    row = _row(_run({"r": unlinted}), "layer-3-linters")
+    assert (row["status"], row["level"]) == ("level", 0)   # a suppression never grants the row
 
 
 def test_instructions_raise_layer_zero_and_five(instructed_repo: dict[str, Any]) -> None:
@@ -431,6 +478,7 @@ def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) 
     ci = _CI_WORKFLOW.replace("make check", "make test")
     unlocked = _ci_repo(tmp_path / "unlocked", ci, instructions=True, extra=_UNLOCKED)
     assert unlocked["ci_checks"]["test_or_lint_runs"] is True
+    assert unlocked["ci_checks"]["enforced_check_runs"] is True
     assert unlocked["agent_environment"]["pinning"]["unlocked_total"] == 1
     assert _row(_run({"r": unlocked}), "layer-5-ci")["level"] == 1
     named = _ci_repo(tmp_path / "named", ci, instructions=True)
@@ -463,6 +511,24 @@ def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -
     assert row["level"] == 1
 
 
+def test_layer_five_is_unknown_on_a_ci_system_the_scanner_cannot_read(tmp_path: Path) -> None:
+    """Issue #787: a Jenkins-only repository is not measured at Layer 5, never level 0."""
+    scans = _ci_repo(tmp_path / "jenkins", None, instructions=False,
+                     extra={"Jenkinsfile": "pipeline { stages { stage('t') { steps { sh 'pytest' } } } }\n"})
+    assert (scans["ci_checks"]["basis"], scans["ci_checks"]["unread_ci_files"]) == ("unread_ci_system", 1)
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+    layer3 = _row(_run({"r": scans}), "layer-3-linters")
+    assert (scans["ci_checks"]["lint_runs"], scans["ci_checks"]["lint_basis"]) == (
+        None, "unread_ci_system")
+    assert (layer3["status"], layer3["level"]) == ("unknown", None)
+    assert "ci_checks.lint_runs" in layer3["missing_signals"]
+    both = _ci_repo(tmp_path / "both", _CI_WORKFLOW.replace("make check", "make test"),
+                    instructions=False, extra={"Jenkinsfile": "sh 'pytest'\n"})
+    assert _row(_run({"r": both}), "layer-5-ci")["repos"]["r"]["levels"][0]["met"] is True
+
+
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:
     """The accepted regression: a named check alone no longer reaches any Layer 5 level."""
     deploy = _CI_WORKFLOW.replace("make check", "make deploy")
@@ -470,6 +536,7 @@ def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_pa
         scans = _ci_repo(tmp_path / name, workflow, instructions=True)
         assert scans["agent_environment"]["layer5_cap"]["applies"] is False
         assert scans["ci_checks"]["test_or_lint_runs"] is False
+        assert scans["ci_checks"]["enforced_check_runs"] is False
         assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
 
 
@@ -496,7 +563,27 @@ def test_layer_five_is_unknown_when_ci_jobs_come_only_from_includes(tmp_path: Pa
     assert scans["ci_checks"]["basis"] == "included_jobs"
     row = _row(_run({"r": scans}), "layer-5-ci")
     assert (row["status"], row["level"]) == ("unknown", None)
-    assert "ci_checks.test_or_lint_runs" in row["missing_signals"]
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+
+
+def test_layer_five_level_one_needs_an_enforced_check(tmp_path: Path) -> None:
+    """Issue #775: a CI check that cannot fail its job does not meet Layer 5 level 1."""
+    masked = _ci_repo(tmp_path / "masked", _CI_WORKFLOW.replace("make check", "pytest || true"),
+                      instructions=False)
+    assert masked["ci_checks"]["test_or_lint_runs"] is True
+    assert masked["ci_checks"]["enforced_check_runs"] is False
+    assert _row(_run({"r": masked}), "layer-5-ci")["level"] == 0
+    plain = _ci_repo(tmp_path / "plain", _CI_WORKFLOW.replace("make check", "pytest"), instructions=False)
+    assert _row(_run({"r": plain}), "layer-5-ci")["level"] >= 1
+
+
+def test_layer_five_is_unknown_on_a_scan_without_enforced_check_runs(tmp_path: Path) -> None:
+    """A stored scan from before #775 has no enforced_check_runs: unknown, never 0."""
+    scans = _ci_repo(tmp_path / "old", _CI_WORKFLOW.replace("make check", "make test"), instructions=False)
+    del scans["ci_checks"]["enforced_check_runs"]
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert row["status"] == "unknown"
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
 
 
 def test_no_instruction_file_is_zero_but_a_missing_block_is_unknown(
@@ -568,3 +655,67 @@ def test_counts_only_output_reaches_the_same_levels(
 
 def test_rerun_is_byte_identical(golden_repos: dict[str, dict[str, Any]]) -> None:
     assert dumps_result(_run(golden_repos)) == dumps_result(_run(copy.deepcopy(golden_repos)))
+
+
+def _coverage_repo(root: Path, files: dict[str, str]) -> dict[str, Any]:
+    root.mkdir()
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+    return _scans(_commit(root))
+
+
+def test_layer_six_level_one_needs_a_threshold_of_at_least_fifty(tmp_path: Path) -> None:
+    """Issue #781: a 1 percent gate is level 0; 85 is level 1; a templated one is unknown."""
+    report = "[project]\nname = 'x'\nversion = '0'\n\n[tool.coverage.report]\nfail_under = {}\n"
+    low = _coverage_repo(tmp_path / "low", {"pyproject.toml": report.format(1)})
+    assert low["coverage_gate"]["threshold_meets_minimum"] is False
+    assert _row(_run({"r": low}), "layer-6-coverage")["level"] == 0
+
+    high = _coverage_repo(tmp_path / "high", {"pyproject.toml": report.format(85)})
+    row = _row(_run({"r": high}), "layer-6-coverage")
+    # Mutation (level 2) is not measured headless, so level 1 shows as the floor.
+    assert (row["status"], row.get("floor")) == ("unknown", 1)
+
+    workflow = ("on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
+                "      - run: pytest --cov-fail-under=${{ env.COV_MIN }}\n")
+    templated = _coverage_repo(tmp_path / "templated", {".github/workflows/ci.yml": workflow})
+    row = _row(_run({"r": templated}), "layer-6-coverage")
+    assert (row["status"], row["level"], row.get("floor")) == ("unknown", None, None)
+    assert "coverage_gate.threshold_meets_minimum" in row["missing_signals"]
+
+
+@pytest.mark.parametrize("meets", [True, False, None])
+def test_coverage_threshold_signal_survives_counts_only(meets: bool | None) -> None:
+    """Counts-only output keeps the three-state signal and both percentages (#781)."""
+    gate = {"file": "pom.xml", "line": 3, "tool": "jacoco", "form": "<rules> <minimum>",
+            "threshold": 0.8, "unit": "ratio", "threshold_percent": 80.0, "metric": "line"}
+    block = {"available": True, "enforced": True, "gates": [gate], "max_threshold_percent": 80.0,
+             "threshold_meets_minimum": meets, "not_detected": ["x"]}
+    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
+    assert out["threshold_meets_minimum"] is meets
+    assert out["max_threshold_percent"] == 80.0
+    assert (out["gates"][0]["threshold"], out["gates"][0]["threshold_percent"]) == (0.8, 80.0)
+
+
+def test_layer_six_is_unknown_on_a_go_repository_with_no_readable_gate(tmp_path: Path) -> None:
+    """Issue #788: a Go repository with no gate found is not measured, never 0."""
+    go = _coverage_repo(tmp_path / "go", {"go.mod": "module example.com/x\n\ngo 1.22\n",
+                                          "main.go": "package main\n\nfunc main() {}\n"})
+    assert go["coverage_gate"]["unmeasured_reason"] == "go_rust_gate_form_not_read"
+    row = _row(_run({"r": go}), "layer-6-coverage")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert row.get("floor") is None
+    gated = _coverage_repo(tmp_path / "gated", {
+        "go.mod": "module example.com/x\n", ".testcoverage.yml": "threshold:\n  total: 80\n"})
+    row = _row(_run({"r": gated}), "layer-6-coverage")
+    assert (row["status"], row.get("floor")) == ("unknown", 1)
+
+
+def test_unmeasured_reason_survives_counts_only() -> None:
+    block = {"available": True, "enforced": False, "gates": [], "max_threshold_percent": None,
+             "threshold_meets_minimum": None,
+             "unmeasured_reason": "go_rust_gate_form_not_read", "not_detected": ["x"]}
+    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
+    assert out["unmeasured_reason"] == "go_rust_gate_form_not_read"
+    assert out["threshold_meets_minimum"] is None

@@ -43,7 +43,11 @@ def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tm
     first = json.loads((tmp_path / "o1" / "achievements.json").read_text(encoding="utf-8"))
     assert len(first["runs"]) == 1 and first["achievements"] == []
     report = (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
-    assert report.index("## What changed and who earned it") < report.index("## Activity and maturity")
+    assert report.index("## What changed and who earned it") < report.index("## Opportunities") \
+        < report.index("## Activity and maturity")  # #746: opportunities after credit, before diagrams
+    assert "This run is the starting line, so there is no earlier run" in report  # kept: a real first run
+    data = json.loads((tmp_path / "o1" / "fleet-data.json").read_text(encoding="utf-8"))
+    assert data["fleet_data_version"] == 3 and data["opportunities"]["measured"] == 2
     (today,) = (tmp_path / "hist" / "grpa+grpb").iterdir()
     _seed_lower(today, "2000-01-01", "grpa/svc1")
     capsys.readouterr()
@@ -55,6 +59,9 @@ def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tm
     kinds = {(a["kind"], a["unit"]) for a in doc["achievements"]}
     assert ("level_up", "grpa/svc1") in kinds and ("target_hit", "grpa/svc1") in kinds
     assert "`grpa/svc1` hit its target of level 1" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+    # #746: recent progress reads this run's level-ups from the history, display only
+    assert "- `grpa/svc1` reached level" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+    assert (tmp_path / "o2" / "report.md").read_bytes() == (tmp_path / "o3" / "report.md").read_bytes()
 
 
 def test_no_history_writes_next_steps_and_a_note(tmp_path, monkeypatch):
@@ -81,7 +88,7 @@ def test_an_achievements_failure_keeps_exit_0_and_clears_a_stale_file(tmp_path, 
     def boom(*_args: object, **_kwargs: object) -> None:
         raise ValueError("engine bug")
     monkeypatch.setattr(fleet_cli, "build_achievements", boom)
-    assert fleet_cli._achievements(tmp_path, {}, {"scan_date": "2026-11-21"}, None, None, None, frozenset(), [], str) is None  # type: ignore[arg-type]
+    assert fleet_cli._achievements(tmp_path, {}, {"scan_date": "2026-11-21"}, None, None, None, frozenset(), [], str) == (None, None)  # type: ignore[arg-type]
     assert "fleet: achievements: not written (ValueError: engine bug)" in capsys.readouterr().err
     assert not (tmp_path / "achievements.json").exists()
 
@@ -139,3 +146,31 @@ def test_fleet_rerun_after_model_bump_keeps_history(tmp_path, monkeypatch, capsy
     assert counted is not None and int(counted.group(1)) > 1
     assert doc["recount"]["from_version"] == version.group(1) and doc["recount"]["to_version"] == "bumped-2"
     assert "### Recount" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+
+
+def test_without_levels_there_is_no_opportunities_section(tmp_path, monkeypatch):
+    """#746: nothing to lift to without a maturity model, so fleet-data.json holds null."""
+    root = _root(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert fleet_cli.main([str(root), "--no-history", "--out", "o1"]) == 0
+    assert json.loads((tmp_path / "o1" / "fleet-data.json").read_text(encoding="utf-8"))["opportunities"] is None
+    assert "## Opportunities" not in (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
+
+
+def test_an_opportunities_failure_keeps_exit_0_and_is_not_built_without_diagrams(tmp_path, monkeypatch, capsys):
+    """#746: the section is built inside the diagram guard, and only when diagrams are drawn."""
+    root = _root(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    calls: list[int] = []
+
+    def broken(*_: object) -> str:
+        calls.append(1)
+        raise ValueError("section bug")
+
+    monkeypatch.setattr(fleet_cli, "opportunities_section", broken)
+    assert fleet_cli.main([str(root), "--levels", "levels.toml", "--no-history", "--no-diagrams", "--out", "o1"]) == 0
+    assert calls == []
+    assert fleet_cli.main([str(root), "--levels", "levels.toml", "--no-history", "--out", "o2"]) == 0
+    assert calls == [1] and "fleet: diagrams: not written (ValueError: section bug)" in capsys.readouterr().err
+    assert json.loads((tmp_path / "o2" / "fleet-data.json").read_text(encoding="utf-8"))["opportunities"] is not None

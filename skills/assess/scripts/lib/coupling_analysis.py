@@ -44,16 +44,20 @@ is treated the same way per-directory (no static evidence for *that* dir).
 """
 from __future__ import annotations
 
+from lib.check_manifest import core_manifest, finding_thresholds
 from lib.run_context_types import CouplingRow, JsonDict
 
 # Per-directory static metrics (``modularity_q`` / ``front_door_ratio``), keyed
 # by directory, as keyhole_signals projects them from the structure block.
 StaticModularity = dict[str, JsonDict]
+# The hidden_coupling thresholds load from the check manifest (``checks/core.toml``,
+# the finding's ``thresholds`` table, #795).
+_THRESHOLDS = finding_thresholds(core_manifest(), "hidden_coupling")
 # Containment below this fraction means a module bleeds: most of its commits
 # drag in files outside it. The PRD leaves the exact island threshold open for
 # calibration (Open Question: "what containment ratio counts as an island?");
 # 0.3 / 0.7 are the v1 defaults and are overridable per call.
-DEFAULT_LOW_CONTAINMENT = 0.3
+DEFAULT_LOW_CONTAINMENT = _THRESHOLDS["low_containment"]
 DEFAULT_HIGH_CONTAINMENT = 0.7
 
 # A directory "looks modular" statically when EITHER its modularity is high
@@ -63,8 +67,8 @@ DEFAULT_HIGH_CONTAINMENT = 0.7
 # *claim* modularity; when history then contradicts it, that claim is the lie
 # worth investigating. OR (not AND) is deliberate: it makes hidden-coupling
 # detection more sensitive, erring toward surfacing a seam for human review.
-DEFAULT_HIGH_MODULARITY_Q = 0.3
-DEFAULT_HIGH_FRONT_DOOR_RATIO = 0.7
+DEFAULT_HIGH_MODULARITY_Q = _THRESHOLDS["high_modularity_q"]
+DEFAULT_HIGH_FRONT_DOOR_RATIO = _THRESHOLDS["high_front_door_ratio"]
 
 
 def _looks_modular(
@@ -137,7 +141,7 @@ def detect_hidden_coupling(
                 finding: str | None = "hidden_coupling"
                 recommendation = (
                     "investigate the seam - the static boundary looks modular but "
-                    "its commits bleed outside it; the boundary is lying"
+                    "its commits reach outside it; the boundary reads better than the history"
                 )
             else:
                 # Static and history agree this is coupled. Not hidden, and the

@@ -122,7 +122,7 @@ def test_load_bearing_surface_is_outside_folds() -> None:
     keeping every verbose section present in the raw markdown inside collapsed
     <details> folds (an agent reading the file still sees all of it).
 
-    A section-ablation A/B established the split: the score headline and the
+    A section-ablation A/B established the split: the headline and the
     Top 3 Actions are necessary (folding the Top 3 made a fresh agent act on
     the wrong item), so they must stay on the visible surface; the verbose
     scorecard / findings / framing are foldable. This guard fails loudly if that
@@ -134,7 +134,8 @@ def test_load_bearing_surface_is_outside_folds() -> None:
 
     # Essential: must be on the default-visible surface, never folded.
     assert "## Top 3 Actions" in surface
-    assert "Score: 6.0 / 8" in surface
+    assert surface.startswith("# Codebase Assessment") and "**Step 3 · " in surface
+    assert "Verified practices: " in surface
     # The two SVG snapshots carry the human value up top.
     assert surface.count("![") >= 2
 
@@ -149,7 +150,7 @@ def test_load_bearing_surface_is_outside_folds() -> None:
 
 
 def test_opening_summary_is_bespoke_not_boilerplate() -> None:
-    """The first thing a human reads (the line under the score headline) must be
+    """The first thing a human reads (the line under the headline) must be
     a bespoke, strength-led summary of *this* run - not the old fixed caveat that
     printed identically under every score. The non-verdict reassurance still
     lives in the 'How to read' fold; it must not lead the report.
@@ -176,7 +177,7 @@ def test_not_a_verdict_frame_adjacent_to_score() -> None:
     surface, sep, _ = report.partition("<details>")
     assert sep
     score_line = next(
-        line for line in surface.splitlines() if line.startswith("**Score:")
+        line for line in surface.splitlines() if line.startswith("_A readiness snapshot")
     )
     assert "not a verdict" in score_line
     # The compact frame is not the folded boilerplate sentence.

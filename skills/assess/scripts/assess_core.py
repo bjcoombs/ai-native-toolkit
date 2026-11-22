@@ -38,14 +38,17 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.badge import write_findings_badge
+from lib.badge import write_headline_badge
+from lib.headline import as_headline, run_context_headline
 from lib.counts_only import COUNTS_ONLY_FILE
 from lib.counts_only import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.coverage_report import load_coverage_data
+from lib.level_tally import run_context_level
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
+from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
@@ -120,11 +123,12 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     test evidence from the ``test_focus`` block (``lib.test_focus.mutation_scope``),
     runs ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites the
     ``test_pressure`` block in place along with every block derived from it: the
-    Layer 6 ``mutation_not_run_cap``, the E1 ``untrusted_hotspot`` finding in
+    Layer 6 ``mutation_not_run_cap``, the ``level`` tally with the ``headline`` and
+    ``badge.json`` worded from it, the E1 ``untrusted_hotspot`` finding in
     ``derived_findings``, and the products ranked or rendered from the findings
     (``attention``, ``attention_low_signal``, ``findings_markdown``,
     ``keyhole_summary``, ``prescribed_actions``, the archive and config-exclude
-    disclosures) and ``badge.json``, through ``lib.mutation_refresh``. Blocks that
+    disclosures), through ``lib.mutation_refresh``. Blocks that
     do not read ``test_pressure`` (``test_focus``, ``gap_actions``) are kept.
     ``run_bounded_mutation`` itself caps the scope at ``MAX_FILES_TO_MUTATE``, so
     passing every focus path is safe.
@@ -168,15 +172,23 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     # Refresh the Layer 6 cap: the mutation tier may have run this pass, lifting
     # the ceiling to Present. Written back so a subsequent finalize sees it.
     ctx["mutation_not_run_cap"] = mutation_not_run_cap(ctx["test_pressure"])
-    # E1 crosses the refreshed survivor density with this run's hotspots; the
-    # findings, attention, report products and badge are rebuilt from it.
-    if refresh_mutation_findings(
-        ctx, load_current_stats(assess_dir), *recorded_excludes(ctx, repo_root),
-    ):
-        write_findings_badge(
-            assess_dir, ctx.get("promissory_markers"), ctx["derived_findings"],
-            run_id=ctx.get("run_id"), scope=ctx.get("scope"),
+    # The tally reads mutation_run (Layer 6 level 2, #744): recount it in place.
+    # The headline and the badge carry the tally, so they are rewritten with it (#747).
+    if "level" in ctx:
+        ctx["level"] = run_context_level(ctx)
+        ctx["headline"] = run_context_headline(ctx["level"])
+        write_headline_badge(
+            assess_dir, as_headline(ctx["headline"]), run_id=ctx.get("run_id"),
+            scope=ctx.get("scope"),
         )
+        refresh_log_readiness(
+            assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
+        )
+    # E1 crosses the refreshed survivor density with this run's hotspots; the
+    # findings, attention and report products are rebuilt from it.
+    refresh_mutation_findings(
+        ctx, load_current_stats(assess_dir), *recorded_excludes(ctx, repo_root),
+    )
     ctx_path.write_text(json.dumps(ctx, indent=2), encoding="utf-8")
 
     tp = ctx["test_pressure"]
@@ -219,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         "--scope", type=Path, metavar="SUBDIR",
         help=(
             "Scope the assessment to a subtree (`/assess <path>` monorepo "
-            "scoping). A path under the repo root; the metrics, score, badge, "
+            "scoping). A path under the repo root; the metrics, headline, badge, "
             "wiki, and artifacts are all computed for and labelled with the "
             "scope, and land under `.assess/<scope-slug>/`. The scoped scans "
             "carry no signal from a sibling directory. Omit for a whole-repo "
