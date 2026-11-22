@@ -155,3 +155,22 @@ def test_without_levels_there_is_no_opportunities_section(tmp_path, monkeypatch)
     assert fleet_cli.main([str(root), "--no-history", "--out", "o1"]) == 0
     assert json.loads((tmp_path / "o1" / "fleet-data.json").read_text(encoding="utf-8"))["opportunities"] is None
     assert "## Opportunities" not in (tmp_path / "o1" / "report.md").read_text(encoding="utf-8")
+
+
+def test_an_opportunities_failure_keeps_exit_0_and_is_not_built_without_diagrams(tmp_path, monkeypatch, capsys):
+    """#746: the section is built inside the diagram guard, and only when diagrams are drawn."""
+    root = _root(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
+    calls: list[int] = []
+
+    def broken(*_: object) -> str:
+        calls.append(1)
+        raise ValueError("section bug")
+
+    monkeypatch.setattr(fleet_cli, "opportunities_section", broken)
+    assert fleet_cli.main([str(root), "--levels", "levels.toml", "--no-history", "--no-diagrams", "--out", "o1"]) == 0
+    assert calls == []
+    assert fleet_cli.main([str(root), "--levels", "levels.toml", "--no-history", "--out", "o2"]) == 0
+    assert calls == [1] and "fleet: diagrams: not written (ValueError: section bug)" in capsys.readouterr().err
+    assert json.loads((tmp_path / "o2" / "fleet-data.json").read_text(encoding="utf-8"))["opportunities"] is not None

@@ -43,6 +43,8 @@ def _lift(opps: Opportunities) -> list[str]:
     line = f"**Biggest lift.** {lift['text']} Applies to {_names(lift['repos'])}."
     if lift["change"] is not None:
         line += f" {lift['change']}"
+    else:  # no wording for this signal: name the criterion so the change is still clear
+        line += f" The criterion to meet: {code(lift['signal'])}."
     if lift["done_when"] is not None:
         line += f" Done when: {lift['done_when']}"
     return [line]

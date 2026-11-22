@@ -511,14 +511,14 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
 def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | None, rows: list[FleetRow],
               window: str, *, history: list[TrendRun] | None = None,
               comparison: Comparison | None = None, credit: str | None = None,
-              coverage: str | None = None, opportunities: str | None = None) -> None:
+              coverage: str | None = None, opportunities: Callable[[], str | None] | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
-        write_diagrams(out_dir, diagrams, credit, coverage, opportunities)
+        write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -756,7 +756,7 @@ def main(argv: list[str] | None = None) -> int:
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
               credit=credit, coverage=coverage_line(coverage, len(rows)),
-              opportunities=opportunities_section(data, achieved))
+              opportunities=lambda: opportunities_section(data, achieved))
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

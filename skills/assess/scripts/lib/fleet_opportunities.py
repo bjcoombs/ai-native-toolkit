@@ -87,12 +87,15 @@ class Opportunities(TypedDict):
 
 
 Key = Callable[[str], str]
-Candidate = tuple[str, int, str]  # (row id, level, signal)
+# (row id, level, signal, index of the criterion in that level): the index tells apart two
+# criteria of one level on the same signal (a range check), so each keeps its own wording
+Candidate = tuple[str, int, str, int]
 
 
-def _sole_unmet(row: Row, scans: Mapping[str, Any]) -> tuple[int, int, str] | None:
-    """``(current level, next level, signal)`` when one unmet criterion stands between a
-    measured repository and its next level on ``row``; None otherwise."""
+def _sole_unmet(row: Row, scans: Mapping[str, Any]) -> Candidate | None:
+    """The criterion when it is the one unmet criterion between a measured repository and its
+    next level on ``row``; None otherwise. Taken from the evaluation outcome, never looked up
+    by signal alone."""
     ev = evaluate_row(row, dict(scans))
     level = ev["level"]
     if ev["status"] != "level" or level is None or level >= len(row["levels"]):
@@ -100,13 +103,15 @@ def _sole_unmet(row: Row, scans: Mapping[str, Any]) -> tuple[int, int, str] | No
     nxt = next((lv for lv in ev["levels"] if lv["level"] == level + 1), None)
     if nxt is None or len(nxt["unmet"]) != 1 or nxt["unmet"][0]["status"] != "unmet":
         return None
-    return level, level + 1, nxt["unmet"][0]["signal"]
+    out = nxt["unmet"][0]
+    criteria = _criteria(row, level + 1)
+    index = next(i for i, c in enumerate(criteria)
+                 if (c["signal"], c["op"], c["value"]) == (out["signal"], out["op"], out["value"]))
+    return row["id"], level + 1, out["signal"], index
 
 
-def _criterion(row: Row, level: int, signal: str) -> Criterion:
-    (match,) = [c for lv in row["levels"] if lv["level"] == level for c in lv["criteria"]
-                if c["signal"] == signal][:1]
-    return match
+def _criteria(row: Row, level: int) -> list[Criterion]:
+    return next(lv["criteria"] for lv in row["levels"] if lv["level"] == level)
 
 
 def _gate(model: MaturityModel, row: str, level: int) -> tuple[str | None, int | None]:
@@ -136,12 +141,13 @@ def _biggest_lift(model: MaturityModel, team_rows: Sequence[Row], lifts: Mapping
     if not lifts:
         return None
     order = {row["id"]: i for i, row in enumerate(team_rows)}
-    (row_id, level, signal) = min(lifts, key=lambda c: (-len(lifts[c]), order[c[0]], c[1], c[2]))
+    best = min(lifts, key=lambda c: (-len(lifts[c]), order[c[0]], c[1], c[2], c[3]))
+    row_id, level, signal, index = best
     row = team_rows[order[row_id]]
-    criterion = _criterion(row, level, signal)
+    criterion = _criteria(row, level)[index]
     words = guidance(signal, criterion["op"], criterion["value"])
     gate, step = _gate(model, row_id, level)
-    repos = lifts[(row_id, level, signal)]
+    repos = lifts[best]
     unlock = f" It is the `{gate}` gate for Step {step}." if gate is not None else ""
     text = (f"Completing level {level} on {row['title']} would lift {len(repos)} {_plural(len(repos))} "
             f"to that level.{unlock}")
@@ -185,7 +191,7 @@ def _templates(team_rows: Sequence[Row], ok: Sequence[FleetRow], next_of: Mappin
             for cand in next_of.get(member, []):
                 if cand[2].startswith(CI_PREFIX):
                     lifted.setdefault(cand, []).append(member)
-        for (row_id, level, signal), repos in sorted(lifted.items(), key=lambda kv: (order[kv[0][0]], kv[0][1:])):
+        for (row_id, level, signal, _), repos in sorted(lifted.items(), key=lambda kv: (order[kv[0][0]], kv[0][1:])):
             text = (f"If this shared CI source ran tests or another enforced check, {len(repos)} of the "
                     f"{len(members)} repositories that include it would reach level {level} on "
                     f"{titles[row_id]}.")
@@ -205,10 +211,9 @@ def build_opportunities(model: MaturityModel | None, rows: Sequence[FleetRow], k
     lifts: dict[Candidate, list[str]] = {}
     for repo in ok:
         for row in team_rows:
-            found = _sole_unmet(row, repo_signals(repo))
-            if found is None:
+            cand = _sole_unmet(row, repo_signals(repo))
+            if cand is None:
                 continue
-            cand = (row["id"], found[1], found[2])
             next_of.setdefault(repo["repo"], []).append(cand)
             lifts.setdefault(cand, []).append(repo["repo"])
     return {"measured": len(ok), "in_place": _in_place(team_rows, ok),

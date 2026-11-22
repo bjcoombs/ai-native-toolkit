@@ -235,3 +235,31 @@ def test_recent_progress_on_the_starting_line_and_with_nothing_new() -> None:
     _, earlier = _history(fleet())
     same = build_achievements(HistoryRun("2026-11-20", now), earlier, model())
     assert "No unit reached a new level since `2026-11-13`" in (opportunities_section(now, same) or "")
+
+
+def test_a_level_repeating_a_signal_lifts_on_the_unmet_criterion() -> None:
+    """A range check: two criteria on one signal; the lift is worded from the one unmet."""
+    ranged = LEVELS.replace('criteria = [{ signal = "layer_grades.instruction_file_present", op = "eq", value = true }]',
+                            'criteria = [{ signal = "nested.lines", op = "gte", value = 10 }, '
+                            '{ signal = "nested.lines", op = "lt", value = 100 }]')
+    big = _row("grp/a", ci=True)
+    assert big["scans"] is not None
+    big["scans"]["nested"] = {"available": True, "lines": 500}  # meets >= 10, not < 100
+    opps = _opps([big], model(ranged))
+    lift = opps["biggest_lift"]
+    assert lift is not None and (lift["row"], lift["signal"]) == ("instr", "nested.lines")
+    small = _row("grp/b", ci=True)
+    assert small["scans"] is not None
+    small["scans"]["nested"] = {"available": True, "lines": 1}  # meets < 100, not >= 10
+    both = _opps([big, small], model(ranged))
+    assert both["biggest_lift"] is not None and both["biggest_lift"]["repo_count"] == 1  # two criteria, one each
+
+
+def test_a_lift_without_wording_names_its_criterion() -> None:
+    plain = LEVELS.replace('signal = "ci_checks.enforced_check_runs", op = "eq", value = true',
+                           'signal = "ci_checks.enforced_check_runs", op = "in", value = [true]')  # no wording
+    data = _data(fleet(), m=model(plain))
+    assert data["opportunities"] is not None and data["opportunities"]["biggest_lift"] is not None
+    assert data["opportunities"]["biggest_lift"]["change"] is None
+    section = opportunities_section(data, None) or ""
+    assert "The criterion to meet: `ci_checks.enforced_check_runs`." in section
