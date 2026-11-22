@@ -360,13 +360,13 @@ _TARGET_FLAGS = frozenset({
 _COMPOSE_FLAGS = frozenset({
     "-f", "--file", "-p", "--project-name", "--env-file", "--profile", "--project-directory",
     "-e", "--env", "-w", "--workdir", "--entrypoint", "-v", "--volume", "--name", "-u",
-    "--user", "--publish", "-l", "--label",
+    "--user", "--publish", "-l", "--label", "--pull",
 })
 _NX_TARGET_FLAGS = ("-t", "--target", "--targets")
 _GRADLE = frozenset({"gradle", "gradlew", "./gradlew"})
 # A Gradle test task: ``test``, ``testDebugUnitTest``, ``:app:testReleaseUnitTest``,
 # ``connectedAndroidTest`` (Android variants and instrumented tests).
-_GRADLE_TEST = re.compile(r"^(?:test[A-Z0-9]\w*|\w*Test)$")
+_GRADLE_TEST = re.compile(r"^(?!compile)(?:test[A-Z0-9]\w*|\w*Test)$")
 # xcodebuild options that take a value (``-scheme App``); its actions are bare words.
 _XCODE_FLAGS = frozenset({
     "-scheme", "-project", "-workspace", "-destination", "-configuration", "-sdk", "-target",
@@ -391,15 +391,30 @@ def _outer_wrapper(words: list[str]) -> list[str] | None:
         rest = _drop_leading_flags(words[words.index("exec") + 1:])
         return rest or None
     if words[:2] == ["docker", "run"]:   # docker run [flags] image [command]
-        rest = _drop_leading_flags(words[2:], _DOCKER_RUN_FLAGS)
-        return rest[1:]
+        flags = words[2:len(words) - len(_drop_leading_flags(words[2:], _DOCKER_RUN_FLAGS))]
+        return _container_command(flags, _drop_leading_flags(words[2:], _DOCKER_RUN_FLAGS))
     if words[0] != "docker-compose":
         return None
     pos = _positionals(words[1:], _COMPOSE_FLAGS)
     if pos[:1] not in (["run"], ["exec"]):
         return None
-    rest = _drop_leading_flags(words[words.index(pos[0], 1) + 1:], _COMPOSE_FLAGS)
-    return rest[1:]   # rest[0] is the service
+    after = words[words.index(pos[0], 1) + 1:]
+    rest = _drop_leading_flags(after, _COMPOSE_FLAGS)
+    return _container_command(after[:len(after) - len(rest)], rest)
+
+
+def _container_command(flags: list[str], rest: list[str]) -> list[str] | None:
+    """What a container runs, from its flags and ``image-or-service [command]``: the
+    ``--entrypoint`` with the command as its arguments, ``[]`` for the default command,
+    None when detached (``-d``: its exit cannot fail the step)."""
+    if any(f in ("-d", "--detach") or f.startswith("--detach=") for f in flags):
+        return None
+    for i, flag in enumerate(flags):
+        if flag == "--entrypoint" and i + 1 < len(flags):
+            return [flags[i + 1], *rest[1:]]
+        if flag.startswith("--entrypoint="):
+            return [flag.split("=", 1)[1], *rest[1:]]
+    return rest[1:]   # rest[0] is the image or service
 
 
 def _wrapped(words: list[str]) -> list[str] | None:
@@ -425,7 +440,8 @@ def _targets(head: str, args: list[str]) -> list[str]:
         if pos[:1] in (["affected"], ["run-many"]):
             return targets
         if pos[:1] == ["run"]:   # nx run app:test
-            return [pos[1].rsplit(":", 1)[-1]] if len(pos) > 1 else []
+            # project:target[:configuration]
+            return [pos[1].split(":")[1] if ":" in pos[1] else pos[1]] if len(pos) > 1 else []
         return [pos[0].rsplit(":", 1)[-1]] if pos else []   # nx test app, nx affected:test
     pos = [w for w in _positionals(args, _TARGET_FLAGS) if "=" not in w]
     if head == "turbo":
@@ -476,9 +492,12 @@ def _script_verdict(words: list[str]) -> bool | None:
         path = pos[0]
     elif head in RUNNERS:
         return False   # ./gradlew, ./mvnw: modelled runners
-    if path.startswith(("/", "$", "~")) or ("/" not in path and not path.endswith(".sh")):
+    elif not (head.startswith(("./", "bin/")) or head.endswith(".sh")):
+        return False   # a bare word with a slash may be a YAML value (path: test-results/x.xml)
+    if path.startswith(("/", "$", "~")):
         return False
-    return _target_verdict([path])
+    # By file name: a directory (ci/, tests/fixtures/) names no check (``./ci/deploy.sh``).
+    return _target_verdict([PurePosixPath(path).name])
 
 
 def _toolchain_test(words: list[str]) -> bool | None:
@@ -487,7 +506,8 @@ def _toolchain_test(words: list[str]) -> bool | None:
     head, pos = words[0], _positionals(words[1:])
     name = PurePosixPath(head).name
     if name in _GRADLE:   # ./gradlew testDebugUnitTest, :app:testReleaseUnitTest
-        return any(_GRADLE_TEST.match(t.rsplit(":", 1)[-1]) for t in pos)
+        tasks = [t.rsplit(":", 1)[-1] for t in pos]
+        return any(_GRADLE_TEST.match(t) and not t.endswith("Classes") for t in tasks)
     if head == "php":   # php artisan test, php vendor/bin/phpunit
         return pos[:2] == ["artisan", "test"] or (
             bool(pos) and PurePosixPath(pos[0]).name in TEST_PROGRAMS)
@@ -518,8 +538,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     program = _wrapped(words)
     if program is not None:
         verdict = _check_verdict(program)
-        if container and verdict is False and program[0] not in _PLAIN_PROGRAMS | frozenset(
-                RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS:
+        if container and verdict is False and not _setup_name(program[0]) and program[
+                0] not in _PLAIN_PROGRAMS | frozenset(RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS:
             return None   # docker run img some-tool: a program this scan does not know
         return verdict
     if head == "deno" and _positionals(words[1:])[:1] == ["task"]:   # deno task foo: not read

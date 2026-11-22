@@ -3549,7 +3549,9 @@ runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`
 too. None (`may_check(text)`) for a target whose recipe is not read: any other target
 of a target runner, its default target (a bare `make`), a `hatch run` script that is not
 check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
-(`./scripts/foo.sh`, `bash ci/foo.sh`), and a container's default command or unknown
+(`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
+file or a path passed to `bash`/`sh`/`zsh`, read by file name so `./ci/deploy.sh` is
+false), and a container's default command or unknown
 program (`docker compose run app`, `docker run img`, `docker run img some-tool`).
 Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
 `format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,

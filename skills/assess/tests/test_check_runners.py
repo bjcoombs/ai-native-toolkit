@@ -33,7 +33,8 @@ _ISSUE_RUNNERS = [
     "./gradlew connectedAndroidTest", "rake test", "rake spec", "bundle exec rake test",
     "bin/test", "bin/rails test", "flutter test", "xcodebuild test -scheme App",
     "xcodebuild -workspace App.xcworkspace -scheme App -destination 'platform=iOS' test",
-    "dart test", "php artisan test", "php vendor/bin/phpunit", "./gradlew testDemoDebug",
+    "dart test", "php artisan test", "docker compose run --pull always app pytest",
+    "nx run app:test:ci", "php vendor/bin/phpunit", "./gradlew testDemoDebug",
 ])
 def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
     assert check_verdict(text) is True
@@ -46,7 +47,8 @@ def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
     "docker compose run app", "deno task foo", "make XCODEBUILD_ARGUMENT=-quiet xcodebuild",
     # Package scripts, committed scripts and containers whose body is not read (#920).
     "npm run foo", "pnpm run foo", "pnpm foo", "yarn foo", "./scripts/foo.sh",
-    "bash scripts/foo.sh", "scripts/foo", "docker run img", "docker run --rm img foo",
+    "bash scripts/foo.sh", "docker run img", "docker run --rm img foo",
+    "scripts/test-data/seed.sh", "./tests/fixtures/make_db.sh",   # by file name, not directory
 ])
 def test_an_unrecognised_target_reads_null(text: str) -> None:
     """The recipe is not read, so the target may run a check: unknown, never false."""
@@ -62,7 +64,13 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "./configure", "./gradlew assemble", "docker run img echo hi", "docker build .",
     "bash -c 'foo'", "/usr/bin/foo", "./gradlew assembleDebug", "xcodebuild build -scheme App",
     "xcodebuild -scheme test build", "flutter build apk", "dart compile exe bin/x.dart",
-    "php artisan migrate", "npm ci", "uv sync --extra test",
+    "php artisan migrate",
+    # Review (#924): a directory names no check, a YAML path value is not a script, a
+    # container is read by its entrypoint, and a detached one cannot fail its step.
+    "./ci/deploy.sh", "bash ci/deploy.sh", "test-results/junit.xml", "coverage/lcov.info", "scripts/foo",
+    "docker run -v a:b img ./scripts/deploy.sh", "./gradlew testClasses",
+    "./gradlew compileTestJava", "docker run -d img pytest", "docker compose run -d app pytest",
+    "docker run --entrypoint echo img pytest", "npm ci", "uv sync --extra test",
     "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",
 ])
@@ -133,6 +141,11 @@ def test_an_unrecognised_target_in_ci_reads_check_target(tmp_path: Path, run: st
 @pytest.mark.parametrize(("files", "expected"), [
     (_gha("make install"), (False, "no_check_command")),
     (_gha("npm ci", "npm run build", "./scripts/deploy.sh"), (False, "no_check_command")),
+    ({".github/workflows/ci.yml": "on: pull_request\njobs:\n  b:\n    runs-on: x\n    steps:\n"
+      "      - run: npm run build\n      - uses: actions/upload-artifact@v4\n        with:\n"
+      "          path: |\n            test-results/junit.xml\n            coverage/lcov.info\n"},
+     (False, "no_check_command")),
+    (_gha("./ci/deploy.sh"), (False, "no_check_command")),
     ({".gitlab-ci.yml": "build:\n  cache:\n    paths:\n      - ./node_modules\n  script:\n    - echo hi\n"},
      (False, "no_check_command")),
     (_gha("make foo || true"), (False, "no_check_command")),
