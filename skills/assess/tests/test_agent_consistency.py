@@ -314,3 +314,5 @@ def test_heading_and_list_ordinals_are_stripped_before_numbers() -> None:
     assert thresholds("1. Coverage at 85\n2) Complexity under 15\n") == {
         "coverage": {85.0}, "complexity": {15.0}}
     assert thresholds("Coverage 2. Keep 90.\n") == {"coverage": {2.0, 90.0}}
+    assert thresholds("## 90 percent coverage\n") == {"coverage": {90.0}}
+    assert thresholds("# 100 line length\n") == {"line_length": {100.0}}

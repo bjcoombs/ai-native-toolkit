@@ -66,8 +66,11 @@ THRESHOLD_KEYWORDS: dict[str, re.Pattern[str]] = {
 }
 _NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?!\w|\.\d)")
 # A heading or list ordinal (``## 2. Coverage``, ``### 3.1 Coverage``, ``1. ``,
-# ``2) ``) numbers the line, it states no threshold (issue #960).
-_ORDINAL = re.compile(r"^\s*(?:#{1,6}[ \t]+\d+(?:\.\d+)*[.)]?|\d+[.)])(?=\s|$)")
+# ``2) ``) numbers the line, it states no threshold (issue #960). A heading
+# number needs a ``.``/``)`` or a dotted form, so ``## 90 percent coverage``
+# keeps its 90.
+_ORDINAL = re.compile(
+    r"^\s*(?:#{1,6}[ \t]+(?:\d+(?:\.\d+)+[.)]?|\d+[.)])|\d+[.)])(?=\s|$)")
 _INLINE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 _FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 NOT_READ = [
