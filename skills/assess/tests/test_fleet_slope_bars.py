@@ -167,7 +167,7 @@ def test_a_raising_slope_renderer_is_a_skip_line(monkeypatch):
     drawn = fd.build_diagrams(_levels(), _repos(), WINDOW,
                               comparison=comparison(_levels(), _repos()))
     entry = next(d for d in drawn if d["file"] == fs.FILE)
-    assert entry["skipped"] == "skipped: drawing failed (KeyError)."
+    assert entry["skipped"] == "skipped: the renderer raised KeyError."
     assert next(d for d in drawn if d["file"] == flb.FILE)["svg"] is not None
 
 
@@ -197,7 +197,7 @@ def test_layer_bars_hatch_unknown_and_name_it_never_as_level_zero():
 def test_segment_counts_use_the_ramp_ink_not_a_theme_class():
     text = flb.render_layer_bars(flb.layer_bars(_levels(), _repos()))
     top = svg.ramp_step(2, 2)
-    assert f'fill="{svg.ORRD_9[top]}"' in text
+    assert f'fill="{svg.LEVEL_RAMP[top]}"' in text
     assert re.search(rf'<text [^>]*fill="{svg.STEP_TEXT[top]}" text-anchor="middle">6</text>', text)
 
 

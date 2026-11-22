@@ -242,9 +242,9 @@ def test_a_raising_renderer_is_a_skip_line_naming_the_error(monkeypatch):
         raise ValueError("render bug")
     monkeypatch.setattr(fq, "render_quadrant", bug)
     diagrams = fd.build_diagrams(_levels(), _repos(), WINDOW)
-    assert diagrams[0]["skipped"] == "skipped: drawing failed (ValueError)."
+    assert diagrams[0]["skipped"] == "skipped: the renderer raised ValueError."
     assert diagrams[1]["svg"] is not None  # the other diagram is still drawn
-    assert "Not drawn: skipped: drawing failed (ValueError)." in fd.report_markdown(diagrams)
+    assert "Not drawn: skipped: the renderer raised ValueError." in fd.report_markdown(diagrams)
 
 
 def test_drawn_skipped_and_failed_diagrams_share_one_heading(monkeypatch):

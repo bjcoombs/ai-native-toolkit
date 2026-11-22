@@ -117,6 +117,59 @@ follow POSIX string order, so `src/foo.py` sorts before `src/foo/bar.py` (`.` < 
 the earlier `Path` ordering compared path parts and put `src/foo/bar.py` first. The windows-latest job
 (`.github/workflows/windows.yml`) checks both through `tests/test_fleet_golden.py`.
 
+### Supportive vocabulary
+
+**`vocabulary.py`**
+The one list of words user-facing output leaves out (#743, parent #740): every report reads
+as a readiness snapshot, never a verdict on the people who built the repository. A gap is
+the next goal. The banned-vocabulary guard is `tests/test_vocabulary_guard.py`
+(`cd skills/assess && uv run --locked pytest tests/test_vocabulary_guard.py`). It renders, from
+source, a real fleet run with the shipped maturity model (`report.md`, every diagram, the heat
+map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
+fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
+naming the word, the output and the line, when one of these words appears in the prose as a
+whole word, case-insensitive. Fenced code, backticked spans and identifiers containing an
+underscore are not prose (`prose`), so machine field names, JSON keys, finding names and
+signal paths (`lying_map`, `instruction_claims.failed`, `fail_under`) stay unchanged.
+
+| Word | Say instead |
+|------|-------------|
+| `tangled` | name the measured structure (cross-package edges, modularity) |
+| `penalty` | name the size or share the grade reads |
+| `weakest` | the row with the most room to grow |
+| `weak` | room to grow |
+| `lying` | stale, or reads better than it measures |
+| `missing` | not measured yet, or not in place yet |
+| `fail` | stop, or turn the job red |
+| `fails` | stops |
+| `failed` | could not be scanned, or did not run |
+| `failing` | erroring |
+| `failure` | an error, or a gap |
+| `Not Ready` | the Step the repository is ready for |
+| `Basic` | the Step name |
+| `Solid` | the Step name |
+| `AI-Native` | the Step name |
+
+The last four are the retired maturity band labels (`RETIRED_LABELS`); the Step names
+(1 Assisted, 2 Supervised agent PRs, 3 Unattended agent PRs, 4 Autonomous loops) replace them.
+
+**Opening line.** Every `## ` section of the fleet `report.md` and every heading of a team
+next-steps page (`teams.md` and `teams/<group>.md`) opens with a line that starts
+`In place:` (`IN_PLACE`) and says what is already in place before any next step: counts of
+what is measured or reached, and at level 0 or unknown a plain "nothing confirmed on this row
+yet", never implied credit. The guard checks it on every rendered page.
+
+**Wording elsewhere.** The quadrant names its shaded corner "Most room to grow: busy, early
+levels" in the amber `warn` role, not the red `bad` one; the keyhole summary shows `lying_map` as
+"stale doc over complex code" (`keyhole_signals.FINDING_DISPLAY_NAMES`); and the headline words a
+reason code it has no entry for with "did not complete" and "not found" in place of "failed" and
+"missing" (`headline._reason_word`).
+
+**Colour.** The fleet level ramp (`fleet_svg.LEVEL_RAMP`, heat map and layer bars) is the
+ColorBrewer YlGn growth palette, pale yellow to deep green, in place of the red OrRd ramp;
+unknown cells stay hatched. The complexity treemap and the doc graph keep their own ramps:
+they encode complexity and staleness, not maturity.
+
 ### Data collection
 
 **`git_churn.py`**
@@ -1053,7 +1106,7 @@ Since #697 an `unknown` level row carries an optional `floor` (the confirmed low
 
 **`fleet_next_steps.py`**
 The per-team next-steps pages behind `skills/fleet/scripts/fleet_next_steps.py`
-(issue #571). `build_pages` re-runs `levels.evaluate` per group on exactly the inputs
+(issue #571). Every heading opens with an `In place:` line (`vocabulary.IN_PLACE`, #743). `build_pages` re-runs `levels.evaluate` per group on exactly the inputs
 `fleet_groups` evaluated (`repo_signals`, `settings_for`, `settings_signals`), then
 checks each row's status and level against `groups.jsonl` and raises
 `NextStepsError` on any difference (a different `--levels` or `--settings`, or files
@@ -1159,7 +1212,7 @@ rank or position field. Tests: `tests/test_fleet_opportunities.py`.
 **`fleet_opportunities_section.py`**
 `opportunities_section` renders `report.md`'s "Opportunities" section from a built
 `FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
-"Already in place" first, then the biggest lift, the shared templates and the display-only
+an `In place:` line first, then the biggest lift, the shared templates and the display-only
 recent progress (this run's `level_up` achievements, from the history; otherwise a
 nothing-new line, a starting-line line on a kept first run (`fleet_achievements.BASELINE_NOTE`),
 or the achievements note when the run is not kept). None when `opportunities` is null. Names are listed in key
@@ -1231,7 +1284,7 @@ the fleet artifact's write-back. `parse_targets` raises `TargetsError` naming th
 
 **`fleet_credit.py`**
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
-from `achievements.json`: this run's credit lines by kind (capped per kind), each unit's
+from `achievements.json`, opening with an `In place:` line (#743): this run's credit lines by kind (capped per kind), each unit's
 nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
 distances (in levels, or in share for a share target), plus a `### Recount` subsection
 after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
@@ -1258,8 +1311,8 @@ without a maturity model is named as having none, not as maturity model `None`).
 **`fleet_heatmap.py`**
 The leadership heat map behind `skills/fleet/scripts/heatmap.py` (#570), stdlib only (no
 `treemap_render`, which loads numpy). `render_heatmap` draws groups as rows and maturity model
-rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer OrRd 9-class
-ramp (`ORRD_9`; `ramp_step` scales a level by its row's top level when a maturity model file
+rows as columns from `fleet_view` data: fill from the hardcoded ColorBrewer YlGn 9-class growth
+ramp (`LEVEL_RAMP`; `ramp_step` scales a level by its row's top level when a maturity model file
 gives one, else indexes the ramp), text colour from the per-step `STEP_TEXT` table, and
 every known cell prints its level. `unknown` is the hatched `UNKNOWN_FILL`, never a ramp
 colour; the cell prints `?` and a key letter (`unknown_keys`, deduplicated in reading
@@ -1282,7 +1335,7 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 | `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
 | `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
 | `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
-| `ORRD_9`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
+| `LEVEL_RAMP`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
 | `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
 | `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
@@ -1352,7 +1405,7 @@ An unknown repository with a floor (#697) is named in `floored` and drawn first 
 **`fleet_diagrams.py`**
 The diagram list and `report.md` that `fleet.py` writes beside `groups.jsonl` (#674).
 `build_diagrams(levels, repos, window, *, history, comparison)` returns a `Diagram` per picture
-(`file`, `title`, `question`, and `svg` or the one-line `skipped` reason: no maturity model, no
+(`file`, `title`, `question`, `in_place`: the section's opening `In place:` line (#743), and `svg` or the one-line `skipped` reason: no maturity model, no
 team rows, no repositories; for the trend no run history or fewer than 3 comparable runs; for
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;

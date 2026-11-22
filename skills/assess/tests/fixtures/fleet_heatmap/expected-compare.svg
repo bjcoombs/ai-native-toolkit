@@ -10,37 +10,37 @@
 <text x="340.0" y="316.0" font-size="12" fill="#1a1a1a" text-anchor="start" transform="rotate(-45 340.0 316.0)">Two-factor</text>
 <text x="404.0" y="316.0" font-size="12" fill="#1a1a1a" text-anchor="start" transform="rotate(-45 404.0 316.0)">Team instructions and shared tooling across rep…<title>Team instructions and shared tooling across repositories</title></text>
 <text x="300.0" y="348.0" font-size="12" fill="#1a1a1a" text-anchor="end">grpa</text>
-<rect x="308.0" y="324.0" width="64.0" height="40.0" fill="#7f0000" stroke="#ffffff" stroke-width="1"><title>grpa · Two-factor: level 1 of 1; change: =</title></rect>
+<rect x="308.0" y="324.0" width="64.0" height="40.0" fill="#004529" stroke="#ffffff" stroke-width="1"><title>grpa · Two-factor: level 1 of 1; change: =</title></rect>
 <text x="340.0" y="340.0" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
 <text x="340.0" y="357.0" font-size="10" fill="#ffffff" text-anchor="middle">=</text>
-<rect x="372.0" y="324.0" width="64.0" height="40.0" fill="#7f0000" stroke="#ffffff" stroke-width="1"><title>grpa · Team instructions and shared tooling across repositories: level 2 of 2; change: +2</title></rect>
+<rect x="372.0" y="324.0" width="64.0" height="40.0" fill="#004529" stroke="#ffffff" stroke-width="1"><title>grpa · Team instructions and shared tooling across repositories: level 2 of 2; change: +2</title></rect>
 <text x="404.0" y="340.0" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
 <text x="404.0" y="357.0" font-size="10" fill="#ffffff" text-anchor="middle">+2</text>
 <text x="300.0" y="388.0" font-size="12" fill="#1a1a1a" text-anchor="end">grpb</text>
-<rect x="308.0" y="364.0" width="64.0" height="40.0" fill="#fff7ec" stroke="#ffffff" stroke-width="1"><title>grpb · Two-factor: level 0 of 1; change: =</title></rect>
+<rect x="308.0" y="364.0" width="64.0" height="40.0" fill="#ffffe5" stroke="#ffffff" stroke-width="1"><title>grpb · Two-factor: level 0 of 1; change: =</title></rect>
 <text x="340.0" y="380.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">0</text>
 <text x="340.0" y="397.0" font-size="10" fill="#1a1a1a" text-anchor="middle">=</text>
-<rect x="372.0" y="364.0" width="64.0" height="40.0" fill="#fff7ec" stroke="#ffffff" stroke-width="1"><title>grpb · Team instructions and shared tooling across repositories: level 0 of 2; change: -2</title></rect>
+<rect x="372.0" y="364.0" width="64.0" height="40.0" fill="#ffffe5" stroke="#ffffff" stroke-width="1"><title>grpb · Team instructions and shared tooling across repositories: level 0 of 2; change: -2</title></rect>
 <text x="404.0" y="380.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">0</text>
 <text x="404.0" y="397.0" font-size="10" fill="#1a1a1a" text-anchor="middle">-2</text>
 <text x="300.0" y="428.0" font-size="12" fill="#1a1a1a" text-anchor="end">grpc</text>
-<rect x="308.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>grpc · Two-factor: unknown: missing two_factor.value; change: =</title></rect>
+<rect x="308.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>grpc · Two-factor: unknown (not measured yet: two_factor.value); change: =</title></rect>
 <rect x="322.0" y="408.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="340.0" y="420.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">? a</text>
 <rect x="318.0" y="427.0" width="44.0" height="13.0" fill="#ffffff"/>
 <text x="340.0" y="437.0" font-size="10" fill="#1a1a1a" text-anchor="middle">=</text>
-<rect x="372.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>grpc · Team instructions and shared tooling across repositories: unknown: missing nested_instructions.budget.claude_code.lines, shared_tooling.available; 1 repository without a level; change: was 2</title></rect>
+<rect x="372.0" y="404.0" width="64.0" height="40.0" fill="url(#fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>grpc · Team instructions and shared tooling across repositories: unknown (not measured yet: nested_instructions.budget.claude_code.lines, shared_tooling.available); 1 repository without a level; change: was 2</title></rect>
 <rect x="386.0" y="408.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="404.0" y="420.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">? b</text>
 <rect x="382.0" y="427.0" width="44.0" height="13.0" fill="#ffffff"/>
 <text x="404.0" y="437.0" font-size="10" fill="#1a1a1a" text-anchor="middle">was 2</text>
 <text x="300.0" y="468.0" font-size="12" fill="#1a1a1a" text-anchor="end">…ement-and-reconciliation/batch-services<title>platform/payments/settlement-and-reconciliation/batch-services</title></text>
-<rect x="308.0" y="444.0" width="64.0" height="40.0" fill="url(#fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Two-factor: unknown: missing two_factor.value; change: new</title></rect>
+<rect x="308.0" y="444.0" width="64.0" height="40.0" fill="url(#fleet-unknown)" stroke="#ffffff" stroke-width="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Two-factor: unknown (not measured yet: two_factor.value); change: new</title></rect>
 <rect x="322.0" y="448.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="340.0" y="460.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">? a</text>
 <rect x="318.0" y="467.0" width="44.0" height="13.0" fill="#ffffff"/>
 <text x="340.0" y="477.0" font-size="10" fill="#1a1a1a" text-anchor="middle">new</text>
-<rect x="372.0" y="444.0" width="64.0" height="40.0" fill="#fc8d59" stroke="#ffffff" stroke-width="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Team instructions and shared tooling across repositories: at least level 1 of 2, higher levels unknown: missing shared_tooling.available; 1 repository without a level; change: new</title></rect>
+<rect x="372.0" y="444.0" width="64.0" height="40.0" fill="#78c679" stroke="#ffffff" stroke-width="1"><title>platform/payments/settlement-and-reconciliation/batch-services · Team instructions and shared tooling across repositories: at least level 1 of 2, higher levels unknown (not measured yet: shared_tooling.available); 1 repository without a level; change: new</title></rect>
 <rect x="372.0" y="444.0" width="64.0" height="40.0" fill="url(#fleet-floor)" pointer-events="none"/>
 <rect x="386.0" y="448.0" width="36.0" height="16.0" fill="#ffffff"/>
 <text x="404.0" y="460.0" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="bold">1+ c</text>
@@ -51,21 +51,21 @@
 <text x="16.0" y="530.0" font-size="12" fill="#5f6368" text-anchor="start">(the level was known / unknown)</text>
 <text x="16.0" y="548.0" font-size="12" fill="#5f6368" text-anchor="start">groups in the earlier run only: grpd</text>
 <text x="16.0" y="576.0" font-size="12" fill="#1a1a1a" text-anchor="start" font-weight="bold">Legend: level as a share of the row's top level</text>
-<rect x="16.0" y="586.0" width="16.0" height="16.0" fill="#fff7ec" stroke="#bdbdbd" stroke-width="1"/>
+<rect x="16.0" y="586.0" width="16.0" height="16.0" fill="#ffffe5" stroke="#bdbdbd" stroke-width="1"/>
 <text x="40.0" y="598.0" font-size="12" fill="#1a1a1a" text-anchor="start">0 (none reached)</text>
-<rect x="16.0" y="608.0" width="16.0" height="16.0" fill="#fc8d59" stroke="#bdbdbd" stroke-width="1"/>
+<rect x="16.0" y="608.0" width="16.0" height="16.0" fill="#78c679" stroke="#bdbdbd" stroke-width="1"/>
 <text x="40.0" y="620.0" font-size="12" fill="#1a1a1a" text-anchor="start">1 of 2</text>
-<rect x="16.0" y="630.0" width="16.0" height="16.0" fill="#7f0000" stroke="#bdbdbd" stroke-width="1"/>
+<rect x="16.0" y="630.0" width="16.0" height="16.0" fill="#004529" stroke="#bdbdbd" stroke-width="1"/>
 <text x="40.0" y="642.0" font-size="12" fill="#1a1a1a" text-anchor="start">1 of 1 / 2 of 2</text>
 <rect x="16.0" y="652.0" width="16.0" height="16.0" fill="url(#fleet-unknown)" stroke="#bdbdbd" stroke-width="1"/>
 <text x="40.0" y="664.0" font-size="12" fill="#1a1a1a" text-anchor="start">unknown: not measured, never level 0 (? and a key letter)</text>
-<rect x="16.0" y="674.0" width="16.0" height="16.0" fill="#fdd49e"/><rect x="16.0" y="674.0" width="16.0" height="16.0" fill="url(#fleet-floor)" stroke="#bdbdbd" stroke-width="1"/>
+<rect x="16.0" y="674.0" width="16.0" height="16.0" fill="#d9f0a3"/><rect x="16.0" y="674.0" width="16.0" height="16.0" fill="url(#fleet-floor)" stroke="#bdbdbd" stroke-width="1"/>
 <text x="40.0" y="686.0" font-size="12" fill="#1a1a1a" text-anchor="start">N+: at least level N confirmed, a higher level not measured (a lower bound, never the exact level)</text>
-<text x="16.0" y="714.0" font-size="12" fill="#1a1a1a" text-anchor="start" font-weight="bold">Unknown cells: the signal that was missing</text>
+<text x="16.0" y="714.0" font-size="12" fill="#1a1a1a" text-anchor="start" font-weight="bold">Unknown cells: the signals not measured yet</text>
 <text x="16.0" y="734.0" font-size="12" fill="#1a1a1a" text-anchor="start" font-weight="bold">a</text>
-<text x="44.0" y="734.0" font-size="12" fill="#1a1a1a" text-anchor="start">missing two_factor.value</text>
+<text x="44.0" y="734.0" font-size="12" fill="#1a1a1a" text-anchor="start">not measured yet: two_factor.value</text>
 <text x="16.0" y="752.0" font-size="12" fill="#1a1a1a" text-anchor="start" font-weight="bold">b</text>
-<text x="44.0" y="752.0" font-size="12" fill="#1a1a1a" text-anchor="start">missing nested_instructions.budget.claude_code.lines, shared_tooling.available</text>
+<text x="44.0" y="752.0" font-size="12" fill="#1a1a1a" text-anchor="start">not measured yet: nested_instructions.budget.claude_code.lines, shared_tooling.available</text>
 <text x="16.0" y="770.0" font-size="12" fill="#1a1a1a" text-anchor="start" font-weight="bold">c</text>
-<text x="44.0" y="770.0" font-size="12" fill="#1a1a1a" text-anchor="start">missing shared_tooling.available</text>
+<text x="44.0" y="770.0" font-size="12" fill="#1a1a1a" text-anchor="start">not measured yet: shared_tooling.available</text>
 </svg>

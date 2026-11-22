@@ -176,7 +176,7 @@ def test_build_keyhole_summary_counts_concerns_and_safe_zones() -> None:
     assert by_name == {"hidden_coupling": 2, "lying_map": 1}
     # The summary text is a pure count, parallel to the 0-8 score - never a score.
     assert summary["summary_text"] == (
-        "3 structural concerns (2 hidden coupling, 1 lying map), 3 safe zones."
+        "3 structural concerns (2 hidden coupling, 1 stale doc over complex code), 3 safe zones."
     )
 
 

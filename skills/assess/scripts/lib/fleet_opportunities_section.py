@@ -2,7 +2,7 @@
 
 Reads the ``opportunities`` object ``lib/fleet_opportunities.py`` computed (so the section and
 the JSON always agree and carry the same privacy) plus this run's achievements for the
-display-only recent progress. The first line states what is already in place; then the
+display-only recent progress. The first line starts ``In place:`` (``lib/vocabulary.IN_PLACE``, #743); then the
 biggest lift, the shared-template leverage and the recent progress, each phrased as an
 opportunity. Repository and unit names are listed in key order, never numbered or ranked.
 Deterministic; no date.
@@ -16,6 +16,7 @@ from lib.fleet_data import FleetData
 from lib.fleet_next_steps import code, text
 from lib.fleet_opportunities import PER_LIST, TITLE, Opportunities
 from lib.fleet_tooling_map import KINDS
+from lib.vocabulary import IN_PLACE
 
 INTRO = ("Computed from this run's data with no model call. Each line is a change and what it "
          "unlocks; a repository the run could not measure is never counted, and no team is ranked.")
@@ -29,10 +30,10 @@ def _names(keys: Sequence[str]) -> str:
 
 def _in_place(opps: Opportunities, titles: dict[str, str]) -> str:
     if not opps["in_place"]:
-        return "Already in place: the maturity model has no team rows to hold."
+        return f"{IN_PLACE} the maturity model has no team rows to hold."
     parts = [f"{p['at_top']} of {p['measured']} measured on {text(titles.get(p['row'], p['row']))}"
              for p in opps["in_place"]]
-    return f"Already in place, repositories at the top level: {'; '.join(parts)}."
+    return f"{IN_PLACE} repositories at the top level, {'; '.join(parts)}."
 
 
 def _lift(opps: Opportunities) -> list[str]:

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 550" width="760" height="550" role="img">
 <title>Fleet activity and maturity</title>
-<desc>Scatter plot of fleet repositories: commits in the history window across, mean maturity up; busy, immature repositories are shaded; repositories with an unknown level or commit count are listed on a hatched strip, not drawn at zero.</desc>
+<desc>Scatter plot of fleet repositories: commits in the history window across, mean maturity up; busy repositories at early levels are shaded; repositories with an unknown level or commit count are listed on a hatched strip, not drawn at zero.</desc>
 <style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }.t-bg,.f-bg{fill:#ffffff}.s-bg{stroke:#ffffff}.t-fg,.f-fg{fill:#1d2321}.s-fg{stroke:#1d2321}.t-muted,.f-muted{fill:#5d6763}.s-muted{stroke:#5d6763}.t-rule,.f-rule{fill:#d9dedb}.s-rule{stroke:#d9dedb}.t-accent,.f-accent{fill:#1f6f6b}.s-accent{stroke:#1f6f6b}.t-bad,.f-bad{fill:#b33a2e}.s-bad{stroke:#b33a2e}.t-warn,.f-warn{fill:#b7791f}.s-warn{stroke:#b7791f}.t-unk,.f-unk{fill:#9aa39f}.s-unk{stroke:#9aa39f}@media (prefers-color-scheme: dark){.t-bg,.f-bg{fill:#1a201e}.s-bg{stroke:#1a201e}.t-fg,.f-fg{fill:#e6ebe8}.s-fg{stroke:#e6ebe8}.t-muted,.f-muted{fill:#9aa5a0}.s-muted{stroke:#9aa5a0}.t-rule,.f-rule{fill:#2c3532}.s-rule{stroke:#2c3532}.t-accent,.f-accent{fill:#5fb8b1}.s-accent{stroke:#5fb8b1}.t-bad,.f-bad{fill:#ec7a6c}.s-bad{stroke:#ec7a6c}.t-warn,.f-warn{fill:#e0a84a}.s-warn{stroke:#e0a84a}.t-unk,.f-unk{fill:#5f6a66}.s-unk{stroke:#5f6a66}}</style>
 <defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
 <rect x="0" y="0" width="760" height="550" class="f-bg"/>
@@ -34,17 +34,17 @@
 <text x="60.0" y="88.0" font-size="11" text-anchor="end" class="t-muted">1</text>
 <line x1="229.7" y1="84.0" x2="229.7" y2="384.0" class="s-muted" stroke-dasharray="4 4"/>
 <line x1="70.0" y1="234.0" x2="730.0" y2="234.0" class="s-muted" stroke-dasharray="4 4"/>
-<text x="722.0" y="374.0" font-size="12.5" text-anchor="end" class="t-bad" font-weight="600">Invest here: busy and immature</text>
-<text x="722.0" y="100.0" font-size="12.5" text-anchor="end" class="t-accent" font-weight="600">Healthy</text>
+<text x="722.0" y="374.0" font-size="12.5" text-anchor="end" class="t-warn" font-weight="600">Most room to grow: busy, early levels</text>
+<text x="722.0" y="100.0" font-size="12.5" text-anchor="end" class="t-accent" font-weight="600">Busy and well along</text>
 <text x="78.0" y="374.0" font-size="12.5" text-anchor="start" class="t-muted">Quiet; can wait</text>
-<text x="78.0" y="100.0" font-size="12.5" text-anchor="start" class="t-muted">Mature, little change</text>
+<text x="78.0" y="100.0" font-size="12.5" text-anchor="start" class="t-muted">Well along, little change</text>
 <text x="400.0" y="422.0" font-size="12" text-anchor="middle" class="t-muted">Commits in the 6mo window (split at the median, 121)</text>
 <text x="22.0" y="234.0" font-size="12" text-anchor="middle" class="t-muted" transform="rotate(-90 22 234.0)">Mean share of top level</text>
-<circle cx="349.8" cy="259.0" r="6.5" class="f-bad s-bg" stroke-width="1.5"><title>payments/api: 212 commits, maturity 0.42 (2 of 2 team rows measured)</title></circle>
+<circle cx="349.8" cy="259.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>payments/api: 212 commits, maturity 0.42 (2 of 2 team rows measured)</title></circle>
 <text x="358.8" y="252.0" font-size="11.5" text-anchor="start" class="t-fg">payments/api</text>
-<circle cx="291.8" cy="259.0" r="6.5" class="f-bad s-bg" stroke-width="1.5"><title>payments/ledger: 168 commits, maturity 0.42 (2 of 2 team rows measured)</title></circle>
+<circle cx="291.8" cy="259.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>payments/ledger: 168 commits, maturity 0.42 (2 of 2 team rows measured)</title></circle>
 <text x="282.8" y="252.0" font-size="11.5" text-anchor="end" class="t-fg">payments/ledger</text>
-<circle cx="229.7" cy="334.0" r="6.5" class="f-bad s-bg" stroke-width="1.5"><title>mobile/ios: 121 commits, maturity 0.17 (2 of 2 team rows measured)</title></circle>
+<circle cx="229.7" cy="334.0" r="6.5" class="f-warn s-bg" stroke-width="1.5"><title>mobile/ios: 121 commits, maturity 0.17 (2 of 2 team rows measured)</title></circle>
 <text x="238.7" y="327.0" font-size="11.5" text-anchor="start" class="t-fg">mobile/ios</text>
 <circle cx="405.3" cy="159.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>web/storefront: 254 commits, maturity 0.75 (2 of 2 team rows measured)</title></circle>
 <text x="414.3" y="152.0" font-size="11.5" text-anchor="start" class="t-fg">web/storefront</text>
@@ -64,7 +64,7 @@
 <circle cx="101.7" cy="234.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/warehouse: 24 commits, maturity 0.50 (2 of 2 team rows measured)</title></circle>
 <text x="110.7" y="227.0" font-size="11.5" text-anchor="start" class="t-fg">data/warehouse</text>
 <circle cx="85.8" cy="384.0" r="6.5" class="f-accent s-bg" stroke-width="1.5"><title>data/notebooks: 12 commits, maturity 0.00 (1 of 2 team rows measured)</title></circle>
-<circle cx="76.0" cy="436.0" r="5" class="f-bad"/>
+<circle cx="76.0" cy="436.0" r="5" class="f-warn"/>
 <text x="88.0" y="440.0" font-size="11.5" text-anchor="start" class="t-muted">Busy (at least 121 commits) and below half the top level</text>
 <circle cx="76.0" cy="454.0" r="5" class="f-accent"/>
 <text x="88.0" y="458.0" font-size="11.5" text-anchor="start" class="t-muted">Other repositories</text>

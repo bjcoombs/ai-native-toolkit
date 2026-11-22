@@ -141,7 +141,7 @@ def detect_hidden_coupling(
                 finding: str | None = "hidden_coupling"
                 recommendation = (
                     "investigate the seam - the static boundary looks modular but "
-                    "its commits bleed outside it; the boundary is lying"
+                    "its commits reach outside it; the boundary reads better than the history"
                 )
             else:
                 # Static and history agree this is coupled. Not hidden, and the

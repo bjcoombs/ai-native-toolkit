@@ -192,7 +192,7 @@ def test_the_section_opens_with_what_is_in_place_and_ranks_no_one() -> None:
     assert section is not None
     lines = section.splitlines()
     assert lines[0] == "## Opportunities"
-    assert lines[2] == ("Already in place, repositories at the top level: 2 of 6 measured on Instructions; "
+    assert lines[2] == ("In place: repositories at the top level, 2 of 6 measured on Instructions; "
                         "1 of 6 measured on CI.")
     assert "Applies to `grp/a`, `grp/b`, `grp/c`, `grp/ci-templates`, `grp/e`." in section
     assert f"- `{SOURCE}` (CI: GitLab project include):" in section
