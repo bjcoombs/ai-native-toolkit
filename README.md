@@ -77,9 +77,9 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
     <th width="33%"><a href="https://github.com/huggingface/candle">candle</a> (Rust)</th>
   </tr>
   <tr>
-    <td><a href="docs/example-heatmap-ktor.svg"><img alt="Complexity hotspot heatmap of the ktor Kotlin web framework: a calm treemap, worst file cyclomatic complexity 141" title="ktor (Kotlin), 5.5/8: calm treemap, worst file ccn 141" src="docs/example-heatmap-ktor.svg"></a></td>
-    <td><a href="docs/example-heatmap-llamacpp.svg"><img alt="Complexity hotspot heatmap of the llama.cpp C/C++ inference engine: ggml-vulkan.cpp dominates as a large vivid-red block, cyclomatic complexity 4,123" title="llama.cpp (C/C++), 4.0/8: ggml-vulkan.cpp ccn 4,123 across 14k LOC, 289 commits" src="docs/example-heatmap-llamacpp.svg"></a></td>
-    <td><a href="docs/example-heatmap-candle.svg"><img alt="Complexity hotspot heatmap of the candle Rust ML framework: concentrated complexity in tensor_tests.rs and the backend modules" title="candle (Rust), 2.5/8: worst file tensor_tests.rs ccn 833" src="docs/example-heatmap-candle.svg"></a></td>
+    <td><a href="docs/example-heatmap-ktor.svg"><img alt="Complexity hotspot heatmap of the ktor Kotlin web framework: a calm treemap, worst file cyclomatic complexity 141" title="ktor (Kotlin): calm treemap, worst file ccn 141" src="docs/example-heatmap-ktor.svg"></a></td>
+    <td><a href="docs/example-heatmap-llamacpp.svg"><img alt="Complexity hotspot heatmap of the llama.cpp C/C++ inference engine: ggml-vulkan.cpp dominates as a large vivid-red block, cyclomatic complexity 4,123" title="llama.cpp (C/C++): ggml-vulkan.cpp ccn 4,123 across 14k LOC, 289 commits" src="docs/example-heatmap-llamacpp.svg"></a></td>
+    <td><a href="docs/example-heatmap-candle.svg"><img alt="Complexity hotspot heatmap of the candle Rust ML framework: concentrated complexity in tensor_tests.rs and the backend modules" title="candle (Rust): worst file tensor_tests.rs ccn 833" src="docs/example-heatmap-candle.svg"></a></td>
   </tr>
 </table>
 

@@ -51,7 +51,7 @@ The deterministic core (`lib/archetype.py`) classifies the repo and writes an `a
 - **Scoring.** For a detected knowledge base the write-side layers (2-7) are marked **N/A** (not Missing) in the scorecard, so they name no gap; the applicable layers (L0, L1, L8) get verdicts on their merits. The headline is unchanged by the archetype: it reads the maturity model's conditions, not layers. A software repo gets a verdict for every layer 0-8.
 - **KB-maintenance signal.** `archetype.kb_maintenance` flags whether the repo documents *how the AI maintains the KB* - the [Karpathy LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (immutable raw sources, the schema file as the product, an ingest workflow, query-as-filing, periodic lint/consolidation). It is both a detection signal and a scored read-side (Layer 0) quality signal; the gist is cited in the report as the best-practice pointer whether or not the workflow is documented.
 
-This is intentionally **one** archetype (knowledge base), structured as an extensible dispatch so more are cheap to add later - not a general archetype framework (YAGNI). The `assess-layer-scorer` agent reads the block (its Step 0) and the `assess-findings` skill renders N/A layers and the renormalised headline.
+This is intentionally **one** archetype (knowledge base), structured as an extensible dispatch so more are cheap to add later - not a general archetype framework (YAGNI). The `assess-layer-scorer` agent reads the block (its Step 0) and the `assess-findings` skill renders N/A layers in the scorecard.
 
 <!-- chat-skip:start -->
 **$ARGUMENTS**
