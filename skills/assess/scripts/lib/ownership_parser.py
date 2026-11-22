@@ -176,7 +176,8 @@ def _is_module_source(path: Path) -> bool:
 
 
 def is_boundary_pattern(pattern: str, files: set[Path]) -> bool:
-    """A CODEOWNERS line that names a module path owning tracked source (#785)."""
+    """A CODEOWNERS line or architecture-doc reference that names a module path owning
+    tracked source (#785, #874)."""
     return _names_a_path(pattern) and any(_is_module_source(f) for f in files)
 
 

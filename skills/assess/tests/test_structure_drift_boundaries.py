@@ -2,7 +2,9 @@
 
 A CODEOWNERS whose only pattern is ``*`` names one owner for the whole tree and no
 module boundary, so Layer 4 level 1 reads ``boundary_patterns`` instead of
-``matched_patterns``. Kept apart from ``test_structure_drift.py``, which sits near its
+``matched_patterns``. An architecture-doc reference passes the same module-source
+predicate, so one naming only ``CONTRIBUTING.md`` or ``.github/`` paths counts 0 (#874).
+Kept apart from ``test_structure_drift.py``, which sits near its
 file-size ceiling.
 """
 from __future__ import annotations

@@ -770,10 +770,10 @@ keeping only references that resolve to real files. `find_empty_globs` flags the
 patterns that match zero tracked files - the cheapest drift, a boundary the filesystem has
 left behind - and `parse_ownership` runs both with the module-shape degradation contract
 (`available: False`, reason `"no ownership map"` when neither map exists).
-`is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line declares a module
-boundary: a literal path segment and at least one matched file with a `CODE_EXTENSIONS`
+`is_boundary_pattern(pattern, files)` says whether a CODEOWNERS line or an architecture-doc
+reference declares a module boundary: a literal path segment and at least one matched file with a `CODE_EXTENSIONS`
 suffix under a non-dot directory, so `*`, `*.py`, `/.github/`, root files and docs-only
-paths do not (#785; tests in `tests/test_structure_drift_boundaries.py`). It mirrors
+paths do not (#785, #874; tests in `tests/test_structure_drift_boundaries.py`). It mirrors
 `doc_graph.py` deliberately: the same `EXCLUDE_DIRS` / `is_excluded_path` resolution and
 `tracked_files` filtering, the same honest-degrade-over-crash shape, every collection
 sorted at the boundary for byte-identical output. The one inversion is that it *reads*
