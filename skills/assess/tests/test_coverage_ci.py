@@ -205,7 +205,7 @@ def test_no_false_credit(tmp_path: Path, files: dict[str, str]) -> None:
 
 def test_jacoco_missed_counter_is_a_gate_with_no_percent(tmp_path: Path) -> None:
     """A MISSEDCOUNT maximum is listed (it gates something, zero included), never read as 0."""
-    (tmp_path / "pom.xml").write_text(_pom("<value>MISSEDCOUNT</value><maximum>0</maximum>"))
+    (tmp_path / "pom.xml").write_text(_pom("<value>MISSEDCOUNT</value><maximum>0</maximum>"), encoding="utf-8")
     block = detect_coverage_gate(tmp_path)
     assert [(g["unit"], g["threshold"], g["threshold_percent"]) for g in block["gates"]] == [
         ("uncovered_count", 0.0, None)]
@@ -213,17 +213,17 @@ def test_jacoco_missed_counter_is_a_gate_with_no_percent(tmp_path: Path) -> None
 
 
 def test_jacoco_missed_ratio_and_gradle_maximum(tmp_path: Path) -> None:
-    (tmp_path / "pom.xml").write_text(_pom("<value>MISSEDRATIO</value><maximum>0.2</maximum>"))
+    (tmp_path / "pom.xml").write_text(_pom("<value>MISSEDRATIO</value><maximum>0.2</maximum>"), encoding="utf-8")
     (tmp_path / "build.gradle").write_text(
         'plugins { id "jacoco" }\njacocoTestCoverageVerification { violationRules { rule {\n'
-        '  limit { counter = "LINE"\n    value = "MISSEDCOUNT"\n    maximum = 10 }\n} } }\n')
+        '  limit { counter = "LINE"\n    value = "MISSEDCOUNT"\n    maximum = 10 }\n} } }\n', encoding="utf-8")
     units = sorted((g["file"], g["unit"], g["form"]) for g in detect_coverage_gate(tmp_path)["gates"])
     assert units == [("build.gradle", "uncovered_count", "jacocoTestCoverageVerification maximum"),
                      ("pom.xml", "missed_ratio", "<rules> <maximum>")]
 
 
 def test_jacoco_covered_ratio_maximum_is_not_a_gate(tmp_path: Path) -> None:
-    (tmp_path / "pom.xml").write_text(_pom("<value>COVEREDRATIO</value><maximum>0.99</maximum>"))
+    (tmp_path / "pom.xml").write_text(_pom("<value>COVEREDRATIO</value><maximum>0.99</maximum>"), encoding="utf-8")
     assert detect_coverage_gate(tmp_path)["gates"] == []
 
 
