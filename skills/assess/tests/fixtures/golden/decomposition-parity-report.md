@@ -6,9 +6,11 @@ _Generated <<normalized>>._
 
 **Step 1 · Assisted · contracts in place**
 
-Next: Step 2 · Supervised agent PRs unlocks when 1 more verified practice is met, for example `layer-3-linters.1`
+Next: Step 2 · Supervised agent PRs unlocks when 1 more practice is in place, for example `layer-3-linters.1`
 
-Verified practices: 0 of 3 measured · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
+Practices in place: 0 of 3 measured, 0 verified · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
+
+By tag: behaviour 0 of 2 (NOT MEASURED: 1) · docs 0 of 0 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 4) · agent_runtime 0 of 0 (NOT MEASURED: 1) · governance 0 of 0 (NOT MEASURED: 2) · supply_chain 0 of 0 (NOT MEASURED: 1)
 
 ## Evidence behind the level
 

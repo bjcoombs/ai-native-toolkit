@@ -49,7 +49,7 @@ def _seed_log_md(assess_dir: Path) -> None:
         "# Assess Log\n\n"
         "## 2026-05-22\n\n"
         "- **Files scored:** 100\n"
-        "- **Readiness:** Step 3 · 4 of 4 measured\n"
+        "- **Readiness:** Step 3 · 4 of 4 in place\n"
         "- **Instructions grade:** B+\n"
         "- **Hotspot transitions:** 1 graduated, 0 regressed, 0 new, 2 persistent\n"
         "- **Top action:** (LLM fills in)\n\n"
@@ -83,7 +83,7 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in content
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in content
     assert "Top action:** Add cyclop rule to .golangci.yml (threshold 15)" in content
     # Placeholders must be gone
     assert "(LLM fills in)" not in content
@@ -206,7 +206,7 @@ def test_finalize_reads_from_cache_path(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in content
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in content
 
 
 def test_finalize_deletes_input_after_success(tmp_assess_dir: Path) -> None:
@@ -480,7 +480,7 @@ def test_finalize_without_actions_writes_no_contract(tmp_assess_dir: Path) -> No
 
     assert not (tmp_assess_dir / "actions.json").exists()
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in content
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in content
 
 
 def test_finalize_drops_malformed_action_entries(tmp_assess_dir: Path) -> None:
@@ -525,7 +525,7 @@ def test_finalize_leaves_deterministic_badge_untouched(tmp_assess_dir: Path) -> 
     _seed_run_context(tmp_assess_dir)
     deterministic_badge = (
         '{"schemaVersion": 1, "label": "AI-readiness", '
-        '"message": "Step 3 · 4 of 4 measured", "color": "green", '
+        '"message": "Step 3 · 4 of 4 in place", "color": "green", '
         '"link": "./assess-report.md"}'
     )
     (tmp_assess_dir / "badge.json").write_text(deterministic_badge, encoding="utf-8")
@@ -537,7 +537,7 @@ def test_finalize_leaves_deterministic_badge_untouched(tmp_assess_dir: Path) -> 
 
     assert (tmp_assess_dir / "badge.json").read_text(encoding="utf-8") == deterministic_badge
     log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in log
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in log
     assert "**Top action:** Add cyclop rule" in log
 
 
@@ -624,7 +624,7 @@ def test_finalize_run_id_match_finalizes_log(tmp_assess_dir: Path) -> None:
     finalize_run(assess_dir=tmp_assess_dir)
 
     log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in log
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in log
 
 
 def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) -> None:
@@ -635,7 +635,7 @@ def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) 
     _write_input(tmp_assess_dir, _base_input())  # no run_id
 
     finalize_run(assess_dir=tmp_assess_dir)  # must not raise
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in (
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in (
         tmp_assess_dir / "log.md"
     ).read_text(encoding="utf-8")
 
@@ -759,7 +759,7 @@ def test_finalize_evidence_all_true_finalizes(tmp_assess_dir: Path) -> None:
     finalize_run(assess_dir=tmp_assess_dir)
 
     log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in log
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in log
     assert "(LLM fills in)" not in log
     assert not (tmp_assess_dir / "finalize-input.json").exists()
 
@@ -773,7 +773,7 @@ def test_finalize_without_evidence_key_finalizes(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
 
-    assert "**Readiness:** Step 3 · 4 of 4 measured" in (tmp_assess_dir / "log.md").read_text(
+    assert "**Readiness:** Step 3 · 4 of 4 in place" in (tmp_assess_dir / "log.md").read_text(
         encoding="utf-8"
     )
 

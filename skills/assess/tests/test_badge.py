@@ -21,7 +21,7 @@ from lib.headline import as_headline
 from lib.level_result_types import Headline
 
 
-def _headline(step: int | None = 3, summary: str = "Step 3 · 4 of 4 measured") -> Headline:
+def _headline(step: int | None = 3, summary: str = "Step 3 · 4 of 4 in place") -> Headline:
     return {"headline_version": 1, "available": True, "levels_version": "m1", "step": step,
             "next_step": None, "lines": [summary], "markdown": summary, "summary": summary}
 
@@ -29,7 +29,7 @@ def _headline(step: int | None = 3, summary: str = "Step 3 · 4 of 4 measured") 
 def test_badge_message_is_the_headline_summary():
     badge = headline_badge(_headline())
     assert badge == {"schemaVersion": 1, "label": "AI-readiness",
-                     "message": "Step 3 · 4 of 4 measured", "color": "green"}
+                     "message": "Step 3 · 4 of 4 in place", "color": "green"}
 
 
 def test_step_colours_rise_and_never_turn_red():
@@ -62,7 +62,7 @@ def test_run_id_and_scope_are_stamped_when_supplied():
 def test_write_headline_badge_links_the_report(tmp_path: Path):
     write_headline_badge(tmp_path, _headline(), run_id="r1")
     data = json.loads((tmp_path / "badge.json").read_text(encoding="utf-8"))
-    assert data["message"] == "Step 3 · 4 of 4 measured"
+    assert data["message"] == "Step 3 · 4 of 4 in place"
     assert data["link"] == "./assess-report.md"
     assert data["run_id"] == "r1"
     assert badge_exists(tmp_path)
