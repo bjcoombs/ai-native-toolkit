@@ -89,7 +89,8 @@ def test_no_ci_files_is_false_with_basis_no_ci(tmp_path: Path) -> None:
                      "includes": [], "merged_config": "not_read", "merged_config_reason": None,
                      "merged_check_commands": 0, "test_or_lint_runs": False, "basis": "no_ci",
                      "enforced_check_runs": False, "enforced_basis": "no_ci",
-                     "masked_check_commands": 0, "off_trigger_check_commands": 0}
+                     "masked_check_commands": 0, "off_trigger_check_commands": 0,
+                     "lint_runs": False, "lint_basis": "no_ci"}
 
 
 def test_a_workflow_running_a_test_is_true(tmp_path: Path) -> None:
@@ -339,3 +340,99 @@ def _is_checkout(root: Path) -> bool:
 @pytest.mark.skipif(not _is_checkout(REPO_ROOT), reason="needs this repository's checkout")
 def test_this_repository_reads_enforced() -> None:
     assert scan_ci_checks(REPO_ROOT)["enforced_check_runs"] is True
+
+
+def _gha(run: str) -> dict[str, str]:
+    return {".github/workflows/ci.yml": (
+        "on: [pull_request]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
+        f"      - uses: actions/checkout@v4\n      - run: {run}\n")}
+
+
+_MATRIX_MYPY = {".github/workflows/ci.yml": (
+    "on: [pull_request]\njobs:\n  t:\n    strategy:\n      matrix:\n        tool:\n"
+    "          - mypy\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.tool }}\n")}
+
+
+# The issue #782 fixture table: (files, lint_runs, lint_basis, test_or_lint_runs as before #782).
+LINT_STATES = [
+    pytest.param(_gha("ruff check ."), True, "lint_command", True, id="ruff-check"),
+    pytest.param({**_gha("ruff check ."), "app.py": "import os  # noqa: F401\n"},
+                 True, "lint_command", True, id="ruff-check-and-noqa"),
+    pytest.param({"app.py": "import os  # noqa: F401\n"}, False, "no_ci", False, id="noqa-no-ci"),
+    pytest.param(_gha("make check"), None, "check_target", True, id="make-check"),
+    pytest.param(_gha("pre-commit run --all-files"), None, "check_target", False, id="pre-commit"),
+    pytest.param(_gha("pytest"), False, "no_lint_command", True, id="pytest"),
+    pytest.param(_gha("ruff --version"), False, "no_lint_command", True, id="ruff-version"),
+    pytest.param(_MATRIX_MYPY, False, "no_lint_command", False, id="matrix-mypy"),
+    pytest.param({".gitlab-ci.yml": "include:\n  - component: gl.test/grp/comp/test@1.0\n"},
+                 None, "included_jobs", None, id="gitlab-include-only"),
+]
+
+
+@pytest.mark.parametrize(("files", "lint", "basis", "test_or_lint"), LINT_STATES)
+def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | None, basis: str,
+                          test_or_lint: bool | None) -> None:
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert block["lint_runs"] is lint
+    assert block["lint_basis"] == basis
+    assert block["test_or_lint_runs"] is test_or_lint   # unchanged by #782
+
+
+@pytest.mark.parametrize(("run", "lint"), [
+    ("ruff check . || true", False),            # masked: cannot fail the job
+    ("uv run ruff check .", True),
+    ("make lint", True),
+    ("npm run lint", True),
+    ("task lint", True),
+    ("./scripts/lint.sh", True),
+    ("go vet ./...", True),
+    ("uv run mypy --version", False),
+    ("eslint --help", False),
+    ("ruff -V", False),
+    ("npm test", None),
+    ("tox -e py312", None),
+    ("./scripts/test.sh", None),
+    ("task check", None),
+    ("uv run pre-commit run --all-files", None),
+    ("uv run pytest -q", False),
+    ("python -m pytest", False),
+    ("go test ./...", False),
+    ("cargo test", False),
+    ("npx jest", False),
+    ("make check || true", False),              # a masked check target cannot fail the job either
+    ("make build", False),
+])
+def test_lint_runs_per_command(tmp_path: Path, run: str, lint: bool | None) -> None:
+    assert scan_ci_checks(_write(tmp_path, _gha(run)))["lint_runs"] is lint
+
+
+def test_a_masked_lint_step_is_not_enforced(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, _gha("ruff check . || true")))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_step_off_the_ordinary_triggers_does_not_count(tmp_path: Path) -> None:
+    text = "on: [workflow_dispatch]\njobs:\n  t:\n    steps:\n      - run: ruff check .\n"
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_step_with_unsettled_triggers_is_unknown(tmp_path: Path) -> None:
+    text = "jobs:\n  t:\n    steps:\n      - run: ruff check .\n"
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["lint_runs"], block["lint_basis"]) == (None, "unknown_trigger")
+
+
+def test_a_lint_line_beats_a_check_target(tmp_path: Path) -> None:
+    files = _gha("make check")
+    files[".github/workflows/lint.yml"] = _gha("ruff check .")[".github/workflows/ci.yml"]
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def test_a_lint_job_in_a_resolved_local_include_counts(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {
+        ".gitlab-ci.yml": "include:\n  - local: ci/lint.yml\n",
+        "ci/lint.yml": "lint:\n  script:\n    - ruff check .\n",
+    }))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")

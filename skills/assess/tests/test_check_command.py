@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from lib.check_command import is_check_command, is_check_name, is_lint_command
+from lib.check_command import is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint
 
 
 @pytest.mark.parametrize(("text", "expected"), [
@@ -35,3 +35,32 @@ def test_lint_is_not_a_check_name_for_instruction_files() -> None:
     """Instruction-file classification is unchanged: lint targets are not named checks."""
     assert is_check_command("make lint") is False
     assert is_check_name("check:all") and not is_check_name("lint")
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("ruff check .", True), ("uv run ruff check .", True), ("make lint", True),
+    ("npm run lint", True), ("pnpm lint", True), ("yarn eslint .", True), ("npx eslint src", True),
+    ("task lint", True), ("go vet ./...", True), ("cargo clippy", True),
+    ("ruff --version", False), ("mypy -V", False), ("eslint --help", False),
+    ("npm test", False), ("npx jest", False), ("yarn test", False), ("npm install eslint", False),
+])
+def test_is_lint_run(text: str, expected: bool) -> None:
+    # Issue #782: a lint call that runs the lint, and not a package-manager test alias.
+    assert is_lint_run(text) is expected
+
+
+def test_is_lint_command_keeps_its_meaning() -> None:
+    # test_or_lint_runs and Layer 5 still read is_lint_command unchanged (#782 requirement 3).
+    assert is_lint_command("ruff --version") and is_lint_command("npm test")
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("make check", True), ("npm test", True), ("npm run ci", True), ("tox -e lint", True),
+    ("nox", True), ("./scripts/test.sh", True), ("task check", True),
+    ("pre-commit run --all-files", True), ("uv run pre-commit run", True),
+    ("pytest", False), ("uv run pytest -q", False), ("python -m pytest", False),
+    ("go test ./...", False), ("cargo test", False), ("npx jest", False), ("npx vitest run", False),
+    ("npx playwright test", False), ("make build", False), ("pre-commit install", False),
+])
+def test_may_lint(text: str, expected: bool) -> None:
+    assert may_lint(text) is expected

@@ -140,3 +140,11 @@ def test_counts_only_keeps_the_enforced_ci_check_fields() -> None:
              "enforced_check_runs": False, "enforced_basis": "not_enforced",
              "masked_check_commands": 1, "off_trigger_check_commands": 1}
     assert counts_only_scans({"ci_checks": block})["ci_checks"] == block
+
+
+def test_counts_only_keeps_the_lint_run_fields() -> None:
+    """Issue #782: Layer 3 level 1 reads lint_runs, so counts-only output must keep it and its basis."""
+    block = {"available": True, "ci_files": 1, "check_commands": 1, "included_files": 0,
+             "test_or_lint_runs": True, "basis": "check_command",
+             "lint_runs": None, "lint_basis": "check_target"}
+    assert counts_only_scans({"ci_checks": block})["ci_checks"] == block

@@ -52,8 +52,9 @@ new signal has to be classified on purpose; ``input_class`` raises
   (``lib/ci_triggers.py``: a GitHub ``push`` / ``pull_request`` /
   ``merge_group`` event, a GitLab job no ``when: manual``, ``only:`` or
   ``rules:`` keeps off ordinary pipelines); triggers it cannot settle read
-  null. ``ci_checks.test_or_lint_runs`` reads neither and would be
-  ``head_text``.
+  null. ``ci_checks.lint_runs`` (#782) reads lint lines under the same
+  rules, so it has the class too. ``ci_checks.test_or_lint_runs`` reads
+  neither and would be ``head_text``.
 - ``platform``: read from the GitHub or GitLab API (``review_reality``,
   ``agent_environment.ci_duration``). Grade ``verified``.
 
@@ -208,12 +209,12 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "structure.modularity_q": "head_structure",
     "structure.cross_package_edges": "head_structure",
     "structure.front_door_ratio": "head_structure",
-    "promissory_markers.families.suppression.total": "head_text",
     "promissory_markers.families.suppression.stale": "git_history",
     "promissory_markers.aging_reliable": "git_history",
     "structure_drift.tier_0.boundary_patterns": "config_text",
     "stats_summary.loc.p95": "head_structure",
     "ci_checks.enforced_check_runs": "ci_executed",
+    "ci_checks.lint_runs": "ci_executed",
     "coverage_gate.threshold_meets_minimum": "config_text",
     "test_pressure.mutation_run": "execution_artifact",
     "review_evidence.present": "head_text",

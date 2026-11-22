@@ -203,7 +203,11 @@ constant each.
 # continue-on-error: true, allow_failure: true, set +e) and checks off the
 # ordinary triggers left out. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.32.0"
+# 1.33.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
+# #782): whether an unmasked CI line on ordinary triggers runs a linter (null
+# when a check target or script may lint inside it). Additive: no existing
+# key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.33.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -327,4 +331,8 @@ ARTIFACT_SCHEMA_VERSION = "1.32.0"
 #     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
 #     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
 #     Layer 5 evidence can move.
-ASSESS_METHOD_VERSION = 28
+# 29: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
+#     in CI, not a suppression comment. One suppression comment no longer earns the row,
+#     and a clean repository that lints in CI reads at least 1 where it was
+#     unknown, so the Layer 3 row can move.
+ASSESS_METHOD_VERSION = 29

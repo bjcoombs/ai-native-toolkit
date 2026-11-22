@@ -50,16 +50,27 @@
 #   import each other) has no community structure to measure: modularity_q
 #   is null with modularity_reason no_import_edges, so the row is unknown
 #   there too, not level 0.
-# - Layer 3 reads the linter's footprint, not its configuration: level 1 is
-#   at least one suppression comment (noqa, eslint-disable, nolint, type:
-#   ignore), which only exists where a linter or type checker runs; level 2
-#   holds the stale bare suppressions to 10 or fewer, the erosion cap
-#   /assess applies. The promissory_markers scan lists a family only when it
-#   found a marker, so a repository with no suppressions (a clean linter, or
-#   none) is unknown, not 0. A suppression is stale once it survives enough
-#   edits to its file, so level 2 also needs aging_reliable: on degenerate
-#   history (a shallow clone, a squashed import) a stale count of 0 says
-#   nothing.
+# - Layer 3 reads a linter running in CI, and caps it with the suppression
+#   footprint (issue #782). Level 1 is ci_checks.lint_runs: a line of a
+#   GitHub Actions workflow or .gitlab-ci.yml runs a linter or type checker
+#   (ruff check, eslint, mypy, golangci-lint, go vet, cargo clippy, a lint
+#   target such as make lint or npm run lint), under the same masking and
+#   trigger rules as Layer 5 (lib/ci_masking.py, lib/ci_triggers.py): a
+#   masked lint step (ruff check . || true) or one off the ordinary triggers
+#   does not count. A linter asked only for --version, --help or -V does not
+#   run. A check target or script that may run a linter inside it (make
+#   check, npm test, tox, ./scripts/test.sh, pre-commit run) is unknown when
+#   no lint line shows, since recipes are not read; a direct test run
+#   (pytest, go test, cargo test) is not a linter. No CI file, or CI with no
+#   lint line, is level 0, whatever the suppression comments say: a
+#   suppression only caps the row, never grants it. Level 2 holds the stale
+#   bare suppressions to 10 or fewer, the erosion cap /assess applies. The
+#   promissory_markers scan lists a family only when it found a marker, so a
+#   repository with no suppressions is unknown at level 2, not 0. A
+#   suppression is stale once it survives enough edits to its file, so
+#   level 2 also needs aging_reliable: on degenerate history (a shallow
+#   clone, a squashed import) a stale count of 0 says nothing. A stored scan
+#   from before lint_runs reads unknown at level 1.
 # - Layer 4 reads a declared boundary and the outcome of the commonest
 #   architecture test: level 1 is a committed ownership or boundary map
 #   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
@@ -161,7 +172,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.15"
+version = "default-2026.11.16"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -216,13 +227,13 @@ aggregation = "min"
 
 [[rows]]
 id = "layer-3-linters"
-title = "Layer 3: linters (suppression footprint)"
+title = "Layer 3: linters run in CI, suppression cap"
 scope = "team"
 aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "promissory_markers.families.suppression.total", op = "gt", value = 0 }]
+  criteria = [{ signal = "ci_checks.lint_runs", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
