@@ -339,7 +339,9 @@ def _is_checkout(root: Path) -> bool:
 
 @pytest.mark.skipif(not _is_checkout(REPO_ROOT), reason="needs this repository's checkout")
 def test_this_repository_reads_enforced() -> None:
-    assert scan_ci_checks(REPO_ROOT)["enforced_check_runs"] is True
+    block = scan_ci_checks(REPO_ROOT)
+    assert block["enforced_check_runs"] is True
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")   # #782
 
 
 def _gha(run: str) -> dict[str, str]:

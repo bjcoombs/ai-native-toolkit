@@ -24,15 +24,15 @@ from lib.levels import _UNAVAILABLE, evaluate, resolve_signal
 from lib.level_signals import load_default_levels
 from lib.signals_schema import SCHEMA_PATH
 
-BLOCKS = ("structure", "stats_summary", "promissory_markers", "structure_drift")
+BLOCKS = ("structure", "stats_summary", "promissory_markers", "structure_drift", "ci_checks")
 
-# The signal paths the default maturity model's layer 2, 3 and 4 rows read (#663).
+# The numeric signal paths the default maturity model's layer 2, 3 and 4 rows read (#663);
+# Layer 3 level 1 reads the ci_checks.lint_runs flag (#782).
 LAYER_SIGNALS = (
     "structure.modularity_q",
     "structure.front_door_ratio",
     "structure.cross_package_edges",
     "promissory_markers.aging_reliable",
-    "promissory_markers.families.suppression.total",
     "promissory_markers.families.suppression.stale",
     "structure_drift.tier_0.boundary_patterns",
     "stats_summary.loc.p95",
@@ -248,6 +248,8 @@ def test_the_default_model_gives_layers_2_to_4_a_whole_level_from_counts_only(
 ) -> None:
     """The fleet path: a counts-only headless document through the default rows."""
     _write(target, "pkg2/__init__.py", "from pkg import api\n")
+    _write(target, ".github/workflows/ci.yml",
+           "on: pull_request\njobs:\n  lint:\n    steps:\n      - run: ruff check .\n")
     _git(target, "add", "-A")
     _git(target, "commit", "-qm", "second package")
     doc = _run(target, tmp_path / "co.json", "--counts-only")
@@ -257,7 +259,8 @@ def test_the_default_model_gives_layers_2_to_4_a_whole_level_from_counts_only(
     assert resolve_signal(doc["scans"], "structure.cross_package_edges") > 0
     for row_id in ("layer-2-design", "layer-3-linters", "layer-4-architecture"):
         assert isinstance(levels[row_id], int), (row_id, levels[row_id])
-    # One suppression on two commits: a linter runs, but history too thin to age it.
+    # A linter in CI, one suppression on two commits: history too thin to age it.
+    assert doc["scans"]["ci_checks"]["lint_runs"] is True
     assert levels["layer-3-linters"] == 1
     assert doc["scans"]["promissory_markers"]["aging_reliable"] is False
     assert levels["layer-4-architecture"] == 2   # a matched CODEOWNERS path, small files
