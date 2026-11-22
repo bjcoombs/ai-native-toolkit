@@ -60,7 +60,7 @@ def test_the_grammar_is_defined_once() -> None:
     """No lib module other than history_window spells out the unit alternation
     as a regex group; fleet_schema builds its run.json pattern from it."""
     units = re.compile(r"\((?:\?:)?d\|w\|mo\|y\)")
-    holders = sorted(p.name for p in LIB.glob("*.py") if units.search(p.read_text(encoding="utf-8")))
+    holders = sorted(p.name for p in LIB.rglob("*.py") if units.search(p.read_text(encoding="utf-8")))
     assert holders == [Path(history_window.__file__).name]
 
 
