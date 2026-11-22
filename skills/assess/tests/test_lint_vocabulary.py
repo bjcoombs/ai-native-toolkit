@@ -20,7 +20,7 @@ LINT_RUNS = [
     "dotnet format --verify-no-changes", "dotnet tool run dotnet-format --verify-no-changes",
     "xargs clang-format-21 --dry-run --Werror",
     # Beyond the table: other spellings of the same forms.
-    "clang-format -n --Werror a.cc", "php vendor/bin/phpstan analyse", "./vendor/bin/phpstan",
+    "clang-format -n --Werror a.cc", "clang-format --dry-run -Werror a.cc", "php vendor/bin/phpstan analyse", "./vendor/bin/phpstan",
     "gradle detektMain", "gradlew lint", "./gradlew build ktlintMainSourceSetCheck",
     "phpstan.phar analyse", "php-cs-fixer check", "xargs -0 -n 1 clang-tidy -p build",
 ]

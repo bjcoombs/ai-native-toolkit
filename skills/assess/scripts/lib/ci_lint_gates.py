@@ -3,7 +3,9 @@
 - ``rewrite_gated``: a formatter that rewrites files (``clang-format -i``, ``mix format``,
   ``dart format .``; ``check_command.is_format_rewrite``) is a lint run only when a later
   unmasked line of the same job runs ``git diff --exit-code`` or ``git diff --quiet``, which
-  fails the job on any change. On its own, or followed by a commit, it reads false as before.
+  fails the job on any change. On its own, or followed by a commit, it reads false as before,
+  and so does a diff whose failure an ``||`` handler absorbs (``git diff --quiet || git
+  commit -am fmt``); ``|| exit 1`` re-raises it and still counts.
   Jobs are the keys under a GitHub workflow's ``jobs:`` and a GitLab file's top-level keys
   (``job_ids``).
 - ``line_compiler_gate`` / ``line_dotnet_build``: one CI line that runs a compiler with
@@ -73,13 +75,21 @@ def _rewrites(line: str) -> bool:
     return any(is_format_rewrite(c.text) for c in line_commands(line))
 
 
+# A ``||`` after a ``git diff`` on its line: what follows handles the diff's failure.
+_OR_AFTER_DIFF = re.compile(r"\bgit\s+diff\b[^|]*\|\|(.*)$")
+# A handler that still fails the step: ``|| exit 1``, ``|| (echo x; exit 1)``, ``|| false``.
+_RERAISE = re.compile(r"\bexit\s+(?:[1-9]|\$\?)|\bfalse\b")
+
+
 def _diff_gate(line: str) -> bool:
-    """``git diff --exit-code`` or ``git diff --quiet``: fails the job on any change."""
-    for c in line_commands(line):
-        words = command_words(c.text)
-        if words[:2] == ["git", "diff"] and {"--exit-code", "--quiet"} & set(words):
-            return True
-    return False
+    """``git diff --exit-code`` or ``git diff --quiet``: fails the job on any change. A
+    failure handled by ``||`` counts only when the handler re-raises it (``|| exit 1``):
+    ``git diff --quiet || git commit -am fmt`` commits the fix and never fails."""
+    if not any((words := command_words(c.text))[:2] == ["git", "diff"]
+               and {"--exit-code", "--quiet"} & set(words) for c in line_commands(line)):
+        return False
+    handler = _OR_AFTER_DIFF.search(ci_line_text(line))
+    return handler is None or _RERAISE.search(handler.group(1)) is not None
 
 
 def rewrite_gated(text: str) -> frozenset[int]:

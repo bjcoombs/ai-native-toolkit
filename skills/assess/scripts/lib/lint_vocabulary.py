@@ -65,7 +65,7 @@ def formatter_mode(words: list[str]) -> FormatMode | None:
     head, args = program_name(words[0]), words[1:]
     flags, sub = set(args), _pos(args)[:1]
     if head == "clang-format":
-        if flags & {"--dry-run", "-n"} and "--Werror" in flags:
+        if flags & {"--dry-run", "-n"} and flags & {"--Werror", "-Werror"}:   # LLVM takes both
             return "check"
         return "rewrite" if "-i" in flags else None
     if head == "swift-format":

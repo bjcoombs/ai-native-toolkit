@@ -3765,7 +3765,9 @@ Layer 3 lint gates one CI line cannot show (issue #926), for `ci_checks.lint_run
 `rewrite_gated(text)` is the set of line indices of rewrite-formatter lines
 (`check_command.is_format_rewrite`) that a later, or the same, unmasked line of the same
 job turns into a lint run with `git diff --exit-code` or `git diff --quiet`; a rewrite
-alone, followed by a commit, or with the diff in another job is not one. `job_ids(lines)`
+alone, followed by a commit, or with the diff in another job is not one, and nor is a diff
+whose failure an `||` handler absorbs without re-raising it (`git diff --quiet || git
+commit -am fmt`; `|| exit 1` and `|| false` re-raise). `job_ids(lines)`
 numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
 under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
 `ci_checks` shares. `line_compiler_gate` and `line_dotnet_build` are per-line tests over
