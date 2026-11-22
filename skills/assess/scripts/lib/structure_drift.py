@@ -51,10 +51,10 @@ references) and side B the tracked, non-excluded file set, and the finding is th
 declarations whose match set is empty. Binary, no statistics; a pattern matching only
 excluded files counts as empty (the excludes are not part of the navigable repo). It emits
 a JSON-serialisable `structure_drift` run-context block (`empty_ownership_patterns`, a
-coverage ratio, `boundary_patterns` - the matched architecture-doc references plus the
-CODEOWNERS lines `ownership_parser.is_boundary_pattern` accepts (a literal path segment and at
-least one matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`,
-`README.md` and `docs/` are left out); Layer 4 level 1 reads it (#785) - and
+coverage ratio, `boundary_patterns` - the CODEOWNERS lines and architecture-doc references
+`ownership_parser.is_boundary_pattern` accepts (a literal path segment and at least one
+matched source file under a non-dot directory, so `*`, `*.py`, `/.github/`, `README.md`,
+`CONTRIBUTING.md` and `docs/` are left out); Layer 4 level 1 reads it (#785, #874) - and
 legacy-shape `empty_globs` mirrors for the orchestrator's enumerate-both-sides view), degrades to `available: False` reason `"no ownership map"`, and
 sorts every list by `(pattern, declared_in)`. **Tier 1** - `detect_grouping_disagreement()` -
 is the next cut up: not "does the boundary still match any file?" but "do the files a
@@ -245,12 +245,9 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
 
     Counts both sides' declarations: every CODEOWNERS glob, and every distinct
     architecture-doc path reference (per declaring boundary). ``matched`` is the
-    declarations whose resolution is non-empty. ``boundary`` counts the matched
-    architecture-doc references and the CODEOWNERS globs ``is_boundary_pattern``
-    accepts: a catch-all, an extension glob, or a path owning no module source
-    (``/.github/``, ``README.md``, ``docs/``) leaves the code with one owner (#785).
-    Reuses the same parse/resolve path as the empty-set detectors so the two never
-    disagree on what "declared" means.
+    declarations whose resolution is non-empty; ``boundary`` those that
+    ``is_boundary_pattern`` accepts (#785, #874). Reuses the empty-set detectors'
+    parse/resolve path so the two never disagree on what "declared" means.
     """
     codeowners = parse_codeowners(repo_root)
     declared = len(codeowners)
@@ -266,17 +263,17 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
                 text = doc.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            d, m = _declared_refs_in_doc(text, repo_root, rel_paths)
+            d, m, b = _declared_refs_in_doc(text, repo_root, rel_paths)
             declared += d
             matched += m
-            boundary += m
+            boundary += b
     return declared, matched, boundary
 
 
 def _declared_refs_in_doc(
     text: str, repo_root: Path, rel_paths: set[str],
-) -> tuple[int, int]:
-    """(declared, matched) path-reference counts for one architecture doc.
+) -> tuple[int, int, int]:
+    """(declared, matched, boundary) path-reference counts for one architecture doc.
 
     Same sectioning as ``_empty_refs_in_doc`` - one declaration per (boundary,
     distinct reference) - but counts resolution outcomes instead of collecting the
@@ -288,16 +285,20 @@ def _declared_refs_in_doc(
     buffer: list[str] = []
     declared = 0
     matched = 0
+    boundary = 0
 
     def flush(lines: list[str]) -> None:
-        nonlocal declared, matched
+        nonlocal declared, matched, boundary
         if not lines:
             return
         segment = "\n".join(lines)
         for ref in _extract_path_refs(segment):
             declared += 1
-            if _resolve_ref(ref, repo_root, rel_paths):
+            files = _resolve_ref(ref, repo_root, rel_paths)
+            if files:
                 matched += 1
+            if is_boundary_pattern(ref, files):
+                boundary += 1
 
     for line in body.splitlines():
         if _HEADER_RE.match(line):
@@ -306,7 +307,7 @@ def _declared_refs_in_doc(
         else:
             buffer.append(line)
     flush(buffer)
-    return declared, matched
+    return declared, matched, boundary
 
 
 def detect_path_existence_drift(

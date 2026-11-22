@@ -13,6 +13,10 @@ reads = ["repo_root"]
 stage = "read_side"
 degrade = false
 gate_reason = "self_degrading"
+headless = { owner_exclusions = "headless_variant" }
+headless_variants = [
+  { block = "owner_exclusions", callable = "lib.headless_static:owner_exclusions", reads = ["repo_root"], stage = "read_side" },
+]
 shapes = [
   { path = "owner_exclusions", type = "lib.level_result_types:OwnerExclusionsBlock" },
 ]

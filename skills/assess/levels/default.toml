@@ -85,8 +85,9 @@
 #   architecture test: level 1 is a committed ownership or boundary map
 #   (CODEOWNERS, ARCHITECTURE.md, DESIGN.md, or a README.md that declares
 #   module boundaries) with at least one pattern matching a tracked file
-#   that names a module path (boundary_patterns). A CODEOWNERS line counts
-#   only when it names a path and owns source code in a module directory:
+#   that names a module path (boundary_patterns). A CODEOWNERS line or an
+#   architecture-doc reference counts only when it names a path and resolves
+#   to source code in a module directory (#874):
 #   a catch-all or extension glob (`*`, `/**`, `*.py`), a dot-directory
 #   (`/.github/`), a root file (`README.md`, `LICENSE`) or a docs-only
 #   path leaves the code with one owner, so it does not count. Level 2 adds a
@@ -198,7 +199,8 @@
 #   working-tree artifact, not part of the commit. Go's go-test-coverage
 #   .testcoverage.yml, cargo tarpaulin --fail-under and cargo llvm-cov
 #   --fail-under-lines are read (#788). A repository holding a go.mod or a
-#   Cargo.toml with no gate found is unknown, never 0: its gate may be a script
+#   Cargo.toml with no gate of that language found, and none of 50 or more for
+#   another (#937), is unknown, never 0: its gate may be a script
 #   comparing go tool cover to a number, which the scan does not read
 #   (coverage_gate.unmeasured_reason go_rust_gate_form_not_read). Level 2 reads
 #   test_pressure.mutation_run, which a headless run does not build.

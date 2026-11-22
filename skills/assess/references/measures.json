@@ -50,15 +50,29 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-0-instructions.1",
           "truth": [
             "agent_context"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [
+            "instructions"
+          ],
+          "grade": "declared",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-0-instructions.1:layer_grades.instruction_file_present",
               "signal": "layer_grades.instruction_file_present",
+              "producer": {
+                "scan": "layer_grades",
+                "collector": "core.layer_grades"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "A committed instruction file exists: is true",
               "title": "An instruction file is committed",
               "fix": "Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works.",
@@ -70,16 +84,28 @@
         },
         {
           "level": 2,
+          "id": "layer-0-instructions.2",
           "truth": [
             "agent_context",
             "docs"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "declared",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-0-instructions.2:agent_environment.check.named_total",
               "signal": "agent_environment.check.named_total",
+              "producer": {
+                "scan": "agent_environment",
+                "collector": "core.agent_environment"
+              },
               "op": "gt",
               "value": 0,
+              "eq_signal": null,
               "text": "Instruction files name a check command: is above 0",
               "title": "An instruction file names a check command",
               "fix": "Name the command that checks a change (for example make check) in your instruction file.",
@@ -90,8 +116,13 @@
             {
               "key": "layer-0-instructions.2:instruction_claims.failed",
               "signal": "instruction_claims.failed",
+              "producer": {
+                "scan": "instruction_claims",
+                "collector": "core.instruction_claims"
+              },
               "op": "eq",
               "value": 0,
+              "eq_signal": null,
               "text": "Instruction claims that do not hold: is 0",
               "title": "Every checkable instruction claim holds",
               "fix": "Update the instruction lines whose claims no longer match the repository.",
@@ -102,8 +133,13 @@
             {
               "key": "layer-0-instructions.2:nested_instructions.budget.claude_code.lines",
               "signal": "nested_instructions.budget.claude_code.lines",
+              "producer": {
+                "scan": "nested_instructions",
+                "collector": "core.nested_instructions"
+              },
               "op": "lte",
               "value": 200,
+              "eq_signal": null,
               "text": "Always-loaded Claude Code instruction lines: is at most 200",
               "title": "Always-loaded instructions fit in 200 lines",
               "fix": "Move detail that is needed only sometimes into files the instructions point to.",
@@ -123,15 +159,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-1-liveness.1",
           "truth": [
             "agent_runtime"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "declared",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-1-liveness.1:observability.rung",
               "signal": "observability.rung",
+              "producer": {
+                "scan": "observability",
+                "collector": "core.liveness_blocks"
+              },
               "op": "gte",
               "value": 1,
+              "eq_signal": null,
               "text": "Observability rung: is at least 1",
               "title": "Some runtime telemetry is committed",
               "fix": "Add a telemetry dependency, a runbook or an OBSERVABILITY.md so an agent can see the system run.",
@@ -143,15 +191,27 @@
         },
         {
           "level": 2,
+          "id": "layer-1-liveness.2",
           "truth": [
             "agent_runtime"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "declared",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-1-liveness.2:observability.rung",
               "signal": "observability.rung",
+              "producer": {
+                "scan": "observability",
+                "collector": "core.liveness_blocks"
+              },
               "op": "gte",
               "value": 3,
+              "eq_signal": null,
               "text": "Observability rung: is at least 3",
               "title": "Runtime telemetry reaches rung 3",
               "fix": "Give agents a way to read logs or metrics, such as a logs or metrics MCP server or skill.",
@@ -171,15 +231,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-2-design.1",
           "truth": [
             "structure"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-2-design.1:structure.modularity_q",
               "signal": "structure.modularity_q",
+              "producer": {
+                "scan": "structure",
+                "collector": "core.keyhole_blocks"
+              },
               "op": "gte",
               "value": 0.3,
+              "eq_signal": null,
               "text": "Import-graph modularity: is at least 0.3",
               "title": "The import graph has module structure",
               "fix": "Group related modules into packages that mostly import within themselves.",
@@ -191,15 +263,29 @@
         },
         {
           "level": 2,
+          "id": "layer-2-design.2",
           "truth": [
             "structure"
           ],
+          "polarity": "positive",
+          "requires": [
+            "layer-2-design.1"
+          ],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-2-design.2:structure.cross_package_edges",
               "signal": "structure.cross_package_edges",
+              "producer": {
+                "scan": "structure",
+                "collector": "core.keyhole_blocks"
+              },
               "op": "gt",
               "value": 0,
+              "eq_signal": null,
               "text": "Cross-package imports: is above 0",
               "title": "Packages import one another",
               "fix": "Nothing to change on its own: this is met once one package imports another.",
@@ -210,8 +296,13 @@
             {
               "key": "layer-2-design.2:structure.front_door_ratio",
               "signal": "structure.front_door_ratio",
+              "producer": {
+                "scan": "structure",
+                "collector": "core.keyhole_blocks"
+              },
               "op": "gte",
               "value": 0.9,
+              "eq_signal": null,
               "text": "Cross-package imports through a package's front door: is at least 0.9",
               "title": "Cross-package imports use a package's front door",
               "fix": "Import other packages through their public API rather than their submodules.",
@@ -231,15 +322,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-3-linters.1",
           "truth": [
             "structure"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "verified",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-3-linters.1:ci_checks.lint_runs",
               "signal": "ci_checks.lint_runs",
+              "producer": {
+                "scan": "ci_checks",
+                "collector": "core.ci_checks"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "A CI line runs a linter on ordinary changes and can stop its job: is true",
               "title": "CI runs a linter or type checker",
               "fix": "Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without || true, continue-on-error or allow_failure.",
@@ -251,15 +354,29 @@
         },
         {
           "level": 2,
+          "id": "layer-3-linters.2",
           "truth": [
             "structure"
           ],
+          "polarity": "positive",
+          "requires": [
+            "layer-3-linters.1"
+          ],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-3-linters.2:promissory_markers.families.suppression.stale",
               "signal": "promissory_markers.families.suppression.stale",
+              "producer": {
+                "scan": "promissory_markers",
+                "collector": "core.promissory_markers"
+              },
               "op": "lte",
               "value": 10,
+              "eq_signal": null,
               "text": "Stale suppression comments: is at most 10",
               "title": "Stale suppressions stay at 10 or fewer",
               "fix": "Revisit the oldest suppression comments and fix or remove them.",
@@ -270,8 +387,13 @@
             {
               "key": "layer-3-linters.2:promissory_markers.aging_reliable",
               "signal": "promissory_markers.aging_reliable",
+              "producer": {
+                "scan": "promissory_markers",
+                "collector": "core.promissory_markers"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "Marker aging is reliable: is true",
               "title": "Suppression ages can be read from history",
               "fix": "Run on a full clone so suppression ages can be measured.",
@@ -291,15 +413,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-4-architecture.1",
           "truth": [
             "structure"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "config_only",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns",
               "signal": "structure_drift.tier_0.boundary_patterns",
+              "producer": {
+                "scan": "structure_drift",
+                "collector": "core.structure_drift_block"
+              },
               "op": "gt",
               "value": 0,
+              "eq_signal": null,
               "text": "Ownership-map patterns naming a module path: is above 0",
               "title": "A boundary or ownership map names a module path",
               "fix": "Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths.",
@@ -311,15 +445,29 @@
         },
         {
           "level": 2,
+          "id": "layer-4-architecture.2",
           "truth": [
             "structure"
           ],
+          "polarity": "positive",
+          "requires": [
+            "layer-4-architecture.1"
+          ],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-4-architecture.2:stats_summary.loc.p95",
               "signal": "stats_summary.loc.p95",
+              "producer": {
+                "scan": "stats_summary",
+                "collector": "core.run_header"
+              },
               "op": "lte",
               "value": 500,
+              "eq_signal": null,
               "text": "File size at the 95th percentile: is at most 500",
               "title": "95% of files are 500 lines or fewer",
               "fix": "Split the largest files along their natural seams.",
@@ -339,15 +487,29 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-5-ci.1",
           "truth": [
             "behaviour"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [
+            "ci_runs_tests"
+          ],
+          "grade": "verified",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-5-ci.1:ci_checks.enforced_check_runs",
               "signal": "ci_checks.enforced_check_runs",
+              "producer": {
+                "scan": "ci_checks",
+                "collector": "core.ci_checks"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "A CI check runs on ordinary changes and can stop its job: is true",
               "title": "CI runs your tests or linters, and an error stops the job",
               "fix": "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure.",
@@ -359,19 +521,31 @@
         },
         {
           "level": 2,
+          "id": "layer-5-ci.2",
           "truth": [
             "agent_runtime",
             "supply_chain"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "declared",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-5-ci.2:agent_environment.pinning.unlocked_total",
               "signal": "agent_environment.pinning.unlocked_total",
+              "producer": {
+                "scan": "agent_environment",
+                "collector": "core.agent_environment"
+              },
               "op": "eq",
               "value": 0,
+              "eq_signal": null,
               "text": "Dependency manifests without a committed lockfile: is 0",
               "title": "Every dependency manifest has its lockfile",
-              "fix": "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests.",
+              "fix": "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking.",
               "input_class": "head_text",
               "grade": "declared",
               "counts": false
@@ -388,15 +562,29 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-6-coverage.1",
           "truth": [
             "behaviour"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [
+            "coverage_gate"
+          ],
+          "grade": "verified",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-6-coverage.1:coverage_gate.enforced_meets_minimum",
               "signal": "coverage_gate.enforced_meets_minimum",
+              "producer": {
+                "scan": "coverage_gate",
+                "collector": "core.coverage_gate"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "CI runs a coverage gate of at least 50 percent: is true",
               "title": "CI runs a coverage gate of at least 50 percent",
               "fix": "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without || true or continue-on-error, so CI holds the line you have reached.",
@@ -408,15 +596,29 @@
         },
         {
           "level": 2,
+          "id": "layer-6-coverage.2",
           "truth": [
             "behaviour"
           ],
+          "polarity": "positive",
+          "requires": [
+            "layer-5-ci.1"
+          ],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-6-coverage.2:test_pressure.mutation_run",
               "signal": "test_pressure.mutation_run",
+              "producer": {
+                "scan": "test_pressure",
+                "collector": "core.test_pressure"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "A mutation run completed: is true",
               "title": "A mutation run has completed",
               "fix": "Run the opt-in mutation pass to see which tests pin behaviour.",
@@ -436,15 +638,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-7-review.1",
           "truth": [
             "governance"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "declared",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-7-review.1:review_evidence.present",
               "signal": "review_evidence.present",
+              "producer": {
+                "scan": "review_evidence",
+                "collector": "core.review_evidence"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "Review evidence exists: is true",
               "title": "Changes get reviewed",
               "fix": "Commit an AI review step in CI, or review merged changes before they land.",
@@ -456,15 +670,27 @@
         },
         {
           "level": 2,
+          "id": "layer-7-review.2",
           "truth": [
             "governance"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "verified",
+          "counts": true,
           "criteria": [
             {
               "key": "layer-7-review.2:review_reality.reviewed_share",
               "signal": "review_reality.reviewed_share",
+              "producer": {
+                "scan": "review_reality",
+                "collector": "core.review_reality"
+              },
               "op": "gte",
               "value": 0.8,
+              "eq_signal": null,
               "text": "Share of merged changes reviewed: is at least 0.8",
               "title": "Most merged changes are reviewed",
               "fix": "Aim for a review on at least four in five merged changes.",
@@ -475,8 +701,13 @@
             {
               "key": "layer-7-review.2:review_reality.approved_share",
               "signal": "review_reality.approved_share",
+              "producer": {
+                "scan": "review_reality",
+                "collector": "core.review_reality"
+              },
               "op": "gte",
               "value": 0.5,
+              "eq_signal": null,
               "text": "Share of merged changes approved: is at least 0.5",
               "title": "Half of merged changes are approved",
               "fix": "Approve changes explicitly when you review them.",
@@ -496,15 +727,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "layer-8-agent-ops.1",
           "truth": [
             "governance"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "config_only",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
               "signal": "agent_ops.summary.permissions_encoded",
+              "producer": {
+                "scan": "agent_ops",
+                "collector": "core.agent_ops"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "Agent permissions are committed: is true",
               "title": "Agent permissions are committed",
               "fix": "Commit the agent permission allowlist your team uses, so every clone shares it.",
@@ -516,15 +759,27 @@
         },
         {
           "level": 2,
+          "id": "layer-8-agent-ops.2",
           "truth": [
             "agent_runtime"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "config_only",
+          "counts": false,
           "criteria": [
             {
               "key": "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
               "signal": "agent_ops.summary.hooks_present",
+              "producer": {
+                "scan": "agent_ops",
+                "collector": "core.agent_ops"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "Agent hooks are committed: is true",
               "title": "Agent hooks are committed",
               "fix": "Commit the hooks that run checks around agent actions.",
@@ -535,8 +790,13 @@
             {
               "key": "layer-8-agent-ops.2:agent_ops.summary.routines_present",
               "signal": "agent_ops.summary.routines_present",
+              "producer": {
+                "scan": "agent_ops",
+                "collector": "core.agent_ops"
+              },
               "op": "eq",
               "value": true,
+              "eq_signal": null,
               "text": "Agent routines are committed: is true",
               "title": "Agent routines are committed",
               "fix": "Commit the routines agents run on a schedule or trigger.",
@@ -556,15 +816,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "doc-freshness.1",
           "truth": [
             "docs"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "doc-freshness.1:doc_staleness.summary.stale_pct",
               "signal": "doc_staleness.summary.stale_pct",
+              "producer": {
+                "scan": "doc_staleness",
+                "collector": "core.doc_staleness"
+              },
               "op": "lte",
               "value": 50,
+              "eq_signal": null,
               "text": "Share of mapped docs outrun by their code: is at most 50",
               "title": "Most mapped docs keep pace with their code",
               "fix": "Refresh the docs the report lists under doc freshness.",
@@ -576,15 +848,27 @@
         },
         {
           "level": 2,
+          "id": "doc-freshness.2",
           "truth": [
             "docs"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "doc-freshness.2:doc_staleness.summary.stale_pct",
               "signal": "doc_staleness.summary.stale_pct",
+              "producer": {
+                "scan": "doc_staleness",
+                "collector": "core.doc_staleness"
+              },
               "op": "lte",
               "value": 20,
+              "eq_signal": null,
               "text": "Share of mapped docs outrun by their code: is at most 20",
               "title": "Four in five mapped docs keep pace",
               "fix": "Refresh the docs the report lists under doc freshness, oldest first.",
@@ -604,15 +888,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "guardrails-stated.1",
           "truth": [
             "agent_context"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "guardrails-stated.1:guardrails.stated_pct",
               "signal": "guardrails.stated_pct",
+              "producer": {
+                "scan": "guardrails",
+                "collector": "core.guardrails"
+              },
               "op": "gte",
               "value": 50,
+              "eq_signal": null,
               "text": "Share of configured gates an instruction file states: is at least 50",
               "title": "Half the configured gates are stated",
               "fix": "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it.",
@@ -624,15 +920,29 @@
         },
         {
           "level": 2,
+          "id": "guardrails-stated.2",
           "truth": [
             "agent_context"
           ],
+          "polarity": "positive",
+          "requires": [
+            "guardrails-stated.1"
+          ],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "guardrails-stated.2:guardrails.stated_pct",
               "signal": "guardrails.stated_pct",
+              "producer": {
+                "scan": "guardrails",
+                "collector": "core.guardrails"
+              },
               "op": "gte",
               "value": 100,
+              "eq_signal": null,
               "text": "Share of configured gates an instruction file states: is at least 100",
               "title": "Every configured gate is stated",
               "fix": "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing.",
@@ -652,15 +962,27 @@
       "levels": [
         {
           "level": 1,
+          "id": "agent-consistency.1",
           "truth": [
             "agent_context"
           ],
+          "polarity": "positive",
+          "requires": [],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "agent-consistency.1:agent_consistency.conflicts",
               "signal": "agent_consistency.conflicts",
+              "producer": {
+                "scan": "agent_consistency",
+                "collector": "core.agent_consistency"
+              },
               "op": "eq",
               "value": 0,
+              "eq_signal": null,
               "text": "Commands and thresholds the agent systems disagree on: is 0",
               "title": "Every agent system names the same checks",
               "fix": "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives.",
@@ -672,15 +994,29 @@
         },
         {
           "level": 2,
+          "id": "agent-consistency.2",
           "truth": [
             "agent_context"
           ],
+          "polarity": "positive",
+          "requires": [
+            "agent-consistency.1"
+          ],
+          "guarded_by": null,
+          "step_gates": [],
+          "grade": "measured",
+          "counts": true,
           "criteria": [
             {
               "key": "agent-consistency.2:agent_consistency.unlinked",
               "signal": "agent_consistency.unlinked",
+              "producer": {
+                "scan": "agent_consistency",
+                "collector": "core.agent_consistency"
+              },
               "op": "eq",
               "value": 0,
+              "eq_signal": null,
               "text": "Agent systems not linked to the canonical instruction file: is 0",
               "title": "Every agent system reads one canonical file",
               "fix": "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool.",
@@ -691,6 +1027,292 @@
           ]
         }
       ]
+    }
+  ],
+  "tags": [
+    {
+      "id": "behaviour",
+      "title": "Behaviour",
+      "conditions": [
+        "layer-5-ci.1",
+        "layer-6-coverage.1",
+        "layer-6-coverage.2"
+      ],
+      "listed": [
+        "layer-5-ci.1",
+        "layer-6-coverage.1",
+        "layer-6-coverage.2"
+      ],
+      "shared": []
+    },
+    {
+      "id": "contracts",
+      "title": "Contracts",
+      "conditions": [],
+      "listed": [],
+      "shared": []
+    },
+    {
+      "id": "docs",
+      "title": "Docs",
+      "conditions": [
+        "layer-0-instructions.2",
+        "doc-freshness.1",
+        "doc-freshness.2"
+      ],
+      "listed": [
+        "doc-freshness.1",
+        "doc-freshness.2"
+      ],
+      "shared": [
+        "layer-0-instructions.2"
+      ]
+    },
+    {
+      "id": "structure",
+      "title": "Structure",
+      "conditions": [
+        "layer-2-design.1",
+        "layer-2-design.2",
+        "layer-3-linters.1",
+        "layer-3-linters.2",
+        "layer-4-architecture.1",
+        "layer-4-architecture.2"
+      ],
+      "listed": [
+        "layer-2-design.1",
+        "layer-2-design.2",
+        "layer-3-linters.1",
+        "layer-3-linters.2",
+        "layer-4-architecture.1",
+        "layer-4-architecture.2"
+      ],
+      "shared": []
+    },
+    {
+      "id": "agent_context",
+      "title": "Agent context",
+      "conditions": [
+        "layer-0-instructions.1",
+        "layer-0-instructions.2",
+        "guardrails-stated.1",
+        "guardrails-stated.2",
+        "agent-consistency.1",
+        "agent-consistency.2"
+      ],
+      "listed": [
+        "layer-0-instructions.1",
+        "layer-0-instructions.2",
+        "guardrails-stated.1",
+        "guardrails-stated.2",
+        "agent-consistency.1",
+        "agent-consistency.2"
+      ],
+      "shared": [
+        "layer-0-instructions.2"
+      ]
+    },
+    {
+      "id": "agent_runtime",
+      "title": "Agent runtime",
+      "conditions": [
+        "layer-1-liveness.1",
+        "layer-1-liveness.2",
+        "layer-5-ci.2",
+        "layer-8-agent-ops.2"
+      ],
+      "listed": [
+        "layer-1-liveness.1",
+        "layer-1-liveness.2",
+        "layer-5-ci.2",
+        "layer-8-agent-ops.2"
+      ],
+      "shared": [
+        "layer-5-ci.2"
+      ]
+    },
+    {
+      "id": "governance",
+      "title": "Governance",
+      "conditions": [
+        "layer-7-review.1",
+        "layer-7-review.2",
+        "layer-8-agent-ops.1"
+      ],
+      "listed": [
+        "layer-7-review.1",
+        "layer-7-review.2",
+        "layer-8-agent-ops.1"
+      ],
+      "shared": []
+    },
+    {
+      "id": "supply_chain",
+      "title": "Supply chain",
+      "conditions": [
+        "layer-5-ci.2"
+      ],
+      "listed": [],
+      "shared": [
+        "layer-5-ci.2"
+      ]
+    }
+  ],
+  "tag_pairs": [
+    {
+      "tags": [
+        "docs",
+        "agent_context"
+      ],
+      "conditions": [
+        "layer-0-instructions.2"
+      ]
+    },
+    {
+      "tags": [
+        "agent_runtime",
+        "supply_chain"
+      ],
+      "conditions": [
+        "layer-5-ci.2"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "name": "Assisted",
+      "threshold": 0,
+      "gates": [],
+      "added_gates": []
+    },
+    {
+      "step": 2,
+      "name": "Supervised agent PRs",
+      "threshold": 1,
+      "gates": [
+        {
+          "id": "instructions",
+          "row": "layer-0-instructions",
+          "level": 1,
+          "conditions": [
+            "layer-0-instructions.1"
+          ],
+          "tags": [
+            "agent_context"
+          ]
+        }
+      ],
+      "added_gates": [
+        "instructions"
+      ]
+    },
+    {
+      "step": 3,
+      "name": "Unattended agent PRs",
+      "threshold": 3,
+      "gates": [
+        {
+          "id": "instructions",
+          "row": "layer-0-instructions",
+          "level": 1,
+          "conditions": [
+            "layer-0-instructions.1"
+          ],
+          "tags": [
+            "agent_context"
+          ]
+        },
+        {
+          "id": "ci_runs_tests",
+          "row": "layer-5-ci",
+          "level": 1,
+          "conditions": [
+            "layer-5-ci.1"
+          ],
+          "tags": [
+            "behaviour"
+          ]
+        }
+      ],
+      "added_gates": [
+        "ci_runs_tests"
+      ]
+    },
+    {
+      "step": 4,
+      "name": "Autonomous loops",
+      "threshold": 5,
+      "gates": [
+        {
+          "id": "instructions",
+          "row": "layer-0-instructions",
+          "level": 1,
+          "conditions": [
+            "layer-0-instructions.1"
+          ],
+          "tags": [
+            "agent_context"
+          ]
+        },
+        {
+          "id": "ci_runs_tests",
+          "row": "layer-5-ci",
+          "level": 1,
+          "conditions": [
+            "layer-5-ci.1"
+          ],
+          "tags": [
+            "behaviour"
+          ]
+        },
+        {
+          "id": "coverage_gate",
+          "row": "layer-6-coverage",
+          "level": 1,
+          "conditions": [
+            "layer-6-coverage.1"
+          ],
+          "tags": [
+            "behaviour"
+          ]
+        }
+      ],
+      "added_gates": [
+        "coverage_gate"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "kind": "requires",
+      "source": "layer-2-design.2",
+      "target": "layer-2-design.1"
+    },
+    {
+      "kind": "requires",
+      "source": "layer-3-linters.2",
+      "target": "layer-3-linters.1"
+    },
+    {
+      "kind": "requires",
+      "source": "layer-4-architecture.2",
+      "target": "layer-4-architecture.1"
+    },
+    {
+      "kind": "requires",
+      "source": "layer-6-coverage.2",
+      "target": "layer-5-ci.1"
+    },
+    {
+      "kind": "requires",
+      "source": "guardrails-stated.2",
+      "target": "guardrails-stated.1"
+    },
+    {
+      "kind": "requires",
+      "source": "agent-consistency.2",
+      "target": "agent-consistency.1"
     }
   ],
   "scans": [
@@ -947,7 +1569,7 @@
       "unknown_reasons": [
         {
           "code": "go_rust_gate_form_not_read",
-          "means": "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
+          "means": "The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
           "next_step": "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.",
           "carried_in": "unmeasured_reason"
         }
@@ -1137,7 +1759,7 @@
     {
       "name": "agent_environment",
       "title": "Agent working environment",
-      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs.",
+      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).",
       "collector": "core.agent_environment",
       "reads": [
         "repo_root",
@@ -1171,6 +1793,7 @@
           "agent_environment.pinning.manifests.ecosystem": "token",
           "agent_environment.pinning.manifests.lockfile": "path",
           "agent_environment.pinning.manifests.manifest": "path",
+          "agent_environment.pinning.manifests.note": "token",
           "agent_environment.reason": "drop",
           "agent_environment.setup.sources.detail": "drop",
           "agent_environment.setup.sources.kind": "token"
@@ -1385,6 +2008,12 @@
           "code": "unknown_trigger",
           "means": "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).",
           "next_step": "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "script_not_found",
+          "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
+          "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
           "carried_in": "basis"
         },
         {
@@ -2165,6 +2794,43 @@
         "findings": [
           "override_contradicts_signals"
         ]
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ]
+    },
+    {
+      "name": "owner_exclusions",
+      "title": "Owner exclusions",
+      "summary": "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why.",
+      "collector": "core.owner_exclusions",
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "headless_variant",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "owner_exclusions.disclosures": "drop",
+          "owner_exclusions.exclusions.excluded_at": "token",
+          "owner_exclusions.exclusions.excluded_by": "drop",
+          "owner_exclusions.exclusions.id": "token",
+          "owner_exclusions.exclusions.kind": "token",
+          "owner_exclusions.exclusions.reason": "drop",
+          "owner_exclusions.exclusions.source": "token",
+          "owner_exclusions.exclusions.version": "token",
+          "owner_exclusions.skipped.id": "drop",
+          "owner_exclusions.skipped.problem": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
       },
       "unknown_reasons": [],
       "evidence": [],
@@ -3712,6 +4378,19 @@
       "private": false
     },
     {
+      "name": "units",
+      "title": "Monorepo units",
+      "publishes": [
+        "units"
+      ],
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "offers_block",
       "title": "End-of-run offers",
       "publishes": [
@@ -4130,7 +4809,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET build analysers; compiler_gate_only: only warnings as errors"
+      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -4175,7 +4854,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: it may be in an included file; unknown_trigger: its triggers are not settled; check_target: an unread target may run it; unread_ci_system: an unparsed CI system may run it; external_ci: merged changes carry external CI checks; external_ci_marker: a root Prow OWNERS_ALIASES, no CI file"
+      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; script_not_found: its script is not committed; check_target: a target may run it; unread_ci_system: an unparsed CI system may; external_ci: merged changes carry external checks; external_ci_marker: a root Prow OWNERS_ALIASES"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",

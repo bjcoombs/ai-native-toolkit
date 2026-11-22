@@ -82,7 +82,9 @@ producer modules:
 
 1. `set` with `absent_signals`: the unknown side's `missing_signals` name a path that side's
    stored scans lack while the other run holds it. This is measured-set movement, never level
-   movement; the achievements replay already treats an unknown side as neutral.
+   movement; the achievements replay already treats an unknown side as neutral. A path under
+   any block or sub-block reporting `available: false` (`agent_environment.ci_duration`, walked
+   as `levels.resolve_signal` walks it, #959) is a degraded scan, never an absent signal.
 2. `toolkit_changed_unknown_scope` when the diff is unavailable. `unavailable_note` adds one
    `notes` line saying the scanner diff was unavailable.
 3. `scanner_changed` with `scanner` (each block and its changed modules) when a block the row
@@ -370,15 +372,22 @@ def absent_signals(missing: Sequence[str], unknown_side: Sequence[Any], other_si
     """The ``missing`` paths absent from a repository's scans on the unknown side, held on the other.
 
     ``unknown_side`` and ``other_side`` are the same repositories' ``scans`` maps, paired by index.
-    A block that reports itself unavailable (``available: false``) is a degraded scan, not a
-    signal the scanner lacked, so its paths never count as absent."""
+    A block or sub-block on the path that reports itself unavailable (``available: false``) is a
+    degraded scan, not a signal the scanner lacked, so its paths never count as absent."""
     return sorted({path for path in missing for then, now in zip(unknown_side, other_side)
                    if not _get(then, path) and _get(now, path) and not _degraded(then, path)})
 
 
 def _degraded(scans: Any, path: str) -> bool:
-    block = scans.get(path.split(".")[0]) if isinstance(scans, dict) else None
-    return isinstance(block, dict) and block.get("available") is False
+    """A node on ``path`` reports ``available: false``, walked as ``levels.resolve_signal`` walks it."""
+    node = scans
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return False
+        node = node[part]
+        if isinstance(node, dict) and node.get("available") is False:
+            return True
+    return False
 
 
 def attribute(cause: str, *, absent: Sequence[str], diff: ScannerDiff | None,
