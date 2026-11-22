@@ -25,9 +25,12 @@ Generated from it at import (#795, steps 3 and 4 of the #789 migration), through
 ``hidden_coupling`` threshold defaults (``coupling_analysis``) from
 :func:`finding_thresholds`, the counts-only ``counts_only_rules.RULES`` from
 :func:`privacy_rules`, and the per-block ``reason`` descriptions of the published
-signals and fleet-row schemas from :func:`reason_codes`. The scan registry, the
-headless tables, the typed roots and the default maturity model are still code, checked
-against the manifest in both directions by ``tests/test_check_manifest.py``. This
+signals and fleet-row schemas from :func:`reason_codes`, ``signal_grades.SIGNAL_INPUTS``
+from :func:`signal_inputs`, and each ``scan_registry.ScanSpec``'s ``reads``, ``stage``,
+``degrade``, ``gate_reason``, ``label``, ``private`` and ``network`` from its collector
+entry (``scan_registry.spec_from_manifest``, #953). The scan table's callables, spread keys
+and order, the headless tables, the typed roots and the default maturity model are still
+code, checked against the manifest in both directions by ``tests/test_check_manifest.py``. This
 module imports none of those modules (they import it), so the agreement checks live
 in the tests.
 

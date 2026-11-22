@@ -1,15 +1,18 @@
 """SIGNAL_INPUTS and the ScanSpec metadata are generated from checks/core.toml (#953)."""
 from __future__ import annotations
 
+import ast
 import copy
-from typing import Any, cast
+from pathlib import Path
+from typing import Any, cast, get_args
 
 import pytest
 
 from lib import check_manifest as cm
 from lib import scan_registry as sr
-from lib.signal_grades import INPUT_GRADES, SIGNAL_INPUTS
+from lib.signal_grades import INPUT_GRADES, SIGNAL_INPUTS, InputClass
 
+LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
 SIGNAL = "review_reality.reviewed_share"
 
 
@@ -79,3 +82,20 @@ def test_a_scan_without_a_collector_entry_is_rejected() -> None:
 def test_a_spread_the_entry_does_not_declare_is_rejected() -> None:
     with pytest.raises(sr.ScanRegistryError, match="spread"):
         sr.spec_from_manifest(cm.core_manifest(), "agent_ops", lambda root: None, spread=("x",))
+
+
+def test_evidence_vocabulary_is_the_input_classes() -> None:
+    assert cm.EVIDENCE == get_args(InputClass)
+
+
+def _lib_imports(module: str) -> set[str]:
+    tree = ast.parse((LIB / f"{module}.py").read_text(encoding="utf-8"))
+    return {n.module for n in ast.walk(tree)
+            if isinstance(n, ast.ImportFrom) and n.module and n.module.startswith("lib")}
+
+
+def test_signal_grades_reaches_only_the_manifest_loader() -> None:
+    """The tally engine reads signal_grades without importing a scanner (#744, #953)."""
+    assert _lib_imports("signal_grades") == {"lib.check_manifest"}
+    assert _lib_imports("check_manifest") == {"lib.check_validation"}
+    assert _lib_imports("check_validation") == set()

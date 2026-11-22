@@ -62,7 +62,8 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   signals carry it now.
 - `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
   (`bool` or `number` here), `collector` (the collector publishing its first segment),
-  `evidence` (the producer input class, `level_signals.SIGNAL_INPUTS`, #783) and
+  `evidence` (the producer input class, which generates `level_signals.SIGNAL_INPUTS`,
+  #783, #953) and
   `null_means`. No grade is authored: it follows from the class
   (`level_signals.INPUT_GRADES`).
 - `condition`: display metadata for one default criterion, keyed
@@ -114,8 +115,12 @@ tables; after a `privacy` change regenerate `references/counts-only.md`, and aft
 `stage`, `publishes`, `private`, `spread`, `degrade`, `gate_reason`, `label`, `network`
 and `offline_callable`, in table order; a failure names the scan key), the headless
 tables, `ROOTS`, the default model's signals and criteria, and `SIGNAL_INPUTS`; and it
-validates the loaded manifest against the schema. Until later steps generate those tables
-from the manifest, adding a scan, criterion or typed root also adds its manifest entry. A
+validates the loaded manifest against the schema. `SIGNAL_INPUTS` and each ScanSpec's
+`reads`, `stage`, `degrade`, `gate_reason`, `label`, `private` and `network` are generated
+from the manifest (`check_manifest.signal_inputs`, `scan_registry.spec_from_manifest`,
+#953; `tests/test_manifest_tables.py`): a signal's evidence or a scan's inputs change in
+the manifest only. Adding a scan still adds its table line (key, callable, spread keys,
+offline callable), and a criterion or typed root its manifest entry. A
 counts-only rule is added in the manifest only; a finding is added in the manifest plus
 its path derivation in `keyhole_signals._finding_path_inputs`
 (`test_every_finding_has_a_path_derivation` pins the two name sets). The generated tables are
