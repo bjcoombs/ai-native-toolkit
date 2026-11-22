@@ -671,3 +671,26 @@ def test_coverage_threshold_signal_survives_counts_only(meets: bool | None) -> N
     assert out["threshold_meets_minimum"] is meets
     assert out["max_threshold_percent"] == 80.0
     assert (out["gates"][0]["threshold"], out["gates"][0]["threshold_percent"]) == (0.8, 80.0)
+
+
+def test_layer_six_is_unknown_on_a_go_repository_with_no_readable_gate(tmp_path: Path) -> None:
+    """Issue #788: a Go repository with no gate found is not measured, never 0."""
+    go = _coverage_repo(tmp_path / "go", {"go.mod": "module example.com/x\n\ngo 1.22\n",
+                                          "main.go": "package main\n\nfunc main() {}\n"})
+    assert go["coverage_gate"]["unmeasured_reason"] == "go_rust_gate_form_not_read"
+    row = _row(_run({"r": go}), "layer-6-coverage")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert row.get("floor") is None
+    gated = _coverage_repo(tmp_path / "gated", {
+        "go.mod": "module example.com/x\n", ".testcoverage.yml": "threshold:\n  total: 80\n"})
+    row = _row(_run({"r": gated}), "layer-6-coverage")
+    assert (row["status"], row.get("floor")) == ("unknown", 1)
+
+
+def test_unmeasured_reason_survives_counts_only() -> None:
+    block = {"available": True, "enforced": False, "gates": [], "max_threshold_percent": None,
+             "threshold_meets_minimum": None,
+             "unmeasured_reason": "go_rust_gate_form_not_read", "not_detected": ["x"]}
+    out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
+    assert out["unmeasured_reason"] == "go_rust_gate_form_not_read"
+    assert out["threshold_meets_minimum"] is None

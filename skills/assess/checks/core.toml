@@ -927,12 +927,16 @@ headless = { coverage_gate = "registered" }
 shapes = [
   { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
-revision = 1
+revision = 2
+unknown_reasons = [
+  { code = "go_rust_gate_form_not_read", carried_in = "unmeasured_reason", means = "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.", next_step = "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines." },
+]
   [entries.privacy]
   "coverage_gate.gates.tool" = "token"
   "coverage_gate.gates.form" = "drop"
   "coverage_gate.gates.unit" = "token"
   "coverage_gate.gates.metric" = "token"
+  "coverage_gate.unmeasured_reason" = "token"
   "coverage_gate.not_detected" = "drop"
 
 [[entries]]
@@ -1738,7 +1742,7 @@ collector = "core.coverage_gate"
 path = "coverage_gate.threshold_meets_minimum"
 type = "bool"
 evidence = "config_text"
-null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count)"
+null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count), or no gate is found in a repository holding a go.mod or Cargo.toml (unmeasured_reason go_rust_gate_form_not_read)"
 
 [[entries]]
 id = "core:test_pressure.mutation_run"
