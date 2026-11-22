@@ -18,7 +18,8 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    the canonical file's name, as ``#[[file:AGENTS.md]]`` or a markdown link
    does), a ``mirror`` (identical below its header, ``mirror_pair``: a
    hand-kept copy, so not linked) or ``independent``. A system is linked when
-   it holds the canonical file or every file of it links.
+   one of its files links; its other files are supplementary rules, compared
+   for divergence like the rest.
 4. **Divergence**, over each system's effective text (its files plus the
    canonical text for a file that imports or points to it):
    ``command``: a test or lint command (``check_command.is_check_command`` /
@@ -33,8 +34,8 @@ nothing to agree with, so the row reads not measured, never 0. Each unlinked
 system gets a ``next_steps`` entry with the exact pointer line for its tool
 (``@AGENTS.md`` for an import-capable tool, ``#[[file:AGENTS.md]]`` for Kiro,
 ``read: AGENTS.md`` in ``.aider.conf.yml`` for Aider, a markdown pointer line
-otherwise) and a symlink command, both built from templates and paths, never
-from file text. Read-only, no network, no model.
+otherwise) and, for the system's own single-file location only, a symlink
+command, both built from templates and paths, never from file text. Read-only, no network, no model.
 """
 from __future__ import annotations
 
@@ -234,6 +235,17 @@ def _divergences(texts: dict[str, str]) -> list[Divergence]:
     return out
 
 
+def _primary(system: str, path: str) -> bool:
+    """A system's own single-file location, which a symlink may replace whole.
+
+    A supplementary rule file (``.claude/rules/x.md``) or Aider's config is
+    never offered a symlink: it would overwrite that file's own content.
+    """
+    known = SYSTEM_BY_ID.get(system)
+    return (system != "aider" and known is not None
+            and path in {loc for loc in known.locations if "*" not in loc})
+
+
 def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
                       aider_reads: frozenset[str],
                       tracked: frozenset[Path] | None) -> AgentConsistencyBlock:
@@ -246,20 +258,24 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
     rows: list[ConsistencyFile] = []
     linked: dict[str, bool] = {}
     texts: dict[str, str] = {}
-    if canon is not None and canon.rel in aider_reads and "aider" not in by_system:
-        rows.append({"path": AIDER_CONFIG, "system": "aider", "link": "config_read"})
-        linked["aider"], texts["aider"] = True, canon.body
-    for system in _sort_systems(by_system):
+    aider_reads_canon = canon is not None and canon.rel in aider_reads
+    for system in _sort_systems([*by_system, *(["aider"] if aider_reads_canon else [])]):
         parts: list[str] = []
         links: list[Link] = []
-        for cand in sorted(by_system[system], key=lambda c: c.rel):
+        if system == "aider" and aider_reads_canon and canon is not None:
+            rows.append({"path": AIDER_CONFIG, "system": "aider", "link": "config_read"})
+            links.append("config_read")
+            parts.append(canon.body)
+        for cand in sorted(by_system.get(system, []), key=lambda c: c.rel):
             link = _link(cand, canon, repo_root, tracked) if canon is not None else "independent"
             rows.append({"path": cand.rel, "system": system, "link": link})
             links.append(link)
             parts.append(cand.body)
             if link in ("import", "pointer") and canon is not None:
                 parts.append(canon.body)
-        linked[system] = "canonical" in links or all(lk in LINKED for lk in links)
+        # One linked file links the system: its other always-loaded files are
+        # supplementary rules, and a divergence among them is still reported.
+        linked[system] = any(lk in LINKED for lk in links)
         texts[system] = "\n".join(parts)
     systems = _sort_systems(texts)
     applicable = len(systems) >= 2
@@ -274,8 +290,8 @@ def check_consistency(repo_root: Path, cands: list[InstructionCandidate],
             "system": system,
             "path": AIDER_CONFIG if system == "aider" else path,
             "pointer": pointer_line(system, path, canon.rel),
-            "symlink": None if system == "aider"
-            else f"ln -sf {_rel_from(path, canon.rel)} {path}",
+            "symlink": f"ln -sf {_rel_from(path, canon.rel)} {path}"
+            if _primary(system, path) else None,
         })
     return {
         "available": True,

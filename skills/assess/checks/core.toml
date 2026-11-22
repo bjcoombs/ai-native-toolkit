@@ -1451,8 +1451,8 @@ revision = 1
 id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
-summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere."
-issues = [698, 775, 782]
+summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked."
+issues = [698, 775, 782, 787]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
 reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
@@ -1468,6 +1468,7 @@ unknown_reasons = [
   { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
   { code = "unknown_trigger", carried_in = "basis", means = "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).", next_step = "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it." },
   { code = "check_target", carried_in = "basis", means = "In lint_basis: no CI line calls a linter, but one runs a check target or script that may run one inside it (make check, npm test, tox, ./scripts/test.sh, pre-commit run); recipes are not read.", next_step = "Nothing to change if the target lints; calling the linter in its own CI step (ruff check ., make lint) lets the scan read it." },
+  { code = "unread_ci_system", carried_in = "basis", means = "In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them.", next_step = "Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent." },
 ]
   [entries.privacy]
   "ci_checks.reason" = "drop"
@@ -1629,6 +1630,29 @@ revision = 1
   "doc_claims.contradictions.conflict_pair.value" = "drop"
 
 [[entries]]
+id = "core.guardrails"
+kind = "collector"
+title = "Guardrails stated"
+summary = "Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet."
+issues = [767]
+callable = "lib.guardrails:scan_guardrails"
+publishes = ["guardrails"]
+reads = ["repo_root", "instruction_files", "coverage_gate", "excludes"]
+stage = "post_offers"
+headless = { guardrails = "registered" }
+shapes = [
+  { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "guardrails.gates.kind" = "token"
+  "guardrails.gates.tool" = "token"
+  "guardrails.gates.rule" = "token"
+  "guardrails.gates.stated_in" = "path"
+  "guardrails.gates.snippet" = "drop"
+  "guardrails.not_read" = "drop"
+
+[[entries]]
 id = "core.level"
 kind = "collector"
 title = "Verified tally and Step"
@@ -1636,7 +1660,7 @@ summary = "The default maturity model's conditions with state, grade and reason,
 issues = [744]
 callable = "lib.core_scans:level"
 publishes = ["level"]
-reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
+reads = ["agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
 stage = "post_offers"
 shapes = [
   { path = "level", type = "lib.level_result_types:LevelResult" },
@@ -1658,6 +1682,27 @@ revision = 1
   "level.next_step.blockers.condition" = "token"
   "level.next_step.blockers.state" = "token"
   "level.next_step.blockers.reason" = "token"
+
+[[entries]]
+id = "core.headline"
+kind = "collector"
+title = "Deterministic headline"
+summary = "The Step with its next unlock and 'Verified practices: N of M measured', worded from the level block; the report pastes it and the badge and log entry carry its summary."
+issues = [747]
+callable = "lib.core_scans:headline"
+publishes = ["headline"]
+reads = ["level"]
+stage = "post_offers"
+shapes = [
+  { path = "headline", type = "lib.level_result_types:Headline" },
+]
+revision = 1
+  [entries.privacy]
+  "headline.levels_version" = "token"
+  "headline.lines" = "drop"
+  "headline.markdown" = "drop"
+  "headline.summary" = "drop"
+  "headline.reason" = "token"
 
 # -- signals: the run-context leaves the default maturity model reads ---------------
 [[entries]]
@@ -1791,7 +1836,7 @@ collector = "core.ci_checks"
 path = "ci_checks.enforced_check_runs"
 type = "bool"
 evidence = "ci_executed"
-null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled"
+null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; unread_ci_system: the check may run in a CI system the scan does not parse"
 
 [[entries]]
 id = "core:agent_environment.pinning.unlocked_total"
@@ -1885,6 +1930,16 @@ path = "doc_staleness.summary.stale_pct"
 type = "number"
 evidence = "git_history"
 null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
+
+[[entries]]
+id = "core:guardrails.stated_pct"
+kind = "signal"
+title = "Share of configured gates an instruction file states"
+collector = "core.guardrails"
+path = "guardrails.stated_pct"
+type = "number"
+evidence = "head_structure"
+null_means = "no gate found: nothing to state"
 
 [[entries]]
 id = "core:agent_consistency.conflicts"
@@ -2088,6 +2143,20 @@ kind = "condition"
 title = "Four in five mapped docs keep pace"
 key = "doc-freshness.2:doc_staleness.summary.stale_pct"
 fix = "Refresh the docs the report lists under doc freshness, oldest first."
+
+[[entries]]
+id = "core.cond.guardrails-stated.1.stated_pct"
+kind = "condition"
+title = "Half the configured gates are stated"
+key = "guardrails-stated.1:guardrails.stated_pct"
+fix = "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it."
+
+[[entries]]
+id = "core.cond.guardrails-stated.2.stated_pct"
+kind = "condition"
+title = "Every configured gate is stated"
+key = "guardrails-stated.2:guardrails.stated_pct"
+fix = "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing."
 
 [[entries]]
 id = "core.cond.agent-consistency.1.conflicts"

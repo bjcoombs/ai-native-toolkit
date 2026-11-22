@@ -292,6 +292,20 @@ def _stale_docs(op: str, value: Operand) -> Guidance | None:
                          "declared source changed after the doc was generated."}
 
 
+def _guardrails_stated(op: str, value: Operand) -> Guidance | None:
+    number = _at_least(op, value)
+    if number is None:
+        return None
+    share = "every gate" if number >= 100 else f"at least {number:g}% of the gates"
+    return {"change": "Add the one-line snippet `/assess` gives for each configured gate an "
+                      "instruction file does not state yet (complexity limit, coverage floor, "
+                      "pre-commit hooks, mypy strict) to `CLAUDE.md` or `AGENTS.md`, so the next "
+                      "session knows the rule before it runs into it.",
+            "done_when": f"A graded instruction file states {share} the repository configures: "
+                         "the rule and its threshold on one line (for example \"Functions stay "
+                         "under complexity 15 (ruff C901): run `ruff check .`\")."}
+
+
 def _agents_agree(op: str, value: Operand) -> Guidance | None:
     if not (op == "eq" and value == 0):
         return None
@@ -380,6 +394,7 @@ _WORDING: dict[str, Wording] = {
         "more than one commit in the history."),
     "stats_summary.loc.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
+    "guardrails.stated_pct": _guardrails_stated,
     "agent_consistency.conflicts": _agents_agree,
     "agent_consistency.unlinked": _agents_linked,
     "coverage_gate.enforced": _flag(
@@ -424,6 +439,9 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
+    "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
+                  "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
+                  "strict): with nothing to state there is no share to measure.",
     "agent_consistency": "Not measured when fewer than two agent systems have a root "
                          "instruction file: one system has nothing to agree with, so "
                          "`conflicts` and `unlinked` are null (`applicable: false`).",
@@ -463,6 +481,11 @@ _MEASURE_HINTS = {
                  "(`enforced_basis: unknown_trigger`: no `on:` key, a `workflow_call` nobody "
                  "calls, a GitLab `rules: if:` on a custom variable): say when the workflow "
                  "runs, by adding `push` or `pull_request` triggers (or a merge request rule). "
+                 "It is unknown too when no GitHub Actions or GitLab CI line runs a check but "
+                 "the repository commits a Jenkins, CircleCI, Azure Pipelines, Bitbucket "
+                 "Pipelines, Travis CI or Buildkite file (`basis: unread_ci_system`, "
+                 "`unread_ci_files` counts them): the scanner cannot read those systems, so "
+                 "their checks are not measured; nothing in the repository needs to change. "
                  "A scan stored before `enforced_check_runs` existed has no such key: re-run "
                  "the scan to measure it. `lint_runs` (Layer 3) is unknown for the same "
                  "reasons, and when no CI line calls a linter but one runs a check target "

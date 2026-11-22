@@ -49,10 +49,6 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
-[ceilings."skills/assess/scripts/assess_finalize.py"]
-lines = 814
-reason = "raised by #468: mypy strict type annotations; lowered to 819 after #497, to 814 after #721"
-
 [ceilings."skills/assess/scripts/complexity-treemap.py"]
 lines = 1493
 reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
@@ -70,7 +66,7 @@ lines = 1016
 reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/tests/test_assess_finalize.py"]
-lines = 1354
+lines = 1243
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/tests/test_complexity_treemap.py"]

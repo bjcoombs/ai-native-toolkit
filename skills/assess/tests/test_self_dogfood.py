@@ -186,9 +186,9 @@ def test_mutation_not_run_cap_applies_and_caps_layer6(dogfood_run: dict) -> None
 
 # --- task 15: deterministic badge (findings count, not an LLM score) ----------
 
-def test_badge_is_deterministic_findings_count(dogfood_run: dict) -> None:
+def test_badge_is_deterministic_headline_summary(dogfood_run: dict) -> None:
     badge = json.loads((dogfood_run["assess_dir"] / "badge.json").read_text(encoding="utf-8"))
-    assert "findings" in badge["message"]
+    assert badge["message"] == dogfood_run["ctx"]["headline"]["summary"]
     # The shipped badge never bakes in an LLM-derived layered score.
     assert "/8" not in badge["message"]
     assert badge["link"] == "./assess-report.md"
@@ -297,17 +297,13 @@ def test_log_chain_verifies_after_finalize(dogfood_run: dict, tmp_path: Path) ->
     import shutil
 
     from assess_finalize import finalize_run
-    from lib.badge import maturity_band
-
+    
     assess_dir = tmp_path / ".assess"
     shutil.copytree(dogfood_run["assess_dir"], assess_dir)
     assert verify_log_chain(assess_dir) == (True, None)
     (assess_dir / ".cache").mkdir(exist_ok=True)
     (assess_dir / ".cache" / "finalize-input.json").write_text(json.dumps({
         "run_id": dogfood_run["ctx"]["run_id"],
-        "score": 4.0,
-        "denominator": 8,
-        "maturity_label": maturity_band(4.0, 8),
         "top_action": "dogfood finalize action",
         "hotspot_actions": {},
     }), encoding="utf-8")

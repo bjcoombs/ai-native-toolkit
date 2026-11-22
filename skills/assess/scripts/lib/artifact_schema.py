@@ -223,13 +223,28 @@ constant each.
 # #782): whether an unmasked CI line on ordinary triggers runs a linter (null
 # when a check target or script may lint inside it). Additive: no existing
 # key moves, and complexity-stats.json is unchanged.
-# 1.38.0: run-context.json gains the agent_consistency block (issue #768): the root
+# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
+# system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+# 1.39.0: run-context.json gains the headline block (issue #747): the Step, its next
+# unlock and "Verified practices: N of M measured" worded from the level block
+# (lib/headline.py); badge.json carries its summary (the Step and the tally) instead
+# of the findings count, and the log.md entry's readiness line is that summary, with
+# no layered score. finalize-input.json drops score, maturity_label and denominator,
+# and an action may carry a condition id. Additive to run-context.json.
+# 1.40.0: run-context.json gains the guardrails block (issue #767): the gates
+# the repository configures (complexity limit, coverage floor, pre-commit hooks,
+# mypy strict), whether an instruction file states each, a snippet for each
+# unstated one, and stated_pct. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+# 1.41.0: run-context.json gains the agent_consistency block (issue #768): the root
 # instruction files of every agent system present, the check commands and
 # thresholds they disagree on, each file's link to the canonical source and the
 # pointer line per unlinked system. nested_instructions also discovers the
 # Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
 # Additive: no existing key moves, and complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.38.0"
+ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -372,8 +387,21 @@ ARTIFACT_SCHEMA_VERSION = "1.38.0"
 #     in CI, not a suppression comment. One suppression comment no longer earns the row,
 #     and a clean repository that lints in CI reads at least 1 where it was
 #     unknown, so the Layer 3 row can move.
-# 33: the agent_consistency block and its conflicts and unlinked signals (issue
+# 33: a repository with no readable CI check whose tree tracks a CI file of a
+#     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
+#     Bitbucket Pipelines, Travis CI, Buildkite) reads
+#     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
+#     its Layer 5 row moves from level 0 to unknown (issue #787).
+# 34: the displayed headline changes (issue #747): the layered "X / 8" score and
+#     its band names are retired for the deterministic Step, its next unlock and
+#     "Verified practices: N of M measured"; the badge and the log.md entry carry
+#     the Step and the tally, and the scorer returns per-layer verdicts only.
+# 35: the guardrails block and its stated_pct signal (issue #767): the default
+#     maturity model gains the guardrails-stated row (half of the configured
+#     gates stated is level 1, all of them level 2, none found is unknown).
+#     Existing rows are unchanged.
+# 36: the agent_consistency block and its conflicts and unlinked signals (issue
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
-ASSESS_METHOD_VERSION = 33
+ASSESS_METHOD_VERSION = 36

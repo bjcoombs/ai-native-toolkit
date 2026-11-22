@@ -147,8 +147,11 @@
 #   check_command.is_check_command classifies an instruction file's
 #   commands, or a lint target or linter: make lint, ruff, eslint). Branch and
 #   path filters are not read: a check in a push-only workflow counts the same
-#   as one on pull requests. Other CI systems (Jenkins, CircleCI) are not read, so a
-#   repository on them alone is level 0. A CI file with no check line that
+#   as one on pull requests. Other CI systems are not parsed (issue #787):
+#   with no readable check line, a tracked Jenkinsfile, .circleci/config.yml,
+#   azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml or
+#   .buildkite/pipeline.yml makes the row unknown (basis unread_ci_system),
+#   never 0, since the check may run there. A CI file with no check line that
 #   pulls its jobs from elsewhere (a GitLab include: or component, a GitHub
 #   job-level uses: of another repository's reusable workflow) is unknown,
 #   never 0: the check may live in the included file. Level 2 is pinned
@@ -177,12 +180,20 @@
 #   comparing go tool cover to a number, which the scan does not read
 #   (coverage_gate.unmeasured_reason go_rust_gate_form_not_read). Level 2 reads
 #   test_pressure.mutation_run, which a headless run does not build.
+# - Guardrails stated reads guardrails.stated_pct (lib/guardrails.py, #767):
+#   the share of the gates the repository configures (a ruff or flake8
+#   complexity limit, a coverage floor, pre-commit hooks, mypy strict) that a
+#   graded instruction file states, the rule and its threshold on one line.
+#   Level 1 is half of them stated, level 2 all of them. A repository with no
+#   gate found has nothing to state, so the share is null and the row is
+#   unknown, never 0. Graded measured: it cross-checks the config against the
+#   instruction text at the commit, as instruction_claims.failed does.
 # - Cross-agent consistency reads agent_consistency (lib/agent_consistency.py,
 #   #768): the root instruction files of every agent system present (Claude
 #   Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q,
 #   Kiro, Continue, Zed; lib/agent_systems.py). Level 1 is no conflict: no
 #   test or lint command one system names and another does not, and no two
-#   systems stating different coverage, complexity or line-length numbers.
+#   systems whose coverage, complexity or line-length numbers share none.
 #   Level 2 adds every system linked to one canonical file (AGENTS.md when
 #   present) by symlink, import or pointer line, and requires level 1. With
 #   fewer than two systems there is nothing to agree with: both signals are
@@ -204,7 +215,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.19"
+version = "default-2026.11.21"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -365,6 +376,21 @@ aggregation = "min"
   [[rows.levels]]
   level = 2
   criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 20 }]
+
+[[rows]]
+id = "guardrails-stated"
+title = "Guardrails stated"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "guardrails.stated_pct", op = "gte", value = 50 }]
+
+  [[rows.levels]]
+  level = 2
+  requires = ["guardrails-stated.1"]
+  criteria = [{ signal = "guardrails.stated_pct", op = "gte", value = 100 }]
 
 [[rows]]
 id = "agent-consistency"

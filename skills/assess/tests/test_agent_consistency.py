@@ -201,6 +201,8 @@ def test_aider_read_forms() -> None:
     assert aider_read_files("read: [a.md, 'b.md']\n") == {"a.md", "b.md"}
     assert aider_read_files("model: x\nread:\n  - a.md\n  - \"b.md\"\nauto: true\n") == {"a.md", "b.md"}
     assert aider_read_files("model: x\n") == frozenset()
+    assert aider_read_files("read:\n- CONVENTIONS.md\n- AGENTS.md\nmodel: x\n") == {
+        "CONVENTIONS.md", "AGENTS.md"}
 
 
 def test_command_and_threshold_readers() -> None:
@@ -230,16 +232,28 @@ def test_counts_only_keeps_the_counts_and_drops_the_text(tmp_path: Path) -> None
     assert "Follow the project" not in text and "ln -sf" not in text
 
 
-def test_next_step_names_the_unlinked_file_of_a_multi_file_system(tmp_path: Path) -> None:
+def test_one_linked_file_links_a_multi_file_system(tmp_path: Path) -> None:
     root = _repo(tmp_path, {
         "AGENTS.md": AGENTS,
         ".github/copilot-instructions.md": "See [AGENTS.md](../AGENTS.md).\n",
         ".github/instructions/all.instructions.md": "---\napplyTo: '**'\n---\nRun `make test`.\n"})
     block = scan_agent_consistency(root)
-    assert block["unlinked"] == 1 and block["conflicts"] == 0
-    step = block["next_steps"][0]
-    assert step["path"] == ".github/instructions/all.instructions.md"
+    assert (block["unlinked"], block["conflicts"], block["next_steps"]) == (0, 0, [])
+
+
+def test_a_supplementary_rule_file_gets_a_pointer_but_no_symlink(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, ".amazonq/rules/team.md": "Run `make test`.\n"})
+    step = scan_agent_consistency(root)["next_steps"][0]
+    assert (step["path"], step["symlink"]) == (".amazonq/rules/team.md", None)
     assert step["pointer"] == "Follow the project instructions in [AGENTS.md](../../AGENTS.md)."
+
+
+def test_aider_reading_conventions_and_agents_md_is_linked(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS, "CONVENTIONS.md": "Keep it short.\n",
+                            ".aider.conf.yml": "read: [CONVENTIONS.md, AGENTS.md]\n"})
+    block = scan_agent_consistency(root)
+    assert {f["path"]: f["link"] for f in block["files"]}[".aider.conf.yml"] == "config_read"
+    assert (block["unlinked"], block["conflicts"], block["next_steps"]) == (0, 0, [])
 
 
 def test_a_stray_number_beside_the_agreed_threshold_is_no_conflict(tmp_path: Path) -> None:

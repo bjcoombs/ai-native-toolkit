@@ -5,6 +5,9 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
+- the headline (``lib/headline.py``, #747): the Step, its next unlock and
+  "Verified practices: N of M measured", pasted from the run context's
+  ``headline`` block,
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
 - the keyhole-readiness summary + the six cross-layer findings, and
@@ -12,7 +15,6 @@ It renders:
 
 It deliberately does NOT reproduce (these require LLM judgement and are written
 elsewhere by the orchestrator, see SKILL.md):
-- the 0-8 layered readiness score,
 - the per-layer present/partial/missing prose, or
 - the Top 3 Actions priority narrative.
 
@@ -35,6 +37,11 @@ import sys
 from pathlib import Path
 from string import Template
 from typing import Any
+
+# Make sibling lib package importable when run as a script
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib.headline import as_headline  # noqa: E402
 
 # Caps on rows rendered so a pathological repo can't bloat the frozen report.
 # The structured arrays in run-context.json keep the full lists.
@@ -85,6 +92,10 @@ REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
 
+## Headline
+
+$headline
+
 ## Metrics Dashboard
 
 - **Files scored:** $files_scored
@@ -108,7 +119,7 @@ $diff_section
 
 ---
 
-_Deterministic portion of the assessment: metrics, hotspots, and cross-layer findings. The 0-8 layer scores, the per-layer prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer verdicts and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 """)
 
 
@@ -574,6 +585,7 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         run_date=ctx.get("run_date", "unknown"),
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
+        headline=as_headline(ctx.get("headline"))["markdown"],
         files_scored=stats.get("files_scored", 0),
         loc_total=_fmt(loc.get("total")),
         loc_p95=_fmt(loc.get("p95")),

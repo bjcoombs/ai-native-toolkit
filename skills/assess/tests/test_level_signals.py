@@ -69,7 +69,8 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / ".windsurfrules").write_text("Follow [CLAUDE.md](CLAUDE.md).\n", encoding="utf-8")
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")
     (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
-    (repo / "pyproject.toml").write_text("[project]\nname = 'x'\nversion = '0'\n", encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        "[project]\nname = 'x'\nversion = '0'\n\n[tool.mypy]\nstrict = true\n", encoding="utf-8")
     (repo / ".claude").mkdir()
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
@@ -279,6 +280,7 @@ def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict
             "layer-7-review": None,      # needs GitHub
             "layer-8-agent-ops": 0,
             "doc-freshness": 2,          # docs and code committed together: none stale
+            "guardrails-stated": None,   # no configured gate: nothing to state
             "agent-consistency": None,   # no instruction file: nothing to agree with
         }
     for scans in golden_repos.values():   # measured headless, each unknown for a named reason
@@ -310,6 +312,7 @@ def test_default_levels_on_the_golden_run_context() -> None:
         "layer-7-review": None,
         "layer-8-agent-ops": None,
         "doc-freshness": None,  # the capture predates doc_staleness.summary
+        "guardrails-stated": None,  # the capture predates the guardrails block
         "agent-consistency": None,  # the capture predates agent_consistency
     }
     assert "layer_grades.instruction_file_present" in _row(
@@ -506,6 +509,24 @@ def test_layer_five_level_two_needs_a_lockfile_even_with_setup(tmp_path: Path) -
     assert env["pinning"]["unlocked_total"] == 1
     row = _row(_run({"r": setup}), "layer-5-ci")
     assert row["level"] == 1
+
+
+def test_layer_five_is_unknown_on_a_ci_system_the_scanner_cannot_read(tmp_path: Path) -> None:
+    """Issue #787: a Jenkins-only repository is not measured at Layer 5, never level 0."""
+    scans = _ci_repo(tmp_path / "jenkins", None, instructions=False,
+                     extra={"Jenkinsfile": "pipeline { stages { stage('t') { steps { sh 'pytest' } } } }\n"})
+    assert (scans["ci_checks"]["basis"], scans["ci_checks"]["unread_ci_files"]) == ("unread_ci_system", 1)
+    row = _row(_run({"r": scans}), "layer-5-ci")
+    assert (row["status"], row["level"]) == ("unknown", None)
+    assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+    layer3 = _row(_run({"r": scans}), "layer-3-linters")
+    assert (scans["ci_checks"]["lint_runs"], scans["ci_checks"]["lint_basis"]) == (
+        None, "unread_ci_system")
+    assert (layer3["status"], layer3["level"]) == ("unknown", None)
+    assert "ci_checks.lint_runs" in layer3["missing_signals"]
+    both = _ci_repo(tmp_path / "both", _CI_WORKFLOW.replace("make check", "make test"),
+                    instructions=False, extra={"Jenkinsfile": "sh 'pytest'\n"})
+    assert _row(_run({"r": both}), "layer-5-ci")["repos"]["r"]["levels"][0]["met"] is True
 
 
 def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_path: Path) -> None:

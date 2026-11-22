@@ -18,7 +18,8 @@ import pytest
 
 import assess_core
 from assess_core import build_and_publish_run
-from lib.badge import fallback_badge, score_badge
+from lib.badge import headline_badge
+from lib.headline import as_headline
 from lib.doc_graph import build_doc_graph, discover_doc_files
 from lib.git_churn import git_churn_scores
 from lib.run_scope import resolve_scope
@@ -166,10 +167,9 @@ def test_treemap_collect_filters_to_scope(tmp_path: Path) -> None:
 # badge + wiki labelling
 # --------------------------------------------------------------------------
 def test_badge_labels_scope() -> None:
-    scoped = score_badge(4.0, "Basic", scope="services/api")
+    scoped = headline_badge(as_headline(None), scope="services/api")
     assert scoped["label"] == "AI-readiness (services/api)"
-    assert score_badge(4.0, "Basic")["label"] == "AI-readiness"  # default unchanged
-    assert fallback_badge(1, 0, scope="services/api")["label"] == "AI-readiness (services/api)"
+    assert headline_badge(as_headline(None))["label"] == "AI-readiness"  # default unchanged
 
 
 def test_write_index_scope_note(tmp_assess_dir: Path) -> None:

@@ -177,7 +177,7 @@ def match_system_file(rel: PurePosixPath, text: str,
 
 
 _READ_KEY = re.compile(r"^read\s*:\s*(.*)$")
-_LIST_ITEM = re.compile(r"^\s+-\s+(.+?)\s*$")
+_LIST_ITEM = re.compile(r"^\s*-\s+(.+?)\s*$")
 
 
 def _unquote(value: str) -> str:

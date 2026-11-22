@@ -98,7 +98,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_anomaly_detector.py` | `lib/anomaly_detector.py` - anomaly detection on run output |
 | `test_archetype.py` | `lib/archetype.py` - repository archetype detection |
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
-| `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge and its producers |
+| `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
 | `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
 | `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
 | `test_review_reality_gitlab.py` | `lib/gitlab_cli.py` + the GitLab path of `lib/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
@@ -154,6 +154,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
 | `test_counts_only_reason.py` | `lib/counts_only.py` `reason_token` + the `REASON` rule - a full counts-only run keeps `structure.reason` as its code (`no_import_graph_rust` on a Rust repository), never the sentence (#764) |
 | `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
+| `test_headline.py` | `lib/headline.py`, `lib/action_conditions.py` - the deterministic headline (Step, Next line, verified tally), its badge, report and log forms on the ci2 contract shape, finalize's condition-id check, and the #741 guard that the X / 8 worked example stays retired |
 | `test_level_tally.py` | `lib/level_tally.py`, `lib/fleet_level.py`, `lib/fleet_level_schema.py` - the verified tally, condition states, Steps and their gates, `requires` and `[[steps]]` loading, `level.json` and the run context's `level` block, and the #744 contract fixtures through `/fleet` and `/assess` |
 | `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
 | `test_block_shapes.py` | `lib/block_shapes.py` - the typed shapes of the blocks a default criterion reads, against each builder's output and the fleet golden; a misspelt `--levels` sub-path under them fails at load (#793); their counts-only reduction |

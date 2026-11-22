@@ -18,13 +18,15 @@ from lib.ci_checks import CiChecksBlock  # noqa: E402
 from lib.counts_only import counts_only_scans  # noqa: E402
 from lib.coverage_gate import CoverageGateBlock  # noqa: E402
 from lib.delivery import DeliveryBlock  # noqa: E402
+from lib.guardrails import GuardrailsBlock  # noqa: E402
 from lib.fleet_schema import build_schema as build_row_schema  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.signals import collect  # noqa: E402
 from lib.signals_schema import REASON_KEPT, build_schema, described_block  # noqa: E402
 
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
-         "delivery": DeliveryBlock, "agent_consistency": AgentConsistencyBlock}
+         "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,
+         "agent_consistency": AgentConsistencyBlock}
 
 
 @pytest.mark.parametrize("name", sorted(BLOCK_SCHEMAS))

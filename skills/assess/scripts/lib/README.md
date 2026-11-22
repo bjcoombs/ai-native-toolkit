@@ -848,7 +848,8 @@ only, which holds every key `detect_anomalies` inspects. No logic of its own. Te
 The run's side effects, applied after every scan (#557) by
 `assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
-keys the run header reserved in place, writes `badge.json`, reads the previous
+keys the run header reserved in place, writes `badge.json` from the `headline` block
+(`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 
@@ -957,7 +958,7 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery` and `agent_consistency` blocks (`scan_block_schemas.py`, #779, #781, #768)
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery`, `guardrails` and `agent_consistency` blocks (`scan_block_schemas.py`, #779, #781, #767, #768)
 also name and describe their fields (`described_block`), loosely: no required field, and a
 string list may be its counts-only length. Each block's `reason` description is generated
 from the check manifest (`reason_description`, #795): the codes its collector declares in
@@ -971,7 +972,7 @@ every other block names no code. `fleet_schema` uses the same blocks for `repos.
 **`scan_block_schemas.py`**
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
-`delivery` (#779) and `agent_consistency` (#768), read
+`delivery` (#779), `guardrails` (#767) and `agent_consistency` (#768), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -1726,9 +1727,9 @@ with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reop
 action that matches a done `completed` entry: the finding came back into the Top 3, so the
 old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
 sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
-rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
-gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a
-reviewed path neither counts nor fails the gate. The committed `findings.json` snapshot
+rebuild. The CI gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) reads open
+paths only, so a reviewed path does not fail the gate (the badge counts no findings since
+#747: it carries the Step and the verified tally). The committed `findings.json` snapshot
 and the method-change diff keep the full `paths`, so a review never reads as a finding
 that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
 `.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
@@ -1774,7 +1775,8 @@ A run-context with no `derived_findings` list is left untouched (returns `False`
 `assess_core` hands it this run's `complexity-stats.json` (the scoped one under
 `--scope`) and the excludes from `recorded_excludes` (the `excluded_by_config` dirs
 and patterns the default run applied and disclosed, or `load_excludes` when the
-block is absent), then rewrites `badge.json` through `badge.write_findings_badge`. Tests:
+block is absent). The badge is no longer rebuilt here: `assess_core` recounts the `level`
+block, rewords the `headline` and rewrites `badge.json` from it before this runs (#747). Tests:
 `tests/test_mutation_refresh.py`.
 
 The behaviour block exports the co-change pairs twice, at two scales. `change_coupling_pairs`
@@ -2341,7 +2343,7 @@ Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
 **`level_result_types.py`**
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`) and the run context's `Headline` (#747), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 
 **`fleet_level.py`**
@@ -2491,7 +2493,8 @@ it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `poin
 line naming the canonical file's name, as a markdown link or Kiro's
 `#[[file:AGENTS.md]]` does), `mirror` (identical below the header, through
 `instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
-A system is linked when it holds the canonical file or every file of it links. Each
+A system is linked when one of its files links (its other always-loaded files are
+supplementary rules, still compared for divergence). Each
 `Divergence` is `{kind, value, named_in, missing_from, stated}` over each system's
 effective text (its files, plus the canonical text where a file imports or points to
 it): `command`, a test or lint command (`check_command.is_check_command` or
@@ -2506,7 +2509,8 @@ never 0. `next_steps` holds one `ConsistencyStep` per unlinked system: `pointer`
 exact line for its tool (`pointer_line`: `@AGENTS.md` relative to the file for Claude
 Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: AGENTS.md` in
 `.aider.conf.yml` for Aider, `Follow the project instructions in
-[AGENTS.md](AGENTS.md).` otherwise) and `symlink` (`ln -sf`, null for Aider), built from
+[AGENTS.md](AGENTS.md).` otherwise) and `symlink` (`ln -sf`, only for the system's own single-file location: null for
+Aider and for a supplementary rule file, which a symlink would overwrite), built from
 templates and paths, never file text; written into the file, each passes the link check.
 `not_read` names the forms not compared (thresholds without a keyword, Aider `--read`
 on the command line, user-level rules, scoped and nested files). Counts-only keeps the
@@ -3117,26 +3121,48 @@ gathers the inputs. Imports `doc_graph` (extensions) and `git_churn`
 (`tracked_files`), never an orchestrator. Structured as an extensible dispatch
 (one archetype today, YAGNI on a general framework). Read by `assess_core`
 (writes the `archetype` block to `run-context.json`), the `assess-layer-scorer`
-agent (N/A scoring + denominator), and the `assess-findings` skill (renders N/A
-+ renormalised headline). Co-changes with `badge.py`/`assess_finalize.py` (the
-denominator) and its test `tests/test_archetype.py`.
+agent (N/A verdicts), and the `assess-findings` skill (renders N/A rows). The
+`denominator` field is kept for compatibility; nothing reads it since the layered
+score was retired (#747). Co-changes with its test `tests/test_archetype.py`.
 
 **`badge.py`**
-Shields.io endpoint badge for the wiki (`.assess/badge.json`). The shipped badge
-is deterministic by default: `assess_core` always writes the findings-count form
-through `write_findings_badge` (`fallback_badge`, "2 findings · 0 stale markers",
-colour banded from the counts), which stamps a `link` to `assess-report.md`, so a
-badge-clicker lands on the full report; the opt-in mutation pass rewrites it the
-same way once the refreshed findings are in. The LLM-derived headline
-(`score_badge`, "7.0/8 · AI-Native",
-renormalised over its `denominator` - 8 for software, the applicable-layer count
-for a knowledge-base archetype, e.g. "2.5/3 · Knowledge Base · Solid") is *not*
-written to the badge; it appears inside `assess-report.md`, so the badge never
-claims a grade a deterministic run cannot reproduce. Pure threshold functions,
-fixture-tested. Also exposes `maturity_band`
-(the same score/denominator fraction mapped to the named tier ladder), the
-single source of truth `assess_finalize` reconciles the LLM's `maturity_label`
-against. Both producers accept an optional `run_id` provenance stamp.
+Shields.io endpoint badge for the wiki (`.assess/badge.json`). The message is the
+run's deterministic headline summary (`headline.summary` from `headline.py`, #747:
+"Step 3 · 4 of 4 measured"), the colour a pure function of the Step (`step_color`:
+blue, blue, green, brightgreen for Steps 1-4, never red; grey with the message
+"Step not measured" when the level result is unavailable). `assess_core` writes
+it through `write_headline_badge` on every run, stamping a `link` to
+`assess-report.md` and the `run_id`, and rewrites it after the opt-in mutation
+recount; `assess_finalize` never touches it. The layered "X / 8" score badge and
+its band ladder are retired. Tests: `tests/test_badge.py`, `tests/test_headline.py`.
+
+**`headline.py`**
+The deterministic `/assess` headline (#747): `headline(level, model)` words a
+`LevelResult` under the model that produced it, and `run_context_headline(level)`
+(the `headline` scan, `core_scans.headline`, reading the `level` block) uses the
+default model. Three `lines`: the Step as the contracts in place ("Step 3 ·
+Unattended agent PRs · contracts in place"), the Next line naming the next Step and
+the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when the
+count still falls short once the gates hold and their counted conditions join the
+tally, "N more verified practices are met, for example `<first unmet counted
+condition>`"; a not-measured gate says
+so with its reason; at the top Step it says the Step holds while its gates hold),
+and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
+model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
+badge message and the `log.md` readiness line), `step`, `next_step`,
+`levels_version` and `headline_version`. A missing or degraded `level` block gives
+`available: false` and "Step not measured", never a guessed Step; `as_headline`
+returns that form for a degraded `headline` block. Shape: `Headline` in
+`level_result_types.py`; under counts-only the text fields are dropped and the
+numbers kept. The per-tag strip is a later line (#844). Tests: `tests/test_headline.py`.
+
+**`action_conditions.py`**
+The condition an action moves (#747): `condition_errors(actions, level)` returns one
+message per `finalize-input.json` action whose optional `condition` is not an id the
+run's `level.conditions` lists (or when the run has no level result to check it
+against). `assess_finalize` raises on any, before writing, so `actions.json` is
+unchanged; a met condition is accepted. Tests: `tests/test_headline.py`.
 
 **`evidence_check.py`**
 Deterministic re-check of the evidence a layer verdict cites (issue #360). The
@@ -3388,7 +3414,7 @@ selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include fil
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
 enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
-lint_basis}`. Each line,
+lint_basis, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3405,7 +3431,7 @@ line, own or included (`included_check_commands` counts the included ones); with
 is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
-false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
 every include resolved and holds no check reads false. Its third argument is the
 `gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
 offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
@@ -3454,6 +3480,17 @@ target or script that may lint inside it; recipes are not read), `not_enforced`
 (false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
 `no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
 caps the row; a stored scan without the key reads unknown there.
+CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
+`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
+`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
+`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
+root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
+and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
+`enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
@@ -3879,7 +3916,7 @@ from `unit` alone by `threshold_percent()`: as written for `percent`, times 100 
 `ratio` (rounded to 6 places, so `0.55` is `55.0`), and null for `uncovered_count` or
 a null threshold. `threshold` and `unit` stay as written. `max_threshold_percent` is the
 highest non-null `threshold_percent` across all gates, null when none has one.
-`threshold_meets_minimum` reads only the gates `enforced` counts (`_gates_something`),
+`threshold_meets_minimum` reads only the gates `enforced` counts (`gates_something`),
 in this order: true when one has `threshold_percent >= MINIMUM_THRESHOLD_PERCENT` (50);
 null (not measured) when none does but one has a null `threshold_percent` (a templated
 value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
@@ -3904,6 +3941,44 @@ result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
 Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
 Tests: `tests/test_coverage_gate.py`.
+
+**`guardrails.py`**
+Guardrails stated (#767): does an instruction file tell an agent what the gates
+enforce? `scan_guardrails(repo_root, instruction_files, coverage_gate, excludes)` runs from the
+scan table (`guardrails`, post-offers stage, headless `registered`) and returns the
+`guardrails` block (`GuardrailsBlock`): `{available, gates, enforced, stated, unstated,
+stated_pct, instruction_files_read, not_read}`. Each gate (`Guardrail`) is `{kind, tool,
+rule, threshold, file, line, stated, stated_in, snippet}`, one per configuring file:
+`complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, ruff's
+default 10 when unset, in `pyproject.toml`, `ruff.toml` or `.ruff.toml`; flake8
+`max-complexity` or `max_complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (per file
+of the `coverage_gate` block, its counted gate with the highest `threshold_percent`, through
+`coverage_gate.gates_something`, never re-parsed), `pre_commit` (a root
+`.pre-commit-config.yaml` with at least one `- id:` hook, one gate whatever its hook
+count) and `type_strictness` (mypy `strict = true` in `[tool.mypy]`, `mypy.ini`,
+`.mypy.ini` or `setup.cfg`). Ruff, flake8 and mypy configs are read wherever they sit
+(`config_files`, through `coverage_gate.walk_named`: the coverage scan's bounded walk with
+the built-in and user excludes), so each package's own `pyproject.toml` is a gate of its
+own and a monorepo's package gates are counted beside its coverage floor. Every kind counts
+one gate per configuring file. Within a directory only the config the tool reads counts
+(`_applied`): the first, in the tool's own order, that configures it (ruff `.ruff.toml`,
+`ruff.toml`, a `pyproject.toml` with `[tool.ruff]`; flake8 the first of `setup.cfg`, `tox.ini`,
+`.flake8` with `[flake8]`; mypy `mypy.ini`, `.mypy.ini`, a `pyproject.toml` with `[tool.mypy]`,
+`setup.cfg` with `[mypy]`). A gate is stated (`states`) when one line of a graded instruction file
+(the keys of `instruction_files`, an aliased file read once) names its rule and its
+threshold as a standalone number: `complexity`/`C901`/`mccabe` plus the limit,
+`coverage` plus the floor (with no readable floor, `coverage` beside `fail_under`,
+`threshold`, `floor` or `minimum`), `pre-commit`, or `mypy` plus `strict`. The local
+command is not required. An unstated gate carries `snippet`, a one-line sentence built
+from a template and the gate's own figures (never from file text) naming the rule, the
+threshold, the configuring file and the command that checks it. `stated_pct` is
+`stated / enforced` as a percentage, one decimal; null with no gate, so the default
+model's `guardrails-stated` row (level 1 at 50, level 2 at 100; `head_structure`, graded
+measured) reads unknown, never 0. `not_read` names the gate forms not read yet (eslint
+`complexity`, TypeScript `strict`, file-size ratchets, architecture tests, required CI
+checks and branch protection, sign-off rules). Counts-only keeps `kind`, `tool`, `rule`,
+the numbers, `file` and `stated_in` as paths, and drops `snippet` (and `not_read` to its
+length). Stdlib plus `lib.coverage_gate`. Tests: `tests/test_guardrails.py`.
 
 **`sibling_tests.py`**
 The one sibling-test resolver. Holds the test-file naming idioms (`<stem>_test`,

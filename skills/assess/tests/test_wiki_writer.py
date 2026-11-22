@@ -24,8 +24,8 @@ from lib.wiki_writer import (
 def _log_entry(**overrides: object) -> LogEntry:
     """A baseline LogEntry; overrides win."""
     base = dict(
-        run_date="2026-07-07", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-07-07", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="Action X", plugin_version="1.55.0",
     )
@@ -122,8 +122,8 @@ def test_write_index_legend_defines_every_status_token(tmp_assess_dir: Path) -> 
 
 def test_append_log_entry_creates_file_if_missing(tmp_assess_dir: Path) -> None:
     entry = LogEntry(
-        run_date="2026-05-22", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-05-22", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=1, regressed_count=0, new_count=0, persistent_count=2,
         top_action="Add complexity rules to .golangci.yml",
     )
@@ -144,8 +144,8 @@ def test_append_log_entry_renders_restructured_count(tmp_assess_dir: Path) -> No
 def test_append_log_entry_appends(tmp_assess_dir: Path) -> None:
     (tmp_assess_dir / "log.md").write_text("# Assess Log\n\n## 2026-05-01\n\nOld entry.\n\n---\n")
     entry = LogEntry(
-        run_date="2026-05-22", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-05-22", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="Action X",
     )
@@ -161,8 +161,8 @@ def test_log_heading_includes_plugin_version(tmp_assess_dir: Path) -> None:
     makes the log a version history at a glance and naturally disambiguates
     same-day runs across versions (issue #52 Bug 2)."""
     entry = LogEntry(
-        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-05-29", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="X", plugin_version="1.13.0",
     )
@@ -176,8 +176,8 @@ def test_log_heading_disambiguates_same_date_same_version(tmp_assess_dir: Path) 
     headings - otherwise GitHub anchors collide and markdownlint MD024
     fires. Second run appends a HH:MM timestamp inside the parentheses."""
     base = dict(
-        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-05-29", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="X", plugin_version="1.13.0",
     )
@@ -199,8 +199,8 @@ def test_log_heading_same_date_different_versions_each_unique(tmp_assess_dir: Pa
     """Same-day runs at different plugin versions distinguish themselves
     via the version in the heading - no time stamp needed."""
     base = dict(
-        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-05-29", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="X",
     )
@@ -216,8 +216,8 @@ def test_log_heading_omits_version_when_none(tmp_assess_dir: Path) -> None:
     """A caller that doesn't pass plugin_version (older code path) still
     works - the heading falls back to the bare date format."""
     entry = LogEntry(
-        run_date="2026-05-29", files_scored=100, readiness_score=4.5,
-        maturity_label="Solid", instructions_grade="B+",
+        run_date="2026-05-29", files_scored=100,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="X",
     )
@@ -374,8 +374,8 @@ def test_write_index_no_run_id_is_byte_identical(tmp_assess_dir: Path) -> None:
 
 def test_append_log_entry_stamps_run_id_per_entry(tmp_assess_dir: Path) -> None:
     entry = LogEntry(
-        run_date="2026-07-07", files_scored=100, readiness_score=0.0,
-        maturity_label="(LLM fills in)", instructions_grade="B+",
+        run_date="2026-07-07", files_scored=100,
+        readiness="(LLM fills in)", instructions_grade="B+",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="x", plugin_version="1.54.0",
         run_id="20260707120000-abcdef01", schema_version="1.0.0",
@@ -501,8 +501,8 @@ def test_log_heading_unique_within_minute(tmp_assess_dir: Path) -> None:
     ids get three distinct headings (#317): HH:MM alone collided on the third
     same-minute run. The short run id is the disambiguator."""
     base = dict(
-        run_date="2026-09-14", files_scored=1, readiness_score=1.0,
-        maturity_label="x", instructions_grade="B",
+        run_date="2026-09-14", files_scored=1,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="none", plugin_version="9.9.9",
     )
@@ -520,8 +520,8 @@ def test_log_heading_unique_within_minute(tmp_assess_dir: Path) -> None:
 def test_log_heading_unique_within_minute_no_version(tmp_assess_dir: Path) -> None:
     """The run id renders without a plugin version too."""
     entry = LogEntry(
-        run_date="2026-09-14", files_scored=1, readiness_score=1.0,
-        maturity_label="x", instructions_grade="B",
+        run_date="2026-09-14", files_scored=1,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="none", run_id="20260914101010-cccc3333",
     )
@@ -534,8 +534,8 @@ def test_log_heading_unique_within_minute_short_id_collision(tmp_assess_dir: Pat
     """Distinct run ids that share the 8-hex suffix still get distinct headings:
     the clash falls back to the full run id, then a counter."""
     base = dict(
-        run_date="2026-09-14", files_scored=1, readiness_score=1.0,
-        maturity_label="x", instructions_grade="B",
+        run_date="2026-09-14", files_scored=1,
+        readiness="Step 2 · 3 of 5 measured", instructions_grade="B",
         graduated_count=0, regressed_count=0, new_count=0, persistent_count=0,
         top_action="none", plugin_version="9.9.9",
     )

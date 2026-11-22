@@ -72,7 +72,10 @@ committed to CI (`review_automation`) sets offline, so such a repository reads
 "at least 1" on Layer 7 without `--platform`. Doc
 staleness reads unavailable (`not_git_root`) outside a git work tree, and its
 stale share is null on a shallow clone, so the doc-freshness row is `unknown`
-there. The agent-consistency row reads `agent_consistency.conflicts` (level 1:
+there. The guardrails-stated row reads `guardrails.stated_pct`, the share of the
+gates a repository configures (complexity limit, coverage floor, pre-commit
+hooks, mypy strict) that an instruction file states; with no gate found it is
+`unknown`. The agent-consistency row reads `agent_consistency.conflicts` (level 1:
 no check command or threshold one agent system's instruction file names and
 another's does not) and `agent_consistency.unlinked` (level 2: every system's
 file is `AGENTS.md`, a symlink, an import or a pointer to it); with fewer than
