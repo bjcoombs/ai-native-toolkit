@@ -69,10 +69,6 @@ reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types im
 lines = 1243
 reason = "pre-existing; ratchet from 2026-10-07"
 
-[ceilings."skills/assess/tests/test_complexity_treemap.py"]
-lines = 1798
-reason = "pre-existing; ratchet from 2026-10-07"
-
 [ceilings."skills/assess/tests/test_doc_graph.py"]
 lines = 1047
 reason = "pre-existing; ratchet from 2026-10-07"

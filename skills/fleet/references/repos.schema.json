@@ -85,6 +85,178 @@
                 }
               }
             },
+            "agent_consistency": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              },
+              "description": "Cross-agent instruction consistency (lib/agent_consistency.py): the root instruction files of every agent system present at HEAD (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed), the check commands and thresholds they disagree on, and how each links to one canonical file.",
+              "properties": {
+                "available": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Why the block is unavailable."
+                },
+                "systems": {
+                  "type": [
+                    "array",
+                    "integer"
+                  ],
+                  "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                },
+                "systems_total": {
+                  "type": "integer",
+                  "description": "Agent systems with a root instruction file."
+                },
+                "applicable": {
+                  "type": "boolean",
+                  "description": "False with fewer than two systems: nothing to agree with."
+                },
+                "canonical": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The canonical file: AGENTS.md when present, else the first root file in system order; null with no instruction file."
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string"
+                      },
+                      "system": {
+                        "type": "string"
+                      },
+                      "link": {
+                        "enum": [
+                          "canonical",
+                          "symlink",
+                          "import",
+                          "pointer",
+                          "config_read",
+                          "mirror",
+                          "independent"
+                        ]
+                      }
+                    }
+                  },
+                  "description": "Each root-context instruction file, its system and how it links to the canonical."
+                },
+                "divergences": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "command",
+                          "threshold"
+                        ]
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "The command, or the threshold keyword; dropped from counts-only output."
+                      },
+                      "named_in": {
+                        "type": [
+                          "array",
+                          "integer"
+                        ],
+                        "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                      },
+                      "missing_from": {
+                        "type": [
+                          "array",
+                          "integer"
+                        ],
+                        "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."
+                      },
+                      "stated": {
+                        "type": "array"
+                      }
+                    }
+                  },
+                  "description": "A command one system names and another does not, or a threshold two state differently."
+                },
+                "conflicts": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "The agent-consistency row's level 1 signal: divergences; null when not applicable."
+                },
+                "unlinked": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "The level 2 signal: systems not linked to the canonical file; null when not applicable."
+                },
+                "consistent": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "No divergence and every system linked; null when not applicable."
+                },
+                "next_steps": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "system": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "pointer": {
+                        "type": "string",
+                        "description": "The exact pointer line for the tool; dropped from counts-only output."
+                      },
+                      "symlink": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "A symlink command; null for Aider (config-only)."
+                      }
+                    }
+                  },
+                  "description": "One per unlinked system."
+                },
+                "not_read": {
+                  "type": [
+                    "array",
+                    "integer"
+                  ],
+                  "description": "A list of strings; counts-only output keeps only its length."
+                }
+              }
+            },
             "ai_usage": {
               "type": "object",
               "if": {

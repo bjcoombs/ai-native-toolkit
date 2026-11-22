@@ -1011,7 +1011,7 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery` and `guardrails` blocks (`scan_block_schemas.py`, #779, #781, #767)
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate`, `delivery`, `guardrails` and `agent_consistency` blocks (`scan_block_schemas.py`, #779, #781, #767, #768)
 also name and describe their fields (`described_block`), loosely: no required field, and a
 string list may be its counts-only length. Each block's `reason` description is generated
 from the check manifest (`reason_description`, #795): the codes its collector declares in
@@ -1025,7 +1025,7 @@ every other block names no code. `fleet_schema` uses the same blocks for `repos.
 **`scan_block_schemas.py`**
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
-`delivery` (#779) and `guardrails` (#767), read
+`delivery` (#779), `guardrails` (#767) and `agent_consistency` (#768), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -2088,7 +2088,7 @@ no prompts and an audit trail. Pure stdlib, no side effects. Called by
 `ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
 writes (run-context.json, the badge, the wiki pages); the version history is in the
 module comment. `complexity-treemap.py` carries a copy that
-`tests/test_complexity_treemap.py` holds equal to it.
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
 It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
 independent of plugin releases, bumped by one in any change that moves which findings
 a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
@@ -2285,7 +2285,7 @@ voids the diff (MAJOR also resets the trend); a MINOR/PATCH bump keeps it armed 
 complexity backend's version moved (`stats_tool_versions` reads the `<tool>_version`
 stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snapshot's
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
-`tests/test_complexity_treemap.py`.
+`tests/test_complexity_treemap_schema_versions.py`.
 
 **`stats_rows.py`**
 The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
@@ -2531,7 +2531,77 @@ a comment only one file carries stays in the comparison, so an instruction
 hidden there makes the pair `claude_shadows_agents`, and a mirror whose paired
 notes differ says so in its detail (#632). Text after a header comment's `-->`
 ends the header unless it opens another comment, so an H1 there is body. Files and findings are capped with `_total` counts, informational
-mirrors last so the cap never drops a defect for one. Tests: `tests/test_instruction_discovery.py`.
+mirrors last so the cap never drops a defect for one. The root files of the systems
+`agent_systems.py` classifies (Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
+Zed, #768) are discovered and graded the same way, `tool` naming the system;
+`.cursorrules` and `.github/copilot-instructions.md` are collected but graded only at their
+`INSTRUCTION_FILE_PATHS` entries. `collect_instruction_files(repo_root, tracked, dirs,
+patterns)` returns every discovered file (`InstructionCandidate`: path, kind, tool,
+directory, globs, always_loaded, body) and the paths `.aider.conf.yml` reads, for
+`agent_consistency.py`. Tests: `tests/test_instruction_discovery.py`.
+
+**`agent_systems.py`**
+The agent systems table (#768): `SYSTEMS` holds one `AgentSystem` (`id`, `name`,
+`locations`, `pointer` style: `import`, `kiro_include`, `text` or `aider_read`) per
+system `/assess` reads instruction files for: `agents_md`, `claude_code`, `codex`,
+`gemini`, `copilot`, `cursor`, `windsurf`, `cline`, `aider`, `junie`, `amazon_q`, `kiro`,
+`continue`, `zed`, in that order (`SYSTEM_ORDER`). The single list for any reader of
+non-Claude agent configuration (#846). `match_system_file(rel, text, aider_reads)`
+classifies a root-located file into a `SystemMatch` (system, kind, globs,
+always_loaded, body) by each tool's documented scope: `.windsurfrules` and
+`.windsurf/rules/*.md` (`trigger` other than `always_on` is not always loaded; `globs`
+for `glob`), `.clinerules` as a file or a directory of `.md` / `.txt` (`paths` scopes a
+rule), `CONVENTIONS.md` (always loaded only when `.aider.conf.yml` names it under
+`read:`, since Aider loads nothing by default), `.junie/guidelines.md`,
+`.amazonq/rules/**/*.md`, `.kiro/steering/*.md` (`inclusion: fileMatch` with
+`fileMatchPattern`, or `manual`, is not always loaded), `.continue/rules/*.md`
+(`alwaysApply`, else always loaded only with no `globs`), `.rules` (Zed), plus the root
+`.cursorrules` and `.github/copilot-instructions.md`. `might_match` is discovery's cheap
+prefilter. `aider_read_files(config_text)` reads `read:` as a scalar, an inline list or a
+block list. Pure. Tests: `tests/test_agent_consistency.py`.
+
+**`agent_consistency.py`**
+Cross-agent instruction consistency (#768): does every agent system get the same map?
+`scan_agent_consistency(repo_root, excludes)` runs from the scan table
+(`agent_consistency`, post-offers stage, headless `registered`) and returns the
+`agent_consistency` block (`AgentConsistencyBlock`): `{available, systems,
+systems_total, applicable, canonical, files, divergences, conflicts, unlinked,
+consistent, next_steps, not_read}`. It reads each system's root-context files (scope
+`always_loaded` at directory `.`, empty files dropped; Aider when `.aider.conf.yml`
+reads a file, as `config_read` when it reads the canonical file directly). The canonical
+file is the root `AGENTS.md`, else the first root file in `SYSTEMS` order, then path
+order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
+it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `pointer` (a
+line naming the canonical file's name, as a markdown link or Kiro's
+`#[[file:AGENTS.md]]` does; never for Claude Code or Gemini CLI, which load only
+imports, so a prose mention there links nothing, matching `claude_shadows_agents`), `mirror` (identical below the header, through
+`instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
+A system is linked when one of its files links (its other always-loaded files are
+supplementary rules, still compared for divergence). Each
+`Divergence` is `{kind, value, named_in, missing_from, stated}` over each system's
+effective text (its files, plus the canonical text where a file imports or points to
+it): `command`, a test or lint command (`check_command.is_check_command` or
+`is_lint_command`, plus a one-word inline `pytest`, `tox`, `nox` or linter) named by
+some systems and not others; `threshold`, two systems whose numbers on lines naming
+`coverage`, `complexity` or `line length` share none (a stray second number is no conflict). `conflicts` (divergences)
+and `unlinked` (systems not linked) are the default model's `agent-consistency` row
+signals, level 1 `conflicts == 0` and level 2 `unlinked == 0` with `requires` level 1,
+both `head_structure` (graded measured). With fewer than two systems `applicable` is
+false and `conflicts`, `unlinked` and `consistent` are null, so the row reads unknown,
+never 0. `next_steps` holds one `ConsistencyStep` per unlinked system: `pointer`, the
+exact line for its tool (`pointer_line`: `@AGENTS.md` relative to the file for Claude
+Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: AGENTS.md` in
+`.aider.conf.yml` for Aider, `Follow the project instructions in
+[AGENTS.md](AGENTS.md).` otherwise) and `symlink` (`ln -sf`, only for the system's own single-file location: null for
+Aider and for a supplementary rule file, which a symlink would overwrite), built from
+templates and paths, never file text; written into the file, each passes the link check.
+`not_read` names the forms not compared (thresholds without a keyword, Aider `--read`
+on the command line, user-level rules, scoped and nested files). Counts-only keeps the
+systems, links, kinds and counts, paths as paths, and drops `value`, `pointer`,
+`symlink` and `not_read`. Known limit: for a system that follows text, any line naming the canonical file's name counts
+as a pointer. Stdlib plus `lib.check_command`, `lib.command_resolver`,
+`lib.instruction_budget` and `lib.instruction_discovery`. Tests:
+`tests/test_agent_consistency.py`.
 
 **`instruction_budget.py`**
 The always-loaded instruction text per tool for the root context, in lines, words,
