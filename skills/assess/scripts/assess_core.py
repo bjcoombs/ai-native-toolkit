@@ -38,6 +38,7 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.assess_diagrams import build_diagrams, write_diagrams
 from lib.badge import write_headline_badge
 from lib.headline import as_headline, run_context_headline
 from lib.counts_only import COUNTS_ONLY_FILE
@@ -184,6 +185,8 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
         refresh_log_readiness(
             assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
         )
+        # The evidence waffle draws the level's conditions (#942): redraw it with them.
+        write_diagrams(assess_dir, build_diagrams(ctx))
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
     refresh_mutation_findings(

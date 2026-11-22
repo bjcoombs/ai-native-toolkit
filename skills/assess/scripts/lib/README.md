@@ -910,7 +910,8 @@ artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four 
 keys the run header reserved in place, writes `badge.json` from the `headline` block
 (`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
-(`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
+(`findings_snapshot`), writes the diagrams (`assess_diagrams.write_diagrams`, #942), and
+then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
 
 **`degrade.py`**
 `safe` and `unavailable`: the "a broken scan never blocks the assessment" wrapper and
@@ -1747,6 +1748,12 @@ filter join. `build_schema` generates `skills/fleet/references/labels.schema.jso
 `skills/assess`). No module in the gathering or scoring path imports it, and it
 imports no model, network or subprocess module: `tests/test_fleet_labels.py` pins both.
 
+**`run_context_types_diagrams.py`**
+The `/assess` diagram shapes (#942), apart from `run_context_types.py`, which is at its
+file-size ceiling: `AssessDiagram` (a drawn SVG or the one-line reason it was not drawn,
+with the section's `In place:` line and caption) and `WaffleSquare` (one condition as the
+evidence waffle draws it). Tests: `tests/test_assess_diagrams.py`.
+
 **`run_context_types.py`**
 `TypedDict` shapes for run-context records a second `lib/` module builds or reads
 (broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
@@ -2201,6 +2208,35 @@ It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
 independent of plugin releases, bumped by one in any change that moves which findings
 a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
 `findings.json`.
+
+**`assess_diagrams.py`**
+The `/assess` diagrams and the report section that links them (#942, parent #940).
+`build_diagrams(ctx, model_rows=None)` returns an `AssessDiagram` per picture, in report
+order, and never raises (a renderer that raises becomes a "the renderer raised X" skip).
+`write_diagrams(assess_dir, diagrams)` writes the drawn SVGs beside `run-context.json` and
+removes every file in `DIAGRAM_FILES` this run did not draw (a symlink in its place is
+removed, never written through); `run_publish.publish_run` calls it, and
+`assess_core.run_opt_in_mutation` again after it recounts the `level` block.
+`diagrams_section(diagrams)` is the deterministic report's Markdown, one `## ` section per
+diagram opening with its `In place:` line, then the relative clickable image link and the
+caption, or `Not drawn:` and the reason.
+
+The **evidence waffle** (`evidence-waffle.svg`) draws one square per condition of the
+`level` block, grouped by maturity-model row in model order. `category(condition)` reads
+state, grade and `counted`: met is `verified`, `measured` or `listed` (not counted:
+`config_only`, `declared`, or no producer grade); then `unmet`, `declined` (its own colour,
+`DECLINED_COLOURS`), `not_applicable` (an empty outline) and `not_measured` (hatched, each
+reason in the tooltip and counted in the key; `requires:` names the row and level). The
+verified and measured squares together equal `tally.met`. Row labels drop a model title's
+`Layer N:` prefix (`row_label`), so no layer number reaches the picture.
+
+A new diagram (#943, #940) adds its `FILE` and heading to `HEADINGS`, a builder returning
+an `AssessDiagram`, and an entry in `build_diagrams`, drawing with the shared helpers:
+`cell` (a square in a category's look), `legend` (swatches with labels and indented
+notes), `wrap` (caption lines by character budget) and `style` (`fleet_svg.theme_style`
+plus `ROLES`), over `lib/fleet_svg.py`. Golden renders: `tests/fixtures/assess_diagrams/`
+(regenerate with `uv run --locked python tests/assess_diagrams_fixture.py` from
+`skills/assess`). Tests: `tests/test_assess_diagrams.py`.
 
 **`findings_snapshot.py`**
 The committed findings snapshot (#554). `build_snapshot` reduces `derived_findings` to
