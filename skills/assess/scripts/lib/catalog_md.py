@@ -137,17 +137,17 @@ def _lines(catalog: Catalog) -> dict[str, list[Line]]:
 
 def _tag_opening(tag: CatalogTag) -> list[str]:
     """The lines that open a tag section, before its table."""
-    listed, shared = len(tag["conditions"]), len(tag["shared"])
-    if not listed:
+    total, shared = len(tag["conditions"]), len(tag["shared"])
+    if not total:
         return [f"Tag `{tag['id']}`. No condition carries this tag yet.", ""]
-    noun = "condition" if listed == 1 else "conditions"
+    noun = "condition" if total == 1 else "conditions"
     if not shared:
         share = "none shared with another tag"
-    elif shared == listed:
-        share = "all shared with another tag" if listed > 1 else "shared with another tag"
+    elif shared == total:
+        share = "all shared with another tag" if total > 1 else "shared with another tag"
     else:
         share = f"{shared} shared with another tag"
-    return [f"Tag `{tag['id']}`: {listed} {noun}, {share}.", ""]
+    return [f"Tag `{tag['id']}`: {total} {noun}, {share}.", ""]
 
 
 def _tag_section(tag: CatalogTag, lines: dict[str, list[Line]], first: dict[str, str]) -> list[str]:

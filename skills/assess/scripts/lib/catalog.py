@@ -263,8 +263,7 @@ def _signal_grade(path: str, signals: Mapping[str, cm.SignalEntry]) -> str:
 
 def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
           conditions: Mapping[str, cm.ConditionEntry],
-          gated: Mapping[str, list[tuple[str, int]]] | None = None) -> list[CatalogRow]:
-    gated = gated or {}
+          gated: Mapping[str, list[tuple[str, int]]]) -> list[CatalogRow]:
     rows: list[CatalogRow] = []
     for row in model["rows"]:
         levels: list[CatalogLevel] = []
