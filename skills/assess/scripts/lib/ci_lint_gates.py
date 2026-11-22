@@ -77,6 +77,9 @@ def _rewrites(line: str) -> bool:
 
 # A ``||`` after a ``git diff`` on its line: what follows handles the diff's failure.
 _OR_AFTER_DIFF = re.compile(r"\bgit\s+diff\b[^|]*\|\|(.*)$")
+# A git diff piped into another command (one ``|``, not ``||``): without ``pipefail``, which
+# GitHub's default ``bash -e`` does not set, the step takes the last command's status.
+_PIPED_DIFF = re.compile(r"\bgit\s+diff\b[^|;&]*\|(?!\|)")
 # A handler that still fails the step: ``|| exit 1``, ``|| (echo x; exit 1)``, ``|| false``.
 # ``false`` counts only as a command, never inside echoed text (``|| echo "false alarm"``).
 _RERAISE = re.compile(r"\bexit\s+(?:[1-9]|\$\?)|(?:^|[;&|({])\s*false\b")
@@ -89,7 +92,10 @@ def _diff_gate(line: str) -> bool:
     if not any((words := command_words(c.text))[:2] == ["git", "diff"]
                and {"--exit-code", "--quiet"} & set(words) for c in line_commands(line)):
         return False
-    handler = _OR_AFTER_DIFF.search(ci_line_text(line))
+    text = ci_line_text(line)
+    if _PIPED_DIFF.search(text):   # git diff --exit-code | tee d.txt: the pipe hides its status
+        return False
+    handler = _OR_AFTER_DIFF.search(text)
     return handler is None or _RERAISE.search(handler.group(1)) is not None
 
 

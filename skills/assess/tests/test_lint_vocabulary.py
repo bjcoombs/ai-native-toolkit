@@ -44,6 +44,10 @@ NOT_LINT_RUNS = [
     "vendor/bin/psalm --set-baseline=psalm-baseline.xml", "detekt --create-baseline",
     "detekt --generate-config", "mix credo gen.config", "mix credo explain lib/a.ex",
     "php vendor/bin/phpstan analyse --generate-baseline", "clang-tidy -fix src/a.cc",
+    # The same modes behind a wrapper or as a package bin (claude-review on 3913f47).
+    "npx phpcs --config-set a b", "npx psalm --init", "npx swiftlint --fix",
+    "npx swiftlint version", "yarn phpstan --generate-baseline", "uv run clang-tidy -fix a.cc",
+    "pnpm exec clang-tidy -fix a.cc", "bundle exec swiftlint --fix",
 ]
 
 

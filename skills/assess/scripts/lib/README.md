@@ -3690,8 +3690,10 @@ in `_NO_ANALYSIS` that configures, lists, explains or records a baseline and exi
 (`phpcs --config-set`, `phpcs -i`, `phpstan analyse --generate-baseline`, `phpstan
 clear-result-cache`, `psalm --init` / `--set-baseline`, `detekt --create-baseline` /
 `--generate-config`, `swiftlint version` / `rules`, `clang-tidy --list-checks` / `-fix`,
-`mix credo gen.config` / `explain`). `check_command` checks it ahead of `LINT_PROGRAMS`, so
-those read false at Layer 5 too. `compiler_gate(words)` is a compiler run
+`mix credo gen.config` / `explain`). `check_command` checks it ahead of `LINT_PROGRAMS`, on the
+command and on the program a wrapper or package bin runs (`_no_analysis`: `npx phpcs
+--config-set`, `uv run clang-tidy -fix`, `yarn phpstan --generate-baseline`), so those
+read false at Layer 5 too. `compiler_gate(words)` is a compiler run
 with warnings as errors (`mix compile --warnings-as-errors`, `-Werror` after a compiler,
 `make`, `ninja` or `cmake`, `-DCMAKE_COMPILE_WARNING_AS_ERROR=ON`, `dotnet build
 -warnaserror` or `-p:TreatWarningsAsErrors=true`), never a lint run (decision 1).
@@ -3812,7 +3814,9 @@ job turns into a lint run with `git diff --exit-code` or `git diff --quiet`; a r
 alone, followed by a commit, or with the diff in another job is not one, and nor is a diff
 whose failure an `||` handler absorbs without re-raising it (`git diff --quiet || git
 commit -am fmt`; `|| exit 1` and `|| false` re-raise). A diff under a GitLab `after_script:`
-key is no gate either (`_after_script`): GitLab ignores its exit codes. Nor is a diff with a
+key is no gate either (`_after_script`): GitLab ignores its exit codes. Nor is a diff piped
+into another command (`git diff --exit-code | tee d.txt`): without `pipefail`, which
+GitHub's default `bash -e` does not set, the step takes the last command's status. Nor is a diff with a
 `git add` or `git commit` between it and the rewrite (`_stages`), since the working tree
 then shows no change. A property tag with a `Condition` attribute counts (it may apply, so
 it reads null, never false). `job_ids(lines)`

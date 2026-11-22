@@ -149,7 +149,7 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
-    if runs_no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
+    if _no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
         return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
             words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
@@ -336,7 +336,7 @@ def is_lint_run(text: str) -> bool:
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or is_info_invocation(text):
         return False
-    if runs_no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
+    if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
         return False
     if ecosystem_lint(words):   # phpstan, mix credo, ./gradlew ktlintCheck, pint --test (#926)
         return True
@@ -512,6 +512,16 @@ def _wrapped(words: list[str]) -> list[str] | None:
     if head == "uvx":
         return _drop_leading_flags(words[1:], _WRAPPER_FLAGS) or None
     return _outer_wrapper(words) or _exec_program(words) or _plain_wrapper(words)
+
+
+def _no_analysis(words: list[str]) -> bool:
+    """``lint_vocabulary.runs_no_analysis`` on the command and on the program it runs: a
+    wrapper (``npx phpcs --config-set``, ``uv run clang-tidy -fix``) or a package bin
+    (``yarn phpstan --generate-baseline``) runs no analysis either."""
+    inner = _info_program(words)
+    bin_form = words[1:] if words[0] in ("pnpm", "yarn", "bun") else []
+    return (runs_no_analysis(words) or runs_no_analysis(inner)
+            or (bool(bin_form) and runs_no_analysis(bin_form)))
 
 
 # xargs flags that take the next word as a value (``xargs -n 1 clang-tidy``).
