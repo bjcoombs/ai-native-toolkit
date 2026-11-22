@@ -182,7 +182,8 @@ def fold(root: Path, release: str, date: datetime.date, overrides: dict[str, str
         lines = texts.get(path) or (root / path).read_text(encoding="utf-8").split("\n")
         texts[path] = fold_counter(lines, name, group, release, overrides.get(name), date)
     for path, lines in texts.items():
-        (root / path).write_text("\n".join(lines), encoding="utf-8")
+        # LF on every platform: a Windows fold must not turn the files into CRLF.
+        (root / path).write_text("\n".join(lines), encoding="utf-8", newline="\n")
     for note in notes:
         note.path.unlink()
     return sorted(by_counter)

@@ -62,6 +62,12 @@ def test_fold_matches_the_hand_fold_of_the_notes_moved_from_main(before: Path) -
     assert _tree(before) == _tree(FIXTURES / "after")
 
 
+def test_fold_writes_lf_line_endings(before: Path) -> None:
+    fc.fold(before, "3.0.0", RELEASE_DATE, {})
+    for counter in fc.COUNTERS.values():
+        assert b"\r\n" not in (before / counter.path).read_bytes(), counter.path
+
+
 def test_fold_deletes_the_notes_and_keeps_the_readme(before: Path) -> None:
     _write(before, "README.md", "not a note\n")
     fc.fold(before, "3.0.0", RELEASE_DATE, {})
