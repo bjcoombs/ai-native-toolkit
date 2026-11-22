@@ -88,7 +88,8 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
 - **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
-  roll-ups with `fleet_data`'s own `repo_cells` and `row_roll_up`, so a
+  roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `step_fields` (with
+  `fleet_data_steps.step_roll_up`), so a
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
   `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.

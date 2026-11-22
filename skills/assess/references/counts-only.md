@@ -819,3 +819,6 @@ kept as written. A string
 | `opportunities.shared_templates.repos` | path (hashed when hashing is on) |
 | `opportunities.shared_templates.source` | path (hashed when hashing is on) |
 | `opportunities.shared_templates.kind` | token |
+| `repos.exclusions.kind` | token |
+| `repos.exclusions.source` | token |
+| `repos.exclusions.reason` | dropped |
