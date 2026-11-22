@@ -165,7 +165,7 @@ CI_CHECKS: JsonDict = {
             {"type": ["boolean", "null"]},
             "Layer 3 level 1 (issue #782): true when a CI line runs a linter that can fail its job "
             "on ordinary changes (not --version or --help), or a step uses a known lint action "
-            "(golangci-lint-action, ruff-action, pre-commit/action, super-linter, reviewdog), "
+            "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
             "null when none does but included "
             "jobs, unsettled triggers or a check target or script that may lint inside it could "
             "hold one, else false."),

@@ -3233,10 +3233,13 @@ and trigger rules, the same own, included and merged files, with
 `count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
 per-line predicate (`_line_runs_lint`: `check_command.is_lint_run`, never a bare `-
 mypy` item, or a `uses:` step of a known lint action, `lint_action(line)` over
-`LINT_ACTIONS` plus `reviewdog/action-*`: golangci-lint-action, ruff-action,
-pre-commit/action, super-linter, lint-action, markdownlint-cli2-action; an unknown
-third-party action is not read, and `continue-on-error` and triggers apply as to any
-step; `_line_may_lint`: `check_command.may_lint`). `lint_basis` is
+`LINT_ACTIONS` plus `reviewdog/action-*` apart from `action-setup` and
+`action-suggester`: golangci-lint-action, ruff-action, super-linter, lint-action,
+markdownlint-cli2-action; an unknown third-party action is not read, and
+`continue-on-error` and triggers apply as to any step; a lone `- flake8` item counts
+under a GitLab `script:` key only, `_script_items` reading its parent;
+`_line_may_lint`: `check_command.may_lint`, or a `pre-commit/action` step, which runs
+`pre-commit run --all-files` and so reads as that line does). `lint_basis` is
 `lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
 `merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
 triggers are not settled), `check_target` (null: no lint line, but an unmasked check

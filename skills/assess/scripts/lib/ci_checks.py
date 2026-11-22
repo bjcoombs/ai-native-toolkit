@@ -98,10 +98,12 @@ the same lines with the same masking and trigger rules, but only lint lines
 count (``check_command.is_lint_run``: ``is_lint_command`` without
 ``--version`` / ``--help`` / ``-V``, plus a go-task lint target), and so does
 a GitHub ``uses:`` step of a known lint action (``LINT_ACTIONS``:
-golangci-lint-action, ruff-action, pre-commit/action, super-linter,
-``reviewdog/action-*``, lint-action, markdownlint-cli2-action; an unknown
-third-party action is not read), masked by ``continue-on-error`` and kept off
-by triggers like any step. A check
+golangci-lint-action, ruff-action, super-linter, ``reviewdog/action-*`` apart
+from action-setup and action-suggester, lint-action, markdownlint-cli2-action;
+an unknown third-party action is not read), masked by ``continue-on-error`` and
+kept off by triggers like any step. A lone ``- flake8`` item counts under a
+GitLab ``script:`` key and nowhere else. ``pre-commit/action`` runs
+``pre-commit run --all-files`` and reads as that line does (below). A check
 target or script may run a linter inside it, and the line alone cannot show
 it (``check_command.may_lint``: ``make check``, ``npm test``, ``tox``,
 ``./scripts/test.sh``, ``pre-commit run``; recipes are not read), so with no
@@ -234,34 +236,48 @@ def _line_runs_check(line: str, *, script_item: bool = True) -> bool:
 # An unknown third-party action is not read.
 LINT_ACTIONS = frozenset({
     "golangci/golangci-lint-action", "astral-sh/ruff-action", "chartboost/ruff-action",
-    "pre-commit/action", "github/super-linter", "super-linter/super-linter",
+    "github/super-linter", "super-linter/super-linter",
     "wearerequired/lint-action", "davidanson/markdownlint-cli2-action",
 })
+# reviewdog actions that install or post, not lint.
+_REVIEWDOG_NOT_LINT = frozenset({"reviewdog/action-setup", "reviewdog/action-suggester"})
+# Actions that run a check whose config may or may not lint: ``pre-commit/action`` runs
+# ``pre-commit run --all-files``, read like that line (``check_command.may_lint``).
+MAY_LINT_ACTIONS = frozenset({"pre-commit/action"})
 _USES = re.compile(r"""^\s*(?:-\s+)?uses:\s*["']?([\w.-]+/[\w.-]+)(?:/[^@\s"']*)?@""")
 
 
-def lint_action(line: str) -> bool:
-    """A workflow step ``uses:`` line calling a known lint action (``reviewdog/action-*`` too)."""
+def _action(line: str) -> str:
+    """The lower-cased ``owner/name`` a workflow step's ``uses:`` line calls, or empty."""
     match = _USES.match(line)
-    if match is None:
-        return False
-    name = match.group(1).lower()
-    return name in LINT_ACTIONS or name.startswith("reviewdog/action-")
+    return match.group(1).lower() if match else ""
+
+
+def lint_action(line: str) -> bool:
+    """A workflow step ``uses:`` line calling a known lint action (``reviewdog/action-*`` too,
+    apart from the setup and suggester actions)."""
+    name = _action(line)
+    return name in LINT_ACTIONS or (name.startswith("reviewdog/action-")
+                                    and name not in _REVIEWDOG_NOT_LINT)
 
 
 def _line_runs_lint(line: str, *, script_item: bool = True) -> bool:
     """One CI line that runs a linter (#782): ``is_lint_run``, never a bare ``- mypy`` item,
     or a ``uses:`` step of a known lint action (``LINT_ACTIONS``)."""
-    del script_item   # a lone linter item is a value under any key
     if lint_action(line):
         return True
     bare_item = _BARE_ITEM.match(line) is not None
-    return any(is_lint_run(c.text) and not (bare_item and _lone_linter(c.text))
+    # A lone ``- mypy`` is a value under matrix: / needs: / stages:, but runs under a
+    # GitLab script: key (``_script_items``).
+    return any(is_lint_run(c.text) and not (bare_item and not script_item and _lone_linter(c.text))
                for c in _line_commands(line))
 
 
 def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
-    """One CI line whose check target or script may run a linter inside it (#782)."""
+    """One CI line whose check target or script may run a linter inside it (#782),
+    or a ``uses:`` step of an action that does (``MAY_LINT_ACTIONS``)."""
+    if _action(line) in MAY_LINT_ACTIONS:
+        return True
     bare_item = _BARE_ITEM.match(line) is not None
     return any(may_lint(c.text) and not (bare_item and not script_item and _lone_check(c.text))
                for c in _line_commands(line))
@@ -291,14 +307,18 @@ def _indent(line: str) -> int:
 def _script_items(lines: Sequence[str]) -> list[bool]:
     """Per line: false for a bare list item whose parent key is not a GitLab script key.
 
+    Read for a lone always-check item (``- pytest``) and a lone linter (``- mypy``,
+    which only ``lint_runs`` reads by key: ``test_or_lint_runs`` never counts one).
+
     The parent is the nearest line above at the item's indent or less that is not a
     sibling item, skipping blank and comment lines and lines nested deeper (a sibling's
     block scalar). An indentless list (``script:`` then ``- pytest`` at its indent) works.
     """
     flags = [True] * len(lines)
     for i, line in enumerate(lines):
-        if _BARE_ITEM.match(line) is None or not _lone_check(ci_line_text(line)):
-            continue   # only a lone always-check item needs its parent
+        text = ci_line_text(line)
+        if _BARE_ITEM.match(line) is None or not (_lone_check(text) or _lone_linter(text)):
+            continue   # only a lone always-check or linter item needs its parent
         depth = _indent(line)
         parent = ""
         for above in reversed(lines[:i]):

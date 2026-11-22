@@ -400,6 +400,7 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     ("python -m pytest", False),
     ("go test ./...", False),
     ("cargo test", False),
+    ("bun test", False),
     ("npx jest", False),
     ("make check || true", False),              # a masked check target cannot fail the job either
     ("make build", False),
@@ -448,7 +449,7 @@ def _uses(action: str, extra: str = "", on: str = "[pull_request]") -> dict[str,
 
 @pytest.mark.parametrize("action", [
     "golangci/golangci-lint-action@v6", "astral-sh/ruff-action@v3", "chartboost/ruff-action@v1",
-    "pre-commit/action@v3.0.1", "github/super-linter@v5", "super-linter/super-linter/slim@v7",
+    "github/super-linter@v5", "super-linter/super-linter/slim@v7",
     "reviewdog/action-eslint@v1", "wearerequired/lint-action@v2",
     "DavidAnson/markdownlint-cli2-action@v16", "'astral-sh/ruff-action@v3'",
     "golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc",
@@ -462,10 +463,34 @@ def test_a_known_lint_action_is_a_lint_step(tmp_path: Path, action: str) -> None
 @pytest.mark.parametrize("action", [
     "actions/setup-python@v5", "someone/lint-action@v1", "reviewdog/reviewdog@v1",
     "golangci/golangci-lint-action-fork@v1", "./.github/actions/lint",
+    "reviewdog/action-setup@v1", "reviewdog/action-suggester@v1",   # install / post only
 ])
 def test_an_unknown_action_is_not_a_lint_step(tmp_path: Path, action: str) -> None:
     block = scan_ci_checks(_write(tmp_path, _uses(action)))
     assert (block["lint_runs"], block["lint_basis"]) == (False, "no_lint_command")
+
+
+def test_pre_commit_action_reads_as_pre_commit_run(tmp_path: Path) -> None:
+    """The action runs ``pre-commit run --all-files``: one reading for both forms."""
+    action = scan_ci_checks(_write(tmp_path / "a", _uses("pre-commit/action@v3.0.1")))
+    line = scan_ci_checks(_write(tmp_path / "l", _gha("pre-commit run --all-files")))
+    assert (action["lint_runs"], action["lint_basis"]) == (line["lint_runs"], line["lint_basis"]) \
+        == (None, "check_target")
+
+
+@pytest.mark.parametrize(("files", "lint"), [
+    pytest.param({".gitlab-ci.yml": "lint:\n  script:\n    - flake8\n"}, True, id="gitlab-script-flake8"),
+    pytest.param({".gitlab-ci.yml": "lint:\n  script:\n  - rubocop\n"}, True, id="indentless-rubocop"),
+    pytest.param({".gitlab-ci.yml": "stages:\n  - mypy\nt:\n  script:\n    - echo hi\n"},
+                 False, id="stages-mypy"),
+    pytest.param({".gitlab-ci.yml": "t:\n  needs:\n    - ruff\n  script:\n    - echo hi\n"},
+                 False, id="needs-ruff"),
+])
+def test_a_lone_linter_runs_only_under_a_script_key(tmp_path: Path, files: dict[str, str],
+                                                    lint: bool) -> None:
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert block["lint_runs"] is lint
+    assert block["test_or_lint_runs"] is False   # unchanged: a lone linter never counted there
 
 
 def test_a_lint_action_with_continue_on_error_is_not_enforced(tmp_path: Path) -> None:

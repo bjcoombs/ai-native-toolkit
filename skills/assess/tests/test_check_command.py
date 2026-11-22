@@ -59,7 +59,7 @@ def test_is_lint_command_keeps_its_meaning() -> None:
     ("nox", True), ("./scripts/test.sh", True), ("task check", True),
     ("pre-commit run --all-files", True), ("uv run pre-commit run", True),
     ("pytest", False), ("uv run pytest -q", False), ("python -m pytest", False),
-    ("go test ./...", False), ("cargo test", False), ("npx jest", False), ("npx vitest run", False),
+    ("go test ./...", False), ("cargo test", False), ("bun test", False), ("npx jest", False), ("npx vitest run", False),
     ("npx playwright test", False), ("make build", False), ("pre-commit install", False),
 ])
 def test_may_lint(text: str, expected: bool) -> None:

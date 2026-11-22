@@ -208,7 +208,7 @@ def may_lint(text: str) -> bool:
 
     A check target of a runner or a script (``make check``, ``npm test``, ``tox``,
     ``./scripts/test.sh``, ``task check``) or ``pre-commit run``. A direct test-program
-    call (``pytest``, ``uv run pytest``, ``go test``, ``cargo test``, ``npx jest``) runs
+    call (``pytest``, ``uv run pytest``, ``go test``, ``cargo test``, ``bun test``, ``npx jest``) runs
     tests only, so it is not one.
     """
     words = command_words(text)
@@ -223,6 +223,6 @@ def may_lint(text: str) -> bool:
         return False
     if program[0] in _DIRECT_TESTS:
         return False
-    if program[0] in ("go", "cargo"):
+    if program[0] in ("go", "cargo", "bun"):   # go test, cargo test, bun test: built-in runners
         return _positionals(program[1:])[:1] != ["test"]
     return not (program[0] == "playwright" and _positionals(program[1:])[:1] == ["test"])
