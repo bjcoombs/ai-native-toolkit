@@ -1,0 +1,15 @@
+# Check manifest fragment: the ancestor_instruction_files collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.ancestor_instruction_files"
+kind = "collector"
+title = "Ancestor instruction files"
+callable = "lib.core_scans:ancestor_instructions"
+publishes = ["ancestor_instruction_files"]
+reads = ["repo_root"]
+stage = "read_side"
+headless = { ancestor_instruction_files = "unregistered" }
+revision = 1
+  [entries.privacy]
+  ancestor_instruction_files = "drop"

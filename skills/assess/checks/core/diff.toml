@@ -1,0 +1,15 @@
+# Check manifest fragment: the diff collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.diff"
+kind = "collector"
+title = "Stats diff against the prior run"
+callable = "lib.run_setup:stats_diff"
+publishes = []
+reads = ["prior", "current", "excluded_as_generated"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

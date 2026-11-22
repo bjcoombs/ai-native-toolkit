@@ -1973,6 +1973,24 @@ raising, and `parse_manifest(data)` validates an already-parsed document. Helper
 id minus its owner), `block_collectors` (run-context block to publishing collector id)
 and `condition_key(row, level, signal)`.
 
+**Fragments (#982).** A root manifest may list `fragments` instead of declaring
+`[[entries]]`. The core does: `checks/core.toml` holds `manifest_version`, `owner` and
+`fragments`, the scan keys in scan-table order, and each entry lives in
+`checks/core/<scan key>.toml`. A fragment holds `[[entries]]` only: exactly one collector,
+the one its file is named for, plus the signals, conditions and findings it owns (a signal
+names its collector, a condition reads one signal, a finding belongs to the collector of
+its first input). The loader merges the fragments by kind (collectors, signals,
+conditions, findings) and, within a kind, in the listed order, so the merged document is
+the one a single file declares, and an error names the fragment
+(`core/ci_checks.toml entries[0] (core.ci_checks).stage`). Layout errors:
+`MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
+would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
+the file) and `FRAGMENTS_AND_ENTRIES`. An id declared in two fragments is `DUPLICATE_ID`,
+naming both files. A new collector adds its fragment and one line to `fragments`; a change
+to an existing check edits its own fragment only. `read_manifest(path)` returns the merged
+document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
+list. A single-file manifest (any third-party owner) loads as before.
+
 The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
 `[[entries]]` of four kinds:
 
@@ -2078,8 +2096,8 @@ Meridian's distance and closest-match tables.
 ### Measures catalog
 
 **`catalog.py`** *(#789 step 2, #794)*
-`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
-default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml` and its
+fragments), the default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
 1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
 row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
@@ -2089,7 +2107,8 @@ the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known
 counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
-(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+(every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
+them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -2102,7 +2121,7 @@ relatively.
 **Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
 root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
 `tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
-so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml` or `level_signals.py` regenerates the catalog.
 `make check` runs it through `test-assess`.
 
 **`measured_appendix.py`**

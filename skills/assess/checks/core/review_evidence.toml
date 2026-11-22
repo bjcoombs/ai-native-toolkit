@@ -1,0 +1,42 @@
+# Check manifest fragment: the review_evidence collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.review_evidence"
+kind = "collector"
+title = "Review evidence"
+summary = "An AI review step committed in CI, or a reviewed merged change."
+issues = [696]
+callable = "lib.review_automation:review_evidence"
+publishes = ["review_evidence"]
+reads = ["review_automation", "review_reality"]
+stage = "post_offers"
+platform_pass = true
+headless = { review_evidence = "registered" }
+shapes = [
+  { path = "review_evidence", type = "lib.review_automation:ReviewEvidenceBlock" },
+]
+revision = 2
+unknown_reasons = [
+  { code = "network", means = "No AI review step is committed in CI, and a headless run without --platform makes no GitHub or GitLab read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh or glab signed in." },
+  { code = "no_remote", means = "No AI review step is committed in CI and the repository has no GitHub or GitLab remote, so there are no merged changes to read.", next_step = "Nothing to change if the repository is local only; with a GitHub or GitLab remote, /assess and fleet --platform read its merged changes." },
+]
+  [entries.privacy]
+  "review_evidence.reason" = "drop"
+
+[[entries]]
+id = "core:review_evidence.present"
+kind = "signal"
+title = "Review evidence exists"
+collector = "core.review_evidence"
+path = "review_evidence.present"
+type = "bool"
+evidence = "head_text"
+null_means = "no AI review step is committed and review_reality is unread"
+
+[[entries]]
+id = "core.cond.layer-7-review.1.present"
+kind = "condition"
+title = "Changes get reviewed"
+key = "layer-7-review.1:review_evidence.present"
+fix = "Commit an AI review step in CI, or review merged changes before they land."

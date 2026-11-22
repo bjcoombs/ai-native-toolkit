@@ -1,0 +1,18 @@
+# Check manifest fragment: the mutation_not_run_cap collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.mutation_not_run_cap"
+kind = "collector"
+title = "Mutation-not-run cap"
+callable = "lib.core_scans:mutation_cap"
+publishes = ["mutation_not_run_cap"]
+reads = ["test_pressure"]
+stage = "read_side"
+shapes = [
+  { path = "mutation_not_run_cap", type = "lib.mutation_cap:MutationNotRunCap" },
+]
+revision = 1
+  [entries.privacy]
+  "mutation_not_run_cap.max_layer6_band" = "token"
+  "mutation_not_run_cap.annotation" = "drop"

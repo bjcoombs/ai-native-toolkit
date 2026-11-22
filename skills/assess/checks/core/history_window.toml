@@ -1,0 +1,15 @@
+# Check manifest fragment: the history_window collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.history_window"
+kind = "collector"
+title = "Git history window"
+callable = "lib.run_setup:history_window"
+publishes = []
+reads = ["current"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

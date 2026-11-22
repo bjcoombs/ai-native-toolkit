@@ -1,0 +1,25 @@
+# Check manifest fragment: the ai_usage collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.ai_usage"
+kind = "collector"
+title = "AI-assisted change share"
+issues = [547, 765]
+callable = "lib.ai_usage:scan_ai_usage"
+publishes = ["ai_usage"]
+reads = ["repo_root", "scope", "history_window", "fleet_config"]
+stage = "post_offers"
+headless = { ai_usage = "registered" }
+shapes = [
+  { path = "ai_usage", type = "lib.ai_usage:AiUsageBlock" },
+]
+revision = 2
+  [entries.privacy]
+  "ai_usage.reason" = "drop"
+  "ai_usage.window" = "token"
+  "ai_usage.since" = "drop"
+  "ai_usage.merge_rule" = "token"
+  "ai_usage.covered_agents" = "drop"
+  "ai_usage.covered_author_agents" = "drop"
+  "ai_usage.limits" = "drop"

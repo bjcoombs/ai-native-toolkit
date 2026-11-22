@@ -1,0 +1,46 @@
+# Check manifest fragment: the coverage_gate collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.coverage_gate"
+kind = "collector"
+title = "Coverage gate"
+summary = "Finds coverage thresholds written in CI, task-runner and tool config, each with its file, line and threshold."
+issues = [488]
+callable = "lib.coverage_gate:detect_coverage_gate"
+publishes = ["coverage_gate"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "read_side"
+headless = { coverage_gate = "registered" }
+shapes = [
+  { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
+]
+revision = 3
+unknown_reasons = [
+  { code = "go_rust_gate_form_not_read", carried_in = "unmeasured_reason", means = "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.", next_step = "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines." },
+]
+  [entries.privacy]
+  "coverage_gate.gates.tool" = "token"
+  "coverage_gate.gates.form" = "drop"
+  "coverage_gate.gates.unit" = "token"
+  "coverage_gate.gates.metric" = "token"
+  "coverage_gate.unmeasured_reason" = "token"
+  "coverage_gate.enforced_basis" = "token"
+  "coverage_gate.not_detected" = "drop"
+
+[[entries]]
+id = "core:coverage_gate.enforced_meets_minimum"
+kind = "signal"
+title = "CI runs a coverage gate of at least 50 percent"
+collector = "core.coverage_gate"
+path = "coverage_gate.enforced_meets_minimum"
+type = "bool"
+evidence = "ci_executed"
+null_means = "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are not settled; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: it may run in an unparsed CI system"
+
+[[entries]]
+id = "core.cond.layer-6-coverage.1.enforced_meets_minimum"
+kind = "condition"
+title = "CI runs a coverage gate of at least 50 percent"
+key = "layer-6-coverage.1:coverage_gate.enforced_meets_minimum"
+fix = "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without || true or continue-on-error, so CI holds the line you have reached."
