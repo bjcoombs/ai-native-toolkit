@@ -79,7 +79,7 @@ def test_numbers_booleans_and_nulls_are_kept_and_text_dropped() -> None:
     assert out == {
         "keyhole_summary": {"safe_zones": 3, "total_concerns": 2,
                             "concerns": [{"name": "hidden_coupling", "count": 2}]},
-        "measured_commit": {"available": True, "behind": None},
+        "measured_commit": {"available": True, "head_sha": "a" * 40, "behind": None},
     }
 
 

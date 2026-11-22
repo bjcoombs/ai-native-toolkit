@@ -94,8 +94,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_tool_versions.*` | token |
 | `diff_version_note` | dropped |
 | `measured_commit.committed_date` | token |
-| `measured_commit.head_sha` | dropped |
-| `measured_commit.head_short` | dropped |
+| `measured_commit.head_sha` | token |
+| `measured_commit.head_short` | token |
 | `measured_commit.subject` | dropped |
 | `measured_commit.upstream` | dropped |
 | `stats_summary.ccn.basis` | token |
