@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.coverage_gate import detect_coverage_gate
+from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -567,11 +567,14 @@ def test_zero_testcoverage_total_gates_nothing(tmp_path: Path) -> None:
     ("cargo tarpaulin --out Xml --fail-under=80", [("cargo-tarpaulin", 80.0)]),
     ("cargo tarpaulin --fail-under ${{ env.COV_MIN }}", [("cargo-tarpaulin", None)]),
     ("cargo llvm-cov --fail-under-lines=70", [("cargo-llvm-cov", 70.0)]),
+    ("cargo +nightly tarpaulin --fail-under 80", [("cargo-tarpaulin", 80.0)]),
+    ("cargo tarpaulin --out Xml && coverage report --fail-under=80", [("coverage.py", 80.0)]),
     ("cargo llvm-cov --fail-under-regions 70", []),
     ("cargo tarpaulin --fail-under-lines 70", []),
     ("coverage report --fail-under=80", [("coverage.py", 80.0)]),
     ("pytest --cov-fail-under=80", [("pytest-cov", 80.0)]),
-], ids=["tarpaulin-eq", "tarpaulin-templated", "llvm-cov-eq", "llvm-cov-regions",
+], ids=["tarpaulin-eq", "tarpaulin-templated", "llvm-cov-eq", "nightly-tarpaulin",
+        "tarpaulin-then-coverage-py",        "llvm-cov-regions",
         "tarpaulin-not-llvm-flag", "coverage-py-not-rust", "pytest-cov-not-rust"])
 def test_rust_cli_forms_are_anchored_on_the_tool(tmp_path: Path, run: str,
                                                  expected: list[tuple[str, float | None]]
@@ -604,3 +607,23 @@ def test_scoped_run_reads_the_root_go_mod(tmp_path: Path) -> None:
     _write(tmp_path, "pkg/b/b.py", "x = 1\n")
     (tmp_path / "go.mod").unlink()
     assert detect_coverage_gate(tmp_path, scope=Path("pkg/a"))["unmeasured_reason"] is None
+
+
+def test_scoped_run_reads_the_root_testcoverage_config(tmp_path: Path) -> None:
+    _write(tmp_path, "go.mod", _GO_MOD)
+    _write(tmp_path, ".testcoverage.yml", _testcoverage("  total: 80\n"))
+    _write(tmp_path, "pkg/a/a.go", "package a\n")
+    block = detect_coverage_gate(tmp_path, scope=Path("pkg/a"))
+    assert [g["file"] for g in block["gates"]] == [".testcoverage.yml"]
+    assert block["threshold_meets_minimum"] is True
+
+
+def test_scoped_run_reads_an_intermediate_go_mod(tmp_path: Path) -> None:
+    """A manifest between the root and the scope is the scope's module."""
+    _write(tmp_path, "services/api/go.mod", _GO_MOD)
+    _write(tmp_path, "services/api/cmd/main.go", "package main\n")
+    _write(tmp_path, "services/web/x.py", "x = 1\n")
+    assert detect_coverage_gate(
+        tmp_path, scope=Path("services/api/cmd"))["unmeasured_reason"] == GO_RUST_UNMEASURED
+    assert detect_coverage_gate(
+        tmp_path, scope=Path("services/web"))["unmeasured_reason"] is None

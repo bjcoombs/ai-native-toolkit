@@ -1798,8 +1798,8 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   under its blocks), `privacy` (its `counts_only_rules.RULES` patterns and classes;
   `archived_finding_paths` sits with the private `keyhole` collector that produces it),
   `unknown_reasons` (`code`, `carried_in` `reason`, `basis` or `unmeasured_reason`, `means`, `next_step`),
-  `revision` (1 for every collector; bumped when a published value changes meaning,
-  #774) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
+  `revision` (starts at 1; bumped when a published value changes meaning, #774, as
+  `ci_checks`, `review_automation` and `coverage_gate` have been) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
   signals carry it now.
 - `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
   (`bool` or `number` here), `collector` (the collector publishing its first segment),
@@ -3479,7 +3479,8 @@ task-runner files; Jest `coverageThreshold` (config or
 and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo; go-test-coverage's
 `.testcoverage.yml` / `.testcoverage.yaml` (#788), one gate per `file:`, `package:` or
 `total:` key under `threshold:` (or in an inline `threshold: {total: 80}` map), with
-`metric` that key and `line` the line holding the value; and `cargo tarpaulin
+`metric` that key and `line` the line holding the value (read at the repo root on a
+scoped run too, like the root CI files); and `cargo tarpaulin
 --fail-under N` and `cargo llvm-cov --fail-under-lines N` in the CLI files (metric
 `lines`, anchored on the tool so a coverage.py `--fail-under` never reads as Rust, and a
 templated value still gates). The threshold is
@@ -3512,8 +3513,8 @@ value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 o
 false otherwise, including no counted gate. Measured coverage is never read: a report
 is a working-tree file, so the level would stop being a function of the commit.
 Go and Rust (#788): when no gate at all is found and the walk holds a `go.mod` or a
-`Cargo.toml` (same depth and excludes; on a scoped run, in the scope or at the repo
-root), `threshold_meets_minimum` is null and `unmeasured_reason` is
+`Cargo.toml` (same depth and excludes; on a scoped run, in the scope or in any
+directory above it up to the repo root, as Go and Cargo resolve a module), `threshold_meets_minimum` is null and `unmeasured_reason` is
 `go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because those ecosystems often gate
 in a script comparing `go tool cover -func` to a number, which is not read. Any gate
 found, even `fail_under = 0`, keeps the normal reading; `unmeasured_reason` is null then.

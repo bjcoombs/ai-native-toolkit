@@ -108,10 +108,12 @@ _CHECK_COVERAGE_CLI_RE = re.compile(
 _LINES_FLAG_RE = re.compile(r"--lines[=\s]+" + _NUM)
 # Rust (#788): anchored on the tool, so a coverage.py ``--fail-under`` never
 # reads as one; tarpaulin's ``--fail-under`` is not llvm-cov's ``-lines`` flag.
+# A toolchain selector (``cargo +nightly tarpaulin``) may sit between; the flag
+# must be in the same command, not after a ``&&``, ``;`` or ``|``.
 _TARPAULIN_RE = re.compile(
-    r"\bcargo[\s-]+tarpaulin\b.*--fail-under(?![\w-])[=\s]+[\"']?" + _VALUE)
+    r"\bcargo(?:\s+\+[\w.-]+)?[\s-]+tarpaulin\b[^;&|]*--fail-under(?![\w-])[=\s]+[\"']?" + _VALUE)
 _LLVM_COV_RE = re.compile(
-    r"\bcargo[\s-]+llvm-cov\b.*--fail-under-lines(?![\w-])[=\s]+[\"']?" + _VALUE)
+    r"\bcargo(?:\s+\+[\w.-]+)?[\s-]+llvm-cov\b[^;&|]*--fail-under-lines(?![\w-])[=\s]+[\"']?" + _VALUE)
 
 # go-test-coverage (#788): ``threshold:`` then ``file:``, ``package:`` and
 # ``total:`` percentages, one level deeper (or an inline ``{total: 80}`` map).
@@ -124,9 +126,10 @@ GO_RUST_UNMEASURED = "go_rust_gate_form_not_read"
 
 # Read at the repo root even on a scoped run: CI and task-runner files run the
 # gates for the scoped package. Package configs (pyproject.toml, package.json,
-# tox.ini, ...) at the root belong to the root package and are dropped.
-_ROOT_CI_FILES = _CLI_FILES - {"pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
-                               "noxfile.py", "package.json"}
+# tox.ini, ...) at the root belong to the root package and are dropped. The root
+# module's go-test-coverage config gates every package below it, so it is kept.
+_ROOT_CI_FILES = (_CLI_FILES - {"pyproject.toml", "setup.cfg", "tox.ini", "pytest.ini",
+                                "noxfile.py", "package.json"}) | _TESTCOVERAGE_FILES
 
 # JS/TS config files and the anchor key that opens a threshold block in each.
 _JEST_FILES = re.compile(r"^jest\.config\.(js|ts|mjs|cjs|json)$")
@@ -569,15 +572,18 @@ def _candidate_files(root: Path, scope: Path | None,
 
 def _holds_go_or_rust(root: Path, scope: Path | None, excludes: Excludes) -> bool:
     """A ``go.mod`` or ``Cargo.toml`` in the walk; on a scoped run, in the scope
-    or at the repo root (the module or workspace the scope belongs to)."""
+    or in a directory above it up to the repo root (the module or workspace the
+    scope belongs to, as Go and Cargo resolve it)."""
     def wanted(name: str, _parts: tuple[str, ...]) -> bool:
         return name in _GO_RUST_MANIFESTS
     base = root if scope is None else scope
     if next(_walk(root, base, excludes, wanted), None) is not None:
         return True
-    return base != root and any(
-        (root / name).is_file() and not is_user_excluded(Path(name), *excludes)
-        for name in _GO_RUST_MANIFESTS)
+    ancestors = [d for d in base.parents if d == root or root in d.parents]
+    return any(
+        (d / name).is_file()
+        and not is_user_excluded((d / name).relative_to(root), *excludes)
+        for d in ancestors for name in _GO_RUST_MANIFESTS)
 
 
 def _is_root_ci(rel: Path) -> bool:
