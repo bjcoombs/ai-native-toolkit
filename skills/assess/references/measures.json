@@ -3713,6 +3713,19 @@
       "private": false
     },
     {
+      "name": "units",
+      "title": "Monorepo units",
+      "publishes": [
+        "units"
+      ],
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "offers_block",
       "title": "End-of-run offers",
       "publishes": [

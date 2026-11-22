@@ -759,6 +759,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `plugin_version` | Plugin version | - | `plugin_version` | no |
 | `decline` | Declined optional tools | `assess_dir`, `plugin_version` | `decline_markers`, `reoffer_mutation`, `decline_disclosures` | no |
 | `owner_exclusions` | Owner exclusions | `repo_root` | `owner_exclusions` | no |
+| `units` | Monorepo units | `repo_root`, `excludes` | `units` | no |
 | `offers_block` | End-of-run offers | `non_interactive` | `interactive`, `offers` | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
