@@ -107,7 +107,7 @@ two agent systems it is `unknown`.
 | `--no-history` | Do not keep this run in the history. |
 | `--discovered FILE` | What ghsync discovered: its `--porcelain` output (one path per line) or `--porcelain-json` output (one object per line). `report.md` and `run.json` then say how many of these repositories were assessed and count each gap. Needs `ROOT`; a malformed line exits 2 and names the line. See [Coverage](#coverage---discovered). |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](references/agent-clusters.md#output-agent_clustersjson). |
-| `--targets FILE` | Targets (TOML) for [`achievements.json`](references/achievements.md#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the targets file format below). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
+| `--targets FILE` | Targets (TOML) for [`achievements.json`](references/achievements.md#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the [targets file format](references/achievements.md#output-achievementsjson)). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--first-achievements` | Also credit `first` achievements in [`achievements.json`](references/achievements.md#output-achievementsjson) (a unit reaching a level no unit of its view and kind has held on that row in this fleet's history). Off by default (#772), since it compares a unit with its peers. Not part of the run stamp. |
 | `--no-diagrams` | Do not draw the [diagrams](references/report-and-diagrams.md#output-reportmd-and-diagrams) (`DIR/report.md` and its SVGs); any a previous run left in `DIR` are removed. |
 
@@ -231,7 +231,7 @@ repositories, so an empty one appears only when your list includes it.
 `report.md` gives the coverage line first, above every section and diagram, and
 `run.json` records the counts under `coverage`. Both are counts only in every output mode:
 the coverage line and `coverage` name no repository. (A repository whose scan exits
-non-zero is still named by its row and its `logs/<repo>.stderr`, as above.)
+non-zero is still named by its row and its `logs/<repo>.stderr`, as in [`repos.jsonl`](references/repos.md#output-reposjsonl).)
 Without `--discovered`, the line says the coverage is unknown and `coverage` is `null`.
 Logic: `lib/fleet_coverage.py`.
 
@@ -285,7 +285,7 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_next_steps.py" fleet-out --levels leve
 | `--settings PATH` | The ghreport settings the run used, in the `fleet.py --settings` forms. |
 | `--hash-salt VALUE` | The `--hash-salt` the run used. Needed with `--settings` when the run hashed its group names ([Hashed runs](references/repos.md#hashed-runs)); the recorded `settings_scope` is joined through it. |
 
-Each page holds (every heading opening with an `In place:` line, as above):
+Each page holds (every heading opening with an `In place:` line, as in [`report.md`](references/report-and-diagrams.md#output-reportmd-and-diagrams)):
 
 - the group's level on every maturity model row, with the roll-up rule;
 - for each row below its top level, the unmet criteria of the next level, one
