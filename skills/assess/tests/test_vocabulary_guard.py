@@ -154,6 +154,8 @@ def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -
     ("Read https://github.com/bjcoombs/ai-native-toolkit/issues/1 first.", []),
     ("Install AI-Native-toolkit, then the ai-native-toolkit plugin.", []),
     ("This repository is AI-Native.", ["AI-Native"]),
+    ("This repo is AI-native.", ["AI-Native"]),
+    ("an ai-native team", ["AI-Native"]),
     ("AI-Native readiness, see [the guide](https://example.test/ai-native-toolkit).", ["AI-Native"]),
 ])
 def test_banned_hits_reads_prose_only(text: str, found: list[str]) -> None:

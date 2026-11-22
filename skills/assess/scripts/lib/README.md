@@ -132,7 +132,7 @@ whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Ma
 target) and identifiers containing an underscore are not prose (`prose`), so machine field
 names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
 `fail_under`) and links into the toolkit repository stay unchanged. The retired label
-`AI-Native` matches case-sensitively, as a whole token not followed by `-toolkit`, because
+`AI-Native` matches, in any case, only as a whole token not followed by `-toolkit`, because
 `ai-native-toolkit` is the product's own name (#794).
 
 | Word | Say instead |
@@ -2076,7 +2076,9 @@ known scan, **Ran** when its block exists without a `not_registered` or `network
 least one repository (with "not measured in k of n" and the reason codes where the block is
 unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
 a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
-"this run wrote no block for it" for `assess_report.py`). Its first line starts `In place:`
+`assess_report.py` instead passes `absent_code="no_block"`: a full run runs every scan, so a
+missing block, such as `structure_drift` with no ownership map, is listed under Ran as not
+measured). Its first line starts `In place:`
 (`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
 measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
 Tests: `tests/test_measured_appendix.py`.

@@ -46,6 +46,9 @@ def test_absent_reason_and_partial_lines() -> None:
     text = measured_section([doc, _doc()], ["ci_checks", "agent_ops"], absent="not here")
     assert "- `ci_checks`: not measured in 1 of 2 (x); skipped in 1 of 2" in text
     assert "- `agent_ops`: not here." in text
+    full = measured_section([_doc()], ["structure_drift"], absent_code="no_block")
+    assert "- `structure_drift`: not measured in 1 of 1 (no_block)" in full
+    assert "### Skipped (0)" in full
     partial = measured_section([_doc(agent_ops={}), _doc()], ["agent_ops"])
     assert "0 scans were measured everywhere, 1 ran but was not measured everywhere" in partial
     assert "In place: over 1 repository, 0 scans were measured everywhere, 1 ran" in measured_section([doc], ["ci_checks"])

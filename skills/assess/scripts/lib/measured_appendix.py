@@ -55,9 +55,12 @@ def _state(block: object) -> str | None:
 
 def measured_section(documents: Sequence[Mapping[str, object]],
                      names: Sequence[str] | None = None,
-                     absent: str = "not selected by --scans") -> str:
+                     absent: str = "not selected by --scans",
+                     absent_code: str | None = None) -> str:
     """The section's Markdown (heading first, no trailing blank line). ``absent`` is the
-    reason for a scan whose block no document holds (a fleet's ``--scans`` selection)."""
+    reason for a scan whose block no document holds (a fleet's ``--scans`` selection).
+    With ``absent_code`` a missing block means the scan ran and wrote nothing (a full run,
+    where every scan runs): it is listed under Ran, not measured, with that code."""
     names = known_scans() if names is None else names
     total = len(documents)
     link = (f"Every check is described in [docs/what-we-measure.md]({CATALOG_URL}). A scan that "
@@ -69,7 +72,7 @@ def measured_section(documents: Sequence[Mapping[str, object]],
     skipped: list[str] = []
     unread = 0  # scans that ran but were unavailable or skipped in at least one repository
     for name in names:
-        states = [_state(doc[name]) if name in doc else "absent" for doc in documents]
+        states = [_state(doc[name]) if name in doc else (absent_code or "absent") for doc in documents]
         run = [s for s in states if s not in SKIP_CODES and s != "absent"]
         if not run:
             codes = {s for s in states if s is not None}

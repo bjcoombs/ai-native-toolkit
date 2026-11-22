@@ -10,8 +10,7 @@ found, when one of them reappears.
 
 Only prose is checked: fenced code, backticked spans, URLs (bare or as a Markdown link
 target) and identifiers that contain an underscore are left out (``prose``), and the
-retired label "AI-Native" matches case-sensitively, never as part of the product name
-``ai-native-toolkit``, so machine field names, JSON keys, finding
+retired label "AI-Native" never matches as part of the product name ``ai-native-toolkit``, so machine field names, JSON keys, finding
 names and signal paths (``lying_map``, ``instruction_claims.failed``) stay as they
 are. Stdlib only.
 """
@@ -50,9 +49,9 @@ _IDENT = re.compile(r"\S*_\S*")
 # A URL is an address, not prose: a bare one, or a Markdown link target ``](...)``.
 _URL = re.compile(r"\]\([^)\s]*\)|<?https?://[^\s)>]+>?")
 
-#: "AI-Native" is the product's own name in ``ai-native-toolkit``, so the retired label
-#: matches case-sensitively, as a whole token not followed by ``-toolkit``.
-_AI_NATIVE = re.compile(r"(?<![\w-])AI-Native(?!-toolkit)(?![\w-])")
+#: "AI-Native" is also the product's own name in ``ai-native-toolkit``, so the retired
+#: label matches (in any case) only as a whole token not followed by ``-toolkit``.
+_AI_NATIVE = re.compile(r"(?<![\w-])AI-Native(?!-toolkit)(?![\w-])", re.I)
 
 
 def prose(text: str) -> str:
