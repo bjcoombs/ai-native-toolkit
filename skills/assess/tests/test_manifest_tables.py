@@ -10,6 +10,7 @@ import pytest
 
 from lib import check_manifest as cm
 from lib import scan_registry as sr
+from lib.level_tally import LEVEL_READS
 from lib.signal_grades import INPUT_GRADES, SIGNAL_INPUTS, InputClass
 
 LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
@@ -99,3 +100,12 @@ def test_signal_grades_reaches_only_the_manifest_loader() -> None:
     assert _lib_imports("signal_grades") == {"lib.check_manifest"}
     assert _lib_imports("check_manifest") == {"lib.check_validation"}
     assert _lib_imports("check_validation") == set()
+
+
+def test_level_reads_are_pinned_to_the_tally_order() -> None:
+    """core_scans.level zips its blocks with LEVEL_READS, so the manifest list must match."""
+    level = next(s for s in sr.SCANS if s.key == "level")
+    assert sr.pinned_reads(level, LEVEL_READS) is level
+    swapped = (LEVEL_READS[1], LEVEL_READS[0], *LEVEL_READS[2:])
+    with pytest.raises(sr.ScanRegistryError, match="zips"):
+        sr.pinned_reads(level, swapped)

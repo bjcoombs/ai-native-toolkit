@@ -105,6 +105,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
+from lib.level_tally import LEVEL_READS
 from lib.merged_sample import merged_sample, offline_merged_sample
 from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
@@ -344,6 +345,15 @@ def spec_from_manifest(manifest: cm.CheckManifest, key: str, fn: Callable[..., A
                     gate_reason="" if gate is None else GATE_REASON_TEXT[gate],
                     label=entry.get("label", ""), private=entry.get("private", False),
                     spread=spread, network=entry.get("network", False), offline_fn=offline_fn)
+
+
+def pinned_reads(spec: ScanSpec, reads: tuple[str, ...]) -> ScanSpec:
+    """``spec`` unchanged when its manifest ``reads`` are exactly ``reads``, in order; else
+    ``ScanRegistryError``. For a callable that zips its arguments with a code tuple."""
+    if spec.reads != reads:
+        raise ScanRegistryError(f"scan {spec.key!r}: the manifest reads {list(spec.reads)}, "
+                                f"but its callable zips them with {list(reads)}")
+    return spec
 
 
 def _spec(key: str, fn: Callable[..., Any], *, spread: tuple[str, ...] = (),
@@ -617,7 +627,9 @@ SCANS: tuple[ScanSpec, ...] = (
 # The verified tally and the autonomy Step (lib/level_tally.py, #744): the
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
-SCANS = (*SCANS, _spec("level", cs.level))
+# core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
+# exactly those reads in that order: checked here, at import, on every run.
+SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
 # The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
 # "Verified practices: N of M measured", worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
