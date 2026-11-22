@@ -7,8 +7,9 @@ runner (``./gradlew``), a known tool installed into the tree (``_KNOWN_TOOLS``: 
 type, test and analyser programs of ``lib.check_command``, so ``./bin/golangci-lint run``
 after ``install.sh -b ./bin`` and ``bin/phpunit`` are tools, not scripts) and a path the
 tree cannot settle (absolute, ``~``, ``$VAR``, ``../``). Only the shell's own leading
-flags are read, so ``bash scripts/test.sh --ci`` runs ``scripts/test.sh``, and ``-o`` /
-``-O`` / ``+o`` / ``+O`` take the next word (``bash -o pipefail ./ci.sh``).
+flags are read, so ``bash scripts/test.sh --ci`` runs ``scripts/test.sh``, and a short
+cluster ending in ``o`` / ``O`` takes the next word (``bash -o pipefail ./ci.sh``,
+``bash -euo pipefail ./ci.sh``, GitHub's ``--noprofile --norc -eo pipefail``).
 
 ``present_in(root, tracked)`` is the predicate ``lib.ci_checks`` reads a script against.
 A script is present at its path, or as the suffix of a tracked path under a directory
@@ -42,7 +43,9 @@ from lib.lint_vocabulary import ANALYSER_PROGRAMS, program_name
 
 Present = Callable[[str], bool]
 
-_SHELL_VALUED = frozenset({"-o", "-O", "+o", "+O"})
+def _takes_value(flag: str) -> bool:
+    """A short-flag cluster ending in ``o`` / ``O`` (``-o``, ``-euo``, ``+O``) takes the next word."""
+    return not flag.startswith("--") and len(flag) > 1 and flag[-1] in "oO"
 # A tool a CI step installs into the tree (``install.sh -b ./bin``) is not a committed script.
 _KNOWN_TOOLS = LINT_PROGRAMS | TYPE_PROGRAMS | BARE_RUN_PROGRAMS | ANALYSER_PROGRAMS
 
@@ -57,7 +60,7 @@ def script_path(text: str) -> str | None:
         i, flags = 1, []
         while i < len(words) and words[i][:1] in ("-", "+"):
             flags.append(words[i])
-            i += 2 if words[i] in _SHELL_VALUED else 1
+            i += 2 if _takes_value(words[i]) else 1
         rest = words[i:]
         if not rest or any("c" in w[1:] for w in flags if w.startswith("-") and not w.startswith("--")):
             return None
