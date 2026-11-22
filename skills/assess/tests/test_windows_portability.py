@@ -233,7 +233,7 @@ def test_git_output_decodes_as_utf8_under_an_ascii_locale(tmp_path):
     )
     lines = done.stdout.decode("utf-8", errors="replace").splitlines()
     locale_encoding = lines[0].removeprefix("locale:")
-    if codecs.lookup(locale_encoding).name == "utf-8":
+    if sys.platform == "win32" and codecs.lookup(locale_encoding).name == "utf-8":
         # A Windows host whose ANSI code page is 65001 decodes UTF-8 by default.
         pytest.skip(f"the locale encoding is {locale_encoding}: no non-UTF-8 default to emulate")
     # The emulation is real: a bare text-mode call does not yield the subject in this
@@ -355,11 +355,12 @@ def _subprocess_function(call: ast.Call, modules: set[str], functions: dict[str,
 
 
 def _may_be_text_mode(kwargs: dict[str | None, ast.expr]) -> bool:
-    """``**kwargs`` or a ``text``/``universal_newlines`` that is not a constant false."""
+    """``**kwargs``, or a ``text``/``universal_newlines``/``errors`` that is not a constant
+    false: ``errors=`` alone also switches subprocess into text mode."""
     if None in kwargs:
         return True
     return any(k in kwargs and not (isinstance(kwargs[k], ast.Constant) and not kwargs[k].value)
-               for k in ("text", "universal_newlines"))
+               for k in ("text", "universal_newlines", "errors"))
 
 
 def _bare_text_subprocess(tree: ast.Module) -> list[int]:
@@ -405,6 +406,7 @@ def test_the_bare_text_io_guard_sees_a_bare_call():
     "import subprocess\nsubprocess.run(a, **{'text': True})",
     "import subprocess\nsubprocess.run(a, text=t)",
     "import subprocess\nsubprocess.run(a, text=True, encoding=None)",
+    "import subprocess\nsubprocess.run(a, errors='replace')",
     "import subprocess\nsubprocess.getoutput(cmd)",
     "from subprocess import getstatusoutput\ngetstatusoutput(cmd)",
 ])
@@ -417,7 +419,8 @@ def test_the_subprocess_guard_passes_a_named_or_binary_call():
              "subprocess.run(a, text=True, encoding='utf-8', errors='replace')\n"
              "subprocess.run(a, encoding='utf-8', **kw)\n"
              "subprocess.run(a, capture_output=True)\nsubprocess.run(a, text=False)\n"
-             "subprocess.run(a, encoding=None)\nrun(a, text=True)\n")
+             "subprocess.run(a, encoding=None)\nsubprocess.run(a, errors=None)\n"
+             "run(a, text=True)\n")
     assert _bare_text_subprocess(ast.parse(named)) == []
 
 

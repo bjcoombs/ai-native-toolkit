@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 from assess_core import build_and_publish_run
 from assess_report import render_report
 from golden import normalize_report

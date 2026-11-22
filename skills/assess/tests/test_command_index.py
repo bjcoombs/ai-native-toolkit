@@ -5,7 +5,6 @@ import json
 import subprocess
 from pathlib import Path
 
-
 import lib.command_index as command_index
 from lib.command_index import TargetSet, build_index, repo_files
 
