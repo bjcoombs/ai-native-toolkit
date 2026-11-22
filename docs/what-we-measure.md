@@ -308,9 +308,9 @@ An AI review step committed in CI, or a reviewed merged change.
 
 ### `ci_checks`: CI runs a test or lint command
 
-Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked.
+Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and the tree tracks a CI file the scan does not parse, when under --platform most sampled merged pull requests carry an external CI check, or when a root Prow OWNERS_ALIASES is the only CI evidence.
 
-- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`.
+- Collector: `core.ci_checks`, reading `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `ci_checks.basis` token, `ci_checks.enforced_basis` token, `ci_checks.includes.id` id, `ci_checks.includes.kind` token, `ci_checks.includes.ref_basis` token, `ci_checks.includes.status` token, `ci_checks.lint_basis` token, `ci_checks.merged_config` token, `ci_checks.merged_config_reason` token, `ci_checks.reason` drop.
@@ -321,7 +321,9 @@ Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether 
   - `merged_config_partial`: GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API. Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.
   - `unknown_trigger`: In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable). Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.
   - `check_target`: No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check. Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.
-  - `unread_ci_system`: In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them. Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent.
+  - `unread_ci_system`: No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; lib/README.md lists the paths); unread_ci_files counts them. Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.
+  - `external_ci`: Under --platform only: no readable CI line settles the signal, and over half of the sampled merged pull requests carry a check run or status of a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit. Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent.
+  - `external_ci_marker`: The tree tracks no CI file of any kind and the root holds a Prow OWNERS_ALIASES file, so presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker. Nothing to change: run with --platform to read the checks on merged pull requests instead.
 
 ### `agent_building`: Agent building
 
@@ -767,7 +769,8 @@ The scan registry in run order, including the private inputs other scans read.
 | `gitlab_merged_ci` | GitLab merged CI configuration | `repo_root`, `ghsync_root` | private input | yes |
 | `review_automation` | AI review committed in CI | `repo_root`, `fleet_config`, `ghsync_root`, `gitlab_merged_ci` | `review_automation` | no |
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
-| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci` | `ci_checks` | no |
+| `external_ci` | External CI on merged pull requests | `merged_sample` | private input | yes |
+| `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci`, `external_ci` | `ci_checks` | no |
 | `agent_building` | Agent building | `repo_root` | `agent_building` | no |
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions` | `gap_actions` | no |

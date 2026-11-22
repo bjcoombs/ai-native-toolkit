@@ -443,3 +443,56 @@ def test_assess_tests_name_utf8_for_text_mode_subprocess():
     bare = [f"{rel}:{line}" for rel, tree in _assess_test_sources()
             for line in _bare_text_subprocess(tree)]
     assert not bare, "text-mode subprocess call without encoding=\"utf-8\": " + ", ".join(bare)
+
+
+# --- no parked Windows failures (#969) -----------------------------------------
+
+# The retired skip marker for known Windows failures (#762). Every test now passes
+# on Windows or carries a POSIX-only marker, so a new failure is fixed, not parked.
+RETIRED_MARKER = "windows_followup"
+POSIX_ONLY_MARKERS = {"needs_symlink", "needs_posix_perms", "needs_posix_shell"}
+
+
+def _retired_marker_uses(tree: ast.Module) -> list[int]:
+    """Lines of ``pytest.mark.<retired>`` / ``mark.<retired>`` uses, and of the bare name
+    as a string (``getattr(pytest.mark, ...)``, a skip-table key, ``get_closest_marker``)."""
+    lines = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == RETIRED_MARKER and (
+                (isinstance(node.value, ast.Name) and node.value.id == "mark")
+                or (isinstance(node.value, ast.Attribute) and node.value.attr == "mark")):
+            lines.append(node.lineno)
+        if isinstance(node, ast.Constant) and node.value == RETIRED_MARKER:
+            lines.append(node.lineno)
+    return lines
+
+
+@pytest.mark.parametrize("source", [
+    f"import pytest\n@pytest.mark.{RETIRED_MARKER}\ndef test_x(): pass",
+    f"import pytest\npytestmark = [pytest.mark.{RETIRED_MARKER}]",
+    f"from pytest import mark\n@mark.{RETIRED_MARKER}(reason='r')\ndef test_x(): pass",
+    f"import pytest\nmarks = getattr(pytest.mark, {RETIRED_MARKER!r})",
+    f"SKIP = {{}}\nSKIP[{RETIRED_MARKER!r}] = 'parked'",
+])
+def test_the_retired_marker_guard_sees_a_use(source):
+    assert _retired_marker_uses(ast.parse(source)) == [2]
+
+
+def test_the_retired_marker_guard_passes_the_posix_only_markers():
+    source = "".join(f"import pytest\n@pytest.mark.{m}\ndef test_{m}(): pass\n"
+                     for m in sorted(POSIX_ONLY_MARKERS))
+    assert _retired_marker_uses(ast.parse(source)) == []
+
+
+def test_no_assess_test_parks_a_windows_failure():
+    """A Windows failure is fixed or skips under a POSIX-only marker; the retired
+    marker cannot come back unnoticed (#969, #762)."""
+    this = Path(__file__).resolve().relative_to(REPO).as_posix()
+    uses = [f"{rel}:{line}" for rel, tree in _assess_test_sources() if rel != this
+            for line in _retired_marker_uses(tree)]
+    assert not uses, f"{RETIRED_MARKER} marker used: " + ", ".join(uses)
+
+
+def test_the_windows_skip_markers_are_the_posix_only_set():
+    from conftest import WINDOWS_SKIP_MARKERS
+    assert set(WINDOWS_SKIP_MARKERS) == POSIX_ONLY_MARKERS

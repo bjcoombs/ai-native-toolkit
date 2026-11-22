@@ -92,6 +92,7 @@ fragments = [
   "gitlab_merged_ci",
   "review_automation",
   "review_evidence",
+  "external_ci",
   "ci_checks",
   "agent_building",
   "layer_grades",

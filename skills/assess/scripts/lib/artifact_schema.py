@@ -271,6 +271,13 @@ constant each.
 #   instruction file before; both are null when there is no root file and the
 #   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
 #   nested_only and now sits after layer_grades in run-context.json.
+# - ci_checks basis, enforced_basis and lint_basis gain external_ci and
+#   external_ci_marker (issue #928): under --platform, more than half of the sampled
+#   merged pull requests carry a check of a known external CI system; offline, a root
+#   Prow OWNERS_ALIASES with no CI file. Either reads null in place of a false case.
+#   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
+#   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
+#   Additive: no existing key moves.
 # - run-context.json agent_environment.pinning gains manifests_total (issue #927):
 #   the number of dependency manifests the lockfile check reads. Additive: no
 #   existing key moves, and complexity-stats.json is unchanged.
@@ -461,7 +468,14 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
-# Unreleased (the 3.0.0 release PR assigns the number):
+# Unreleased (bumped once by the 3.0.0 release PR):
+# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
+#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
+#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
+#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
+#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
+#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
+#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
 # - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
 #   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
 #   read met. Fewer conditions count on repositories with no dependency manifest.

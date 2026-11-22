@@ -15,6 +15,8 @@ import pytest
 
 from lib.check_command import is_info_invocation, is_lint_run
 from lib.ci_checks import check_commands, enforced_check_commands, scan_ci_checks
+from lib.ci_exempt import exempt_segments, unquoted
+from lib.ci_masking import split_statements, unmasked_lines
 from lib.command_index import ci_config_files
 
 
@@ -261,3 +263,117 @@ def test_pytype_v_is_its_python_version_and_runs_the_type_check() -> None:
 def test_a_may_check_target_asking_for_help_is_not_a_pending_check(tmp_path: Path) -> None:
     files = {".github/workflows/ci.yml": _wf("make --help")}
     assert _scan(tmp_path, files) == (False, False)
+
+
+# Issue #936: under errexit (GitHub's default ``bash -e {0}``) a failing command does not stop
+# the step in an errexit-exempt position (bash manual, ``set -e``): the left side of ``&&`` /
+# ``||``, a pipeline but its last command (without pipefail), an ``if`` / ``elif`` / ``while``
+# condition, or after ``!``. A later top-level ``exit 0`` then masks it.
+@pytest.mark.parametrize("text", [
+    pytest.param(_wf("pytest && echo ok; exit 0"), id="and_list_left_side"),
+    pytest.param(_block("pytest && echo ok\nexit 0"), id="and_list_left_side_block"),
+    pytest.param(_wf("pytest || echo failed; exit 0"), id="or_list_left_side"),
+    pytest.param(_wf("pytest | tee log; exit 0"), id="pipe_without_pipefail_default_shell"),
+    pytest.param(_shell("pytest | tee log; exit 0", "    shell: sh\n"), id="pipe_under_named_sh"),
+    pytest.param(_block("set -o pipefail\nset +o pipefail\npytest | tee log\nexit 0"),
+                 id="pipefail_turned_off_again"),
+    pytest.param(_shell("pytest | tee log && echo ok; exit 0", "    shell: bash\n"),
+                 id="pipeline_before_and_with_pipefail"),
+    pytest.param(_shell('echo "{"; pytest; exit 0', "    shell: bash {0}\n"), id="quoted_brace_is_not_a_group"),
+    pytest.param(_block('echo "<<EOF"\npytest\nexit 0', shell="bash {0}"), id="quoted_heredoc_is_not_a_heredoc"),
+    pytest.param(_wf("ruff check . --exit-zero || pytest"), id="or_after_exit_zero_never_runs"),
+    pytest.param(_wf("git diff | flake8 --diff --exit-zero"), id="piped_exit_zero_flag"),
+    pytest.param(_block("if [ -n \"$X\" ]; then\n  pytest && echo ok\nfi\nexit 0"), id="and_list_in_an_if_body"),
+])
+def test_a_check_in_an_errexit_exempt_position_before_exit_0_is_masked(text: str) -> None:
+    assert check_commands(text) == 1
+    assert enforced_check_commands(text) == (0, 1)
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param(_shell("pytest | tee log; exit 0", "    shell: bash\n"), id="pipe_with_named_bash_pipefail"),
+    pytest.param(_shell("pytest | tee log; exit 0", "    shell: bash -eo pipefail {0}\n"),
+                 id="pipe_with_custom_pipefail"),
+    pytest.param(_block("set -euo pipefail\npytest | tee log\nexit 0"), id="pipe_after_set_euo_pipefail"),
+    pytest.param(_block("set -o pipefail\npytest | tee log\nexit 0"), id="pipe_after_set_o_pipefail"),
+    pytest.param(_wf("cd sub && pytest; exit 0"), id="check_after_the_final_and"),
+    pytest.param(_wf("pytest && echo ok"), id="and_list_with_no_exit_0"),
+    pytest.param(_wf("pytest || exit 1; exit 0"), id="own_reraise_default_shell"),
+    pytest.param(_wf("pytest && echo ok || exit 1; exit 0"), id="and_list_with_reraise"),
+    pytest.param(_wf("pytest && echo ok; [ -f x ] && exit 0"), id="conditional_exit_0_masks_nothing"),
+    pytest.param(_wf("ruff check . --exit-zero && pytest || echo x"), id="and_after_exit_zero_still_runs"),
+    pytest.param(_wf("ruff check . --exit-zero | grep E || pytest"), id="exit_zero_not_ending_its_pipeline"),
+    # A subshell or a function returns the list's status as one command: errexit stops there.
+    pytest.param(_wf("( pytest && echo ok ); exit 0"), id="and_list_in_a_subshell"),
+    pytest.param(_block("(\n  pytest && echo ok\n)\nexit 0"), id="and_list_in_a_multi_line_subshell"),
+    pytest.param(_block("run_tests() {\n  pytest && echo ok\n}\nrun_tests\nexit 0"), id="and_list_in_a_function"),
+])
+def test_a_check_errexit_still_stops_on_stays_enforced(text: str) -> None:
+    assert enforced_check_commands(text) == (1, 0)
+
+
+def test_only_the_exempt_segment_is_masked() -> None:
+    assert enforced_check_commands(_wf("pytest && ruff check .; exit 0")) == (1, 0)
+    assert unmasked_lines(_wf("pytest && ruff check .; exit 0"))[-1] == "      - run: ruff check .; exit 0"
+
+
+def test_a_folded_block_is_read_as_one_line() -> None:
+    folded = ("on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
+              "      - run: >\n          pytest\n          || true\n")
+    assert enforced_check_commands(folded) == (0, 1)
+    pwsh = folded.replace("|| true", "exit 0") + "        shell: pwsh\n"
+    assert enforced_check_commands(pwsh) == (1, 0)   # one command: ``pytest exit 0``
+    kept = folded.replace(">\n", ">-\n").replace("|| true", "--cov\n\n          exit 0")
+    assert enforced_check_commands(kept) == (1, 0)   # errexit stops at the failing ``pytest --cov``
+
+
+@pytest.mark.parametrize("text", [
+    "hatch run pytest --version", "pnpm exec jest --help", "hatch run pytest -V", "hatch run pytest --co",
+])
+def test_an_info_call_through_any_wrapper_is_an_info_invocation(text: str) -> None:
+    assert is_info_invocation(text)
+
+
+def test_exempt_segments_follow_the_bash_grammar() -> None:
+    s = split_statements("a | b && c | d || e")[0]
+    assert exempt_segments(s, pipefail=False) == {0, 1, 2, 3}
+    assert exempt_segments(s, pipefail=True) == {0, 1, 2, 3}
+    assert exempt_segments(split_statements("a | b")[0], pipefail=True) == set()
+    assert exempt_segments(split_statements("a & b && c")[0], pipefail=True) == {1}
+    assert exempt_segments(split_statements("! a")[0], pipefail=True) == {0}
+
+
+def test_unquoted_drops_quoted_spans_and_escapes() -> None:
+    assert unquoted("""echo "{" '(' \\{ x""") == "echo    x"
+
+
+def _reads_pytest(text: str) -> bool:
+    return any("pytest" in line for line in unmasked_lines(text))
+
+
+# The line classifier reads no check behind ``if`` / ``while`` / ``until`` / ``!`` / ``do`` / ``{``, so these
+# are read on ``unmasked_lines``: the condition is dropped before a later ``exit 0``.
+@pytest.mark.parametrize("text", [
+    pytest.param(_wf("if pytest; then :; fi; exit 0"), id="if_condition"),
+    pytest.param(_block("if pytest\nthen\n  echo ok\nfi\nexit 0"), id="if_condition_block"),
+    pytest.param(_block("if [ -n \"$X\" ]; then\n  echo x\nelif pytest; then\n  echo ok\nfi\nexit 0"),
+                 id="elif_condition"),
+    pytest.param(_wf("while pytest; do break; done; exit 0"), id="while_condition"),
+    pytest.param(_wf("for d in a b; do pytest && echo ok; done; exit 0"), id="and_list_in_a_loop_body"),
+    pytest.param(_wf("! pytest; exit 0"), id="negated"),
+    pytest.param(_shell("! pytest | tee log; exit 0", "    shell: bash\n"), id="negated_pipeline_with_pipefail"),
+])
+def test_a_condition_or_negated_check_before_exit_0_is_dropped(text: str) -> None:
+    assert not _reads_pytest(text)
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param(_wf("if ! pytest; then exit 1; fi; exit 0"), id="if_not_check_then_exit_1"),
+    pytest.param(_block("if pytest; then\n  echo ok\nelse\n  exit 1\nfi\nexit 0"), id="if_else_exit_1"),
+    pytest.param(_wf("until pytest; do sleep 5; done; exit 0"), id="until_retries_until_it_passes"),
+    pytest.param(_wf("if pytest; then :; fi"), id="if_condition_with_no_exit_0"),
+    # Known limit: a ``{ }`` group is read like a function body, so its exempt check stays credited.
+    pytest.param(_wf("{ pytest && echo ok; }; exit 0"), id="brace_group_known_limit"),
+])
+def test_a_condition_with_a_reraise_or_no_exit_0_is_kept(text: str) -> None:
+    assert _reads_pytest(text)

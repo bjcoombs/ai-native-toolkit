@@ -384,6 +384,7 @@ def test_measure_hints():
     assert "`push` or `pull_request`" in hint and "re-run the scan" in hint
     assert "unread_ci_system" in hint and "Jenkins" in hint and "CircleCI" in hint   # #787
     assert "cannot read those systems" in hint and "nothing in the repository needs to change" in hint
+    assert "`enforced_basis: external_ci`" in hint and "`OWNERS_ALIASES`" in hint   # #928
     assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")
     assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.boundary_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
