@@ -17,6 +17,9 @@
 | `schema` | int | Schema version. Currently `2`. |
 | `run_id` | string \| null | The run that produced this contract, copied from `run-context.json`. `null` when the run carried no id (legacy). Ties the actions back to the assessment that raised them. |
 | `actions` | array | The Top 3 Actions, one object per row, sorted ascending by `rank`. |
+| `completed` | array, optional | Prior `done` entries of a reviewable finding (`self_referential_tests`) that no action in this run's Top 3 matched, kept as they were. An action that later matches one comes back as `reopened`, not `done`. Written only when non-empty. A done review that cleared its finding (below) leaves the Top 3, and this list is what keeps the record. |
+
+**A done review clears `self_referential_tests` (#721).** That finding keys on commit origin, so no code change clears it; its action asks for a review instead. When the `actions.json` committed at HEAD holds an entry (in `actions` or `completed`) with `finding: "self_referential_tests"`, `status: "done"`, a `completed_sha` that is an ancestor of HEAD, and the flagged **source** path in `files`, and no commit since `completed_sha` touched that path, the path leaves the attention list and `prescribed_actions`. It stays in run-context `derived_findings` with a `reviewed` note citing the sha, and the findings section lists it under "Reviewed". A later change to the source re-flags it. An entry that names only the test file does not clear the source path; commit `actions.json` for the review to count. See `scripts/lib/README.md` (`reviewed_findings.py`).
 
 ## Per-action fields
 
@@ -60,7 +63,7 @@
 | `done` | Completed; `completed_sha` records the commit that satisfied `done_when`. |
 | `reopened` | A later run re-flagged work a prior run had marked done. |
 
-**Carry-forward across runs.** Each `/assess` run recomputes `rank`, `mode`, `done_when`, and `scope_fence` from the freshest findings, but preserves `status`, `claimed_by`, and `completed_sha` for any action that matches an entry in the existing `actions.json`. A done action therefore stays done, with its completed SHA and claimant intact, when the assessment is re-run. An action that no longer appears in the new Top 3 simply drops out of the contract.
+**Carry-forward across runs.** Each `/assess` run recomputes `rank`, `mode`, `done_when`, and `scope_fence` from the freshest findings, but preserves `status`, `claimed_by`, and `completed_sha` for any action that matches an entry in the existing `actions.json`. A done action therefore stays done, with its completed SHA and claimant intact, when the assessment is re-run. An action that no longer appears in the new Top 3 drops out of `actions`; if it was a `done` `self_referential_tests` action, it moves to `completed`, and an action that matches a `completed` entry again is `reopened`.
 
 **How an action is matched.** Two keys, tried in order:
 

@@ -1329,6 +1329,7 @@ team rows, no repositories; for the trend no run history or fewer than 3 compara
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
@@ -1369,6 +1370,21 @@ described under `scans`), with a `status` enum, a reason-token pattern and an
 `tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
 `uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 
+**`fleet_coverage.py`**
+Fleet coverage against ghsync's discovery listing (issue #745). `read_discovery` parses
+`fleet.py --discovered FILE` (`parse_discovery`: ghsync `--porcelain` paths or
+`--porcelain-json` objects, `archived` and an empty `default_branch` read, a repeated path
+once, a malformed line a `DiscoveryError` naming its number) and adds the paths in the root's
+`.gh_archived_repos` cache as archived. `reconcile` puts each discovered path in one bucket,
+first match: `assessed` (ok row), `failed_scan` (failed row), `archived_or_empty`,
+`excluded_by_filters` (a checkout under the root this run was not given), `not_cloned`; the
+buckets sum to `discoverable`, and `not_in_listing` counts rows no path names. A path maps to
+a row id as `fleet.layout_id` does (`row_id`). `Coverage` is counts only and is stamped in
+`run.json` (`fleet_stamp.FleetStamp.coverage`, null without a listing, optional in the schema since a stamp from before #745 lacks it; not copied into
+`fleet-data.json`, `fleet_data.RUN_EXCLUDED`). `coverage_line` is the paragraph
+`fleet_diagrams.report_markdown` puts first in `report.md`; without a listing it says the
+coverage is unknown. Tests: `tests/test_fleet_coverage.py`.
+
 **`fleet_stamp.py`**
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
@@ -1377,14 +1393,17 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
 without one, absent before #706 and read as null, so the stamp version stays 1), and
 `platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
-false through `fleet_legacy.stamp_value`). No path,
+false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
+counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
+comparability key). No path,
 salt, timing or input mode, so a
-root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+root run, a list run and any `--jobs` give the same bytes on the same day (with
+`--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
 writes atomically with sorted keys.
 
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
-`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+`[ai_usage]`, `[review]`, `[platform]` and `[identities]` (empty allowed; their keys are added by #695,
 #696 and #714; `[review]` has `ai_review_components`, a string list read by
 `review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
 --platform-jobs` and `--platform-timeout`). API:
@@ -1408,7 +1427,9 @@ Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`
 required) and `field` (`one_of("email", "username", "name")`)) and
 `token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
 classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
-`gitlab_notes` (#716).
+`gitlab_notes` (#716); `[identities]` `agents`, `bots` and `people` (`string_list`
+of literal accounts, #765), read through `identities_section` by `ai_usage.matcher_from_config`
+(so also `delivery` and `gitlab_notes`) and counted in `section_entries`.
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
@@ -1673,7 +1694,45 @@ input, with the degenerate-churn gate on `_CHURN_DERIVED_FINDINGS`) and `_filter
 `integrate`; the C901 gate keeps each step under ccn 15. The attention list and every
 product rendered from the findings (`findings_markdown`, `keyhole_summary`,
 `attention_low_signal`, `prescribed_actions`, `archived_finding_paths`) come from one
-function, `finding_products`, which `mutation_refresh.py` calls too.
+function, `finding_products`, which `mutation_refresh.py` calls too. After
+`_filter_findings`, `integrate` calls `reviewed_findings.mark_reviewed`, and
+`finding_products` reads every product from `reviewed_findings.open_findings`, so a
+reviewed path stays in `derived_findings` but not in the attention list, the
+prescribed actions, the summary or the rendered path lists.
+
+**`reviewed_findings.py`** *(#721)*
+A recorded human review clears `self_referential_tests` until the source changes. The
+finding keys on commit origin (a test co-committed with its code), which no later
+commit can change, so it could never clear before. `committed_reviews` reads
+`.assess/actions.json` **as committed at HEAD** (`git show HEAD:./.assess/actions.json`,
+never the working tree) and collects, from its `actions` and `completed` arrays
+(`action_entries`), every entry with `finding` in `REVIEWABLE_FINDINGS`
+(`self_referential_tests` only), `status: done`, a hex `completed_sha` and a `files`
+list. `mark_reviewed` marks a finding path reviewed when it is in such an entry's
+`files` and `unchanged_since` holds: the sha resolves to a commit that is an ancestor of
+HEAD and `git rev-list <sha>..HEAD -- <path>` is empty. The finding's
+`derived_findings` row keeps the path in `paths` and gains `reviewed`, a list of
+`{path, completed_sha, note}` (`ReviewedPath`; the full resolved sha, and `note` from
+`review_note`, which contains it), written only when non-empty. `open_findings` is the
+rows with reviewed paths taken out of `paths`, which `finding_products` ranks and
+renders; `render_reviewed_markdown` appends a `### Reviewed` section to
+`findings_markdown`. A later commit touching the path re-flags it (no `reviewed`, back in
+attention and `prescribed_actions`). The source path must be in `files`: an entry
+naming only the test file does not clear it. Any failure (no git, no committed file, bad
+JSON, an unknown or non-ancestor sha) leaves the finding open. `carried_completed` gives
+`assess_finalize` the prior `done` entries of a reviewable finding that no new action
+matched; finalize writes them to actions.json `completed`, so a review that took its
+finding out of the Top 3 is not lost on the next finalize. Finalize reads `completed` back
+with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reopened` on an
+action that matches a done `completed` entry: the finding came back into the Top 3, so the
+old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
+sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
+rebuild. The CI gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) reads open
+paths only, so a reviewed path does not fail the gate (the badge counts no findings since
+#747: it carries the Step and the verified tally). The committed `findings.json` snapshot
+and the method-change diff keep the full `paths`, so a review never reads as a finding
+that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
+`.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
 
 **`untrusted_hotspot.py`**
 The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity
@@ -3454,8 +3513,33 @@ pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
 token's owner-chosen name), which is `agent` under `token_users_as_agents` and
 `token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
 `--timeout` bounds a pathological repository pattern).
+Confirmed identities (#765): `AuthorMatcher(..., confirmed=ConfirmedIdentities)` holds the
+`[identities]` section as lower-case literal sets (`ConfirmedIdentities.from_section`;
+entries are exact accounts, never patterns). Right after the dependency-bot check, an
+identity whose `identity_keys(email, name, username)` (the e-mail, the noreply login and
+a `[bot]` display name) is a confirmed person or bot is `other`, and a confirmed agent is
+`agent` (rule_index None), ahead of every config rule and pinned default; a person or
+bot entry wins over an agent entry for the same account.
 Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
-`tests/test_change_coupling.py`.
+`tests/test_identity_candidates.py`, `tests/test_change_coupling.py`.
+
+**`account_discovery.py`**
+Bot and agent account discovery (issue #765): suggestions for the human to confirm in
+`[identities]`. `discover(commits, matcher)` is pure: over `HistoryCommit(author_email,
+author_name, subject, coauthors)` rows (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
+returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
+commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
+`STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
+`agent_name_hint` from `AI_TOOL_NAMES`, `automation_name_hint`) makes a candidate, while
+`co_author_trailer`, `noreply_address` and `uniform_subjects` (at least
+`UNIFORM_MIN_COMMITS` commits, one folded subject shape covering `UNIFORM_SHARE`) only
+annotate one. An account the matcher already puts in `agent`, or one classified in
+`[identities]`, is never a candidate. A candidate holds an identity: `ai_usage` emits only
+`len(discover(...))` as `identities_awaiting_confirmation`, and the rows reach only the
+terminal through `scripts/identity_candidates.py` (list one repository or a fleet list
+aggregated by account; `--confirm CLASS=ACCOUNT` rewrites the `[identities]` section of
+`--config` or the repository's `.assess/config.toml`). Tests:
+`tests/test_identity_candidates.py`.
 
 **`ai_usage.py`**
 AI-assisted change share (issue #547), a lower bound on agent use.
@@ -3463,7 +3547,8 @@ AI-assisted change share (issue #547), a lower bound on agent use.
 `--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
 total_commits, agent_trailer_commits, agent_trailer_share, agent_authored_commits,
 agent_authored_share, agent_either_commits, agent_either_share, dependency_bot_commits,
-token_user_commits, agent_identity_rule_commits[], lower_bound, covered_agents[],
+token_user_commits, agent_identity_rule_commits[], identities_awaiting_confirmation,
+lower_bound, covered_agents[],
 covered_author_agents[], limits[]}`. A commit is a trailer commit when any `Co-authored-by` trailer names an
 AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded),
 and an authored commit when `agent_identity.AuthorMatcher` (built by
@@ -3471,6 +3556,9 @@ and an authored commit when `agent_identity.AuthorMatcher` (built by
 input) puts its author (`%ae`, `%an`) in the `agent` bucket; `agent_either_*` counts a
 commit with both once. `agent_identity_rule_commits[i]` counts the commits credited to
 config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
+`identities_awaiting_confirmation` counts the window's accounts `account_discovery.discover`
+lists (#765), a number only. `window_commits(repo_root, scope, window)` is the shared
+windowed read (`WindowCommits(commits, since)` or a fixed reason string).
 Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
