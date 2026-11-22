@@ -21,7 +21,7 @@ from test_fleet_cli import fleet_cli
 
 
 def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
 
 
 def _row(repo: str, status: str = STATUS_OK, active: bool | None = True) -> FleetRow:

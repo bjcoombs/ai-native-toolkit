@@ -71,7 +71,7 @@ def _snapshot(root: Path) -> dict[str, str]:
         listing = sorted(f"{p.relative_to(checkout)}:{p.stat().st_mtime_ns}"
                          for p in checkout.rglob("*") if p.is_file())
         status = subprocess.run(["git", "-C", str(checkout), "status", "--porcelain", "--ignored"],
-                                capture_output=True, text=True, check=True,
+                                capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True,
                                 env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"}).stdout
         state[str(checkout)] = status + "\n".join(listing)
     return state
@@ -352,7 +352,7 @@ def test_script_runs_standalone(froot, tmp_path):
     """The documented invocation: the script finds the assess lib on its own."""
     env = {**os.environ, "PYTHONPATH": ""}
     done = subprocess.run([sys.executable, str(FLEET_SCRIPT), str(froot), "--out", str(tmp_path / "o"),
-                           "--scans", "agent_ops"], capture_output=True, text=True, env=env, check=False)
+                           "--scans", "agent_ops"], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, check=False)
     assert done.returncode == 0, done.stderr
     assert len(_rows(tmp_path / "o")) == 3
 

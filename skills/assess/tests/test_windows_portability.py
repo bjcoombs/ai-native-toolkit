@@ -212,16 +212,15 @@ sys.path.insert(0, sys.argv[1])
 from lib import fleet
 repo = sys.argv[2]
 try:
-    subprocess.run(["git", "-C", repo, "log", "-1", "--format=%s"],
-                   capture_output=True, text=True, check=True)
-    print("default:decoded")
+    bare = subprocess.run(["git", "-C", repo, "log", "-1", "--format=%s"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    print("default:" + ascii(bare))
 except UnicodeDecodeError:
     print("default:UnicodeDecodeError")
 print("fleet:" + ascii(fleet._git(Path(repo), "log", "-1", "--format=%s")))
 """
 
 
-@pytest.mark.windows_followup
 def test_git_output_decodes_as_utf8_under_an_ascii_locale(tmp_path):
     repo = make_checkout(tmp_path / "repo")
     subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "café ✓"],
@@ -231,8 +230,11 @@ def test_git_output_decodes_as_utf8_under_an_ascii_locale(tmp_path):
         capture_output=True, check=True, env=_ascii_locale_env(),
     )
     lines = done.stdout.decode("utf-8", errors="replace").splitlines()
-    # The emulation is real: a bare text-mode call fails in this locale.
-    assert lines[0] == "default:UnicodeDecodeError"
+    # The emulation is real: a bare text-mode call does not yield the subject in this
+    # locale. POSIX raises UnicodeDecodeError; Windows takes its code page from the ANSI
+    # setting, not LC_ALL, and decodes the UTF-8 bytes to mojibake without raising.
+    assert lines[0].startswith("default:")
+    assert lines[0] != "default:" + ascii("café ✓")
     assert lines[1] == "fleet:" + ascii("café ✓")
 
 
@@ -318,16 +320,57 @@ def _bare_text_io(tree: ast.Module) -> list[int]:
     return lines
 
 
+SUBPROCESS_TEXT_CALLS = {"run", "check_output", "Popen", "check_call"}
+
+
+def _bare_text_subprocess(tree: ast.Module) -> list[int]:
+    """Lines of ``subprocess.run``/``check_output``/``Popen``/``check_call`` calls in
+    text mode (``text=True`` or ``universal_newlines=True``) with no encoding (#963)."""
+    lines = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess"
+                and node.func.attr in SUBPROCESS_TEXT_CALLS):
+            continue
+        kwargs = {kw.arg: kw.value for kw in node.keywords}
+        if "encoding" in kwargs or None in kwargs:
+            continue
+        if any(isinstance(kwargs.get(k), ast.Constant) and kwargs[k].value is True
+               for k in ("text", "universal_newlines")):
+            lines.append(node.lineno)
+    return lines
+
+
 def test_the_bare_text_io_guard_sees_a_bare_call():
     assert _bare_text_io(ast.parse("p.read_text()\np.write_text(s)\n")) == [1, 2]
     assert _bare_text_io(ast.parse("p.read_text(encoding='utf-8')\np.write_text(s, 'utf-8')\n")) == []
 
 
+def test_the_subprocess_guard_sees_a_bare_text_mode_call():
+    bare = ("subprocess.run(a, text=True)\nsubprocess.check_output(a, universal_newlines=True)\n"
+            "subprocess.Popen(a, text=True)\nsubprocess.check_call(a, text=True)\n")
+    assert _bare_text_subprocess(ast.parse(bare)) == [1, 2, 3, 4]
+    named = ("subprocess.run(a, text=True, encoding='utf-8', errors='replace')\n"
+             "subprocess.run(a, capture_output=True)\nsubprocess.run(a, text=False)\n")
+    assert _bare_text_subprocess(ast.parse(named)) == []
+
+
+def _assess_test_sources() -> list[tuple[str, ast.Module]]:
+    tests = Path(__file__).resolve().parent
+    return [(path.relative_to(REPO).as_posix(), ast.parse(path.read_text(encoding="utf-8")))
+            for path in sorted(tests.rglob("*.py")) if "fixtures" not in path.parts]
+
+
 def test_assess_tests_name_utf8_for_text_io():
     """A test that reads a fixture holding "·" through the Windows code page
     fails there only (#754: test_golden_baseline, test_headline)."""
-    tests = Path(__file__).resolve().parent
-    bare = [f"{path.relative_to(REPO).as_posix()}:{line}"
-            for path in sorted(tests.rglob("*.py")) if "fixtures" not in path.parts
-            for line in _bare_text_io(ast.parse(path.read_text(encoding="utf-8")))]
+    bare = [f"{rel}:{line}" for rel, tree in _assess_test_sources() for line in _bare_text_io(tree)]
     assert not bare, "read_text()/write_text() without encoding=\"utf-8\": " + ", ".join(bare)
+
+
+def test_assess_tests_name_utf8_for_text_mode_subprocess():
+    """A text-mode subprocess call decodes through the Windows code page unless it
+    names its encoding, so a non-ASCII commit subject or fixture fails there only (#963)."""
+    bare = [f"{rel}:{line}" for rel, tree in _assess_test_sources()
+            for line in _bare_text_subprocess(tree)]
+    assert not bare, "text-mode subprocess call without encoding=\"utf-8\": " + ", ".join(bare)
