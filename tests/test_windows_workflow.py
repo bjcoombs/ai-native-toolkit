@@ -42,6 +42,7 @@ STEP_LEG = {
     "Smoke fixture estate": "smoke",
     "Smoke assess_signals.py": "smoke",
     "Smoke assess_core.py": "smoke",
+    "Smoke the SVG scripts on Python 3.12": "smoke",
     "Smoke fleet.py over a ghsync-layout root": "smoke",
     "Smoke fleet.py --from-list": "smoke",
     "Smoke start_gate.py and complete_gate.py": "smoke",

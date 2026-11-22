@@ -291,6 +291,22 @@ jobs:
           print(report[:400])
           ' "$co" "$RUNNER_TEMP/report.md"
 
+      # Both SVG scripts declare requires-python >=3.12 and their own
+      # dependencies in an inline script header, so `uv run <script>` builds a
+      # 3.12 environment from that header (uv fetches 3.12; the project venv
+      # stays 3.11). check_svg.py is stdlib only and runs on the setup Python.
+      - name: Smoke the SVG scripts on Python 3.12
+        if: ${{ !cancelled() && matrix.suite == 'smoke' }}
+        shell: bash
+        working-directory: skills/assess
+        run: |
+          co="$RUNNER_TEMP/estate/acme/widget/widget-main"
+          uv run --python 3.12 scripts/complexity-treemap.py "$co" \
+            -o "$RUNNER_TEMP/complexity-heatmap.svg" --stats "$RUNNER_TEMP/complexity-stats.json"
+          uv run --python 3.12 scripts/doc-graph-svg.py "$co" -o "$RUNNER_TEMP/doc-graph.svg"
+          python ../../tests/fixtures/windows_smoke/check_svg.py \
+            "$RUNNER_TEMP/complexity-heatmap.svg" "$RUNNER_TEMP/doc-graph.svg"
+
       - name: Smoke fleet.py over a ghsync-layout root
         if: ${{ !cancelled() && matrix.suite == 'smoke' }}
         shell: bash
