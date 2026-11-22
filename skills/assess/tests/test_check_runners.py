@@ -5,11 +5,13 @@ recipe is not read (``make foo``, ``task foo``) reads null (``check_target``), n
 """
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from lib.check_command import check_verdict, is_check_command, is_lint_command, is_lint_run, may_lint
+from lib.agent_environment import scan_agent_environment
 from lib.ci_checks import scan_ci_checks
 
 _ISSUE_RUNNERS = [
@@ -46,7 +48,7 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "dotnet build", "swift build", "mix compile", "bazel build //...", "make install",
     "task deps", "make clean install", "bundle install", "npm ci", "uv sync --extra test",
     "npm run build", "go build ./...", "docker compose build", "docker compose up -d", "npx",
-    "pnpm exec", "hatch run",
+    "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",
 ])
 def test_setup_and_build_commands_are_not_checks(text: str) -> None:
     assert check_verdict(text) is False
@@ -123,3 +125,20 @@ def test_check_target_is_masked_and_triggered_like_any_check(
         tmp_path: Path, files: dict[str, str], expected: tuple[bool | None, str]) -> None:
     """A masked or off-trigger ``make foo`` still reads false; a bare ``- make`` value too."""
     assert _scan(tmp_path, files) == expected
+
+
+def test_a_named_dotnet_test_that_ci_runs_lifts_the_layer_five_cap(tmp_path: Path) -> None:
+    """Instruction files get the wider vocabulary too: ``agent_environment.layer5_cap``
+    reads a named ``dotnet test`` that CI runs as a resolved check (on main it was not named)."""
+    files = {**_gha("dotnet test"), "app.csproj": "<Project />\n",
+             "CLAUDE.md": "# Repo\n\n```bash\ndotnet test\n```\n"}
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    for args in (["init", "-q"], ["add", "-A"],
+                 ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init"]):
+        subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True)
+    block = scan_agent_environment(tmp_path, {"CLAUDE.md": {"grade": "B"}}, None, probe_ci=False)
+    assert [(n["command"], n["verdict"]) for n in block["check"]["named"]] == [
+        ("dotnet test", "resolved")]
+    assert "check_named" not in block["layer5_cap"]["unmet"]

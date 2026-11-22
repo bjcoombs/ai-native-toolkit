@@ -350,6 +350,8 @@ _COMPOSE_FLAGS = frozenset({
     "--user", "--publish", "-l", "--label",
 })
 _NX_TARGET_FLAGS = ("-t", "--target", "--targets")
+# A target runner asked for its version or its target list runs no target.
+_RUNNER_INFO_FLAGS = _INFO_FLAGS | {"-h", "--list", "--list-all", "-T", "--tasks", "--summary"}
 
 
 def _outer_wrapper(words: list[str]) -> list[str] | None:
@@ -438,6 +440,8 @@ def _check_verdict(words: list[str]) -> bool | None:
     if head in TEST_SUBCOMMANDS or head == "playwright":
         return pos[:1] == ["test"]
     if head in TARGET_RUNNERS:
+        if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
+            return False
         return _target_verdict(_targets(head, words[1:]), rake=head == "rake")
     return False
 
