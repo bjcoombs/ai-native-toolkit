@@ -1598,6 +1598,29 @@ revision = 1
   "doc_claims.contradictions.conflict_pair.value" = "drop"
 
 [[entries]]
+id = "core.guardrails"
+kind = "collector"
+title = "Guardrails stated"
+summary = "Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet."
+issues = [767]
+callable = "lib.guardrails:scan_guardrails"
+publishes = ["guardrails"]
+reads = ["repo_root", "instruction_files", "coverage_gate", "excludes"]
+stage = "post_offers"
+headless = { guardrails = "registered" }
+shapes = [
+  { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "guardrails.gates.kind" = "token"
+  "guardrails.gates.tool" = "token"
+  "guardrails.gates.rule" = "token"
+  "guardrails.gates.stated_in" = "path"
+  "guardrails.gates.snippet" = "drop"
+  "guardrails.not_read" = "drop"
+
+[[entries]]
 id = "core.level"
 kind = "collector"
 title = "Verified tally and Step"
@@ -1605,7 +1628,7 @@ summary = "The default maturity model's conditions with state, grade and reason,
 issues = [744]
 callable = "lib.core_scans:level"
 publishes = ["level"]
-reads = ["agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
+reads = ["agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure"]
 stage = "post_offers"
 shapes = [
   { path = "level", type = "lib.level_result_types:LevelResult" },
@@ -1876,6 +1899,16 @@ type = "number"
 evidence = "git_history"
 null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
 
+[[entries]]
+id = "core:guardrails.stated_pct"
+kind = "signal"
+title = "Share of configured gates an instruction file states"
+collector = "core.guardrails"
+path = "guardrails.stated_pct"
+type = "number"
+evidence = "head_structure"
+null_means = "no gate found: nothing to state"
+
 # -- conditions: display metadata for each default criterion -----------------------
 [[entries]]
 id = "core.cond.layer-0-instructions.1.instruction_file_present"
@@ -2058,6 +2091,20 @@ kind = "condition"
 title = "Four in five mapped docs keep pace"
 key = "doc-freshness.2:doc_staleness.summary.stale_pct"
 fix = "Refresh the docs the report lists under doc freshness, oldest first."
+
+[[entries]]
+id = "core.cond.guardrails-stated.1.stated_pct"
+kind = "condition"
+title = "Half the configured gates are stated"
+key = "guardrails-stated.1:guardrails.stated_pct"
+fix = "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it."
+
+[[entries]]
+id = "core.cond.guardrails-stated.2.stated_pct"
+kind = "condition"
+title = "Every configured gate is stated"
+key = "guardrails-stated.2:guardrails.stated_pct"
+fix = "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing."
 
 # -- findings -----------------------------------------------------------------------
 [[entries]]

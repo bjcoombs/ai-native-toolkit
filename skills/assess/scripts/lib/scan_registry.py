@@ -64,6 +64,7 @@ from lib.layer_grades import scan_layer_grades
 from lib.level_tally import DEFAULT_BLOCKS
 from lib.merged_sample import merged_sample
 from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
+from lib.guardrails import scan_guardrails
 from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
@@ -617,6 +618,14 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec(
         "doc_claims", scan_doc_claims,
         ("repo_root", "instruction_files", "scope", "excludes"), STAGE_POST_OFFERS,
+    ),
+    # Guardrails stated (issue #767): the gates the repository configures (ruff or
+    # flake8 complexity limit, the coverage_gate floor, pre-commit hooks, mypy
+    # strict), each checked against the graded instruction files; an unstated gate
+    # carries a ready one-line snippet. stated_pct feeds the guardrails-stated row.
+    ScanSpec(
+        "guardrails", scan_guardrails,
+        ("repo_root", "instruction_files", "coverage_gate", "excludes"), STAGE_POST_OFFERS,
     ),
 )
 

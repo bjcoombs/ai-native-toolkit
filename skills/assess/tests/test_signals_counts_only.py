@@ -157,3 +157,19 @@ def test_counts_only_keeps_the_unread_ci_system_fields() -> None:
              "enforced_check_runs": None, "enforced_basis": "unread_ci_system",
              "masked_check_commands": 0, "off_trigger_check_commands": 0, "unread_ci_files": 2}
     assert counts_only_scans({"ci_checks": block})["ci_checks"] == block
+
+
+def test_counts_only_keeps_the_guardrails_counts_and_drops_the_snippets() -> None:
+    gate = {"kind": "pre_commit", "tool": "pre-commit", "rule": "hooks", "threshold": None,
+            "file": ".pre-commit-config.yaml", "line": None, "stated": False, "stated_in": None,
+            "snippet": "Pre-commit hooks run on every commit: run `pre-commit run --all-files`."}
+    block = {"available": True, "gates": [gate], "enforced": 1, "stated": 0, "unstated": 1,
+             "stated_pct": 0.0, "instruction_files_read": 1, "not_read": ["eslint `complexity`"]}
+    kept = counts_only_scans({"guardrails": block})["guardrails"]
+    assert {k: v for k, v in kept["gates"][0].items() if k != "snippet"} == {
+        k: v for k, v in gate.items() if k != "snippet"}
+    assert "snippet" not in kept["gates"][0] or kept["gates"][0]["snippet"] is None
+    assert {k: kept[k] for k in ("enforced", "stated", "unstated", "stated_pct",
+                                 "instruction_files_read")} == {
+        "enforced": 1, "stated": 0, "unstated": 1, "stated_pct": 0.0, "instruction_files_read": 1}
+    assert kept["not_read"] == 1

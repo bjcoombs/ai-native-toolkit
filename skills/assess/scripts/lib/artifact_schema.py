@@ -233,7 +233,12 @@ constant each.
 # of the findings count, and the log.md entry's readiness line is that summary, with
 # no layered score. finalize-input.json drops score, maturity_label and denominator,
 # and an action may carry a condition id. Additive to run-context.json.
-ARTIFACT_SCHEMA_VERSION = "1.39.0"
+# 1.40.0: run-context.json gains the guardrails block (issue #767): the gates
+# the repository configures (complexity limit, coverage floor, pre-commit hooks,
+# mypy strict), whether an instruction file states each, a snippet for each
+# unstated one, and stated_pct. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.40.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -385,4 +390,8 @@ ARTIFACT_SCHEMA_VERSION = "1.39.0"
 #     its band names are retired for the deterministic Step, its next unlock and
 #     "Verified practices: N of M measured"; the badge and the log.md entry carry
 #     the Step and the tally, and the scorer returns per-layer verdicts only.
-ASSESS_METHOD_VERSION = 34
+# 35: the guardrails block and its stated_pct signal (issue #767): the default
+#     maturity model gains the guardrails-stated row (half of the configured
+#     gates stated is level 1, all of them level 2, none found is unknown).
+#     Existing rows are unchanged.
+ASSESS_METHOD_VERSION = 35

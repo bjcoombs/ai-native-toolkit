@@ -292,6 +292,20 @@ def _stale_docs(op: str, value: Operand) -> Guidance | None:
                          "declared source changed after the doc was generated."}
 
 
+def _guardrails_stated(op: str, value: Operand) -> Guidance | None:
+    number = _at_least(op, value)
+    if number is None:
+        return None
+    share = "every gate" if number >= 100 else f"at least {number:g}% of the gates"
+    return {"change": "Add the one-line snippet `/assess` gives for each configured gate an "
+                      "instruction file does not state yet (complexity limit, coverage floor, "
+                      "pre-commit hooks, mypy strict) to `CLAUDE.md` or `AGENTS.md`, so the next "
+                      "session knows the rule before it runs into it.",
+            "done_when": f"A graded instruction file states {share} the repository configures: "
+                         "the rule and its threshold on one line (for example \"Functions stay "
+                         "under complexity 15 (ruff C901): run `ruff check .`\")."}
+
+
 def _setting(name: str) -> Wording:
     label = SETTING_NAMES.get(name, f"`{name}` setting")
 
@@ -359,6 +373,7 @@ _WORDING: dict[str, Wording] = {
         "more than one commit in the history."),
     "stats_summary.loc.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
+    "guardrails.stated_pct": _guardrails_stated,
     "coverage_gate.enforced": _flag(
         "Make the test run exit non-zero when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -401,6 +416,9 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
+    "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
+                  "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
+                  "strict): with nothing to state there is no share to measure.",
     "structure": _NEEDS.format("structure", "grimp or networkx is not installed (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
                  "the dominant source language: `no_import_graph_<language>` when no "
