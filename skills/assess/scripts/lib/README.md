@@ -2491,7 +2491,8 @@ file is the root `AGENTS.md`, else the first root file in `SYSTEMS` order, then 
 order. Each file (`ConsistencyFile`) carries `link`: `canonical`, `symlink` (resolves to
 it), `import` (`@AGENTS.md`, through `instruction_budget.follow_imports`), `pointer` (a
 line naming the canonical file's name, as a markdown link or Kiro's
-`#[[file:AGENTS.md]]` does), `mirror` (identical below the header, through
+`#[[file:AGENTS.md]]` does; never for Claude Code or Gemini CLI, which load only
+imports, so a prose mention there links nothing, matching `claude_shadows_agents`), `mirror` (identical below the header, through
 `instruction_discovery.mirror_pair`; a hand-kept copy, so not linked) or `independent`.
 A system is linked when one of its files links (its other always-loaded files are
 supplementary rules, still compared for divergence). Each
@@ -2515,7 +2516,7 @@ templates and paths, never file text; written into the file, each passes the lin
 `not_read` names the forms not compared (thresholds without a keyword, Aider `--read`
 on the command line, user-level rules, scoped and nested files). Counts-only keeps the
 systems, links, kinds and counts, paths as paths, and drops `value`, `pointer`,
-`symlink` and `not_read`. Known limit: any line naming the canonical file's name counts
+`symlink` and `not_read`. Known limit: for a system that follows text, any line naming the canonical file's name counts
 as a pointer. Stdlib plus `lib.check_command`, `lib.command_resolver`,
 `lib.instruction_budget` and `lib.instruction_discovery`. Tests:
 `tests/test_agent_consistency.py`.

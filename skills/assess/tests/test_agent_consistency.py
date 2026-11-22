@@ -260,3 +260,26 @@ def test_a_stray_number_beside_the_agreed_threshold_is_no_conflict(tmp_path: Pat
     root = _repo(tmp_path, {"AGENTS.md": "Keep coverage at 90 (see issue 412).\n",
                             "CLAUDE.md": "Coverage stays at 90.\n"})
     assert scan_agent_consistency(root)["conflicts"] == 0
+
+
+def test_a_prose_mention_is_no_link_for_claude_code(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {
+        "AGENTS.md": "Run `make test` before pushing.\nCoverage floor 90.\n",
+        "CLAUDE.md": "Run `npm test` before pushing.\nCoverage floor 70.\n"
+                     "Codex reads AGENTS.md instead of this file.\n"})
+    block = scan_agent_consistency(root)
+    assert {f["path"]: f["link"] for f in block["files"]}["CLAUDE.md"] == "independent"
+    assert block["unlinked"] == 1
+    kinds = {(d["kind"], d["value"]) for d in block["divergences"]}
+    assert kinds == {("command", "make test"), ("command", "npm test"), ("threshold", "coverage")}
+    assert block["next_steps"][0]["pointer"] == "@AGENTS.md"
+    assert any(f["kind"] == "claude_shadows_agents"
+               for f in nested_instruction_surface(root)["findings"])
+
+
+def test_a_prose_mention_still_points_a_text_system(tmp_path: Path) -> None:
+    root = _repo(tmp_path, {"AGENTS.md": AGENTS,
+                            ".windsurfrules": "Codex and Windsurf read AGENTS.md.\n"})
+    block = scan_agent_consistency(root)
+    assert {f["path"]: f["link"] for f in block["files"]}[".windsurfrules"] == "pointer"
+    assert block["consistent"] is True

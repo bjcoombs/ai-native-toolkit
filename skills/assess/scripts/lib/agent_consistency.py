@@ -16,7 +16,8 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    ``import`` of it (``@AGENTS.md``, followed by
    ``lib.instruction_budget.follow_imports``), a ``pointer`` (a line naming
    the canonical file's name, as ``#[[file:AGENTS.md]]`` or a markdown link
-   does), a ``mirror`` (identical below its header, ``mirror_pair``: a
+   does; never for Claude Code or Gemini CLI, which load only imports, so a
+   prose mention there links nothing and their own text is compared), a ``mirror`` (identical below its header, ``mirror_pair``: a
    hand-kept copy, so not linked) or ``independent``. A system is linked when
    one of its files links; its other files are supplementary rules, compared
    for divergence like the rest.
@@ -204,8 +205,12 @@ def _link(cand: InstructionCandidate, canon: InstructionCandidate, repo_root: Pa
         [cand.rel], repo_root, lambda p: is_repo_file(p, repo_root, tracked))
     if canon.rel in loaded:
         return "import"
+    # Claude Code and Gemini CLI load only what a file imports: a prose mention of
+    # AGENTS.md is no link for them (instruction_discovery's claude_shadows_agents
+    # rule), so their own text is compared as it stands.
+    follows_text = SYSTEM_BY_ID[cand.tool].pointer != "import" if cand.tool in SYSTEM_BY_ID else True
     name = re.escape(PurePosixPath(canon.rel).name)
-    if re.search(rf"(?<![\w-]){name}(?![\w-])", cand.body):
+    if follows_text and re.search(rf"(?<![\w-]){name}(?![\w-])", cand.body):
         return "pointer"
     mine, theirs, _notes = mirror_pair(cand.body, canon.body)
     return "mirror" if mine == theirs else "independent"

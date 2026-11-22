@@ -8,7 +8,7 @@ _Generated <<normalized>>._
 
 Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests and 1 more verified practice is met, for example `layer-3-linters.1`
 
-Verified practices: 1 of 3 measured · 11 not measured (scan did not run: 1, needs a full run: 1, no remote: 2, no source files: 2, no value read: 4, unavailable: 1) · model <<normalized>>
+Verified practices: 1 of 3 measured · 13 not measured (scan did not run: 1, needs a full run: 1, no remote: 2, no source files: 2, no value read: 6, unavailable: 1) · model <<normalized>>
 
 ## Metrics Dashboard
 
