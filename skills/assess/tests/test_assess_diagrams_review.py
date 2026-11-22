@@ -244,8 +244,17 @@ def test_all_unknown_bot_marks_never_read_as_zero() -> None:
     assert "Not known whether a review bot commented (10)" in content
 
 
+def test_a_missing_bot_list_or_unknown_share_has_no_bare_count() -> None:
+    no_list = {k: v for k, v in REVIEW.items() if k != "bot_sequence"}
+    content = _svg({"review_reality": no_list}, rd.STRIP_FILE)
+    assert _bots(content, "unknown") == len(REVIEW["sequence"])
+    marks = {**REVIEW, "bot_sequence": ["none"] * 10, "bot_review_share": None}
+    content = _svg({"review_reality": marks}, rd.STRIP_FILE)
+    assert "Review-bot output (0 known)" in content and "Review-bot output (0)<" not in content
+
+
 def test_known_bot_marks_show_a_bare_count() -> None:
-    block = {**REVIEW, "bot_sequence": ["bot"] + ["none"] * 9}
+    block = {**REVIEW, "bot_review_share": 0.1, "bot_sequence": ["bot"] + ["none"] * 9}
     content = _svg({"review_reality": block}, rd.STRIP_FILE)
     assert "Review-bot output (1)" in content and "Not known whether" not in content
     assert rd.bot_marks({"bot_sequence": ["odd"]}, 1) == ["unknown"]

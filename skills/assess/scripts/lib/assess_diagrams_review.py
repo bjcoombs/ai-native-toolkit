@@ -292,9 +292,10 @@ def bot_marks(block: Mapping[str, Any], n: int) -> list[str]:
     return [m if m in (BOT, NO_BOT) else UNKNOWN for m in marks]
 
 
-def _bot_key(marks: Sequence[str]) -> list[tuple[str, str]]:
+def _bot_key(marks: Sequence[str], share_unknown: bool) -> list[tuple[str, str]]:
+    """The bot rows of the key; a bare count only when every mark and the share are known."""
     known, unknown = marks.count(BOT), marks.count(UNKNOWN)
-    if not unknown:
+    if not unknown and not share_unknown:
         return [(_DOT, f"Review-bot output ({known})")]
     return [(_DOT, f"Review-bot output ({known} known)"),
             (_HOLLOW, f"Not known whether a review bot commented ({unknown})")]
@@ -353,7 +354,7 @@ def render_strip(block: Mapping[str, Any]) -> str:
     entries = [(('<rect x="{x}" y="{y}" width="14.0" height="14.0" rx="2" '
                  + _tick_paint(state) + "/>"), f"{label} ({counts[state]})")
                for state, label in STATES if state != UNKNOWN or counts[UNKNOWN]]
-    entries += _bot_key(bots)
+    entries += _bot_key(bots, "bot_review_share" in block and block["bot_review_share"] is None)
     key, key_h = _key(PAD, y + 30, entries)
     body += key
     caption = strip_caption()
