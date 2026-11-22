@@ -3650,7 +3650,11 @@ A target runner asked for `--version` or its list (`task --list`, `rake -T`) is 
 `may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
 `bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
 lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
-(`ci_checks._lone_check`). Tests: `tests/test_check_command.py`,
+(`ci_checks._lone_check`). `script_path(text)` (#937) names the repository file a
+command runs as a committed script (`./ci.sh` is `ci.sh`, `bash scripts/test.sh` is
+`scripts/test.sh`, `bin/test`), or None for no script (`bash -c`, `pytest`), a modelled
+runner (`./gradlew`) and a path the tree cannot settle (absolute, `~`, `$VAR`, `../`);
+`ci_checks` reads it against the tracked files. Tests: `tests/test_check_command.py`,
 `tests/test_check_runners.py` (#920), `tests/test_agent_environment.py`
 (`test_is_check_command`), `tests/test_ci_checks.py` (`test_lint_runs_per_command`).
 
@@ -3710,7 +3714,15 @@ in the merged configuration when those hold none)
 whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
 off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
 null with `enforced_basis: unknown_trigger`), else null under the
-same `included_jobs` rule, else null with `enforced_basis: check_target` when an
+same `included_jobs` rule, else null with `enforced_basis: script_not_found` (issue
+#937) when the only unmasked check on ordinary changes (or unsettled triggers) runs a
+committed script that no tracked file matches (`check_command.script_path` names the
+file: `./ci.sh`, `bash scripts/test.sh`, `bin/test`; `_present(repo_files)` matches it
+at that path or as a suffix under a directory, for `cd svc && ./ci.sh` and
+`working-directory:`; a path outside what git tracks by design, an excluded tree such as
+`./vendor/bin/phpunit` or a gitignored output, is not missing, as in `command_resolver`;
+`_line_runs_check(..., present=)` drops it and
+`_line_runs_missing_check` counts it), else null with `enforced_basis: check_target` when an
 unmasked line on ordinary changes runs a target whose recipe is not read
 (`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
@@ -3730,7 +3742,8 @@ under a GitLab `script:` key only, `_script_items` reading its parent;
 `pre-commit run --all-files` and so reads as that line does). `lint_basis` is
 `lint_command` (true: an unmasked lint line on ordinary changes), `included_jobs` /
 `merged_config_partial` (null, as `basis`), `unknown_trigger` (null: a lint line's
-triggers are not settled), `check_target` (null: no lint line, but an unmasked check
+triggers are not settled), `script_not_found` (null: the only lint line runs a lint
+script no tracked file matches, `_line_runs_missing_lint`), `check_target` (null: no lint line, but an unmasked check
 target or script that may lint inside it; recipes are not read), `not_enforced`
 (false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
 `no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
@@ -4203,14 +4216,20 @@ null (not measured) when none does but one has a null `threshold_percent` (a tem
 value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
 false otherwise, including no counted gate. Measured coverage is never read: a report
 is a working-tree file, so the level would stop being a function of the commit.
-Go and Rust (#788): when no gate at all is found and the walk holds a `go.mod` or a
-`Cargo.toml` (same depth and excludes; on a scoped run, in the scope or in any
-directory above it up to the repo root, as Go and Cargo resolve a module; one under a
-`testdata/` directory is a fixture and does not count), `threshold_meets_minimum` is null and `unmeasured_reason` is
-`go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because those ecosystems often gate
-in a script comparing `go tool cover -func` to a number, which is not read. Any gate
-found, even `fail_under = 0`, keeps the normal reading; `unmeasured_reason` is null then.
-The collector's manifest `revision` is 2 for this change of meaning.
+Go and Rust (#788, #937): when the walk holds a `go.mod` or a `Cargo.toml` (same depth
+and excludes; on a scoped run, in the scope or in any directory above it up to the repo
+root, as Go and Cargo resolve a module; one under a `testdata/` directory is a fixture
+and does not count, `_go_rust_manifests`) and no gate of that language is read
+(`_MANIFEST_TOOLS`: go-test-coverage for `go.mod`, cargo-tarpaulin or cargo-llvm-cov for
+`Cargo.toml`), a `threshold_meets_minimum` that is not true reads null and
+`unmeasured_reason` is `go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because
+those ecosystems often gate in a script comparing `go tool cover -func` to a number,
+which is not read. So a low Python `fail_under = 10` (or `0`) beside a `go.mod` reads
+unknown, not unmet (#937): one language's low gate does not settle another's. A gate of
+at least 50 percent keeps true, and a gate read for every Go and Rust manifest present,
+even one gating nothing, keeps the normal reading, with `unmeasured_reason` null.
+The collector's manifest `revision` is 2 for the #788 change of meaning; the #937
+widening is listed for the 3.0.0 release PR.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to

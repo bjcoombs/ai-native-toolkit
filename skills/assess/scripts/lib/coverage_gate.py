@@ -27,10 +27,10 @@ Go and Rust (#788): go-test-coverage's ``.testcoverage.yml`` ``threshold:``
 keys, ``cargo tarpaulin --fail-under N`` and ``cargo llvm-cov
 --fail-under-lines N`` are read. Their other common gate is a script comparing
 ``go tool cover -func`` (or a report) to a number, which this scan cannot read,
-so when no gate at all is found and the walk holds a ``go.mod`` or a
-``Cargo.toml``, ``threshold_meets_minimum`` is null (not measured) and
-``unmeasured_reason`` is ``go_rust_gate_form_not_read``. Any gate found keeps
-the normal reading.
+so when the walk holds a ``go.mod`` (or a ``Cargo.toml``) and no gate of that
+language is read, a ``threshold_meets_minimum`` that is not true reads null (not
+measured) with ``unmeasured_reason`` ``go_rust_gate_form_not_read`` (#937: a low
+Python gate beside ``go.mod`` is not unmet). A gate meeting the minimum keeps true.
 
 A configured threshold is evidence the tooling fails below it *when coverage
 runs*. ``enforced_meets_minimum`` (#921) is ``threshold_meets_minimum`` with
@@ -130,6 +130,8 @@ _TC_THRESHOLD_RE = re.compile(r"^(\s*)threshold\s*:\s*(.*)$")
 _TC_KEY_RE = re.compile(r"\b(file|package|total)\s*:\s*[\"']?" + _NUM)
 # Manifests whose ecosystem gates coverage mostly in forms not read here.
 _GO_RUST_MANIFESTS = {"go.mod", "Cargo.toml"}
+_MANIFEST_TOOLS = {"go.mod": {"go-test-coverage"},
+                   "Cargo.toml": {"cargo-tarpaulin", "cargo-llvm-cov"}}
 GO_RUST_UNMEASURED = "go_rust_gate_form_not_read"
 
 # Read at the repo root even on a scoped run: CI and task-runner files run the
@@ -624,21 +626,23 @@ def _candidate_files(root: Path, scope: Path | None,
         yield root / rel, rel.as_posix()
 
 
-def _holds_go_or_rust(root: Path, scope: Path | None, excludes: Excludes) -> bool:
-    """A ``go.mod`` or ``Cargo.toml`` in the walk; on a scoped run, in the scope
+def _go_rust_manifests(root: Path, scope: Path | None, excludes: Excludes) -> set[str]:
+    """The ``go.mod`` / ``Cargo.toml`` names in the walk; on a scoped run, in the scope
     or in a directory above it up to the repo root (the module or workspace the
     scope belongs to, as Go and Cargo resolve it). A manifest under a ``testdata``
     directory is a fixture (the Go tool ignores it too), so it does not count."""
     def wanted(name: str, parts: tuple[str, ...]) -> bool:
         return name in _GO_RUST_MANIFESTS and "testdata" not in parts
     base = root if scope is None else scope
-    if next(_walk(root, base, excludes, wanted), None) is not None:
-        return True
+    found: set[str] = set()
+    for rel in _walk(root, base, excludes, wanted):
+        found.add(rel.name)
+        if found == _GO_RUST_MANIFESTS:
+            break
     ancestors = [d for d in base.parents if d == root or root in d.parents]
-    return any(
-        (d / name).is_file()
-        and not is_user_excluded((d / name).relative_to(root), *excludes)
-        for d in ancestors for name in _GO_RUST_MANIFESTS)
+    return found | {name for d in ancestors for name in _GO_RUST_MANIFESTS
+                    if (d / name).is_file()
+                    and not is_user_excluded((d / name).relative_to(root), *excludes)}
 
 
 def _is_root_ci(rel: Path) -> bool:
@@ -766,11 +770,14 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
             _GRADLE_CHECK_WIRED_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines)))))
         jest_collects = jest_collects or bool(
             _JEST_COLLECTS_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines))))
-    walk_excludes = excludes or (set(), [])
-    unmeasured = (GO_RUST_UNMEASURED if not gates
-                  and _holds_go_or_rust(root, scope_abs if scope_abs != root else None,
-                                        walk_excludes) else None)
-    meets = None if unmeasured else threshold_meets_minimum(gates)
+    manifests = _go_rust_manifests(root, scope_abs if scope_abs != root else None,
+                                   excludes or (set(), []))
+    meets = threshold_meets_minimum(gates)
+    # #937: no gate read for a Go or Rust module present makes a reading that is not
+    # true unknown; one language's low gate never reads unmet for another's.
+    unread = {m for m in manifests if not any(g["tool"] in _MANIFEST_TOOLS[m] for g in gates)}
+    unmeasured = GO_RUST_UNMEASURED if unread and meets is not True else None
+    meets = None if unmeasured else meets
     enforced, basis = enforced_meets_minimum(
         gates, meets, read_ci_runs(root) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,

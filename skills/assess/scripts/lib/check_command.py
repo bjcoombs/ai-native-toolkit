@@ -573,6 +573,30 @@ def _script_verdict(words: list[str]) -> bool | None:
     return _target_verdict([PurePosixPath(path).name])
 
 
+def script_path(text: str) -> str | None:
+    """The repository file a command runs as a committed script (#937): ``./ci.sh`` ->
+    ``ci.sh``, ``bash scripts/test.sh`` -> ``scripts/test.sh``, ``bin/test``. None when it
+    runs no script (``bash -c '...'``, ``pytest``), a modelled runner (``./gradlew``), or a
+    path the tree cannot settle: absolute, home, variable or outside the checkout."""
+    words = command_words(text)
+    if not words:
+        return None
+    head = words[0]
+    if head in ("bash", "sh", "zsh"):
+        pos = _positionals(words[1:])
+        if not pos or any(w.startswith("-") and "c" in w[1:] for w in words[1:]):
+            return None
+        path = pos[0]
+    elif head in RUNNERS or not (head.startswith(("./", "bin/")) or head.endswith(".sh")):
+        return None
+    else:
+        path = head
+    if path.startswith(("/", "~")) or "$" in path:
+        return None
+    norm = str(PurePosixPath(path.removeprefix("./")))
+    return None if norm.split("/")[0] == ".." else norm
+
+
 def _toolchain_test(words: list[str]) -> bool | None:
     """Whether a toolchain command runs its tests (``dotnet test``, ``./gradlew testDebug``,
     ``xcodebuild -scheme App test``, ``php artisan test``); None for another command."""

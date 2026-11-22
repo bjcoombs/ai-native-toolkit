@@ -519,13 +519,51 @@ def test_go_or_rust_with_no_readable_gate_is_not_measured(
     assert block["unmeasured_reason"] == reason
 
 
-def test_a_found_gate_keeps_the_normal_reading_beside_go(tmp_path: Path) -> None:
-    """Any gate found, even one gating nothing, keeps the normal evaluation."""
-    _write(tmp_path, "go.mod", _GO_MOD)
-    _write(tmp_path, _PY, _fail_under("0"))
+@pytest.mark.parametrize(("files", "expected", "reason"), [
+    ({"go.mod": _GO_MOD, _PY: _fail_under("10")}, None, GO_RUST_UNMEASURED),
+    ({"go.mod": _GO_MOD, _PY: _fail_under("0")}, None, GO_RUST_UNMEASURED),
+    ({"Cargo.toml": _CARGO, _PY: _fail_under("10")}, None, GO_RUST_UNMEASURED),
+    ({"go.mod": _GO_MOD, "Cargo.toml": _CARGO, _PY: _fail_under("10"),
+      ".testcoverage.yml": _testcoverage("  total: 10\n")}, None, GO_RUST_UNMEASURED),
+    ({"go.mod": _GO_MOD, _PY: _fail_under("10"),
+      ".testcoverage.yml": _testcoverage("  total: 10\n")}, False, None),
+    ({"go.mod": _GO_MOD, _PY: _fail_under("10"),
+      ".testcoverage.yml": _testcoverage("  total: 0\n")}, False, None),
+    ({"Cargo.toml": _CARGO, _PY: _fail_under("10"),
+      _CI: _workflow("cargo tarpaulin --fail-under 10")}, False, None),
+    ({"go.mod": _GO_MOD, _PY: _fail_under("85")}, True, None),
+    ({_PY: _fail_under("10"), "testdata/x/go.mod": _GO_MOD}, False, None),
+], ids=["l6_adv_go_plus_low_py", "go-plus-zero-py", "cargo-plus-low-py",
+        "go-read-rust-unread", "go-read-low", "go-read-zero", "rust-read-low",
+        "go-plus-high-py", "testdata-go-mod"])
+def test_a_low_gate_beside_an_unread_language_is_not_measured(
+        tmp_path: Path, files: dict[str, str], expected: bool | None,
+        reason: str | None) -> None:
+    """#937: a low gate for one language is not unmet while a Go or Rust module beside it
+    has no gate read; a gate read for each such language, or a gate meeting the minimum,
+    keeps the normal reading."""
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
     block = detect_coverage_gate(tmp_path)
-    assert block["threshold_meets_minimum"] is False
-    assert block["unmeasured_reason"] is None
+    assert block["threshold_meets_minimum"] is expected
+    assert block["unmeasured_reason"] == reason
+    if expected is None:
+        assert block["enforced_meets_minimum"] is None
+    if expected is False:
+        assert block["enforced_meets_minimum"] is False
+
+
+def test_scoped_low_gate_reads_the_scopes_go_module(tmp_path: Path) -> None:
+    """On a scoped run only the scope's own module counts: a Go service elsewhere in the
+    repository does not make a Python package's low gate unknown."""
+    _write(tmp_path, "services/api/go.mod", _GO_MOD)
+    _write(tmp_path, "services/web/pyproject.toml", _fail_under("10"))
+    web = detect_coverage_gate(tmp_path, scope=Path("services/web"))
+    assert (web["threshold_meets_minimum"], web["unmeasured_reason"]) == (False, None)
+    _write(tmp_path, "services/web/go.mod", _GO_MOD)
+    web = detect_coverage_gate(tmp_path, scope=Path("services/web"))
+    assert (web["threshold_meets_minimum"], web["unmeasured_reason"]) == (
+        None, GO_RUST_UNMEASURED)
 
 
 def test_excluded_go_mod_does_not_make_the_reading_unknown(tmp_path: Path) -> None:

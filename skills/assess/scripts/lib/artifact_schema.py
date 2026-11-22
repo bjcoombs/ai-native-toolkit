@@ -271,6 +271,9 @@ constant each.
 #   instruction file before; both are null when there is no root file and the
 #   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
 #   nested_only and now sits after layer_grades in run-context.json.
+# - ci_checks.enforced_basis and ci_checks.lint_basis gain script_not_found
+#   (issue #937); coverage_gate.unmeasured_reason go_rust_gate_form_not_read now
+#   also carries a low gate beside an unread Go or Rust module.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -458,4 +461,13 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
+# Unreleased (bumped once by the 3.0.0 release PR):
+# - issue #937, two false readings. A coverage gate below 50 percent beside a
+#   go.mod or Cargo.toml with no gate read for that language reads
+#   threshold_meets_minimum null (go_rust_gate_form_not_read) where it read
+#   false, so Layer 6 level 1 and the Step 4 coverage_gate gate read unknown,
+#   not unmet. A CI check or lint step that runs a committed script no tracked
+#   file matches (run: ./ci.sh with no ci.sh) reads enforced_check_runs and
+#   lint_runs null (script_not_found) where it read true: Layer 3 and Layer 5
+#   level 1 can move from met to unknown.
 ASSESS_METHOD_VERSION = 37

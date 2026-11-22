@@ -161,13 +161,16 @@ CI_CHECKS: JsonDict = {
         "enforced_check_runs": _field(
             {"type": ["boolean", "null"]},
             "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
-            "changes, null when none does but included jobs, unsettled triggers, a target whose "
-            "recipe is not read or a CI system the scan does not parse may hold one, else false."),
+            "changes, null when none does but included jobs, unsettled triggers, a committed "
+            "script the tree does not hold, a target whose recipe is not read or a CI system "
+            "the scan does not parse may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_target",
-                      "unread_ci_system", "not_enforced", "no_check_command", "no_ci"]},
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "script_not_found",
+                      "check_target", "unread_ci_system", "not_enforced", "no_check_command",
+                      "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
-            "unknown_trigger, check_target or unread_ci_system (null), not_enforced, "
+            "unknown_trigger, script_not_found, check_target or unread_ci_system (null), "
+            "not_enforced, "
             "no_check_command or no_ci (false)."),
         "masked_check_commands": _field(
             _INT, "CI lines that run a check whose failure cannot fail the job."),
@@ -180,14 +183,15 @@ CI_CHECKS: JsonDict = {
             "on ordinary changes (not --version or --help), or a step uses a known lint action "
             "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
             "null when none does but included "
-            "jobs, unsettled triggers or a check target or script that may lint inside it could "
-            "hold one, else false."),
+            "jobs, unsettled triggers, a lint script the tree does not hold or a check target or "
+            "script that may lint inside it could hold one, else false."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "check_target", "unread_ci_system", "not_enforced", "no_lint_command",
-                      "no_ci"]},
+                      "script_not_found", "check_target", "unread_ci_system", "not_enforced",
+                      "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger, check_target or unread_ci_system (null), not_enforced, no_lint_command "
+            "unknown_trigger, script_not_found, check_target or unread_ci_system (null), "
+            "not_enforced, no_lint_command "
             "or no_ci "
             "(false)."),
         "unread_ci_files": _field(
@@ -233,14 +237,17 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
-            "read, or when no gate is found in a repository holding a go.mod or Cargo.toml "
-            "(see unmeasured_reason); false otherwise. Gates counted are those enforced "
+            "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
+            "language and none of at least 50 for another (see unmeasured_reason); false "
+            "otherwise. Gates counted are those enforced "
             "counts."),
         "unmeasured_reason": _field(
             {"type": ["string", "null"]},
-            "Why threshold_meets_minimum is null with no gate found: "
-            "go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml "
-            "and its gate may be a script this scan does not read; null otherwise."),
+            "Why threshold_meets_minimum is null when no gate of the repository's Go or Rust "
+            "module is found: go_rust_gate_form_not_read when the repository holds a go.mod "
+            "or Cargo.toml with no gate read for it and none of at least 50 percent for "
+            "another language (issue #937), so its gate may be a script this scan does not "
+            "read; null otherwise."),
         "enforced_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "

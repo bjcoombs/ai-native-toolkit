@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from lib.check_command import is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint
+from lib.check_command import (
+    is_check_command, is_check_name, is_lint_command, is_lint_run, may_lint, script_path)
 
 
 @pytest.mark.parametrize(("text", "expected"), [
@@ -117,3 +118,30 @@ def test_type_checkers_leave_is_lint_command_unchanged() -> None:
 def test_package_manager_runner_forms(text: str, lint: bool, maybe: bool) -> None:
     # Issue #782: the program a runner form runs decides the reading, as the npx branch does.
     assert (is_lint_run(text), may_lint(text)) == (lint, maybe)
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("./ci.sh", "ci.sh"),
+    ("./scripts/test.sh -q", "scripts/test.sh"),
+    ("bash scripts/test.sh", "scripts/test.sh"),
+    ("sh ./ci/check.sh", "ci/check.sh"),
+    ("bin/test", "bin/test"),
+    ("scripts/test.sh", "scripts/test.sh"),
+    ("bash -c 'pytest'", None),
+    ("bash", None),
+    ("./gradlew test", None),
+    ("./mvnw verify", None),
+    ("/opt/ci/test.sh", None),
+    ("$HOME/test.sh", None),
+    ("~/test.sh", None),
+    ("./${DIR}/test.sh", None),
+    ("../shared/test.sh", None),
+    ("pytest", None),
+    ("make test", None),
+    ("", None),
+])
+def test_script_path_names_the_committed_file_a_command_runs(text: str,
+                                                             expected: str | None) -> None:
+    """#937: the repository file a command runs as a script, or None when it runs none
+    (or a path the tree cannot settle)."""
+    assert script_path(text) == expected
