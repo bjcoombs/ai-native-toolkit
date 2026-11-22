@@ -25,14 +25,23 @@ from lib.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
 from lib.ai_usage import AiUsageBlock
+from lib.block_shapes import (
+    AgentOpsBlock,
+    CoverageGateBlock,
+    InstructionClaimsBlock,
+    PromissoryMarkersBlock,
+    ReviewRealityBlock,
+    StructureDriftBlock,
+)
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
-from lib.coverage_gate import CoverageGate
 from lib.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
+from lib.agent_consistency import AgentConsistencyBlock
 from lib.doc_complexity_join import DocUnit
 from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
+from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
 from lib.liveness_scan import ObservabilityBlock
 from lib.mutation_cap import MutationNotRunCap
@@ -60,10 +69,10 @@ from lib.run_context_types import (
     BehaviourBlock as _BehaviourBlock,
 )
 from lib.layer_grades import LayerGradesBlock
+from lib.level_result_types import Headline, LevelResult
 from lib.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
-from lib.structure_drift import EmptyOwnershipPattern
 from lib.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
 
@@ -96,14 +105,15 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("stats_summary.complexity_unreliable", UnreliableCcnRow),
     ("excluded_generated", GeneratedExclusion),
     ("nested_instructions", NestedInstructionsBlock),
+    ("agent_consistency", AgentConsistencyBlock),
     ("agent_harness", AgentHarnessBlock),
     ("agent_environment", AgentEnvironmentBlock),
     ("claude_config", ClaudeConfigBlock),
     ("claude_config.findings", ClaudeConfigFinding),
-    ("coverage_gate.gates", CoverageGate),
+    ("coverage_gate", CoverageGateBlock),
     ("gap_actions", GapAction),
     ("structure", StructureBlock),
-    ("structure_drift.tier_0.empty_ownership_patterns", EmptyOwnershipPattern),
+    ("structure_drift", StructureDriftBlock),
     ("sensitive_instruction_content.{}", SensitiveFinding),
     ("shared_tooling", SharedToolingBlock),
     ("review_automation", ReviewAutomationBlock),
@@ -116,10 +126,19 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("ai_usage", AiUsageBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
+    ("guardrails", GuardrailsBlock),
     ("test_pressure", TestPressureUnavailable),
     ("stats_summary.loc", SizeBlock),
     ("stats_summary.est_tokens", SizeBlock),
     ("stats_summary.est_tokens.budget", KeyholeBudget),
+    # The blocks a default criterion reads (#793), so a --levels path under them
+    # is checked segment by segment at load.
+    ("agent_ops", AgentOpsBlock),
+    ("instruction_claims", InstructionClaimsBlock),
+    ("promissory_markers", PromissoryMarkersBlock),
+    ("review_reality", ReviewRealityBlock),
+    ("level", LevelResult),
+    ("headline", Headline),
 )
 
 _UNIONS = (Union, types.UnionType)

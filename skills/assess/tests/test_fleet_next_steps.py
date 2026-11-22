@@ -336,6 +336,9 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
     ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
     ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
+    ("coverage_gate.threshold_meets_minimum", "eq", True, "below 50 does not count"),
+    ("structure_drift.tier_0.boundary_patterns", "gt", 0, "tracked, non-excluded source file"),
+    ("structure_drift.tier_0.boundary_patterns", "gte", 1, "a `CODEOWNERS` line per module path"),
 ])
 def test_guidance_templates_on_the_criterion(signal, op, value, needle):
     words = guidance(signal, op, value)
@@ -350,13 +353,15 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
 
 @pytest.mark.parametrize(("signal", "op", "value"), [
     ("coverage_gate.enforced", "eq", False), ("observability.rung", "gte", 9),
+    ("coverage_gate.threshold_meets_minimum", "eq", False),
     ("observability.rung", "lt", 2), ("nested_instructions.budget.claude_code.lines", "gt", 5),
     ("agent_environment.check.named_total", "gt", 3), ("instruction_claims.failed", "gt", 0),
     ("agent_environment.layer5_cap.applies", "eq", True), ("two_factor.value", "lt", 1),
     ("nested_instructions.budget.claude_code.bytes", "lt", 5), ("unknown.signal", "eq", 1),
     ("review_reality.approved_share", "lt", 0.5), ("structure.modularity_q", "lt", 0.3),
     ("promissory_markers.families.suppression.total", "eq", 0), ("stats_summary.loc.p95", "gt", 5),
-    ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.matched_patterns", "eq", 0),
+    ("structure.front_door_ratio", "lt", 0.9), ("structure_drift.tier_0.boundary_patterns", "eq", 0),
+    ("structure_drift.tier_0.matched_patterns", "eq", 0),
     ("promissory_markers.families.suppression.stale", "gt", 10),
 ])
 def test_guidance_declines_shapes_it_does_not_fit(signal, op, value):
@@ -369,12 +374,20 @@ def test_measure_hints():
     assert "shallow clone" in measure_hint("doc_staleness.summary.stale_pct")
     assert "ghreport" in measure_hint("two_factor.value")
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
+    assert "${{ env.COV_MIN }}" in measure_hint("coverage_gate.threshold_meets_minimum")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
     assert "no_import_edges" in measure_hint("structure.modularity_q")
+    hint = measure_hint("ci_checks.lint_runs")   # issue #782
+    assert "check_target" in hint and "`pre-commit run`" in hint
+    hint = measure_hint("ci_checks.enforced_check_runs")   # issue #775
+    assert "included_jobs" in hint and "unknown_trigger" in hint
+    assert "`push` or `pull_request`" in hint and "re-run the scan" in hint
+    assert "unread_ci_system" in hint and "Jenkins" in hint and "CircleCI" in hint   # #787
+    assert "cannot read those systems" in hint and "nothing in the repository needs to change" in hint
     assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")
-    assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.matched_patterns")
+    assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.boundary_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
-    assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.matched_patterns")
+    assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.boundary_patterns")
 
 
 def test_default_levels_toml_parses():
@@ -444,3 +457,10 @@ def test_parts_reads_the_cap_tokens():
                  {"agent_environment": {"layer5_cap": {"unmet": "check_named"}}}) == ["check_named"]
     assert parts("agent_environment.layer5_cap.applies", {}) == []
     assert parts("coverage_gate.enforced", scans) == []
+
+
+def test_lint_runs_guidance_names_a_linter_command_in_ci():
+    """Issue #782 requirement 6: the done-when names a linter command in a CI file."""
+    words = guidance("ci_checks.lint_runs", "eq", True)
+    assert words is not None
+    assert "`.gitlab-ci.yml`" in words["done_when"] and "`ruff check .`" in words["done_when"]

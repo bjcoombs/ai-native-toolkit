@@ -8,6 +8,8 @@ argument-hint: "[path] [--no-default-excludes] [--exclude <glob>]..."
 
 Run it on any repository. It is **read-only** apart from its report: it never edits a document or a source file.
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 `/assess` measures the doc graph structurally (hubs, orphans, broken links) and states plainly that contradictions are out of its deterministic scope. This skill is the LLM pass that covers them.
 
 ## Two roles, two models

@@ -438,10 +438,19 @@ class FindingPaths(TypedDict):
     paths: list[str]
 
 
+class ReviewedPath(TypedDict):
+    """A finding path a committed review cleared (``lib.reviewed_findings``)."""
+
+    path: str
+    completed_sha: str
+    note: str
+
+
 class DerivedFinding(FindingPaths):
     """One ``derived_findings`` row: a named finding, its paths and its action."""
 
     action: str
+    reviewed: NotRequired[list[ReviewedPath]]  # paths a done review clears (#721)
 
 
 class FindingsSnapshot(TypedDict):
@@ -631,17 +640,14 @@ class FinalizeInput(TypedDict):
     before it writes. The types are what the contract asks for, not a proof.
     """
 
-    score: float
-    maturity_label: str
     top_action: str
     run_id: NotRequired[str]
-    # 8 for a software repo, the applicable-layer count for a knowledge base.
-    denominator: NotRequired[int]
     hotspot_actions: NotRequired[dict[str, list[str]]]
     # Layer id to its 0.0/0.5/1.0 band; an int key is tolerated beside the
     # JSON string key, so the keys are not uniform.
     layer_scores: NotRequired[JsonDict]
-    # Action-contract rows keep whatever extra keys the model supplied.
+    # Action-contract rows keep whatever extra keys the model supplied; an
+    # optional ``condition`` is checked against ``level.conditions`` (#747).
     actions: NotRequired[list[JsonDict]]
     evidence: NotRequired[list[JsonDict]]
 

@@ -94,6 +94,14 @@ def _flag_count(change: str, done_when: str) -> Wording:
     return wording
 
 
+def _none_left(change: str, done_when: str) -> Wording:
+    """Wording for an ``eq 0`` / ``lt 1`` / ``lte 0`` count criterion."""
+    def wording(op: str, value: Operand) -> Guidance | None:
+        fits = op == "eq" and value == 0 or op == "lt" and value == 1 or op == "lte" and value == 0
+        return {"change": change, "done_when": done_when} if fits else None
+    return wording
+
+
 def _instructions_present(op: str, value: Operand) -> Guidance | None:
     if not (op == "gt" and value == 0 or op == "gte" and value == 1):
         return None
@@ -248,6 +256,17 @@ def _ownership_map(op: str, value: Operand) -> Guidance | None:
                          "the repository."}
 
 
+def _boundary_map(op: str, value: Operand) -> Guidance | None:
+    if not (op == "gt" and value == 0 or op == "gte" and value == 1):
+        return None
+    return {"change": "Declare module boundaries: a `CODEOWNERS` line per module path, or an "
+                      "`ARCHITECTURE.md` that names module paths.",
+            "done_when": "A committed `CODEOWNERS` line or `ARCHITECTURE.md` reference names "
+                         "a module path that matches a tracked, non-excluded source file (not "
+                         "a catch-all such as `*` or `/**`, an extension glob such as `*.py`, "
+                         "`.github/`, or a docs-only path)."}
+
+
 def _file_size(op: str, value: Operand) -> Guidance | None:
     number = _number(value)
     if number is None or op not in ("lte", "lt"):
@@ -271,6 +290,41 @@ def _stale_docs(op: str, value: Operand) -> Guidance | None:
                          "the code have had more than two changes to their code since the doc "
                          "last changed (the `/assess` staleness ratio above 2), or whose "
                          "declared source changed after the doc was generated."}
+
+
+def _guardrails_stated(op: str, value: Operand) -> Guidance | None:
+    number = _at_least(op, value)
+    if number is None:
+        return None
+    share = "every gate" if number >= 100 else f"at least {number:g}% of the gates"
+    return {"change": "Add the one-line snippet `/assess` gives for each configured gate an "
+                      "instruction file does not state yet (complexity limit, coverage floor, "
+                      "pre-commit hooks, mypy strict) to `CLAUDE.md` or `AGENTS.md`, so the next "
+                      "session knows the rule before it runs into it.",
+            "done_when": f"A graded instruction file states {share} the repository configures: "
+                         "the rule and its threshold on one line (for example \"Functions stay "
+                         "under complexity 15 (ruff C901): run `ruff check .`\")."}
+
+
+def _agents_agree(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Make every agent system's instruction file name the same test and lint "
+                      "commands and the same coverage, complexity and line-length numbers, "
+                      "ideally by keeping them in `AGENTS.md` only.",
+            "done_when": "No check command or threshold is named in one tool's instruction file "
+                         "and missing from, or different in, another's."}
+
+
+def _agents_linked(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Keep `AGENTS.md` as the one canonical source and replace each other "
+                      "tool's file with the pointer line `/assess` gives for it (`@AGENTS.md` "
+                      "for Claude Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: "
+                      "AGENTS.md` in `.aider.conf.yml`), or make it a symlink to `AGENTS.md`.",
+            "done_when": "Every agent system's root instruction file is `AGENTS.md`, a symlink to "
+                         "it, an `@AGENTS.md` import or a line pointing to it."}
 
 
 def _setting(name: str) -> Wording:
@@ -298,11 +352,30 @@ _WORDING: dict[str, Wording] = {
         "`git ls-files` lists a `CLAUDE.md`, `AGENTS.md` or `.github/copilot-instructions.md`."),
     "nested_instructions.budget.claude_code.lines": _instructions_lines,
     "agent_environment.check.named_total": _check_named,
+    "agent_environment.pinning.unlocked_total": _none_left(
+        "Commit a lockfile beside every dependency manifest (`uv.lock`, `package-lock.json`, "
+        "`go.sum`, `Cargo.lock` or similar), or pin every requirement with `==`.",
+        "Every dependency manifest has its lockfile committed in its directory or a parent."),
     "ci_checks.test_or_lint_runs": _flag(
         "Run the test suite or linter in CI: a GitHub Actions workflow or `.gitlab-ci.yml` job "
         "whose script runs it (`make test`, `pytest`, `npm test`, `uv run ruff check`).",
         "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
         "lint command."),
+    "ci_checks.enforced_check_runs": _flag(
+        "Run the test suite or linter in CI so a failure fails the job (`make test`, `pytest`, "
+        "`npm test`, `uv run ruff check`) on pull requests or pushes. Remove `|| true` / "
+        "`continue-on-error` / `allow_failure` from the step that runs the tests, or re-raise "
+        "the status after `set +e`.",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a test or "
+        "lint command, is not masked and runs on ordinary changes "
+        "(`ci_checks.masked_check_commands` and `off_trigger_check_commands` count the others)."),
+    "ci_checks.lint_runs": _flag(
+        "Run a linter or type checker in CI so a finding fails the job: a GitHub Actions or "
+        "`.gitlab-ci.yml` step that calls it (`ruff check .`, `npx eslint .`, `mypy src`, "
+        "`golangci-lint run`, `make lint`) on pull requests or pushes, without `|| true`, "
+        "`continue-on-error` or `allow_failure`.",
+        "A workflow in `.github/workflows/` or `.gitlab-ci.yml` has a step that runs a linter "
+        "command (`ruff check .`, `eslint`, `mypy`, `make lint`), not only `--version`."),
     "instruction_claims.failed": _claims_hold,
     "observability.rung": _observability,
     "structure.modularity_q": _modularity,
@@ -312,6 +385,7 @@ _WORDING: dict[str, Wording] = {
         "At least one module imports from a different top-level package of the repository."),
     "promissory_markers.families.suppression.total": _suppressions_present,
     "promissory_markers.families.suppression.stale": _suppressions_stale,
+    "structure_drift.tier_0.boundary_patterns": _boundary_map,
     "structure_drift.tier_0.matched_patterns": _ownership_map,
     "promissory_markers.aging_reliable": _flag(
         "Assess a full-history clone, not a shallow or squashed one, so lint suppressions can "
@@ -320,10 +394,21 @@ _WORDING: dict[str, Wording] = {
         "more than one commit in the history."),
     "stats_summary.loc.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
+    "guardrails.stated_pct": _guardrails_stated,
+    "agent_consistency.conflicts": _agents_agree,
+    "agent_consistency.unlinked": _agents_linked,
     "coverage_gate.enforced": _flag(
         "Make the test run fail when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
         "`--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it fails."),
+    "coverage_gate.threshold_meets_minimum": _flag(
+        "Make the test run fail when line coverage drops below a threshold of at least 50 "
+        "percent (a JaCoCo ratio of at least `0.50`).",
+        "A committed coverage threshold of at least 50 percent (`fail_under = 50` in "
+        "`pyproject.toml`, `--cov-fail-under=50`, Jest `coverageThreshold`, JaCoCo `<minimum>0.50"
+        "</minimum>`, go-test-coverage `threshold: total: 50`, `cargo tarpaulin --fail-under 50`, "
+        "or similar) is in the repository as a number, not a variable. A threshold "
+        "below 50 does not count, even when measured coverage is higher."),
     "test_pressure.mutation_run": _flag(
         "Run mutation testing against the test suite.",
         "A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a "
@@ -354,6 +439,12 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
+    "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
+                  "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
+                  "strict): with nothing to state there is no share to measure.",
+    "agent_consistency": "Not measured when fewer than two agent systems have a root "
+                         "instruction file: one system has nothing to agree with, so "
+                         "`conflicts` and `unlinked` are null (`applicable: false`).",
     "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
                  "the dominant source language: `no_import_graph_<language>` when no "
@@ -381,9 +472,36 @@ _MEASURE_HINTS = {
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
-                 "but a CI file pulls jobs from elsewhere (`basis: included_jobs`: a GitLab "
-                 "`include:` or component, a reusable workflow from another repository): the "
-                 "check may live in the included file, which the scan does not read.",
+                 "that can fail its job but a CI file pulls jobs from a file the run could not read (`basis: "
+                 "included_jobs`: a GitLab `include:` whose template is not cloned in the "
+                 "fleet root, or a `template:` or `remote:` include, a reusable workflow from "
+                 "another repository): the check may live there. Cloning the template into "
+                 "the same ghsync root lets the fleet read it. `enforced_check_runs` is also "
+                 "unknown when the check's workflow or job has triggers the scan cannot settle "
+                 "(`enforced_basis: unknown_trigger`: no `on:` key, a `workflow_call` nobody "
+                 "calls, a GitLab `rules: if:` on a custom variable): say when the workflow "
+                 "runs, by adding `push` or `pull_request` triggers (or a merge request rule). "
+                 "It is unknown too when no GitHub Actions or GitLab CI line runs a check but "
+                 "the repository commits a Jenkins, CircleCI, Azure Pipelines, Bitbucket "
+                 "Pipelines, Travis CI or Buildkite file (`basis: unread_ci_system`, "
+                 "`unread_ci_files` counts them): the scanner cannot read those systems, so "
+                 "their checks are not measured; nothing in the repository needs to change. "
+                 "A scan stored before `enforced_check_runs` existed has no such key: re-run "
+                 "the scan to measure it. `lint_runs` (Layer 3) is unknown for the same "
+                 "reasons, and when no CI line calls a linter but one runs a check target "
+                 "or script that may (`lint_basis: check_target`: `make check`, `npm test`, "
+                 "`tox`, `pre-commit run`): the scan does not read recipes, so call the "
+                 "linter in its own CI step (`ruff check .`, `make lint`) to measure it.",
+    "coverage_gate": "The `coverage_gate` scan reads the threshold unknown when none of at "
+                     "least 50 percent is committed but a gate's threshold is not a readable "
+                     "percentage: a variable (`--cov-fail-under=${{ env.COV_MIN }}`), an nyc/c8 "
+                     "default, or a Jest uncovered-line count. Write the threshold as a number "
+                     "to measure it. A Go or Rust repository with no gate found also reads "
+                     "unknown (`unmeasured_reason` `go_rust_gate_form_not_read`): a script "
+                     "comparing `go tool cover` to a number is not read, while go-test-coverage's "
+                     "`.testcoverage.yml`, `cargo tarpaulin --fail-under` and `cargo llvm-cov "
+                     "--fail-under-lines` are. The block is unavailable when the scan did not run: check "
+                     "the fleet run's `--scans` and its `logs/` directory.",
     "test_pressure": "Only a full `/assess` run with its opt-in mutation pass measures this; a "
                      "headless fleet scan does not.",
 }

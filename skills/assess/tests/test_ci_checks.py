@@ -1,12 +1,16 @@
-"""Tests for lib/ci_checks.py: does CI run a test or lint command? (issue #698)."""
+"""Tests for lib/ci_checks.py: does CI run a test or lint command (#698), and can it fail the job (#775)?"""
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from lib.ci_checks import check_commands, count_check_lines, scan_ci_checks
+from lib.ci_checks import check_commands, count_check_lines, enforced_check_commands, scan_ci_checks
+from lib.ci_masking import split_statements, unmasked_lines
 from lib.shared_tooling import pulls_jobs_from_elsewhere
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.parametrize("text", [
@@ -81,7 +85,13 @@ def _write(root: Path, files: dict[str, str]) -> Path:
 def test_no_ci_files_is_false_with_basis_no_ci(tmp_path: Path) -> None:
     block = scan_ci_checks(_write(tmp_path, {"README.md": "x\n"}))
     assert block == {"available": True, "ci_files": 0, "check_commands": 0, "included_files": 0,
-                     "test_or_lint_runs": False, "basis": "no_ci"}
+                     "included_check_commands": 0, "resolved_includes": 0, "unresolved_includes": 0,
+                     "includes": [], "merged_config": "not_read", "merged_config_reason": None,
+                     "merged_check_commands": 0, "test_or_lint_runs": False, "basis": "no_ci",
+                     "enforced_check_runs": False, "enforced_basis": "no_ci",
+                     "masked_check_commands": 0, "off_trigger_check_commands": 0,
+                     "lint_runs": False, "lint_basis": "no_ci",
+                     "unread_ci_files": 0}
 
 
 def test_a_workflow_running_a_test_is_true(tmp_path: Path) -> None:
@@ -155,3 +165,413 @@ def test_a_local_reusable_workflow_is_not_an_include() -> None:
     assert pulls_jobs_from_elsewhere("jobs:\n  t:\n    steps:\n      - uses: actions/checkout@v4\n",
                                      gitlab=False) is False
     assert pulls_jobs_from_elsewhere("test:\n  trigger:\n    include: child.yml\n", gitlab=True) is False
+
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param("run: pytest || true", id="or_true"),
+    pytest.param("run: pytest || exit 0", id="or_exit_0"),
+    pytest.param("run: pytest || :", id="or_colon"),
+    pytest.param("run: pytest || /bin/true", id="or_bin_true"),
+    pytest.param("run: cd x && pytest || true", id="and_chain_or_true"),
+    pytest.param("run: |\n  uv sync\n  pytest -q || true", id="block_or_true"),
+    pytest.param("script:\n  - pytest || true", id="gitlab_or_true"),
+    pytest.param("run: pytest \\\n  -q || true", id="continuation_or_true"),
+    pytest.param("run: pytest --cov=x --cov-fail-under=1 || true", id="cov_fail_under_or_true"),
+    pytest.param("run: ruff check . || true", id="lint_or_true"),
+    pytest.param("- name: t\n  continue-on-error: true\n  run: pytest", id="step_continue_on_error_before"),
+    pytest.param("- name: t\n  run: |\n    pytest\n  continue-on-error: true", id="step_continue_on_error_after"),
+    pytest.param("- name: t\n  continue-on-error: true  # advisory\n  run: pytest",
+                 id="step_continue_on_error_comment"),
+    pytest.param("jobs:\n  t:\n    runs-on: x\n    continue-on-error: true\n    steps:\n      - run: pytest",
+                 id="job_continue_on_error"),
+    pytest.param("test:\n  allow_failure: true\n  script:\n    - pytest", id="gitlab_allow_failure"),
+    pytest.param("run: |\n  set +e\n  pytest", id="set_plus_e_block"),
+    pytest.param("test:\n  script:\n    - set +e\n    - pytest", id="gitlab_set_plus_e_list"),
+    pytest.param("run: |\n  set +e\n  pytest\n  echo \"code $?\"", id="set_plus_e_status_only_echoed"),
+    # A redirect with no later failing exit is still a mask, not a capture.
+    pytest.param("run: ruff check . > out.txt || true", id="redirect_without_check_is_masked"),
+    pytest.param("run: pytest > /dev/null || true\n", id="dev_null_is_masked"),
+    pytest.param("run: pytest | tee -a $GITHUB_STEP_SUMMARY || true\n", id="step_summary_is_masked"),
+    pytest.param("steps:\n  - run: pytest > out.txt || true\n  - run: |\n      make build\n      exit 1\n",
+                 id="redirect_then_unrelated_exit_is_masked"),
+    # The captured name only as a substring of another word (`out` in `layout`) is not a read-back.
+    pytest.param("steps:\n  - run: pytest > out || true\n  - run: |\n      make layout\n      exit 1\n",
+                 id="capture_name_as_substring_is_masked"),
+    # Trimmed `.github/workflows/windows.yml`: job-level continue-on-error.
+    pytest.param("jobs:\n  windows:\n    runs-on: windows-latest\n    continue-on-error: true\n"
+                 "    steps:\n      - uses: actions/checkout@v4\n      - name: tests\n"
+                 "        run: |\n          uv run --locked pytest -ra\n", id="windows_job_continue_on_error"),
+    # Trimmed `.github/workflows/claude-review.yml`: an advisory comment after the value.
+    pytest.param("      - name: review\n        continue-on-error: true  # advisory: never blocks\n"
+                 "        run: npm test\n", id="claude_review_advisory_comment"),
+])
+def test_a_masked_ci_check_is_not_enforced(text: str) -> None:
+    assert check_commands(text) == 1
+    assert enforced_check_commands(text) == (0, 1)
+
+
+_GRAFANA_CAPTURE = (
+    "jobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n"
+    "      - run: pnpm --silent run lint:circular &> /tmp/pr-circular.txt || true\n"
+    "      - name: compare\n        run: |\n"
+    "          if [ \"$(wc -l < /tmp/pr-circular.txt)\" -gt 0 ]; then\n"
+    "            exit 1\n          fi\n"
+)
+_SUBSTITUTION_CAPTURE = (
+    "steps:\n  - run: |\n"
+    "      OUT=\"$(ruff check . 2>&1 || true)\"\n"
+    "      if [ -n \"$OUT\" ]; then echo \"$OUT\"; exit 1; fi\n"
+    "  - run: pytest\n"
+)
+
+
+@pytest.mark.parametrize("text", [
+    pytest.param("run: pytest", id="plain"),
+    pytest.param("run: pytest && true", id="and_true"),
+    pytest.param("run: echo 'a || true' && pytest", id="quoted_operator"),
+    pytest.param("run: pytest; make docs || true", id="mask_on_other_command"),
+    pytest.param("- name: t\n  continue-on-error: ${{ matrix.experimental }}\n  run: pytest",
+                 id="continue_on_error_expression"),
+    pytest.param("- name: t\n  continue-on-error: false\n  run: pytest", id="continue_on_error_false"),
+    pytest.param("test:\n  allow_failure:\n    exit_codes: [137]\n  script:\n    - pytest",
+                 id="allow_failure_exit_codes"),
+    pytest.param("run: |\n  set +e\n  pytest\n  status=$?\n  exit $status", id="set_plus_e_reraised"),
+    pytest.param("run: |\n  set +e\n  make docs\n  set -e\n  pytest", id="set_plus_e_then_set_e"),
+    pytest.param("run: |\n  set +e\n  pytest\n  exit $?", id="set_plus_e_exit_status"),
+    pytest.param("run: |\n  set +e\n  pytest\n  [ $? -eq 0 ] || exit 1", id="set_plus_e_test_then_exit"),
+    pytest.param("steps:\n  - name: a\n    continue-on-error: true\n    run: make docs\n"
+                 "  - name: b\n    run: pytest", id="continue_on_error_on_sibling_step"),
+    pytest.param("test:\n  allow_failure: true\n  script:\n    - make docs\nlint:\n  script:\n    - pytest",
+                 id="allow_failure_on_sibling_job"),
+    pytest.param("- name: t\n  run: |\n    pytest\n- name: u\n  continue-on-error: true\n  run: make docs",
+                 id="continue_on_error_on_next_step"),
+    # Issue #775 calibration (grafana): `|| true` that captures output for a later explicit check.
+    pytest.param(_GRAFANA_CAPTURE, id="capture_then_later_step_exits"),
+    pytest.param("run: mkdir -p out || true && pytest", id="noop_before_check_leaves_it_enforced"),
+    pytest.param("run: pytest || true && ruff check .", id="check_after_noop_is_enforced"),
+])
+def test_an_unmasked_ci_check_is_enforced(text: str) -> None:
+    assert enforced_check_commands(text) == (1, 0)
+
+
+def test_or_true_inside_a_substitution_is_a_capture_not_a_mask() -> None:
+    """The substitution's `|| true` is not top level, so the step after it is enforced and nothing is masked."""
+    assert enforced_check_commands(_SUBSTITUTION_CAPTURE) == (1, 0)
+
+
+def test_the_floor_retry_loop_is_not_masked() -> None:
+    """Trimmed `.github/workflows/floor.yml` canary step: `set +e`, then the status is re-raised."""
+    text = (
+        "      - name: Run the canary suite\n        run: |\n          set +e\n"
+        "          for attempt in 1 2; do\n            uv run pytest tests\n            status=$?\n"
+        "            if [ \"${status}\" -eq 0 ]; then\n              exit 0\n            fi\n"
+        "          done\n          exit 1\n"
+    )
+    assert enforced_check_commands(text) == (1, 0)
+
+
+def test_a_masked_continuation_of_a_non_check_counts_nothing() -> None:
+    """Trimmed `.github/workflows/mutation.yml`: mutmut is not a check command, masked or not."""
+    text = "        run: |\n          uv run mutmut results \\\n            > mutmut-results.txt || true\n"
+    assert enforced_check_commands(text) == (0, 0)
+
+
+def test_a_masked_and_an_unmasked_step_count_separately() -> None:
+    text = ("jobs:\n  t:\n    runs-on: x\n    steps:\n      - name: tests\n        continue-on-error: true\n"
+            "        run: pytest\n      - name: lint\n        run: ruff check .\n")
+    assert enforced_check_commands(text) == (1, 1)
+
+
+def test_unmasked_lines_keep_their_index_and_drop_only_masked_statements() -> None:
+    lines = unmasked_lines("run: pytest || true; ruff check .\nrun: make docs\n")
+    assert lines == ["run: ruff check .", "run: make docs"]
+
+
+def test_split_statements_keeps_operators_outside_quotes_and_substitutions() -> None:
+    assert split_statements("cd x && pytest || true; echo 'a;b' $(c || d) # x || true") == [
+        [("", "cd x"), ("&&", "pytest"), ("||", "true")],
+        [("", "echo 'a;b' $(c || d)")],
+    ]
+
+
+_WF = "name: ci\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n" \
+      "      - uses: actions/checkout@v4\n      - run: {}\n"
+
+
+def test_masked_only_ci_is_not_enforced_but_still_runs(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": _WF.format("pytest || true")}))
+    assert block["test_or_lint_runs"] is True
+    assert block["enforced_check_runs"] is False
+    assert block["masked_check_commands"] == 1
+    assert block["basis"] == "check_command"
+
+
+def test_masked_check_with_include_is_unknown(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": (
+        "include:\n  - project: grp/tpl\n    file: /t.yml\ntest:\n  script:\n    - pytest || true\n")}))
+    assert (block["test_or_lint_runs"], block["enforced_check_runs"]) == (True, None)
+
+
+def test_allow_failure_job_with_a_coverage_gate_is_not_enforced(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {".gitlab-ci.yml": (
+        "test:\n  allow_failure: true\n  script:\n    - pytest --cov-fail-under=80\n")}))
+    assert (block["test_or_lint_runs"], block["enforced_check_runs"]) == (True, False)
+
+
+def test_one_unmasked_check_is_enforced(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {
+        ".github/workflows/a.yml": _WF.format("pytest || true"),
+        ".github/workflows/b.yml": _WF.format("ruff check ."),
+    }))
+    assert (block["enforced_check_runs"], block["masked_check_commands"]) == (True, 1)
+
+
+def test_no_ci_is_not_enforced(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {"README.md": "x\n"}))
+    assert (block["enforced_check_runs"], block["masked_check_commands"]) == (False, 0)
+
+
+def _is_checkout(root: Path) -> bool:
+    probe = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"], capture_output=True,
+                           encoding="utf-8", errors="replace", check=False)
+    return probe.returncode == 0 and (root / ".github" / "workflows" / "tests.yml").is_file()
+
+
+@pytest.mark.skipif(not _is_checkout(REPO_ROOT), reason="needs this repository's checkout")
+def test_this_repository_reads_enforced() -> None:
+    block = scan_ci_checks(REPO_ROOT)
+    assert block["enforced_check_runs"] is True
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")   # #782
+
+
+def _gha(run: str) -> dict[str, str]:
+    return {".github/workflows/ci.yml": (
+        "on: [pull_request]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n"
+        f"      - uses: actions/checkout@v4\n      - run: {run}\n")}
+
+
+_MATRIX_MYPY = {".github/workflows/ci.yml": (
+    "on: [pull_request]\njobs:\n  t:\n    strategy:\n      matrix:\n        tool:\n"
+    "          - mypy\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.tool }}\n")}
+
+
+# The issue #782 fixture table: (files, lint_runs, lint_basis, test_or_lint_runs as before #782).
+LINT_STATES = [
+    pytest.param(_gha("ruff check ."), True, "lint_command", True, id="ruff-check"),
+    pytest.param({**_gha("ruff check ."), "app.py": "import os  # noqa: F401\n"},
+                 True, "lint_command", True, id="ruff-check-and-noqa"),
+    pytest.param({"app.py": "import os  # noqa: F401\n"}, False, "no_ci", False, id="noqa-no-ci"),
+    pytest.param(_gha("make check"), None, "check_target", True, id="make-check"),
+    pytest.param(_gha("pre-commit run --all-files"), None, "check_target", False, id="pre-commit"),
+    pytest.param(_gha("pytest"), False, "no_lint_command", True, id="pytest"),
+    pytest.param(_gha("ruff --version"), False, "no_lint_command", True, id="ruff-version"),
+    pytest.param(_MATRIX_MYPY, False, "no_lint_command", False, id="matrix-mypy"),
+    pytest.param({".gitlab-ci.yml": "include:\n  - component: gl.test/grp/comp/test@1.0\n"},
+                 None, "included_jobs", None, id="gitlab-include-only"),
+]
+
+
+@pytest.mark.parametrize(("files", "lint", "basis", "test_or_lint"), LINT_STATES)
+def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | None, basis: str,
+                          test_or_lint: bool | None) -> None:
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert block["lint_runs"] is lint
+    assert block["lint_basis"] == basis
+    assert block["test_or_lint_runs"] is test_or_lint   # unchanged by #782
+
+
+@pytest.mark.parametrize(("run", "lint"), [
+    ("ruff check . || true", False),            # masked: cannot fail the job
+    ("uv run ruff check .", True),
+    ("make lint", True),
+    ("npm run lint", True),
+    ("task lint", True),
+    ("./scripts/lint.sh", True),
+    ("go vet ./...", True),
+    ("uv run mypy --version", False),
+    ("eslint --help", False),
+    ("ruff -V", False),
+    ("npm test", None),
+    ("tox -e py312", None),
+    ("./scripts/test.sh", None),
+    ("task check", None),
+    ("uv run pre-commit run --all-files", None),
+    ("uv run pytest -q", False),
+    ("python -m pytest", False),
+    ("go test ./...", False),
+    ("cargo test", False),
+    ("bun test", False),
+    ("npx jest", False),
+    ("make check || true", False),              # a masked check target cannot fail the job either
+    ("make build", False),
+    ("hatch fmt --check", True),
+    ("hatch run lint", None),
+    ("hatch run pytest", False),
+    ("pyright", True),
+    ("npx tsc --noEmit", True),
+    ("npm run typecheck", True),
+])
+def test_lint_runs_per_command(tmp_path: Path, run: str, lint: bool | None) -> None:
+    assert scan_ci_checks(_write(tmp_path, _gha(run)))["lint_runs"] is lint
+
+
+def test_a_masked_lint_step_is_not_enforced(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, _gha("ruff check . || true")))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_step_off_the_ordinary_triggers_does_not_count(tmp_path: Path) -> None:
+    text = "on: [workflow_dispatch]\njobs:\n  t:\n    steps:\n      - run: ruff check .\n"
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_step_with_unsettled_triggers_is_unknown(tmp_path: Path) -> None:
+    text = "jobs:\n  t:\n    steps:\n      - run: ruff check .\n"
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": text}))
+    assert (block["lint_runs"], block["lint_basis"]) == (None, "unknown_trigger")
+
+
+def test_a_lint_line_beats_a_check_target(tmp_path: Path) -> None:
+    files = _gha("make check")
+    files[".github/workflows/lint.yml"] = _gha("ruff check .")[".github/workflows/ci.yml"]
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def test_a_lint_job_in_a_resolved_local_include_counts(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, {
+        ".gitlab-ci.yml": "include:\n  - local: ci/lint.yml\n",
+        "ci/lint.yml": "lint:\n  script:\n    - ruff check .\n",
+    }))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def _uses(action: str, extra: str = "", on: str = "[pull_request]") -> dict[str, str]:
+    return {".github/workflows/lint.yml": (
+        f"on: {on}\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n"
+        f"      - uses: actions/checkout@v4\n      - uses: {action}\n{extra}")}
+
+
+@pytest.mark.parametrize("action", [
+    "golangci/golangci-lint-action@v6", "astral-sh/ruff-action@v3", "chartboost/ruff-action@v1",
+    "github/super-linter@v5", "super-linter/super-linter/slim@v7",
+    "reviewdog/action-eslint@v1", "wearerequired/lint-action@v2",
+    "DavidAnson/markdownlint-cli2-action@v16", "'astral-sh/ruff-action@v3'",
+    "golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc",
+])
+def test_a_known_lint_action_is_a_lint_step(tmp_path: Path, action: str) -> None:
+    block = scan_ci_checks(_write(tmp_path, _uses(action)))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+    assert block["test_or_lint_runs"] is False   # unchanged by #782: actions are not read there
+
+
+@pytest.mark.parametrize("action", [
+    "actions/setup-python@v5", "someone/lint-action@v1", "reviewdog/reviewdog@v1",
+    "golangci/golangci-lint-action-fork@v1", "./.github/actions/lint",
+    "reviewdog/action-setup@v1", "reviewdog/action-suggester@v1",   # install / post only
+])
+def test_an_unknown_action_is_not_a_lint_step(tmp_path: Path, action: str) -> None:
+    block = scan_ci_checks(_write(tmp_path, _uses(action)))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "no_lint_command")
+
+
+def test_pre_commit_action_reads_as_pre_commit_run(tmp_path: Path) -> None:
+    """The action runs ``pre-commit run --all-files``: one reading for both forms."""
+    action = scan_ci_checks(_write(tmp_path / "a", _uses("pre-commit/action@v3.0.1")))
+    line = scan_ci_checks(_write(tmp_path / "l", _gha("pre-commit run --all-files")))
+    assert (action["lint_runs"], action["lint_basis"]) == (line["lint_runs"], line["lint_basis"]) \
+        == (None, "check_target")
+
+
+@pytest.mark.parametrize(("files", "lint"), [
+    pytest.param({".gitlab-ci.yml": "lint:\n  script:\n    - flake8\n"}, True, id="gitlab-script-flake8"),
+    pytest.param({".gitlab-ci.yml": "lint:\n  script:\n  - rubocop\n"}, True, id="indentless-rubocop"),
+    pytest.param({".gitlab-ci.yml": "stages:\n  - mypy\nt:\n  script:\n    - echo hi\n"},
+                 False, id="stages-mypy"),
+    pytest.param({".gitlab-ci.yml": "t:\n  needs:\n    - ruff\n  script:\n    - echo hi\n"},
+                 False, id="needs-ruff"),
+    pytest.param({".gitlab-ci.yml": "t:\n  needs:\n    - tsc\n  script:\n    - echo hi\n"},
+                 False, id="needs-tsc"),
+    pytest.param({".gitlab-ci.yml": "stages:\n  - pyright\nt:\n  script:\n    - echo hi\n"},
+                 False, id="stages-pyright"),
+    pytest.param({".gitlab-ci.yml": "lint:\n  script:\n    - pyright\n"}, True, id="gitlab-script-pyright"),
+])
+def test_a_lone_linter_runs_only_under_a_script_key(tmp_path: Path, files: dict[str, str],
+                                                    lint: bool) -> None:
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert block["lint_runs"] is lint
+    assert block["test_or_lint_runs"] is False   # unchanged: a lone linter never counted there
+
+
+def test_a_lint_action_with_continue_on_error_is_not_enforced(tmp_path: Path) -> None:
+    files = _uses("golangci/golangci-lint-action@v6", "        continue-on-error: true\n")
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_action_off_the_ordinary_triggers_does_not_count(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, _uses("astral-sh/ruff-action@v3", on="[workflow_dispatch]")))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_action_with_unsettled_triggers_is_unknown(tmp_path: Path) -> None:
+    text = "jobs:\n  lint:\n    steps:\n      - uses: astral-sh/ruff-action@v3\n"
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/lint.yml": text}))
+    assert (block["lint_runs"], block["lint_basis"]) == (None, "unknown_trigger")
+
+
+def test_a_lint_action_with_step_inputs_counts(tmp_path: Path) -> None:
+    files = _uses("golangci/golangci-lint-action@v6", "        with:\n          version: v1.60\n")
+    assert scan_ci_checks(_write(tmp_path, files))["lint_runs"] is True
+
+
+_GH_PYTEST = "on: [pull_request]\njobs:\n  t:\n    steps:\n      - run: pytest\n"
+_GH_DEPLOY = "on: [pull_request]\njobs:\n  d:\n    steps:\n      - run: make deploy\n"
+_GH_MASKED = "on: [pull_request]\njobs:\n  t:\n    steps:\n      - run: pytest || true\n"
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({"Jenkinsfile": "pipeline { agent any; stages { stage('t') { steps { sh 'pytest' } } } }\n"},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    ({".circleci/config.yml": "version: 2.1\njobs:\n  test:\n    steps:\n      - run: pytest\n"},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    ({"azure-pipelines.yml": "steps:\n- script: echo hi\n"},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    ({"Jenkinsfile": "", "bitbucket-pipelines.yml": "", ".travis.yml": "",
+      ".buildkite/pipeline.yml": ""},
+     (None, False, "unread_ci_system", "unread_ci_system", 4)),
+    ({"azure-pipelines.yaml": "", ".buildkite/pipeline.yaml": "", "buildkite.yml": ""},
+     (None, False, "unread_ci_system", "unread_ci_system", 3)),
+    ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_PYTEST},
+     (True, True, "check_command", "enforced_check", 1)),
+    ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_DEPLOY},
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
+    # A masked check beside an unread system: the unread system may run it unmasked.
+    ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_MASKED},
+     (None, True, "check_command", "unread_ci_system", 1)),
+    ({"README.md": "x\n"}, (False, False, "no_ci", "no_ci", 0)),
+    # Only root files are markers: a nested Jenkinsfile is not the repository's pipeline.
+    ({"tools/Jenkinsfile": "sh 'pytest'\n"}, (False, False, "no_ci", "no_ci", 0)),
+])
+def test_unread_ci_system_is_not_measured(
+        tmp_path: Path, files: dict[str, str],
+        expected: tuple[bool | None, bool, str, str, int]) -> None:
+    """Issue #787: a CI system the scan does not parse is not measured, never 0."""
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["enforced_check_runs"], block["test_or_lint_runs"], block["basis"],
+            block["enforced_basis"], block["unread_ci_files"]) == expected
+
+
+@pytest.mark.parametrize(("files", "lint"), [
+    ({"Jenkinsfile": "sh 'ruff check .'\n"}, (None, "unread_ci_system")),
+    ({"Jenkinsfile": "", **_gha("pytest")}, (None, "unread_ci_system")),
+    ({"Jenkinsfile": "", **_gha("ruff check .")}, (True, "lint_command")),
+    ({"Jenkinsfile": "", **_gha("make check")}, (None, "check_target")),
+])
+def test_lint_runs_on_an_unread_ci_system_is_not_measured(
+        tmp_path: Path, files: dict[str, str], lint: tuple[bool | None, str]) -> None:
+    """Issue #787: Layer 3 level 1 reads unknown, never false, beside an unread CI system."""
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == lint

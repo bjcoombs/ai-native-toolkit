@@ -6,6 +6,8 @@
 # `check` runs the commands the required jobs in .github/workflows/tests.yml
 # run, so a green `make check` predicts a green CI. When a job there changes,
 # change the matching target here. Needs uv (https://docs.astral.sh/uv/).
+# docs/windows.md shows each recipe as a make-free command for machines
+# without make; tests/test_windows_docs.py fails when the two drift.
 
 .POSIX:
 .PHONY: help setup check lock-check test-assess test-scripts test-contract lint

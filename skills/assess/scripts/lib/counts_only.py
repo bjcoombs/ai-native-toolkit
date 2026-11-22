@@ -44,7 +44,6 @@ from lib.counts_only_rules import (
     PATH,
     PATH_KEYED_MAPS,
     REASON,
-    REASON_SENTENCE_CODES,
     RULES,
     TOKEN,
     TOKEN_RE,
@@ -52,7 +51,8 @@ from lib.counts_only_rules import (
     classify,
 )
 from lib.counts_only_schema import typed_field_names
-from lib.import_graph import STRUCTURE_REASON_CODES
+from lib.reason_codes import reason_code as reason_code
+from lib.reason_codes import reason_token as reason_token
 from lib.run_context_types import JsonDict
 
 # The longest path kept; a longer "path" is more likely prose than a file.
@@ -273,9 +273,10 @@ def render_doc() -> str:
     lines = [
         "# Counts-only output: fields kept per block",
         "",
-        "Generated from `scripts/lib/counts_only_rules.py` (in the assess skill) by",
-        "`lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
-        "and the table disagree. Regenerate with:",
+        "Generated from each collector's `privacy` table in `checks/core.toml` and",
+        "the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)",
+        "by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file",
+        "and the table disagree. Each section below is one collector. Regenerate with:",
         "",
         "```bash",
         "# from the assess skill directory",
@@ -406,31 +407,6 @@ def apply_cli(ctx: Mapping[str, Any], parsed: argparse.Namespace) -> JsonDict | 
         return None
     hash_paths, salt = hash_options(parsed)
     return counts_only(ctx, hash_paths=hash_paths, salt=salt)
-
-
-def reason_code(reason: object) -> str:
-    """The machine code of an unavailable block's reason, or ``"unavailable"``.
-
-    Reasons are written ``code: sentence`` (``no_remote: no github.com remote
-    ...``); the code before the colon is kept when it is a token, the sentence
-    never is.
-    """
-    code = str(reason).split(":", 1)[0].strip() if reason is not None else ""
-    return code if TOKEN_RE.match(code) else "unavailable"
-
-
-def reason_token(reason: str) -> str | None:
-    """A ``REASON`` field's code: the leading code, a known sentence's code, or
-    ``"unavailable"``; None (dropped) for an empty reason (#764). A leading
-    code is kept only when ``STRUCTURE_REASON_CODES`` lists it, so a path or a
-    name before the colon never leaks."""
-    if not reason.strip():
-        return None
-    code = reason.split(":", 1)[0].strip()
-    if code in STRUCTURE_REASON_CODES:
-        return code
-    return next((c for needle, c in REASON_SENTENCE_CODES if needle in reason),
-                "unavailable")
 
 
 def counts_only_scans(

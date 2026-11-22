@@ -49,10 +49,6 @@ reason = "pre-existing; ratchet from 2026-10-07"
 lines = 1422
 reason = "pre-existing; ratchet from 2026-10-07"
 
-[ceilings."skills/assess/scripts/assess_finalize.py"]
-lines = 819
-reason = "raised by #468: mypy strict type annotations; lowered to 819 after #497"
-
 [ceilings."skills/assess/scripts/complexity-treemap.py"]
 lines = 1493
 reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
@@ -62,19 +58,15 @@ lines = 1107
 reason = "raised by #468: mypy strict type annotations; +3 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/scripts/lib/keyhole_signals.py"]
-lines = 1590
-reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py)"
+lines = 1556
+reason = "raised by #468, then lowered by #473 (E1 detector moved to lib/untrusted_hotspot.py) and #795 (finding tables load from checks/core.toml)"
 
 [ceilings."skills/assess/scripts/lib/wiki_writer.py"]
 lines = 1016
 reason = "pre-existing; ratchet from 2026-10-07; +1 for the run_context_types import (disallow_any_generics ratchet)"
 
 [ceilings."skills/assess/tests/test_assess_finalize.py"]
-lines = 1354
-reason = "pre-existing; ratchet from 2026-10-07"
-
-[ceilings."skills/assess/tests/test_complexity_treemap.py"]
-lines = 1798
+lines = 1243
 reason = "pre-existing; ratchet from 2026-10-07"
 
 [ceilings."skills/assess/tests/test_doc_graph.py"]

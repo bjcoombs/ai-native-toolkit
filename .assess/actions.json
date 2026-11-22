@@ -26,16 +26,18 @@
       "layer": 6,
       "effort": "medium",
       "files": [
+        "scripts/floor_check.py",
         "scripts/tests/test_floor_check.py",
+        "scripts/tests/test_floor_check_spec.py",
         "FLOOR.md"
       ],
       "first_step": "List FLOOR.md rules with no spec-derived test in scripts/tests/test_floor_check.py",
       "done_when": "A non-author reviewer records the rule-to-test mapping; unmapped rules gain spec-derived tests; make check passes",
       "scope_fence": "Test files only; no edits to scripts/floor_check.py (floor core)",
       "finding": "self_referential_tests",
-      "status": "pending",
-      "claimed_by": null,
-      "completed_sha": null,
+      "status": "done",
+      "claimed_by": "issues-agent-ready.719",
+      "completed_sha": "7e4e84e848c3ed239348cd9200c3fc760037fb04",
       "mode": "verify_then_retire"
     },
     {

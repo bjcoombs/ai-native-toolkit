@@ -49,8 +49,9 @@ from lib.levels import MaturityModel
 
 _TOP_KEYS = ("run", "model", "views", "repos")
 # The fleet-data.json versions whose cells and units the engine reads alike: 1 (#703) carried
-# the mean-share roll-up #772 removed, which the engine no longer reads.
-READABLE_FLEET_DATA_VERSIONS = frozenset({1, FLEET_DATA_VERSION})
+# the mean-share roll-up #772 removed, which the engine no longer reads; 3 (#746) only adds
+# ``opportunities``, which the engine does not read.
+READABLE_FLEET_DATA_VERSIONS = frozenset({1, 2, FLEET_DATA_VERSION})
 
 
 def _stamp(entry: Path, data: Mapping[str, Any]) -> Any:

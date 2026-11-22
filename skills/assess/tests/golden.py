@@ -96,13 +96,17 @@ _REPORT_GENERATED_RE = re.compile(
 _REPORT_MEASURED_COMMIT_RE = re.compile(
     r"^- \*\*Measured at commit:\*\* .*$", re.MULTILINE
 )
+# The headline's tally line ends with the maturity-model version (#747), which moves
+# with every default.toml edit; it is provenance, like the plugin version.
+_REPORT_MODEL_VERSION_RE = re.compile(r"^(Verified practices: .* · model )\S+$", re.MULTILINE)
 
 
 def normalize_report(text: str) -> str:
     """Return an ``assess-report.md`` string with volatile lines masked.
 
-    Only the two provenance lines (the ``_Generated ..._`` stamp and the
-    ``Measured at commit`` bullet) carry the date/version/commit; the rest of
+    Only the provenance (the ``_Generated ..._`` stamp, the ``Measured at
+    commit`` bullet and the maturity-model version ending the headline's tally
+    line) carries the date/version/commit; the rest of
     the report is deterministic given the deterministic core's output, so it is
     compared verbatim.
     """
@@ -110,6 +114,7 @@ def normalize_report(text: str) -> str:
     text = _REPORT_MEASURED_COMMIT_RE.sub(
         f"- **Measured at commit:** {SENTINEL}", text
     )
+    text = _REPORT_MODEL_VERSION_RE.sub(rf"\g<1>{SENTINEL}", text)
     return text
 
 

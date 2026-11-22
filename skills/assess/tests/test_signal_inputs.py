@@ -33,23 +33,23 @@ def test_every_default_signal_has_an_input_class(signal: str) -> None:
 
 
 def test_an_unclassified_signal_fails_the_classification_check(tmp_path: Path) -> None:
-    # coverage_gate is open above its typed gates list, so the path validator accepts it.
+    # A valid typed path that no default criterion reads, so it has no class.
     model = tmp_path / "levels.toml"
     model.write_text(
         'version = "t-1"\n[[rows]]\nid = "r"\ntitle = "R"\nscope = "team"\n'
         'aggregation = "min"\n[[rows.levels]]\nlevel = 1\n'
-        'criteria = [{ signal = "coverage_gate.gates_total", op = "gt", value = 0 }]\n',
+        'criteria = [{ signal = "review_reality.merged_count", op = "gt", value = 0 }]\n',
         encoding="utf-8")
     loaded = load_levels(model, signal_path_validator())
     signal = loaded["rows"][0]["levels"][0]["criteria"][0]["signal"]
-    with pytest.raises(UnclassifiedSignal, match="coverage_gate.gates_total"):
+    with pytest.raises(UnclassifiedSignal, match="review_reality.merged_count"):
         input_class(signal)
 
 
 @pytest.mark.parametrize(("criterion", "declared"), [
     ({"signal": "layer_grades.instruction_file_present", "op": "eq", "value": True}, True),
-    ({"signal": "coverage_gate.enforced", "op": "eq", "value": True}, True),
-    ({"signal": "promissory_markers.families.suppression.total", "op": "gt", "value": 0}, True),
+    ({"signal": "coverage_gate.threshold_meets_minimum", "op": "eq", "value": True}, True),
+    ({"signal": "ci_checks.lint_runs", "op": "eq", "value": True}, False),
     ({"signal": "observability.rung", "op": "gte", "value": 1}, True),
     ({"signal": "observability.rung", "op": "gte", "value": 3}, True),
     ({"signal": "promissory_markers.families.suppression.stale", "op": "lte", "value": 10}, False),
@@ -63,8 +63,9 @@ def test_is_declared_matches_the_classification_table(criterion: Criterion, decl
 
 
 @pytest.mark.parametrize(("criterion", "grade"), [
-    ({"signal": "coverage_gate.enforced", "op": "eq", "value": True}, "config_only"),
-    ({"signal": "ci_checks.test_or_lint_runs", "op": "eq", "value": True}, "declared"),
+    ({"signal": "coverage_gate.threshold_meets_minimum", "op": "eq", "value": True}, "config_only"),
+    ({"signal": "ci_checks.enforced_check_runs", "op": "eq", "value": True}, "verified"),
+    ({"signal": "ci_checks.lint_runs", "op": "eq", "value": True}, "verified"),
     ({"signal": "observability.rung", "op": "gte", "value": 3}, "declared"),
     ({"signal": "stats_summary.loc.p95", "op": "lte", "value": 500}, "measured"),
     ({"signal": "doc_staleness.summary.stale_pct", "op": "lte", "value": 50}, "measured"),
@@ -77,9 +78,9 @@ def test_criterion_grade_follows_the_input_class(criterion: Criterion, grade: Gr
 @pytest.mark.parametrize("criterion", [
     {"signal": "agent_environment.check.named_total", "op": "gte", "value": 2},
     {"signal": "agent_environment.check.named_total", "op": "lte", "value": 0},
-    {"signal": "promissory_markers.families.suppression.total", "op": "lt", "value": 1},
+    {"signal": "agent_environment.pinning.unlocked_total", "op": "lt", "value": 1},
     {"signal": "observability.rung", "op": "ne", "value": 3},
-    {"signal": "coverage_gate.enforced", "op": "gte", "value": True},
+    {"signal": "coverage_gate.threshold_meets_minimum", "op": "gte", "value": True},
 ])
 def test_no_operator_lifts_a_text_signal_to_a_counted_grade(criterion: Criterion) -> None:
     # #789: the grade comes from the evidence, never from the criterion's operator.

@@ -175,7 +175,76 @@ constant each.
 # with no package boundary crossed there is no contract edge to measure, so the
 # former 1.0 was vacuous. A reader comparing front_door_ratio as a number must
 # skip null. complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.27.0"
+# 1.28.0: run-context.json ci_checks gains included_check_commands,
+# resolved_includes, unresolved_includes and includes[] (kind, id, status,
+# ref_basis, depth: GitLab includes resolved offline, issue #766), and each
+# review_automation match gains depth. Additive: no existing key moves.
+# 1.29.0: run-context.json structure_drift.tier_0 gains boundary_patterns (issue
+# #785): the matched declarations that name a module path - every matched
+# architecture-doc reference, and every CODEOWNERS glob with a literal path
+# segment that owns source code under a non-dot directory (not `*`, `*.py`,
+# `/.github/`, `README.md` or a docs-only path). Read by the default
+# maturity model's Layer 4 level 1. Additive: total_patterns and matched_patterns
+# keep their meaning, and complexity-stats.json is unchanged.
+# 1.30.0: run-context.json ci_checks gains merged_config, merged_config_reason and
+# merged_check_commands (issue #796): GitLab's merged CI configuration, read through
+# the CI lint API where an include did not resolve offline, and basis gains
+# merged_config. A review_automation match read from that configuration has line
+# null and depth 1. Additive: no existing key moves.
+# 1.31.0: run-context.json coverage_gate gains max_threshold_percent and
+# threshold_meets_minimum, and each gate gains threshold_percent (issue #781): the
+# threshold as a percentage (a JaCoCo ratio 0.80 is 80) and the Layer 6 level 1
+# signal (true at 50 percent or more, null when a counted gate's percentage is not
+# read). Additive: threshold and unit stay as written, and complexity-stats.json is
+# unchanged.
+# 1.32.0: run-context.json ci_checks gains enforced_check_runs,
+# enforced_basis, masked_check_commands and off_trigger_check_commands
+# (issue #775): the CI check test with masked checks (|| true,
+# continue-on-error: true, allow_failure: true, set +e) and checks off the
+# ordinary triggers left out. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+# 1.33.0: run-context.json coverage_gate gains unmeasured_reason (issue #788):
+# go_rust_gate_form_not_read when no gate is found in a repository holding a
+# go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
+# the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
+# 1.34.0: run-context.json gains the level block (issue #744): the default maturity
+# model's conditions with state, grade and reason, the verified tally (met, measured,
+# not_measured), the autonomy Step and the next Step's blockers
+# (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+# 1.35.0: run-context.json derived_findings rows gain an optional reviewed list of
+# {path, completed_sha, note} (issue #721): the paths a done review in the
+# committed .assess/actions.json clears. actions.json gains an optional completed
+# list for done entries that left the Top 3. Additive.
+# 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# #765): the window's accounts that look automated and are not yet classified in
+# the [identities] config section, a count with no identity. Additive.
+# 1.37.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
+# #782): whether an unmasked CI line on ordinary triggers runs a linter (null
+# when a check target or script may lint inside it). Additive: no existing
+# key moves, and complexity-stats.json is unchanged.
+# 1.38.0: run-context.json ci_checks gains unread_ci_files, and basis and
+# enforced_basis gain unread_ci_system (issue #787): a tracked CI file of a
+# system the scan does not parse (Jenkinsfile, .circleci/config.yml, ...).
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+# 1.39.0: run-context.json gains the headline block (issue #747): the Step, its next
+# unlock and "Verified practices: N of M measured" worded from the level block
+# (lib/headline.py); badge.json carries its summary (the Step and the tally) instead
+# of the findings count, and the log.md entry's readiness line is that summary, with
+# no layered score. finalize-input.json drops score, maturity_label and denominator,
+# and an action may carry a condition id. Additive to run-context.json.
+# 1.40.0: run-context.json gains the guardrails block (issue #767): the gates
+# the repository configures (complexity limit, coverage floor, pre-commit hooks,
+# mypy strict), whether an instruction file states each, a snippet for each
+# unstated one, and stated_pct. Additive: no existing key moves, and
+# complexity-stats.json is unchanged.
+# 1.41.0: run-context.json gains the agent_consistency block (issue #768): the root
+# instruction files of every agent system present, the check commands and
+# thresholds they disagree on, each file's link to the canonical source and the
+# pointer line per unlinked system. nested_instructions also discovers the
+# Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -273,4 +342,66 @@ ARTIFACT_SCHEMA_VERSION = "1.27.0"
 #     GitLab ``script:`` / ``before_script:`` / ``after_script:`` (issue #725), so
 #     a workflow whose only mention is ``needs: - pytest`` or a ``matrix:`` axis
 #     ``- tox`` reads ``check_commands`` 0 and Layer 5 level 1 can drop to 0.
-ASSESS_METHOD_VERSION = 23
+# 24: GitLab includes resolve offline (issue #766): ``ci_checks.test_or_lint_runs``
+#     reads a check in an included local file or a template cloned in the fleet root
+#     (true), or false when every include resolved without one, where it was null;
+#     ``review_automation`` credits a review component inside a resolved template;
+#     a workflow whose ``on`` key reads ``true:`` (YAML 1.1) has its events read, so
+#     an issue_comment-only review action is no longer credited.
+# 25: ``agent_environment`` adds ``setup_ready`` (the setup half of ``layer5_cap``)
+#     and ``pinning.unlocked_total`` (issue #786). Layer 5 level 2 reads
+#     ``unlocked_total eq 0`` instead of the cap: a repository whose instruction
+#     file names no check can now read level 2, and one with committed setup
+#     but an unlocked manifest no longer can. ``layer5_cap`` is unchanged.
+# 26: Layer 4 level 1 reads structure_drift.tier_0.boundary_patterns instead of
+#     matched_patterns (issue #785), so a CODEOWNERS whose lines own no module
+#     source (`*`, `*.py`, `/.github/`, `README.md`, `docs/`) no longer credits a
+#     declared boundary.
+# 27: under --platform (and in a full /assess run) GitLab's CI lint API gives the
+#     merged CI configuration of a repository whose includes did not all resolve
+#     offline (issue #796): ``ci_checks.test_or_lint_runs`` reads true or false
+#     where it was null, and ``review_automation`` credits a review component the
+#     merge pulled in. Offline headless runs are unchanged.
+# 28: a masked CI check (``|| true``, ``continue-on-error: true``,
+#     ``allow_failure: true``, ``set +e`` without a re-raise) or one that does
+#     not run on ordinary changes (a ``workflow_dispatch``-only workflow, a
+#     manual GitLab job) no longer meets Layer 5 level 1 (issue #775): it reads
+#     ``ci_checks.enforced_check_runs``, so the Layer 5 row and the scorer's
+#     Layer 5 evidence can move.
+# 29: coverage_gate reads go-test-coverage's .testcoverage.yml, cargo tarpaulin
+#     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
+#     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
+#     level 1 as not measured (threshold_meets_minimum null) where it read 0.
+# 30: a self_referential_tests path whose done review is recorded in the committed
+#     .assess/actions.json (status done, completed_sha an ancestor of HEAD, the path
+#     in files) and untouched since that commit leaves the attention list,
+#     prescribed_actions and the keyhole summary (issue #721), so the Top 3 can move.
+#     It stays in derived_findings with a reviewed note; a later change re-flags it.
+# 31: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+#     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
+#     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
+#     or person never does. The same matcher serves ``delivery`` and the GitLab
+#     note classifier (``gitlab_notes``) under --platform, so a confirmed account
+#     moves their agent counts too. Without the section nothing changes.
+# 32: Layer 3 level 1 reads ``ci_checks.lint_runs`` (issue #782): a linter run
+#     in CI, not a suppression comment. One suppression comment no longer earns the row,
+#     and a clean repository that lints in CI reads at least 1 where it was
+#     unknown, so the Layer 3 row can move.
+# 33: a repository with no readable CI check whose tree tracks a CI file of a
+#     system the scan does not parse (Jenkins, CircleCI, Azure Pipelines,
+#     Bitbucket Pipelines, Travis CI, Buildkite) reads
+#     ``ci_checks.enforced_check_runs`` null (``basis: unread_ci_system``), so
+#     its Layer 5 row moves from level 0 to unknown (issue #787).
+# 34: the displayed headline changes (issue #747): the layered "X / 8" score and
+#     its band names are retired for the deterministic Step, its next unlock and
+#     "Verified practices: N of M measured"; the badge and the log.md entry carry
+#     the Step and the tally, and the scorer returns per-layer verdicts only.
+# 35: the guardrails block and its stated_pct signal (issue #767): the default
+#     maturity model gains the guardrails-stated row (half of the configured
+#     gates stated is level 1, all of them level 2, none found is unknown).
+#     Existing rows are unchanged.
+# 36: the agent_consistency block and its conflicts and unlinked signals (issue
+#     #768): the default maturity model gains the agent-consistency row (no
+#     conflict is level 1, every system linked to the canonical file level 2,
+#     fewer than two systems unknown). Existing rows are unchanged.
+ASSESS_METHOD_VERSION = 36

@@ -96,6 +96,7 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [Contributing: releasing](./contributing/release.md) - cutting the per-marathon release and refreshing the Marketplace listing.
 - [Contributing: standalone skill pipeline](./contributing/standalone-skills.md) - how the standalone ZIPs are built, vendored and marker-transformed.
 - [Contributing: /assess architecture](./contributing/assess-architecture.md) - the deterministic core, the inward-only layering, the `.assess/` wiki and the LLM write-back.
+- [Windows setup](./windows.md) - the Windows baseline (Git for Windows with Git Bash, Python 3.11+, uv optional), installs, PATH notes and the commands that replace `make setup`, `make check` and `make lint`.
 - [Testing a branch locally](./testing-a-branch-locally.md) - run an unmerged branch's `SKILL.md` and scripts as a real plugin against a target repo.
 - [Design history](./superpowers/README.md) - the plans and specs behind the skills as they were built.
 - [Modernization programme (2026-09)](./design/2026-09-modernization/README.md) - intent, recorded probes, and the eleven workstream specs behind the multi-plugin split.

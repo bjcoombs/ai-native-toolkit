@@ -5,14 +5,16 @@ description: Renders the /assess report from the deterministic run-context.json 
 
 # Assess Findings Writer
 
-The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the 0-8 scorecard. Your job is to assemble `.assess/assess-report.md`: the scorecard, the snapshots, the **verbatim** cross-layer findings, the lying signals, and the Top 3 Actions.
+The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the per-layer scorecard. Your job is to assemble `.assess/assess-report.md`: the deterministic headline, the scorecard, the snapshots, the **verbatim** cross-layer findings, the lying signals, and the Top 3 Actions.
+
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
 
 The deterministic parts are not yours to invent - you paste them. You write the prose *around* a findings section you cannot omit or reorder. This is the deterministic-core-writes-data / LLM-writes-prose split that makes the report reproducible regardless of which model drives the run.
 
 ## Inputs
 
-- `$REPO_ROOT/.assess/run-context.json` - the data bus (findings, attention, keyhole summary, prescribed actions, stats, diff).
-- The scorecard returned by the `assess-layer-scorer` agent (the 0-8 score, per-layer verdicts, maturity label), with its `evidence` list already re-checked by `lib/evidence_check.py`: only entries that held on disk remain there; the rejected ones arrive separately under `evidence_rejected`, each with the `reason` the check gave.
+- `$REPO_ROOT/.assess/run-context.json` - the data bus (the `headline` and `level` blocks, findings, attention, keyhole summary, prescribed actions, stats, diff).
+- The scorecard returned by the `assess-layer-scorer` agent (the per-layer verdicts and their evidence), with its `evidence` list already re-checked by `lib/evidence_check.py`: only entries that held on disk remain there; the rejected ones arrive separately under `evidence_rejected`, each with the `reason` the check gave.
 
 **Existence and wiring claims cite only verified evidence.** A report sentence saying a file or directory exists or is missing, or that something is or is not wired in (a workflow runs the linter, no CI job calls the script), must rest on an entry in the scorecard's `evidence` list and name the path that entry cites. When no verified entry backs such a claim, leave it out rather than restating it from the scorer's prose. The scorecard's per-layer Evidence cell is exempt only in its two empty states (no entries offered, every entry rejected), set beside the scorecard table below; a cell whose layer kept some verified entries cites only those, as the partial state there says. The deterministic findings you paste verbatim are already grounded and need no entry.
 
@@ -44,14 +46,14 @@ jq '.derived_findings, .attention, .attention_low_signal, .keyhole_summary, .pre
 
 **Copy `findings_markdown` verbatim.** `run-context.json` carries a pre-rendered `findings_markdown` string - the deterministic findings section (the ten findings with their paths and actions, then the attention list). Paste it into the report **verbatim, inside the `🔎 Cross-layer findings` fold below** - do not paraphrase, summarise, reorder, or drop findings. You write framing prose (the "why these matter here") *inside* the block, directly under its `## Cross-Layer Findings (Keyhole Readiness)` heading - the block already opens with that heading, so **never add your own heading above or around it**; the heading must appear exactly once in the report. The section itself is the deterministic core's product, not yours. This is what makes the findings impossible to omit regardless of which LLM drives the run.
 
-`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported alongside the 0-8 score - see the **score headline** in the report template below. `prescribed_actions` lists the actions the report MUST include, one per top `attention` row (up to three; one when `attention_low_signal` is true), and `gap_actions` lists `{signal, action, paths}` candidates for the slots left free: a missing coverage report (`signal` `coverage_report`, naming the top hotspots to measure) and doc reachability below the 0.50 floor (`signal` `doc_graph`, naming the unreachable docs), `[]` when neither fires, or `{available: false, reason}` when the gap scan failed (then fill free slots by judgement) - see the **Mandatory attention rule** in the Top 3 Actions section below.
+`keyhole_summary` rolls the same findings into a one-line readiness summary (`summary_text`), reported beside the deterministic headline - see the **headline** in the report template below. `prescribed_actions` lists the actions the report MUST include, one per top `attention` row (up to three; one when `attention_low_signal` is true), and `gap_actions` lists `{signal, action, paths}` candidates for the slots left free: a missing coverage report (`signal` `coverage_report`, naming the top hotspots to measure) and doc reachability below the 0.50 floor (`signal` `doc_graph`, naming the unreachable docs), `[]` when neither fires, or `{available: false, reason}` when the gap scan failed (then fill free slots by judgement) - see the **Mandatory attention rule** in the Top 3 Actions section below.
 
 
-## Score and Write the Report
+## Write the Report
 
-Calculate the score (0-8 based on layers present, +0.5 for partial) and write the report to `$REPO_ROOT/.assess/assess-report.md`.
+Write the report to `$REPO_ROOT/.assess/assess-report.md`. **The headline is not yours to compute.** It is the run context's `headline` block (`lib/headline.py`), a pure function of the commit and the maturity-model version: the autonomy Step with its next unlock, then "Verified practices: N of M measured" with the not-measured count and the model version. Paste `headline.markdown` verbatim. Never write a layered score, a fraction such as "X / 8" or a band name; the per-layer verdicts sit underneath as detail, and they never set the Step.
 
-**Two audiences, one file.** The report serves a human (wants a short, picture-led skim) and an AI agent (wants the full structured detail). The structure below satisfies both: the **default-visible surface is short** - the score headline, the Top 3 Actions, and the two SVG images, plus one caveat line - and **everything verbose is relocated into collapsible `<details>` folds**. A collapsed `<details>` keeps its content fully present in the raw markdown, so an agent reading the file sees everything inside the folds; the fold only hides it from a human's *rendered* view. **Folding is presentation, not removal - never delete content to shorten, relocate it into a fold.** Two things never fold: the **score headline** and the **Top 3 Actions**. A section-ablation A/B showed that removing the Top 3 made a fresh agent confidently act on the *wrong* (lower-priority) item, so they stay visible and complete.
+**Two audiences, one file.** The report serves a human (wants a short, picture-led skim) and an AI agent (wants the full structured detail). The structure below satisfies both: the **default-visible surface is short** - the headline, the Top 3 Actions, and the two SVG images, plus one caveat line - and **everything verbose is relocated into collapsible `<details>` folds**. A collapsed `<details>` keeps its content fully present in the raw markdown, so an agent reading the file sees everything inside the folds; the fold only hides it from a human's *rendered* view. **Folding is presentation, not removal - never delete content to shorten, relocate it into a fold.** Two things never fold: the **headline** and the **Top 3 Actions**. A section-ablation A/B showed that removing the Top 3 made a fresh agent confidently act on the *wrong* (lower-priority) item, so they stay visible and complete.
 
 Use the CodeRabbit fold style: `<details>`, then `<summary>emoji label</summary>`, a blank line, the content, a blank line, then `</details>`. The blank lines are required for tables and lists to render inside the fold. Nesting is allowed.
 
@@ -62,13 +64,15 @@ Use the CodeRabbit fold style: `<details>`, then `<summary>emoji label</summary>
 
 _Generated <YYYY-MM-DD>. Generated by `/assess` v<version>._
 
-**Score: X / <denominator> - <maturity-label>** - a readiness snapshot, not a verdict · Keyhole: <paste `keyhole_summary.summary_text` from run-context.json verbatim>
-<!-- <denominator> is 8 for a software repo (almost always) or the applicable-layer count for a detected archetype - see "Archetype-aware scoring" in the Score derivation fold. Resolve it before writing the headline; it is not a literal. -->
-<!-- The " - a readiness snapshot, not a verdict" clause is a FIXED string: paste it verbatim on the score line. It is the SHORT not-a-verdict frame that sits with the score so the reader never mistakes the LLM grade for a pass/fail gate. Do NOT expand it into the full "This is an improvement roadmap, not a verdict" sentence here - that longer framing stays in the "How to read" fold, and duplicating it on the surface regresses the bespoke-opening contract. -->
+<paste `headline.markdown` from run-context.json verbatim>
 
-<Bespoke summary - the report's emotional headline and the first thing a human reads. Write 2-3 sentences specific to **this** repo and **this** run; it must be **unrepeatable** - a sentence that would print identically under a different score is the boilerplate tell to avoid. Hit recognition before remediation:
+_A readiness snapshot, not a verdict._ · Keyhole: <paste `keyhole_summary.summary_text` from run-context.json verbatim>
+<!-- The headline lines come from the deterministic core: the Step as the contracts in place, the Next line naming the next Step and the one change that reaches it, then "Verified practices: N of M measured" with its not-measured count and model version. Paste them unchanged; never add a score, a fraction or a band name. -->
+<!-- The "A readiness snapshot, not a verdict." line is a FIXED string: paste it verbatim under the headline. It is the SHORT not-a-verdict frame that sits with the headline so the reader never mistakes a Step for a pass/fail gate. Do NOT expand it into the full "This is an improvement roadmap, not a verdict" sentence here - that longer framing stays in the "How to read" fold, and duplicating it on the surface regresses the bespoke-opening contract. -->
+
+<Bespoke summary - the report's emotional headline and the first thing a human reads. Write 2-3 sentences specific to **this** repo and **this** run; it must be **unrepeatable** - a sentence that would print identically under a different headline is the boilerplate tell to avoid. Hit recognition before remediation:
 > 1. **Lead with the genuine standout strengths**, named from the actual findings (the enforced gates, the complexity ratchet, a navigability jump, the closing feedback loop) - so the maintainer feels *seen* and a skeptic sees the tool read *this* code, not a template.
-> 2. **Then** name the single most important next step in one clause, and - when prior-run data exists - a one-beat trajectory note (what moved since last run: score, a layer that flipped, reachability).
+> 2. **Then** name the single most important next step in one clause, and - when prior-run data exists - a one-beat trajectory note (what moved since last run: the Step, the verified tally, a layer that flipped, reachability).
 >
 > Keep the non-verdict reassurance alive in the *tone* (a Missing or Partial locates where someone is partly blind, it is not a mark against the code) but do not lead with it or restate it as a standalone caveat - the full framing lives in the "How to read" fold. Celebrate what is working before pointing at what to improve.>
 
@@ -94,6 +98,8 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 **Done when** is the action's exit criterion and it must be *checkable, not aspirational*. State it in the repository's own terms first, so a maintainer without the plugin can check it: a command whose pass state defines done (`golangci-lint run` reports 0 new issues; `bats tests/` passes), a file state (`AGENTS.md` names the check command), or a CI result (the `lint` job runs `actionlint` and is green). A re-run criterion (`max_fn_ccn` of the named function drops below the threshold in a re-run's stats sidecar; the finding no longer lists the path) may follow, but never as the only one. An executing agent - especially a smaller model - uses this to know when to stop; an action without a verifiable exit invites either premature "done" claims or runaway scope.
 
 **One concern per action.** Each row carries one change a maintainer could accept or decline on its own. When a gap needs several independent changes (an instruction-file stub, a lockfile, a CI step), the row takes the highest-leverage one, and each other change goes directly under the table as a lettered sub-item (`3a. <change> - Done when: <criterion>`), so the issue-tracking step can file each separately. Sub-items are not extra rows: the table and `actions.json` keep one entry per rank.
+
+**Name the condition an action moves.** When an action changes one maturity-model condition, put that condition's id in the action's `condition` field in `finalize-input.json` (an id `level.conditions` lists, e.g. `layer-5-ci.1`); `assess_finalize.py` refuses an id the run's level result does not list. When the headline's Next line names an unmet gate and no prescribed action holds the slot, the change that holds that gate is the strongest candidate for a free slot.
 
 **Scope fence** names what the action must NOT touch: the files, behaviours, or conventions out of bounds ("only `.golangci.yml`; no source edits", "extract the one function; no drive-by reformatting of the rest of the file"). Smaller models over-extend without an explicit fence.
 
@@ -173,6 +179,7 @@ Follow it with the **coverage gate line** from `.coverage_gate`:
 - `enforced: true` → _"Coverage gate: `<file>:<line>` (`<form>` `<threshold>`)"_ for each gate: the threshold as written, with `ratio` appended for a JaCoCo ratio and `uncovered lines` for a negative Jest value (`unit: uncovered_count`, so `-10` reads "at most 10 uncovered lines", never minus ten percent). A `threshold: null` reads "tool default" for an nyc/c8 `check-coverage` and "threshold not read" for any other tool.
 - `enforced: false` with gates listed (`fail_under = 0`, or a Jest/Vitest threshold not read) → _"Coverage gate: `<file>:<line>` configured at 0 / threshold not read, gates nothing"_ for each.
 - `enforced: false` with no gates → _"Coverage gate: none detected"_.
+- Close the line with the 50 percent minimum the maturity model reads (`.coverage_gate.threshold_meets_minimum`): `true` → _"meets the 50% minimum"_ (name `max_threshold_percent`, so a JaCoCo `0.80` reads 80%); `false` with a counted gate → _"below the 50% minimum (highest `<max_threshold_percent>`%)"_; `null` with gates → _"50% minimum not measured: a threshold is not a readable percentage"_; `null` with no gates and `unmeasured_reason: go_rust_gate_form_not_read` → _"50% minimum not measured: Go and Rust gates written in a script are not read"_. Otherwise omit it with no gates. Use `threshold_percent` only for this comparison; each gate still shows its threshold as written.
 
 Then the table, one row per entry, mapping the raw `.test_focus.entries` values to human-readable labels:
 
@@ -209,7 +216,7 @@ Colour = staleness (vivid red = a frozen doc beside churning code = a lying map)
 <details>
 <summary>📊 Full scorecard (per-layer evidence & gaps)</summary>
 
-The two headline metrics measure **different things and are never combined.** The 0-8 score answers _"is the scaffolding in place to catch problems?"_ (a property of the contracts and enforcement layers). The Keyhole Readiness summary answers _"where is today's structural pain?"_ - a pure count of structural concerns and safe zones rolled up from the ten cross-layer findings. A repo can score 7/8 and still carry many structural concerns (great scaffolding over churning legacy), or 3/8 with zero concerns (small, calm codebase). Report both side by side in the headline; never average, rescale, or fold one into the other.
+The headline and the keyhole summary measure **different things and are never combined.** The Step and the verified tally answer _"which contracts are in place to catch problems?"_ (a property of the contracts and enforcement). The Keyhole Readiness summary answers _"where is today's structural pain?"_ - a pure count of structural concerns and safe zones rolled up from the ten cross-layer findings. A repo can hold Step 3 and still carry many structural concerns (strong contracts over churning legacy), or Step 1 with zero concerns (small, calm codebase). Report both side by side; never average, rescale, or fold one into the other. The per-layer rows below are detail under the headline: they explain it and never set it.
 
 The **What it asks** column is the question that layer answers for an agent working here - read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
 
@@ -225,64 +232,34 @@ The **What it asks** column is the question that layer answers for an agent work
 | 7: Code Review Bots | Is there design-level feedback on every change? | write | Present/Partial/Missing | <what was found> | <what's missing> |
 | 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Present/Partial/Missing | <what was found> | <what's missing> |
 
-**Archetype-aware Status (`N/A` ≠ `Missing`).** When the scorecard marks a layer **N/A** (the write-side layers L2-L7 on a detected knowledge base - see Score derivation), render its Status cell as `N/A`, its Evidence as "not applicable - <archetype> repo has no code surface for this layer", and its Gap as "-". **Never render an N/A layer as Missing** and never propose a remediation action for it: Missing is a real gap (the contributor is asked to be careful where a guardrail could exist); N/A means the layer cannot apply here. The headline denominator already excludes the N/A layers, so a KB scoring well on its three applicable layers reads as ready, not as a 2.5/8 failure.
+**Archetype-aware Status (`N/A` ≠ `Missing`).** When the scorecard marks a layer **N/A** (the write-side layers L2-L7 on a detected knowledge base - see the headline section below), render its Status cell as `N/A`, its Evidence as "not applicable - <archetype> repo has no code surface for this layer", and its Gap as "-". **Never render an N/A layer as Missing** and never propose a remediation action for it: Missing is a real gap (the contributor is asked to be careful where a guardrail could exist); N/A means the layer cannot apply here. An N/A layer names no gap, so a knowledge base strong on its applicable layers reads as ready, not as failing the layers it has no surface for.
 
 **The Evidence cell is never blank, and a scored layer has two empty states and one partial state.** When the scorer offered no entries for a scored layer (or returned no `evidence` list), keep its one-line note there and end it with `(unverified)`, so the gap reads as a limit of this run rather than as a fact. An N/A layer is neither state: it keeps the archetype rule's text above and takes no marker, because nothing about a layer that cannot apply awaits verification. When a layer's entries were offered and every one was rejected, drop the scorer's note, since repeating it restates a claim the check refuted, and render the gap instead: `no verified evidence - N claim(s) rejected`, followed by each rejected entry's `reason` from `evidence_rejected`. When only some of a layer's entries were rejected, strike the refuted claims from the scorer's note (or rebuild the cell from the entries that held) and end it with `- N of M claim(s) rejected`, so the cell cites only verified entries and still shows that the check refuted part of the note.
 
 **Layer 1 evidence carries an explicit caveat by default.** The Layer 1 spec is honest about its boundary: this scores what the *repo* makes agent-reachable, not what the agent has installed at runtime. So when Layer 1 is **Present** (rung 3), the Evidence cell should not read "Reachable, full stop" - it should name the cited tools and conditionalise on their availability. Example: _"Runbook fences `kubectl logs`, `stern`, `logcli`; reachable *if* the agent has these in its execution context."_ When Partial or Missing, the caveat is moot - no rung-3 claim is being made.
 
-### Score derivation (worked)
+### The headline (deterministic)
 
-**State the final score only.** The headline is the score the per-layer verdicts derive. If the scorer's headline disagrees with its own verdicts, use the derived score without comment: the report never narrates a correction, a draft, or a reconciliation between the scorer and this step. The evidence markers above (`(unverified)`, `N of M claim(s) rejected`) are findings about the repository and stay.
+**State the headline only.** The headline is the `headline` block the core computed from the `level` block; paste it and never narrate a correction, a draft, or a reconciliation with the scorer's verdicts. If a layer verdict seems to disagree with the headline, the verdict is detail and the headline stands: the Step reads only the maturity model's conditions. The evidence markers above (`(unverified)`, `N of M claim(s) rejected`) are findings about the repository and stay.
 
-The layered model has 9 layers (0-8); the display caps at "X / 8" so the headline matches the maturity band table. Compute the raw sum, then apply two rules:
+- **Line 1, the Step.** The highest Step whose gates hold and whose count threshold `tally.met` reaches, phrased as the contracts in place ("Step 3 · Unattended agent PRs · contracts in place").
+- **Line 2, the Next line.** The next Step and the change that reaches it: a gate first ("unlocks when CI runs the tests"), then any count still short ("and 1 more verified practice is met"). A gate the run could not see says "not measured here" with its reason.
+- **Line 3, the tally.** "Verified practices: N of M measured": N is `tally.met` (measured and verified conditions met), M is `tally.measured` (measured conditions only), then the not-measured count with each reason and the maturity-model version. A condition that was not measured is never in M, so a blind run neither lowers nor raises the tally. Config-only and declared conditions are listed (`level.listed`), never counted.
 
-1. **Raw sum**: Present = 1, Partial = 0.5, Missing = 0. With 9 layers, the maximum raw sum is 9.0.
-2. **Cap at 8**: the displayed score is `min(raw_sum, 8.0)`. A 9.0 (every layer Present) caps at 8.0 = ceiling. This keeps the band table (0-2 / 3-4 / 5-6 / 7-8) consistent with the headline.
+There is no layered score, no fraction and no band name anywhere in the report. For a knowledge base (`.archetype.archetype` is not `"software"`), the scorecard marks the write-side layers N/A as above; the headline is unchanged, because it reads conditions, not layers.
 
-Worked example: 7 layers Present + 2 layers Partial = 7×1 + 2×0.5 = 8.0 raw. Two partials below ceiling shouldn't display as "all perfect", so by the cap rule the **displayed score is 7.0 / 8** - you subtract the half-points the partials cost relative to a Present (each Partial costs 0.5 vs ceiling, two of them cost 1.0, so 8 ceiling - 1.0 = 7.0). Equivalent shortcut: `min(raw_sum, 8 - 0.5 × num_partials_when_raw_sum_would_exceed_8)`. The general case is just `min(raw_sum, 8)`.
+### What the Step unlocks
 
-Other examples:
-- 8 Present + 1 Missing → raw 8.0 → display **8.0 / 8** (AI-Native).
-- 6 Present + 2 Partial + 1 Missing → raw 7.0 → display **7.0 / 8** (AI-Native).
-- 4 Present + 3 Partial + 2 Missing → raw 5.5 → display **5.5 / 8** (Solid).
-- 0 Present + 0 Partial → raw 0.0 → display **0.0 / 8** (Not Ready).
+Each Step names the agent **autonomy** this repo's contracts support, in the vocabulary of the adoption ladder ([Steps of AI Adoption](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-), B. Cherny, 2026). Gates accumulate: each Step keeps the gates of the one below. The Step definitions and their count thresholds live with the maturity model (`skills/assess/levels/default.toml`), so they are versioned.
 
-#### Archetype-aware scoring (knowledge base and beyond)
+| Step | Contracts in place for | Gate added at this Step |
+|------|------------------------|-------------------------|
+| 1 | Assisted: one supervised agent | none |
+| 2 | Supervised agent PRs | `instructions`: an instruction file an agent reads |
+| 3 | Unattended agent PRs | `ci_runs_tests`: CI runs the tests, unmasked |
+| 4 | Autonomous loops | `coverage_gate`: an enforced coverage gate |
 
-When `run-context.json`'s `.archetype.archetype` is **not** `"software"`, the scorecard the layer-scorer returns has already excluded the `na_layers` (the write-side L2-L7 for a knowledge base). Honour it:
-
-1. **Numerator**: sum Present=1 / Partial=0.5 over the **applicable layers only** (`.archetype.applicable_layers`, e.g. L0, L1, L8 for a KB). N/A layers contribute nothing.
-2. **Denominator**: `.archetype.denominator` (the applicable-layer count, e.g. 3 for a KB), **not** 8. There is no cap rule - the applicable layers have no ceiling collision.
-3. **Headline**: `**Score: <numerator> / <denominator> - <maturity-label>**`, e.g. `2.5 / 3`.
-4. **Maturity label names the archetype and the applicable-layer count**, e.g. `Knowledge Base · Solid (3 applicable layers)`. Pick the level by the **renormalised fraction** (numerator ÷ denominator) against the maturity ladder below: ≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready.
-5. **Pass the denominator through.** Put `"denominator": <D>` in `finalize-input.json` (Step 7.5 of `/assess`) so `assess_finalize.py` renormalises the `log.md` line and the badge (`2.5/3` not `2.5/8`).
-
-For a software repo (`.archetype.archetype == "software"` or `.archetype.available == false`), nothing changes: all 0-8 layers, denominator 8, the cap rules above. This is one archetype today (knowledge base); the structure is dispatch-friendly for more later, but do not invent archetypes the core didn't report.
-
-### Maturity Level
-
-| Score | Level | Description |
-|-------|-------|-------------|
-| 0-2 | Not Ready | Agent will produce inconsistent, unvalidated code |
-| 3-4 | Basic | Norms exist but aren't enforced. Agent works but drifts |
-| 5-6 | Solid | Contracts catch most issues. Agent is productive |
-| 7-8 | AI-Native | System self-improves. Agents work reliably at scale |
-
-For a renormalised archetype score, read the level off the **fraction** (numerator ÷ denominator), not the raw number: the bands above correspond to ≥0.875 AI-Native, ≥0.625 Solid, ≥0.375 Basic, else Not Ready. A KB at 2.5/3 (0.83) is **Solid**, not "Not Ready".
-
-### What this score unlocks
-
-The maturity band bounds how much agent **autonomy** this repo's contracts can safely absorb, in the vocabulary of the adoption ladder ([Steps of AI Adoption](https://www.threads.com/@boris_cherny/post/Da4CkQnEea-), B. Cherny, 2026): the per-step guardrails Cherny names are these layers (self-verification loops = L5/L6, automated review = L7, agent instructions = L0, encoded routines and permissions = L8).
-
-| Band | Contracts support up to | Why |
-|------|------------------------|-----|
-| Not Ready | Step 1 (Assisted) - one supervised agent | No verification contracts; a human must review every change |
-| Basic | Step 1-2 boundary | Parallel agents are risky until L5/L6 self-verification holds |
-| Solid | Step 2 (Parallel) - ~10 agents, one orchestrator | Self-verification and review automation absorb parallel diffs |
-| AI-Native | Step 3 (Supervised autonomy) - background routines | Contracts plus L8 orchestration can absorb autonomous loops |
-
-**This is a bound, not a claim about how the team actually works** - a Solid repo whose team reviews every diff by hand is operating below its bound; a Not Ready repo running unattended agents is operating beyond it (the risk the score names). Read the band off the renormalised **fraction** for a non-software archetype, exactly as with the maturity level above.
+**This is a bound, not a claim about how the team actually works** - a Step 3 repo whose team reviews every diff by hand is operating below its bound; a Step 1 repo running unattended agents is operating beyond it (the risk the headline names). A Step is a capability unlocked, never a grade of the team.
 
 </details>
 
@@ -322,9 +299,17 @@ These artefacts look true but aren't - the most dangerous failure mode for an ag
 
 <Informational, beside the Claude Code configuration evidence. From `agent_harness`: one line naming what the committed agent configuration runs on every session, from `executes_by_kind` (e.g. "2 settings hooks, 1 MCP server (`.mcp.json`: `db` runs `npx`)"), or "no committed hooks, env, apiKeyHelper or MCP servers" when `executes` is empty. Then one bullet per entry of `findings`: `<file>[:<line>]` - `<detail>` (`<kind>`), ending with its `fix`. Never print a value the block does not carry: it names a tracked `.env` by path and an `env` variable by name only, and reports hidden characters as code points. When `tracked_known` is false, add "tracked-file checks not run (not a git repository)". A `tracked_env_file` or `tracked_local_settings` finding is a Top 3 candidate (see the scorer's Layer 0 rule); the rest stay here. Not a lying-signal row and not counted on the badge.>
 
+### Agent consistency
+
+<From `agent_consistency`: does every agent system get the same map? With `applicable` false, one line: "one agent system (`<systems>`): nothing to compare". Otherwise open with "<systems_total> agent systems; canonical source `<canonical>`". When `consistent` is true, one line saying every system reads the same instructions. Otherwise **Differences**: one bullet per `divergences` entry, a command as `` `<value>` `` named in `<named_in>`, missing from `<missing_from>`, a threshold as `<value>` stated as the `stated` numbers per system. Then **Next steps**: one bullet per `next_steps` entry, `<path>` (`<system>`): its `pointer` verbatim in a code span as the line to add to that file (for Aider, an entry under `read:` in `.aider.conf.yml`; keep the file's other settings), and `symlink` verbatim as the alternative when not null. Never rewrite a pointer line and never write one for a system the block does not list. Supportive voice: a shared source is what keeps every tool's agent on the same checks, never a failing. Not a lying-signal row.>
+
 ### Agent environment
 
 <Layer 5 evidence, from `agent_environment`. One line each: **Setup** - the `setup.sources` paths, or "none committed"; **Check** - `check.named[0]` as `<file>:<line>` `<command>`; when `named` is empty and `check.unresolved` is not, its first entry as `<file>:<line>` `<command>` "does not resolve" with its `reason` (fix that command, do not add a second); when both are empty, "no instruction file names a check command" and the `check.entry_points` commands it could name; **Pinning** - the manifests with `locked: false`, or "every manifest locked" (`all_locked: null`: no manifest); **CI duration** - `slowest_median_seconds` as minutes for `branch` over `runs_sampled` runs against the 10-minute guidance, or `ci_duration.reason` when unavailable. Then the cap: when `layer5_cap.applies`, "Layer 5 capped at Partial: <reason>". One bullet per `findings` entry: `<file>[:<line>]` - `<detail>` (`<kind>`), ending with its `fix`. A capped Layer 5 makes the missing piece a Top 3 candidate: name the instruction-file line to add or the setup file to commit. Not a lying-signal row and not counted on the badge.>
+
+### Guardrails stated
+
+<From `guardrails`: do the instruction files tell an agent what the gates enforce, so the next session does not trip over the same gate? Open with one line: "<stated> of <enforced> configured gates are stated in the instruction files". Then **In place**: one bullet per gate with `stated: true`, `<kind>` (`<tool>` `<rule>`, threshold `<threshold>` when not null) at `<file>[:<line>]`, stated in `<stated_in>`. Then **Next steps**: one bullet per gate with `stated: false`, the gate as above, followed by its `snippet` verbatim in a code span as the line to add to `CLAUDE.md` or `AGENTS.md`. Never rewrite a snippet and never write one for a gate the block does not list. With `enforced` 0, one line: "no configured gate found to state" and the `not_read` forms. `available: false`: "guardrails not checked" with the `reason`. Supportive voice: a stated gate is something the repository already does well, an unstated one is a ready line to add, never a failing. Adding the snippets is a Top 3 candidate when two or more gates are unstated. Not a lying-signal row.>
 
 <paste the `findings_markdown` string from run-context.json verbatim here - it renders as a `## Cross-Layer Findings (Keyhole Readiness)` block with the ten findings, their paths, their deterministic actions, and the attention list. Do not paraphrase, summarise, reorder, or drop any finding. The block's own `## Cross-Layer Findings (Keyhole Readiness)` line is the section's ONLY heading - never add a framing heading of your own (no `### Cross-Layer Findings (Keyhole Readiness)` above the block; the heading must appear exactly once in the report). If a sentence or two of framing helps a reader, place it directly under the block's heading line, before the first `###` finding; the findings and attention list themselves are copied, not rewritten.>
 
@@ -352,9 +337,9 @@ This is an improvement roadmap, not a verdict. It measures one thing: **is the c
 
 - **Where the codebase is today** - the complexity heatmap shows current complexity and churn. Vivid red = complex AND actively changing = the files most likely to bite an agent (or a human) next week.
 - **Whether an agent can navigate it** - the doc graph shows the docs' link structure: how much is reachable from the entry point, and which docs are stale maps of churning code.
-- **What keeps it from getting worse** - the AI Readiness score (0-8) across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
+- **What keeps it from getting worse** - the headline: the autonomy Step the contracts support and the verified practices behind it, with the per-layer scorecard underneath across three bands: read-side foundation (can the agent form a true picture?), write-side enforcement (can it be trusted to produce good output?), and meta (does the system keep itself honest over time?).
 
-A codebase can be 8/8 and still on fire (great scaffolding, legacy debt) - or 2/8 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
+A codebase can hold Step 4 and still be on fire (strong contracts, legacy debt) - or Step 1 with a calm treemap (small codebase, no enforcement needed yet). The views matter together.
 
 **Each layer is a sense the agent needs, not a box to tick - and this report is written to be understood without prior knowledge of the framework.** Every row in the scorecard names one thing an agent (or a newly-arrived human) must be able to *see or trust* before working safely here; it's phrased as the question that row answers. A **Missing** or **Partial** is not a mark against the codebase - it locates where someone working here is partly blind, and the Gap column says what would restore the view. One row matters most for cold readers, because it's the one most often misread: **Layer 1 (Runtime Legibility) is the agent's attention-sense - "which parts are actually live, which need attention, which are dead weight creating support burden?"** A running service answers that through telemetry (latency, errors, traffic); a repo with no deployed runtime answers it through complexity, churn, and reachability - so the complexity heatmap and the dead-code scan *are* its observability. A low telemetry score on such a repo means *look through those instruments instead*, *not* "the agent is flying blind." Observability, in this report, is whatever lets the agent see where to point effort - by whichever instrument fits the codebase.
 

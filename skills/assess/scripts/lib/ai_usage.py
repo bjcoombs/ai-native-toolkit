@@ -26,6 +26,8 @@ Block (``ai_usage`` in run-context.json)::
      "dependency_bot_commits": int,   # Renovate / Dependabot authors: never counted as agent
      "token_user_commits": int,       # GitLab access-token users not promoted to agent
      "agent_identity_rule_commits": [int, ...],  # per [[ai_usage.agent_identities]] rule, by position
+     "identities_awaiting_confirmation": int,  # accounts that look automated, not yet
+                                   # classified in [identities] (#765); a count, never a name
      "lower_bound": True,
      "covered_agents": [str, ...], # lib.agent_identity.COVERED_AGENTS (trailers)
      "covered_author_agents": [str, ...],  # lib.agent_identity.COVERED_AUTHOR_AGENTS
@@ -67,6 +69,13 @@ AI-assisted. Only AI-assistant trailers count
 (``agent_identity.coauthors_have_ai_assistant``: the shared matcher with
 non-Copilot ``[bot]`` accounts removed), which keeps the value a floor.
 
+Confirmed identities (#765). An account the human classified in ``[identities]``
+(``.assess/config.toml`` or ``--fleet-config``) is bucketed by that answer before
+any pinned rule: ``agents`` count as agent authors, ``bots`` and ``people`` never
+do. ``identities_awaiting_confirmation`` counts the window's accounts that look
+automated (``lib.account_discovery``) and are neither classified nor counted
+by a pinned or configured agent rule; it is a next step, never a score.
+
 Privacy: counts, a share and fixed strings only. No name, e-mail or commit
 subject reaches the block. A missing git, a timeout, a non-repository and a
 shallow clone each degrade to ``{"available": False, "reason"}`` with a fixed
@@ -76,7 +85,8 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Literal, NamedTuple, TypedDict
+from collections.abc import Mapping
+from typing import Literal, NamedTuple, TypedDict, cast
 
 from lib.agent_identity import (
     AGENT,
@@ -85,11 +95,13 @@ from lib.agent_identity import (
     DEPENDENCY_BOT,
     TOKEN_USER,
     AuthorMatcher,
+    ConfirmedIdentities,
     coauthors_have_ai_assistant,
     compile_config_rules,
 )
-from lib.fleet_config import FleetConfig, ai_usage_section
+from lib.fleet_config import FleetConfig, ai_usage_section, identities_section
 from lib.history_window import anchored_since, split_window
+from lib.account_discovery import HistoryCommit, discover
 
 GIT_TIMEOUT_SECONDS = 20
 
@@ -124,6 +136,7 @@ class AiUsageBlock(TypedDict):
     dependency_bot_commits: int
     token_user_commits: int
     agent_identity_rule_commits: list[int]
+    identities_awaiting_confirmation: int
     lower_bound: Literal[True]
     covered_agents: list[str]
     covered_author_agents: list[str]
@@ -177,13 +190,7 @@ def _git(repo_root: Path, *args: str) -> str:
         raise _GitUnavailable(REASON_NOT_A_REPO) from e
 
 
-class _Commit(NamedTuple):
-    author_email: str
-    author_name: str
-    coauthors: str  # the Co-authored-by values joined by GS
-
-
-def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[_Commit]:
+def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[HistoryCommit]:
     """Author and co-author fields of each non-merge commit in the window.
 
     Raises ``_GitUnavailable`` when git cannot answer, or when the clone is
@@ -191,7 +198,7 @@ def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[_Com
     share above the true value, so it is no floor.
     """
     args = ["log", "--no-merges",
-            "--format=%x1e%ae%x1f%an%x1f%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
+            "--format=%x1e%ae%x1f%an%x1f%s%x1f%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
     args += [*bound, "--", str(scope) if scope is not None else "."]
     out = _git(repo_root, *args)
     try:
@@ -204,8 +211,9 @@ def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[_Com
     commits = []
     for record in out.split("\x1e")[1:]:
         email, _, rest = record.partition("\x1f")
-        name, _, coauthors = rest.partition("\x1f")
-        commits.append(_Commit(email, name, coauthors.strip("\n")))
+        name, _, rest = rest.partition("\x1f")
+        subject, _, coauthors = rest.partition("\x1f")
+        commits.append(HistoryCommit(email, name, subject, coauthors.strip("\n")))
     return commits
 
 
@@ -223,6 +231,23 @@ def _window_bound(repo_root: Path, window: str | None) -> list[str]:
     return [] if since is None else [f"--since={since}"]
 
 
+class WindowCommits(NamedTuple):
+    commits: list[HistoryCommit]
+    since: str | None  # the absolute ``@<epoch>`` bound; None for full history
+
+
+def window_commits(repo_root: Path, scope: Path | None,
+                   history_window: str | None) -> WindowCommits | str:
+    """The window's non-merge commits, or the fixed ``REASON_*`` git could not answer
+    with. Shared with the identity listing (``scripts/identity_candidates.py``)."""
+    try:
+        bound = _window_bound(repo_root, history_window)
+        commits = _commits(repo_root, scope, bound)
+    except _GitUnavailable as e:
+        return str(e)
+    return WindowCommits(commits, bound[0].partition("=")[2] if bound else None)
+
+
 def _share(count: int, total: int) -> float | None:
     return round(count / total, 4) if total else None
 
@@ -233,7 +258,8 @@ def matcher_from_config(config: FleetConfig | None) -> AuthorMatcher:
         return AuthorMatcher()
     section = ai_usage_section(config)
     rules = compile_config_rules(section.get("agent_identities", []))
-    return AuthorMatcher(rules, section.get("token_users_as_agents", False))
+    confirmed = ConfirmedIdentities.from_section(cast(Mapping[str, object], identities_section(config)))
+    return AuthorMatcher(rules, section.get("token_users_as_agents", False), confirmed)
 
 
 def scan_ai_usage(
@@ -244,12 +270,10 @@ def scan_ai_usage(
     those an agent identity authored (``fleet_config``: the merged ``[ai_usage]`` rules)."""
     label = resolve_window(history_window)
     matcher = matcher_from_config(fleet_config)
-    try:
-        bound = _window_bound(repo_root, history_window)
-        commits = _commits(repo_root, scope, bound)
-    except _GitUnavailable as e:
-        return {"available": False, "reason": str(e)}
-    since = bound[0].partition("=")[2] if bound else None
+    read = window_commits(repo_root, scope, history_window)
+    if isinstance(read, str):
+        return {"available": False, "reason": read}
+    commits, since = read
     total = len(commits)
     agent = authored = either = dependency = token = 0
     per_rule = [0] * len(matcher.config_rules)
@@ -279,6 +303,7 @@ def scan_ai_usage(
         "dependency_bot_commits": dependency,
         "token_user_commits": token,
         "agent_identity_rule_commits": per_rule,
+        "identities_awaiting_confirmation": len(discover(commits, matcher)),
         "lower_bound": True,
         "covered_agents": list(COVERED_AGENTS),
         "covered_author_agents": list(COVERED_AUTHOR_AGENTS),

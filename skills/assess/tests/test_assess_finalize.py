@@ -12,7 +12,6 @@ from assess_finalize import FinalizeValidationError, finalize_run
 def _seed_run_context(
     assess_dir: Path,
     *,
-    denominator: int = 8,
     hotspots: tuple[str, ...] = ("src/foo.go",),
     mutation_run: bool = True,
     run_id: str | None = None,
@@ -21,11 +20,11 @@ def _seed_run_context(
 
     finalize now reads run-context.json first and enforces invariants against it,
     so every finalize test seeds a matching context. Defaults produce a
-    software-repo (denominator 8) context whose top hotspots and mutation state
+    software-repo context whose top hotspots and mutation state
     satisfy the invariants; individual tests override to exercise a violation.
     """
     ctx: dict = {
-        "archetype": {"available": True, "denominator": denominator},
+        "archetype": {"available": True, "denominator": 8},
         "stats_summary": {
             "top_hotspots": [{"path": p} for p in hotspots],
         },
@@ -50,10 +49,10 @@ def _seed_log_md(assess_dir: Path) -> None:
         "# Assess Log\n\n"
         "## 2026-05-22\n\n"
         "- **Files scored:** 100\n"
-        "- **AI Readiness:** 0.0 / 8 ((LLM fills in))\n"
+        "- **Readiness:** Step 3 · 4 of 4 measured\n"
         "- **Instructions grade:** B+\n"
         "- **Hotspot transitions:** 1 graduated, 0 regressed, 0 new, 2 persistent\n"
-        "- **Top action:** Deterministic ranker not yet wired (LLM picks Top 3)\n\n"
+        "- **Top action:** (LLM fills in)\n\n"
         "[Full report](./assess-report.md)\n\n"
         "---\n",
         encoding="utf-8",
@@ -75,8 +74,6 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
     finalize_input = {
-        "score": 6.0,
-        "maturity_label": "Solid",
         "top_action": "Add cyclop rule to .golangci.yml (threshold 15)",
         "hotspot_actions": {},
     }
@@ -86,39 +83,11 @@ def test_finalize_updates_log_last_entry(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "AI Readiness:** 6.0 / 8 (Solid)" in content
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in content
     assert "Top action:** Add cyclop rule to .golangci.yml (threshold 15)" in content
     # Placeholders must be gone
-    assert "((LLM fills in))" not in content
+    assert "(LLM fills in)" not in content
     assert "Deterministic ranker not yet wired" not in content
-
-
-def test_finalize_knowledge_base_denominator(tmp_assess_dir: Path) -> None:
-    """A KB run finalises the log over its applicable-layer denominator (#224).
-
-    The score is renormalised in the log/report line; it is deliberately NOT
-    written to the badge, which stays the deterministic form assess_core wrote.
-    """
-    _seed_log_md(tmp_assess_dir)
-    _seed_run_context(tmp_assess_dir, denominator=3)
-    finalize_input = {
-        "score": 2.5,
-        "maturity_label": "Knowledge Base · Solid (3 applicable layers)",
-        "denominator": 3,
-        "top_action": "Document the KB maintenance workflow in CLAUDE.md",
-        "hotspot_actions": {},
-    }
-    (tmp_assess_dir / "finalize-input.json").write_text(
-        json.dumps(finalize_input), encoding="utf-8"
-    )
-
-    finalize_run(assess_dir=tmp_assess_dir)
-    content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "AI Readiness:** 2.5 / 3 (Knowledge Base · Solid (3 applicable layers))" in content
-    assert "/ 8" not in content  # the misleading software denominator is gone
-    # Finalize writes no badge - the score lives in the report line above, not
-    # on the shipped (deterministic) badge.
-    assert not (tmp_assess_dir / "badge.json").exists()
 
 
 def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
@@ -128,8 +97,6 @@ def test_finalize_updates_hotspot_actions(tmp_assess_dir: Path) -> None:
     slug = slug_for_path("src/foo.go")
     _seed_hotspot_page(tmp_assess_dir, slug=slug)
     finalize_input = {
-        "score": 6.0,
-        "maturity_label": "Solid",
         "top_action": "x",
         "hotspot_actions": {
             "src/foo.go": [
@@ -170,8 +137,6 @@ def test_finalize_hotspot_without_match_is_skipped(tmp_assess_dir: Path) -> None
     # lifecycle case this test covers (graduated between LLM read and finalize).
     _seed_run_context(tmp_assess_dir, hotspots=("src/nonexistent.go",))
     finalize_input = {
-        "score": 6.0,
-        "maturity_label": "Solid",
         "top_action": "x",
         "hotspot_actions": {"src/nonexistent.go": ["something"]},
     }
@@ -188,8 +153,6 @@ def test_finalize_log_handles_backslash_in_top_action(tmp_assess_dir: Path) -> N
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
     finalize_input = {
-        "score": 6.0,
-        "maturity_label": "Solid",
         # Adversarial: contains \1 which would be a re.sub backreference if not handled
         "top_action": r"Replace `\1` capture group references in regexes",
         "hotspot_actions": {},
@@ -211,8 +174,6 @@ def test_finalize_hotspot_action_handles_backslash(tmp_assess_dir: Path) -> None
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
     finalize_input = {
-        "score": 6.0,
-        "maturity_label": "Solid",
         "top_action": "x",
         "hotspot_actions": {
             "src/foo.go": [
@@ -238,7 +199,6 @@ def test_finalize_reads_from_cache_path(tmp_assess_dir: Path) -> None:
     cache_dir.mkdir()
     (cache_dir / "finalize-input.json").write_text(
         json.dumps({
-            "score": 7.0, "maturity_label": "AI-Native",
             "top_action": "x", "hotspot_actions": {},
         }),
         encoding="utf-8",
@@ -246,7 +206,7 @@ def test_finalize_reads_from_cache_path(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "AI Readiness:** 7.0 / 8 (AI-Native)" in content
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in content
 
 
 def test_finalize_deletes_input_after_success(tmp_assess_dir: Path) -> None:
@@ -256,7 +216,6 @@ def test_finalize_deletes_input_after_success(tmp_assess_dir: Path) -> None:
     legacy = tmp_assess_dir / "finalize-input.json"
     legacy.write_text(
         json.dumps({
-            "score": 6.0, "maturity_label": "Solid",
             "top_action": "x", "hotspot_actions": {},
         }),
         encoding="utf-8",
@@ -277,7 +236,6 @@ def test_finalize_cleans_up_legacy_when_cache_present(tmp_assess_dir: Path) -> N
     cache_path = cache_dir / "finalize-input.json"
     cache_path.write_text(
         json.dumps({
-            "score": 7.0, "maturity_label": "AI-Native",
             "top_action": "current", "hotspot_actions": {},
         }),
         encoding="utf-8",
@@ -285,7 +243,6 @@ def test_finalize_cleans_up_legacy_when_cache_present(tmp_assess_dir: Path) -> N
     legacy = tmp_assess_dir / "finalize-input.json"
     legacy.write_text(
         json.dumps({
-            "score": 3.0, "maturity_label": "Basic",
             "top_action": "stale", "hotspot_actions": {},
         }),
         encoding="utf-8",
@@ -294,7 +251,7 @@ def test_finalize_cleans_up_legacy_when_cache_present(tmp_assess_dir: Path) -> N
     finalize_run(assess_dir=tmp_assess_dir)
     # Cache wins (the value the report just published).
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "AI-Native" in content
+    assert "**Top action:** current" in content
     # Both files cleaned up.
     assert not cache_path.exists()
     assert not legacy.exists()
@@ -324,8 +281,6 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
         encoding="utf-8",
     )
     finalize_input = {
-        "score": 6.5,
-        "maturity_label": "Solid",
         "top_action": "Add cyclop rule (threshold 15) to .golangci.yml",
         "hotspot_actions": {},
     }
@@ -338,7 +293,9 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
 
     # The 2026-05-22 (latest) entry got filled
     latest_section = content.split("## 2026-05-22")[1]
-    assert "AI Readiness:** 6.5 / 8 (Solid)" in latest_section
+    # A legacy layered-score placeholder is filled with the deterministic summary.
+    assert "**Readiness:** Step not measured" in latest_section
+    assert "/ 8" not in latest_section
     assert "Top action:** Add cyclop rule (threshold 15) to .golangci.yml" in latest_section
 
     # The 2026-05-01 (older) entry's placeholders are PRESERVED as historical evidence
@@ -349,8 +306,6 @@ def test_finalize_updates_last_entry_when_older_entry_unfinalized(tmp_assess_dir
 
 def _base_input() -> dict:
     return {
-        "score": 6.0,
-        "maturity_label": "Solid",
         "top_action": "Add cyclop rule",
         "hotspot_actions": {},
     }
@@ -525,7 +480,7 @@ def test_finalize_without_actions_writes_no_contract(tmp_assess_dir: Path) -> No
 
     assert not (tmp_assess_dir / "actions.json").exists()
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "AI Readiness:** 6.0 / 8 (Solid)" in content
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in content
 
 
 def test_finalize_drops_malformed_action_entries(tmp_assess_dir: Path) -> None:
@@ -565,17 +520,12 @@ def test_finalize_all_actions_malformed_writes_no_contract(tmp_assess_dir: Path)
 
 
 def test_finalize_leaves_deterministic_badge_untouched(tmp_assess_dir: Path) -> None:
-    """Finalize does NOT overwrite the deterministic badge with the LLM score.
-
-    The shipped badge stays the findings-count form assess_core wrote; the
-    LLM-derived score lands in the report/log instead, so the badge never claims
-    a grade a deterministic run cannot reproduce.
-    """
+    """Finalize never rewrites the badge assess_core wrote from the headline (#747)."""
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
     deterministic_badge = (
         '{"schemaVersion": 1, "label": "AI-readiness", '
-        '"message": "9 findings · 9 stale markers", "color": "orange", '
+        '"message": "Step 3 · 4 of 4 measured", "color": "green", '
         '"link": "./assess-report.md"}'
     )
     (tmp_assess_dir / "badge.json").write_text(deterministic_badge, encoding="utf-8")
@@ -585,14 +535,10 @@ def test_finalize_leaves_deterministic_badge_untouched(tmp_assess_dir: Path) -> 
 
     finalize_run(assess_dir=tmp_assess_dir)
 
-    badge = json.loads((tmp_assess_dir / "badge.json").read_text(encoding="utf-8"))
-    # Badge unchanged: still the deterministic findings form, no LLM score.
-    assert badge["message"] == "9 findings · 9 stale markers"
-    assert "6.0/8" not in badge["message"]
-    assert badge["link"] == "./assess-report.md"
-    # The LLM score still lands where it belongs: the report/log entry.
+    assert (tmp_assess_dir / "badge.json").read_text(encoding="utf-8") == deterministic_badge
     log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in log
+    assert "**Top action:** Add cyclop rule" in log
 
 
 # --- Task 1: finalize reconciles run-context invariants (fail-closed) --------
@@ -613,62 +559,8 @@ def test_finalize_missing_run_context_refuses(tmp_assess_dir: Path) -> None:
 
     # Nothing written: the log placeholder survives untouched.
     content = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "((LLM fills in))" in content
+    assert "(LLM fills in)" in content
     assert not (tmp_assess_dir / "actions.json").exists()
-
-
-def test_finalize_denominator_mismatch_refuses(tmp_assess_dir: Path) -> None:
-    """The input denominator must match run-context archetype.denominator."""
-    _seed_log_md(tmp_assess_dir)
-    _seed_run_context(tmp_assess_dir, denominator=3)  # KB
-    _write_input(tmp_assess_dir, {**_base_input(), "denominator": 8})
-
-    with pytest.raises(FinalizeValidationError, match="denominator mismatch"):
-        finalize_run(assess_dir=tmp_assess_dir)
-
-
-def test_finalize_score_exceeds_denominator_refuses(tmp_assess_dir: Path) -> None:
-    """A score above its denominator is impossible - refuse."""
-    _seed_log_md(tmp_assess_dir)
-    _seed_run_context(tmp_assess_dir)
-    _write_input(
-        tmp_assess_dir,
-        {**_base_input(), "score": 9.0, "maturity_label": "AI-Native"},
-    )
-
-    with pytest.raises(FinalizeValidationError, match="exceeds denominator"):
-        finalize_run(assess_dir=tmp_assess_dir)
-
-
-def test_finalize_maturity_inconsistent_with_score_refuses(tmp_assess_dir: Path) -> None:
-    """A label that overstates the score band (2.0/8 called 'AI-Native') is a
-    lying self-description - refuse, naming the expected tier."""
-    _seed_log_md(tmp_assess_dir)
-    _seed_run_context(tmp_assess_dir)
-    _write_input(
-        tmp_assess_dir,
-        {**_base_input(), "score": 2.0, "maturity_label": "AI-Native"},
-    )
-
-    with pytest.raises(FinalizeValidationError, match="claims tier 'AI-Native'"):
-        finalize_run(assess_dir=tmp_assess_dir)
-
-
-def test_finalize_valid_maturity_bands_pass(tmp_assess_dir: Path) -> None:
-    """The documented ladder is accepted verbatim: each score earns its label."""
-    for score, label in [
-        (7.0, "AI-Native"),   # 0.875
-        (6.0, "Solid"),       # 0.75
-        (3.0, "Basic"),       # 0.375
-        (1.0, "Not Ready"),   # 0.125
-    ]:
-        _seed_log_md(tmp_assess_dir)
-        _seed_run_context(tmp_assess_dir)
-        _write_input(
-            tmp_assess_dir,
-            {**_base_input(), "score": score, "maturity_label": label},
-        )
-        finalize_run(assess_dir=tmp_assess_dir)  # must not raise
 
 
 def test_finalize_fabricated_hotspot_path_refuses(tmp_assess_dir: Path) -> None:
@@ -691,14 +583,13 @@ def test_finalize_writes_nothing_on_violation(tmp_assess_dir: Path) -> None:
     rerun can still find it)."""
     _seed_log_md(tmp_assess_dir)
     _seed_run_context(tmp_assess_dir)
-    bad = {**_base_input(), "score": 2.0, "maturity_label": "AI-Native",
-           "actions": [_good_action(rank=1)]}
+    bad = {**_base_input(), "actions": [{**_good_action(rank=1), "condition": "layer-99-none.1"}]}
     _write_input(tmp_assess_dir, bad)
 
     with pytest.raises(FinalizeValidationError):
         finalize_run(assess_dir=tmp_assess_dir)
 
-    assert "((LLM fills in))" in (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "(LLM fills in)" in (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     assert not (tmp_assess_dir / "actions.json").exists()
     assert not (tmp_assess_dir / "badge.json").exists()
     assert (tmp_assess_dir / "finalize-input.json").exists()  # not consumed
@@ -733,7 +624,7 @@ def test_finalize_run_id_match_finalizes_log(tmp_assess_dir: Path) -> None:
     finalize_run(assess_dir=tmp_assess_dir)
 
     log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in log
 
 
 def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) -> None:
@@ -744,7 +635,7 @@ def test_finalize_legacy_input_without_run_id_still_works(tmp_assess_dir: Path) 
     _write_input(tmp_assess_dir, _base_input())  # no run_id
 
     finalize_run(assess_dir=tmp_assess_dir)  # must not raise
-    assert "AI Readiness:** 6.0 / 8 (Solid)" in (
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in (
         tmp_assess_dir / "log.md"
     ).read_text(encoding="utf-8")
 
@@ -813,7 +704,7 @@ def _evidence_input(evidence: list | None) -> dict:
 
 
 def _assert_nothing_written(assess_dir: Path) -> None:
-    assert "((LLM fills in))" in (assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "(LLM fills in)" in (assess_dir / "log.md").read_text(encoding="utf-8")
     assert (assess_dir / "finalize-input.json").exists()  # not consumed
 
 
@@ -868,8 +759,8 @@ def test_finalize_evidence_all_true_finalizes(tmp_assess_dir: Path) -> None:
     finalize_run(assess_dir=tmp_assess_dir)
 
     log = (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
-    assert "**AI Readiness:** 6.0 / 8 (Solid)" in log
-    assert "((LLM fills in))" not in log
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in log
+    assert "(LLM fills in)" not in log
     assert not (tmp_assess_dir / "finalize-input.json").exists()
 
 
@@ -882,7 +773,7 @@ def test_finalize_without_evidence_key_finalizes(tmp_assess_dir: Path) -> None:
 
     finalize_run(assess_dir=tmp_assess_dir)
 
-    assert "**AI Readiness:** 6.0 / 8 (Solid)" in (tmp_assess_dir / "log.md").read_text(
+    assert "**Readiness:** Step 3 · 4 of 4 measured" in (tmp_assess_dir / "log.md").read_text(
         encoding="utf-8"
     )
 
@@ -902,7 +793,7 @@ def test_finalize_evidence_mixed_layer_finalizes_and_warns(
 
     finalize_run(assess_dir=tmp_assess_dir)
 
-    assert "((LLM fills in))" not in (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
+    assert "(LLM fills in)" not in (tmp_assess_dir / "log.md").read_text(encoding="utf-8")
     err = capsys.readouterr().err
     assert "warning" in err
     assert "path_exists docs/invented.md" in err
@@ -965,12 +856,10 @@ def test_finalize_evidence_refusal_through_core_and_cli(tmp_path: Path) -> None:
     (root / ".assess").mkdir(parents=True)
     _seed_evidence_repo(root / ".assess")
     ctx = build_and_publish_run(repo_root=root, run_date="2026-09-18", non_interactive=True)
-    den = int(ctx["archetype"].get("denominator") or 8)
     cache = root / ".assess" / ".cache"
     cache.mkdir(exist_ok=True)
     (cache / "finalize-input.json").write_text(json.dumps({
-        "run_id": ctx["run_id"], "score": den * 0.75, "maturity_label": "Solid",
-        "denominator": den, "top_action": "Add a gate",
+        "run_id": ctx["run_id"], "top_action": "Add a gate",
         "layer_scores": {"0": 1.0, "7": 1.0},
         "evidence": [{"layer": 0, "kind": "path_absent", "path": "docs/guide.md"}],
     }), encoding="utf-8")
@@ -983,7 +872,7 @@ def test_finalize_evidence_refusal_through_core_and_cli(tmp_path: Path) -> None:
     assert proc.returncode == 1
     assert "finalize refused" in proc.stderr
     assert "path_absent docs/guide.md" in proc.stderr
-    assert "((LLM fills in))" in (root / ".assess" / "log.md").read_text(encoding="utf-8")
+    assert "(LLM fills in)" in (root / ".assess" / "log.md").read_text(encoding="utf-8")
     assert (cache / "finalize-input.json").exists()
 
 
