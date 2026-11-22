@@ -5,9 +5,9 @@ During a version freeze a PR that would bump a version counter adds one file,
 ``skills/assess/changes/<issue>.<counter>.md``, holding its note as one or more
 markdown bullets. No two PRs write the same file, so the notes never conflict.
 
-The release PR runs, from ``scripts/``::
-
-    uv run --locked python fold_changes.py --release 3.0.0
+The release PR runs ``make fold RELEASE=3.0.0`` from the repository root, which
+runs ``fold_changes.py --release 3.0.0`` here and then ``make regen``, since the
+generated schemas, catalog and goldens stamp the counter values.
 
 For each counter with notes it writes one history entry directly above the
 counter's assignment line, ``# <new> (<release> release): <n> changes since

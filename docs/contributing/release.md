@@ -31,14 +31,16 @@ While a version freeze holds, a PR leaves every version counter at its value on 
 
 `scripts/tests/test_fold_changes.py` fails on a note whose name is not `<issue>.<counter>.md`, whose counter is unknown, or whose text is not bullets, and on an `Unreleased` line left in a history comment.
 
-The release PR folds the notes, from `scripts/`:
+The release PR folds the notes from the repository root:
 
 ```bash
-uv run --locked python fold_changes.py --check        # validate only
-uv run --locked python fold_changes.py --release 3.0.0
+make fold RELEASE=3.0.0
+# with options: make fold RELEASE=3.0.0 FOLD_ARGS='--set artifact_schema=2.0.0 --date 2026-12-01'
 ```
 
-For each counter with notes, the fold writes one history entry directly above the counter, `# <new> (<release> release): <n> changes since <old>.` followed by the notes in issue order, sets the counter to `<new>` and deletes the notes. `<new>` is the next minor version for `ARTIFACT_SCHEMA_VERSION`, the next integer for an integer counter, and `default-<date>` for the default maturity model (`--date`, default today). Pass `--set artifact_schema=2.0.0` (one `--set` per counter) to pick a different value. The fold does not touch the copies and pins elsewhere: `complexity-treemap.py`, the tests and goldens that name a counter's value, and `.claude-plugin/plugin.json` still move by hand in the same PR.
+`make fold` runs `scripts/fold_changes.py --release <RELEASE>` and then `make regen`, because the schemas, the catalog and the goldens stamp the counter values. The fold is not part of `make regen`: regen is safe to run after any conflict, while the fold deletes the notes and bumps each counter, once per release. Without `make`, run `uv run --locked python fold_changes.py --release 3.0.0` from `scripts/` and then the `regen` recipe; `fold_changes.py --check` validates the notes without writing.
+
+For each counter with notes, the fold writes one history entry directly above the counter, `# <new> (<release> release): <n> changes since <old>.` followed by the notes in issue order, sets the counter to `<new>` and deletes the notes. `<new>` is the next minor version for `ARTIFACT_SCHEMA_VERSION`, the next integer for an integer counter, and `default-<date>` for the default maturity model (`--date`, default today). Pass `--set artifact_schema=2.0.0` (one `--set` per counter) to pick a different value. `make regen` rewrites the generated files and goldens; the hand-written copies and pins do not move with it: `complexity-treemap.py`, the tests that name a counter's value, and `.claude-plugin/plugin.json` still move by hand in the same PR.
 
 ## Marketplace listing (manual, web-only)
 
