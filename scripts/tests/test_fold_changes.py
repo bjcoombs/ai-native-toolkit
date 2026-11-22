@@ -128,6 +128,32 @@ def test_a_missing_closing_bump_rule_is_named(tmp_path: Path) -> None:
         fc.fold(tmp_path, "3.0.0", RELEASE_DATE, {})
 
 
+def _fleet_row(tmp_path: Path) -> Path:
+    path = tmp_path / fc.COUNTERS["fleet_row"].path
+    path.parent.mkdir(parents=True)
+    path.write_text("# 2 (#569): ``active``.\nFLEET_ROW_VERSION = 2\n", encoding="utf-8")
+    _write(tmp_path, "932.fleet_row.md", "- ``dirty_reason`` (#932).\n")
+    return path
+
+
+def test_an_explicit_counter_refuses_to_pick_its_own_value(tmp_path: Path) -> None:
+    path = _fleet_row(tmp_path)
+    with pytest.raises(fc.FoldError, match=re.escape("fleet_row needs --set fleet_row=<value>")):
+        fc.fold(tmp_path, "3.0.0", RELEASE_DATE, {})
+    assert path.read_text(encoding="utf-8").endswith("FLEET_ROW_VERSION = 2\n")
+
+
+def test_setting_the_current_value_records_the_notes_without_a_bump(tmp_path: Path) -> None:
+    path = _fleet_row(tmp_path)
+    fc.fold(tmp_path, "3.0.0", RELEASE_DATE, {"fleet_row": "2"})
+    assert path.read_text(encoding="utf-8") == (
+        "# 2 (#569): ``active``.\n"
+        "# 2 (3.0.0 release): one change, without a bump.\n"
+        "# - ``dirty_reason`` (#932).\n"
+        "FLEET_ROW_VERSION = 2\n"
+    )
+
+
 def test_next_value_per_kind() -> None:
     assert fc.next_value(fc.COUNTERS["artifact_schema"], "1.42.0", RELEASE_DATE) == "1.43.0"
     assert fc.next_value(fc.COUNTERS["assess_method"], "37", RELEASE_DATE) == "38"

@@ -44,6 +44,8 @@ class Counter:
     lead: tuple[str, ...] = ()  # comment lines written before a new entry
     # A comment line that closes the history (the bump rule); the entry goes above it.
     before: re.Pattern[str] | None = None
+    # Why the fold will not pick this counter's next value: the release must pass --set.
+    explicit: str = ""
 
 
 COUNTERS: dict[str, Counter] = {
@@ -90,6 +92,8 @@ COUNTERS: dict[str, Counter] = {
         Path("skills/assess/scripts/lib/fleet.py"),
         re.compile(r"^FLEET_ROW_VERSION = (?P<value>[0-9]+)$"),
         "int",
+        explicit="the fleet history readers accept only the current row version, so a bump"
+                 " moves them too; --set fleet_row=<current> records the notes without one",
     ),
 }
 
@@ -174,9 +178,13 @@ def fold_counter(lines: list[str], name: str, notes: list[Note], release: str, n
     match = counter.assignment.match(lines[at])
     assert match is not None
     old = match.group("value")
+    if new is None and counter.explicit:
+        raise FoldError(f"{name} needs --set {name}=<value>: {counter.explicit}")
     new = new or next_value(counter, old, date)
     bullets = [b for note in notes for b in note.bullets]
-    entry = [*counter.lead, f"# {new} ({release} release): {_count(len(bullets), counter.noun)} since {old}."]
+    count = _count(len(bullets), counter.noun)
+    tail = f"{count}, without a bump." if new == old else f"{count} since {old}."
+    entry = [*counter.lead, f"# {new} ({release} release): {tail}"]
     entry += ["# " + line for bullet in bullets for line in bullet]
     insert = at
     while insert > 0 and not lines[insert - 1].strip():
