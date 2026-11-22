@@ -150,7 +150,7 @@
               },
               "counted": {
                 "type": "boolean",
-                "description": "true when the grade is one of measured, verified"
+                "description": "true when the grade is one of measured, verified and the owner did not exclude it"
               },
               "state": {
                 "enum": [
@@ -163,6 +163,20 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "disposition": {
+                "enum": [
+                  "excluded_by_owner"
+                ]
+              },
+              "exclusion_kind": {
+                "enum": [
+                  "not_applicable",
+                  "measured_elsewhere",
+                  "tool_unsupported",
+                  "false_positive",
+                  "other"
+                ]
               }
             },
             "required": [
@@ -221,6 +235,20 @@
                       },
                       "met": {
                         "type": "integer"
+                      },
+                      "disposition": {
+                        "enum": [
+                          "excluded_by_owner"
+                        ]
+                      },
+                      "exclusion_kind": {
+                        "enum": [
+                          "not_applicable",
+                          "measured_elsewhere",
+                          "tool_unsupported",
+                          "false_positive",
+                          "other"
+                        ]
                       }
                     },
                     "required": [
@@ -241,6 +269,37 @@
               "type": "null"
             }
           ]
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "not_applicable",
+                  "measured_elsewhere",
+                  "tool_unsupported",
+                  "false_positive",
+                  "other"
+                ]
+              },
+              "source": {
+                "enum": [
+                  "repo"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "source"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [

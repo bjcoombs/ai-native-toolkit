@@ -347,7 +347,7 @@ def _imports(path: Path) -> set[str]:
 
 def test_no_gathering_or_scoring_module_imports_labels():
     allowed = {LIB / "fleet_labels.py", LABELS_SCRIPT}
-    sources = [*LIB.glob("*.py"), *(SKILLS / "fleet" / "scripts").glob("*.py"),
+    sources = [*LIB.rglob("*.py"), *(SKILLS / "fleet" / "scripts").glob("*.py"),
                *(SKILLS / "assess" / "scripts").glob("*.py")]
     offenders = [p.name for p in sources
                  if p not in allowed and any("fleet_labels" in m for m in _imports(p))]

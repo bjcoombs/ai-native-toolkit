@@ -207,7 +207,7 @@ def _info_program(words: list[str]) -> list[str]:
             return []
         inner = _program(words)
         if inner == words:
-            inner = _wrapped(words) or words
+            inner = _wrapped(words) or _hatch_run(words) or words
         if inner == words:
             return words
         words = inner

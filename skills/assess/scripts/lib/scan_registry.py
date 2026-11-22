@@ -55,6 +55,7 @@ from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
 from lib.coverage_gate import detect_coverage_gate
 from lib.delivery import scan_delivery
+from lib.external_ci import no_external_ci, read_external_ci
 from lib.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.gitlab_notes import gitlab_note_facts
@@ -62,7 +63,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
-from lib.level_tally import DEFAULT_BLOCKS
+from lib.level_tally import LEVEL_READS
 from lib.merged_sample import merged_sample, offline_merged_sample
 from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.guardrails import scan_guardrails
@@ -497,6 +498,9 @@ SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("decline", cs.decline_blocks, ("assess_dir", "plugin_version"), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER,
              spread=("decline_markers", "reoffer_mutation", "decline_disclosures")),
+    # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
+    ScanSpec("owner_exclusions", cs.owner_exclusions, ("repo_root",), STAGE_READ_SIDE,
+             degrade=False, gate_reason=_SELF_DEGRADING),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     ScanSpec("offers_block", cs.offers_blocks, ("non_interactive",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=("interactive", "offers")),
@@ -579,9 +583,13 @@ SCANS: tuple[ScanSpec, ...] = (
     # checks and checks off the ordinary triggers (lib/ci_masking.py,
     # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
     # lint_runs (#782) is the same test for lint lines; Layer 3 level 1 reads it.
-    # Offline itself.
-    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root", "gitlab_merged_ci"),
-             STAGE_POST_OFFERS),
+    # Offline itself; under --platform it also reads external_ci (#928, lib/external_ci.py):
+    # the check runs and statuses of the sampled merged pull requests, at most two GETs each.
+    # Private, two counts in memory; offline it reads nothing.
+    ScanSpec("external_ci", read_external_ci, ("merged_sample",), STAGE_POST_OFFERS,
+             private=True, network=True, offline_fn=no_external_ci),
+    ScanSpec("ci_checks", scan_ci_checks,
+             ("repo_root", "ghsync_root", "gitlab_merged_ci", "external_ci"), STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
     # configuration, a counts-only tool-call loop / MCP server heuristic and the
@@ -650,7 +658,7 @@ SCANS: tuple[ScanSpec, ...] = (
 # The verified tally and the autonomy Step (lib/level_tally.py, #744): the
 # default maturity model over the finished run context. Core-only: the
 # headless runner never reports it; /fleet computes the same from each row.
-SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
+SCANS = (*SCANS, ScanSpec("level", cs.level, LEVEL_READS, STAGE_POST_OFFERS))
 # The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
 # "Verified practices: N of M measured", worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
