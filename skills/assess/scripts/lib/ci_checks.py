@@ -9,7 +9,8 @@ evidence is static, read from the files at HEAD:
   systems are not parsed (issue #787): ``unread_ci_files`` counts the tracked
   files of the ones this scan knows (``UNREAD_CI_FILES``: ``Jenkinsfile``,
   ``.circleci/config.yml``, ``azure-pipelines.yml``, ``bitbucket-pipelines.yml``,
-  ``.travis.yml``, ``.buildkite/pipeline.yml``, at the repository root). When no
+  ``.travis.yml``, ``.buildkite/pipeline.yml``, the Azure and Buildkite ``.yaml``
+  spellings and a root ``buildkite.yml``, at the repository root). When no
   GitHub or GitLab line runs a check and no included jobs are pending, such a
   file makes ``basis`` (and ``enforced_basis``) ``unread_ci_system`` and
   ``enforced_check_runs`` null: the scanner did not see that system's checks,
@@ -164,8 +165,9 @@ EnforcedBasis = Literal[
 # Root CI files of systems this scan does not parse (#787): their presence makes a
 # repository with no readable check not measured, never 0.
 UNREAD_CI_FILES = frozenset({
-    "Jenkinsfile", ".circleci/config.yml", "azure-pipelines.yml", "bitbucket-pipelines.yml",
-    ".travis.yml", ".buildkite/pipeline.yml",
+    "Jenkinsfile", ".circleci/config.yml", "azure-pipelines.yml", "azure-pipelines.yaml",
+    "bitbucket-pipelines.yml", ".travis.yml", ".buildkite/pipeline.yml",
+    ".buildkite/pipeline.yaml", "buildkite.yml", "buildkite.yaml",
 })
 
 

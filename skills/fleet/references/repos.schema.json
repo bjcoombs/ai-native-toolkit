@@ -391,7 +391,7 @@
                 },
                 "unread_ci_files": {
                   "type": "integer",
-                  "description": "Tracked root CI files of systems the scan does not parse (Jenkinsfile, .circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, .buildkite/pipeline.yml)."
+                  "description": "Tracked root CI files of systems the scan does not parse (Jenkinsfile, .circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, .buildkite/pipeline.yml, and the Azure and Buildkite .yaml / buildkite.yml spellings)."
                 }
               }
             },

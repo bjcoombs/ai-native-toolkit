@@ -3186,7 +3186,7 @@ line, own or included (`included_check_commands` counts the included ones); with
 is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
-false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
+false (`no_check_command`, `no_ci` with no CI file, or `unread_ci_system`, below): a `.gitlab-ci.yml` whose
 every include resolved and holds no check reads false. Its third argument is the
 `gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
 offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
@@ -3219,7 +3219,8 @@ still describes `test_or_lint_runs`, which keeps its meaning.
 CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
 `UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
 `azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
-`.buildkite/pipeline.yml`). With no own, included or merged check line and no pending
+`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
+root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
 included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
 and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
 `enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check

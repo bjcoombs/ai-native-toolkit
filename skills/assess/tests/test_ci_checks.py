@@ -357,6 +357,8 @@ _GH_MASKED = "on: [pull_request]\njobs:\n  t:\n    steps:\n      - run: pytest |
     ({"Jenkinsfile": "", "bitbucket-pipelines.yml": "", ".travis.yml": "",
       ".buildkite/pipeline.yml": ""},
      (None, False, "unread_ci_system", "unread_ci_system", 4)),
+    ({"azure-pipelines.yaml": "", ".buildkite/pipeline.yaml": "", "buildkite.yml": ""},
+     (None, False, "unread_ci_system", "unread_ci_system", 3)),
     ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_PYTEST},
      (True, True, "check_command", "enforced_check", 1)),
     ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_DEPLOY},

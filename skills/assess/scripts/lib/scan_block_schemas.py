@@ -167,7 +167,8 @@ CI_CHECKS: JsonDict = {
         "unread_ci_files": _field(
             _INT, "Tracked root CI files of systems the scan does not parse (Jenkinsfile, "
             ".circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, "
-            ".buildkite/pipeline.yml)."),
+            ".buildkite/pipeline.yml, and the Azure and Buildkite .yaml / buildkite.yml "
+            "spellings)."),
     },
 }
 
