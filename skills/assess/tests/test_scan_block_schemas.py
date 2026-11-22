@@ -20,7 +20,7 @@ from lib.delivery import DeliveryBlock  # noqa: E402
 from lib.fleet_schema import build_schema as build_row_schema  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.signals import collect  # noqa: E402
-from lib.signals_schema import build_schema, described_block  # noqa: E402
+from lib.signals_schema import REASON_KEPT, build_schema, described_block  # noqa: E402
 
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
          "delivery": DeliveryBlock}
@@ -46,6 +46,43 @@ def test_both_published_schemas_describe_the_blocks() -> None:
     assert {"test_or_lint_runs", "basis"} <= set(signals_scans["ci_checks"]["properties"])
     assert "hours" in signals_scans["delivery"]["properties"]["time_to_merge_hours_p50"]["description"]
     assert "review_automation" in row_scans
+
+
+def _reason_texts(block: dict[str, Any]) -> list[str]:
+    """Every ``reason`` description of a block schema: its field and its unavailable rule."""
+    return [r["description"] for r in (block.get("properties", {}).get("reason", {}),
+                                       block["then"]["properties"]["reason"]) if "description" in r]
+
+
+def test_each_block_describes_only_its_own_reason_codes() -> None:
+    """The structure codes are described under structure only (#795, from #790's review)."""
+    for scans in (build_schema()["properties"]["scans"],
+                  next(b for b in build_row_schema()["properties"]["scans"]["anyOf"]
+                       if b.get("type") == "object")):
+        for name in BLOCK_SCHEMAS:
+            texts = _reason_texts(scans["properties"][name])
+            assert texts and not [t for t in texts for code in ("no_grimp", "no_networkx",
+                                                                "grimp_failed") if code in t], name
+        structure = " ".join(_reason_texts(scans["properties"]["structure"]))
+        for code in ("no_grimp", "no_networkx", "grimp_failed", "no_python_packages",
+                     "no_import_graph_<language>", "invalid_import_graph", "no_source_files"):
+            assert code in structure
+        assert structure.endswith(REASON_KEPT)
+        assert "no_grimp" not in " ".join(_reason_texts(scans["additionalProperties"]))
+    assert _reason_texts(described_block("ai_usage"))[-1].endswith(REASON_KEPT)
+
+
+@pytest.mark.parametrize(("name", "reason", "code"), [
+    ("ai_usage", "git is not installed", "unavailable"),
+    ("ci_checks", "no_ci: no CI file", "no_ci"),
+    ("delivery", "no_access: HTTP 403", "no_access"),
+    ("structure", "no_grimp: grimp not installed; static structure not assessed", "no_grimp"),
+])
+def test_the_reason_text_matches_the_counts_only_reduction(name: str, reason: str, code: str) -> None:
+    """Every block's reason survives counts-only as its leading code, as REASON_KEPT says."""
+    kept = counts_only_scans({name: {"available": False, "reason": reason}})[name]
+    assert kept == {"available": False, "reason": code}
+    jsonschema.validate(kept, described_block(name))
 
 
 def _git(repo: Path, *args: str) -> None:

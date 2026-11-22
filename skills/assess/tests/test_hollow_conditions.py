@@ -81,7 +81,7 @@ CASES = [
         "ARCHITECTURE.md": "# Architecture\n\nThe entry point is `src/a.py`.\n", "src/a.py": "x = 1\n",
     }, _NONE_FILED),
     _case("l5-1-pytest-or-true", "layer-5-ci", 1,
-          {".github/workflows/ci.yml": _workflow("pytest || true")}, _ISSUES + "775"),
+          {".github/workflows/ci.yml": _workflow("pytest || true")}, None),
     # #782 fixes this for lint_runs only, not for Layer 5.
     _case("l5-1-linter-version", "layer-5-ci", 1,
           {".github/workflows/ci.yml": _workflow("ruff --version")}, _NONE_FILED),

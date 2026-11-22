@@ -959,10 +959,17 @@ custom table, and the namespace `level_signals.py` checks paths against), open p
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
 `reason`. The `ai_usage`, `ci_checks`, `coverage_gate` and `delivery` blocks (`scan_block_schemas.py`, #779, #781)
 also name and describe their fields (`described_block`), loosely: no required field, and a
-string list may be its counts-only length.
+string list may be its counts-only length. Each block's `reason` description is generated
+from the check manifest (`reason_description`, #795): the codes its collector declares in
+`unknown_reasons` (carried in `reason`, for that block) with what each means, then
+`REASON_KEPT`: a counts-only signals document keeps an unavailable block's reason as its
+leading code, or `unavailable` (`counts_only.reason_code`), for every block. `described_blocks`
+adds every known block that declares codes (`structure`), so the structure codes
+(`no_grimp` and the rest) are described under `structure` only and the shared text of
+every other block names no code. `fleet_schema` uses the same blocks for `repos.schema.json`.
 
 **`scan_block_schemas.py`**
-`BLOCK_SCHEMAS`: hand-written field descriptions (with units: delivery durations are hours)
+`BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781)
 and `delivery` (#779), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
@@ -1096,9 +1103,9 @@ each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`
 `placement` map, repository id to unit id, so a repository sits once per view.
 `build_trees` infers the ownership view from repository paths (every prefix of a GitLab
 `path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
-a GitHub settings fragment (deepest team wins, then the first slug), then, for a
+a GitHub settings fragment (written by `ghreport`; deepest team wins, then the first slug), then, for a
 repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
-under that group, and
+under that group (matched ignoring case, the unit id's team part lower-cased; #733), and
 finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
 `[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
 with no repository left are dropped; their kind follows their place (root `org`, a unit
@@ -1617,7 +1624,8 @@ Integration barrier between the individual signal modules and `assess_core`. Der
 the per-directory containment view from the commit-file sets the orchestrator parses
 once and passes in, then assembles all five run-context blocks from the upstream signal
 outputs. Emits the named derived findings as a fixed-order structured array (the single
-source of order is `FINDING_ORDER`): `hidden_coupling`, `lying_map`,
+source of order is `FINDING_ORDER`, loaded from the finding entries' `order` in
+`checks/core.toml`): `hidden_coupling`, `lying_map`,
 `unexplained_complexity`, `untrusted_hotspot`, `self_referential_tests`,
 `unactioned_intent`, `accretion_ratchet`, `orphaned_understanding`,
 `candidate_dead_weight`, `override_contradicts_signals` (archetype marker disagrees with
@@ -1795,9 +1803,13 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `headless_variant` or `unregistered`; an unlisted block is not reported headless),
   `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
   `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots
-  under its blocks), `privacy` (its `counts_only_rules.RULES` patterns and classes;
+  under its blocks), `privacy` (its counts-only patterns and classes, from which
+  `counts_only_rules.RULES` is generated; a pattern is classified by one collector only;
   `archived_finding_paths` sits with the private `keyhole` collector that produces it),
-  `unknown_reasons` (`code`, `carried_in` `reason`, `basis` or `unmeasured_reason`, `means`, `next_step`),
+  `unknown_reasons` (`code`, `carried_in` `reason`, `basis` or `unmeasured_reason`, an
+  optional `block` naming the published block whose reason carries it, `means`,
+  `next_step`; a trailing `<name>` in a code stands for a family, as in
+  `no_import_graph_<language>`),
   `revision` (starts at 1; bumped when a published value changes meaning, #774, as
   `ci_checks`, `review_automation` and `coverage_gate` have been) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
   signals carry it now.
@@ -1807,14 +1819,20 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `null_means`. No grade is authored: it follows from the class
   (`level_signals.INPUT_GRADES`).
 - `condition`: display metadata for one default criterion, keyed
-  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.enforced_check_runs`, unique per
   manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
   supportive `fix`. The criterion itself stays in
   `levels/default.toml`; a custom `--levels` file needs no entries.
-- `finding`: a derived finding, id `core.finding.<name>`, with `order`, `action`,
-  `mode`, `concern` (in `assess_config.GATE_CONCERN_FINDINGS`), `inputs`, `derive`,
-  `thresholds`, `suppressed_when` (the churn suppression, a #789 rule expression in
-  source form) and `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`).
+- `finding`: a derived finding, id `core.finding.<name>`, with `order` (the report and
+  severity order, `keyhole_signals.FINDING_ORDER`), `action` (`FINDING_ACTIONS`), `mode`
+  (`FINDING_MODES`), `concern` (`assess_config.GATE_CONCERN_FINDINGS`), `inputs`,
+  `derive`, `thresholds` (the `coupling_analysis` defaults for `hidden_coupling`),
+  `suppressed_when` (the churn suppression, `keyhole_signals._CHURN_DERIVED_FINDINGS`;
+  until the rule evaluator the loader accepts only `doc_staleness.churn_degenerate ==
+  true`), `prune_missing_paths` (`keyhole_signals.GIT_HISTORY_FINDINGS`) and `headless`.
+  `inputs`, `derive` and `headless` are documentary: no table is generated from them.
+  `inputs` is checked on its typed-root fields or first segment, `derive` as a callable,
+  and `headless` against the `derived_findings` block's headless status.
 
 Loader rules beyond types: an id has its kind's form; a private collector publishes
 nothing and is not spread; a plain collector publishes `[key]`; opting out of degrading
@@ -1824,24 +1842,44 @@ block is `headless_variant` exactly when a variant names it; every read is a cor
 or an earlier collector at the same or an earlier stage, and no key shadows a core
 input or publishes a block another collector publishes (the `scan_registry.validate`
 rules); a signal's collector exists and publishes its block; a condition key is unique and names a
-declared signal; finding orders are distinct and every finding input names a block or collector.
+declared signal; finding orders are distinct and every finding input names a block or collector; a
+privacy pattern is classified by one collector; a reason code's `block` is published by
+its collector; `suppressed_when` is the one supported expression.
 An unknown key or reference carries a "did you mean" `suggestion` and the `available`
-names. The module imports none of the tables it describes, because later steps make
-them load from it.
+names. The module imports none of the tables it describes; they load from it.
 
-Nothing reads the manifest at runtime yet. **Agreement test:**
+**Generated at import (#795, #789 steps 3 and 4).** `core_manifest()` loads and validates
+`checks/core.toml` once per process. `finding_tables` builds `FINDING_ORDER`,
+`FINDING_ACTIONS`, `FINDING_MODES`, `GIT_HISTORY_FINDINGS`, `_CHURN_DERIVED_FINDINGS`
+(`keyhole_signals`) and `GATE_CONCERN_FINDINGS` (`assess_config`); `finding_thresholds`
+gives the `coupling_analysis` defaults (`DEFAULT_LOW_CONTAINMENT`,
+`DEFAULT_HIGH_MODULARITY_Q`, `DEFAULT_HIGH_FRONT_DOOR_RATIO`); `privacy_rules` builds
+`counts_only_rules.RULES` (scan key to privacy table, in scan-table order); and
+`reason_codes(manifest, block)` feeds the per-block reason descriptions of
+`signals_schema`. Editing an entry's `order`, `action`, `mode`, `concern`,
+`prune_missing_paths`, `suppressed_when`, `thresholds` or `privacy` changes the runtime
+tables; after a `privacy` change regenerate `references/counts-only.md`, and after an
+`unknown_reasons` change regenerate the signals and fleet-row schemas.
+
+**Agreement test:**
 `tests/test_check_manifest.py` checks it in both directions against `scan_registry.SCANS`
 (`test_registry_matches_manifest`: one collector per scan key, equal `callable`, `reads`,
 `stage`, `publishes`, `private`, `spread`, `degrade`, `gate_reason`, `label`, `network`
 and `offline_callable`, in table order; a failure names the scan key), the headless
-tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the default
-model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
-against the schema. Until later steps generate those tables from the manifest, adding a
-scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+tables, `ROOTS`, the default model's signals and criteria, and `SIGNAL_INPUTS`; and it
+validates the loaded manifest against the schema. Until later steps generate those tables
+from the manifest, adding a scan, criterion or typed root also adds its manifest entry. A
+counts-only rule is added in the manifest only; a finding is added in the manifest plus
+its path derivation in `keyhole_signals._finding_path_inputs`
+(`test_every_finding_has_a_path_derivation` pins the two name sets). The generated tables are
+pinned through their builders (an edited copy of the manifest reorders the findings or
+reclassifies a field), the structure reason codes against
+`import_graph.STRUCTURE_REASON_CODES`, and the thresholds as all read.
 A finding `inputs` path under a typed root must name fields of its shape
 (`test_finding_inputs_under_a_typed_root_name_its_fields`, #793); one under an untyped
-block or a collector is checked on its first segment only. `derive` is checked as a
-callable only: it stays documentary until a later step generates the findings from it.
+block or a collector is checked on its first segment only. Map keys under a typed root
+are not checked. `derive` is checked as a callable only: it stays documentary until a
+later step generates the findings from it.
 Loader tests: `tests/test_check_manifest_loader.py`.
 
 **`check_validation.py`**
@@ -1961,7 +1999,8 @@ the fleet's unit and repository keys (#703). Tests:
 `tests/test_counts_only.py`, `tests/test_signals_counts_only.py`.
 
 **`counts_only_rules.py`**
-The counts-only allow-list: `RULES` maps each block's field patterns (dotted keys, list
+The counts-only allow-list: `RULES` maps each collector's field patterns (generated from
+the collector's `privacy` table in `checks/core.toml`, #795; dotted keys, list
 levels left out, `{}` for a path-keyed map key) to path, token or dropped text, with
 an `ID` class for external join keys such as `shared_tooling` source ids (kept, hashed
 with the paths), a `REASON` class for an unavailable block's reason kept as its code
@@ -1971,7 +2010,9 @@ field names and `classify`. Every other object is a record whose keys survive on
 they are known field names (`EXTRA_FIELD_NAMES` for dict-literal blocks, plus the typed
 fields and rule segments), so a map keyed by a login or a function name is dropped
 rather than kept unhashed. Adding a run-context string field or block means adding its
-rule or field name here and regenerating `references/counts-only.md`.
+rule to its collector's `privacy` table in `checks/core.toml` (or a field name here) and
+regenerating `references/counts-only.md`. The global leaves, the keyed-map sets,
+`EXTRA_FIELD_NAMES` and `FLEET_DATA_RULES` stay in this module.
 `FLEET_DATA_RULES` and `classify_fleet_data` classify the fleet's `fleet-data.json`
 fields (#703), kept apart from `RULES` so their names never widen the run-context field
 names. Tests: `tests/test_counts_only.py`, `tests/test_fleet_data.py`.
@@ -3121,13 +3162,14 @@ lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
 (`test_is_check_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
-maturity model reads it, so the CI row measures CI, not the instruction file.
+Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
-unresolved_includes, includes[], test_or_lint_runs, basis}`. Each line,
+unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
+enforced_basis, masked_check_commands, off_trigger_check_commands}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3162,8 +3204,66 @@ unknown beats wrong. `merged_config` is `not_read`
 template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
 `not_read`. The module itself is
 offline: it imports the value type, never a platform client.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line (own, included, or
+in the merged configuration when those hold none)
+whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
+off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
+null with `enforced_basis: unknown_trigger`), else null under the
+same `included_jobs` rule, else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_runs`, which keeps its meaning.
 Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`ci_masking.py`**
+Which CI shell statements cannot fail their job (issue #775), with no YAML parser
+(an indentation model over the lines). `unmasked_lines(text) -> list[str]` is the
+result shape other CI classifiers build on: one entry per input line, same index,
+with every masked statement removed (`pytest || true; ruff check .` becomes
+`ruff check .`) and a line whose statements are all masked replaced by `""`. A
+classifier counts what can fail the job by running its line test over this list,
+and the masked count as its count over the original lines minus that.
+`split_statements(text)` splits one shell line into top-level `;` statements of
+`(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
+operator. Rules: a top-level `|| true` / `|| :` / `|| /bin/true` / `|| exit 0`
+masks the segments before it in its statement (`mkdir -p x || true && pytest`
+keeps `pytest`), unless they send output to a file (`>`, `&>`, `| tee`; not
+`/dev/null` or `$GITHUB_STEP_SUMMARY`) that a later line of the same job names,
+with a non-zero exit at or after it (a capture, the grafana `lint:circular`
+pattern); `continue-on-error: true` or `allow_failure:
+true` (literal, a trailing comment ignored) masks the mapping that holds it and
+everything under it (a step or a job); `set +e` masks the rest of its script body
+(a block scalar, or one `script:` list) until `set -e`, unless a later statement
+exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
+joined first.
+Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
+wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+`before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
+`tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
+shared with `ci_triggers.py`.
+
+**`ci_triggers.py`**
+Does a CI line run on ordinary changes (issue #775)? It makes
+`ci_checks.enforced_check_runs` a `ci_executed` signal. `workflow_events(text)` lists a
+GitHub workflow's top-level `on` events (scalar, flow list or mapping, block list or
+mapping; `"on"` and YAML 1.1 `true` too), or None when it cannot; `workflow_trigger`
+maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
+`merge_group`), `called` (`workflow_call` / `workflow_run` only), `not_ordinary`
+(`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
+called workflow as `ordinary` when an ordinary workflow of the repository calls it
+(`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
+one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
+and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
+web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
+outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
+so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
+anchors and `workflow: rules:` are not resolved; branch and path filters are not
+read. Tests: `tests/test_ci_triggers.py`.
 
 **`merged_ci.py`**
 The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
@@ -3381,7 +3481,10 @@ kind `framework`, `llm`, `mcp`, `tracker` or `git_host`; (b) `config` kinds
 `claude_agents` and `ci_agent_job` (`CI_AGENT_PATTERNS` in `.gitlab-ci.yml` and
 `.github/workflows/*.yml`); (c) the count of source files matching
 `TOOL_LOOP_PATTERNS` and `MCP_SERVER_PATTERNS`; (d) issue-tracker and Git-host clients
-from manifests or `ENDPOINT_PATTERNS`, `pairing` when both are present. Every string is
+from manifests or `ENDPOINT_PATTERNS`; a Git host already in `git_hosts` is also an issue
+tracker when the source calls both its issues API (`ISSUE_API_PATTERNS`) and its
+merge-request or pull-request API (`CHANGE_API_PATTERNS`), the same-host case of #731,
+credited after every file is read; `pairing` when both lists are non-empty. Every string is
 a vocabulary slug, so counts-only keeps the block whole. `classify` is the class rule,
 first match wins: `builds-agent` (an agent framework, or a model SDK with a tool-call
 loop or the pairing), `builds-mcp-server` (an MCP server pattern), `uses-agent-tooling`
@@ -3398,7 +3501,9 @@ The pinned vocabulary of `agent_building` (issue #689): `PACKAGES` maps a declar
 dependency name (exact, or a `*` prefix family) to `(slug, kind)`; `lookup` tries the
 name as written and PEP 503-normalised (`normalise`), exact before the longest prefix.
 `TOOL_LOOP_PATTERNS`, `MCP_SERVER_PATTERNS`, `ENDPOINT_PATTERNS` and
-`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics. Widening a table changes
+`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics; `ISSUE_API_PATTERNS` and
+`CHANGE_API_PATTERNS` (#731) tag a Git-host client's issues and merge-request or
+pull-request calls with the hosts whose clients use that form; a form two hosts share is credited only when exactly one of them is in `git_hosts`. Widening a table changes
 classes, so it is a change of its own. Tests: `tests/test_agent_building.py`.
 
 **`agent_manifests.py`**

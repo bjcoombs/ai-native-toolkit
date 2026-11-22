@@ -1,8 +1,11 @@
 # The core check manifest (#789): every collector, signal, condition and finding the
 # toolkit ships, declared once. Contract: skills/assess/references/check-manifest.schema.json;
-# loader: skills/assess/scripts/lib/check_manifest.py; agreement with the scan registry,
-# the finding tables, the counts-only rules and the default maturity model:
-# skills/assess/tests/test_check_manifest.py. Collectors are in scan-table order.
+# loader: skills/assess/scripts/lib/check_manifest.py. The finding tables, the coupling
+# thresholds, the counts-only rules (each collector's privacy table) and the per-block
+# reason descriptions of the published schemas are generated from this file at import
+# (#795). Agreement with the scan registry, the headless tables, the typed roots and the
+# default maturity model: skills/assess/tests/test_check_manifest.py. Collectors are in
+# scan-table order.
 
 manifest_version = 1
 owner = "core"
@@ -995,6 +998,15 @@ shapes = [
   { path = "structure", type = "lib.structure_graph:StructureBlock" },
 ]
 revision = 1
+unknown_reasons = [
+  { code = "no_grimp", block = "structure", means = "grimp, the Python import-graph builder, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "no_networkx", block = "structure", means = "networkx, which the structure metrics need, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "grimp_failed", block = "structure", means = "grimp could not build the Python import graph.", next_step = "Check that the packages import cleanly; the sentence after the code names grimp's error." },
+  { code = "no_python_packages", block = "structure", means = "A Python repository with no importable package.", next_step = "Nothing to change if the code is scripts; a package with an __init__.py is measured." },
+  { code = "no_import_graph_<language>", block = "structure", means = "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.", next_step = "Nothing to change: structure reads as not measured for this language." },
+  { code = "invalid_import_graph", block = "structure", means = "A builder returned a graph that breaks the module-graph contract.", next_step = "Report it against the toolkit; structure reads as not measured meanwhile." },
+  { code = "no_source_files", block = "structure", means = "The scope holds no source file in a language the assess skill recognises.", next_step = "Nothing to change if the scope has no code; check the scope and the excludes otherwise." },
+]
   [entries.privacy]
   "runtime.reason" = "drop"
   "runtime.static_reachability.caveat" = "drop"
@@ -1434,8 +1446,8 @@ revision = 1
 id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
-summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere."
-issues = [698]
+summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, and whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers); null when no check is found but a CI file pulls its jobs from elsewhere."
+issues = [698, 775]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
 reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
@@ -1449,10 +1461,12 @@ revision = 2
 unknown_reasons = [
   { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
   { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
+  { code = "unknown_trigger", carried_in = "basis", means = "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).", next_step = "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it." },
 ]
   [entries.privacy]
   "ci_checks.reason" = "drop"
   "ci_checks.basis" = "token"
+  "ci_checks.enforced_basis" = "token"
   "ci_checks.includes.kind" = "token"
   "ci_checks.includes.id" = "id"
   "ci_checks.includes.status" = "token"
@@ -1464,7 +1478,7 @@ unknown_reasons = [
 id = "core.agent_building"
 kind = "collector"
 title = "Agent building"
-issues = [689]
+issues = [689, 731]
 callable = "lib.agent_building:scan_agent_building"
 publishes = ["agent_building"]
 reads = ["repo_root"]
@@ -1473,7 +1487,7 @@ headless = { agent_building = "registered" }
 shapes = [
   { path = "agent_building", type = "lib.agent_building:AgentBuildingBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "agent_building.reason" = "drop"
   "agent_building.agent_class" = "token"
@@ -1700,14 +1714,14 @@ type = "number"
 evidence = "head_structure"
 
 [[entries]]
-id = "core:ci_checks.test_or_lint_runs"
+id = "core:ci_checks.enforced_check_runs"
 kind = "signal"
-title = "A CI line runs a test or lint command"
+title = "A CI check runs on ordinary changes and can fail its job"
 collector = "core.ci_checks"
-path = "ci_checks.test_or_lint_runs"
+path = "ci_checks.enforced_check_runs"
 type = "bool"
-evidence = "head_text"
-null_means = "included_jobs: the check may live in an included file"
+evidence = "ci_executed"
+null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled"
 
 [[entries]]
 id = "core:agent_environment.pinning.unlocked_total"
@@ -1902,11 +1916,11 @@ key = "layer-4-architecture.2:stats_summary.loc.p95"
 fix = "Split the largest files along their natural seams."
 
 [[entries]]
-id = "core.cond.layer-5-ci.1.test_or_lint_runs"
+id = "core.cond.layer-5-ci.1.enforced_check_runs"
 kind = "condition"
-title = "CI runs your tests or linters"
-key = "layer-5-ci.1:ci_checks.test_or_lint_runs"
-fix = "Add a CI step that runs your test or lint command on pull requests."
+title = "CI runs your tests or linters, and a failure fails the job"
+key = "layer-5-ci.1:ci_checks.enforced_check_runs"
+fix = "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure."
 
 [[entries]]
 id = "core.cond.layer-5-ci.2.unlocked_total"

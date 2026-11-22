@@ -20,6 +20,8 @@ Source-agnostic team orchestration. The caller supplies a **work-source adapter*
 skill owns DAG analysis, hot-file combining, team lifecycle, waves, crash recovery, and
 the retrospective. It uses the `pr-review-merge` skill for every PR.
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 ## Work-Source Adapter Contract
 
 The calling command MUST fill these four operations before invoking this skill:

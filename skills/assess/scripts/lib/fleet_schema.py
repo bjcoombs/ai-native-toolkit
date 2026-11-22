@@ -15,7 +15,7 @@ The envelope is strict. ``scans`` holds the ``assess_signals`` blocks
 (``skills/assess/references/signals.schema.json``), so a block reporting
 ``"available": false`` carries a ``reason``. ``review_automation`` and the blocks in
 ``lib/scan_block_schemas.py`` (``ai_usage``, ``ci_checks``, ``delivery``) are described
-field by field.
+field by field, and ``structure`` names its reason codes (``signals_schema.described_blocks``).
 """
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ from lib.fleet_stamp import FleetStamp  # noqa: E402
 from lib.history_window import WINDOW_PATTERN  # noqa: E402
 from lib.review_automation import KINDS  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
-from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
-from lib.signals_schema import described_block, type_schema  # noqa: E402
+from lib.signals import known_scans  # noqa: E402
+from lib.signals_schema import described_blocks, type_schema  # noqa: E402
 
 # skills/assess/scripts/lib -> skills/
 SCHEMA_PATH = Path(__file__).resolve().parents[3] / "fleet" / "references" / "repos.schema.json"
@@ -69,7 +69,7 @@ def build_schema() -> JsonDict:
                         "runs an AI review; kinds names which (ci_action, ci_component, config_file)."),
         "properties": {"present": {"type": "boolean"},
                        "kinds": {"type": "array", "items": {"enum": list(KINDS)}}},
-    }, **{name: described_block(name) for name in BLOCK_SCHEMAS}}
+    }, **described_blocks(known_scans())}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,

@@ -64,7 +64,7 @@ def test_is_declared_matches_the_classification_table(criterion: Criterion, decl
 
 @pytest.mark.parametrize(("criterion", "grade"), [
     ({"signal": "coverage_gate.threshold_meets_minimum", "op": "eq", "value": True}, "config_only"),
-    ({"signal": "ci_checks.test_or_lint_runs", "op": "eq", "value": True}, "declared"),
+    ({"signal": "ci_checks.enforced_check_runs", "op": "eq", "value": True}, "verified"),
     ({"signal": "observability.rung", "op": "gte", "value": 3}, "declared"),
     ({"signal": "stats_summary.loc.p95", "op": "lte", "value": 500}, "measured"),
     ({"signal": "doc_staleness.summary.stale_pct", "op": "lte", "value": 50}, "measured"),
