@@ -61,6 +61,7 @@ from lib.instruction_claims import scan_instruction_claims
 from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
+from lib.level_tally import DEFAULT_BLOCKS
 from lib.merged_sample import merged_sample
 from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.review_automation import review_evidence, scan_review_automation
@@ -135,7 +136,8 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
 
     Stages run in ``STAGES`` order, so a read must name a provided input or a
     key whose producer is declared earlier *and* runs at the same or an earlier
-    stage. The run-context keys the table writes (published keys and spread
+    stage; a key a spread entry copies into the run context counts as produced by it,
+    and reads None when that entry leaves it out. The run-context keys the table writes (published keys and spread
     keys) must be distinct.
     """
     produced_at: dict[str, int] = {name: -1 for name in provided}
@@ -180,13 +182,19 @@ def validate(specs: Iterable[ScanSpec], provided: Iterable[str] = PROVIDED_INPUT
             raise ScanRegistryError(f"scan {spec.key!r} writes run-context key(s) {clash} written elsewhere")
         written.update(keys)
         produced_at[spec.key] = stage_index
+        # a spread key is readable too: it is in the run context from that stage on
+        for name in spec.spread:
+            produced_at[name] = stage_index
 
 
-def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any]) -> Any:
+def _resolve(spec: ScanSpec, name: str, inputs: Mapping[str, Any], ctx: Mapping[str, Any],
+             spread: frozenset[str] = frozenset()) -> Any:
     if name in inputs:
         return inputs[name]
     if name in ctx:
         return ctx[name]
+    if name in spread:  # a spread entry may leave one of its keys out (an omitted block)
+        return None
     raise ScanRegistryError(
         f"scan {spec.key!r} reads {name!r}, which is neither in the inputs the core "
         f"passed nor in the run context yet"
@@ -240,10 +248,11 @@ def run_scans(
         for each in STAGES:
             run_scans(ctx, inputs, each, table)
         return
+    spread = frozenset(name for each in table for name in each.spread)
     for spec in table:
         if spec.stage != stage:
             continue
-        args = tuple(_resolve(spec, name, inputs, ctx) for name in spec.reads)
+        args = tuple(_resolve(spec, name, inputs, ctx, spread) for name in spec.reads)
         value, degraded = _call(spec, args)
         if spec.spread:
             _spread(spec, ctx, value, degraded)
@@ -610,5 +619,11 @@ SCANS: tuple[ScanSpec, ...] = (
         ("repo_root", "instruction_files", "scope", "excludes"), STAGE_POST_OFFERS,
     ),
 )
+
+
+# The verified tally and the autonomy Step (lib/level_tally.py, #744): the
+# default maturity model over the finished run context. Core-only: the
+# headless runner never reports it; /fleet computes the same from each row.
+SCANS = (*SCANS, ScanSpec("level", cs.level, DEFAULT_BLOCKS, STAGE_POST_OFFERS))
 
 validate(SCANS)

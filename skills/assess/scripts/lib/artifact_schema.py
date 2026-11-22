@@ -207,6 +207,11 @@ constant each.
 # go_rust_gate_form_not_read when no gate is found in a repository holding a
 # go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
 # the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
+# 1.34.0: run-context.json gains the level block (issue #744): the default maturity
+# model's conditions with state, grade and reason, the verified tally (met, measured,
+# not_measured), the autonomy Step and the next Step's blockers
+# (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
 # 1.35.0: run-context.json ci_checks gains lint_runs and lint_basis (issue
 # #782): whether an unmasked CI line on ordinary triggers runs a linter (null
 # when a check target or script may lint inside it). Additive: no existing
