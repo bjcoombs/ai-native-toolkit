@@ -188,6 +188,17 @@
 #   gate found has nothing to state, so the share is null and the row is
 #   unknown, never 0. Graded measured: it cross-checks the config against the
 #   instruction text at the commit, as instruction_claims.failed does.
+# - Cross-agent consistency reads agent_consistency (lib/agent_consistency.py,
+#   #768): the root instruction files of every agent system present (Claude
+#   Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q,
+#   Kiro, Continue, Zed; lib/agent_systems.py). Level 1 is no conflict: no
+#   test or lint command one system names and another does not, and no two
+#   systems whose coverage, complexity or line-length numbers share none.
+#   Level 2 adds every system linked to one canonical file (AGENTS.md when
+#   present) by symlink, import or pointer line, and requires level 1. With
+#   fewer than two systems there is nothing to agree with: both signals are
+#   null and the row is unknown, never 0. Graded measured: it compares the
+#   files and their links at the commit, as instruction_claims.failed does.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
@@ -204,7 +215,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.20"
+version = "default-2026.11.21"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -380,6 +391,21 @@ aggregation = "min"
   level = 2
   requires = ["guardrails-stated.1"]
   criteria = [{ signal = "guardrails.stated_pct", op = "gte", value = 100 }]
+
+[[rows]]
+id = "agent-consistency"
+title = "Cross-agent instruction consistency"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "agent_consistency.conflicts", op = "eq", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  requires = ["agent-consistency.1"]
+  criteria = [{ signal = "agent_consistency.unlinked", op = "eq", value = 0 }]
 
 [[steps]]
 step = 1
