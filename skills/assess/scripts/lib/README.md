@@ -4212,7 +4212,9 @@ INI continuation lines) or `coverage
 report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
 nothing), any `pytest` with pytest-cov on (`--cov` on the line or in `addopts`) for a threshold flag inside a pytest config section (`[pytest]` in `pytest.ini` or `tox.ini`, `[tool:pytest]`, `[tool.pytest.ini_options]`; a `tox.ini` `[testenv]` `commands` line is a task command), `jest --coverage` (or `jest` with
 `collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
-or `jacoco:check`, Gradle `jacocoTestCoverageVerification`, the go-test-coverage
+or `jacoco:check`, Gradle `jacocoTestCoverageVerification` (and `build` / `check` when the
+build file wires `check.dependsOn jacocoTestCoverageVerification`; any other Gradle task
+reads `indirect_run`, null), the go-test-coverage
 program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)
 is reached only through a target. pytest-cov is on only with `--cov` or `--cov=<source>` on the line or in `addopts`
 (`--cov-report` or `--cov-fail-under` alone turns nothing on), and an inline

@@ -251,7 +251,7 @@ def test_folded_paragraphs_are_one_command_each() -> None:
     (("npx", "jest"), "jest", None),
     (("./mvnw", "install"), "maven-jacoco", True),
     (("./gradlew", "jacocoTestCoverageVerification"), "gradle-jacoco", True),
-    (("./gradlew", "check"), "gradle-jacoco", False),
+    (("./gradlew", "check"), "gradle-jacoco", None),
     (("npx", "c8", "npm", "test"), "nyc", True),
     (("uv", "run", "--locked", "pytest", "--cov"), "coverage.py", True),
     (("python", "-m", "pytest", "--cov"), "coverage.py", True),
@@ -316,3 +316,33 @@ def test_an_oversized_ci_file_is_unread_not_absent(tmp_path: Path) -> None:
     big = _wf("pytest --cov") + "#" + "x" * 2_100_000 + "\n"
     assert _read(tmp_path, {".github/workflows/ci.yml": big, "pyproject.toml": PYPROJECT_80}) == (
         None, "unread_ci_system")
+
+
+GRADLE_080 = ('plugins { id "jacoco" }\njacocoTestCoverageVerification {\n'
+              '  violationRules { rule { limit { minimum = 0.80 } } }\n}\n')
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({**_ci("./gradlew build"), "build.gradle": GRADLE_080}, (None, "indirect_run")),
+    ({**_ci("./gradlew check"), "build.gradle": GRADLE_080}, (None, "indirect_run")),
+    ({**_ci("./gradlew test jacocoTestCoverageVerification"), "build.gradle": GRADLE_080},
+     (True, "ci_run")),
+    ({**_ci("./gradlew build"),
+      "build.gradle": GRADLE_080 + "check.dependsOn jacocoTestCoverageVerification\n"},
+     (True, "ci_run")),
+    ({**_ci("./gradlew check"), "build.gradle.kts": GRADLE_080.replace('id "jacoco"', "jacoco")
+      + "tasks.check {\n    dependsOn(tasks.jacocoTestCoverageVerification)\n}\n"},
+     (True, "ci_run")),
+    ({**_ci("./gradlew assemble"),
+      "build.gradle": GRADLE_080 + "check.dependsOn jacocoTestCoverageVerification\n"},
+     (None, "indirect_run")),
+    ({**_ci("./gradlew build"),
+      "build.gradle": GRADLE_080 + "// check.dependsOn jacocoTestCoverageVerification\n"},
+     (None, "indirect_run")),
+], ids=["build-unwired", "check-unwired", "explicit-verification", "build-wired",
+        "check-wired-kts", "assemble-wired", "wiring-commented"])
+def test_gradle_tasks(tmp_path: Path, files: dict[str, str],
+                      expected: tuple[bool | None, str]) -> None:
+    """Issue #921 review: a Gradle task other than the verification may run it (null);
+    ``check`` / ``build`` run it when the build file wires ``check`` to it (met)."""
+    assert _read(tmp_path, files) == expected

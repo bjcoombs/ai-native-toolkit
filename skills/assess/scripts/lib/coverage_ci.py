@@ -290,10 +290,12 @@ def coverage_flag(args: Iterable[str]) -> bool | None:
 
 
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
-              jest_collects: bool = False) -> bool | None:
+              jest_collects: bool = False, gradle_check: bool = False) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
-    whether coverage is on is set elsewhere (a Jest or Vitest config)."""
+    whether coverage is on is set elsewhere (a Jest or Vitest config), or a Gradle task
+    may run the verification (``build`` / ``check`` are met when the build file wires
+    ``check`` to ``jacocoTestCoverageVerification``, ``gradle_check``)."""
     if is_info_invocation(" ".join(words)):   # pytest --version runs no gate (#919)
         return False
     name, args = program(words)
@@ -316,8 +318,14 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     if family == "maven-jacoco":
         return name in ("mvn", "mvnw") and bool(_MAVEN_PHASES & set(args))
     if family == "gradle-jacoco":
-        return name in ("gradle", "gradlew") and any(
-            "jacocoTestCoverageVerification" in w for w in args)
+        if name not in ("gradle", "gradlew"):
+            return False
+        tasks = [w.rsplit(":", 1)[-1] for w in args if not w.startswith("-")]
+        if "jacocoTestCoverageVerification" in tasks:
+            return True
+        if gradle_check and {"build", "check"} & set(tasks):
+            return True
+        return None
     if family == "go-test-coverage":
         return name == "go-test-coverage"
     return False
@@ -359,7 +367,7 @@ def _merge(states: Iterable[bool | None | str]) -> bool | str:
 
 
 def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool = False,
-             jest_collects: bool = False,
+             jest_collects: bool = False, gradle_check: bool = False,
              pytest_lines: frozenset[tuple[str, int]] = frozenset()) -> bool | str:
     """True when an enforced CI line runs ``gate``; a null reason token when that cannot be
     told; False when CI is read and does not."""
@@ -383,7 +391,7 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool 
         # A CI system or composite action this module does not read.
         found = "unread_ci_system"
     else:
-        found = _merge([_tool_state(run, family, pytest_cov, jest_collects)
+        found = _merge([_tool_state(run, family, pytest_cov, jest_collects, gradle_check)
                         for run in ci.runs] + [_indirect(ci)])
     if found is False and ci.elsewhere:
         return "included_jobs"
@@ -402,8 +410,10 @@ def _activates(gate: Gate, words: tuple[str, ...], pytest_cov: bool) -> bool:
     return pytest_cov or cov_enabled(args)
 
 
-def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool) -> bool | None | str:
-    state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects)
+def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
+                gradle_check: bool = False) -> bool | None | str:
+    state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects,
+                      gradle_check=gradle_check)
     if state is False or run.trigger == "not_ordinary":
         return False
     if run.trigger == "unknown":
@@ -440,7 +450,7 @@ def coverage_target(words: tuple[str, ...]) -> bool:
 def enforced_meets_minimum(
         gates: Sequence[G], threshold: bool | None, ci: CiRuns, line_gates: LineGates, *,
         counted: Callable[[G], bool], minimum: float, pytest_cov: bool = False,
-        jest_collects: bool = False,
+        jest_collects: bool = False, gradle_check: bool = False,
         pytest_lines: frozenset[tuple[str, int]] = frozenset()
         ) -> tuple[bool | None, EnforcedBasis]:
     """``(enforced_meets_minimum, enforced_basis)``: ``threshold`` is
@@ -457,7 +467,7 @@ def enforced_meets_minimum(
         if not counted(gate) or (isinstance(percent, (int, float)) and percent < minimum):
             continue
         state = gate_run(gate, ci, line_gates, pytest_cov=pytest_cov, pytest_lines=pytest_lines,
-                         jest_collects=jest_collects)
+                         jest_collects=jest_collects, gradle_check=gradle_check)
         if state is True and percent is not None:
             return True, "ci_run"
         if isinstance(state, str):

@@ -170,6 +170,10 @@ _COV_FLAG_RE = re.compile(r"--cov(?![\w-])")
 _JS_COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\"'])//[^\n]*", re.S)
 _PYTEST_CONFIG_FILES = {"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
 _PYTEST_SECTIONS = {"pytest", "tool:pytest", "tool.pytest.ini_options"}
+# ``check.dependsOn jacocoTestCoverageVerification`` (Groovy or Kotlin DSL, a
+# ``tasks.check { dependsOn(...) }`` block): ``gradle check`` / ``build`` runs the gate.
+_GRADLE_CHECK_WIRED_RE = re.compile(
+    r"\bcheck\b[^\n{]*(?:\{[^}]*)?\bdependsOn\b[^\n]*jacocoTestCoverageVerification")
 _JEST_COLLECTS_RE = re.compile(r"[\"']?collectCoverage[\"']?\s*:\s*true\b")
 
 # Common gate forms this scan does not read - reported so an empty result reads
@@ -746,7 +750,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     root = Path(repo_root).resolve()
     scope_abs = (root / scope).resolve() if scope else None
     gates: list[CoverageGate] = []
-    pytest_cov = jest_collects = False
+    pytest_cov = jest_collects = gradle_check = False
     pytest_lines: set[tuple[str, int]] = set()
     for path, rel in _candidate_files(root, scope_abs, excludes or (set(), [])):
         lines = _read_lines(path)
@@ -758,6 +762,8 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
             pytest_lines.update((rel, n) for n in _pytest_section_lines(lines))
         pytest_cov = pytest_cov or (path.name in _PYTEST_CONFIG_FILES
                                     and _addopts_cov(lines))
+        gradle_check = gradle_check or (path.name in _JACOCO_GRADLE and bool(
+            _GRADLE_CHECK_WIRED_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines)))))
         jest_collects = jest_collects or bool(
             _JEST_COLLECTS_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines))))
     walk_excludes = excludes or (set(), [])
@@ -769,7 +775,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         gates, meets, read_ci_runs(root) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
         minimum=MINIMUM_THRESHOLD_PERCENT, pytest_cov=pytest_cov, jest_collects=jest_collects,
-        pytest_lines=frozenset(pytest_lines))
+        gradle_check=gradle_check, pytest_lines=frozenset(pytest_lines))
     return {
         "available": True,
         "configured": any(gates_something(g) for g in gates),
