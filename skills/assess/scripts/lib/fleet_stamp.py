@@ -63,7 +63,14 @@ class RepositoryCounts(TypedDict):
     qualifying: int
 
 
-class FleetStamp(TypedDict):
+class _LaterStampKeys(TypedDict, total=False):
+    """Keys every stamp is written with that an earlier stamp may lack, so run.schema.json
+    does not require them (``NotRequired`` is not seen under postponed annotations)."""
+
+    coverage: Coverage | None  # None without --discovered (unknown); absent before #745
+
+
+class FleetStamp(_LaterStampKeys):
     fleet_stamp_version: int
     toolkit_commit: str | None  # None for an install that is not a git checkout
     plugin_version: str
@@ -77,7 +84,6 @@ class FleetStamp(TypedDict):
     fleet_config_entries: FleetConfigEntries | None
     platform: bool  # --platform ran the platform pass; absent before #714 (reads as False)
     repositories: RepositoryCounts
-    coverage: Coverage | None  # None without --discovered (unknown); absent before #745
 
 
 def count_repositories(rows: list[FleetRow]) -> RepositoryCounts:

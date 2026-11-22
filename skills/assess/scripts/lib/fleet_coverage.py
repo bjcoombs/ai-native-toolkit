@@ -10,7 +10,8 @@ per line) adds the archived repositories its listing leaves out.
 Each discovered path lands in exactly one bucket, first match wins:
 
 1. ``assessed``: a row with ``status`` ``ok``;
-2. ``failed_scan``: a row with ``status`` ``failed`` (cloned, but it could not be scanned);
+2. ``failed_scan``: a row with ``status`` ``failed`` (cloned, but it could not be scanned),
+   except a ``missing_checkout`` row: a ``--from-list`` entry with no clone falls through;
 3. ``archived_or_empty``: ``archived`` true, or an empty ``default_branch`` (ghsync skips both);
 4. ``excluded_by_filters``: a ghsync checkout under ROOT that this run was not given
    (a ``--from-list`` run that left it out);
@@ -18,7 +19,8 @@ Each discovered path lands in exactly one bucket, first match wins:
 
 So the buckets always sum to ``discoverable``. A path maps to a row id the way
 ``lib/fleet.py`` ``layout_id`` names a checkout: a one-segment GitHub path ``svc`` is
-``<root name>/svc``. ``not_in_listing`` counts the rows no discovered path names; they
+``<root name>/svc``. Two paths naming the same id (``svc`` and ``<root name>/svc``) are
+one repository, counted once under the first. ``not_in_listing`` counts the rows no discovered path names; they
 are left out of the other counts.
 
 Counts only: no repository name is kept, so ``run.json`` and ``report.md`` stay
@@ -31,7 +33,7 @@ import json
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
-from lib.fleet import STATUS_OK, FleetRow, checkout_name
+from lib.fleet import MISSING_CHECKOUT, STATUS_OK, FleetRow, checkout_name
 
 ARCHIVED_CACHE = ".gh_archived_repos"  # ghsync's archived-repos cache in the root
 
@@ -117,24 +119,30 @@ def reconcile(entries: list[Discovered], rows: list[FleetRow], root: Path,
               targeted: frozenset[str]) -> Coverage:
     """Every discovered path counted in one bucket (module docstring); ``targeted`` is this
     run's repository ids."""
-    status = {row["repo"]: row["status"] for row in rows}
-    coverage: Coverage = {"discoverable": len(entries), "assessed": 0, "archived_or_empty": 0,
+    by_repo = {row["repo"]: row for row in rows}
+    coverage: Coverage = {"discoverable": 0, "assessed": 0, "archived_or_empty": 0,
                           "not_cloned": 0, "failed_scan": 0, "excluded_by_filters": 0,
                           "not_in_listing": 0}
     named: set[str] = set()
     for entry in entries:
         repo = row_id(entry.path, root)
+        if repo in named:  # another spelling of a path already counted
+            continue
         named.add(repo)
+        coverage["discoverable"] += 1
         repo_dir = root / entry.path
-        if repo in status:
-            coverage["assessed" if status[repo] == STATUS_OK else "failed_scan"] += 1
+        row = by_repo.get(repo)
+        if row is not None and row["status"] == STATUS_OK:
+            coverage["assessed"] += 1
+        elif row is not None and row["reason"] != MISSING_CHECKOUT:
+            coverage["failed_scan"] += 1
         elif entry.archived_or_empty:
             coverage["archived_or_empty"] += 1
         elif repo not in targeted and (repo_dir / checkout_name(repo_dir)).is_dir():
             coverage["excluded_by_filters"] += 1
         else:
             coverage["not_cloned"] += 1
-    coverage["not_in_listing"] = sum(1 for repo in status if repo not in named)
+    coverage["not_in_listing"] = sum(1 for repo in by_repo if repo not in named)
     return coverage
 
 

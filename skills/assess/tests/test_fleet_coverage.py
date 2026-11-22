@@ -146,7 +146,7 @@ def test_the_report_and_stamp_state_two_of_five_assessed_with_each_gap(tmp_path)
 
     report = (out / "report.md").read_text(encoding="utf-8")
     line = next(t for t in report.splitlines() if t.startswith("**Coverage:**"))
-    assert report.index(line) < report.index("\n## ")  # above the first section and diagram
+    assert report.index(line) < report.index("Drawn from") < report.index("\n## ")  # the first paragraph
     assert "2 of 5 discoverable repositories were assessed" in line
     for part in ("1 archived or empty", "1 discovered but not cloned", "1 cloned but could not be scanned",
                  "0 excluded by filters"):
@@ -206,3 +206,30 @@ def test_coverage_is_no_comparability_key():
     with_coverage = build_stamp([_row("grp/a")], coverage=coverage, **kwargs)  # type: ignore[arg-type]
     assert fleet_compare.comparability(without, with_coverage) == ([], [])
     assert "coverage" not in fleet_history._MATCH_KEYS
+
+
+def test_a_listed_entry_with_no_clone_is_not_cloned_never_a_failed_scan(tmp_path):
+    """A --from-list run over the listing itself: grp/d has no checkout (missing_checkout)."""
+    root, listing = _coverage_root(tmp_path)
+    (tmp_path / "list.txt").write_text("grp/a\ngrp/b\ngrp/d\ngrp/e\n", encoding="utf-8")
+    out = tmp_path / "c4"
+    assert fleet_cli.main(["--from-list", str(tmp_path / "list.txt"), str(root), "--discovered", str(listing),
+                           "--no-history", "--no-diagrams", "--out", str(out)]) == 0
+    coverage = json.loads((out / "run.json").read_text(encoding="utf-8"))["coverage"]
+    assert coverage == {"discoverable": 5, "assessed": 2, "archived_or_empty": 1, "not_cloned": 1,
+                        "failed_scan": 1, "excluded_by_filters": 0, "not_in_listing": 0}
+
+
+def test_two_spellings_of_one_repository_count_once(tmp_path):
+    root = tmp_path / "org"
+    entries = [fc.Discovered("svc", False), fc.Discovered("org/svc", False)]
+    coverage = fc.reconcile(entries, [_row("org/svc")], root, frozenset({"org/svc"}))
+    assert coverage["discoverable"] == coverage["assessed"] == 1
+
+
+def test_a_stamp_from_before_745_without_coverage_is_valid():
+    stamp = build_stamp([_row("grp/a")], toolkit_commit="c", plugin_version="2.1.0", today=date(2026, 11, 22),
+                        window="6mo", levels_version=None, counts_only=True, paths_hashed=False, scans=None)
+    old = {k: v for k, v in stamp.items() if k != "coverage"}
+    jsonschema.validate(old, build_stamp_schema())
+    assert "coverage" not in build_stamp_schema()["required"]

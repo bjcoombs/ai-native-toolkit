@@ -507,9 +507,9 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `coverage` | The [`--discovered`](#coverage---discovered) counts: `discoverable`, `assessed`, `archived_or_empty`, `not_cloned`, `failed_scan`, `excluded_by_filters` and `not_in_listing`. `null` without `--discovered` (coverage unknown), and absent in a run from before #745. Counts only, and not a comparability key. |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
-any `--jobs` over unchanged checkouts on the same day write the same bytes. With
-`--discovered`, a list run that leaves a checkout out counts it under `coverage`
-(`excluded_by_filters`), so only that key differs.
+any `--jobs` over unchanged checkouts on the same day write the same bytes. A list
+run that leaves a checkout out differs in `repositories` (`selected`, `scanned_ok`) and,
+with `--discovered`, in `coverage` (`excluded_by_filters`).
 
 ## Fleet settings: `--fleet-config`
 
@@ -828,13 +828,14 @@ Each discovered path lands in one bucket, the first that matches:
 | Bucket (`run.json` key) | When |
 |-------------------------|------|
 | `assessed` | its row is `ok` |
-| `failed_scan` | its row is `failed`: cloned, but it could not be scanned (the reason is in `repos.jsonl`) |
+| `failed_scan` | its row is `failed`: cloned, but it could not be scanned (the reason is in `repos.jsonl`). A `missing_checkout` row (a `--from-list` entry with no clone) is not a scan and falls through to the buckets below |
 | `archived_or_empty` | `archived` is true or `default_branch` is empty: ghsync skips both |
 | `excluded_by_filters` | a `<repo>-main` checkout under `ROOT` this run was not given, such as one a `--from-list` run left out |
 | `not_cloned` | anything else: discovered, but there is no checkout |
 
 The buckets sum to `discoverable`. A path names a row the way the root layout does: a
-one-segment GitHub path `svc` is the row `<root name>/svc`. `not_in_listing` counts the rows
+one-segment GitHub path `svc` is the row `<root name>/svc`, and two paths naming the same
+row count once. `not_in_listing` counts the rows
 no discovered path names; they are left out of the other counts.
 
 ghsync's listing leaves archived and empty repositories out, so `archived_or_empty` counts
@@ -844,7 +845,8 @@ repositories, so an empty one appears only when your list includes it.
 
 `report.md` gives the coverage line first, above every section and diagram, and
 `run.json` records the counts under `coverage`. Both are counts only in every output mode:
-no repository is named, so nothing outside `repos.jsonl` names an unassessed repository.
+the coverage line and `coverage` name no repository. (A repository whose scan exits
+non-zero is still named by its row and its `logs/<repo>.stderr`, as above.)
 Without `--discovered`, the line says the coverage is unknown and `coverage` is `null`.
 Logic: `lib/fleet_coverage.py`.
 

@@ -1372,7 +1372,7 @@ first match: `assessed` (ok row), `failed_scan` (failed row), `archived_or_empty
 `excluded_by_filters` (a checkout under the root this run was not given), `not_cloned`; the
 buckets sum to `discoverable`, and `not_in_listing` counts rows no path names. A path maps to
 a row id as `fleet.layout_id` does (`row_id`). `Coverage` is counts only and is stamped in
-`run.json` (`fleet_stamp.FleetStamp.coverage`, null without a listing; not copied into
+`run.json` (`fleet_stamp.FleetStamp.coverage`, null without a listing, optional in the schema since a stamp from before #745 lacks it; not copied into
 `fleet-data.json`, `fleet_data.RUN_EXCLUDED`). `coverage_line` is the paragraph
 `fleet_diagrams.report_markdown` puts first in `report.md`; without a listing it says the
 coverage is unknown. Tests: `tests/test_fleet_coverage.py`.

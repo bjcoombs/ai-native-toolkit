@@ -182,11 +182,11 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
     """``report.md``: the coverage line when given (``lib/fleet_coverage.py``), the credit
     section when given (``lib/fleet_credit.py``), then each diagram embedded with a relative
     link, or why it was skipped."""
-    lines = ["# Fleet diagrams", "",
-             "Drawn from this run's output with no model call; unknown is hatched and named, "
-             "never drawn as zero.", ""]
+    lines = ["# Fleet diagrams", ""]
     if coverage is not None:
         lines += [coverage, ""]
+    lines += ["Drawn from this run's output with no model call; unknown is hatched and named, "
+              "never drawn as zero.", ""]
     if credit is not None:
         lines += [credit.rstrip("\n"), ""]
     for diagram in diagrams:
