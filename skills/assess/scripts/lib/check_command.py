@@ -172,7 +172,7 @@ def _task_target(words: list[str], names: frozenset[str]) -> bool:
 
 
 # Type checkers Layer 3 credits as lint runs (#782), local to ``is_lint_run`` so
-# ``is_lint_command`` (Layer 5, ``test_or_lint_runs``) keeps its vocabulary.
+# ``is_lint_command`` (Layer 5, ``test_or_lint_configured``) keeps its vocabulary.
 TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
 _RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
 # Package-manager forms that run a named program: ``npm exec``, ``pnpm dlx``, ``bun x``.
@@ -249,7 +249,7 @@ def is_lint_run(text: str) -> bool:
     ``hatch fmt --check`` and ``hatch run``
     of a linter program (``hatch run ruff check .``) count too, and a package-manager test
     alias (``npm test``, ``npx jest``) does not. ``is_lint_command`` keeps its
-    meaning: ``lib.ci_checks.test_or_lint_runs`` and Layer 5 read it unchanged.
+    meaning: ``lib.ci_checks.test_or_lint_configured`` and Layer 5 read it unchanged.
     """
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]

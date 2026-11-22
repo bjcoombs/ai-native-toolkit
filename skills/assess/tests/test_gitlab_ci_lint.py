@@ -167,9 +167,9 @@ def _offline_app(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_ci_checks_reads_the_merged_check_where_offline_was_unknown(tmp_path):
     root, app = _offline_app(tmp_path)
-    assert scan_ci_checks(app, root)["test_or_lint_runs"] is None
+    assert scan_ci_checks(app, root)["test_or_lint_configured"] is None
     block = scan_ci_checks(app, root, MergedCi("read", text=MERGED))
-    assert (block["test_or_lint_runs"], block["basis"]) == (True, "merged_config")
+    assert (block["test_or_lint_configured"], block["basis"]) == (True, "merged_config")
     assert (block["merged_config"], block["merged_check_commands"]) == ("read", 1)
     assert (block["check_commands"], block["included_check_commands"]) == (0, 0)
 
@@ -178,13 +178,13 @@ def test_ci_checks_reads_gitlabs_yaml_dump_shape(tmp_path):
     """GitLab dumps merged_yaml with a document marker and indentless lists."""
     root, app = _offline_app(tmp_path)
     block = scan_ci_checks(app, root, MergedCi("read", text="---\nunit:\n  script:\n  - pytest\n"))
-    assert (block["test_or_lint_runs"], block["merged_check_commands"]) == (True, 1)
+    assert (block["test_or_lint_configured"], block["merged_check_commands"]) == (True, 1)
 
 
 def test_ci_checks_reads_false_when_the_merged_config_holds_no_check(tmp_path):
     root, app = _offline_app(tmp_path)
     block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
-    assert (block["test_or_lint_runs"], block["basis"]) == (False, "no_check_command")
+    assert (block["test_or_lint_configured"], block["basis"]) == (False, "no_check_command")
 
 
 @pytest.mark.parametrize("ci", [
@@ -196,9 +196,9 @@ def test_a_conditional_include_keeps_a_check_free_merge_unknown(tmp_path, ci):
     root = tmp_path / "gl"
     app = make_repo(root, "grp/app", files={".gitlab-ci.yml": ci})
     block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "merged_config_partial")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "merged_config_partial")
     block = scan_ci_checks(app, root, MergedCi("read", text=MERGED))
-    assert (block["test_or_lint_runs"], block["basis"]) == (True, "merged_config")
+    assert (block["test_or_lint_configured"], block["basis"]) == (True, "merged_config")
 
 
 def test_a_rules_include_inside_a_template_read_offline_keeps_the_merge_unknown(tmp_path):
@@ -207,7 +207,7 @@ def test_a_rules_include_inside_a_template_read_offline_keeps_the_merge_unknown(
         "include:\n  - project: grp/missing\n    file: /x.yml\n    rules:\n      - if: $X\n")})
     app = make_repo(root, "grp/app", files={".gitlab-ci.yml": INCLUDE.format(project="grp/tpl")})
     block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "merged_config_partial")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "merged_config_partial")
 
 
 @pytest.mark.parametrize(("own", "merged"), [
@@ -226,7 +226,7 @@ def test_a_child_pipeline_keeps_a_check_free_merge_unknown(tmp_path, own, merged
     root = tmp_path / "gl"
     app = make_repo(root, "grp/app", files={".gitlab-ci.yml": own})
     block = scan_ci_checks(app, root, MergedCi("read", text=merged))
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "merged_config_partial")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "merged_config_partial")
     assert block["merged_config"] == "read"
 
 
@@ -258,7 +258,7 @@ def test_no_gitlab_ci_file_or_no_include_is_not_read(glab, tmp_path):
 def test_ci_checks_stays_unknown_without_a_merged_read(tmp_path, merged):
     root, app = _offline_app(tmp_path)
     block = scan_ci_checks(app, root, merged)
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "included_jobs")
     assert block["merged_check_commands"] == 0
 
 
@@ -267,7 +267,7 @@ def test_an_offline_check_wins_over_the_merged_config(tmp_path):
     app = make_repo(root, "grp/app", files={
         ".gitlab-ci.yml": INCLUDE.format(project="grp/missing") + "t:\n  script:\n    - make test\n"})
     block = scan_ci_checks(app, root, MergedCi("read", text="build:\n  script:\n    - make\n"))
-    assert (block["test_or_lint_runs"], block["basis"]) == (True, "check_command")
+    assert (block["test_or_lint_configured"], block["basis"]) == (True, "check_command")
 
 
 def test_review_automation_matches_a_merged_review_component_once(tmp_path):
@@ -286,7 +286,7 @@ def test_counts_only_keeps_the_merged_fields_and_no_text(tmp_path):
     scans = {"ci_checks": scan_ci_checks(app, root, MergedCi("read", text=MERGED))}
     out = counts_only_scans(scans)["ci_checks"]
     for field in ("merged_config", "merged_config_reason", "merged_check_commands",
-                  "test_or_lint_runs", "basis"):
+                  "test_or_lint_configured", "basis"):
         assert out[field] == scans["ci_checks"][field], field  # a dropped field fails here
     unavailable = {"ci_checks": scan_ci_checks(app, root, MergedCi("unavailable", "not_found"))}
     assert counts_only_scans(unavailable)["ci_checks"]["merged_config_reason"] == "not_found"
@@ -299,7 +299,7 @@ def test_counts_only_keeps_the_merged_fields_and_no_text(tmp_path):
 def test_offline_collect_never_asks(glab, tmp_path):
     root = _root(tmp_path)
     block = collect(_app(root), ["ci_checks"], ghsync_root=root)["ci_checks"]
-    assert (block["merged_config"], block["test_or_lint_runs"]) == ("not_read", None)
+    assert (block["merged_config"], block["test_or_lint_configured"]) == ("not_read", None)
     assert calls(glab) == []
 
 
@@ -313,7 +313,7 @@ def test_fleet_platform_reads_the_merged_config_where_a_template_is_not_cloned(g
     base = [str(root), "--no-history", "--no-diagrams"]
     assert fleet_cli.main([*base, "--out", str(tmp_path / "n0")]) == 0
     assert calls(glab) == []
-    assert _rows(tmp_path / "n0")["grp/app"]["ci_checks"]["test_or_lint_runs"] is None
+    assert _rows(tmp_path / "n0")["grp/app"]["ci_checks"]["test_or_lint_configured"] is None
 
     assert fleet_cli.main([*base, "--out", str(tmp_path / "n1"), "--platform",
                            "--platform-jobs", "1"]) == 0
@@ -321,9 +321,9 @@ def test_fleet_platform_reads_the_merged_config_where_a_template_is_not_cloned(g
     assert len(lint_calls) == 1 and "projects/grp%2Fapp/ci/lint" in lint_calls[0]
     scans = _rows(tmp_path / "n1")
     app, both = scans["grp/app"]["ci_checks"], scans["grp/both"]["ci_checks"]
-    assert (app["test_or_lint_runs"], app["basis"], app["merged_config"]) == (
+    assert (app["test_or_lint_configured"], app["basis"], app["merged_config"]) == (
         True, "merged_config", "read")
-    assert (both["test_or_lint_runs"], both["merged_config"]) == (False, "not_needed")
+    assert (both["test_or_lint_configured"], both["merged_config"]) == (False, "not_needed")
     assert calls(glab, "leak.log") == []
     for where in (tmp_path / "tmp", tmp_path / "n1"):
         assert not [p for p in where.rglob("*") if p.is_file() and b"pytest -q" in p.read_bytes()]

@@ -1,4 +1,4 @@
-"""Detect an *enforced* line-coverage threshold in a repo's config - read-only.
+"""Detect a line-coverage threshold *configured* in a repo's config - read-only.
 
 `coverage_report.py` answers "is coverage measured, and what is it?". This
 module answers the Layer 6 question that measurement cannot: "does the tooling
@@ -13,7 +13,7 @@ threshold exactly as written (a JaCoCo ``0.80`` stays ``0.80`` with unit
 ``threshold_percent`` is the same number as a percentage (``80.0`` for that
 ratio), derived from ``unit`` alone, and null when it is not a percentage of
 coverage (an uncovered-line count) or was not read (a template, a tool default).
-When nothing is found the block says ``enforced: false`` with an empty ``gates``
+When nothing is found the block says ``configured: false`` with an empty ``gates``
 list - a gate is never inferred from coverage *measurement*.
 
 ``threshold_meets_minimum`` is the Layer 6 level 1 signal (#781): true when a
@@ -206,7 +206,7 @@ class CoverageGateBlock(TypedDict):
     """The ``coverage_gate`` run-context block."""
 
     available: bool
-    enforced: bool
+    configured: bool
     gates: list[CoverageGate]
     max_threshold_percent: float | None
     threshold_meets_minimum: bool | None
@@ -610,7 +610,7 @@ def _read_lines(path: Path) -> list[str] | None:
 
 
 def gates_something(gate: CoverageGate) -> bool:
-    """A gate `enforced` counts: a non-zero threshold, or a null one from nyc/c8."""
+    """A gate `configured` counts: a non-zero threshold, or a null one from nyc/c8."""
     if gate["threshold"] is None:
         return gate["tool"] in _NULL_THRESHOLD_GATES
     return gate["threshold"] != 0
@@ -625,7 +625,7 @@ def max_threshold_percent(gates: list[CoverageGate]) -> float | None:
 def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     """Layer 6 level 1: does a counted gate hold coverage at 50 percent or more?
 
-    Only the gates ``enforced`` counts are read, so a ``fail_under = 0`` still
+    Only the gates ``configured`` counts are read, so a ``fail_under = 0`` still
     gates nothing. True when one has ``threshold_percent`` of at least
     ``MINIMUM_THRESHOLD_PERCENT``; otherwise None (not measured) when one has a
     null ``threshold_percent`` (a template, an nyc/c8 default, an uncovered-line
@@ -644,11 +644,11 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
                          excludes: Excludes | None = None) -> CoverageGateBlock:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
 
-    ``{"available": True, "enforced": bool, "gates": [...],
+    ``{"available": True, "configured": bool, "gates": [...],
     "max_threshold_percent": float | None, "threshold_meets_minimum": bool | None,
     "unmeasured_reason": str | None, "not_detected": [...]}`` where each gate is ``{file, line, tool, form,
     threshold, unit, threshold_percent, metric}``.
-    ``enforced`` is true when at least one gate has a non-zero threshold, or a
+    ``configured`` is true when at least one gate has a non-zero threshold, or a
     null one from a tool that checks at a built-in default (nyc/c8). A
     ``fail_under = 0``, and a Jest/Vitest anchor whose threshold was not read, are
     reported but count as gating nothing. A templated threshold
@@ -673,7 +673,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
                                         walk_excludes) else None)
     return {
         "available": True,
-        "enforced": any(gates_something(g) for g in gates),
+        "configured": any(gates_something(g) for g in gates),
         "gates": gates,
         "max_threshold_percent": max_threshold_percent(gates),
         "threshold_meets_minimum": None if unmeasured else threshold_meets_minimum(gates),

@@ -50,7 +50,7 @@ def test_is_lint_run(text: str, expected: bool) -> None:
 
 
 def test_is_lint_command_keeps_its_meaning() -> None:
-    # test_or_lint_runs and Layer 5 still read is_lint_command unchanged (#782 requirement 3).
+    # test_or_lint_configured and Layer 5 still read is_lint_command unchanged (#782 requirement 3).
     assert is_lint_command("ruff --version") and is_lint_command("npm test")
 
 
@@ -94,7 +94,7 @@ def test_a_type_checker_is_a_lint_run(text: str) -> None:
 
 
 def test_type_checkers_leave_is_lint_command_unchanged() -> None:
-    # Layer 5 and test_or_lint_runs keep is_lint_command's vocabulary.
+    # Layer 5 and test_or_lint_configured keep is_lint_command's vocabulary.
     assert not is_lint_command("pyright") and not is_lint_command("tsc --noEmit")
     assert not is_lint_run("tsc --version") and not is_lint_run("npm run build:types")
 

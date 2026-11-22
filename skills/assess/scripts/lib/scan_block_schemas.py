@@ -89,7 +89,7 @@ CI_CHECKS: JsonDict = {
     "description": (
         "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI "
         "files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and "
-        "project or component files of clones in the --ghsync-root). test_or_lint_runs is true "
+        "project or component files of clones in the --ghsync-root). test_or_lint_configured is true "
         "when an own or included CI line runs one, false when none does and every include "
         "resolved, and null (unknown) when a CI file pulls jobs from a file this run could not "
         "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
@@ -144,14 +144,14 @@ CI_CHECKS: JsonDict = {
             "not_gitlab, ...); null otherwise."),
         "merged_check_commands": _field(_INT, "Lines of the merged configuration that run a test "
                                               "or lint check; the text is never published."),
-        "test_or_lint_runs": _field(
+        "test_or_lint_configured": _field(
             {"type": ["boolean", "null"]},
             "The CI test-or-lint signal: true, false, or null when included jobs may hold "
             "the check."),
         "basis": _field(
             {"enum": ["check_command", "merged_config", "included_jobs", "merged_config_partial",
                       "unread_ci_system", "no_check_command", "no_ci"]},
-            "The reason for test_or_lint_runs: check_command or merged_config (true; the second "
+            "The reason for test_or_lint_configured: check_command or merged_config (true; the second "
             "when only the merged configuration ran a check), included_jobs or "
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
@@ -205,9 +205,9 @@ COVERAGE_GATE: JsonDict = {
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
-        "enforced": _field({"type": "boolean"},
-                           "True when any gate gates something (a non-zero threshold, or a "
-                           "null one from a tool default or a templated flag)."),
+        "configured": _field({"type": "boolean"},
+                             "True when any gate gates something (a non-zero threshold, or a "
+                             "null one from a tool default or a templated flag). Read from configuration text at HEAD; was enforced before issue #783."),
         "gates": _field(
             {"type": "array", "items": {"type": "object", "properties": {
                 "file": {"type": "string"},

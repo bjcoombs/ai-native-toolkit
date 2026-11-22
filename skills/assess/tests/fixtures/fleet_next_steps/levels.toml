@@ -42,7 +42,7 @@ share = 0.5
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "coverage_gate.enforced", op = "eq", value = true }]
+  criteria = [{ signal = "coverage_gate.configured", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
