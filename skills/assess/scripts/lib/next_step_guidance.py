@@ -464,9 +464,10 @@ _MEASURE_HINTS = {
     "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)")
                      + " With no file scored (`files_scored` 0, a docs-only repository) "
                      "the file size is not measured (`no_scored_files`): a percentile of "
-                     "no files says nothing. A full run whose treemap step wrote no "
-                     "`complexity-stats.json` reads `no_complexity_stats`: rerun `/assess` so "
-                     "the treemap step writes it.",
+                     "no files says nothing. A full run with no `complexity-stats.json` "
+                     "reads `no_complexity_stats`: the treemap step did not run or did not "
+                     "finish (it writes the file even when no file is scored), so check its "
+                     "output in the `/assess` run.",
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",

@@ -45,8 +45,9 @@ def load_current_stats(assess_dir: Path) -> dict[str, Any]:
     """This run's complexity stats, or an empty snapshot when none was written.
 
     The empty snapshot is marked ``available: false`` with ``NO_STATS_REASON``, so the
-    run context reads "not measured" rather than a measured zero: a missing sidecar is
-    not a repository with no source (``files_scored`` 0 would fire the empty-set rule,
+    run context reads "not measured" rather than a measured zero: a missing sidecar means
+    the treemap step did not run or did not finish (it writes a zero-file sidecar when
+    nothing is scorable), not a repository with no source (``files_scored`` 0 would fire the empty-set rule,
     ``no_scored_files``). Its ``files_scored`` stays 0 for the readers that count it
     (the wiki log)."""
     return load_stats(assess_dir / "complexity-stats.json") or {
