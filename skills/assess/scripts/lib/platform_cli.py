@@ -23,8 +23,9 @@
   every read whose response carries a body is made with ``cache=False`` and
   read in memory only. On GitHub: the merged pull request read with reviews and
   comments (``lib/merged_sample.py``, #778). On GitLab: merge-request notes
-  (``lib/gitlab_notes.py``, #716) and the merged list with its descriptions
-  (``lib/merged_sample.py``, #778). ``fleet --platform`` sets it for its platform
+  (``lib/gitlab_notes.py``, #716), the merged list with its descriptions
+  (``lib/merged_sample.py``, #778), and the merged CI configuration
+  (``lib/gitlab_ci_lint.py``, #796). ``fleet --platform`` sets it for its platform
   children only, to a temporary directory removed when the pass ends: cached
   responses can still hold names and account logins, so they never land in
   ``--out``, the run history or a target. Without it nothing is cached. The key is the argv

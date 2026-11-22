@@ -1371,19 +1371,34 @@ revision = 1
   "shared_tooling.marketplace_ids" = "id"
 
 [[entries]]
+id = "core.gitlab_merged_ci"
+kind = "collector"
+title = "GitLab merged CI configuration"
+issues = [796]
+callable = "lib.gitlab_ci_lint:read_merged_ci"
+offline_callable = "lib.gitlab_ci_lint:no_merged_ci"
+publishes = []
+reads = ["repo_root", "ghsync_root"]
+stage = "post_offers"
+private = true
+network = true
+revision = 1
+
+[[entries]]
 id = "core.review_automation"
 kind = "collector"
 title = "AI review committed in CI"
 issues = [696]
 callable = "lib.review_automation:scan_review_automation"
 publishes = ["review_automation"]
-reads = ["repo_root", "fleet_config", "ghsync_root"]
+reads = ["repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
+platform_pass = true
 headless = { review_automation = "registered" }
 shapes = [
   { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "review_automation.reason" = "drop"
   "review_automation.kinds" = "token"
@@ -1419,15 +1434,17 @@ summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint comman
 issues = [698]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
-reads = ["repo_root", "ghsync_root"]
+reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
+platform_pass = true
 headless = { ci_checks = "registered" }
 shapes = [
   { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
-  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read." },
+  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
+  { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
 ]
   [entries.privacy]
   "ci_checks.reason" = "drop"
@@ -1436,6 +1453,8 @@ unknown_reasons = [
   "ci_checks.includes.id" = "id"
   "ci_checks.includes.status" = "token"
   "ci_checks.includes.ref_basis" = "token"
+  "ci_checks.merged_config" = "token"
+  "ci_checks.merged_config_reason" = "token"
 
 [[entries]]
 id = "core.agent_building"

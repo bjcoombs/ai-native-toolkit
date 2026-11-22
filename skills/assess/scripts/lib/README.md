@@ -1494,7 +1494,8 @@ omits a block gives that block `available: false` with `platform_timeout`,
 counts-only output). Such a failed block never replaces an offline block that is
 available (`join`, #696): `review_evidence` credits an AI review step offline, and a slow
 host keeps that credit. Failed rows are not read. `names` is `platform_scans(--scans)`:
-`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+`signals.PLATFORM_SCANS` narrowed by `--scans` (`review_automation` and `ci_checks` are
+listed because they read GitLab's merged CI configuration, #796). All children share one response cache
 directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
 `--delete-after` hook) runs on each row after its platform read, so a clone outlives the
 read of its remote. A new platform block (#715, #716) needs no change here: see
@@ -2590,7 +2591,8 @@ Only the fleet platform pass sets it, to a temporary directory it removes. A cal
 with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
 nor writes it. The cache never holds comment or review text on either provider: GitLab
 merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
-through `gitlab_cli.glab_api(..., cache=False)`, and the GitHub merged pull request read with
+through `gitlab_cli.glab_api(..., cache=False)`, GitLab's merged CI configuration
+(`gitlab_ci_lint.py`, #796, the same way), and the GitHub merged pull request read with
 reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
 in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
@@ -3121,7 +3123,7 @@ lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
 maturity model reads it, so the CI row measures CI, not the instruction file.
-`scan_ci_checks(repo_root, ghsync_root)` reads the files `command_index.ci_config_files`
+`scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
@@ -3143,9 +3145,49 @@ is null (`basis: included_jobs`) when a CI file pulls jobs this run could not re
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
 false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
-every include resolved and holds no check reads false. Offline and headless.
-Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
+every include resolved and holds no check reads false. Its third argument is the
+`gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
+offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
+merged configuration, whose check lines are counted apart in `merged_check_commands`
+(the merged file repeats the own and resolved jobs). A check there makes the signal true
+(`basis: merged_config`, used only when no own or included line ran one: offline wins); a
+merged configuration read with none makes it false, unless it may lack jobs
+(`merged_partial`): a `rules:` key in the `include:` section of the repository's file or of a
+template read offline (`conditional_include`; the lint API may leave that include out), or a
+`trigger:` job in any of those or in the merged file (`child_pipeline`; a child or downstream
+pipeline is not expanded). Then the signal stays null with `basis: merged_config_partial`:
+unknown beats wrong. `merged_config` is `not_read`
+(offline), `not_needed`, `read`, `invalid` or `unavailable` (reason code in
+`merged_config_reason`); the merged text is never in the block. Known limit: a `rules:` include inside a
+template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
+`not_read`. The module itself is
+offline: it imports the value type, never a platform client.
+Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`merged_ci.py`**
+The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
+reason, text, include_sources)`, `NOT_READ`, `NOT_NEEDED`, `MERGED_STATUSES` and
+`as_merged(value)` (anything other than a `MergedCi`, such as a degraded spec's dict, is
+`NOT_READ`). Apart from `gitlab_ci_lint.py` so `ci_checks` and `review_automation` stay
+offline modules (`tests/test_signals.py` checks that a scan is `network` exactly when its
+module reaches a platform client). `text` is held in memory only. Tests:
+`tests/test_gitlab_ci_lint.py`.
+
+**`gitlab_ci_lint.py`**
+GitLab's merged CI configuration through the CI lint API (#796, #766 part 2): the private
+`network` spec `gitlab_merged_ci` (`read_merged_ci(repo_root, ghsync_root)`; offline the
+runner calls `no_merged_ci`, which reads nothing). Asked only when
+`ci_includes.resolve_includes` left an include unresolved (`not_needed` otherwise: a
+template resolved offline wins) and `gitlab_cli.open_gitlab` finds a GitLab remote
+(`not_gitlab` otherwise). One call, naming its target:
+`glab api --hostname <host> projects/<encoded>/ci/lint?content_ref=<HEAD sha>`, a GET (no
+file content uploaded), made with `cache=False` so the merged YAML never reaches the
+platform response cache (#778). `valid` true with a `merged_yaml` string is `read`; any
+other shape is `invalid`; a refusal is `unavailable` with the `GhUnavailable` reason code.
+`include_sources(includes)` reads the response's `includes` list (a `component` item's
+`location`, a `file` item's `extra.project`) for `review_automation`. Errors and warnings
+are never kept. Tests: `tests/test_gitlab_ci_lint.py`, `tests/test_platform_argv_contract.py`.
 
 **`ci_includes.py`**
 GitLab CI includes resolved offline (issue #766), read by `ci_checks` and
@@ -3287,11 +3329,14 @@ events; `ON_KEY` also accepts the YAML 1.1 `true:` spelling, shared with
 
 **`review_automation.py`**
 AI review committed in CI and the Layer 7 level 1 signal (issue #696).
-`scan_review_automation(repo_root, fleet_config, ghsync_root)` writes `{available, present, kinds[],
+`scan_review_automation(repo_root, fleet_config, ghsync_root, merged_ci)` writes `{available, present, kinds[],
 matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked, on_changes, depth}`.
 The include entries of GitLab files `ci_includes.resolve_includes` read are matched as the
 repository's own are (#766), keeping the path and line of the repository's own include that
-led there, with `depth` the include level (0 for the repository's own file). Kinds:
+led there, with `depth` the include level (0 for the repository's own file). Its fourth
+argument is the `gitlab_merged_ci` reading (#796): the sources GitLab's CI lint API lists as
+merged in are matched the same way, once each (a source an offline entry names is skipped),
+with `line` null and `depth` 1. Kinds:
 `ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
 `anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
 pipelines is not read), `ci_component` (a

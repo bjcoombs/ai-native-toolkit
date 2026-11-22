@@ -593,8 +593,9 @@ repository; the block never carries a pattern or a matched identity.
 The offline scan never reaches the network. `--platform` adds a second, separate
 pass after it: for each repository whose row is `ok`, one more
 `assess_signals.py --platform` child reads the platform for the scans in
-`lib/signals.py` `PLATFORM_SCANS` (`review_reality`, `delivery` and `review_evidence`,
-which the pass rebuilds from the measured `review_reality`), narrowed by
+`lib/signals.py` `PLATFORM_SCANS` (`review_reality`, `delivery`, `review_evidence`,
+which the pass rebuilds from the measured `review_reality`, and `review_automation` and
+`ci_checks`, which read GitLab's merged CI configuration), narrowed by
 `--scans` when given. Each needs `gh` (github.com remotes) or `glab` (GitLab
 remotes) logged in.
 
@@ -619,6 +620,20 @@ remotes) logged in.
   sampled merge request, or when the notes read is refused. Counts-only output
   (the default) keeps every `delivery` figure, the same as `--full`.
 
+- **GitLab merged CI configuration (#796).** A GitLab repository whose `.gitlab-ci.yml`
+  includes a file the offline scan could not read (a template project not cloned under
+  `ROOT`, a `template:` or `remote:` file) gets its merged configuration from GitLab's
+  CI lint API: one `glab api --hostname <host> projects/<path>/ci/lint?content_ref=<HEAD>`
+  GET per such repository. A repository whose every include resolved offline is not
+  asked: the template read from `ROOT` wins. `ci_checks.test_or_lint_runs` then reads
+  true when a merged job runs a test or lint check (`basis: merged_config`) and false
+  when none does, where offline it was null. It stays null, with `basis:
+  merged_config_partial`, when the merged configuration may lack jobs: an include under
+  `rules:` (GitLab may merge without it) or a `trigger:` child pipeline (not expanded); `ci_checks.merged_config` says whether the
+  read ran (`read`, `not_needed`, `invalid`, `unavailable` with `merged_config_reason`,
+  or `not_read` offline). `review_automation` credits a review component the merge
+  pulled in. A refused or invalid read leaves the offline reading unchanged. The merged
+  YAML is never written to disk, cached or published: only a count and a status token.
 - **Joined, never failing a row.** The pass's blocks replace the offline
   `network` placeholders in the row's `scans`, and add `delivery`, which a row
   read without `--platform` does not carry at all (absent, never zeros or a
@@ -645,7 +660,8 @@ remotes) logged in.
   `DIR`, the history or a target. The response cache never holds comment or
   review text on either provider: GitHub pull request reviews and comments, the
   GitLab merged list and GitLab merge-request notes are read in memory only and
-  never written to disk.
+  never written to disk. Nor does it hold CI configuration text: GitLab's merged CI
+  configuration is read the same way.
 - **Stamp.** `run.json` records `platform: true` only when the pass ran a
   platform read (`--platform` with `--scans` selecting no platform scan reads
   nothing and stamps `false`); runs with and without the pass
