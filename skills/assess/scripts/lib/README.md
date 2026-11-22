@@ -3100,11 +3100,15 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Its `offline_fn`, `offline_merged_sample`
-(a headless run without `--platform`, #908), reads the remote with git only: no
-remote, or a URL neither `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote`
-reads, is `NO_REMOTE_REASON` (`no_remote`, the answer the full read reaches), and any
-other remote is `NETWORK_REASON`. Up to `SAMPLE_CAP` (30) changes merged
+blocks and they describe the same changes. Both reads classify the remote with
+`remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
+`gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
+`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
+`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
+without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
+`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
+`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
+so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
