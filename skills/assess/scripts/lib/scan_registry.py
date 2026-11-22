@@ -55,6 +55,7 @@ from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
 from lib.coverage_gate import detect_coverage_gate
 from lib.delivery import scan_delivery
+from lib.external_ci import no_external_ci, read_external_ci
 from lib.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.gitlab_notes import gitlab_note_facts
@@ -581,9 +582,13 @@ SCANS: tuple[ScanSpec, ...] = (
     # checks and checks off the ordinary triggers (lib/ci_masking.py,
     # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
     # lint_runs (#782) is the same test for lint lines; Layer 3 level 1 reads it.
-    # Offline itself.
-    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root", "gitlab_merged_ci"),
-             STAGE_POST_OFFERS),
+    # Offline itself; under --platform it also reads external_ci (#928, lib/external_ci.py):
+    # the check runs and statuses of the sampled merged pull requests, at most two GETs each.
+    # Private, two counts in memory; offline it reads nothing.
+    ScanSpec("external_ci", read_external_ci, ("merged_sample",), STAGE_POST_OFFERS,
+             private=True, network=True, offline_fn=no_external_ci),
+    ScanSpec("ci_checks", scan_ci_checks,
+             ("repo_root", "ghsync_root", "gitlab_merged_ci", "external_ci"), STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
     # configuration, a counts-only tool-call loop / MCP server heuristic and the
