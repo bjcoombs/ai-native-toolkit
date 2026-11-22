@@ -88,7 +88,7 @@ too. Both reads classify the remote with
 `remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
 `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
 `gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`,
-`unsupported` (a `UNSUPPORTED_HOSTS` host: Bitbucket, Azure DevOps, Codeberg, Gitea, sourcehut,
+`unsupported` (a `UNSUPPORTED_HOSTS` host: Bitbucket, Azure DevOps, Codeberg, Gitea,
 or a `*.visualstudio.com` host), or `platform` (any other host). Its `offline_fn`,
 `offline_merged_sample` (a headless run without `--platform`), gives `NO_REMOTE_REASON`
 (`no_remote`) for `none`, `UNSUPPORTED_HOST_REASON` (`unsupported_host`) for `unsupported`
@@ -420,7 +420,6 @@ UNSUPPORTED_HOST_REASON = ("unsupported_host: the remote's host is not GitHub or
 # non-GitHub host may be a self-managed GitLab, which only a glab probe settles.
 UNSUPPORTED_HOSTS = frozenset({
     "bitbucket.org", "dev.azure.com", "ssh.dev.azure.com", "codeberg.org", "gitea.com",
-    "git.sr.ht",
 })
 UNSUPPORTED_HOST_SUFFIXES = (".visualstudio.com",)
 
