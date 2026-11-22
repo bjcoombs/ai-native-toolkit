@@ -126,7 +126,9 @@ Any of these blocks can instead be `{"available": false, "reason": ...}` when it
 `.instructions_grade` is the best grade across all tracked files - the starting point for the layer scoring.
 
 **Scoring rule:** start from the deterministic grade, then apply the integrity overrides below.
-- `instructions_grade` is `null` → **Missing** (no committed instruction file at any known location)
+- `instructions_grade` is `null` → read `.layer_grades.instruction_presence` first. The top-level `instructions_grade` grades root locations only.
+  - `nested_only` → **Partial**: instruction files exist below the root (`.nested_instructions.files`), but a session that starts at the root reads none of them. Score from `.layer_grades.instructions_grade`, the best nested grade, capped at Partial. The remediation is the `gap_actions` entry whose `signal` is `layer_grades`: add a root `AGENTS.md` or `CLAUDE.md` that names the check command. Never write "no instruction file" here.
+  - `none` → **Missing** (no committed instruction file at any known location).
 - A/A-/B+ → **Present**
 - B/C → **Partial**
 - D/F → **Partial** if at least one file exists but scores low - note the grade and recommend rewriting

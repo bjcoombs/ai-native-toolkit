@@ -14,10 +14,10 @@ from lib.signals import known_scans
 NO_NESTED: dict[str, Any] = {"available": True, "files": []}
 
 
-def _file(path: str, grade: str, *, always: bool = False) -> dict[str, Any]:
+def _file(path: str, grade: str, *, always: bool = False, directory: str | None = None) -> dict[str, Any]:
+    where = directory if directory is not None else path.rpartition("/")[0] or "."
     return {"path": path, "grade": grade,
-            "scope": {"directory": path.rpartition("/")[0] or ".", "globs": [],
-                      "always_loaded": always}}
+            "scope": {"directory": where, "globs": [], "always_loaded": always}}
 
 
 @pytest.mark.parametrize(("grading", "expected"), [
@@ -46,6 +46,13 @@ def test_an_always_loaded_discovered_file_reads_root() -> None:
     assert scan_layer_grades(({}, None), nested) == {
         "instructions_grade": "C", "instruction_file_present": True,
         "instruction_presence": "root"}
+
+
+def test_a_nested_always_apply_rule_is_not_a_root_file() -> None:
+    """A Cursor alwaysApply rule under pkg/ is always loaded but not at the root."""
+    nested = {"available": True, "files": [_file("pkg/.cursor/rules/x.mdc", "B", always=True,
+                                                  directory="pkg")]}
+    assert scan_layer_grades(({}, None), nested)["instruction_presence"] == "nested_only"
 
 
 def test_a_root_file_keeps_the_root_grade_over_nested_files() -> None:

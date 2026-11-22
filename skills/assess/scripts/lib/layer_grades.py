@@ -15,8 +15,8 @@ Fields:
 
   - ``root``: a tracked file at a root location
     (``instruction_files.INSTRUCTION_FILE_PATHS``), or a discovered file the
-    tool loads at session start (``nested_instructions`` with
-    ``scope.always_loaded``, such as an unscoped ``.claude/rules`` file or
+    tool loads at session start for the root context (``nested_instructions``
+    with ``scope.always_loaded`` and ``scope.directory`` ``.``, such as an unscoped ``.claude/rules`` file or
     ``.windsurfrules``). Always loaded.
   - ``nested_only``: no root file, but ``nested_instructions`` lists at least
     one file (a ``pkg/AGENTS.md``, a path-scoped rule). Present, loaded on
@@ -84,8 +84,15 @@ def _nested_files(nested: Any) -> list[Mapping[str, Any]] | None:
 
 
 def _always_loaded(entry: Mapping[str, Any]) -> bool:
+    """Loaded at session start for the root context: always loaded and at the root.
+
+    Cursor's ``alwaysApply`` marks a rule always loaded whatever its directory, so a
+    nested ``pkg/.cursor/rules/x.mdc`` is not a root file (the same test as
+    ``agent_consistency``'s root context).
+    """
     scope = entry.get("scope")
-    return isinstance(scope, Mapping) and scope.get("always_loaded") is True
+    return (isinstance(scope, Mapping) and scope.get("always_loaded") is True
+            and scope.get("directory") == ".")
 
 
 def _grades(files: list[Mapping[str, Any]]) -> list[str]:
