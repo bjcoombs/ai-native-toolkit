@@ -12,6 +12,11 @@ It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
 independent of plugin releases, bumped by one in any change that moves which findings
 a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
 `findings.json`.
+
+During a version freeze a change to either counter, or to another counter
+`scripts/fold_changes.py` knows, adds a note file under `skills/assess/changes/`
+instead of editing the history comment; the release PR folds the notes in with
+`make fold` (#1011).
 """
 
 # Artifact schema version, stamped on every artifact the run produces
@@ -491,20 +496,4 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
-# Unreleased (bumped once by the 3.0.0 release PR):
-# - agent_consistency drops a leading heading or list ordinal before reading
-#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
-#   conflict, so agent-consistency level 1 can move from unmet to met. A
-#   next step for an unlinked system names its primary file (CLAUDE.md) before
-#   a supplementary rule file.
-# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
-#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
-#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
-#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
-#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
-#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
-#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
-# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
-#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
-#   read met. Fewer conditions count on repositories with no dependency manifest.
 ASSESS_METHOD_VERSION = 37

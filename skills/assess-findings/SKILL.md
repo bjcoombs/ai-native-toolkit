@@ -125,6 +125,12 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 
 <one-line takeaway: reachability plus whether it is a wayfinding or a truth gap - e.g. "~10% link-reachable: a curation/wayfinding gap, not hidden content; no lying maps.">
 
+### Evidence behind the level
+
+[![Evidence behind the level](./evidence-waffle.svg)](./evidence-waffle.svg)
+
+<the waffle's caption and its "In place:" line, copied verbatim from the `## Evidence behind the level` section that `assess_report.py <repo> --stdout` prints; when that section says "Not drawn:", write its reason here instead of the image>
+
 <details>
 <summary>📈 Snapshot detail (commit, hotspots, navigability, lying maps)</summary>
 
@@ -426,6 +432,6 @@ Generic actions to avoid:
 
 Complete the full assessment in under 2 minutes. Scan, don't deep-read.
 
-Both SVGs are embedded as **clickable, relative links** - `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly - GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a snapshot only if its script could not generate the SVG (record the reason in the snapshot-detail fold instead).
+Every snapshot SVG is embedded as a **clickable, relative link** - `[![alt](./complexity-heatmap.svg)](./complexity-heatmap.svg)` and the same for `./doc-graph.svg` and `./evidence-waffle.svg`. The `viewBox` lets GitHub scale them to the content column; the link lets a reader open the SVG on its own (the doc graph's hover tooltips only work when the raw SVG is opened directly - GitHub renders the inline copy as a static image). Keep the link relative, never a `raw.githubusercontent.com` URL (those are branch-specific and rot on rename). Omit a snapshot only if its script could not generate the SVG (record the reason in the snapshot-detail fold instead).
 
 The plugin footer is important - it's how other engineers viewing the report in a PR discover the tool that produced it. Do not omit it, and keep it outside any fold so it stays visible.

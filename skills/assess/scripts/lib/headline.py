@@ -97,7 +97,8 @@ def _step_names(model: MaturityModel) -> dict[int, str]:
     return {s["step"]: s["name"] for s in model.get("steps", [])}
 
 
-def _reason_word(code: str) -> str:
+def reason_word(code: str) -> str:
+    """A not-measured reason code in supportive words (the headline and the /assess diagrams)."""
     if code.startswith("requires:"):
         return f"waits on {code.split(':', 1)[1]}"
     if code in REASON_WORDS:
@@ -115,7 +116,7 @@ def _gate_change(blocker: Blocker) -> str:
         kind = blocker.get("exclusion_kind", "other").replace("_", " ")
         change += f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
     elif blocker.get("state") == "not_measured":
-        change += f" (not measured here: {_reason_word(blocker.get('reason', ''))})"
+        change += f" (not measured here: {reason_word(blocker.get('reason', ''))})"
     return change
 
 
@@ -172,7 +173,7 @@ def _tally_line(level: LevelResult) -> str:
     tally = level["tally"]
     line = f"Verified practices: {tally['met']} of {tally['measured']} measured"
     reasons = Counter(entry["reason"] for entry in level["not_measured"])
-    detail = ", ".join(f"{_reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
+    detail = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
     line += f" · {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
     if level.get("excluded"):
         # only an exclusion makes a condition not_applicable, directly or through `requires`
