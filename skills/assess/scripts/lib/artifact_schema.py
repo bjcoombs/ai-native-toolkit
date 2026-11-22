@@ -465,4 +465,12 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
+# Unreleased (bumped once by the 3.0.0 release PR):
+# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
+#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
+#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
+#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
+#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
+#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
+#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
 ASSESS_METHOD_VERSION = 37
