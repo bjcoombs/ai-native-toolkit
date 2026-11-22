@@ -4,8 +4,15 @@
 path and the artifact-directory slug, raising `ValueError` for a missing or
 outside-repo path; a whole-repo run returns `(None, None, "")`. `assess_dir_for` names
 `.assess/` or `.assess/<slug>/`, and `load_current_stats` reads that directory's
-`complexity-stats.json`, or an empty snapshot when none was written. Tests:
-`tests/test_scope.py`.
+`complexity-stats.json`, or an empty snapshot when none was written. The empty snapshot
+carries `available: false` and `NO_STATS_REASON` (`no_complexity_stats`, #959), and
+`run_setup.run_header` turns it into an unavailable `stats_summary` with `files_scored`
+null, so a run whose treemap step wrote nothing reads not measured
+(`no_complexity_stats`), never the measured empty set (`no_scored_files`). With `scc` on
+PATH (it reads every language) the treemap writes a zero-file sidecar when nothing is
+scorable (`complexity-treemap.py`, still exit 1), so the run reads `no_scored_files`;
+without `scc` zero files is not a measurement and no sidecar is written. Tests:
+`tests/test_scope.py`, `tests/test_run_setup.py`, `tests/test_complexity_treemap.py`.
 """
 
 from __future__ import annotations
@@ -44,9 +51,22 @@ def assess_dir_for(repo_root: Path, scope_slug: str) -> Path:
     return repo_root / ".assess" / scope_slug if scope_slug else repo_root / ".assess"
 
 
+# The reason the run context's ``stats_summary`` gives when no sidecar was written (#959).
+NO_STATS_REASON = ("no_complexity_stats: the run wrote no complexity-stats.json, so it is not "
+                   "known how many files would be scored")
+
+
 def load_current_stats(assess_dir: Path) -> dict[str, Any]:
-    """This run's complexity stats, or an empty snapshot when none was written."""
+    """This run's complexity stats, or an empty snapshot when none was written.
+
+    The empty snapshot is marked ``available: false`` with ``NO_STATS_REASON``, so the
+    run context reads "not measured" rather than a measured zero: a missing sidecar means
+    the treemap step did not run or did not finish, or scored nothing without ``scc``
+    (with ``scc`` on PATH it writes a zero-file sidecar), not a repository with no source (``files_scored`` 0 would fire the empty-set rule,
+    ``no_scored_files``). Its ``files_scored`` stays 0 for the readers that count it
+    (the wiki log)."""
     return load_stats(assess_dir / "complexity-stats.json") or {
+        "available": False, "reason": NO_STATS_REASON,
         "files_scored": 0, "top_hotspots": [], "top_complex": [], "top_large": [],
         "loc": {}, "ccn": {},
     }

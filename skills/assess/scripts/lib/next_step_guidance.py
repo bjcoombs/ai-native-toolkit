@@ -478,7 +478,11 @@ _MEASURE_HINTS = {
     "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)")
                      + " With no file scored (`files_scored` 0, a docs-only repository) "
                      "the file size is not measured (`no_scored_files`): a percentile of "
-                     "no files says nothing.",
+                     "no files says nothing. A full run with no `complexity-stats.json` "
+                     "reads `no_complexity_stats`: the treemap step did not run or did not "
+                     "finish, or scored nothing without `scc` on `PATH` (with it, an empty "
+                     "set is written as `files_scored` 0). Install `scc`, then check the "
+                     "treemap step's output in the next `/assess` run.",
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",
@@ -492,14 +496,21 @@ _MEASURE_HINTS = {
                      "tree, and the stale share is null on a shallow clone or a history where "
                      "every file has about one commit (rescan a full-history clone), or when no "
                      "doc describes a part of the code of its own.",
-    "review_reality": "Needs GitHub or GitLab API access; a headless fleet scan makes no network "
+    "review_reality": "Unavailable (`unsupported_host`) when the remote's host is not GitHub or a "
+                      "GitLab host glab reaches (Bitbucket, Azure DevOps, GitHub Enterprise): "
+                      "neither `--platform` nor `/assess` reads merged changes there; sign glab "
+                      "in to the host if it is a GitLab. Otherwise it "
+                      "needs GitHub or GitLab API access; a headless fleet scan makes no network "
                       "calls, so this is not measured there.",
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
     "agent_environment": "The `agent_environment` scan reported it unavailable or did not run: "
                          "check the fleet run's `--scans` and its `logs/` directory. The lockfile "
                          "check (`unlocked_total`) is also not measured with no dependency manifest "
-                         "read (`manifests_total` 0, `no_manifests`): there is nothing to lock.",
+                         "read (`manifests_total` 0, `no_manifests`): there is nothing to lock. "
+                         "A library whose ecosystem commits no lock (a Composer library, a published "
+                         "Pub package, a SwiftPM library) is listed with the note `skipped_library` "
+                         "and not counted.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
                  "that can stop its job but a CI file pulls jobs from a file the run could not read (`basis: "
                  "included_jobs`: a GitLab `include:` whose template is not cloned in the "
@@ -514,6 +525,9 @@ _MEASURE_HINTS = {
                  "does not read (`enforced_basis: check_target`: `make foo`, `npm run foo`, "
                  "`./scripts/foo.sh`, `docker run img`): call the test command in its "
                  "own CI step (`make test`, `pytest`) to measure it. "
+                 "It is unknown when the only check runs a committed script the tree does "
+                 "not hold (`enforced_basis: script_not_found`, `run: ./ci.sh` with no "
+                 "`ci.sh`): commit the script, or call the test command in its own CI step. "
                  "It is unknown too when no GitHub Actions or GitLab CI line runs a check but "
                  "the repository commits a CI file of another system (Jenkins, CircleCI, "
                  "Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; `basis: "
@@ -536,7 +550,8 @@ _MEASURE_HINTS = {
                      "least 50 percent is committed but a gate's threshold is not a readable "
                      "percentage: a variable (`--cov-fail-under=${{ env.COV_MIN }}`), an nyc/c8 "
                      "default, or a Jest uncovered-line count. Write the threshold as a number "
-                     "to measure it. A Go or Rust repository with no gate found also reads "
+                     "to measure it. A Go or Rust repository with no Go or Rust gate found, "
+                     "and none of at least 50 percent for another language, also reads "
                      "unknown (`unmeasured_reason` `go_rust_gate_form_not_read`): a script "
                      "comparing `go tool cover` to a number is not read, while go-test-coverage's "
                      "`.testcoverage.yml`, `cargo tarpaulin --fail-under` and `cargo llvm-cov "

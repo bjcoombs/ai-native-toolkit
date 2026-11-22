@@ -1,0 +1,30 @@
+# Check manifest fragment: the units collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.units"
+kind = "collector"
+title = "Monorepo units"
+summary = "The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped."
+issues = [800, 862]
+callable = "lib.core_scans:units"
+publishes = ["units"]
+reads = ["repo_root", "excludes"]
+stage = "read_side"
+shapes = [
+  { path = "units", type = "lib.unit_discovery:UnitsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "units.source" = "token"
+  "units.unit_count_reason" = "token"
+  "units.units.path" = "drop"
+  "units.units.origin" = "token"
+  "units.units.ecosystem" = "token"
+  "units.units.workspace" = "drop"
+  "units.units.name" = "drop"
+  "units.aggregators.path" = "drop"
+  "units.aggregators.ecosystem" = "token"
+  "units.skipped.path" = "drop"
+  "units.skipped.problem" = "token"
+  "units.unreadable_manifests" = "drop"

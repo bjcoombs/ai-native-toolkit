@@ -9,11 +9,18 @@ and the plugin version) and nothing that changes between two runs of the same
 commits, so a rerun writes identical bytes. Without ``--levels`` the file is
 removed, never left from an earlier run. ``commits`` holds, under the same ids, the
 commit each result measured and whether the checkout was dirty (#907; a dirty one is
-scored from its committed tree, ``lib/fleet.py`` ``committed_tree``). Schema:
+scored from its committed tree, ``lib/fleet.py`` ``committed_tree``). Each result applies
+the owner exclusions of the repository's own ``.assess/config.toml`` (#910), read from its
+``owner_exclusions`` scan as ``/assess`` reads them from its run context (``repo_level``;
+``fleet-data.json`` copies the Step fields from the same function, #944). A ``--scans``
+subset without ``owner_exclusions`` applies none. Fleet-wide exclusions through
+``--fleet-config`` wait on the method stamp (#952). Schema:
 ``skills/fleet/references/level.schema.json`` (``lib/fleet_level_schema.py``).
 
-`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
-over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
+`OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `repo_level`
+(`level_tally.level_result` with the owner exclusions of the row's `owner_exclusions` scan,
+`level_tally.run_exclusions`, #944; `fleet_data.step_fields` calls it too) over each scanned
+row's `scans` (a failed row has no entry), keyed by repository id, in an
 envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
 plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
@@ -28,7 +35,7 @@ from typing import TypedDict
 from lib.fleet import STATUS_OK, FleetRow, RepoCommit
 from lib.levels import MaturityModel
 from lib.level_result_types import LevelResult
-from lib.level_tally import LEVEL_RESULT_VERSION, dumps_level, level_result
+from lib.level_tally import LEVEL_RESULT_VERSION, dumps_level, level_result, run_exclusions
 
 LEVEL_FILE = "level.json"
 
@@ -42,6 +49,12 @@ class FleetLevels(TypedDict):
     commits: dict[str, RepoCommit]  # the same ids: the commit each result measured (#907)
 
 
+def repo_level(model: MaturityModel, row: FleetRow) -> LevelResult:
+    """One scanned repository's level result, with the owner's exclusions from its scans."""
+    scans = row.get("scans") or {}
+    return level_result(model, scans, run_exclusions(scans))
+
+
 def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_commit: str | None,
                  plugin_version: str) -> FleetLevels:
     """One result per scanned repository, sorted by id."""
@@ -51,9 +64,7 @@ def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_comm
         "levels_version": model["version"],
         "toolkit_commit": toolkit_commit,
         "plugin_version": plugin_version,
-        # No owner exclusions here yet: the fleet side waits on the method stamp (#952, #910),
-        # so a repo with [checks] exclude reads its exclusions in /assess only.
-        "repos": {row["repo"]: level_result(model, row.get("scans") or {}) for row in scanned},
+        "repos": {row["repo"]: repo_level(model, row) for row in scanned},
         "commits": {row["repo"]: {"head_sha": row.get("head_sha"), "dirty": row.get("dirty")}
                     for row in scanned},
     }
