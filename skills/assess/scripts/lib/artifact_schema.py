@@ -264,6 +264,10 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
+# Unreleased (version freeze; the release PR bumps the minor once):
+# - run-context.json delivery gains sample_page_size (issue #995): the changes per
+#   heavy read the merged sample finished at, or null when none was made. Additive:
+#   no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.

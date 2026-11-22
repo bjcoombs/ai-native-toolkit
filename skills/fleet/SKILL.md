@@ -720,7 +720,9 @@ remotes) logged in.
   `[[ai_usage.agent_identities]]` rule), and `approved_share` / `self_merged_share`
   copied from `review_reality`, and `agent_authored_share` (changes authored by a
   pinned agent app or an `[[ai_usage.agent_identities]]` rule, by username; a
-  GitLab access-token user counts only under `token_users_as_agents`). Durations
+  GitLab access-token user counts only under `token_users_as_agents`), and
+  `sample_page_size` (changes per request the sample was read at: 20, or 10 after
+  one retry on an HTTP 502 or 504 from a large repository). Durations
   are hours, percentiles nearest-rank. On GitLab the comment and AI-review
   figures come from each merge request's notes (#716): the first human comment is
   the first non-system note by a person other than the author, and AI review is a

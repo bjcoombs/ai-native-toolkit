@@ -15,18 +15,42 @@ same day draws the same window. ``history_window`` None (an interactive run
 with no churn window) means no cutoff: the latest ``SAMPLE_CAP`` merges.
 
 - **GitHub.** No listing orders by merge time, so the sample is read in two
-  calls. ``gh pr list --search "merged:>=<since> sort:updated-desc" --json
+  steps. ``gh pr list --search "merged:>=<since> sort:updated-desc" --json
   mergedAt`` lists up to ``FETCH_LIMIT`` merges; a change's ``updatedAt`` is never
   before its ``mergedAt``, so the newest merges are among the most recently
-  updated. Their ``SAMPLE_CAP``-th newest ``mergedAt`` is the floor of a second
-  ``gh pr list --search "merged:>=<floor> ..."`` that reads ``PR_FIELDS`` (the
-  heavy fields: reviews, comments) for those changes only. The result is
+  updated. Their ``SAMPLE_CAP`` newest ``mergedAt`` values, newest first, are cut
+  into pages of ``PAGE_SIZE``, and each page is one ``gh pr list --limit
+  <PAGE_SIZE>`` that reads ``PR_FIELDS`` (the heavy fields: reviews, comments)
+  for the changes merged in that page's span: ``merged:>=<oldest>`` for the
+  newest page (today's read when the sample fits one page), ``merged:<oldest>..
+  <newest>`` for the others (#995). A page runs on past ``PAGE_SIZE`` rather than
+  split changes merged in the same second, so no change is in two spans; its
+  ``--limit`` is the page size, or its length when it ran on. The pages are joined,
   ordered by ``mergedAt`` and cut to ``SAMPLE_CAP``.
-- **GitLab.** One read: ``projects/<id>/merge_requests?state=merged
-  &updated_after=<since>&order_by=updated_at&sort=desc&per_page=FETCH_LIMIT``
-  (``updated_after`` and ``order_by=updated_at`` work on every GitLab version,
-  unlike ordering by ``merged_at``), then the merges with ``merged_at`` inside the
-  window, newest first, cut to ``SAMPLE_CAP``.
+- **GitLab.** ``projects/<id>/merge_requests?state=merged&updated_after=<since>
+  &order_by=updated_at&sort=desc&per_page=<PAGE_SIZE>&page=<n>`` (``updated_after``
+  and ``order_by=updated_at`` work on every GitLab version, unlike ordering by
+  ``merged_at``), page after page until ``FETCH_LIMIT`` merge requests are listed
+  or a page comes back short (#995), then the merges with ``merged_at`` inside
+  the window, newest first, cut to ``SAMPLE_CAP``.
+
+Paging (#995). One 100-change GraphQL page with nested reviews and comments
+times out on a large repository (HTTP 502 on kubernetes/kubernetes), so the
+heavy reads ask for ``PAGE_SIZE`` changes at a time. A page refused with HTTP
+502 or 504, or with no answer inside the CLI timeout, is read again once at
+``PAGE_SIZE // 2``, and every later page of the sample uses that size; a second
+such refusal is the sample's reason. The sample's ``page_size`` is the size its
+heavy read finished at (None when no heavy read was made: a GitHub window with
+no merges), and ``delivery.sample_page_size`` carries it as a count. The sample
+size and its order do not depend on the page size.
+
+Call ceiling. The sample costs at most ``GITHUB_SAMPLE_CALLS`` ``gh pr list``
+calls (the light listing, then ``ceil(SAMPLE_CAP / PAGE_SIZE)`` pages, or after
+one retry ``1 + ceil(SAMPLE_CAP / (PAGE_SIZE // 2))``) and at most
+``GITLAB_SAMPLE_CALLS`` ``glab api`` calls (``FETCH_LIMIT / PAGE_SIZE`` pages, or
+after one retry ``1 + FETCH_LIMIT / (PAGE_SIZE // 2)``). Per-change reads made
+from the sample (``external_ci``'s ``CALLS_PER_CHANGE``, GitLab approvals and
+notes) do not depend on the page size.
 
 A change merged in the window but last updated before the ``FETCH_LIMIT``
 most recently updated ones is missed; that needs more than ``FETCH_LIMIT``
@@ -68,8 +92,21 @@ from lib.gitlab_cli import GITHUB_HOSTS, GitlabProject, glab_api, open_gitlab, p
 # Changes in the sample: the most recently merged in the window.
 SAMPLE_CAP = 30
 
-# Changes listed to find the newest merges (one page on GitLab).
+# Changes listed to find the newest merges.
 FETCH_LIMIT = 100
+
+# Changes per heavy read (the GitHub PR_FIELDS pages, the GitLab merged-list
+# pages); a page refused with HTTP 502 or 504 is read again once at half this
+# size (#995). Even, and FETCH_LIMIT a multiple of it, so GitLab's page offsets
+# line up at either size.
+PAGE_SIZE = 20
+
+# HTTP statuses a too-heavy page gets (a gateway timeout); read again smaller.
+RETRY_STATUSES = frozenset({"502", "504"})
+
+# The most calls the sample's reads make (see the module docstring).
+GITHUB_SAMPLE_CALLS = 1 + 1 + -(-SAMPLE_CAP // (PAGE_SIZE // 2))
+GITLAB_SAMPLE_CALLS = 1 + FETCH_LIMIT // (PAGE_SIZE // 2)
 
 # Distinct unmarked comment logins probed for a bot account per sample.
 MAX_LOGIN_PROBES = 20
@@ -143,7 +180,8 @@ class BotClassifier:
 
 @dataclass(frozen=True)
 class MergedSample:
-    """The sample (see the module docstring). ``changes`` are newest merge first."""
+    """The sample (see the module docstring). ``changes`` are newest merge first;
+    ``page_size`` is the size the heavy read finished at, None when none was made."""
 
     provider: Provider
     changes: tuple[dict[str, Any], ...]
@@ -151,6 +189,7 @@ class MergedSample:
     github: GithubRepo | None = None
     gitlab: GitlabProject | None = None
     bots: BotClassifier = field(default_factory=BotClassifier, compare=False)
+    page_size: int | None = None
 
 
 # What the registry passes a reader: the sample, or the unavailable block a
@@ -195,37 +234,92 @@ def _newest(changes: list[dict[str, Any]], key: str, since: date | None,
     return [c for _, c in kept[:SAMPLE_CAP]]
 
 
-def _gh_merged(repo: GithubRepo, floor: str, fields: str, cache: bool) -> list[dict[str, Any]]:
+def _too_heavy(e: GhUnavailable) -> bool:
+    """A refusal that a smaller page may get past: HTTP 502 or 504, or the CLI timeout."""
+    return e.status in RETRY_STATUSES or e.reason.startswith(("gh_timeout", "glab_timeout"))
+
+
+def _gh_merged(repo: GithubRepo, search: str, limit: int, fields: str,
+               cache: bool) -> list[dict[str, Any]]:
     """One ``gh pr list`` read. Each caller states ``cache``: only the light ``mergedAt``
     read may be cached; the ``PR_FIELDS`` read carries review and comment bodies, so it
     passes ``cache=False`` and is read in memory only."""
-    search = f"merged:>={floor} sort:updated-desc" if floor else "sort:updated-desc"
-    got = gh_json(["pr", "list", "--repo", repo.slug, "--state", "merged", "--search", search,
-                   "--limit", str(FETCH_LIMIT), "--json", fields], cache=cache)
+    got = gh_json(["pr", "list", "--repo", repo.slug, "--state", "merged", "--search",
+                   f"{search} sort:updated-desc".strip(), "--limit", str(limit),
+                   "--json", fields], cache=cache)
     if not isinstance(got, list):
         raise GhUnavailable("gh_bad_json: `gh pr list` did not return a list")
     return [pr for pr in got if isinstance(pr, dict)]
 
 
-def github_changes(repo: GithubRepo, since: date | None) -> list[dict[str, Any]]:
-    """The GitHub sample's pull requests (two reads; see the module docstring)."""
-    light = _newest(_gh_merged(repo, since.isoformat() if since else "", "mergedAt", cache=True),
+def _span(page: list[dict[str, Any]], newest_page: bool) -> str:
+    """The ``merged:`` qualifier for one page of the newest merges (newest first)."""
+    oldest, newest = page[-1]["mergedAt"], page[0]["mergedAt"]
+    return f"merged:>={oldest}" if newest_page else f"merged:{oldest}..{newest}"
+
+
+def _github_pages(repo: GithubRepo, light: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The ``PR_FIELDS`` read of ``light`` (newest merge first), page by page, and the
+    page size it finished at; one retry at half the size (see the module docstring)."""
+    size, read = PAGE_SIZE, 0
+    got: list[dict[str, Any]] = []
+    while read < len(light):
+        page = light[read:_page_end(light, read, size)]
+        try:
+            got += _gh_merged(repo, _span(page, read == 0), max(size, len(page)), PR_FIELDS,
+                              cache=False)
+        except GhUnavailable as e:
+            if size < PAGE_SIZE or not _too_heavy(e):
+                raise
+            size = PAGE_SIZE // 2
+            continue
+        read += len(page)
+    return got, size
+
+
+def _page_end(light: list[dict[str, Any]], start: int, size: int) -> int:
+    """Where the page from ``start`` ends: ``size`` changes on, moved on past any change
+    merged in the same second as the page's last, so no merge time straddles two pages
+    and the spans stay disjoint. Never more pages than ``ceil(len(light) / size)``."""
+    end = min(start + size, len(light))
+    while end < len(light) and light[end - 1]["mergedAt"] == light[end]["mergedAt"]:
+        end += 1
+    return end
+
+
+def github_changes(repo: GithubRepo, since: date | None) -> tuple[list[dict[str, Any]], int | None]:
+    """The GitHub sample's pull requests and the page size read at (see the module docstring)."""
+    floor = f"merged:>={since.isoformat()}" if since else ""
+    light = _newest(_gh_merged(repo, floor, FETCH_LIMIT, "mergedAt", cache=True),
                     "mergedAt", since, "gh")
     if not light:
-        return []
-    floor = str(light[-1]["mergedAt"])
-    return _newest(_gh_merged(repo, floor, PR_FIELDS, cache=False), "mergedAt", since, "gh")
+        return [], None
+    prs, size = _github_pages(repo, light)
+    return _newest(prs, "mergedAt", since, "gh"), size
 
 
-def gitlab_changes(project: GitlabProject, since: date | None) -> list[dict[str, Any]]:
-    """The GitLab sample's merge requests (one read; see the module docstring)."""
+def gitlab_changes(project: GitlabProject, since: date | None) -> tuple[list[dict[str, Any]], int]:
+    """The GitLab sample's merge requests and the page size read at (see the module docstring)."""
     after = f"&updated_after={since.isoformat()}T00:00:00Z" if since else ""
-    got = glab_api(project, f"projects/{project.encoded}/merge_requests?state=merged{after}"
-                            f"&order_by=updated_at&sort=desc&per_page={FETCH_LIMIT}",
-                   cache=False)  # titles and descriptions: read in memory only
-    if not isinstance(got, list):
-        raise GhUnavailable("glab_bad_json: the merged merge request list was not a list")
-    return _newest([mr for mr in got if isinstance(mr, dict)], "merged_at", since, "glab")
+    size = PAGE_SIZE
+    got: list[Any] = []
+    while len(got) < FETCH_LIMIT:
+        try:
+            page = glab_api(project, f"projects/{project.encoded}/merge_requests?state=merged{after}"
+                                     f"&order_by=updated_at&sort=desc&per_page={size}"
+                                     f"&page={len(got) // size + 1}",
+                            cache=False)  # titles and descriptions: read in memory only
+        except GhUnavailable as e:
+            if size < PAGE_SIZE or not _too_heavy(e):
+                raise
+            size = PAGE_SIZE // 2
+            continue
+        if not isinstance(page, list):
+            raise GhUnavailable("glab_bad_json: the merged merge request list was not a list")
+        got += page
+        if len(page) < size:
+            break
+    return _newest([mr for mr in got if isinstance(mr, dict)], "merged_at", since, "glab"), size
 
 
 def merged_sample(repo_root: Path, history_window: str | None, run_date: str) -> SampleOrReason:
@@ -234,14 +328,15 @@ def merged_sample(repo_root: Path, history_window: str | None, run_date: str) ->
     try:
         project = open_gitlab(repo_root)
         if project is not None:
-            return MergedSample("gitlab", tuple(gitlab_changes(project, since)), since,
-                                gitlab=project)
+            mrs, size = gitlab_changes(project, since)
+            return MergedSample("gitlab", tuple(mrs), since, gitlab=project, page_size=size)
         if remote_kind(git_remote_url(repo_root)) == "platform":
             # A host that is neither GitHub nor a GitLab glab reaches: the remote
             # exists, so this is a platform gap, as the offline read says (#908).
             return unavailable(UNREACHED_HOST_REASON)
         repo = open_github(repo_root)
-        return MergedSample("github", tuple(github_changes(repo, since)), since, github=repo)
+        prs, read_at = github_changes(repo, since)
+        return MergedSample("github", tuple(prs), since, github=repo, page_size=read_at)
     except GhUnavailable as e:
         return unavailable(e.reason)
 
