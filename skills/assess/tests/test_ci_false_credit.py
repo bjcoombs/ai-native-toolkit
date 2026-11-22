@@ -245,10 +245,17 @@ def test_a_runner_check_is_dropped_by_its_info_flag(runs: str, info: str) -> Non
     assert enforced_check_commands(_wf(info)) == (0, 0)
 
 
-@pytest.mark.parametrize("text", ["ctest -V", "bundle exec rspec spec/a_spec.rb", "dotnet test -c Release"])
+@pytest.mark.parametrize("text", [
+    "ctest -V", "bundle exec rspec spec/a_spec.rb", "dotnet test -c Release",
+])
 def test_a_runner_flag_that_runs_the_work_stays_a_check(text: str) -> None:
     assert not is_info_invocation(text)
     assert check_commands(_wf(text)) == 1
+
+
+def test_pytype_v_is_its_python_version_and_runs_the_type_check() -> None:
+    assert not is_info_invocation("pytype -V 3.11 src/")
+    assert is_lint_run("pytype -V 3.11 src/")
 
 
 def test_a_may_check_target_asking_for_help_is_not_a_pending_check(tmp_path: Path) -> None:

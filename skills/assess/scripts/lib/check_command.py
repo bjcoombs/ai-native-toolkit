@@ -244,7 +244,8 @@ def _task_target(words: list[str], names: frozenset[str]) -> bool:
 TYPE_PROGRAMS = frozenset({"pyright", "basedpyright", "pytype", "pyre", "tsc", "vue-tsc"})
 _RUN_PROGRAMS = LINT_PROGRAMS | TYPE_PROGRAMS
 # Programs whose ``-V`` prints the version and exits (``is_info_invocation``).
-_V_VERSION = _RUN_PROGRAMS | ALWAYS_CHECK
+# ``pytype -V`` is ``--python-version`` and runs the check, so pytype is left out.
+_V_VERSION = (_RUN_PROGRAMS | ALWAYS_CHECK) - {"pytype"}
 _H_HELP = _V_VERSION | _H_RUNNERS
 # Package-manager forms that run a named program: ``npm exec``, ``pnpm dlx``, ``bun x``.
 _EXEC_SUBCOMMANDS = frozenset({"exec", "dlx", "x"})
