@@ -1073,9 +1073,14 @@ hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 `fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
 no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
 `git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
-when failed (`dirty` is also `null` on an ok row with no commit or a failed `git status`).
+when failed. On an ok row `dirty` is `null` only when unknown, with `dirty_reason` naming why
+(#932, `DIRTY_UNKNOWN_REASONS`): `no_commit`, `status_error`, `index_read_error`, or, after a
+clean status, index entries `git status` never compares (`_hidden_entries` reads `git ls-files -v`:
+`sparse_checkout`, `skip_worktree`, `assume_unchanged`). `commit_state` returns `CommitState`
+(`RepoCommit` plus `dirty_reason`). Status runs with `--ignore-submodules=dirty`, so a submodule's
+own edits never mark the checkout dirty (unlike `/assess`); a moved submodule commit still does.
 `_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
-`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when known clean or without a commit, else (dirty or unknown) a
 `git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
 (no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
 copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
