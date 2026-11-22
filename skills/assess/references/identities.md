@@ -11,7 +11,7 @@ bots = ["codecov[bot]", "renovate[bot]"]        # automation (dependency, covera
 people = ["ann@example.com"]                    # people: never counted as agents
 ```
 
-An entry matches the author e-mail, the login a noreply address carries (`22429695+codecov[bot]@users.noreply.github.com` is `codecov[bot]`) or a `[bot]` display name. A confirmed class wins over every pinned rule, so a person named "Cursor" never counts unless confirmed as an agent. The same section in a `--fleet-config` file extends each repository's (lists append, #706).
+An entry matches the author e-mail, the login a noreply address carries (`22429695+codecov[bot]@users.noreply.github.com` is `codecov[bot]`) or a `[bot]` display name. A confirmed class wins over every pinned agent rule, so a person named "Cursor" never counts unless confirmed as an agent. The one exception is a dependency bot (Renovate, Dependabot: `dependency_bot_hint`): it stays in `ai_usage.dependency_bot_commits` whatever the answer, so an agent answer for one changes no count. It is still listed so the answer clears it from the awaiting count; offer **Automation bot** as the expected answer for it. The same section in a `--fleet-config` file extends each repository's (lists append, #706).
 
 List the accounts awaiting confirmation (deterministic, never prompts, prints to the terminal only):
 

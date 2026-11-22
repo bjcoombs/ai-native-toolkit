@@ -20,7 +20,9 @@ too (a GitHub privacy address, a run of same-shaped commit subjects):
 - ``bot_suffix``: the reserved ``[bot]`` suffix on the name, e-mail or login;
 - ``gitlab_token_user``: a GitLab project or group access-token user;
 - ``dependency_bot_hint``: a pinned dependency-bot rule matches (Renovate,
-  Dependabot); these stay in their own bucket either way;
+  Dependabot). These stay in the ``dependency_bot`` bucket whatever the
+  answer, so an agent answer moves no count; they are still listed so a bot
+  answer clears them from ``identities_awaiting_confirmation``;
 - ``agent_name_hint``: an AI tool name (``AI_TOOL_NAMES``) is a word of the
   display name, login or e-mail local part. "Cursor" is a person's name too,
   which is why it is only a hint;
