@@ -156,6 +156,12 @@ def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
     guards = [n for n in body if _is_main_guard(n)]
     if len(imports) + len(top_alias) + len(guards) != len(body) or len(guards) > 1:
         problems.append(f"{rel}: a shim holds no code beyond the alias and the __main__ branch")
+    # The alias reads sys and the branch calls runpy: each name is imported, and
+    # every import comes first, or the shim raises NameError instead of aliasing.
+    imported = {a.name for n in imports if isinstance(n, ast.Import) for a in n.names}
+    needed = {"sys"} | ({"runpy"} if guards else set())
+    if needed - imported or body[:len(imports)] != imports:
+        problems.append(f"{rel}: a shim imports {', '.join(sorted(needed))} before it uses them")
     nested_alias = [n for n in ast.walk(tree) if isinstance(n, ast.stmt) and _sets_sys_modules(n)
                     and n not in top_alias]
     if not top_alias or nested_alias or any(ast.unparse(n.value) not in aliases for n in top_alias):
