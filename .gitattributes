@@ -2,3 +2,8 @@
 # core.autocrlf=true, and bash under Git Bash reads a CRLF script as
 # $'\r'-suffixed commands (#753).
 *.sh text eol=lf
+
+# The generated measures catalog is byte-compared against the generator's LF output
+# (skills/assess/tests/test_catalog.py, #794), so it stays LF on Windows too.
+docs/what-we-measure.md text eol=lf
+skills/assess/references/measures.json text eol=lf

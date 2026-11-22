@@ -10,7 +10,7 @@
 # without make; tests/test_windows_docs.py fails when the two drift.
 
 .POSIX:
-.PHONY: help setup check lock-check test-assess test-scripts test-contract lint
+.PHONY: help setup check lock-check test-assess test-scripts test-contract lint catalog
 
 help:
 	@echo "make setup          sync the locked dev environments for skills/assess and scripts"
@@ -20,6 +20,7 @@ help:
 	@echo "make test-scripts   scripts/ pytest, with its coverage floor"
 	@echo "make test-contract  plugin contract pytest (tests/)"
 	@echo "make lint           ruff and mypy gates for both packages"
+	@echo "make catalog        regenerate docs/what-we-measure.md and references/measures.json"
 
 # ripgrep is not a Python dependency: the promissory-marker tests shell out to
 # it and degrade without it, so setup warns rather than fails.
@@ -42,6 +43,13 @@ test-scripts:
 
 test-contract:
 	uv run --with pytest --with pyyaml pytest -v tests/
+
+# The measures catalog, generated from skills/assess/checks/core.toml, the default
+# maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and
+# lib/scan_registry.py (the registry). test-assess fails (tests/test_catalog.py)
+# when a committed copy is stale, so run this after changing any of them.
+catalog:
+	cd skills/assess && uv run --locked python scripts/gen_catalog.py
 
 lint:
 	cd skills/assess && uv run --locked ruff check .

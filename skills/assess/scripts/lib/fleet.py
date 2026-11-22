@@ -28,7 +28,17 @@ carry no absolute path, duration, stderr text or per-run stamp field (the run
 stamp is ``run.json``, lib/fleet_stamp.py). An ``ok`` row's ``active`` says
 whether its ``HEAD`` was committed inside the window (lib/fleet_activity.py). Two runs over unchanged checkouts on the same day write
 byte-identical files. ``--hash-paths`` without a salt draws one salt per run,
-so such a run joins within itself but is not byte-identical across runs.
+so such a run joins within itself but is not byte-identical across runs. Under a
+salt the output files name each repository by its hashed id (``lib/fleet_hashed.py``).
+
+The committed tree (#907): an ``ok`` row records the ``HEAD`` it measured
+(``head_sha``) and whether tracked files differed from it (``dirty``, the
+``/assess`` definition in ``lib/git_churn.py``: untracked files and the
+tool's own ``.assess/`` outputs never count, ``.assess/config.toml`` does).
+A dirty checkout is scanned from a ``git clone --shared`` of it checked out
+at that sha in the scratch directory (``committed_tree``), with the
+``origin`` URL copied over, so the row is a function of the commit, the same
+as a clean checkout of it. A clean checkout is scanned in place.
 
 Read only: every git call here and in the scan runs with
 ``GIT_OPTIONAL_LOCKS=0``, scans run with the scratch directory as their working
@@ -40,24 +50,29 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict
 
 from lib.fleet_activity import is_active
+from lib.git_churn import ASSESS_CONFIG_PATHSPEC, ASSESS_EXCLUDE_PATHSPEC
 from lib.platform_cli import CACHE_ENV
 from lib.run_context_types import JsonDict
 from lib.signals import offline_scans
 
 # Bumped when a row's envelope (the keys below) changes. Scan blocks carry
 # their own shapes, versioned by ``signals_schema_version``.
-# 2 (#569): ``active``.
+# 2 (#569): ``active``. ``head_sha`` and ``dirty`` (#907) were added without a
+# bump: the history readers reject any other version, and a row written before
+# them reads both as None through ``.get``.
 FLEET_ROW_VERSION = 2
 REPOS_FILE = "repos.jsonl"
 SIGNALS_SCRIPT = Path(__file__).resolve().parents[1] / "assess_signals.py"
@@ -75,7 +90,9 @@ NOT_A_WORK_TREE = "not_a_git_work_tree"
 SCAN_TIMEOUT = "scan_timeout"
 INVALID_OUTPUT = "invalid_output"
 SCAN_ERROR = "scan_error"
-FAILURE_REASONS = (MISSING_CHECKOUT, NOT_A_WORK_TREE, SCAN_TIMEOUT, INVALID_OUTPUT, SCAN_ERROR)
+COMMITTED_TREE_ERROR = "committed_tree_error"  # a dirty checkout's HEAD could not be checked out
+FAILURE_REASONS = (MISSING_CHECKOUT, NOT_A_WORK_TREE, SCAN_TIMEOUT, INVALID_OUTPUT, SCAN_ERROR,
+                   COMMITTED_TREE_ERROR)
 # Plus ``scan_exit_<code>`` for a scan process that exits non-zero.
 
 _SKIP_DIRS = frozenset({"worktree"})
@@ -92,6 +109,15 @@ class FleetRow(TypedDict):
     signals_schema_version: int | None  # None when failed
     scans: dict[str, JsonDict] | None  # assess_signals ``scans``; None when failed
     active: bool | None  # HEAD committed inside the window; None when failed or not checked
+    head_sha: str | None  # the commit measured (#907); None when failed or no commit
+    dirty: bool | None  # tracked files differed from HEAD, so HEAD's tree was scanned; None as head_sha
+
+
+class RepoCommit(TypedDict):
+    """The commit a row measured: ``head_sha`` and ``dirty`` as on ``FleetRow``."""
+
+    head_sha: str | None
+    dirty: bool | None
 
 
 @dataclass(frozen=True)
@@ -125,17 +151,33 @@ ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
 AfterFn = Callable[[Target, FleetRow], None]
 
 
+# The repository-local variables git itself clears for a subprocess on another repository
+# (``git rev-parse --local-env-vars``). Inherited from a hook or CI step, any of them would
+# point every git call, the scratch clone and the scan child at that repository, not the
+# target (#907).
+REPO_LOCAL_GIT_ENV = frozenset({
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX",
+    "GIT_INTERNAL_SUPER_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR",
+})
+
+
 def _read_only_env(cache_dir: Path | None = None) -> dict[str, str]:
     # PYTHONUTF8: the scan child reads and writes UTF-8 whatever the host locale
     # (a Windows code page would otherwise garble or reject non-ASCII text).
-    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"}
+    env = {key: value for key, value in os.environ.items()
+           if key not in REPO_LOCAL_GIT_ENV and not key.startswith("GIT_CONFIG_KEY_")
+           and not key.startswith("GIT_CONFIG_VALUE_")}
+    env.update({"GIT_OPTIONAL_LOCKS": "0", "PYTHONUTF8": "1"})
     env.pop(CACHE_ENV, None)  # only the platform pass caches, and only in its own directory
     if cache_dir is not None:
         env[CACHE_ENV] = str(cache_dir)
     return env
 
 
-def _git(path: Path, *args: str) -> str | None:
+def _git_output(path: Path, *args: str) -> str | None:
+    """Stripped stdout (empty when git printed nothing), or None when git failed."""
     try:
         out = subprocess.run(
             ["git", "-C", str(path), *args], capture_output=True, text=True,
@@ -144,7 +186,11 @@ def _git(path: Path, *args: str) -> str | None:
         )
     except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
         return None
-    return out.stdout.strip() or None
+    return out.stdout.strip()
+
+
+def _git(path: Path, *args: str) -> str | None:
+    return _git_output(path, *args) or None
 
 
 # --- target discovery ------------------------------------------------------
@@ -257,7 +303,7 @@ def targets_from_list(entries: Iterable[str], root: Path | None, base: Path) -> 
 
 
 def _row(target: Target, *, reason: str | None = None, document: JsonDict | None = None,
-         active: bool | None = None) -> FleetRow:
+         active: bool | None = None, commit: RepoCommit | None = None) -> FleetRow:
     return {
         "fleet_row_version": FLEET_ROW_VERSION,
         "repo": target.repo,
@@ -267,6 +313,8 @@ def _row(target: Target, *, reason: str | None = None, document: JsonDict | None
         "signals_schema_version": document["signals_schema_version"] if document else None,
         "scans": document["scans"] if document else None,
         "active": active if document else None,
+        "head_sha": commit["head_sha"] if document and commit else None,
+        "dirty": commit["dirty"] if document and commit else None,
     }
 
 
@@ -282,6 +330,64 @@ def checkout_problem(checkout: Path) -> str | None:
     if top is None or Path(top).resolve() != checkout.resolve():
         return NOT_A_WORK_TREE
     return None
+
+
+def commit_state(checkout: Path) -> RepoCommit:
+    """``HEAD`` and whether tracked files differ from it, both None when there is no commit.
+
+    ``dirty`` is ``/assess``'s ``measured_commit.dirty`` (``lib/git_churn.py``): untracked
+    files and ``.assess/`` outputs are left out, ``.assess/config.toml`` is not. Read
+    with optional locks off, so ``git status`` never rewrites the target's index.
+    """
+    head = _git(checkout, "rev-parse", "--verify", "--quiet", "HEAD")
+    if head is None:
+        return {"head_sha": None, "dirty": None}
+    states = [_git_output(checkout, "status", "--porcelain", "--untracked-files=no", "--", spec)
+              for spec in (ASSESS_EXCLUDE_PATHSPEC, ASSESS_CONFIG_PATHSPEC)]
+    dirty = None if None in states else any(states)
+    return {"head_sha": head, "dirty": dirty}
+
+
+def _clone_at(checkout: Path, copy: Path, sha: str, timeout: int) -> bool:
+    """``copy``: a shared clone of ``checkout`` with ``sha`` checked out and the same ``origin``.
+
+    Shared (``--shared``): the copy borrows the checkout's objects and writes none
+    there. No hooks run and no LFS content is fetched.
+    """
+    origin = _git(checkout, "config", "--get", "remote.origin.url")
+    no_hooks = ["-c", f"core.hooksPath={os.devnull}"]
+    steps = [
+        ["git", *no_hooks, "clone", "--quiet", "--shared", "--no-checkout", str(checkout), str(copy)],
+        ["git", "-C", str(copy), *no_hooks, "-c", "advice.detachedHead=false",
+         "checkout", "--quiet", "--detach", sha],
+        ["git", "-C", str(copy), "remote", *(("set-url", "origin", origin) if origin else ("remove", "origin"))],
+    ]
+    env = {**_read_only_env(), "GIT_LFS_SKIP_SMUDGE": "1"}
+    try:
+        for step in steps:
+            subprocess.run(step, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           check=True, timeout=timeout, env=env)
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired):
+        return False
+    return True
+
+
+@contextmanager
+def committed_tree(checkout: Path, scratch: Path, commit: RepoCommit,
+                   timeout: int = DEFAULT_TIMEOUT) -> Iterator[Path | None]:
+    """The tree to scan for ``commit``: ``checkout`` itself when it is clean, else a
+    scratch clone at ``head_sha`` (same directory name), removed afterwards; None when
+    that clone cannot be made."""
+    sha = commit["head_sha"]
+    if not commit["dirty"] or sha is None:
+        yield checkout
+        return
+    holder = Path(tempfile.mkdtemp(prefix="committed-", dir=scratch))
+    try:
+        copy = holder / checkout.name
+        yield copy if _clone_at(checkout, copy, sha, timeout) else None
+    finally:
+        shutil.rmtree(holder, ignore_errors=True)
 
 
 def signals_command(checkout: Path, out: Path, options: ScanOptions) -> list[str]:
@@ -320,24 +426,37 @@ def scan_target(target: Target, scratch: Path, options: ScanOptions) -> FleetRow
     problem = checkout_problem(target.checkout)
     if problem:
         return _row(target, reason=problem)
-    document = run_signals(target, scratch, options)
+    commit = commit_state(target.checkout)
+    document = run_signals(target, scratch, options, commit=commit)
     if isinstance(document, str):
         return _row(target, reason=document)
     since = options.active_since
-    return _row(target, document=document,
+    return _row(target, document=document, commit=commit,
                 active=None if since is None else is_active(target.checkout, since))
 
 
-def run_signals(target: Target, scratch: Path, options: ScanOptions, log_suffix: str = ".stderr") -> JsonDict | str:
-    """``assess_signals.py`` on ``target.checkout`` in its own process: the document, or a
-    failure token (``scan_timeout``, ``scan_error``, ``scan_exit_<code>``, ``invalid_output``).
+def run_signals(target: Target, scratch: Path, options: ScanOptions, log_suffix: str = ".stderr",
+                commit: RepoCommit | None = None) -> JsonDict | str:
+    """``assess_signals.py`` on the committed tree of ``target.checkout`` (``committed_tree``;
+    ``commit`` defaults to ``commit_state``) in its own process: the document, or a failure
+    token (``scan_timeout``, ``scan_error``, ``scan_exit_<code>``, ``invalid_output``,
+    ``committed_tree_error``).
 
     A non-zero exit leaves its stderr tail in ``<log_dir>/<repo><log_suffix>``.
     """
+    state = commit_state(target.checkout) if commit is None else commit
+    with committed_tree(target.checkout, scratch, state, options.timeout) as tree:
+        if tree is None:
+            return COMMITTED_TREE_ERROR
+        return _run_signals_on(tree, target, scratch, options, log_suffix)
+
+
+def _run_signals_on(tree: Path, target: Target, scratch: Path, options: ScanOptions,
+                    log_suffix: str) -> JsonDict | str:
     out = scratch / (secrets.token_hex(8) + ".json")
     try:
         done = subprocess.run(
-            signals_command(target.checkout, out, options), cwd=scratch,
+            signals_command(tree, out, options), cwd=scratch,
             env=_read_only_env(options.cache_dir), capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=options.timeout, check=False,
         )
@@ -346,7 +465,8 @@ def run_signals(target: Target, scratch: Path, options: ScanOptions, log_suffix:
     except OSError:
         return SCAN_ERROR
     if done.returncode != 0:
-        write_stderr_tail(options.log_dir, target, done.stderr, log_suffix)
+        if options.hash_salt is None:  # free text can name the checkout: none under hashing (#909)
+            write_stderr_tail(options.log_dir, target, done.stderr, log_suffix)
         return f"scan_exit_{done.returncode}"
     document = _load_document(out)
     out.unlink(missing_ok=True)

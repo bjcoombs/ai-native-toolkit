@@ -19,7 +19,10 @@ passed over when the caller gives this run's model and key function: its ``repos
 scans are re-scored under this run's model (``lib/fleet_rescore.py``) and it replays as
 ``HistoryRun(..., rescored_from=<its version>, stored=<its fleet-data.json>)``. It is passed
 over (today's behaviour, never an error) when ``repos.jsonl`` does not read as fleet rows
-with scans or a stored repository key does not join under this run's key function.
+with scans or a stored repository key does not join under this run's key function. A
+``repos.jsonl`` written by a hashed run holds hashed ids (#909), which the key keeps as
+they are; such an entry is passed over when none of its ids is one of this run's (another
+salt).
 
 An entry is dated by its ``run.json`` ``scan_date``, not by the copy of the stamp
 inside ``fleet-data.json``: a run copied into the history with a re-dated ``run.json``
@@ -37,6 +40,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple, cast
 
+from lib.counts_only import is_hashed
 from lib.fleet_achievements import HistoryRun, subjects
 from lib.fleet_compare import comparability
 from lib.fleet_data import FLEET_DATA_FILE, FLEET_DATA_VERSION, FleetData
@@ -68,6 +72,7 @@ class Rescorer(NamedTuple):
 
     model: MaturityModel
     key: Callable[[str], str]
+    ids: frozenset[str] | None = None  # this run's repository ids as its output files write them
 
 
 def _version_only(stamp: FleetStamp, current: FleetStamp) -> bool:
@@ -85,6 +90,9 @@ def _rescored(entry: Path, data: FleetData, stamp: FleetStamp, current: FleetSta
         rows = read_repos(entry)
     except (FleetViewError, OSError):
         return None
+    stored = {row["repo"] for row in rows}
+    if rescorer.ids is not None and any(is_hashed(r) for r in stored) and not stored & rescorer.ids:
+        return None  # ids hashed at the output boundary under another salt (#909): no join
     try:
         again = rescore(data, rows, rescorer.model, rescorer.key)
     except (KeyError, TypeError, AttributeError, ValueError, IndexError):
@@ -158,6 +166,6 @@ def earlier_runs(org_dir: Path, current: FleetStamp, repos: frozenset[str], *,
 
     With ``model`` (this run's) and ``key`` (this run's repository key function), an entry whose
     only difference is the maturity-model version is re-scored (``lib/fleet_rescore.py``)."""
-    rescorer = Rescorer(model, key) if model is not None and key is not None else None
+    rescorer = Rescorer(model, key, repos) if model is not None and key is not None else None
     return [run for _date, run in one_per_date(org_dir, current["scan_date"], repos,
                                                lambda entry, date: _read(entry, date, current, rescorer))]

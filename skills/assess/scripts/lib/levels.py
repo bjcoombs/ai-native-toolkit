@@ -58,6 +58,11 @@ Semantics:
   Consequence: a null that a scan means as "absent" (``instructions_grade:
   null``) reads as unknown here; ``layer_grades.instruction_file_present``
   carries that absence as a boolean.
+- A statistic over an empty set is unknown, never met or unmet (#906): a signal
+  listed in ``signal_grades.EMPTY_DENOMINATORS`` whose set's count reads exactly
+  0 (``stats_summary.loc.p95`` with ``files_scored`` 0) gives an ``unknown``
+  criterion whose ``reason`` is the table's code (``no_scored_files``). A count
+  that is unavailable or absent leaves the usual rules in place.
 - ``actual`` in a criterion outcome is the resolved value only when it is a
   finite scalar; an object, a list or a non-finite number is reported as null
   (its kind is already explained by ``type_mismatch``), so a result never
@@ -104,6 +109,8 @@ import tomllib
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, TypedDict
+
+from lib.signal_grades import EMPTY_DENOMINATORS
 
 Scope = Literal["org", "team"]
 Scalar = str | int | float | bool
@@ -564,6 +571,17 @@ _COMPARE: dict[str, Callable[[Any, Any], bool]] = {
 }
 
 
+def _empty_set(data: JsonDict | None, signal: str) -> str | None:
+    """The ``EMPTY_DENOMINATORS`` code when ``signal``'s set has a count of exactly 0."""
+    rule = EMPTY_DENOMINATORS.get(signal)
+    if rule is None:
+        return None
+    count = resolve_signal(data, rule[0])
+    if isinstance(count, (int, float)) and not isinstance(count, bool) and count == 0:
+        return rule[1]
+    return None
+
+
 def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> CriterionOutcome:
     op, value = criterion["op"], criterion["value"]
     actual = resolve_signal(data, criterion["signal"])
@@ -575,6 +593,10 @@ def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> Criterio
         "actual": None,
         "reason": "unavailable",
     }
+    empty = _empty_set(data, criterion["signal"])
+    if empty is not None:  # before availability: a full run leaves loc {} with no file scored
+        outcome["reason"] = empty
+        return outcome
     if actual is _UNAVAILABLE:
         return outcome
     kind = _kind(actual)
