@@ -2159,7 +2159,8 @@ Reads the owner's condition exclusions from `.assess/config.toml` (#910):
 `[checks] exclude = [{id, reason, kind?, excluded_by?, excluded_at?, plugin_version?}]`.
 `id` is a default-model condition id (`<row id>.<level>`) and `reason` is required;
 `kind` is one of `KINDS` (`not_applicable`, `measured_elsewhere`, `tool_unsupported`,
-`false_positive`, `other`, the default). The provenance keys are named as a decline marker's.
+`false_positive`, `other`, the default when the key is left out; a written kind that is not
+one of them is skipped). The provenance keys are named as a decline marker's.
 `parse_exclusions(config, known)` returns the run-context `owner_exclusions` block
 (`OwnerExclusionsBlock`): the `exclusions` in force (with `source: "repo"`), the `skipped`
 entries with a `PROBLEMS` code (`not_a_table`, `no_id`, `no_reason`, `unknown_kind`,
@@ -3356,7 +3357,8 @@ so with its reason, and a gate whose condition the owner excluded says "excluded
 owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
 Step holds while its gates hold), and "Verified practices: N of M measured · K not
 measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes), with
-"E excluded by owner" before the model when the level lists exclusions (#910). Also `markdown` (the lines, the
+"E not applicable (excluded by owner)" before the model when the level lists exclusions,
+E counting the excluded conditions and those whose `requires` names one (#910). Also `markdown` (the lines, the
 first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
 badge message and the `log.md` readiness line), `step`, `next_step`,
 `levels_version` and `headline_version`. A missing or degraded `level` block gives

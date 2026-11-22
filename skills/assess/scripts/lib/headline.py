@@ -18,8 +18,10 @@ fix:
    model V``. N is ``tally.met``, M is ``tally.measured`` (measured conditions only),
    K is ``tally.not_measured`` with each reason code and its count, V the
    maturity-model version. When the owner excluded conditions (#910), the line
-   adds "E excluded by owner" before the model, and a blocking gate whose
-   condition is excluded says so in the Next line: the Step stays out of reach.
+   adds "E not applicable (excluded by owner)" before the model, where E counts
+   every condition that left the denominator that way, the excluded ones and those
+   whose ``requires`` names one. A blocking gate whose condition is excluded says
+   so in the Next line: the Step stays out of reach.
 
 The per-tag strip is a later third line (#844); the model carries no tags yet.
 
@@ -149,7 +151,9 @@ def _tally_line(level: LevelResult) -> str:
     detail = ", ".join(f"{_reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
     line += f" · {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
     if level.get("excluded"):
-        line += f" · {len(level.get('excluded', []))} excluded by owner"
+        # only an exclusion makes a condition not_applicable, directly or through `requires`
+        gone = sum(c["state"] == "not_applicable" for c in level["conditions"])
+        line += f" · {gone} not applicable (excluded by owner)"
     return line + f" · model {level['levels_version']}"
 
 

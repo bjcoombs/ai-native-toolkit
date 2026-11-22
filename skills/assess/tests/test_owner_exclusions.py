@@ -61,6 +61,8 @@ def test_kind_defaults_to_other_and_provenance_is_optional():
     ({"id": "ci.1"}, "no_reason"),
     ({"id": "ci.1", "reason": "   "}, "no_reason"),
     ({"id": "ci.1", "reason": "r", "kind": "waived"}, "unknown_kind"),
+    ({"id": "ci.1", "reason": "r", "kind": ""}, "unknown_kind"),
+    ({"id": "ci.1", "reason": "r", "kind": 5}, "unknown_kind"),
     ({"id": "nope.1", "reason": "r"}, "unknown_condition"),
 ])
 def test_a_bad_entry_is_skipped_and_the_condition_stays_in_force(entry, problem):
@@ -139,6 +141,8 @@ def test_a_dependent_of_an_excluded_condition_is_not_applicable_too():
     assert _state(result, "fresh.1") == ("not_applicable", "requires:ci.1")
     assert "disposition" not in next(c for c in result["conditions"] if c["id"] == "fresh.1")
     assert result["tally"]["met"] == 0
+    # the headline counts the dependent too: both left the denominator
+    assert "· 2 not applicable (excluded by owner) ·" in hl._tally_line(result)
 
 
 def test_an_excluded_gate_condition_keeps_its_step_unreachable():
@@ -191,7 +195,7 @@ def test_the_headline_names_an_excluded_gate_and_counts_exclusions():
     lines = hl.headline(lt.level_result(model, signals, [_exclude("ci.1")]), model)["lines"]
     assert "CI runs the tests (excluded by owner: measured elsewhere; the Step waits while the exclusion stands)" \
         in lines[1]
-    assert "· 1 excluded by owner ·" in lines[2]
+    assert "· 1 not applicable (excluded by owner) ·" in lines[2]
     plain = hl.headline(lt.level_result(model, signals), model)["lines"]
     assert "excluded" not in " ".join(plain)
 

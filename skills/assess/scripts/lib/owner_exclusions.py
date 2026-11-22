@@ -15,8 +15,9 @@ the maturity-model version and the committed config::
   ``lib.levels.condition_id``). Required.
 - ``reason`` is required and non-empty. An entry without one is skipped, so the
   condition stays in force.
-- ``kind`` is one of ``KINDS``; it defaults to ``other`` when left out. An unknown
-  kind is skipped rather than guessed.
+- ``kind`` is one of ``KINDS``; it defaults to ``other`` only when the key is left
+  out. A kind that is written but unknown, empty or not a string is skipped
+  rather than guessed.
 - ``excluded_by``, ``excluded_at`` and ``plugin_version`` are optional
   provenance, named as a decline marker's (``lib/decline_markers.py``).
 
@@ -66,7 +67,7 @@ def _problem(entry: Any, known: Collection[str], seen: Collection[str]) -> str |
         return "no_id"
     if _text(entry, "reason") is None:
         return "no_reason"
-    if (_text(entry, "kind") or DEFAULT_KIND) not in KINDS:
+    if "kind" in entry and entry["kind"] not in KINDS:
         return "unknown_kind"
     if cid not in known:
         return "unknown_condition"
