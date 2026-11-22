@@ -371,7 +371,7 @@ def _bulk_fixture(repo: Path, commit) -> None:
 def _head_sha(repo: Path, rev: str) -> str:
     import subprocess
     return subprocess.run(["git", "-C", str(repo), "rev-parse", rev],
-                          capture_output=True, text=True, check=True).stdout.strip()
+                          capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True).stdout.strip()
 
 
 def test_bulk_commit_does_not_reset_doc_staleness(git_repo) -> None:

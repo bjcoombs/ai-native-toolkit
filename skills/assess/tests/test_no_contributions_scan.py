@@ -30,7 +30,7 @@ def _scan_block() -> str:
 def _run_scan(repo_root: Path, var: str = "NO_CONTRIBUTIONS") -> str:
     script = f'REPO_ROOT="{repo_root}"\n{_scan_block()}printf %s "${var}"\n'
     result = subprocess.run(
-        ["sh", "-c", script], capture_output=True, text=True, check=True
+        ["sh", "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True
     )
     assert result.stderr == ""
     return result.stdout
@@ -174,7 +174,7 @@ def test_is_own_fork_compares_viewer_with_fork_owner(
     push_info = f'{{"isFork": {is_fork}, "owner": {{"login": "{owner}"}}}}'
     script = f"IS_FORK={is_fork}\nPUSH_INFO='{push_info}'\n{_own_fork_block()}printf %s \"$IS_OWN_FORK\"\n"
     result = subprocess.run(
-        ["sh", "-c", script], capture_output=True, text=True, check=True,
+        ["sh", "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
         env={"PATH": f"{tmp_path}:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"},
     )
     assert result.stdout == expected
@@ -305,6 +305,6 @@ def test_scan_runs_under_zsh(tmp_path: Path, body: str, expected: str) -> None:
     # "$var[" is a subscript, not a variable followed by a bracket class.
     (tmp_path / "README.md").write_text(f"# App\n{body}\n", encoding="utf-8")
     script = f'REPO_ROOT="{tmp_path}"\n{_scan_block()}printf %s "$NO_CONTRIBUTIONS"\n'
-    result = subprocess.run(["zsh", "-c", script], capture_output=True, text=True, check=True)
+    result = subprocess.run(["zsh", "-c", script], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
     assert result.stderr == ""
     assert result.stdout == expected

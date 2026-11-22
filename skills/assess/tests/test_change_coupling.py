@@ -24,7 +24,7 @@ from lib.change_coupling import (
 def _git(repo: Path, *args: str, env: dict | None = None) -> None:
     full_env = {**os.environ, **(env or {})}
     subprocess.run(["git", "-C", str(repo), *args],
-                   check=True, capture_output=True, text=True, env=full_env)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=full_env)
 
 
 def _write(repo: Path, rel: str, text: str) -> None:
@@ -485,7 +485,7 @@ def _sibling_rename_merge(repo: Path, into: str, other: str) -> None:
     _commit(repo, {}, "b -> c")
     _git(repo, "checkout", "-q", into)
     subprocess.run(["git", "-C", str(repo), "merge", "-q", "--no-edit", other],
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, encoding="utf-8", errors="surrogateescape")
     for leftover in ("a.py",):
         if (repo / leftover).exists():
             (repo / leftover).unlink()

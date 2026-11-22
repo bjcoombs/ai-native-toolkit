@@ -31,7 +31,7 @@ DAY = "2026-09-18"
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=T", *args],
-        check=True, capture_output=True, text=True, env=os.environ,
+        check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=os.environ,
     )
 
 
@@ -187,7 +187,7 @@ def test_drop_entry_clears_earlier_same_date_placeholder_refusal(repo: Path) -> 
     script = Path(__file__).resolve().parents[1] / "scripts" / "assess_finalize.py"
     done = subprocess.run(
         [sys.executable, str(script), str(repo), "--drop-entry", first["run_id"]],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert done.returncode == 0, done.stderr
     log = (assess_dir / "log.md").read_text(encoding="utf-8")
@@ -203,7 +203,7 @@ def test_drop_entry_clears_earlier_same_date_placeholder_refusal(repo: Path) -> 
     # A finalized entry is history: --drop-entry refuses it.
     refused = subprocess.run(
         [sys.executable, str(script), str(repo), "--drop-entry", second["run_id"]],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert refused.returncode == 1
     assert "finalized" in refused.stderr

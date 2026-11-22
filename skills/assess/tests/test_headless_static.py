@@ -25,7 +25,7 @@ FULL_RUN_ONLY = ("dead_code", "understanding", "runtime")
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True)
+    subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True)
 
 
 def _write(repo: Path, rel: str, text: str) -> None:
