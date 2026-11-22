@@ -32,6 +32,26 @@ restructure:
 - ``signals``: each signal a criterion reads, with its type, collector, input class and
   grade.
 - ``findings``: each derived finding, in report order, with its inputs and rules.
+
+(#789 step 2, #794)
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml` and its
+fragments), the default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
+grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
+row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
+the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
+`collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
+`unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
+counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
+`findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
+reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
+(every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
+them, not manifest order, since fragments group signals by collector) and `findings`. `sources` (`catalog.SOURCES`) lists the
+files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
+manifest fragments as a glob (#994). A scan no criterion reads is
+graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
+every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
+commit or version string is read, so a version-only bump of the model leaves it unchanged.
 """
 from __future__ import annotations
 

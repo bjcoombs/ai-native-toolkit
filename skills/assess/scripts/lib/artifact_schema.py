@@ -3,6 +3,20 @@
 A leaf module so the orchestrator and the lib modules that write artifacts
 (the hotspot wiki pages, the index, the log, the findings snapshot) read one
 constant each.
+
+`ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
+writes (run-context.json, the badge, the wiki pages); the version history is in the
+module comment. `complexity-treemap.py` carries a copy that
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
+It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
+independent of plugin releases, bumped by one in any change that moves which findings
+a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
+`findings.json`.
+
+During a version freeze a change to either counter, or to another counter
+`scripts/fold_changes.py` knows, adds a note file under `skills/assess/changes/`
+instead of editing the history comment; the release PR folds the notes in with
+`make fold` (#1011).
 """
 
 # Artifact schema version, stamped on every artifact the run produces
@@ -264,33 +278,6 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-# Unreleased (bumped once by the 3.0.0 release PR):
-# - run-context.json layer_grades gains instruction_presence (issue #821): root,
-#   nested_only or none. instruction_file_present is true for nested_only, and
-#   instructions_grade there is the best nested grade, where both read as no
-#   instruction file before; both are null when there is no root file and the
-#   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
-#   nested_only and now sits after layer_grades in run-context.json.
-# - ci_checks basis, enforced_basis and lint_basis gain external_ci and
-#   external_ci_marker (issue #928): under --platform, more than half of the sampled
-#   merged pull requests carry a check of a known external CI system; offline, a root
-#   Prow OWNERS_ALIASES with no CI file. Either reads null in place of a false case.
-#   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
-#   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
-#   Additive: no existing key moves.
-# - run-context.json delivery gains sample_page_size (issue #995): the changes per
-#   heavy read the merged sample finished at, or null when none was made. Additive:
-#   no existing key moves.
-# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
-#   #926), both with lint_runs null: a CI .NET build whose committed project files
-#   turn on the analysers, and a compiler run with warnings as errors as the only
-#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
-#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
-#   --exit-code in its job counts, and a target whose recipe is not read reads
-#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
-# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
-#   the number of dependency manifests the lockfile check reads. Additive: no
-#   existing key moves, and complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -478,27 +465,4 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
-# Unreleased (bumped once by the 3.0.0 release PR):
-# - agent_consistency drops a leading heading or list ordinal before reading
-#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
-#   conflict, so agent-consistency level 1 can move from unmet to met. A
-#   next step for an unlinked system names its primary file (CLAUDE.md) before
-#   a supplementary rule file.
-# - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
-#   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
-#   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
-#   `ruff check . --exit-zero || pytest` drops `pytest`, a folded `run: >` block is read
-#   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
-#   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
-#   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
-# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
-#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
-#   read met. Fewer conditions count on repositories with no dependency manifest.
-# - GitLab `rules:` are read as GitLab runs them (issue #884): the first matching rule
-#   decides, `if:` expressions are evaluated per merge request and branch push pipeline,
-#   and a top-level `workflow: rules:` gates every job of its file. A job gated by
-#   `$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` or
-#   `$CI_COMMIT_TAG && ...` no longer runs a check (enforced_check_runs can move from
-#   true to false); a custom variable, inline or anchored rules and `exists:` read
-#   unknown. Layer 5 level 1 can move from met to unmet or unknown.
 ASSESS_METHOD_VERSION = 37

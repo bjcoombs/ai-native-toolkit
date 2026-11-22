@@ -1,0 +1,7 @@
+# #843. A condition with several tags counts once. Tags change no level, no
+# tally and no Step.
+#
+# Changing a criterion changes results: bump "version" with every edit.
+
+version = "default-2026.11.22"
+

@@ -217,7 +217,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_scope.py` | `/assess <path>` monorepo scoping across `lib/doc_graph.py`, `lib/git_churn.py`, `lib/badge.py` and `lib/wiki_writer.py` |
 | `test_log_supersede.py` | `lib/wiki_writer.py` - `log.md` entry replacement and re-chain across core runs and finalize |
 | `test_hotspot_orphan_invariant.py` | `lib/wiki_writer.py` - executable invariant for the hotspot wiki |
-| `test_self_architecture.py` | `scripts/lib/` - the inward-only layering contract and the lib `README.md` entry check |
+| `test_self_architecture.py` | `scripts/lib/` - the inward-only layering contract and the lib module docstring check |
 | `test_self_dogfood.py` | the whole deterministic core - it must obey the signals it computes |
 
 ---

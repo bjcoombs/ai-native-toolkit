@@ -77,6 +77,49 @@ none that differ, gives ``available: True`` with ``entries: []``. Any platform r
 ``{"available": False, "reason"}`` (``no_access`` on HTTP 403) - never a
 partial clean result. GitHub access goes through ``gh_cli``, GitLab access
 through ``gitlab_cli``.
+
+Layer 5 lying signal: tracked GitHub configuration snapshots diffed against the
+live setting via `gh_cli`. Snapshots are ruleset exports - tracked JSON with a
+`name` or `id` and a top-level `rules` array of `type` entries, in
+`.github/rulesets/` or anywhere (matched to a live ruleset by `id`, else `name`);
+a file missing either is skipped, never reported - and classic branch-protection exports - tracked JSON under
+`.github/` with `required_status_checks`, `enforce_admins` or
+`required_pull_request_reviews` at the top level (branch from the export's `url`,
+else the file stem) - and, on GitLab, protected-branch exports: tracked JSON under
+`.gitlab/` with `push_access_levels` or `merge_access_levels` at the top level (branch
+from its `name`, a name or `*` wildcard, else the file stem), diffed against
+`gitlab_cli.branch_protection` with each access level compared on `access_level`,
+`user_id`, `group_id` and `deploy_key_id` only. A GitLab remote (`gitlab_cli.open_gitlab`) compares only
+GitLab snapshots and any other remote only GitHub ones; `snapshots` lists the compared
+kind, and a repo whose snapshots are all of the other provider's kind is `available:
+False` with reason `other_provider`, never clean. On GitLab a refused protected-branch
+read (403 or 404) or an incomplete list degrades the block; only a complete readable
+list without a covering rule is a `branch_protection` drift entry. The diff is snapshot-driven (keys only the API returns are
+not drift), ignores ids, timestamps and links, and folds the `{"enabled": X}` read
+shape into `X`. Lists are sets. Write-shape restriction lists (plain user, team
+and app names) compare against the read shape's objects projected onto
+`login`/`slug`/`name`. A changed scalar list is one entry: `tracked` is
+`{count, removed, sample}`, `live` is `{count, added, sample}`, with at most
+`MAX_SAMPLE` (3) names per sample, never the whole live list. Object lists pair by
+identity (`login`, `slug`, `type`, `context`, `actor_type:actor_id`, `name`; users and
+teams carry `type` as a shared discriminator, so `login`/`slug` are tried first) in both directions, and a
+one-sided item, or a snapshot key the live response omits, is recorded as
+`"present"`/`"absent"`, never as the live object, so live org configuration stays
+out of the committed wiki (the item's identity does travel in `key`). Live rulesets
+are listed with `includes_parents=false`, so a repo snapshot never pairs with an
+inherited org ruleset. Tracked JSON holding none of the snapshot keys is skipped by
+a substring probe before any parse. A missing live ruleset, an
+unprotected branch and a deleted branch are drift entries, not outages. Emits
+`config_drift: {available, entries: [{file, key, tracked, live}], dropped, snapshots}`, entries
+ranked worst first (one-sided `"absent"`, then boolean flips, then other changes) because
+the report renders only `entries[0]`, then capped at `MAX_ENTRIES` (10) with `dropped`
+counting the rest. Stored in the committed wiki: changed scalar settings, list-item
+identities in `key`, and up to three added names per changed list; never a live
+object or a whole live list;
+with no snapshots it calls nothing and reports `entries: []`. Any refused or
+failed read degrades the whole block, never a partial clean result. Add a case
+in `tests/test_config_drift.py` (GitLab: `tests/test_gitlab_protected_branches.py`)
+alongside any change to discovery or the diff.
 """
 from __future__ import annotations
 

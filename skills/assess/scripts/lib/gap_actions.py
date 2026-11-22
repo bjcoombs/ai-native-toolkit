@@ -23,6 +23,24 @@ block the gap was read from. The root-instructions entry, when present, comes
 first, then coverage.
 A lint complexity-rule gap is deliberately absent: the core has no detector for
 it, and the layer scorer owns that check.
+
+Builds the run-context `gap_actions` list: Top 3 candidates for the slots
+`prescribed_actions` leaves free, read from blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `layer_grades` entry (issue #821) fires when
+`layer_grades.instruction_presence` is `nested_only`: its action is to add a root
+instruction file (`AGENTS.md` or `CLAUDE.md`) that names the check command, and it names
+up to five nested files (`MAX_NESTED_PATHS`); it comes first. The registry runs the
+scan at the post-offers stage, after `layer_grades` and `nested_instructions`.
+A `coverage_report` entry fires when no coverage
+report was found in a repo whose archetype is `software` and names up to three
+`top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
+`keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
+and when no hotspot remains, and when it fires it comes next.
+A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
+its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
+reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
+`[]` when none fires. There is no lint complexity-rule gap: the core has no detector
+for it, and the layer scorer owns that check.
 """
 from __future__ import annotations
 

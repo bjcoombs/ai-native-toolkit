@@ -1,4 +1,4 @@
-"""Does a GitLab ``rules:`` list let a job, or a pipeline, run on ordinary changes? (issue #884)
+"""Reads a GitLab ``rules:`` list the way GitLab runs it, per ordinary pipeline (issue #884).
 
 ``lib.ci_triggers`` asks this of each GitLab job and of a top-level ``workflow: rules:``.
 The answer is read per ordinary pipeline: a merge request pipeline
@@ -24,7 +24,13 @@ Each condition reads one of four values in a context: true, false, varies (true 
 pipelines of that kind and false for others: which branch, which files changed, which
 merge request) or unknown (a custom variable, a value set in project settings, an
 expression this reader cannot parse). A rule that may match with unknown outcome makes
-the answer ``unknown``, never ``no``.
+the answer ``unknown``, never ``no``. An unread rule (an anchor merge, ``!reference``, a
+key this reader does not know) has an unknown match and an unknown ``when:``: it may bring
+its own ``when: never``.
+
+``evaluate(expression, context)`` gives one expression's value; ``outcome(rules, context,
+default_when)`` walks ``Rule`` items and gives ``yes``, ``some``, ``no`` or ``unknown``.
+Imports nothing from ``lib``. Tests: ``tests/test_gitlab_rules.py``.
 
 Variables: ``CI_PIPELINE_SOURCE``, ``CI_COMMIT_TAG`` (unset in both), ``CI_COMMIT_BRANCH``
 (unset in a merge request pipeline), ``CI_MERGE_REQUEST_*`` (unset in a push pipeline),

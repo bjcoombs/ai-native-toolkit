@@ -1,7 +1,7 @@
 """Layer 1 inputs: runtime legibility / liveness signals.
 
-Two tiers, both deterministic and best-effort -- they degrade to "not assessed"
-rather than ever blocking the assessment.
+Three tiers (the capability-offer tier is in the full reference), all deterministic and
+best-effort -- they degrade to "not assessed" rather than ever blocking the assessment.
 
 **Dead-code tier (cheap, traditional).** Flags *intra-repo* candidate-dead code
 (unused exports / unreferenced symbols) using a language-appropriate tool when
@@ -24,6 +24,8 @@ the report: static reachability proves "nothing in *this* repo calls it", never
 Boundary: this sees only what the *repo provides* toward agent-reachability; it
 cannot know the agent's live environment. We score what the repo makes reachable
 and say so.
+
+Full reference: lib/docs/liveness_scan.md.
 """
 from __future__ import annotations
 

@@ -10,6 +10,12 @@ before (a finding-driven action moves no single condition).
 
 A met condition is accepted: an action can keep a condition met (or deepen the
 practice behind it), and "met at this commit" is not proof it cannot change.
+
+The condition an action moves (#747): `condition_errors(actions, level)` returns one
+message per `finalize-input.json` action whose optional `condition` is not an id the
+run's `level.conditions` lists (or when the run has no level result to check it
+against). `assess_finalize` raises on any, before writing, so `actions.json` is
+unchanged; a met condition is accepted. Tests: `tests/test_headline.py`.
 """
 from __future__ import annotations
 

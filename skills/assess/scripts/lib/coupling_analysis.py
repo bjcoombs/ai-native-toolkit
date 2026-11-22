@@ -41,6 +41,13 @@ onto the directories it cares about; this module only consumes the per-directory
 view. ``None`` for the whole argument means "no static graph at all" -> the
 graceful historical-only path. A directory absent from an otherwise-present dict
 is treated the same way per-directory (no static evidence for *that* dir).
+
+B3 static-vs-historical disagreement cross: compares the import-graph view
+(`structure_graph`) against the commit-history view (`change_coupling`) to surface
+hidden coupling (looks modular, bleeds historically), bleeding modules (no static graph
+available), and refactor boundaries (high containment + low external coupling, a safe
+zone for keyhole edits). Looks-coupled-but-never-co-changes is suppressed - the static
+graph already surfaces it.
 """
 from __future__ import annotations
 

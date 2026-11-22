@@ -64,6 +64,36 @@ imports times the same-stem sources. The scan runs once per index, on the
 first probe the name tiers could not answer.
 
 Inward-only: stdlib only; ``lib.sibling_tests`` imports it. Never raises.
+
+The import tier of the sibling-test probe (issue #485): a source counts as having
+a test file when a test file imports it, so a large test split by concern
+(`test_keyhole_<family>.py`, none named after `keyhole_signals.py`) still credits
+its subject. Reads only files that are tests by name and define a test (a
+top-level `test*` function, or a `Test*` class, `*TestCase` subclass or class
+with `test*` methods; an `it(` / `test(` / `describe(` call outside a
+line-leading comment), so a `conftest.py`, a helper module, or a `test_utils.py` that defines no
+test credits nothing. Python is parsed with `ast`: absolute names credit the
+source whose module path ends with the name (closest unique source to the test;
+a one-part name needs a common directory below the root unless the module sits
+at the root, and a one-part standard-library name such as `json` - from a pinned
+union over CPython 3.10-3.14 - never credits), relative imports resolve exactly, and `from pkg import mod` names
+`pkg/mod.py` when it exists, else `pkg/__init__.py`. JS/TS is a regex over
+relative specifiers only (`import ... from`, `export ... from`, side-effect and
+dynamic `import`, `require`; `import type` and line-leading comments skipped;
+string literals are not parsed; a NodeNext `./foo.js` specifier also resolves to
+`foo.ts`); alias and package
+specifiers keep the name match. A bats suite with an `@test` line (issue #593)
+credits the files it `source`s / `.`s / `load`s by a suite-anchored path
+(`$BATS_TEST_DIRNAME/...`, or a relative `load`, `.bash` appended tried first); a
+cwd-relative `source`, another variable, a glob, a single-quoted (literal) anchor or a
+load after a `#` comment credits nothing. All other
+languages keep the name match. Modules inside a test
+directory are support, never credited. Every module a qualifying test imports
+directly is credited. Runs lazily, once per `TestIndex`, over the index's test
+and source lists (so the same excludes and tracked-files rule apply), capped at
+10,000 test files of at most 1 MB in sorted order (measured: 0.2 s for this
+repo's 110 tests; 0.05 s for 272 TS tests in a 4,600-file monorepo). Stdlib only; never raises.
+Tests: `tests/test_import_credit.py`.
 """
 from __future__ import annotations
 

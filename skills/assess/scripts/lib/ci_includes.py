@@ -45,6 +45,44 @@ the include entries of the resolved files. Template text is never published.
 
 Deterministic for fixed checkouts: ``git show`` of committed content, records in
 walk order (file order, each nested include after its parent), no network. Read only (``GIT_OPTIONAL_LOCKS=0``).
+
+GitLab CI includes resolved offline (issue #766), read by `ci_checks` and
+`review_automation`. `include_items(text)` parses the top-level `include:` of a GitLab CI
+file into `IncludeItem(kind, source, files, ref, line)` (block list, single mapping,
+flow list or mapping, bare strings; `file:` as a scalar, flow list or block list) and
+says whether a section exists. `resolve_includes(repo_root, ghsync_root)` (cached per
+argument pair) walks the repository's `.gitlab-ci.yml`: `local:` from the work tree
+(`ref_basis: worktree`) or, inside a template, from the template's commit; `project:`
+from the clone `<ghsync_root>/<path>/<last>-main` with `git show <commit>:<file>` at
+`ref:` when the clone holds it (`ref_basis: ref`), at HEAD only with no `ref:` (`head`); a pin
+the clone does not hold, or no plain ref name (a CI variable), is `ref_missing`; `component:
+<host>/<project>/<name>@<v>` from `templates/<name>.yml` or `templates/<name>/template.yml`
+of the clone of `<project>`; `template:` / `remote:` are `not_offline`. Nested includes are
+walked to `MAX_DEPTH` (5) and `MAX_FILES` (50); a file already read is not read again (a
+cycle). Reads stay inside the checkout or clone: `..` or empty segments are `bad_path`, a ref
+that is not a plain ref name is never passed to git (`ref_missing`), a clone resolving
+outside the root (a symlink) is `not_cloned`.
+
+Resolved-include data shape (read by #746 opportunity insights and #796, the
+`--platform` CI lint pass): `Resolution.files` holds `IncludedFile(text, depth, line)` for
+the scans (`line` is the repository's own include line that led there; the text is never
+published), and `Resolution.includes` one `IncludeRecord` per item, published as
+`ci_checks.includes`:
+
+| field | value |
+|-------|-------|
+| `kind` | `local`, `project`, `component`, `template`, `remote` |
+| `id` | `gitlab_project:<path>` / `gitlab_component:<path>` (lowercased, the `shared_tooling` id); null for the other kinds. Kept in counts-only output (ID rule) |
+| `status` | `resolved`, or why not: `no_root` (no `--ghsync-root`), `not_cloned`, `file_missing`, `not_offline`, `glob`, `bad_path`, `depth_limit`, `file_limit`, `unparsed` (an `include:` entry naming no item this reader parses), `ref_missing` |
+| `ref_basis` | `ref`, `head`, `worktree`; null unless resolved |
+| `depth` | 1 for the repository's own include; nested records follow their parent |
+
+An item is resolved only when every file it names was read. `ci_checks` adds the
+`resolved_includes` / `unresolved_includes` counts; a consumer that needs "jobs this run
+could not read" reads `unresolved_includes > 0`. The root reaches the scan as the registry
+input `ghsync_root` (`run_setup.ghsync_root`: None in an interactive run; the headless
+`assess_signals --ghsync-root`, which `fleet.py` passes as its ROOT unless
+`--delete-after`). Tests: `tests/test_ci_includes.py`.
 """
 from __future__ import annotations
 

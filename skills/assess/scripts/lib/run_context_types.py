@@ -1,23 +1,19 @@
 """TypedDict shapes for the run-context.json rows the lib modules build.
 
-A shape lives here when a second ``lib/`` module builds or reads it (a broken
-doc link, a doc-to-code edge, a dead-code candidate, a bulk commit, a co-change
-pair, a keyhole block that ``context_blocks`` copies into the run-context), or
-when it belongs to the same run-context block as one that does: the
-``doc_graph``, ``dead_code`` and keyhole blocks keep every row shape together
-here, so a block is read in one place. The orchestrators' file shapes (the
-stats sidecar ``complexity-treemap.py`` writes, the ``finalize-input.json``
-``assess_finalize`` reads) also live here, which keeps those scripts under their
-file-size ceilings. Any other shape stays in the module that builds it. Typing
-them turns the shape from a docstring comment into a contract mypy checks at
-every construction site.
-
-These are annotations only. A TypedDict is a plain ``dict`` at runtime, so the
-serialised run-context is byte-identical to the untyped version.
-
-mypy runs with ``disallow_any_generics`` on for every script (``[tool.mypy]`` in
-``pyproject.toml``), so a bare ``dict`` fails the gate: a known shape belongs
-here or beside its builder, and ``JsonDict`` names a block whose keys vary.
+`TypedDict` shapes for run-context records a second `lib/` module builds or reads
+(broken links, doc-to-code edges, dead-code candidates, source trees, the raw-source
+and working-notes classifier signals, bulk commits, co-change pairs, B3 coupling rows,
+the keyhole blocks, derived findings and attention rows that `context_blocks` and
+`mutation_refresh` read back from `keyhole_signals`, and the `test_pressure` block),
+plus the other row shapes of the blocks those belong to: the `doc_graph`, `dead_code`,
+keyhole and `test_pressure` blocks keep all their rows here. The orchestrators' file
+shapes live here too, so those scripts stay under their file-size ceilings: the stats
+sidecar rows and blocks `complexity-treemap.py` writes, and the `finalize-input.json`
+and action-lifecycle shapes `assess_finalize.py` reads. `JsonDict` (`dict[str, Any]`)
+names a block whose keys are genuinely dynamic. Any other shape stays in the module
+that builds it. Annotations only: no runtime behaviour, so the serialised run-context
+is unchanged. mypy runs with `disallow_any_generics` on for every script
+(`pyproject.toml` `[tool.mypy]`), so a bare `dict` fails the gate.
 """
 from __future__ import annotations
 

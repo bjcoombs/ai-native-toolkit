@@ -30,6 +30,14 @@ here:
 ``build_repo_context`` reads the repository once; pass the context to every
 call. Without git, the symbol and gitignore checks are skipped (no evidence
 either way) and paths are checked against a filesystem walk.
+
+The repository-checked content signals of the grader: backticked path references that
+exist (and stale ones, with URLs, globs, placeholders, absolute paths, excluded trees,
+gitignored paths and `owner/repo`-shaped slugs left unchecked), backticked code symbols
+no other tracked file names (`git grep`, skipped outside git), directory-tree blocks,
+repository-overview headings and the share of lines repeated from the root README.
+`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Gitignored candidates go to `git check-ignore -z --stdin` as NUL-separated UTF-8 bytes (`surrogateescape` both ways), never text-mode stdin, so Windows newline translation and git's path quoting cannot hide a match. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
+`tests/test_instruction_content.py`.
 """
 from __future__ import annotations
 

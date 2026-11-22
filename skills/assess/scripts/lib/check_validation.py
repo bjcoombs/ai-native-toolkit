@@ -15,6 +15,15 @@ a human ``message``, and, where one applies, a ``suggestion`` (the closest valid
 and ``available`` (the valid names). The Go struct's ``line``, ``column``,
 ``resource_type`` and ``resource_id`` fields are not ported: TOML parse errors carry
 their own position, and ``path`` names the entry.
+
+Structured validation findings ported from meridianhub/meridian
+`services/control-plane/internal/validator/manifest_validator.go` (`ValidationError`,
+`findClosestMatch`, `levenshteinDistance`): a `ValidationError` TypedDict (`severity`
+`error` or `warning`, `path`, `code`, `message`, optional `suggestion` and `available`),
+`finding(...)` to build one, `format_error` (`[severity] path: message (suggestion: x)`),
+`errors_only`, `levenshtein` and `closest` (the nearest candidate within half the
+target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
+Meridian's distance and closest-match tables.
 """
 from __future__ import annotations
 

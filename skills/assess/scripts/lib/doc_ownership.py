@@ -31,6 +31,21 @@ Every base doc stays an ancestor in the walk, including one that owns no
 discovered code (its method is then a fallback). The treemap scores languages
 the doc-staleness discovery does not list, so a scored file under such a doc's
 directory is still that doc's, never handed to a doc further up.
+
+The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness.py` and
+`doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
+ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
+directory's code; a skill's `SKILL.md` is a base doc ranked just after `README.md`, so it
+owns its skill's subtree, #614), then a parallel `docs/` tree, explicit code links, and the empty
+`repo-baseline` subject. `subject_spec` records each doc's method and roots as
+repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
+`/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
+Staleness expands them over every discovered code file and exports each row's
+`subject_roots`, `base_doc_dir`, `subject_code_count` and up to `SUBJECT_PATHS_CAP`
+sorted `subject_paths`; the join expands the same roots over the scored files, so the cap
+never hides an owned file from it. Every base doc stays an ancestor in the walk, even one
+that owns no discovered code, because the treemap scores languages the staleness
+discovery does not list. Tests: `tests/test_doc_ownership.py`.
 """
 from __future__ import annotations
 

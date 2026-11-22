@@ -47,6 +47,19 @@ credit (``COMMAND_POINTS``, 12) for a command that would fail, so built-in lists
 stay exact. A path the repo keeps out of git by design (absolute, ``~`` or
 ``$VAR``-led, under an excluded tree such as ``.venv`` or ``node_modules``, or
 gitignored) is ``unknown``, never ``missing``.
+
+Extracts the shell commands an instruction file gives (shell-fenced blocks, and inline
+code that starts with a known runner) and checks each names a real target at HEAD without
+running it. Public API: `extract_commands(text) -> list[Command]`,
+`resolve(command, repo_root=None, *, index=None) -> Resolution` (verdict `resolved`,
+`missing`, `external` or `unknown`, plus a `reason`) and `build_index(repo_root)`. Covers npm / pnpm /
+yarn / bun scripts, npx, make, just, uv / poetry run, uvx, tox, nox, pytest, python, go,
+cargo, mvn and gradle, and script paths; an unmodelled runner resolves when a CI line runs
+it verbatim, else it is `external` when its program is a standard CLI in `EXTERNAL_TOOLS`
+(`gh`, `git`, `rg`, `jq`, `docker`, `kubectl`, `aws` and similar: real, but defined outside
+the repo, so never a finding, even with a `{PLACEHOLDER}` argument) and `unknown` ("unresolved: unknown runner") otherwise, which
+is no evidence either way. Independent of the grader so other checks (such as whether an instruction
+file names the repo's check command) can reuse it. Tests: `tests/test_command_resolver.py`.
 """
 from __future__ import annotations
 

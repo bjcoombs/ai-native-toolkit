@@ -44,6 +44,20 @@ The response's ``includes`` list, where the host sends one, gives the sources
 the merge pulled in: a ``component`` item's ``location``, or a ``file`` item's
 ``extra.project``. ``review_automation`` matches these the way it matches an
 ``include:`` entry.
+
+GitLab's merged CI configuration through the CI lint API (#796, #766 part 2): the private
+`network` spec `gitlab_merged_ci` (`read_merged_ci(repo_root, ghsync_root)`; offline the
+runner calls `no_merged_ci`, which reads nothing). Asked only when
+`ci_includes.resolve_includes` left an include unresolved (`not_needed` otherwise: a
+template resolved offline wins) and `gitlab_cli.open_gitlab` finds a GitLab remote
+(`not_gitlab` otherwise). One call, naming its target:
+`glab api --hostname <host> projects/<encoded>/ci/lint?content_ref=<HEAD sha>`, a GET (no
+file content uploaded), made with `cache=False` so the merged YAML never reaches the
+platform response cache (#778). `valid` true with a `merged_yaml` string is `read`; any
+other shape is `invalid`; a refusal is `unavailable` with the `GhUnavailable` reason code.
+`include_sources(includes)` reads the response's `includes` list (a `component` item's
+`location`, a `file` item's `extra.project`) for `review_automation`. Errors and warnings
+are never kept. Tests: `tests/test_gitlab_ci_lint.py`, `tests/test_platform_argv_contract.py`.
 """
 from __future__ import annotations
 
