@@ -7,6 +7,7 @@ boundary - it must NOT reproduce the LLM-only 0-8 score or Top 3 Actions.
 """
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 
@@ -611,6 +612,19 @@ def test_main_stdout_does_not_write_file(tmp_path: Path,
     assert not (tmp_path / ".assess" / "deterministic-report.md").exists()
     out = capsys.readouterr().out
     assert "# Deterministic Assessment Snapshot:" in out
+
+
+def test_main_stdout_is_utf8_under_a_cp1252_console(tmp_path: Path,
+                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Windows console is cp1252; the report's "·" must still reach a pipe as UTF-8."""
+    _seed_run_context(tmp_path, _full_ctx())
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252", newline="")
+    monkeypatch.setattr("sys.stdout", console)
+    monkeypatch.setattr("assess_report.render_report", lambda _ctx, _name: "Step 3 \u00b7 next\n")
+    assert main([str(tmp_path), "--stdout"]) == 0
+    console.flush()
+    assert raw.getvalue() == "Step 3 \u00b7 next\n".encode("utf-8")
 
 
 def test_main_no_args_usage_error(capsys: pytest.CaptureFixture) -> None:

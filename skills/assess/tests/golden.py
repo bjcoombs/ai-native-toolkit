@@ -127,4 +127,4 @@ def load_golden_run_context() -> dict[str, Any]:
 def load_golden_report() -> str:
     """Load the normalized golden ``assess-report`` baseline."""
     path = Path(__file__).parent / "fixtures" / "golden" / "assess-report-baseline.md"
-    return path.read_text()
+    return path.read_text(encoding="utf-8")
