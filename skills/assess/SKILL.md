@@ -387,6 +387,35 @@ With no mutation data the `--test-pressure` flag is a silent no-op, so the overl
 **On decline or no tool available:** continue with the cheap read intact - the assessment is complete without it. State in the report that the deep mutation pass was **not** run and why (declined, or no mutation tool for the language), so the Layer 1 read is honest about its depth rather than implying the focus files were proven well-tested.
 <!-- chat-skip:end -->
 
+### 2e: Confirm bot and agent accounts (first run)
+
+Pinned lists count only the unambiguous agent accounts (an agent app such as `claude[bot]`, a vendor address such as `noreply@anthropic.com`) and AI co-author trailers. Every other account that looks automated is **awaiting confirmation**: it counts as nothing until the human classifies it, and `ai_usage.identities_awaiting_confirmation` gives the number (a count, never a name). The answers live in a committed `[identities]` section of `.assess/config.toml`, so the level stays a function of the commit:
+
+```toml
+[identities]  # literal e-mails or logins, matched case-insensitively; never patterns
+agents = ["cursor@example.com"]                 # AI agents: their commits count as agent-authored
+bots = ["codecov[bot]", "renovate[bot]"]        # automation (dependency, coverage, release bots)
+people = ["ann@example.com"]                    # people: never counted as agents
+```
+
+An entry matches the author e-mail, the login a noreply address carries (`22429695+codecov[bot]@users.noreply.github.com` is `codecov[bot]`) or a `[bot]` display name. A confirmed class wins over every pinned rule, so a person named "Cursor" never counts unless confirmed as an agent. The same section in a `--fleet-config` file extends each repository's (lists append, #706).
+
+List the accounts awaiting confirmation (deterministic, never prompts, prints to the terminal only):
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/identity_candidates.py" "$REPO_ROOT" --window "$(jq -r .ai_usage.window "$REPO_ROOT/.assess/run-context.json")"   # add --json for a machine-readable list
+```
+
+Each line names the account, its commits and its evidence (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`, `agent_name_hint`, `automation_name_hint`, with `co_author_trailer`, `noreply_address` and `uniform_subjects` as supporting evidence). In an interactive run with at least one candidate, ask **one AskUserQuestion call** with one question per candidate (up to four per call; batch the rest), showing the evidence, with the options **AI agent**, **Automation bot** and **Person**. Record the answers, then re-run the core so `ai_usage` reads them:
+
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/identity_candidates.py" "$REPO_ROOT" --confirm agent=cursor@example.com --confirm bot=codecov[bot]
+```
+
+`--confirm` rewrites only the `[identities]` section of `.assess/config.toml`. Later runs list only accounts not yet classified. A headless or `--non-interactive` run never asks: state "N accounts awaiting confirmation" in the report as a next step, never as a score. Never copy a candidate's name or e-mail into the report, run-context, counts-only output or any other artifact; the listing is for the terminal and the config only.
+<!-- chat-skip:end -->
+
 ## Step 3: Score the Layers
 
 The deterministic core has written the data bus (`.assess/run-context.json`). Assigning each layer Present / Partial / Missing is judgement-heavy work that benefits from a fresh context window applying the layer methodology - so it runs as a dedicated unit, not inline here.

@@ -127,6 +127,10 @@ def coauthors_have_ai_assistant(coauthor_field: str) -> bool:
 #
 # 1. ``dependency_bot``: Renovate and Dependabot (``DEPENDENCY_BOT_RULES``),
 #    never an agent, whatever a config rule says;
+# 1a. ``other``: an account the human confirmed as an automation bot or a person
+#    (``[identities] bots`` / ``people``, #765), whatever a pinned rule or a
+#    config pattern says: a confirmed person never counts as an agent;
+# 1b. ``agent``: an account confirmed as an AI agent (``[identities] agents``);
 # 2. ``agent``: a config rule, in its order (the commit is credited to the first
 #    config rule that matches, so per-rule counts never double-count), then a
 #    pinned default (``AGENT_RULES``);
@@ -247,13 +251,57 @@ def _rule_matches(r: IdentityRule, email: str, username: str, name: str) -> bool
     return any(t and r.pattern.search(t[:MAX_MATCH_LENGTH]) for t in targets)
 
 
+def identity_keys(email: str = "", name: str = "", username: str | None = None) -> frozenset[str]:
+    """The lower-case forms a confirmed ``[identities]`` entry (#765) may name: the
+    e-mail, the login (given, or the one a noreply address carries) and a display
+    name only when it carries the reserved ``[bot]`` suffix (``codecov[bot]``)."""
+    email = email.strip()
+    if username is None:
+        username = username_from_email(email) or ""
+    keys = {email.lower(), username.strip().lower()}
+    if "[bot]" in name.lower():
+        keys.add(name.strip().lower())
+    return frozenset(k for k in keys if k)
+
+
+class ConfirmedIdentities(NamedTuple):
+    """``[identities]`` (#765) as lower-case literal sets. An entry is an exact
+    account, never a pattern, so ``codecov[bot]`` is not a character class."""
+
+    agents: frozenset[str] = frozenset()
+    bots: frozenset[str] = frozenset()
+    people: frozenset[str] = frozenset()
+
+    @classmethod
+    def from_section(cls, section: Mapping[str, object]) -> ConfirmedIdentities:
+        """From a validated ``[identities]`` table (lists of strings)."""
+        def norm(key: str) -> frozenset[str]:
+            values = section.get(key, ())
+            items = values if isinstance(values, (list, tuple)) else ()
+            return frozenset(v.strip().lower() for v in items if isinstance(v, str) and v.strip())
+        return cls(norm("agents"), norm("bots"), norm("people"))
+
+    def class_of(self, keys: frozenset[str]) -> Literal["agent", "bot", "person"] | None:
+        """The confirmed class of an identity, or None when unconfirmed. A person or
+        bot entry wins over an agent entry for the same account."""
+        if keys & self.people:
+            return "person"
+        if keys & self.bots:
+            return "bot"
+        if keys & self.agents:
+            return "agent"
+        return None
+
+
 class AuthorMatcher:
     """Classify authors into buckets with the pinned defaults plus config rules."""
 
     def __init__(self, config_rules: tuple[IdentityRule, ...] = (),
-                 token_users_as_agents: bool = False) -> None:
+                 token_users_as_agents: bool = False,
+                 confirmed: ConfirmedIdentities | None = None) -> None:
         self.config_rules = config_rules
         self.token_users_as_agents = token_users_as_agents
+        self.confirmed = confirmed or ConfirmedIdentities()
 
     def classify(self, email: str = "", name: str = "", username: str | None = None) -> AuthorClass:
         """The bucket of one identity. ``username`` defaults to the one ``email`` carries."""
@@ -262,6 +310,11 @@ class AuthorMatcher:
             username = username_from_email(email) or ""
         if any(_rule_matches(r, email, username, "") for r in DEPENDENCY_BOT_RULES):
             return AuthorClass(DEPENDENCY_BOT, None)
+        confirmed = self.confirmed.class_of(identity_keys(email, name, username))
+        if confirmed in ("bot", "person"):
+            return AuthorClass(OTHER, None)
+        if confirmed == "agent":
+            return AuthorClass(AGENT, None)
         for i, r in enumerate(self.config_rules):
             if _rule_matches(r, email, username, name):
                 return AuthorClass(AGENT, i)

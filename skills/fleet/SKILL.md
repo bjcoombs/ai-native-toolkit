@@ -519,6 +519,7 @@ One TOML file of fleet-wide lists and settings, with one section per consumer:
 [ai_usage]   # agent identities (#695)
 [review]     # AI review components in CI (#696)
 [platform]   # --platform settings (#714)
+[identities] # confirmed bot and agent accounts (#765)
 ```
 
 The sections are known and may be empty or left out. Each consumer adds its keys;
@@ -528,8 +529,20 @@ until it does, any key in a section is unknown and exits 2.
 |-----|---------|
 | `[review] ai_review_markers` | Strings an AI reviewer prints in its GitLab merge-request notes (a list; case-insensitive substrings). With `--platform`, a note carrying one counts as AI review in `review_reality.bot_review_share`, on top of the pinned markers (an "AI Code Review" heading, an HTML marker comment) and agent accounts. An access-token user's unmarked note is not review unless `[ai_usage] token_users_as_agents` or an identity rule makes it an agent: coverage, Danger and release bots post through tokens too. |
 | `[review] ai_review_components` | GitLab CI component or project paths, and GitHub `owner/repo` actions, that run an AI review in CI, beside the pinned list in `lib/review_automation.py` (#696). Compared lowercased with the host and `@version` dropped; a project path covers the components under it. Read by `review_automation`; a match reports `rule: config` and never the entry itself. |
+| `[identities] agents`, `bots`, `people` | Accounts the human confirmed (#765): literal e-mails or logins such as `codecov[bot]`, matched case-insensitively, never patterns. `agents` count as agent authors in `ai_usage`; `bots` and `people` never do, whatever a pinned rule says. The fleet lists extend each repository's own `[identities]` (`/assess` SKILL.md, Step 2e). |
 | `[platform] jobs` | Default for `--platform-jobs` (a whole number of at least 1); the flag wins. |
 | `[platform] timeout` | Default for `--platform-timeout`, in seconds; the flag wins. |
+
+**Confirming accounts across the fleet.** The rows carry only `ai_usage.identities_awaiting_confirmation`, a count. To see the accounts, run the listing over every repository at once; it never prompts and prints to the terminal only, aggregated by account with the commits summed and the repositories counted:
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/identity_candidates.py" --from-list repos.txt --fleet-config fleet.toml [--json]
+uv run "${CLAUDE_SKILL_DIR}/../assess/scripts/identity_candidates.py" --from-list repos.txt --confirm bot=codecov[bot] --config fleet.toml
+```
+<!-- chat-skip:end -->
+
+In an interactive session, ask one AskUserQuestion round over the aggregated list (AI agent, automation bot or person, with the evidence shown) and record the answers in the `--fleet-config` file with `--confirm ... --config`. The next run lists only accounts not yet classified. A headless fleet run never asks.
 
 The `[platform]` keys are read from the `--fleet-config` file only: the pass is fleet-wide, so a
 repository's own `[platform]` values have no effect.

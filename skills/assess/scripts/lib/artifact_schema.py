@@ -197,7 +197,10 @@ constant each.
 # signal (true at 50 percent or more, null when a counted gate's percentage is not
 # read). Additive: threshold and unit stay as written, and complexity-stats.json is
 # unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.31.0"
+# 1.32.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
+# #765): the window's accounts that look automated and are not yet classified in
+# the [identities] config section, a count with no identity. Additive.
+ARTIFACT_SCHEMA_VERSION = "1.32.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -315,4 +318,8 @@ ARTIFACT_SCHEMA_VERSION = "1.31.0"
 #     offline (issue #796): ``ci_checks.test_or_lint_runs`` reads true or false
 #     where it was null, and ``review_automation`` credits a review component the
 #     merge pulled in. Offline headless runs are unchanged.
-ASSESS_METHOD_VERSION = 27
+# 28: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
+#     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
+#     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
+#     or person never does. Without the section the counts are unchanged.
+ASSESS_METHOD_VERSION = 28
