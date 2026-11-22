@@ -78,7 +78,7 @@ Nothing found is `configured: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
-fails below it when coverage runs; `enforced_meets_minimum` (below) adds the run.
+fails below it when coverage runs; `enforced_meets_minimum` (`coverage_ci.py`) adds the run.
 JaCoCo `<maximum>` on a `MISSEDCOUNT` or `MISSEDRATIO` counter (and Gradle's `maximum =`
 beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_ratio`:
 its `threshold_percent` is null, so it reads unknown, never 0, and any such bound

@@ -40,10 +40,6 @@ one (files that keep co-changing in the same commit). Where they disagree about
 which files belong together is the signal: a declared boundary the import graph
 or the commit log has quietly split or fused.
 
-The suite pins label invariance directly (build communities, relabel them, assert
-identical metrics). Tier 1 also degrades to ``available: False`` when the static or
-historical lens is unavailable.
-
 The Layer 0 structure-drift signal, built entirely on `ownership_parser`'s parse + resolve
 primitives (it re-implements no parsing). A declaration is a self-description under no
 pressure to stay true: a directory is renamed, a module's files scatter, a pattern is
@@ -73,8 +69,9 @@ intersections of the three relations (human-vs-static splits/fuses, human-vs-coc
 the two agreement sets). Known-good architectural seams (the lib<->tests and standalone-build
 <->skills seams documented in `lib/README.md`) are an allowlist subtracted from the *denominator* - correct
 by construction, a seam can only suppress an owned boundary, never manufacture drift. Tier 1
-degrades to `available: False` reason `"no ownership map"` and emits its own `tier_1_available`
-field. `keyhole_signals.py` orchestrates Tier 1 (feeding it the behaviour block's already-parsed
+degrades to `available: False` reason `"no ownership map"`, or when the static or historical
+lens is unavailable, and emits its own `tier_1_available` field. The suite pins label
+invariance directly (build communities, relabel them, assert identical metrics). `keyhole_signals.py` orchestrates Tier 1 (feeding it the behaviour block's already-parsed
 co-change pairs) and folds the hidden-seam direction (`human_split_but_cochange`) into the
 existing `hidden_coupling` finding - a recurring directory pair, not the version hot-file's
 repo-wide couplings; `assess_core.py` serialises the Tier 0 + Tier 1 result into the

@@ -39,6 +39,6 @@ the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`,
 later Step keeps every gate of the one below and never lowers the threshold, or the load
 fails. A model without them loads exactly as before.
 Each level also carries `truth` (#843), and three additive fields ride along, all defined in
-`levels_fields.py` below. `load_levels` passes the file path to `parse_levels` (`source=`) so a
+`levels_fields.py`. `load_levels` passes the file path to `parse_levels` (`source=`) so a
 `MixedTruthError` names the model file. `LevelsError` and `MixedTruthError` are defined in
 `levels_fields.py` and re-exported here, so callers keep importing them from `lib.levels`.
