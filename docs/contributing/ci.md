@@ -20,6 +20,22 @@ The CI reference for `ai-native-toolkit`, moved out of the root `CLAUDE.md` so i
 
 `skills/assess/` and `scripts/` each commit a `uv.lock`, and CI installs from them with `uv run --locked`. The `Lockfiles match pyproject.toml` step in `ruff + mypy gates` runs `uv lock --check` in both packages and fails first on a stale lock, so a `pyproject.toml` edit without `uv lock` reads as a lock problem rather than a lint or type failure. A dependency edit commits the re-locked `uv.lock` in the same PR.
 
+## Generated files and goldens
+
+The schemas, the measures catalog, `references/counts-only.md` and the fixture goldens under `skills/assess/tests/fixtures/` are committed generator output. A test byte-compares each against a fresh build, so a stale copy fails CI. `.gitattributes` lists every one as `linguist-generated`, which also folds them out of GitHub diffs. When a PR changes a generator, a renderer or a report, expand the folded files in review: a golden such as the parity report or a team page is where the behaviour change shows.
+
+They conflict on most parallel merges. The recipe for a conflict in any of them, whichever files it touches:
+
+```bash
+git checkout --theirs -- <conflicted generated files>   # or --ours: either side works
+make regen
+git add -A && git commit
+```
+
+`make regen` (in the root `Makefile`) runs every generator in dependency order: the schema modules, `make catalog`, the counts-only document, the fixture builders and the renders built from them, then the goldens their tests rewrite under a `*_REGEN=1` variable. It takes about 30 seconds. It is POSIX-only: on Windows without `make`, run the `regen` recipe lines from the `Makefile` one by one in Git Bash. Never hand-merge a generated file; review the diff `make regen` leaves instead. The fleet golden needs ripgrep (`rg`); without it that step skips and leaves the file as it was.
+
+`tests/test_make_regen.py` (in `plugin contract pytest`) copies the tree, overwrites every `linguist-generated` file with a conflict, runs `make regen` and fails on any remaining diff. A new generated file therefore needs two edits: a `linguist-generated` line in `.gitattributes` and its generator in the `regen` recipe. A few goldens are frozen oracles that no current code may rewrite, so they are left out of both. Under `skills/assess/tests/fixtures/` (relative to the repository root): `structure_golden/` (written by the pre-#708 builder), the captured `/assess` run in `golden/run-context-baseline.json` and `golden/assess-report-baseline.md`, and `fleet_legacy/` (the pre-2.0.0 format). At the root: `tests/canaries/`.
+
 ## The type gate
 
 mypy runs `strict` over all of `skills/assess/scripts/` (lib, orchestrators, renderers) with `disallow_any_generics` on for every module and no per-module exception, so a bare `dict` or `list` fails. Known shapes are `TypedDict`s: shared run-context rows and the orchestrators' file shapes, the stats sidecar and `finalize-input.json`, live in `lib/run_context_types.py`; `dict[str, Any]` is for blocks whose keys genuinely vary.
