@@ -3678,9 +3678,10 @@ the built-in and `.assess/config.toml` excludes. Findings are `copilot-setup-ste
 constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `setup_ready` is the
-setup half of that cap on its own (committed setup, or every manifest locked, or
-no manifest). `pinning.manifests_total` counts the manifests the lock check reads
-and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
+setup half of that cap on its own (committed setup, or every counted manifest
+locked, or no manifest). The pinning rows and totals come from `pinning.py`.
+`pinning.manifests_total` counts the manifests the lock check reads (every row but
+a `skipped_library`) and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
 model reads `unlocked_total` `eq 0`, and reads not measured (`no_manifests`,
 `signal_grades.EMPTY_DENOMINATORS`, #927) when `manifests_total` is 0, so committed
 setup does not stand in for a lockfile and the named check is read once, by
@@ -3690,6 +3691,30 @@ network read, through `gh_cli` with a 10-second per-call cap: per-workflow
 median wall time of successful push runs on the default branch, or
 `{available: false, reason}`. Evidence only; it caps nothing.
 Tests: `tests/test_agent_environment.py`.
+
+**`pinning.py`**
+The `agent_environment.pinning` block, split from `agent_environment.py` (issue #927).
+`pin_rows(index, excludes)` gives one `PinRow` `{ecosystem, manifest, locked, lockfile,
+note}` per dependency manifest outside the built-in and `.assess/config.toml` excludes;
+`pinning_block(rows)` adds `all_locked`, `unlocked_total` and `manifests_total` over
+`counted(rows)`. Manifests and locks: `package.json`, `pyproject.toml`, `Pipfile`,
+`requirements*.txt` (its own lock when every line is pinned with `==`), `go.mod`,
+`Cargo.toml`, `Gemfile`, `composer.json`, `mix.exs` (`mix.lock`), `pubspec.yaml`
+(`pubspec.lock`), `conanfile.py` / `conanfile.txt` (`conan.lock`), each looked for beside
+the manifest and in its parents; `Package.swift` (`Package.resolved` beside it or under an
+`*.xcworkspace/xcshareddata/swiftpm/` in its directory, also inside an `.xcodeproj`);
+`*.csproj` / `*.fsproj` with a `PackageReference` (`packages.lock.json` beside the
+project); `build.gradle(.kts)` with a `dependencies` block (`gradle.lockfile` beside it,
+`settings-gradle.lockfile` or `gradle/verification-metadata.xml` at the root); `vcpkg.json`
+with dependencies (a `builtin-baseline` in the manifest itself). `note` is
+`skipped_library` for an unlocked Composer library (`type` `library` or absent), Pub
+package (no `publish_to: none`) or SwiftPM library (a `.library(` product): listed, not
+counted, so a repository of such libraries reads `no_manifests` until #827 gives not
+applicable. `direct_pins_only` marks an unlocked Gradle project beside
+`gradle/libs.versions.toml` or .NET project under a `Directory.Packages.props`: unlocked,
+and the condition's fix says to turn on dependency locking. The manifest text read for
+these decisions is never kept. Tests: `tests/test_pinning.py`,
+`tests/test_agent_environment.py`.
 
 **`check_command.py`**
 Pure classifier, split from `agent_environment.py` (issue #698) so an offline scan

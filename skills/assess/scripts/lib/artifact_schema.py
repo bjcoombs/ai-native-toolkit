@@ -291,6 +291,9 @@ constant each.
 # - run-context.json agent_environment.pinning gains manifests_total (issue #927):
 #   the number of dependency manifests the lockfile check reads. Additive: no
 #   existing key moves, and complexity-stats.json is unchanged.
+# - agent_environment.pinning.manifests[] rows gain note (issue #927 part B):
+#   skipped_library, direct_pins_only or null. A skipped_library row is listed
+#   but left out of manifests_total and unlocked_total. Additive.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -494,4 +497,11 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 # - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
 #   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
 #   read met. Fewer conditions count on repositories with no dependency manifest.
+# - the lockfile check reads Mix, Pub, SwiftPM, .NET, Gradle, vcpkg and Conan
+#   manifests (issue #927 part B). Libraries that by convention commit no lock
+#   (Composer type library, a published Pub package, a SwiftPM library) are
+#   left out of the count; a Gradle version catalog or NuGet central package
+#   management reads unlocked. layer-5-ci.2 can move from met to unmet on
+#   repositories with those manifests, and from unmet to not measured on
+#   library-only ones.
 ASSESS_METHOD_VERSION = 37
