@@ -289,7 +289,8 @@ basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_c
 enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
 environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
 Issue #926: a target whose recipe is not read (`_line_may_check`: `make foo`, `npm run
-foo`, `./scripts/foo.sh`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
+foo`, `./scripts/foo.sh`, and a `ci` name behind any runner, `named_check.unread_ci_target`,
+#951: `python ci.py`, `cargo ci`) reads `lint_basis` `check_target` too, as at Layer 5. A rewrite
 formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
 (`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
 gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
@@ -317,6 +318,7 @@ from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import (
     line_commands, line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated)
 from lib.ci_masking import unmasked_lines
+from lib.named_check import unread_ci_target
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
@@ -478,7 +480,7 @@ def _line_may_check(line: str, *, script_item: bool = True) -> bool:
     """One CI line whose target's recipe is not read, so it may run a check (#920):
     ``make foo``, ``npm run foo``, ``./scripts/foo.sh``, ``docker compose run app``."""
     bare_item = _BARE_ITEM.match(line) is not None
-    return any(may_check(c.text) and not is_info_invocation(c.text)
+    return any((may_check(c.text) or unread_ci_target(c.text)) and not is_info_invocation(c.text)
                and not (bare_item and not script_item and _lone_check(c.text))
                for c in line_commands(line))
 

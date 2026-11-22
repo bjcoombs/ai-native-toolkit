@@ -371,7 +371,7 @@
               "value": 0,
               "text": "Dependency manifests without a committed lockfile: is 0",
               "title": "Every dependency manifest has its lockfile",
-              "fix": "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests.",
+              "fix": "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests. A Gradle version catalog or NuGet central package management pins direct versions only: turn on dependency locking.",
               "input_class": "head_text",
               "grade": "declared",
               "counts": false
@@ -1137,7 +1137,7 @@
     {
       "name": "agent_environment",
       "title": "Agent working environment",
-      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs.",
+      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).",
       "collector": "core.agent_environment",
       "reads": [
         "repo_root",
@@ -1171,6 +1171,7 @@
           "agent_environment.pinning.manifests.ecosystem": "token",
           "agent_environment.pinning.manifests.lockfile": "path",
           "agent_environment.pinning.manifests.manifest": "path",
+          "agent_environment.pinning.manifests.note": "token",
           "agent_environment.reason": "drop",
           "agent_environment.setup.sources.detail": "drop",
           "agent_environment.setup.sources.kind": "token"

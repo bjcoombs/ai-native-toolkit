@@ -19,7 +19,7 @@ from lib.agent_consistency import check_commands
 from lib.agent_environment import scan_agent_environment
 from lib.check_command import check_verdict, is_check_name
 from lib.ci_checks import scan_ci_checks
-from lib.named_check import is_named_check, is_named_check_name
+from lib.named_check import is_named_check, is_named_check_name, unread_ci_target
 
 _CI_TARGETS = ["make ci", "just ci", "task ci", "npm run ci", "pnpm ci", "yarn ci", "bun run ci",
                "./ci.sh", "./scripts/ci.sh", "bash ci.sh"]
@@ -49,10 +49,31 @@ def test_installs_stay_false_and_check_named_ci_targets_stay_true(text: str, exp
     assert check_verdict(text) is expected
 
 
-@pytest.mark.parametrize("run", ["make ci", "npm run ci", "./ci.sh"])
+_RUNNER_CI = ["python ci.py", "python3 scripts/ci.py", "source ci.sh", "cargo ci",
+              "./gradlew ci", "gradle ci", "mvn ci", "./mvnw -B ci", "go ci"]
+
+
+@pytest.mark.parametrize("run", ["make ci", "npm run ci", "./ci.sh", *_RUNNER_CI])
 def test_a_lone_ci_target_in_ci_reads_not_measured(tmp_path: Path, run: str) -> None:
     """The issue's fixtures: Layer 5 level 1 and Layer 3 level 1 read null, never a false 0."""
     assert _scan(tmp_path, run) == (None, "check_target", None, "check_target")
+
+
+@pytest.mark.parametrize("text", _RUNNER_CI)
+def test_a_ci_name_behind_a_runner_is_an_unread_target(text: str) -> None:
+    """Read false by the CI vocabulary and true by the instruction one: the reading rests on
+    the name alone, so ``ci_checks`` treats it like ``./ci.sh`` (null), never as no check."""
+    assert unread_ci_target(text)
+
+
+@pytest.mark.parametrize("text", ["bun ci", "npm ci", "python build.py", "cargo build", "make ci",
+                                  "pytest", "./ci/deploy.sh", "mvn install"])
+def test_other_commands_are_not_unread_ci_targets(text: str) -> None:
+    assert not unread_ci_target(text)
+
+
+def test_a_masked_ci_name_behind_a_runner_still_reads_false(tmp_path: Path) -> None:
+    assert _scan(tmp_path, "cargo ci || true")[:2] == (False, "no_check_command")
 
 
 def test_a_ci_target_beside_pytest_reads_true(tmp_path: Path) -> None:

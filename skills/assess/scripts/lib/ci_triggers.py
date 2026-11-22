@@ -19,27 +19,36 @@ or a block list or mapping:
   ``issue_comment`` ...): ``not_ordinary``.
 - No ``on`` key, or one this reader cannot list: ``unknown``.
 
-GitLab CI, per job (a top-level key of the file):
+GitLab CI, per job (a top-level key of the file), read for a merge request pipeline
+and a branch push pipeline (``lib.gitlab_rules``); the job is ``ordinary`` when it
+runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwise:
 
-- ``when: manual`` or ``when: never`` on the job: ``not_ordinary``.
-- ``only:`` as a scalar or list: ``ordinary`` when it names ``branches``,
-  ``merge_requests``, ``pushes`` or a branch name; ``not_ordinary`` when it names
+- ``rules:``: the first matching rule decides, with ``when: never``, ``manual`` and
+  ``on_failure`` as no run, and the job-level ``when:`` as each rule's default. ``if:``
+  expressions are evaluated (``&&``, ``||``, parentheses, ``!``, ``==`` / ``!=`` /
+  ``=~`` / ``!~``), so ``$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH ==
+  $CI_DEFAULT_BRANCH`` and ``$CI_COMMIT_TAG && $CI_COMMIT_BRANCH == null`` run in
+  neither (#884). A custom variable or an expression not read is ``unknown``; so is
+  ``rules:`` given inline (``!reference``, an anchor) and a rule whose plain ``if:``
+  continues on the next line.
+- ``when: manual``, ``never`` or ``on_failure`` on a job without ``rules:``:
+  ``not_ordinary``.
+- ``only:`` as a scalar or list: merge requests when it names ``merge_requests``,
+  branch pushes when it names ``branches``, ``pushes`` or a branch name; it names
   only ``tags``, ``schedules``, ``web``, ``triggers``, ``api``, ``pipelines``,
-  ``external`` or ``chat``. The map form (``only: {refs: ...}``) reads its
+  ``external`` or ``chat``: neither. The map form (``only: {refs: ...}``) reads its
   ``refs``; anything else is ``unknown``.
-- ``rules:``: a rule that runs (``when`` is not ``never`` or ``manual``) whose
-  ``if:`` is absent or names a merge request or branch variable
-  (``CI_PIPELINE_SOURCE == "merge_request_event"`` / ``"push"``,
-  ``CI_MERGE_REQUEST_*``, ``CI_COMMIT_BRANCH``, ``CI_DEFAULT_BRANCH``,
-  ``CI_COMMIT_REF_NAME``, ``CI_OPEN_MERGE_REQUESTS``) makes the job
-  ``ordinary``. With none, a running rule whose ``if:`` names anything else
-  except a schedule, web, trigger or api source or ``CI_COMMIT_TAG`` makes it
-  ``unknown``; otherwise ``not_ordinary``.
-- No such key: ``ordinary``. Lines outside a job (``default:``, a top-level
-  ``before_script:``) are ``ordinary``.
+- No such key: branch pushes, and merge requests too when ``workflow: rules:`` exists.
+- A top-level ``workflow: rules:`` decides which of the two pipelines GitLab creates,
+  with the same reader; a job runs only in a pipeline that is created.
+- Lines outside a job (``default:``, a top-level ``before_script:``) are ``ordinary``
+  when ``workflow: rules:`` (if any) creates either pipeline.
+- A job limited to some branches inside a workflow limited to some branches is
+  ``unknown``: the two limits are not compared.
 
 Known limits: rules and ``when`` inherited through ``extends:``, ``default:``
-or a YAML anchor are not read, nor a top-level ``workflow: rules:``; hidden
+or a YAML anchor are not read, nor ``except:``; ``workflow: rules:`` is read only
+in the file that holds it, not across ``include:``; hidden
 jobs (``.name:``) are read like any job; GitHub branch and path filters and
 ``if:`` conditions are not read here (a literal ``if: false`` is a mask in
 ``lib.ci_masking``, #919). Only a workflow file directly under
@@ -70,6 +79,7 @@ from collections.abc import Iterable
 from typing import Literal
 
 from lib.ci_masking import IndentTree, parse_lines, strip_comment
+from lib.gitlab_rules import CONTEXTS, Context, Outcome, Rule, outcome
 
 Trigger = Literal["ordinary", "not_ordinary", "unknown"]
 WorkflowTrigger = Literal["ordinary", "not_ordinary", "unknown", "called"]
@@ -83,11 +93,6 @@ _GITLAB_RESERVED = frozenset({
     "before_script", "after_script",
 })
 _SPECIAL_ONLY = frozenset({"tags", "schedules", "web", "triggers", "api", "pipelines", "external", "chat"})
-_ORDINARY_IF = re.compile(
-    r"CI_PIPELINE_SOURCE\s*==\s*['\"](?:merge_request_event|push)['\"]|CI_MERGE_REQUEST_\w+|"
-    r"CI_COMMIT_BRANCH|CI_DEFAULT_BRANCH|CI_COMMIT_REF_NAME|CI_OPEN_MERGE_REQUESTS")
-_SPECIAL_IF = re.compile(
-    r"^\s*(?:\$CI_PIPELINE_SOURCE\s*==\s*['\"](?:schedule|web|trigger|api)['\"]|\$CI_COMMIT_TAG)\s*$")
 
 
 def _names(text: str) -> list[str]:
@@ -186,9 +191,13 @@ def resolve_workflows(triggers: dict[str, WorkflowTrigger], texts: dict[str, str
     return settled
 
 
-def _only_trigger(tree: IndentTree, key: int) -> Trigger:
+_Outcomes = dict[Context, Outcome]
+
+
+def _only_outcomes(tree: IndentTree, key: int) -> _Outcomes:
     line = tree.lines[key]
     values: list[str]
+    unknown: _Outcomes = {c: "unknown" for c in CONTEXTS}
     if line.value:
         values = _names(line.value)
     else:
@@ -200,54 +209,96 @@ def _only_trigger(tree: IndentTree, key: int) -> Trigger:
         elif children and all(tree.lines[k].dash and not tree.lines[k].key for k in children):
             values = [tree.lines[k].value.strip("'\"") for k in children]
         else:
-            return "unknown"
+            return unknown
     if not values:
-        return "unknown"
-    return "not_ordinary" if all(v in _SPECIAL_ONLY for v in values) else "ordinary"
+        return unknown
+    named = [v for v in values if v not in _SPECIAL_ONLY and v != "merge_requests"]
+    push: Outcome = "yes" if {"branches", "pushes"} & set(named) else "some" if named else "no"
+    return {"merge_request": "yes" if "merge_requests" in values else "no", "push": push}
 
 
-def _rules_trigger(tree: IndentTree, key: int) -> Trigger:
-    unknown = False
-    for item in tree.items(key):
+def _rules(tree: IndentTree, key: int) -> list[Rule] | None:
+    """The items of a ``rules:`` key, or None when it is not a block list read here."""
+    if tree.lines[key].value:
+        return None
+    items = tree.items(key)
+    if not items or not all(tree.lines[item[0]].dash for item in items):
+        return None
+    rules: list[Rule] = []
+    for item in items:
         fields = {tree.lines[k].key: tree.lines[k].value for k in item}
-        if fields.get("when", "").strip("'\"") in ("never", "manual"):
-            continue
-        condition = fields.get("if")
-        if condition is None or _ORDINARY_IF.search(condition):
-            return "ordinary"
-        bare = condition.strip()
-        if len(bare) > 1 and bare[0] == bare[-1] and bare[0] in "'\"":
-            bare = bare[1:-1]
-        if not _SPECIAL_IF.match(bare):
-            unknown = True
-    return "unknown" if unknown else "not_ordinary"
+        # A plain scalar continued on the next line (``if: $A == "push"`` then ``&& $B``)
+        # parses as a keyless child: the rule is not read whole, so it is unread.
+        if any(tree.lines[k].key in ("if", "when") and tree.children(k) for k in item):
+            fields[""] = "continued"
+        rules.append(Rule(fields))
+    return rules
 
 
-def _job_trigger(tree: IndentTree, job: int) -> Trigger:
+def _rules_outcomes(tree: IndentTree, key: int, default_when: str = "on_success") -> _Outcomes:
+    rules = _rules(tree, key)
+    if rules is None:
+        return {c: "unknown" for c in CONTEXTS}
+    return {c: outcome(rules, c, default_when) for c in CONTEXTS}
+
+
+def _job_outcomes(tree: IndentTree, job: int, workflow_rules: bool) -> _Outcomes:
     keys = {tree.lines[k].key: k for k in tree.children(job)}
     when = tree.lines[keys["when"]].value.strip("'\"") if "when" in keys else ""
-    if when in ("manual", "never"):
-        return "not_ordinary"
     if "rules" in keys:
-        return _rules_trigger(tree, keys["rules"])
+        return _rules_outcomes(tree, keys["rules"], when or "on_success")
+    if when in ("manual", "never", "on_failure"):
+        return {c: "no" for c in CONTEXTS}
     if "only" in keys:
-        return _only_trigger(tree, keys["only"])
-    return "ordinary"
+        return _only_outcomes(tree, keys["only"])
+    # No rules: the default ``only: [branches, tags]`` leaves merge request pipelines out, unless
+    # ``workflow: rules:`` creates them; then the job runs there too (merge_request_pipelines docs).
+    return {"merge_request": "yes" if workflow_rules else "no", "push": "yes"}
+
+
+def _workflow_outcomes(tree: IndentTree) -> _Outcomes | None:
+    """Which ordinary pipelines a top-level ``workflow: rules:`` lets GitLab create."""
+    for i, line in enumerate(tree.lines):
+        if line.structural and line.level == 0 and line.key == "workflow":
+            rules = [k for k in tree.children(i) if tree.lines[k].key == "rules"]
+            if rules:
+                return _rules_outcomes(tree, rules[0], "always")
+    return None
+
+
+def _trigger(job: _Outcomes, workflow: _Outcomes) -> Trigger:
+    both: list[Outcome] = []
+    for c in CONTEXTS:
+        pair = (job[c], workflow[c])
+        if "no" in pair:
+            both.append("no")
+        elif "unknown" in pair or pair == ("some", "some"):
+            # Two branch limits may never meet (workflow on main, job on release): not read.
+            both.append("unknown")
+        else:
+            both.append("yes")
+    if "yes" in both:
+        return "ordinary"
+    return "unknown" if "unknown" in both else "not_ordinary"
 
 
 def gitlab_line_triggers(text: str) -> list[Trigger]:
     """Per line of one GitLab CI file: does the job holding it run on ordinary pipelines?"""
     tree = IndentTree(parse_lines(text.splitlines()))
+    workflow = _workflow_outcomes(tree)
+    created: _Outcomes = workflow or {c: "yes" for c in CONTEXTS}
+    # default: and a top-level before_script: run with the jobs, in the pipelines created.
+    outside = _trigger({c: "yes" for c in CONTEXTS}, created)
     jobs: dict[int, Trigger] = {}
     out: list[Trigger] = []
     for i in range(len(tree.lines)):
         ancestors = tree.ancestors(i)
         top = ancestors[-1] if ancestors else None
         if top is None or tree.lines[top].level != 0 or tree.lines[top].key in _GITLAB_RESERVED:
-            out.append("ordinary")
+            out.append(outside)
             continue
         if top not in jobs:
-            jobs[top] = _job_trigger(tree, top)
+            jobs[top] = _trigger(_job_outcomes(tree, top, workflow is not None), created)
         out.append(jobs[top])
     return out
 
