@@ -33,8 +33,23 @@ How a gate is run, by where it is written:
   ``[tool:pytest]``, ``[tool.pytest.ini_options]``) is ``addopts``, run by any
   ``pytest`` line with pytest-cov on (``--cov`` there or in ``addopts``); a ``tox.ini`` ``[testenv]`` ``commands`` line is a task command.
 - A task-runner file (``Makefile``, ``tox.ini`` commands, ``package.json``
-  scripts, ``justfile``, ``noxfile.py``, ...): CI reaches it only through a
-  target, whose recipe this scan does not follow.
+  scripts, ``justfile``, ``noxfile.py``, ...) or a hatch, pdm or poe script section of
+  ``pyproject.toml`` (#954): CI reaches it only through a target or script, whose
+  recipe this scan does not follow (``indirect_run`` when CI runs one, ``hatch run``,
+  ``pdm run`` and ``poe`` included).
+
+#954 edge cases. A CI line's gate is credited only to the run whose own flag carries
+its threshold (``echo --cov-fail-under=90 && pytest --cov --cov-fail-under=10``
+enforces 10), and one gate is read per ``--cov-fail-under`` on a line. ``--no-cov``
+turns pytest-cov off wherever it stands, on the line or in ``addopts``
+(``--no-cov-on-fail`` does not). A Gradle task named with ``-x`` / ``--exclude-task``
+is not run (``check -x jacocoTestCoverageVerification`` reads false; ``-x check``
+stops a wired ``check`` crediting it), and a dry run (``-m``, ``--dry-run``,
+``--task-graph``) runs nothing. Coverage switched on in config (pytest ``addopts``,
+Jest ``collectCoverage: true``) is keyed by the config's directory
+(``lib.coverage_activation``): it switches on a config gate in that directory or below,
+never a sibling package's, and a gate on a CI line reads it from the root, with a
+package-only ``addopts`` reading ``indirect_run``.
 
 Unknown beats wrong. A gate reads null (not false) when the line or tool run
 sits in a workflow or job whose triggers are not settled (``unknown_trigger``),
@@ -101,13 +116,16 @@ action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known lim
 GitHub step and job `if:`, branch filters, matrix values and composite-action
 internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
 phase reads null. A run whose own flag overrides the config threshold
-(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate. On a scoped run,
+(`coverage report --fail-under=10` beside `fail_under = 80`) still credits the config gate.
+A root `addopts` or `collectCoverage: true` switches on a package's gate, though a run at
+the root has coverage.py read the root config; Gradle's `check` wiring is still read once
+per repository; a package `addopts` `--no-cov` does not stop a CI-line gate. On a scoped run,
 any enforced run of the tool anywhere in the repository credits the scope's config gate
 (`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
 runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
-`lib.command_index`, `lib.command_resolver`, `lib.check_command` and
-`lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
-Tests: `tests/test_coverage_ci.py`.
+`lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.coverage_activation`
+and `lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
+Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954).
 """
 from __future__ import annotations
 
@@ -119,6 +137,7 @@ from typing import Literal, TypeVar
 
 from lib.check_command import _exec_program, _info_program, is_info_invocation, may_lint
 from lib.ci_masking import unmasked_lines
+from lib.coverage_activation import Activation, covers
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
@@ -334,6 +353,53 @@ def cov_enabled(args: Iterable[str]) -> bool:
     return any(w == "--cov" or w.startswith("--cov=") for w in args)
 
 
+def cov_disabled(args: Iterable[str]) -> bool:
+    """``--no-cov`` turns pytest-cov off wherever it stands (``--no-cov-on-fail`` only
+    skips the report on a failure)."""
+    return "--no-cov" in args
+
+
+_GRADLE_DRY_RUN = frozenset({"-m", "--dry-run", "--task-graph"})
+_GRADLE_EXCLUDE = ("-x", "--exclude-task")
+_VERIFY = "jacocoTestCoverageVerification"
+
+
+def gradle_tasks(args: Sequence[str]) -> tuple[list[str], set[str]]:
+    """``(tasks run, tasks excluded)`` of a Gradle command, each by its last path part
+    (``:app:check`` is ``check``); a word after ``-x`` / ``--exclude-task`` (or its ``=``
+    form) is excluded, not run."""
+    tasks: list[str] = []
+    excluded: set[str] = set()
+    skip = False
+    for word in args:
+        if skip:
+            excluded.add(word.rsplit(":", 1)[-1])
+            skip = False
+        elif word in _GRADLE_EXCLUDE:
+            skip = True
+        elif word.startswith("--exclude-task="):
+            excluded.add(word.partition("=")[2].rsplit(":", 1)[-1])
+        elif not word.startswith("-"):
+            tasks.append(word.rsplit(":", 1)[-1])
+    return tasks, excluded
+
+
+def gradle_runs_nothing(words: tuple[str, ...]) -> bool:
+    """A Gradle dry run (``-m``, ``--dry-run``, ``--task-graph``) executes no task."""
+    name, args = program(words)
+    return name in ("gradle", "gradlew") and bool(_GRADLE_DRY_RUN & set(args))
+
+
+def gradle_skips_verification(words: tuple[str, ...]) -> bool:
+    """A Gradle command that runs no JaCoCo verification: a dry run, or one that
+    excludes the verification task with ``-x`` (Gradle skips an excluded task even when
+    another task depends on it). ``-x check`` only stops ``check`` crediting it."""
+    name, args = program(words)
+    if name not in ("gradle", "gradlew"):
+        return False
+    return gradle_runs_nothing(words) or _VERIFY in gradle_tasks(args)[1]
+
+
 def coverage_flag(args: Iterable[str]) -> bool | None:
     """Jest / Vitest ``--coverage`` as given: True for ``--coverage``, ``--coverage=true``
     or ``--coverage.enabled[=true]``, False for ``=false``, None when absent
@@ -346,7 +412,8 @@ def coverage_flag(args: Iterable[str]) -> bool | None:
 
 
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
-              jest_collects: bool = False, gradle_check: bool = False) -> bool | None:
+              jest_collects: bool = False, gradle_check: bool = False,
+              pytest_off: bool = False) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config), or a Gradle task
@@ -358,8 +425,10 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     if family in ("coverage.py", "pytest"):
         if name in ("pytest", "py.test"):
             # Either family gates only with pytest-cov on: ``--cov`` on the line or in
-            # ``addopts``. An ``addopts`` threshold with no ``--cov`` anywhere checks nothing.
-            return pytest_cov or cov_enabled(args)
+            # ``addopts``. An ``addopts`` threshold with no ``--cov`` anywhere checks nothing,
+            # and ``--no-cov`` turns it off (#954).
+            return ((pytest_cov or cov_enabled(args)) and not pytest_off
+                    and not cov_disabled(args))
         return (family == "coverage.py" and name == "coverage"
                 and bool(args) and args[0] in _COVERAGE_REPORTS)
     if family in ("jest", "vitest"):
@@ -374,12 +443,12 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     if family == "maven-jacoco":
         return name in ("mvn", "mvnw") and bool(_MAVEN_PHASES & set(args))
     if family == "gradle-jacoco":
-        if name not in ("gradle", "gradlew"):
-            return False
-        tasks = [w.rsplit(":", 1)[-1] for w in args if not w.startswith("-")]
-        if "jacocoTestCoverageVerification" in tasks:
+        if name not in ("gradle", "gradlew") or gradle_skips_verification(words):
+            return False   # #954: a dry run, or -x jacocoTestCoverageVerification
+        tasks, excluded = gradle_tasks(args)
+        if _VERIFY in tasks:
             return True
-        if gradle_check and {"build", "check"} & set(tasks):
+        if gradle_check and {"build", "check"} & set(tasks) and "check" not in excluded:
             return True
         return None
     if family == "go-test-coverage":
@@ -422,38 +491,63 @@ def _merge(states: Iterable[bool | None | str]) -> bool | str:
     return min(reasons, key=_NULL_ORDER.index) if reasons else False
 
 
-def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool = False,
-             jest_collects: bool = False, gradle_check: bool = False,
-             pytest_lines: frozenset[tuple[str, int]] = frozenset()) -> bool | str:
+def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
+             activation: Activation = Activation()) -> bool | str:
     """True when an enforced CI line runs ``gate``; a null reason token when that cannot be
-    told; False when CI is read and does not."""
+    told; False when CI is read and does not. ``activation`` switches coverage on for a
+    config gate only from the gate's directory or one above it (#954)."""
     file = str(gate["file"])
-    family = gate_family(gate, pytest_lines)
+    family = gate_family(gate, activation.pytest_lines)
     if file in ci.ci_files:
-        states: list[bool | None | str] = []
-        for run in ci.runs:
-            if run.file != file or _line(gate) - 1 not in run.span:
-                continue
-            carried = runs_a_program(run.words) and _activates(gate, run.words, pytest_cov) and any(
-                g["tool"] == gate["tool"] and g["form"] == gate["form"]
-                for g in line_gates(" ".join(run.words)))
-            if carried:
-                states.append(True if run.trigger == "ordinary"
-                              else "unknown_trigger" if run.trigger == "unknown" else False)
-        found = _merge(states)
-    elif file.rsplit("/", 1)[-1] in _TASK_FILES and family is None:
+        found = _line_gate_run(gate, ci, line_gates, activation)
+    elif family is None and (file.rsplit("/", 1)[-1] in _TASK_FILES
+                             or (file, _line(gate)) in activation.script_lines):
+        # A hatch / pdm / poe script in pyproject.toml is a task too (#954).
         found = _indirect(ci)
     elif family is None:
         # A CI system or composite action this module does not read.
         found = "unread_ci_system"
     else:
-        found = _merge([_tool_state(run, family, pytest_cov, jest_collects, gradle_check)
-                        for run in ci.runs] + [_indirect(ci)])
+        pytest_cov = covers(activation.pytest_cov, file)
+        jest_collects = covers(activation.jest_collects, file)
+        off = covers(activation.pytest_off, file)
+        found = _merge([_tool_state(run, family, pytest_cov, jest_collects,
+                                    activation.gradle_check, off)
+                        for run in ci.runs] + [_indirect(ci, family)])
     if found is False and ci.elsewhere:
         return "included_jobs"
     if found is False and ci.unread:
         return "unread_ci_system"
     return found
+
+
+def _line_gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
+                   activation: Activation) -> bool | str:
+    """A gate written on a CI line: an enforced run there must carry the flag with the
+    gate's own threshold (``echo --cov-fail-under=90 && pytest --cov --cov-fail-under=10``
+    enforces 10, never 90, #954). A root ``addopts`` ``--cov`` switches a bare ``pytest``
+    run on; one only in a package's ``addopts`` reads ``indirect_run``, because the
+    directory the CI line runs in is not resolved. A root ``addopts`` ``--no-cov`` turns
+    every ``pytest`` run off."""
+    cov_dirs = activation.pytest_cov
+    off = "" in activation.pytest_off
+    states: list[bool | None | str] = []
+    for run in ci.runs:
+        if run.file != gate["file"] or _line(gate) - 1 not in run.span:
+            continue
+        if not runs_a_program(run.words) or not any(
+                g["tool"] == gate["tool"] and g["form"] == gate["form"]
+                and g["threshold"] == gate["threshold"]
+                for g in line_gates(" ".join(run.words))):
+            continue
+        if off and gate["tool"] == "pytest-cov" and program(run.words)[0] in ("pytest", "py.test"):
+            continue
+        if _activates(gate, run.words, "" in cov_dirs):
+            states.append(True if run.trigger == "ordinary"
+                          else "unknown_trigger" if run.trigger == "unknown" else False)
+        elif cov_dirs and _activates(gate, run.words, True) and run.trigger != "not_ordinary":
+            states.append("indirect_run" if run.trigger == "ordinary" else "unknown_trigger")
+    return _merge(states)
 
 
 def _activates(gate: Gate, words: tuple[str, ...], pytest_cov: bool) -> bool:
@@ -463,13 +557,13 @@ def _activates(gate: Gate, words: tuple[str, ...], pytest_cov: bool) -> bool:
     name, args = program(words)
     if gate["tool"] != "pytest-cov" or name not in ("pytest", "py.test"):
         return True
-    return pytest_cov or cov_enabled(args)
+    return (pytest_cov or cov_enabled(args)) and not cov_disabled(args)
 
 
 def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
-                gradle_check: bool = False) -> bool | None | str:
+                gradle_check: bool = False, pytest_off: bool = False) -> bool | None | str:
     state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects,
-                      gradle_check=gradle_check)
+                      gradle_check=gradle_check, pytest_off=pytest_off)
     if state is False or run.trigger == "not_ordinary":
         return False
     if run.trigger == "unknown":
@@ -477,25 +571,35 @@ def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
     return True if state else "indirect_run"
 
 
-def _indirect(ci: CiRuns) -> bool | str:
+def _indirect(ci: CiRuns, family: str | None = None) -> bool | str:
     """``indirect_run`` when an enforced CI line runs a check target or script whose recipe
-    this scan does not follow (``unknown_trigger`` when its triggers are not settled)."""
+    this scan does not follow (``unknown_trigger`` when its triggers are not settled). A
+    Gradle dry run runs nothing, and for a JaCoCo Gradle gate neither does a run that
+    excludes the verification (#954)."""
     return _merge(("indirect_run" if run.trigger == "ordinary" else "unknown_trigger")
                   for run in ci.runs if run.trigger != "not_ordinary"
-                  and (may_lint(run.text) or coverage_target(run.words)))
+                  and (may_lint(run.text) or coverage_target(run.words))
+                  and not gradle_runs_nothing(run.words)
+                  and not (family == "gradle-jacoco" and gradle_skips_verification(run.words)))
 
 
 _TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "invoke", "nox", "tox"})
+# Python task runners whose any script may run the gate, as ``may_lint`` reads ``hatch run``.
+_PY_SCRIPT_RUNNERS = frozenset({"pdm", "poe"})
 _SCRIPT_RUNNERS = frozenset({"npm", "yarn", "pnpm", "bun"})
 
 
 def coverage_target(words: tuple[str, ...]) -> bool:
     """A runner target or package script named for coverage (``make coverage``, ``make
-    cov``, ``npm run coverage``, ``just coverage``): it may run the gate inside it."""
+    cov``, ``npm run coverage``, ``just coverage``), or any ``pdm run`` script or ``poe``
+    task (#954, as ``may_lint`` reads any ``hatch run`` script): it may run the gate."""
     if not words:
         return False
     name = words[0].rsplit("/", 1)[-1]
     positionals = [w for w in words[1:] if not w.startswith("-")]
+    if name in _PY_SCRIPT_RUNNERS:   # pdm run <script>, poe <task>: the recipe is not read
+        return bool(positionals[1:2] if name == "pdm" and positionals[:1] == ["run"]
+                    else positionals[:1] if name == "poe" else [])
     if name in _SCRIPT_RUNNERS and positionals[:1] == ["run"]:
         positionals = positionals[1:]
     elif name not in _TARGET_RUNNERS | _SCRIPT_RUNNERS:
@@ -505,9 +609,7 @@ def coverage_target(words: tuple[str, ...]) -> bool:
 
 def enforced_meets_minimum(
         gates: Sequence[G], threshold: bool | None, ci: CiRuns, line_gates: LineGates, *,
-        counted: Callable[[G], bool], minimum: float, pytest_cov: bool = False,
-        jest_collects: bool = False, gradle_check: bool = False,
-        pytest_lines: frozenset[tuple[str, int]] = frozenset()
+        counted: Callable[[G], bool], minimum: float, activation: Activation = Activation()
         ) -> tuple[bool | None, EnforcedBasis]:
     """``(enforced_meets_minimum, enforced_basis)``: ``threshold`` is
     ``threshold_meets_minimum``. A false or null threshold stays false or null; a true one
@@ -522,8 +624,7 @@ def enforced_meets_minimum(
         percent = gate["threshold_percent"]
         if not counted(gate) or (isinstance(percent, (int, float)) and percent < minimum):
             continue
-        state = gate_run(gate, ci, line_gates, pytest_cov=pytest_cov, pytest_lines=pytest_lines,
-                         jest_collects=jest_collects, gradle_check=gradle_check)
+        state = gate_run(gate, ci, line_gates, activation)
         if state is True and percent is not None:
             return True, "ci_run"
         if isinstance(state, str):
