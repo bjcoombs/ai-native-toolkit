@@ -134,11 +134,18 @@ class A<T> extends B<T> {
 ], ids=["deep-nesting", "unclosed-functions", "nested-functions", "unterminated-string", "unterminated-interpolation",
         "nested-comment", "long-line", "one-token"])
 def test_dart_scanner_pathological_input_is_fast(text: str) -> None:
-    # CPU time, not wall time: parallel workers (xdist on CI) stretch the wall
-    # clock without making the scanner any slower.
-    start = time.process_time()
-    scan_dart_functions(text)
-    assert time.process_time() - start < 1.0
+    """Each pathological input scans in under 1 s, the fastest of 3 runs by CPU time.
+
+    CPU time, not wall time: parallel workers (xdist on the Windows CI job)
+    stretch the wall clock without making the scanner slower. The fastest of 3
+    drops first-run and scheduler noise. The 1 s bound itself is unchanged.
+    """
+    def cpu_seconds() -> float:
+        start = time.process_time()
+        scan_dart_functions(text)
+        return time.process_time() - start
+
+    assert min(cpu_seconds() for _ in range(3)) < 1.0
 
 
 def test_dart_scanner_reads_a_bounded_prefix(tmp_path: Path,

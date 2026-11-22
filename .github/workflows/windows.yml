@@ -246,6 +246,8 @@ jobs:
         shell: bash
         working-directory: skills/assess
         run: |
+          # Deliberately mixed: widget by its checkout dir, gadget by its repository
+          # dir. --from-list accepts both forms and both must map to acme/<name>.
           printf '%s\n' "$RUNNER_TEMP/estate/acme/widget/widget-main" "$RUNNER_TEMP/estate/acme/gadget" \
             > "$RUNNER_TEMP/fleet-list.txt"
           uv run --locked --python 3.11 python ../fleet/scripts/fleet.py --from-list "$RUNNER_TEMP/fleet-list.txt" \
