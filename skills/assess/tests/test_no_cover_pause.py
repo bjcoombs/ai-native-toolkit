@@ -22,3 +22,9 @@ def test_coverage_resumes_after_a_no_cover_test(request: pytest.FixtureRequest) 
     if not request.config.pluginmanager.hasplugin("_cov") or request.config.getoption("no_cov"):
         pytest.skip("runs only under pytest-cov")
     assert coverage.Coverage.current() is not None
+
+
+def test_the_no_cover_fixture_pauses_coverage_too(no_cover: None) -> None:
+    """pytest-cov pauses for its ``no_cover`` fixture as well as the marker."""
+    coverage = pytest.importorskip("coverage")
+    assert coverage.Coverage.current() is None

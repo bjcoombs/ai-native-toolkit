@@ -131,6 +131,15 @@ jobs:
           --ignore=tests/test_fleet_golden.py
         working-directory: skills/assess
 
+      # The cpu_budget tests skip in the xdist pool above (tests/conftest.py,
+      # CPU_BUDGET_SKIP) and run here, serially, as in tests.yml.
+      - name: skills/assess CPU-budget tests
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run --locked --python 3.11
+          pytest -ra -p no:cacheprovider -p no:xdist -m cpu_budget --no-cov
+        working-directory: skills/assess
+
       - name: scripts/ pytest
         if: ${{ !cancelled() }}
         run: >-

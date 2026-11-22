@@ -49,6 +49,15 @@ jobs:
           --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
         working-directory: skills/assess
 
+      # Absolute CPU-time budgets (marker cpu_budget) skip in the xdist pool: a
+      # busy worker on the sibling hardware thread doubles their CPU seconds.
+      # They run here, serially; they are no_cover, so the floor above is
+      # unaffected. See CPU_BUDGET_SKIP in tests/conftest.py (#930).
+      - name: Run the CPU-budget tests serially
+        if: ${{ !cancelled() }}
+        run: uv run --locked pytest -v -p no:xdist -m cpu_budget --no-cov
+        working-directory: skills/assess
+
       - name: Upload coverage report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2

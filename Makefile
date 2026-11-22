@@ -42,6 +42,7 @@ lock-check:
 
 test-assess:
 	cd skills/assess && uv run --locked pytest -v $(XDIST) --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
+	cd skills/assess && uv run --locked pytest -v -p no:xdist -m cpu_budget --no-cov
 
 test-scripts:
 	cd scripts && uv run --locked pytest -v $(XDIST) --cov=. --cov-report=term --cov-report=xml:coverage.xml
