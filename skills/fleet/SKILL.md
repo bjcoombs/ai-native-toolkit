@@ -938,7 +938,11 @@ report says why in one line; stderr names it too. A diagram failure never change
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
 The report opens with the [coverage line](#coverage---discovered), then "What changed and who
 earned it" (see [`achievements.json`](#output-achievementsjson)), then "Opportunities",
-before the diagrams.
+before the diagrams. It closes with "How this was measured": a link to the catalog of every
+check (`docs/what-we-measure.md` in the toolkit repository), the scans that ran (with how
+many repositories could not measure each, and the reason codes) and the scans that were
+skipped, each with its reason (only a full `/assess` run builds it, it needs the network or
+`--platform`, or `--scans` left it out).
 
 **Opportunities.** Rendered from `fleet-data.json`'s [`opportunities`](#opportunities), so
 the two always agree. It opens with what is already in place (per row, how many measured

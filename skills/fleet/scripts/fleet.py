@@ -177,6 +177,7 @@ from lib.fleet_achievements_runs import earlier_runs  # noqa: E402
 from lib.fleet_credit import credit_section  # noqa: E402
 from lib.fleet_opportunities_section import opportunities_section  # noqa: E402
 from lib.fleet_level import write_fleet_levels  # noqa: E402
+from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
@@ -518,7 +519,9 @@ def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | 
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
-        write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None)
+        ok = [row["scans"] for row in rows if row["status"] == "ok" and row["scans"] is not None]
+        write_diagrams(out_dir, diagrams, credit, coverage, opportunities() if opportunities else None,
+                       measured_section(ok))
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return

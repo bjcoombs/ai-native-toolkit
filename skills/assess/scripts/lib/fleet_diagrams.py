@@ -7,7 +7,9 @@ one-line reason it was skipped. ``report_markdown`` renders ``report.md``: the
 section per diagram, the SVG embedded with a relative, clickable image link,
 or the skip reason in its place. Every ``## `` section opens with a line starting
 ``In place:`` (``lib/vocabulary.IN_PLACE``, #743) that says what this run already has
-before the question and any next step. ``write_diagrams`` writes the SVGs and the
+before the question and any next step. The report ends with "How this was measured"
+(the scans that ran and were skipped, ``lib/measured_appendix.py``, #794).
+``write_diagrams`` writes the SVGs and the
 report beside ``groups.jsonl``, removing any diagram file a previous run left
 that this run did not draw, so a stale picture never sits beside new data;
 ``clear_diagrams`` removes them all (``fleet.py --no-diagrams``).
@@ -212,11 +214,13 @@ def build_diagrams(levels: MaturityModel | None, repos: Sequence[FleetRow], wind
 
 
 def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
-                    coverage: str | None = None, opportunities: str | None = None) -> str:
+                    coverage: str | None = None, opportunities: str | None = None,
+                    measured: str | None = None) -> str:
     """``report.md``: the coverage line when given (``lib/fleet_coverage.py``), the credit
     section when given (``lib/fleet_credit.py``), the opportunities section when given
     (``lib/fleet_opportunities_section.py``), then each diagram embedded with a relative
-    link, or why it was skipped."""
+    link, or why it was skipped, then the "How this was measured" section when given
+    (``lib/measured_appendix.py``)."""
     lines = ["# Fleet diagrams", ""]
     if coverage is not None:
         lines += [coverage, ""]
@@ -232,6 +236,8 @@ def report_markdown(diagrams: Sequence[Diagram], credit: str | None = None,
         else:
             lines.append(f"Not drawn: {diagram['skipped']}")
         lines.append("")
+    if measured is not None:
+        lines += [measured.rstrip("\n"), ""]
     return "\n".join(lines)
 
 
@@ -258,10 +264,12 @@ def _write(path: Path, content: str) -> Path:
 
 
 def write_diagrams(out_dir: Path, diagrams: Sequence[Diagram], credit: str | None = None,
-                   coverage: str | None = None, opportunities: str | None = None) -> list[Path]:
+                   coverage: str | None = None, opportunities: str | None = None,
+                   measured: str | None = None) -> list[Path]:
     """Write the drawn SVGs and ``report.md`` (with ``coverage``, ``credit`` and
-    ``opportunities`` first) under ``out_dir``; returns the paths written."""
+    ``opportunities`` first and ``measured`` last) under ``out_dir``; returns the paths written."""
     clear_diagrams(out_dir)
     written = [_write(out_dir / d["file"], d["svg"]) for d in diagrams if d["svg"] is not None]
-    written.append(_write(out_dir / REPORT_FILE, report_markdown(diagrams, credit, coverage, opportunities)))
+    written.append(_write(out_dir / REPORT_FILE,
+                          report_markdown(diagrams, credit, coverage, opportunities, measured)))
     return written

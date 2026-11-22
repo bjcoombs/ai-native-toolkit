@@ -128,9 +128,12 @@ source, a real fleet run with the shipped maturity model (`report.md`, every dia
 map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
 fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
 naming the word, the output and the line, when one of these words appears in the prose as a
-whole word, case-insensitive. Fenced code, backticked spans and identifiers containing an
-underscore are not prose (`prose`), so machine field names, JSON keys, finding names and
-signal paths (`lying_map`, `instruction_claims.failed`, `fail_under`) stay unchanged.
+whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
+target) and identifiers containing an underscore are not prose (`prose`), so machine field
+names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
+`fail_under`) and links into the toolkit repository stay unchanged. The retired label
+`AI-Native` matches, in any case, only as a whole token not followed by `-toolkit`, because
+`ai-native-toolkit` is the product's own name (#794).
 
 | Word | Say instead |
 |------|-------------|
@@ -1415,7 +1418,8 @@ is the trend's runs (`fleet_trends`), `None` when the run is not kept in the his
 `fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then the `fleet_opportunities_section` section when
 given, then embeds each with a relative clickable image link or says
-why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
+why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
+built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
@@ -2037,6 +2041,50 @@ Structured validation findings ported from meridianhub/meridian
 target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
 Meridian's distance and closest-match tables.
 
+### Measures catalog
+
+**`catalog.py`** *(#789 step 2, #794)*
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
+default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
+grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
+row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
+the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
+`collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
+`unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
+counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
+`findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
+reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
+(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
+every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
+commit or version string is read, so a version-only bump of the model leaves it unchanged.
+
+**`catalog_md.py`**
+`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, each row's
+conditions in plain words, each scan, the findings and the registry, linking `measures.json`
+relatively.
+
+**Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
+root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
+`tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
+so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+`make check` runs it through `test-assess`.
+
+**`measured_appendix.py`**
+`measured_section(documents, names=None, absent=...)`: the "How this was measured" section. One
+`{block: block}` mapping per repository (a fleet row's `scans`, or a run-context); for each
+known scan, **Ran** when its block exists without a `not_registered` or `network` reason in at
+least one repository (with "not measured in k of n" and the reason codes where the block is
+unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
+a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
+`assess_report.py` instead passes `absent_code="no_block"`: a full run runs every scan, so a
+missing block, such as `structure_drift` with no ownership map, is listed under Ran as not
+measured). Its first line starts `In place:`
+(`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
+measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+Tests: `tests/test_measured_appendix.py`.
+
 ### Configuration
 
 **`run_scope.py`**
@@ -2481,7 +2529,9 @@ returns the signal's class grade whatever the operator (the #789 grades design: 
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
 conditions #744 lists without counting. The module doc records the rulings (platform
 reads are their own class; instruction files stay declared but still gate Steps).
-`level_tally.py` reads it to count conditions; `levels.py` does not. `UNMEASURED_VALUES`
+`level_tally.py` reads it to count conditions; `levels.py` does not.
+`counts_toward_level(grade)` is that rule for a grade (`measured` and `verified` count;
+`lib/catalog.py` reads it). `UNMEASURED_VALUES`
 names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
 false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
