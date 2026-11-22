@@ -273,3 +273,11 @@ def test_the_documented_defaults_leave_the_default_results_unchanged() -> None:
             lv["polarity"] = "positive"
     data = {"doc_staleness": {"summary": {"stale_pct": 10}}, "ci_checks": {"enforced_check_runs": True}}
     assert lt.level_result(parse_levels(with_defaults), data) == lt.level_result(parse_levels(raw), data)
+
+
+def test_the_hazard_marker_survives_counts_only() -> None:
+    from lib.counts_only import counts_only
+
+    model = parse_levels(_model({"criteria": _crit(), "truth": ["docs"], "polarity": "hazard"}))
+    level = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": 0}}})
+    assert counts_only({"level": level})["level"] == level

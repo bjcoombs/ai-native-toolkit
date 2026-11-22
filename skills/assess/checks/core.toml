@@ -1692,6 +1692,7 @@ revision = 1
   "level.conditions.grade" = "token"
   "level.conditions.state" = "token"
   "level.conditions.reason" = "token"
+  "level.conditions.polarity" = "token"
   "level.next_step.blockers.kind" = "token"
   "level.next_step.blockers.gate" = "token"
   "level.next_step.blockers.condition" = "token"
