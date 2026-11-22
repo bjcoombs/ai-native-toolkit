@@ -65,6 +65,7 @@ REASON_WORDS = {
     "no_ownership_map": "no ownership map",
     "scan_failed": "scan did not complete",
     "no_scored_files": "no files scored",
+    "no_manifests": "no manifests read",
     "no_complexity_stats": "no complexity stats written",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.

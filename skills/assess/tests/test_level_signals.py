@@ -70,7 +70,7 @@ def instructed_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     (repo / "Makefile").write_text("check:\n\tpython -m pytest\n", encoding="utf-8")
     (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
     (repo / "pyproject.toml").write_text(
-        "[project]\nname = 'x'\nversion = '0'\n\n[tool.mypy]\nstrict = true\n", encoding="utf-8")
+        "[project]\nname = 'x'\nversion = '0'\ndependencies = ['httpx']\n\n[tool.mypy]\nstrict = true\n", encoding="utf-8")
     (repo / ".claude").mkdir()
     (repo / ".claude" / "settings.json").write_text(
         json.dumps({"permissions": {"allow": ["Bash(make check)"]}}), encoding="utf-8")
@@ -475,6 +475,7 @@ def _ci_repo(root: Path, workflow: str | None, instructions: bool,
 
 
 _UNLOCKED = {"package.json": json.dumps({"name": "x", "dependencies": {"left-pad": "1.3.0"}})}
+_LOCKED = {**_UNLOCKED, "package-lock.json": "{}"}
 
 
 def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) -> None:
@@ -485,8 +486,12 @@ def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) 
     assert unlocked["ci_checks"]["enforced_check_runs"] is True
     assert unlocked["agent_environment"]["pinning"]["unlocked_total"] == 1
     assert _row(_run({"r": unlocked}), "layer-5-ci")["level"] == 1
-    named = _ci_repo(tmp_path / "named", ci, instructions=True)
+    named = _ci_repo(tmp_path / "named", ci, instructions=True, extra=_LOCKED)
     assert _row(_run({"r": named}), "layer-5-ci")["level"] == 2
+    # #927: with no manifest there is nothing to lock, so level 2 is not measured.
+    bare = _row(_run({"r": _ci_repo(tmp_path / "bare", ci, instructions=True)}), "layer-5-ci")
+    assert (bare["status"], bare["level"]) == ("unknown", None)
+    assert bare["repos"]["r"]["levels"][1]["unmet"][0]["reason"] == "no_manifests"
 
 
 def test_layer_five_level_two_does_not_read_the_named_check(tmp_path: Path) -> None:
@@ -496,7 +501,7 @@ def test_layer_five_level_two_does_not_read_the_named_check(tmp_path: Path) -> N
     assert not read & {"agent_environment.check.named_total", "agent_environment.layer5_cap.applies"}
     ci = _CI_WORKFLOW.replace("make check", "make test")
     unnamed = _ci_repo(tmp_path / "unnamed", ci, instructions=False,
-                       extra={"CLAUDE.md": "# Project\n\nNotes.\n"})
+                       extra={**_LOCKED, "CLAUDE.md": "# Project\n\nNotes.\n"})
     assert unnamed["agent_environment"]["check"]["named_total"] == 0
     levels = _levels(_run({"r": unnamed}))
     assert levels["layer-0-instructions"] == 1   # the missing named check costs Layer 0 only
@@ -577,7 +582,8 @@ def test_layer_five_level_one_needs_an_enforced_check(tmp_path: Path) -> None:
     assert masked["ci_checks"]["test_or_lint_configured"] is True
     assert masked["ci_checks"]["enforced_check_runs"] is False
     assert _row(_run({"r": masked}), "layer-5-ci")["level"] == 0
-    plain = _ci_repo(tmp_path / "plain", _CI_WORKFLOW.replace("make check", "pytest"), instructions=False)
+    plain = _ci_repo(tmp_path / "plain", _CI_WORKFLOW.replace("make check", "pytest"), instructions=False,
+                     extra=_LOCKED)
     assert _row(_run({"r": plain}), "layer-5-ci")["level"] >= 1
 
 

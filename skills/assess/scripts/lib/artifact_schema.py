@@ -288,6 +288,9 @@ constant each.
 #   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
 #   --exit-code in its job counts, and a target whose recipe is not read reads
 #   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
+# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
+#   the number of dependency manifests the lockfile check reads. Additive: no
+#   existing key moves, and complexity-stats.json is unchanged.
 # - issue #959: an unparsed GitLab include record is kind unknown (was local), and
 #   an unquoted YAML tag, anchor or alias entry is unparsed (was a local glob);
 #   stats_summary with no complexity-stats.json is available: false
@@ -493,4 +496,7 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
 #   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
 #   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
+# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
+#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
+#   read met. Fewer conditions count on repositories with no dependency manifest.
 ASSESS_METHOD_VERSION = 37

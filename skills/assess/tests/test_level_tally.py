@@ -223,6 +223,19 @@ def test_file_size_counts_only_beside_a_boundary_map():
     assert _default_state(empty, "layer-4-architecture.2") == ("not_measured", "no_scored_files")
 
 
+@pytest.mark.parametrize("pinning, state", [
+    pytest.param({"manifests": [], "manifests_total": 0, "unlocked_total": 0},
+                 ("not_measured", "no_manifests"), id="CMAKE"),
+    pytest.param({"manifests_total": 1, "unlocked_total": 0}, ("met", None), id="NODE-LOCKED"),
+    pytest.param({"manifests_total": 1, "unlocked_total": 1}, ("unmet", None), id="NODE-UNLOCKED"),
+    pytest.param({"unlocked_total": 0}, ("met", None), id="pre-927-block"),
+])
+def test_no_counted_manifest_reads_not_measured(pinning, state):
+    """#927 A: nothing to lock is not a lockfile check passed."""
+    signals = {"agent_environment": {"available": True, "pinning": pinning}}
+    assert _default_state(signals, "layer-5-ci.2") == state
+
+
 def test_a_real_unmet_sibling_outweighs_an_empty_set():
     model = _model(_row("size", [_eq(INSTR), {"signal": P95, "op": "lte", "value": 500}]))
     signals = {"layer_grades": {"instruction_file_present": False},
