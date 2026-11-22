@@ -9,6 +9,8 @@ argument-hint: "[pr-number] (optional - derives from current branch if omitted)"
 
 Enter autonomous PR review loop for the current branch's PR. Loops until the PR is merge-ready across ALL criteria, not just CI.
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 ---
 
 ## What this does

@@ -345,6 +345,8 @@ def test_fleet_reruns_are_byte_identical_and_steps_follow_the_gates(estate):
         gates = {b.get("gate") for b in nxt["blockers"]} if nxt else set()
         assert "ci_runs_tests" not in gates or nxt["step"] >= 3
         assert "coverage_gate" not in gates or nxt["step"] >= 4
+    # the CI condition counts (layer 5 level 1 reads a ci_executed signal, #775)
+    assert repos["ci2/r"]["tally"]["met"] >= repos["ci0/r"]["tally"]["met"] + 1
     assert repos["inc/r"]["tally"]["met"] == repos["nci/r"]["tally"]["met"]
     assert repos["inc/r"]["tally"]["not_measured"] > repos["nci/r"]["tally"]["not_measured"]
 

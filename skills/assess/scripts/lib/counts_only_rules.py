@@ -405,6 +405,8 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "promissory_markers.top_offenders.family": TOKEN,
         "promissory_markers.top_offenders.text": DROP,
         "promissory_markers.top_offenders.commit": DROP,
+        # Family names per stale file; kept as a count, as before #793 typed it.
+        "promissory_markers.stale_by_file.{}.families": DROP,
     },
     "agent_ops / config_drift / review": {
         "config_drift.reason": DROP,
@@ -460,6 +462,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         # Counts, a tri-state boolean and the basis token (issue #698).
         "ci_checks.reason": DROP,
         "ci_checks.basis": TOKEN,
+        "ci_checks.enforced_basis": TOKEN,  # #775
         # Resolved GitLab includes (#766): the kind, status and ref-basis tokens and
         # the shared_tooling-style id (kept readable, as shared_tooling ids are);
         # never a file name, ref or template text.
@@ -467,6 +470,10 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "ci_checks.includes.id": ID,
         "ci_checks.includes.status": TOKEN,
         "ci_checks.includes.ref_basis": TOKEN,
+        # The CI lint API read (#796): a status token and the reason code only; the
+        # merged configuration itself is never in the block.
+        "ci_checks.merged_config": TOKEN,
+        "ci_checks.merged_config_reason": TOKEN,
     },
     "layer_grades": {
         # A letter grade (A-F) or null; the presence flag is a boolean.

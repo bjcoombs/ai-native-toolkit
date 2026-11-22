@@ -316,7 +316,7 @@ Either SVG is additive: if a script fails (no `uv`, no scoreable files, no docs)
 python -m pip install --user networkx grimp lizard==1.23.0 squarify matplotlib numpy  # once, no uv
 $REPO_ROOT = git rev-parse --show-toplevel; python "${CLAUDE_SKILL_DIR}/scripts/assess_core.py" "$REPO_ROOT"
 ```
-Run each other `uv run` line in this skill as `python` with the same arguments. The full PowerShell sequence and the ripgrep lookup (`RG_PATH`, then `PATH`, then the WinGet package folder): `references/windows.md`.
+Run each other `uv run` line in this skill as `python` with the same arguments. The full PowerShell sequence and the ripgrep lookup (`RG_PATH`, then `PATH`, then the WinGet package folder): `references/windows.md`. Installs, PATH notes and the make-free commands: the [Windows setup guide](../../docs/windows.md).
 <!-- chat-skip:end -->
 
 Interactivity is an explicit signal, never a stdin probe: pass `--non-interactive` only on a headless/CI run, otherwise the run is interactive by default. See `references/consent-lifecycle.md` for why (`isatty()` misreads a subprocess).

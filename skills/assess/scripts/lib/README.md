@@ -957,13 +957,14 @@ Generates the published `references/signals.schema.json` from the `SignalsDocume
 whose names are limited to `signals.known_scans` (sorted; `build_schema(specs)` for a
 custom table, and the namespace `level_signals.py` checks paths against), open per-scan
 blocks, and an `if`/`then` rule that an `"available": false` block carries a string
-`reason`. The `ai_usage`, `ci_checks` and `delivery` blocks (`scan_block_schemas.py`, #779)
+`reason`. The `ai_usage`, `ci_checks`, `coverage_gate` and `delivery` blocks (`scan_block_schemas.py`, #779, #781)
 also name and describe their fields (`described_block`), loosely: no required field, and a
 string list may be its counts-only length.
 
 **`scan_block_schemas.py`**
 `BLOCK_SCHEMAS`: hand-written field descriptions (with units: delivery durations are hours)
-of the blocks a fleet reader compares, `ai_usage`, `ci_checks` and `delivery` (#779), read
+of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781)
+and `delivery` (#779), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -1095,9 +1096,9 @@ each a sorted list of `Unit` (`id`, `name`, `kind`, `parent`, `owners`, `source`
 `placement` map, repository id to unit id, so a repository sits once per view.
 `build_trees` infers the ownership view from repository paths (every prefix of a GitLab
 `path_with_namespace` group is a unit), then GitHub teams from an optional `teams` list on
-a GitHub settings fragment (deepest team wins, then the first slug), then, for a
+a GitHub settings fragment (written by `ghreport`; deepest team wins, then the first slug), then, for a
 repository in a one-segment group that no team placed, a CODEOWNERS catch-all team handle
-under that group, and
+under that group (matched ignoring case, the unit id's team part lower-cased; #733), and
 finally applies the `--units` mapping (`load_units` / `parse_units`, TOML `[[unit]]` and
 `[[repo]]`), which always wins. The system view comes from the mapping only. Inferred units
 with no repository left are dropped; their kind follows their place (root `org`, a unit
@@ -1493,7 +1494,8 @@ omits a block gives that block `available: false` with `platform_timeout`,
 counts-only output). Such a failed block never replaces an offline block that is
 available (`join`, #696): `review_evidence` credits an AI review step offline, and a slow
 host keeps that credit. Failed rows are not read. `names` is `platform_scans(--scans)`:
-`signals.PLATFORM_SCANS` narrowed by `--scans`. All children share one response cache
+`signals.PLATFORM_SCANS` narrowed by `--scans` (`review_automation` and `ci_checks` are
+listed because they read GitLab's merged CI configuration, #796). All children share one response cache
 directory (`platform_cli.CACHE_ENV`) that the pass creates and removes. `after` (the
 `--delete-after` hook) runs on each row after its platform read, so a clone outlives the
 read of its remote. A new platform block (#715, #716) needs no change here: see
@@ -1805,7 +1807,7 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `null_means`. No grade is authored: it follows from the class
   (`level_signals.INPUT_GRADES`).
 - `condition`: display metadata for one default criterion, keyed
-  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.enforced_check_runs`, unique per
   manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
   supportive `fix`. The criterion itself stays in
   `levels/default.toml`; a custom `--levels` file needs no entries.
@@ -1836,6 +1838,10 @@ tables, `ROOTS`, `RULES`, the finding tables and the coupling thresholds, the de
 model's signals and criteria, and `SIGNAL_INPUTS`; and it validates the loaded manifest
 against the schema. Until later steps generate those tables from the manifest, adding a
 scan, criterion, finding, typed root or counts-only rule also adds its manifest entry.
+A finding `inputs` path under a typed root must name fields of its shape
+(`test_finding_inputs_under_a_typed_root_name_its_fields`, #793); one under an untyped
+block or a collector is checked on its first segment only. `derive` is checked as a
+callable only: it stays documentary until a later step generates the findings from it.
 Loader tests: `tests/test_check_manifest_loader.py`.
 
 **`check_validation.py`**
@@ -1979,6 +1985,21 @@ walks them, so a typed shape that gains a
 string field fails `tests/test_counts_only.py` until the field is classified, even when
 no fixture run populates the block. `delivery.DeliveryBlock` is a root (#769), so counts-only output keeps
 every delivery figure (`tests/test_delivery.py` checks a full block on both providers).
+The blocks a default criterion reads are all roots since #793 (their shapes are in
+`block_shapes.py`), which added one field name to the counts-only keys:
+`promissory_markers.stale_by_file.{}.max_survived`, an integer, now survives reduction.
+The newly typed string field `promissory_markers.stale_by_file.{}.families` is classified
+`drop`, so it stays a count.
+
+**`block_shapes.py`**
+TypedDicts for the run-context blocks a default maturity-model criterion reads that are
+built as dict literals (#793): `AgentOpsBlock`, `CoverageGateBlock`,
+`InstructionClaimsBlock`, `PromissoryMarkersBlock`, `ReviewRealityBlock` and
+`StructureDriftBlock`, each a `counts_only_schema.ROOTS` entry and a `shapes` entry of
+its collector in `checks/core.toml`. The builders are unchanged; the shapes record what
+they write. Tests: `tests/test_block_shapes.py` runs each builder on a small repository
+and checks every key and leaf type against its shape, checks the fleet golden's blocks,
+and fails if a default criterion reads a block with no typed root.
 
 **`run_wiki.py`**
 Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
@@ -2243,7 +2264,12 @@ segment must be a block name the published headless schema lists
 `run-context.json`; run-context keys outside the schema (`instructions_grade`) are
 rejected, and the deterministic layer grades are read through the `layer_grades` block
 instead (`layer_grades.instructions_grade`). Where `counts_only_schema.ROOTS` types the block, every further segment must
-name a field and end on a scalar (no list, no object); an untyped block is open. An
+name a field and end on a scalar (no list, no object); an untyped block is open.
+Every block a default criterion reads is typed (#793), so **a misspelt sub-path under
+`agent_ops`, `coverage_gate`, `instruction_claims`, `promissory_markers`,
+`review_reality` or `structure_drift` in a `--levels` file now fails at load**
+(`agent_ops.summary.permissions_encodd`, `coverage_gate.enforcd`) where it used to load
+and evaluate `unknown`; the default model loads unchanged and its results do not move. An
 `org` path must be a field of `ghreport`'s settings fragment (`scope`, `provider`,
 `<setting>.value` / `.reason`). `load_default_levels` loads
 `skills/assess/levels/default.toml`: one team row per layer 0-8, level 1 for
@@ -2637,7 +2663,8 @@ Only the fleet platform pass sets it, to a temporary directory it removes. A cal
 with `run_cli(..., cache=False)` (`gitlab_cli.glab_api(..., cache=False)`) neither reads
 nor writes it. The cache never holds comment or review text on either provider: GitLab
 merge-request notes (#716) and the GitLab merged list (`merged_sample.py`, #778), both
-through `gitlab_cli.glab_api(..., cache=False)`, and the GitHub merged pull request read with
+through `gitlab_cli.glab_api(..., cache=False)`, GitLab's merged CI configuration
+(`gitlab_ci_lint.py`, #796, the same way), and the GitHub merged pull request read with
 reviews and comments (`merged_sample.py`, `gh_cli.gh_json(..., cache=False)`, #778) are read
 in memory only. Callers keep
 their own `FileNotFoundError` / `TimeoutExpired` mapping. Tests:
@@ -3166,13 +3193,14 @@ lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
 (`test_is_check_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
-maturity model reads it, so the CI row measures CI, not the instruction file.
-`scan_ci_checks(repo_root, ghsync_root)` reads the files `command_index.ci_config_files`
+Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
+`scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
-unresolved_includes, includes[], test_or_lint_runs, basis}`. Each line,
+unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
+enforced_basis, masked_check_commands, off_trigger_check_commands}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3190,9 +3218,107 @@ is null (`basis: included_jobs`) when a CI file pulls jobs this run could not re
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
 item, a job-level `uses:` of another repository's reusable workflow), else
 false (`no_check_command`, or `no_ci` with no CI file): a `.gitlab-ci.yml` whose
-every include resolved and holds no check reads false. Offline and headless.
-Tests: `tests/test_ci_checks.py`, and the Layer 5 rows in
+every include resolved and holds no check reads false. Its third argument is the
+`gitlab_merged_ci` reading (`merged_ci.MergedCi`, #796): where an include did not resolve
+offline, `fleet --platform` (and a full `/assess` run) asks GitLab's CI lint API for the
+merged configuration, whose check lines are counted apart in `merged_check_commands`
+(the merged file repeats the own and resolved jobs). A check there makes the signal true
+(`basis: merged_config`, used only when no own or included line ran one: offline wins); a
+merged configuration read with none makes it false, unless it may lack jobs
+(`merged_partial`): a `rules:` key in the `include:` section of the repository's file or of a
+template read offline (`conditional_include`; the lint API may leave that include out), or a
+`trigger:` job in any of those or in the merged file (`child_pipeline`; a child or downstream
+pipeline is not expanded). Then the signal stays null with `basis: merged_config_partial`:
+unknown beats wrong. `merged_config` is `not_read`
+(offline), `not_needed`, `read`, `invalid` or `unavailable` (reason code in
+`merged_config_reason`); the merged text is never in the block. Known limit: a `rules:` include inside a
+template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
+`not_read`. The module itself is
+offline: it imports the value type, never a platform client.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line (own, included, or
+in the merged configuration when those hold none)
+whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
+off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
+null with `enforced_basis: unknown_trigger`), else null under the
+same `included_jobs` rule, else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_runs`, which keeps its meaning.
+Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`ci_masking.py`**
+Which CI shell statements cannot fail their job (issue #775), with no YAML parser
+(an indentation model over the lines). `unmasked_lines(text) -> list[str]` is the
+result shape other CI classifiers build on: one entry per input line, same index,
+with every masked statement removed (`pytest || true; ruff check .` becomes
+`ruff check .`) and a line whose statements are all masked replaced by `""`. A
+classifier counts what can fail the job by running its line test over this list,
+and the masked count as its count over the original lines minus that.
+`split_statements(text)` splits one shell line into top-level `;` statements of
+`(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
+operator. Rules: a top-level `|| true` / `|| :` / `|| /bin/true` / `|| exit 0`
+masks the segments before it in its statement (`mkdir -p x || true && pytest`
+keeps `pytest`), unless they send output to a file (`>`, `&>`, `| tee`; not
+`/dev/null` or `$GITHUB_STEP_SUMMARY`) that a later line of the same job names,
+with a non-zero exit at or after it (a capture, the grafana `lint:circular`
+pattern); `continue-on-error: true` or `allow_failure:
+true` (literal, a trailing comment ignored) masks the mapping that holds it and
+everything under it (a step or a job); `set +e` masks the rest of its script body
+(a block scalar, or one `script:` list) until `set -e`, unless a later statement
+exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
+joined first.
+Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
+wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+`before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
+`tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
+shared with `ci_triggers.py`.
+
+**`ci_triggers.py`**
+Does a CI line run on ordinary changes (issue #775)? It makes
+`ci_checks.enforced_check_runs` a `ci_executed` signal. `workflow_events(text)` lists a
+GitHub workflow's top-level `on` events (scalar, flow list or mapping, block list or
+mapping; `"on"` and YAML 1.1 `true` too), or None when it cannot; `workflow_trigger`
+maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
+`merge_group`), `called` (`workflow_call` / `workflow_run` only), `not_ordinary`
+(`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
+called workflow as `ordinary` when an ordinary workflow of the repository calls it
+(`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
+one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
+and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
+web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
+outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
+so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
+anchors and `workflow: rules:` are not resolved; branch and path filters are not
+read. Tests: `tests/test_ci_triggers.py`.
+
+**`merged_ci.py`**
+The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
+reason, text, include_sources)`, `NOT_READ`, `NOT_NEEDED`, `MERGED_STATUSES` and
+`as_merged(value)` (anything other than a `MergedCi`, such as a degraded spec's dict, is
+`NOT_READ`). Apart from `gitlab_ci_lint.py` so `ci_checks` and `review_automation` stay
+offline modules (`tests/test_signals.py` checks that a scan is `network` exactly when its
+module reaches a platform client). `text` is held in memory only. Tests:
+`tests/test_gitlab_ci_lint.py`.
+
+**`gitlab_ci_lint.py`**
+GitLab's merged CI configuration through the CI lint API (#796, #766 part 2): the private
+`network` spec `gitlab_merged_ci` (`read_merged_ci(repo_root, ghsync_root)`; offline the
+runner calls `no_merged_ci`, which reads nothing). Asked only when
+`ci_includes.resolve_includes` left an include unresolved (`not_needed` otherwise: a
+template resolved offline wins) and `gitlab_cli.open_gitlab` finds a GitLab remote
+(`not_gitlab` otherwise). One call, naming its target:
+`glab api --hostname <host> projects/<encoded>/ci/lint?content_ref=<HEAD sha>`, a GET (no
+file content uploaded), made with `cache=False` so the merged YAML never reaches the
+platform response cache (#778). `valid` true with a `merged_yaml` string is `read`; any
+other shape is `invalid`; a refusal is `unavailable` with the `GhUnavailable` reason code.
+`include_sources(includes)` reads the response's `includes` list (a `component` item's
+`location`, a `file` item's `extra.project`) for `review_automation`. Errors and warnings
+are never kept. Tests: `tests/test_gitlab_ci_lint.py`, `tests/test_platform_argv_contract.py`.
 
 **`ci_includes.py`**
 GitLab CI includes resolved offline (issue #766), read by `ci_checks` and
@@ -3334,11 +3460,14 @@ events; `ON_KEY` also accepts the YAML 1.1 `true:` spelling, shared with
 
 **`review_automation.py`**
 AI review committed in CI and the Layer 7 level 1 signal (issue #696).
-`scan_review_automation(repo_root, fleet_config, ghsync_root)` writes `{available, present, kinds[],
+`scan_review_automation(repo_root, fleet_config, ghsync_root, merged_ci)` writes `{available, present, kinds[],
 matches[]}`; a match is `{kind, rule, reviewer, path, line, tracked, on_changes, depth}`.
 The include entries of GitLab files `ci_includes.resolve_includes` read are matched as the
 repository's own are (#766), keeping the path and line of the repository's own include that
-led there, with `depth` the include level (0 for the repository's own file). Kinds:
+led there, with `depth` the include level (0 for the repository's own file). Its fourth
+argument is the `gitlab_merged_ci` reading (#796): the sources GitLab's CI lint API lists as
+merged in are matched the same way, once each (a source an offline entry names is skipped),
+with `line` null and `depth` 1. Kinds:
 `ci_action` (a `shared_tooling.step_uses` action in the pinned `REVIEW_ACTIONS`: any
 `anthropics/*`, `coderabbitai/*`, `qodo-ai`/`codium-ai` `pr-agent`; a name heuristic, so whether an included job runs in merge-request
 pipelines is not read), `ci_component` (a
@@ -3467,8 +3596,9 @@ package; a package-level config outside the scope is dropped. A root CI gate is
 reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
-`coverage_gate` block: `{available, enforced, gates, not_detected}`, each gate
-`{file, line, tool, form, threshold, unit, metric}`. Forms read: coverage.py
+`coverage_gate` block (`CoverageGateBlock`): `{available, enforced, gates,
+max_threshold_percent, threshold_meets_minimum, not_detected}`, each gate
+`{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
 (`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
 and `coverage report|xml|json|html|lcov --fail-under` in GitHub workflows and
@@ -3493,6 +3623,23 @@ typed by the `CoverageGate` TypedDict. `enforced` is true when
 any gate has a non-zero threshold, or a null one from nyc/c8 (which check at a
 built-in default) or a templated coverage.py / pytest-cov flag; `fail_under = 0` and a Jest/Vitest anchor whose threshold was
 not read are listed but gate nothing.
+
+The threshold reading (#781), which Layer 6 level 1 of the default maturity model
+reads. `threshold_percent` is the gate's threshold as a percentage, derived in `_gate`
+from `unit` alone by `threshold_percent()`: as written for `percent`, times 100 for
+`ratio` (rounded to 6 places, so `0.55` is `55.0`), and null for `uncovered_count` or
+a null threshold. `threshold` and `unit` stay as written. `max_threshold_percent` is the
+highest non-null `threshold_percent` across all gates, null when none has one.
+`threshold_meets_minimum` reads only the gates `enforced` counts (`_gates_something`),
+in this order: true when one has `threshold_percent >= MINIMUM_THRESHOLD_PERCENT` (50);
+null (not measured) when none does but one has a null `threshold_percent` (a templated
+value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
+false otherwise, including no counted gate. Measured coverage is never read: a report
+is a working-tree file, so the level would stop being a function of the commit.
+Adding a gate form (Go, Rust under #788): build the gate with `_gate` and the right
+`unit`; `threshold_percent` and both block fields follow with no other change. A form
+whose number is not a coverage percentage (a count) needs its own `unit`, mapped to
+null in `threshold_percent()`, so it reads unknown rather than credited.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty

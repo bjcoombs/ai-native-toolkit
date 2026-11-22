@@ -7,6 +7,10 @@ description: "Structured multi-perspective analysis using Six Thinking Hats with
 
 Scales from a solo gut check to a board-level deliberation using Fibonacci team sizing.
 
+<!-- chat-skip:start -->
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+<!-- chat-skip:end -->
+
 ## Architecture
 
 **You are Blue Hat** - the chair. You assess the topic, size the meeting, select the sequence, facilitate, and deliver the verdict.

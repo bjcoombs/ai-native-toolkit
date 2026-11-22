@@ -11,8 +11,11 @@ one. A maturity model row's ``scope`` picks the namespace:
   data. Where a block has a typed shape (``counts_only_schema.ROOTS``, the
   TypedDicts the counts-only allow-list is checked against) every further
   segment must name a field, may not step into a list, and must end on a
-  scalar. A block without a typed shape is open: any sub-path is accepted, so
-  a typo there loads and evaluates ``unknown`` with the path named. Run-context
+  scalar. Every block a default criterion reads is typed (#793,
+  ``lib.block_shapes``), so a misspelt sub-path under ``coverage_gate`` or
+  ``agent_ops`` fails at load. A block without a typed shape is still open: any
+  sub-path is accepted, so a typo there loads and evaluates ``unknown`` with the
+  path named. Run-context
   keys outside the schema (``instructions_grade``, ``skills_count``) are
   rejected: a fleet run never has them. The deterministic layer grades are
   published as the ``layer_grades`` block (``lib.layer_grades``), so a maturity model
@@ -43,9 +46,14 @@ new signal has to be classified on purpose; ``input_class`` raises
 - ``git_history`` and ``execution_artifact``: commit history, and the output of
   running something at the commit. Grade ``measured``.
 - ``ci_executed``: a CI line that CI runs on every change; the pipeline
-  enforces its result. Grade ``verified``. No default signal has it yet:
-  ``ci_checks.test_or_lint_runs`` finds a line naming a check but does not read
-  its triggers, so it is ``head_text`` until a signal that does lands (#775).
+  enforces its result. Grade ``verified``. ``ci_checks.enforced_check_runs``
+  (#775) has it: a check line counts only when its exit code can fail the job
+  (``lib/ci_masking.py``) and its workflow or job runs on ordinary changes
+  (``lib/ci_triggers.py``: a GitHub ``push`` / ``pull_request`` /
+  ``merge_group`` event, a GitLab job no ``when: manual``, ``only:`` or
+  ``rules:`` keeps off ordinary pipelines); triggers it cannot settle read
+  null. ``ci_checks.test_or_lint_runs`` reads neither and would be
+  ``head_text``.
 - ``platform``: read from the GitHub or GitLab API (``review_reality``,
   ``agent_environment.ci_duration``). Grade ``verified``.
 

@@ -784,12 +784,16 @@ headless = { promissory_markers = "headless_variant" }
 headless_variants = [
   { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
 ]
+shapes = [
+  { path = "promissory_markers", type = "lib.block_shapes:PromissoryMarkersBlock" },
+]
 revision = 1
   [entries.privacy]
   "promissory_markers.reason" = "drop"
   "promissory_markers.top_offenders.family" = "token"
   "promissory_markers.top_offenders.text" = "drop"
   "promissory_markers.top_offenders.commit" = "drop"
+  "promissory_markers.stale_by_file.{}.families" = "drop"
 
 [[entries]]
 id = "core.agent_ops"
@@ -801,6 +805,9 @@ publishes = ["agent_ops"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { agent_ops = "registered" }
+shapes = [
+  { path = "agent_ops", type = "lib.block_shapes:AgentOpsBlock" },
+]
 revision = 1
 
 [[entries]]
@@ -861,6 +868,9 @@ stage = "read_side"
 network = true
 platform_pass = true
 headless = { review_reality = "registered" }
+shapes = [
+  { path = "review_reality", type = "lib.block_shapes:ReviewRealityBlock" },
+]
 revision = 1
   [entries.privacy]
   "review_reality.reason" = "drop"
@@ -912,7 +922,7 @@ reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
 headless = { coverage_gate = "registered" }
 shapes = [
-  { path = "coverage_gate.gates", type = "lib.coverage_gate:CoverageGate" },
+  { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
 revision = 1
   [entries.privacy]
@@ -1104,7 +1114,7 @@ headless_variants = [
   { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
 ]
 shapes = [
-  { path = "structure_drift.tier_0.empty_ownership_patterns", type = "lib.structure_drift:EmptyOwnershipPattern" },
+  { path = "structure_drift", type = "lib.block_shapes:StructureDriftBlock" },
 ]
 revision = 1
   [entries.privacy]
@@ -1200,6 +1210,9 @@ publishes = ["instruction_claims"]
 reads = ["repo_root", "instruction_files"]
 stage = "post_offers"
 headless = { instruction_claims = "registered" }
+shapes = [
+  { path = "instruction_claims", type = "lib.block_shapes:InstructionClaimsBlock" },
+]
 revision = 1
   [entries.privacy]
   "instruction_claims.failures.kind" = "token"
@@ -1358,19 +1371,34 @@ revision = 1
   "shared_tooling.marketplace_ids" = "id"
 
 [[entries]]
+id = "core.gitlab_merged_ci"
+kind = "collector"
+title = "GitLab merged CI configuration"
+issues = [796]
+callable = "lib.gitlab_ci_lint:read_merged_ci"
+offline_callable = "lib.gitlab_ci_lint:no_merged_ci"
+publishes = []
+reads = ["repo_root", "ghsync_root"]
+stage = "post_offers"
+private = true
+network = true
+revision = 1
+
+[[entries]]
 id = "core.review_automation"
 kind = "collector"
 title = "AI review committed in CI"
 issues = [696]
 callable = "lib.review_automation:scan_review_automation"
 publishes = ["review_automation"]
-reads = ["repo_root", "fleet_config", "ghsync_root"]
+reads = ["repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
+platform_pass = true
 headless = { review_automation = "registered" }
 shapes = [
   { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "review_automation.reason" = "drop"
   "review_automation.kinds" = "token"
@@ -1402,27 +1430,33 @@ revision = 1
 id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
-summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command; null when no check is found but a CI file pulls its jobs from elsewhere."
-issues = [698]
+summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, and whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers); null when no check is found but a CI file pulls its jobs from elsewhere."
+issues = [698, 775]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
-reads = ["repo_root", "ghsync_root"]
+reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
 stage = "post_offers"
+platform_pass = true
 headless = { ci_checks = "registered" }
 shapes = [
   { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
 ]
-revision = 1
+revision = 2
 unknown_reasons = [
-  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read." },
+  { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
+  { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
+  { code = "unknown_trigger", carried_in = "basis", means = "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).", next_step = "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it." },
 ]
   [entries.privacy]
   "ci_checks.reason" = "drop"
   "ci_checks.basis" = "token"
+  "ci_checks.enforced_basis" = "token"
   "ci_checks.includes.kind" = "token"
   "ci_checks.includes.id" = "id"
   "ci_checks.includes.status" = "token"
   "ci_checks.includes.ref_basis" = "token"
+  "ci_checks.merged_config" = "token"
+  "ci_checks.merged_config_reason" = "token"
 
 [[entries]]
 id = "core.agent_building"
@@ -1695,14 +1729,14 @@ type = "number"
 evidence = "head_structure"
 
 [[entries]]
-id = "core:ci_checks.test_or_lint_runs"
+id = "core:ci_checks.enforced_check_runs"
 kind = "signal"
-title = "A CI line runs a test or lint command"
+title = "A CI check runs on ordinary changes and can fail its job"
 collector = "core.ci_checks"
-path = "ci_checks.test_or_lint_runs"
+path = "ci_checks.enforced_check_runs"
 type = "bool"
-evidence = "head_text"
-null_means = "included_jobs: the check may live in an included file"
+evidence = "ci_executed"
+null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled"
 
 [[entries]]
 id = "core:agent_environment.pinning.unlocked_total"
@@ -1714,14 +1748,14 @@ type = "number"
 evidence = "head_text"
 
 [[entries]]
-id = "core:coverage_gate.enforced"
+id = "core:coverage_gate.threshold_meets_minimum"
 kind = "signal"
-title = "A coverage threshold is set"
+title = "A coverage threshold of at least 50 percent is set"
 collector = "core.coverage_gate"
-path = "coverage_gate.enforced"
+path = "coverage_gate.threshold_meets_minimum"
 type = "bool"
 evidence = "config_text"
-null_means = "never null; a block that could not be read is available: false"
+null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count)"
 
 [[entries]]
 id = "core:test_pressure.mutation_run"
@@ -1897,11 +1931,11 @@ key = "layer-4-architecture.2:stats_summary.loc.p95"
 fix = "Split the largest files along their natural seams."
 
 [[entries]]
-id = "core.cond.layer-5-ci.1.test_or_lint_runs"
+id = "core.cond.layer-5-ci.1.enforced_check_runs"
 kind = "condition"
-title = "CI runs your tests or linters"
-key = "layer-5-ci.1:ci_checks.test_or_lint_runs"
-fix = "Add a CI step that runs your test or lint command on pull requests."
+title = "CI runs your tests or linters, and a failure fails the job"
+key = "layer-5-ci.1:ci_checks.enforced_check_runs"
+fix = "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure."
 
 [[entries]]
 id = "core.cond.layer-5-ci.2.unlocked_total"
@@ -1911,11 +1945,11 @@ key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
 fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests."
 
 [[entries]]
-id = "core.cond.layer-6-coverage.1.enforced"
+id = "core.cond.layer-6-coverage.1.threshold_meets_minimum"
 kind = "condition"
-title = "A coverage gate is configured"
-key = "layer-6-coverage.1:coverage_gate.enforced"
-fix = "Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached."
+title = "A coverage gate of at least 50 percent is configured"
+key = "layer-6-coverage.1:coverage_gate.threshold_meets_minimum"
+fix = "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, so CI holds the line you have reached."
 
 [[entries]]
 id = "core.cond.layer-6-coverage.2.mutation_run"

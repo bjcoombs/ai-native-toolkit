@@ -7,6 +7,10 @@ description: "Harden a skill or any agent instruction file (CLAUDE.md, AGENTS.md
 
 A lead (the Forge Master) chairs ephemeral runner teammates that exercise a draft document via prompt-injection, and a persistent judge panel that scores the transcripts. The lead amends one thing per round and applies a strict 3-tier promotion gate, until the document promotes or hits a budget ceiling. It is proven by forging itself.
 
+<!-- chat-skip:start -->
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+<!-- chat-skip:end -->
+
 The target is a `SKILL.md` by default, but the same loop hardens **any agent instruction file** - `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/*`, `.github/copilot-instructions.md` - because those files have the same failure surface as a skill: they steer an agent and can mislead it. The artifact type is detected deterministically and drives three adaptations (the lens set, the runner variant, and the canonical intent); see [Artifact type and the lens-selector](#artifact-type-and-the-lens-selector) below.
 
 ## Boundary

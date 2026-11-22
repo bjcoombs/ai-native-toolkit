@@ -7,6 +7,8 @@ description: The /assess end-of-run offers - open a PR with the report, track th
 
 The end-of-run half of `/assess`. The report (`.assess/assess-report.md`), the complexity heatmap, and the doc graph are written. This step runs the optional end-of-run offers - in order - then closes the loop:
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 1. **Open a PR** with the report (Step 5).
 2. **Track the Top 3 Actions** in the user's issue tracker (Step 6).
 3. **Freeze the assessment into a CI gate** (Step 6.5).
