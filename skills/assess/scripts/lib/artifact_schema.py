@@ -278,38 +278,6 @@ instead of editing the history comment; the release PR folds the notes in with
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-# Unreleased (bumped once by the 3.0.0 release PR):
-# - run-context.json layer_grades gains instruction_presence (issue #821): root,
-#   nested_only or none. instruction_file_present is true for nested_only, and
-#   instructions_grade there is the best nested grade, where both read as no
-#   instruction file before; both are null when there is no root file and the
-#   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
-#   nested_only and now sits after layer_grades in run-context.json.
-# - ci_checks basis, enforced_basis and lint_basis gain external_ci and
-#   external_ci_marker (issue #928): under --platform, more than half of the sampled
-#   merged pull requests carry a check of a known external CI system; offline, a root
-#   Prow OWNERS_ALIASES with no CI file. Either reads null in place of a false case.
-#   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
-#   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
-#   Additive: no existing key moves.
-# - run-context.json delivery gains sample_page_size (issue #995): the changes per
-#   heavy read the merged sample finished at, or null when none was made. Additive:
-#   no existing key moves.
-# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
-#   #926), both with lint_runs null: a CI .NET build whose committed project files
-#   turn on the analysers, and a compiler run with warnings as errors as the only
-#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
-#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
-#   --exit-code in its job counts, and a target whose recipe is not read reads
-#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
-# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
-#   the number of dependency manifests the lockfile check reads. Additive: no
-#   existing key moves, and complexity-stats.json is unchanged.
-# - issue #959: an unparsed GitLab include record is kind unknown (was local), and
-#   an unquoted YAML tag, anchor or alias entry is unparsed (was a local glob);
-#   stats_summary with no complexity-stats.json is available: false
-#   (no_complexity_stats) with files_scored null (was 0); review_reality and
-#   delivery on a host no platform read supports read unsupported_host (was network).
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
