@@ -38,8 +38,9 @@ never gives credit: an external context shows that a check ran, not that it
 ran the tests or could block the merge.
 
 A GitLab sample, an empty sample, a sample that could not be read, or any
-refused call returns a reading that does not apply, so the offline result
-stands. GitLab external pipelines are not read.
+refused call (other than ``not_found``) returns a reading that does not apply, so
+the offline result stands. A ``not_found`` head (a merged fork pull request whose
+commit the remote no longer holds) counts that change as not external. GitLab external pipelines are not read.
 """
 from __future__ import annotations
 
@@ -74,10 +75,14 @@ def read_external_ci(merged_sample: object) -> ExternalCi:
     slug = merged_sample.github.slug
     shas = [str(c["headRefOid"]) for c in merged_sample.changes
             if isinstance(c.get("headRefOid"), str) and c["headRefOid"]]
-    try:
-        external = sum(_carries_external(slug, sha) for sha in shas)
-    except GhUnavailable:
-        return NOT_READ  # a refused read leaves the offline result
+    external = 0
+    for sha in shas:
+        try:
+            external += _carries_external(slug, sha)
+        except GhUnavailable as e:
+            if e.reason.startswith("not_found"):
+                continue  # a head the remote no longer holds: that change is not external
+            return NOT_READ  # a refused or rate-limited read leaves the offline result
     return ExternalCi(len(merged_sample.changes), external)
 
 

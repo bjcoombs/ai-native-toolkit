@@ -140,6 +140,8 @@ def test_the_app_allowlist(slug: object, known: bool) -> None:
     ("buildkite/rails", True), ("buildkite", True), ("tide", True), ("ci/circleci: test", True),
     ("continuous-integration/travis-ci/pr", True), ("Azure Pipelines", True),
     ("luci-flutter", True), ("codecov/patch", False), ("EasyCLA", False), ("cla/google", False),
+    ("tidelift", False), ("Tidelift Alignment", False), ("lucidchart", False),
+    ("buildkitex", False), ("jenkinsfile-lint", False), ("jenkins/pr-head", True),
     ("", False), (3, False),
 ])
 def test_the_context_allowlist(context: object, known: bool) -> None:
@@ -211,6 +213,12 @@ def test_read_external_ci_counts_known_systems(monkeypatch: pytest.MonkeyPatch) 
                                         "repos/o/ext/commits/H3/status"]
     assert all(args[0] == "api" and not cache for args, cache in calls)
     assert len(calls) <= ext.CALLS_PER_CHANGE * 4
+
+
+def test_a_missing_head_counts_as_not_external(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake(monkeypatch, {"H1/check-runs": GhUnavailable("not_found: gone"),
+                        "H2/check-runs": BK_RUNS, "H3/check-runs": BK_RUNS})
+    assert ext.read_external_ci(_sample(["H1", "H2", "H3"])) == ExternalCi(3, 2)
 
 
 def test_a_refused_read_or_no_github_sample_reads_nothing(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -6,8 +6,8 @@ value through :func:`as_external`. The two live apart so the offline ``ci_checks
 scan never imports a platform client (``lib.gh_cli``).
 
 The allowlist: a check run's app slug in ``EXTERNAL_CI_APPS``, or a commit status
-context equal to or starting with an entry of ``EXTERNAL_CI_CONTEXTS``, compared
-case-insensitively. Anything else (``github-actions``, ``codecov``,
+context equal to an entry of ``EXTERNAL_CI_CONTEXTS`` or the entry followed by a
+separator (``/``, ``:``, a space or ``-``), compared case-insensitively. Anything else (``github-actions``, ``codecov``,
 ``coderabbitai``, a CLA bot) is not CI evidence. :attr:`ExternalCi.applies` is the
 majority rule: more than half of the sampled changes carry a known system.
 """
@@ -57,8 +57,18 @@ def known_app(slug: object) -> bool:
     return isinstance(slug, str) and slug.lower() in EXTERNAL_CI_APPS
 
 
+# What may follow an entry in a longer context (``buildkite/rails``, ``ci/circleci: test``,
+# ``luci-flutter``): never a letter, so ``tide`` does not match ``tidelift``.
+_SEPARATORS = "/: -"
+
+
 def known_context(context: object) -> bool:
+    """A status context equal to an entry, or an entry followed by a separator."""
     if not isinstance(context, str):
         return False
     name = context.strip().lower()
-    return any(name == entry.rstrip("/") or name.startswith(entry) for entry in EXTERNAL_CI_CONTEXTS)
+    for entry in EXTERNAL_CI_CONTEXTS:
+        base = entry.rstrip("/")
+        if name == base or (name.startswith(base) and name[len(base)] in _SEPARATORS):
+            return True
+    return False

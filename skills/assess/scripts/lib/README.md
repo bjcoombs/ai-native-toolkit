@@ -3816,9 +3816,10 @@ The `external_ci` value type and allowlist (#928), apart from `external_ci.py` s
 known system). The allowlist of known CI systems: a check run's app slug in
 `EXTERNAL_CI_APPS` (`buildkite`, `circleci-checks`, `travis-ci`, `appveyor`, `cirrus-ci`,
 `azure-pipelines`, `google-cloud-build`, `flutter-dashboard` for LUCI, and others), or a
-status context equal to or starting with an entry of `EXTERNAL_CI_CONTEXTS`
-(`buildkite/`, `ci/circleci`, `continuous-integration/travis-ci`, `azure pipelines`,
-`luci`, Prow's `tide`, and others), case-insensitive. An app or context on neither list
+status context equal to an entry of `EXTERNAL_CI_CONTEXTS` (`buildkite/`, `ci/circleci`,
+`continuous-integration/travis-ci`, `azure pipelines`, `luci`, Prow's `tide`, and others)
+or the entry followed by `/`, `:`, a space or `-` (so `tide` never matches `tidelift`),
+case-insensitive. An app or context on neither list
 (`github-actions`, `codecov`, `coderabbitai`, a CLA bot) changes nothing. Tests:
 `tests/test_external_ci.py`.
 
@@ -3837,7 +3838,7 @@ status descriptions are free text); only the two counts leave the module. `exter
 in `ci_checks` means an external check context on merged changes under `--platform`: more
 than half of the sampled merges carry a known external CI system. A GitLab sample, an
 empty or unread sample and any refused call (`GhUnavailable`) read `NOT_READ`, so the
-offline result stands. Tests: `tests/test_external_ci.py`.
+offline result stands; a `not_found` head counts that change as not external instead. Tests: `tests/test_external_ci.py`.
 
 **`merged_ci.py`**
 The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
