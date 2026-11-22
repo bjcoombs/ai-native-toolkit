@@ -82,6 +82,7 @@ regen:
 	cd skills/assess && uv run --locked python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; open('references/counts-only.md', 'w', encoding='utf-8', newline='\\n').write(render_doc())"
 	cd skills/assess && uv run --locked python tests/fleet_data_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_diagrams_fixture.py
+	cd skills/assess && uv run --locked python tests/assess_diagrams_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_trends_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_heatmap_fixture.py
 	cd skills/assess && uv run --locked python ../fleet/scripts/heatmap.py tests/fixtures/fleet_heatmap --levels tests/fixtures/fleet_heatmap/levels.toml --output tests/fixtures/fleet_heatmap/expected.svg
