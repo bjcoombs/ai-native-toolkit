@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import shlex
+from itertools import takewhile
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
@@ -583,10 +584,12 @@ def script_path(text: str) -> str | None:
         return None
     head = words[0]
     if head in ("bash", "sh", "zsh"):
-        pos = _positionals(words[1:])
-        if not pos or any(w.startswith("-") and "c" in w[1:] for w in words[1:]):
+        # Only the shell's own flags, before the script: ``bash x.sh --ci`` runs ``x.sh``.
+        flags = list(takewhile(lambda w: w.startswith("-"), words[1:]))
+        rest = words[1 + len(flags):]
+        if not rest or any("c" in w[1:] for w in flags if not w.startswith("--")):
             return None
-        path = pos[0]
+        path = rest[0]
     elif head in RUNNERS or not (head.startswith(("./", "bin/")) or head.endswith(".sh")):
         return None
     else:

@@ -586,6 +586,8 @@ def test_lint_runs_on_an_unread_ci_system_is_not_measured(
     pytest.param({**_gha("./ci.sh"), "ci.sh": "pytest\n"}, (True, "enforced_check"),
                  id="committed-ci-sh"),
     pytest.param(_gha("bash scripts/test.sh"), (None, "script_not_found"), id="missing-bash-script"),
+    pytest.param(_gha("bash scripts/test.sh --ci"), (None, "script_not_found"),
+                 id="missing-bash-script-with-flag"),
     pytest.param({**_gha("bash scripts/test.sh"), "scripts/test.sh": "pytest\n"},
                  (True, "enforced_check"), id="committed-bash-script"),
     pytest.param({**_gha("cd svc && ./ci.sh"), "svc/ci.sh": "pytest\n"}, (True, "enforced_check"),
