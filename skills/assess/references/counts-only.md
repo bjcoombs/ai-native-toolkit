@@ -751,3 +751,7 @@ kept as written. A string
 | `repos.rows.status` | token |
 | `repos.rows.value` | token |
 | `repos.rows.reason` | token |
+| `opportunities.biggest_lift.repos` | path (hashed when hashing is on) |
+| `opportunities.shared_templates.repos` | path (hashed when hashing is on) |
+| `opportunities.shared_templates.source` | path (hashed when hashing is on) |
+| `opportunities.shared_templates.kind` | token |
