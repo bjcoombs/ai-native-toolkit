@@ -3628,7 +3628,9 @@ program behind them stays false (`xargs rm` is not a target whose recipe is unre
 `xargs clang-format-21 -i`, `mix format`), read by `ci_lint_gates`. `is_info_invocation`
 reads the program by `lint_vocabulary.program_name` (`clang-tidy-18 -h`). `nx graph`,
 `nx show`, `nx list`, `nx report`, `nx reset` and `nx daemon` print information:
-`check_verdict` reads them false, not null. Tests: `tests/test_check_command.py`,
+`check_verdict` reads them false, not null, and so do `npx nx graph`, `pnpm exec nx graph`
+(`may_lint` too) and `pnpm nx graph` / `yarn nx graph` (a package-manager head running a
+target runner is read as that runner). Tests: `tests/test_check_command.py`,
 `tests/test_check_runners.py` (#920), `tests/test_lint_vocabulary.py` (#926),
 `tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
 (`test_lint_runs_per_command`).
@@ -3650,7 +3652,14 @@ format -o none` only print); formatter checks count as lint (maintainer decision
 task after `-x`) named `lint*`, `ktlint*Check`, `detekt*`, `spotless*Check` or
 `checkstyle*`, never one that fixes, formats, applies or records a baseline (`lintFix`,
 `ktlintFormat`, `spotlessApply`, `detektBaseline`). `ecosystem_lint(words)` is any of the
-three, with `php <program>` read as the program. `compiler_gate(words)` is a compiler run
+three, with `php <program>` read as the program, and never a run `runs_no_analysis(words)`
+names: a formatter's rewrite mode, `swiftlint --fix` / `autocorrect`, or a per-program mode
+in `_NO_ANALYSIS` that configures, lists, explains or records a baseline and exits 0
+(`phpcs --config-set`, `phpcs -i`, `phpstan analyse --generate-baseline`, `phpstan
+clear-result-cache`, `psalm --init` / `--set-baseline`, `detekt --create-baseline` /
+`--generate-config`, `swiftlint version` / `rules`, `clang-tidy --list-checks` / `-fix`,
+`mix credo gen.config` / `explain`). `check_command` checks it ahead of `LINT_PROGRAMS`, so
+those read false at Layer 5 too. `compiler_gate(words)` is a compiler run
 with warnings as errors (`mix compile --warnings-as-errors`, `-Werror` after a compiler,
 `make`, `ninja` or `cmake`, `-DCMAKE_COMPILE_WARNING_AS_ERROR=ON`, `dotnet build
 -warnaserror` or `-p:TreatWarningsAsErrors=true`), never a lint run (decision 1).
@@ -3771,7 +3780,10 @@ job turns into a lint run with `git diff --exit-code` or `git diff --quiet`; a r
 alone, followed by a commit, or with the diff in another job is not one, and nor is a diff
 whose failure an `||` handler absorbs without re-raising it (`git diff --quiet || git
 commit -am fmt`; `|| exit 1` and `|| false` re-raise). A diff under a GitLab `after_script:`
-key is no gate either (`_after_script`): GitLab ignores its exit codes. `job_ids(lines)`
+key is no gate either (`_after_script`): GitLab ignores its exit codes. Nor is a diff with a
+`git add` or `git commit` between it and the rewrite (`_stages`), since the working tree
+then shows no change. A property tag with a `Condition` attribute counts (it may apply, so
+it reads null, never false). `job_ids(lines)`
 numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
 under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
 `ci_checks` shares. `line_compiler_gate` and `line_dotnet_build` are per-line tests over

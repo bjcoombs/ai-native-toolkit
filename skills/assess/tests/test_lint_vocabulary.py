@@ -36,6 +36,14 @@ NOT_LINT_RUNS = [
     "php-cs-fixer fix", "clang-format --Werror a.cc", "clang-tidy-18 --version",
     "swiftlint --help", "dart pub get", "xargs rm -f", "swiftlint --fix", "swiftlint lint --fix",
     "swiftlint autocorrect",
+    # Analyser modes that run no analysis (the lead's pre-review, item 2).
+    "vendor/bin/phpcs --config-set installed_paths vendor/x", "vendor/bin/phpcs --config-show",
+    "vendor/bin/phpcs -i", "vendor/bin/phpstan analyse --generate-baseline",
+    "vendor/bin/phpstan clear-result-cache", "swiftlint version", "swiftlint rules",
+    "clang-tidy --list-checks", "clang-tidy-18 -dump-config", "vendor/bin/psalm --init",
+    "vendor/bin/psalm --set-baseline=psalm-baseline.xml", "detekt --create-baseline",
+    "detekt --generate-config", "mix credo gen.config", "mix credo explain lib/a.ex",
+    "php vendor/bin/phpstan analyse --generate-baseline", "clang-tidy -fix src/a.cc",
 ]
 
 

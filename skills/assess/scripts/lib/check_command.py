@@ -18,7 +18,8 @@ import shlex
 from pathlib import PurePosixPath
 
 from lib.command_resolver import RUNNERS, command_words
-from lib.lint_vocabulary import ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name
+from lib.lint_vocabulary import (
+    ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
 
 CHECK_WORDS = frozenset({
     "test", "tests", "check", "checks", "verify", "ci", "validate", "pytest", "tox", "nox",
@@ -148,7 +149,7 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
-    if formatter_mode(words) == "rewrite":   # swiftlint --fix rewrites, like clang-format -i
+    if runs_no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
         return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
             words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
@@ -335,7 +336,7 @@ def is_lint_run(text: str) -> bool:
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or is_info_invocation(text):
         return False
-    if formatter_mode(words) == "rewrite":   # swiftlint --fix: gated only by a git diff (#926)
+    if runs_no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
         return False
     if ecosystem_lint(words):   # phpstan, mix credo, ./gradlew ktlintCheck, pint --test (#926)
         return True
@@ -376,6 +377,9 @@ def may_lint(text: str) -> bool:
             return False
         if runner[0] == "playwright" and _positionals(runner[1:])[:1] == ["test"]:
             return False
+        if runner[0] == "nx" and _positionals(runner[1:])[:1] and _positionals(
+                runner[1:])[0] in _NX_INFO:
+            return False   # npx nx graph: information only, as at Layer 5 (#926)
         return not is_check_name(_TYPE_CHECK.sub("typecheck", runner[0]), _RUN_WORDS)
     program = _program(words)
     if program[:2] == ["pre-commit", "run"]:
@@ -586,6 +590,8 @@ def _js_script_verdict(head: str, words: list[str]) -> bool | None:
     if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
         return False
     rest = words[words.index(pos[0], 1):]   # pnpm turbo run test: a bin of the package
+    if rest[0] in TARGET_RUNNERS:   # pnpm nx graph, yarn turbo run build: read the runner
+        return _check_verdict(rest)
     return True if _check_verdict(rest) is True else _target_verdict(pos[:1])
 
 

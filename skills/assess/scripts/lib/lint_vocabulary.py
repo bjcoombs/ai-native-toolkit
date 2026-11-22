@@ -133,6 +133,45 @@ def subcommand_lint(words: list[str]) -> bool:
     return False
 
 
+# Per program, the flags and subcommands that run no analysis: they configure, list,
+# explain, fix or record a baseline and exit 0 (``phpcs --config-set``, ``phpstan analyse
+# --generate-baseline``, ``swiftlint version``, ``clang-tidy --list-checks``).
+_NO_ANALYSIS: dict[str, frozenset[str]] = {
+    "phpcs": frozenset({"--config-set", "--config-show", "--config-delete", "-i", "-e"}),
+    "phpstan": frozenset({"--generate-baseline", "clear-result-cache", "worker", "list",
+                          "dump-deps", "diagnose"}),
+    "psalm": frozenset({"--init", "--set-baseline", "--update-baseline", "--alter",
+                        "--clear-cache", "--clear-global-cache", "--list-supported-issues"}),
+    "detekt": frozenset({"--create-baseline", "-cb", "--generate-config", "-gc"}),
+    "swiftlint": frozenset({"--fix", "autocorrect", "version", "rules", "generate-docs",
+                            "reporters"}),
+    "clang-tidy": frozenset({"--list-checks", "-list-checks", "--dump-config", "-dump-config",
+                             "--explain-config", "-explain-config", "--fix", "-fix",
+                             "--fix-errors", "-fix-errors"}),
+    "cppcheck": frozenset({"--errorlist", "--doc"}),
+}
+# ``mix credo`` subcommands that run no analysis.
+_CREDO_NOT_ANALYSIS = frozenset({"gen.config", "gen.check", "explain", "categories", "info",
+                                 "version", "help"})
+
+
+def runs_no_analysis(words: list[str]) -> bool:
+    """An analyser or ``mix credo`` asked for a mode that runs no analysis (#926), or a
+    formatter in its rewrite mode: neither is a lint run on its own."""
+    if not words:
+        return False
+    if program_name(words[0]) == "php" and len(words) > 1 and not words[1].startswith("-"):
+        return runs_no_analysis(words[1:])
+    if formatter_mode(words) == "rewrite":
+        return True
+    head = program_name(words[0])
+    if head == "mix":
+        pos = _pos(words[1:])
+        return pos[:1] == ["credo"] and bool(set(pos[1:2]) & _CREDO_NOT_ANALYSIS)
+    modes = _NO_ANALYSIS.get(head, frozenset())
+    return any(w.split("=", 1)[0] in modes for w in words[1:])
+
+
 def ecosystem_lint(words: list[str]) -> bool:
     """A lint run this module's vocabulary reads: an analyser, a formatter in check mode or
     a build-tool lint subcommand; ``php <program>`` reads as the program it runs."""
@@ -140,9 +179,10 @@ def ecosystem_lint(words: list[str]) -> bool:
         return False
     if program_name(words[0]) == "php" and len(words) > 1 and not words[1].startswith("-"):
         return ecosystem_lint(words[1:])
-    mode = formatter_mode(words)
-    return mode != "rewrite" and (program_name(words[0]) in ANALYSER_PROGRAMS or mode == "check"
-                                  or subcommand_lint(words))
+    if runs_no_analysis(words):
+        return False
+    return (program_name(words[0]) in ANALYSER_PROGRAMS or formatter_mode(words) == "check"
+            or subcommand_lint(words))
 
 
 _COMPILERS = frozenset({

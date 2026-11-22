@@ -114,6 +114,12 @@ def _after_script(lines: Sequence[str]) -> frozenset[int]:
     return frozenset(out)
 
 
+def _stages(line: str) -> bool:
+    """``git add`` or ``git commit``: after either, ``git diff`` sees no working-tree change."""
+    return any(command_words(c.text)[:2] in (["git", "add"], ["git", "commit"])
+               for c in line_commands(line))
+
+
 def rewrite_gated(text: str) -> frozenset[int]:
     """Indices of the rewrite-formatter lines a later unmasked ``git diff`` gate of the same
     job turns into a lint run (the same line counts: ``clang-format -i a && git diff --quiet``)."""
@@ -125,7 +131,10 @@ def rewrite_gated(text: str) -> frozenset[int]:
     ignored = _after_script(lines)
     diffs = [j for j, line in enumerate(unmasked_lines(text))
              if j not in ignored and _diff_gate(line)]
-    return frozenset(i for i in rewrites if any(j >= i and jobs[j] == jobs[i] for j in diffs))
+    staged = [k for k, line in enumerate(lines) if _stages(line)]
+    return frozenset(i for i in rewrites if any(
+        j >= i and jobs[j] == jobs[i]
+        and not any(i <= k <= j and jobs[k] == jobs[i] for k in staged) for j in diffs))
 
 
 # A YAML list item with no key (``- msbuild``), as ``ci_checks._BARE_ITEM`` reads it.
@@ -151,9 +160,12 @@ def line_dotnet_build(line: str, *, script_item: bool = True) -> bool:
     return any(dotnet_build(w) for w in _line_words(line, script_item))
 
 
-_WARNASERROR = re.compile(r"<TreatWarningsAsErrors>\s*true\s*<", re.IGNORECASE)
+# A property tag may carry a Condition attribute (``<TreatWarningsAsErrors
+# Condition="'$(CI)'=='true'">``): it may apply, so it reads null, never false.
+_WARNASERROR = re.compile(r"<TreatWarningsAsErrors\b[^>]*>\s*true\s*<", re.IGNORECASE)
 _ANALYSERS = re.compile(
-    r"<EnforceCodeStyleInBuild>\s*true\s*<|<AnalysisLevel>\s*(?!none\s*<)[^<\s]", re.IGNORECASE)
+    r"<EnforceCodeStyleInBuild\b[^>]*>\s*true\s*<|<AnalysisLevel\b[^>]*>\s*(?!none\s*<)[^<\s]",
+    re.IGNORECASE)
 
 
 def _project_files(tracked: frozenset[str]) -> list[str]:

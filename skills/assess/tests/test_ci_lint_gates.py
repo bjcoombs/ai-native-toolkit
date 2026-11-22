@@ -67,6 +67,20 @@ def _props(*props: str) -> str:
                  (False, "no_lint_command"), id="REWRITE-DIFF-OR-COMMIT"),
     pytest.param(_wf(_step("mix format\ngit diff --quiet || (git commit -am fmt && git push)")),
                  (False, "no_lint_command"), id="REWRITE-DIFF-OR-COMMIT-PUSH"),
+    pytest.param(_wf(_step("clang-format -i a.cc\ngit diff --quiet || git commit -am fmt")),
+                 (False, "no_lint_command"), id="REWRITE-CLANG-DIFF-OR-COMMIT"),
+    pytest.param(_wf(_step("clang-format -i a.cc\ngit add -A\ngit diff --exit-code")),
+                 (False, "no_lint_command"), id="REWRITE-ADD-DIFF"),
+    pytest.param(_wf(_step("clang-format -i a.cc && git add -A && git diff --exit-code")),
+                 (False, "no_lint_command"), id="REWRITE-ADD-DIFF-ONE-LINE"),
+    pytest.param(_wf(_step("mix format\ngit commit -am fmt\ngit diff --exit-code")),
+                 (False, "no_lint_command"), id="REWRITE-COMMIT-DIFF"),
+    pytest.param(_wf(_step("mix format\ngit diff --exit-code\ngit add -A")),
+                 (True, "lint_command"), id="REWRITE-DIFF-THEN-ADD"),
+    pytest.param(_wf(_step("swiftlint --fix\ngit commit -am fix && git push")),
+                 (False, "no_lint_command"), id="SWIFTLINT-FIX-COMMIT"),
+    pytest.param(_wf(_step("vendor/bin/phpcs --config-set installed_paths vendor/x")),
+                 (False, "no_lint_command"), id="PHPCS-CONFIG-SET"),
     pytest.param(_wf(_step("mix format\ngit diff --quiet || echo changed")),
                  (False, "no_lint_command"), id="REWRITE-DIFF-OR-ECHO"),
     pytest.param(_wf(_step("mix format\ngit diff --exit-code || echo \"false alarm, ignoring\"")),
@@ -109,6 +123,15 @@ def _props(*props: str) -> str:
                   "src/App/App.csproj": "<Project><PropertyGroup><AnalysisLevel>latest-recommended"
                                         "</AnalysisLevel></PropertyGroup></Project>\n"},
                  (None, "analysers_in_build"), id="NETAN-CSPROJ-ANALYSISLEVEL"),
+    pytest.param({**_wf(_step("dotnet build")),
+                  _PROPS: "<Project><PropertyGroup><AnalysisLevel Condition=\"'$(X)'==''\">"
+                          "latest</AnalysisLevel></PropertyGroup></Project>\n"},
+                 (None, "analysers_in_build"), id="NETAN-CONDITIONAL"),
+    pytest.param({**_wf(_step("dotnet build")),
+                  _PROPS: "<Project><PropertyGroup><TreatWarningsAsErrors Condition="
+                          "\"'$(CI)'=='true'\">true</TreatWarningsAsErrors></PropertyGroup>"
+                          "</Project>\n"},
+                 (None, "compiler_gate_only"), id="WARNASERROR-CONDITIONAL"),
     pytest.param(_wf(_step("dotnet build")), (False, "no_lint_command"), id="DOTNET-PLAIN"),
     pytest.param({**_wf(_step("dotnet restore")), _PROPS: _props("EnforceCodeStyleInBuild")},
                  (False, "no_lint_command"), id="NETAN-NO-BUILD"),
@@ -119,6 +142,11 @@ def _props(*props: str) -> str:
     pytest.param(_wf(_step("make install")), (False, "no_lint_command"), id="make-install"),
     pytest.param(_wf(_step("npm run build")), (False, "no_lint_command"), id="npm-run-build"),
     pytest.param(_wf(_step("nx graph")), (False, "no_lint_command"), id="nx-graph"),
+    pytest.param(_wf(_step("npx nx graph")), (False, "no_lint_command"), id="npx-nx-graph"),
+    pytest.param(_wf(_step("pnpm nx graph")), (False, "no_lint_command"), id="pnpm-nx-graph"),
+    pytest.param(_wf(_step("pnpm exec nx show projects")), (False, "no_lint_command"),
+                 id="pnpm-exec-nx-show"),
+    pytest.param(_wf(_step("yarn nx graph")), (False, "no_lint_command"), id="yarn-nx-graph"),
     pytest.param(_wf(_step("bazel test //...")), (None, "check_target"), id="bazel-test"),
     # Criterion 8: a masked gate or linter reads the masked state.
     pytest.param(_wf(_step("mix compile --warnings-as-errors",
@@ -155,8 +183,20 @@ def test_an_unread_ci_system_still_reads_ahead_of_the_compiler_gate(tmp_path: Pa
     assert _scan(tmp_path, files) == (None, "unread_ci_system")
 
 
-def test_nx_graph_is_not_an_enforced_check_either(tmp_path: Path) -> None:
-    for rel, text in _wf(_step("nx graph")).items():
+@pytest.mark.parametrize("run", ["nx graph", "npx nx graph", "pnpm nx graph", "yarn nx graph",
+                                 "pnpm exec nx graph"])
+def test_nx_graph_is_not_an_enforced_check_either(tmp_path: Path, run: str) -> None:
+    for rel, text in _wf(_step(run)).items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    assert scan_ci_checks(tmp_path)["enforced_check_runs"] is False
+
+
+@pytest.mark.parametrize("run", ["vendor/bin/phpcs --config-set installed_paths x",
+                                 "swiftlint version", "clang-tidy --list-checks"])
+def test_an_analyser_mode_that_runs_no_analysis_is_no_layer_5_check(tmp_path: Path,
+                                                                    run: str) -> None:
+    for rel, text in _wf(_step(run)).items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text, encoding="utf-8")
     assert scan_ci_checks(tmp_path)["enforced_check_runs"] is False
