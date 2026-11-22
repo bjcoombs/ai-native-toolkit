@@ -1672,7 +1672,45 @@ input, with the degenerate-churn gate on `_CHURN_DERIVED_FINDINGS`) and `_filter
 `integrate`; the C901 gate keeps each step under ccn 15. The attention list and every
 product rendered from the findings (`findings_markdown`, `keyhole_summary`,
 `attention_low_signal`, `prescribed_actions`, `archived_finding_paths`) come from one
-function, `finding_products`, which `mutation_refresh.py` calls too.
+function, `finding_products`, which `mutation_refresh.py` calls too. After
+`_filter_findings`, `integrate` calls `reviewed_findings.mark_reviewed`, and
+`finding_products` reads every product from `reviewed_findings.open_findings`, so a
+reviewed path stays in `derived_findings` but not in the attention list, the
+prescribed actions, the summary or the rendered path lists.
+
+**`reviewed_findings.py`** *(#721)*
+A recorded human review clears `self_referential_tests` until the source changes. The
+finding keys on commit origin (a test co-committed with its code), which no later
+commit can change, so it could never clear before. `committed_reviews` reads
+`.assess/actions.json` **as committed at HEAD** (`git show HEAD:./.assess/actions.json`,
+never the working tree) and collects, from its `actions` and `completed` arrays
+(`action_entries`), every entry with `finding` in `REVIEWABLE_FINDINGS`
+(`self_referential_tests` only), `status: done`, a hex `completed_sha` and a `files`
+list. `mark_reviewed` marks a finding path reviewed when it is in such an entry's
+`files` and `unchanged_since` holds: the sha resolves to a commit that is an ancestor of
+HEAD and `git rev-list <sha>..HEAD -- <path>` is empty. The finding's
+`derived_findings` row keeps the path in `paths` and gains `reviewed`, a list of
+`{path, completed_sha, note}` (`ReviewedPath`; the full resolved sha, and `note` from
+`review_note`, which contains it), written only when non-empty. `open_findings` is the
+rows with reviewed paths taken out of `paths`, which `finding_products` ranks and
+renders; `render_reviewed_markdown` appends a `### Reviewed` section to
+`findings_markdown`. A later commit touching the path re-flags it (no `reviewed`, back in
+attention and `prescribed_actions`). The source path must be in `files`: an entry
+naming only the test file does not clear it. Any failure (no git, no committed file, bad
+JSON, an unknown or non-ancestor sha) leaves the finding open. `carried_completed` gives
+`assess_finalize` the prior `done` entries of a reviewable finding that no new action
+matched; finalize writes them to actions.json `completed`, so a review that took its
+finding out of the Top 3 is not lost on the next finalize. Finalize reads `completed` back
+with `action_entries(..., tag_completed=True)`, and `reopened_status` sets `reopened` on an
+action that matches a done `completed` entry: the finding came back into the Top 3, so the
+old `done` does not carry forward. Counts-only keeps `derived_findings.reviewed.path` and drops the
+sha and the note. `mutation_refresh` carries the stored `reviewed` list through its
+rebuild. The badge's concern count (`badge.concern_count_from_findings`) and the CI
+gate's `fail_on` / `warn_on` (`assess_gate._findings_by_name`) read open paths only, so a
+reviewed path neither counts nor fails the gate. The committed `findings.json` snapshot
+and the method-change diff keep the full `paths`, so a review never reads as a finding
+that cleared. The rule reads the whole-repo `.assess/actions.json` only: a `--scope` run's
+`.assess/<slug>/actions.json` is not read. Tests: `tests/test_reviewed_findings.py`.
 
 **`untrusted_hotspot.py`**
 The E1 trust axis, a leaf module. `find_untrusted_hotspots` crosses the complexity

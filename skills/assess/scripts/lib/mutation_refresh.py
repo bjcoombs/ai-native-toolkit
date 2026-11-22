@@ -52,9 +52,14 @@ def _rebuilt_findings(findings: list[Any], untrusted: list[str]) -> list[Derived
     paths_by_name = {f["name"]: list(f.get("paths") or []) for f in stored}
     paths_by_name["untrusted_hotspot"] = untrusted
     actions = {f["name"]: f["action"] for f in stored if f.get("action")}
+    # A stored ``reviewed`` list (lib.reviewed_findings) is kept, so a path a
+    # done review cleared stays out of the rebuilt attention and Top 3.
+    reviewed = {f["name"]: f["reviewed"] for f in stored if f.get("reviewed")}
     rebuilt = [f for f in assemble_findings(paths_by_name) if f["name"] in paths_by_name]
     for f in rebuilt:
         f["action"] = actions.get(f["name"], f["action"])
+        if f["name"] in reviewed:
+            f["reviewed"] = reviewed[f["name"]]
     return rebuilt
 
 
