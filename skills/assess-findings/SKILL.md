@@ -220,17 +220,19 @@ The headline and the keyhole summary measure **different things and are never co
 
 The **What it asks** column is the question that layer answers for an agent working here - read it first; the framework name is secondary. The **Band** orders them by dependency: a read-side blind spot makes the write-side scores mean less (you can't trust enforcement of a picture you can't see), and the meta band only matters once the rest works.
 
+**Status labels (display only).** The scorer returns `Present`, `Partial`, `Missing` or `N/A`; render the Status cell as **In place**, **Partly in place**, **Next up** or **N/A**, and keep the scorer's token everywhere it is data (`layer_scores`, the finalize input). Write every cell and every line of prose in the supportive vocabulary: the banned words of the deterministic vocabulary list (tangled, penalty, weakest, weak, lying, missing, fail, fails, failed, failing, failure, and the retired band labels Not Ready, Basic, Solid, AI-Native) stay out of prose, and a gap reads as the next goal, never a verdict on the people who built the repository.
+
 | Layer | What it asks | Band | Status | Evidence | Gap |
 |-------|--------------|------|--------|----------|-----|
-| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | Present/Partial/Missing | <what was found> | <what's missing> |
-| 1: Runtime Legibility / Liveness | Can I see which parts are live, which need attention, and which are dead weight? | read | Present/Partial/Missing | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"; if no deployed runtime, note that liveness is read through complexity + churn + reachability, not telemetry> | <what's missing> |
-| 2: Code Design | Will the type-checker catch my mistakes? | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 7: Code Review Bots | Is there design-level feedback on every change? | write | Present/Partial/Missing | <what was found> | <what's missing> |
-| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | Present/Partial/Missing | <what was found> | <what's missing> |
+| 0: Agent Instructions & Navigability | Can I build a true map of this codebase before I touch it? | read | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 1: Runtime Legibility / Liveness | Can I see which parts are live, which need attention, and which are dead weight? | read | In place/Partly in place/Next up | <what was found - if rung 3, append: "Reachable *if* the agent has `<tools cited in runbooks>` in its execution environment"; if no deployed runtime, note that liveness is read through complexity + churn + reachability, not telemetry> | <what's next> |
+| 2: Code Design | Will the type-checker catch my mistakes? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 3: Linters | Are complexity and style bounds enforced, or will my code drift? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 4: Architecture Tests | Are the structural conventions executable, or just folklore? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 5: CI Pipeline | Does something automatically catch a bad change before it merges? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 6: Coverage Gates | Do the tests constrain behaviour, or just execute lines? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 7: Code Review Bots | Is there design-level feedback on every change? | write | In place/Partly in place/Next up | <what was found> | <what's next> |
+| 8: AI Project Mgmt (capstone) | Do learnings feed back into the contracts, or evaporate? | meta | In place/Partly in place/Next up | <what was found> | <what's next> |
 
 **Archetype-aware Status (`N/A` ≠ `Missing`).** When the scorecard marks a layer **N/A** (the write-side layers L2-L7 on a detected knowledge base - see the headline section below), render its Status cell as `N/A`, its Evidence as "not applicable - <archetype> repo has no code surface for this layer", and its Gap as "-". **Never render an N/A layer as Missing** and never propose a remediation action for it: Missing is a real gap (the contributor is asked to be careful where a guardrail could exist); N/A means the layer cannot apply here. An N/A layer names no gap, so a knowledge base strong on its applicable layers reads as ready, not as failing the layers it has no surface for.
 

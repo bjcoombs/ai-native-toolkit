@@ -114,6 +114,31 @@ def test_the_readme_documents_exactly_the_banned_list() -> None:
     assert "tests/test_vocabulary_guard.py" in section and IN_PLACE in section
 
 
+def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -> None:
+    """Every criterion's guidance and every signal's hint, not only the levels a fixture reaches."""
+    from lib.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
+    from lib.headline import _reason_word
+    from lib.level_signals import load_default_levels
+    from lib.next_step_guidance import _LAYER5_PARTS, guidance, measure_hint
+    texts = {"FULL_RUN_HINT": FULL_RUN_HINT, "PLATFORM_HINT": PLATFORM_HINT}
+    for row in load_default_levels()["rows"]:
+        texts[f"{row['id']} title"] = row["title"]
+        for number, level in enumerate(row["levels"], start=1):
+            for criterion in level["criteria"]:
+                signal = criterion["signal"]
+                texts[f"{signal} hint"] = measure_hint(signal)
+                for unmet in ((), *((part,) for part in _LAYER5_PARTS)):
+                    worded = guidance(signal, criterion["op"], criterion["value"], unmet)
+                    if worded is not None:
+                        texts[f"{row['id']}.{number} {signal}"] = f"{worded['change']}\n{worded['done_when']}"
+    for code in ("scan_failed", "missing_checkout", "no_python_packages", "build_failed"):
+        texts[f"reason {code}"] = _reason_word(code)
+    assert len(texts) > 40
+    hits = [f"{term!r} in {name}: {text}" for name, content in texts.items()
+            for term, _, text in banned_hits(content)]
+    assert not hits, "banned vocabulary in next-step guidance:\n" + "\n".join(hits)
+
+
 @pytest.mark.parametrize(("text", "found"), [
     ("Structure reads tangled.", ["tangled"]),
     ("A Lying map.", ["lying"]),
