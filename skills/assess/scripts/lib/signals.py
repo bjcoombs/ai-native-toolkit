@@ -56,6 +56,9 @@ from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 # or when a scanner change alters when an existing signal reads true or null
 # without a new signal name (the fleet comparison convention,
 # lib/fleet_scanner_diff.py). Per-scan block shapes are not versioned here.
+# Unreleased (bumped once by the 3.0.0 release PR): layer_grades.instruction_file_present
+# reads true, and instructions_grade a letter, for a repository whose only instruction
+# files are nested (instruction_presence nested_only, issue #821).
 SIGNALS_SCHEMA_VERSION = 2
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in

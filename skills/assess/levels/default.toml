@@ -101,10 +101,16 @@
 #   instruction_files.INSTRUCTION_FILE_PATHS (root CLAUDE.md, AGENTS.md,
 #   GEMINI.md, .cursorrules; .github/copilot-instructions.md,
 #   .github/claude-instructions.md, .github/claude-review-instructions.md;
-#   docs/CLAUDE.md, docs/AGENTS.md), the presence /assess scores. A boolean,
-#   never null, so "no instruction file" is level 0, as /assess scores a
-#   null instructions_grade Missing, and a missing layer_grades block is
-#   unknown. layer_grades.instructions_grade (the letter grade, null with no
+#   docs/CLAUDE.md, docs/AGENTS.md), or, without one, a nested or path-scoped
+#   file nested_instructions discovers (layer_grades.instruction_presence root
+#   or nested_only, #821: harnesses load a nested AGENTS.md where the agent
+#   works). "No instruction file" (none) is level 0, as /assess scores a null
+#   instructions_grade Missing; the flag is null, and the level unknown, only
+#   when there is no root file and nested_instructions did not run, and a
+#   missing layer_grades block is unknown. A nested-only repository's advice
+#   is the gap_actions layer_grades entry: add a root file that names the
+#   check command. Unreleased: this comment changed with #821 and the criterion
+#   did not; the 3.0.0 release PR bumps "version". layer_grades.instructions_grade (the letter grade, null with no
 #   file) is available to a maturity model too; this one does not grade on the
 #   letter, since /assess weighs it with the instruction text. Level 2 reads
 #   the size of the always-loaded Claude Code instruction text (root

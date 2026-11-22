@@ -5,7 +5,8 @@ blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
-``delivery`` (#715), ``guardrails`` (#767) and ``agent_consistency`` (#768).
+``delivery`` (#715), ``guardrails`` (#767), ``agent_consistency`` (#768) and
+``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -386,6 +387,32 @@ AGENT_CONSISTENCY: JsonDict = {
     },
 }
 
+# The deterministic Layer 0 grade and where the instruction files are (#620, #821).
+LAYER_GRADES: JsonDict = {
+    "description": (
+        "Deterministic layer grades (lib/layer_grades.py): the best instruction-file grade and "
+        "where the agent instruction files are. Tokens and a boolean, kept whole by counts-only "
+        "output; no path is carried."),
+    "properties": {
+        "instruction_presence": _field(
+            {"enum": ["root", "nested_only", "none", None]},
+            "root: a file at a root location (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, "
+            ".github/copilot-instructions.md and the others instruction_files grades) or one the "
+            "tool loads at session start, always loaded. nested_only: no root file, but a nested or "
+            "path-scoped file (pkg/AGENTS.md, a .claude/rules file with paths), loaded on demand "
+            "where the agent works. none: no instruction file at any known location. Null when "
+            "there is no root file and the nested_instructions scan did not run."),
+        "instruction_file_present": _field(
+            {"type": ["boolean", "null"]},
+            "True for root and nested_only, false for none, null with instruction_presence. "
+            "Layer 0 level 1 of the default maturity model reads it."),
+        "instructions_grade": _field(
+            {"type": ["string", "null"]},
+            "Best letter grade (A to F) of the files instruction_presence counts: the root files, "
+            "else the always-loaded or nested ones. Null only for none."),
+    },
+}
+
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "agent_consistency": AGENT_CONSISTENCY,
     "ai_usage": AI_USAGE,
@@ -393,4 +420,5 @@ BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "coverage_gate": COVERAGE_GATE,
     "delivery": DELIVERY,
     "guardrails": GUARDRAILS,
+    "layer_grades": LAYER_GRADES,
 }
