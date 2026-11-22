@@ -1328,6 +1328,7 @@ team rows, no repositories; for the trend no run history or fewer than 3 compara
 the slope chart no `--compare`, runs not comparable, or no row known in both runs). `history`
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
+`fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
@@ -1368,6 +1369,21 @@ described under `scans`), with a `status` enum, a reason-token pattern and an
 `tests/test_fleet_run_stamp.py` fail when a checked-in file differs; regenerate both with
 `uv run --locked python scripts/lib/fleet_schema.py` from `skills/assess`.
 
+**`fleet_coverage.py`**
+Fleet coverage against ghsync's discovery listing (issue #745). `read_discovery` parses
+`fleet.py --discovered FILE` (`parse_discovery`: ghsync `--porcelain` paths or
+`--porcelain-json` objects, `archived` and an empty `default_branch` read, a repeated path
+once, a malformed line a `DiscoveryError` naming its number) and adds the paths in the root's
+`.gh_archived_repos` cache as archived. `reconcile` puts each discovered path in one bucket,
+first match: `assessed` (ok row), `failed_scan` (failed row), `archived_or_empty`,
+`excluded_by_filters` (a checkout under the root this run was not given), `not_cloned`; the
+buckets sum to `discoverable`, and `not_in_listing` counts rows no path names. A path maps to
+a row id as `fleet.layout_id` does (`row_id`). `Coverage` is counts only and is stamped in
+`run.json` (`fleet_stamp.FleetStamp.coverage`, null without a listing, optional in the schema since a stamp from before #745 lacks it; not copied into
+`fleet-data.json`, `fleet_data.RUN_EXCLUDED`). `coverage_line` is the paragraph
+`fleet_diagrams.report_markdown` puts first in `report.md`; without a listing it says the
+coverage is unknown. Tests: `tests/test_fleet_coverage.py`.
+
 **`fleet_stamp.py`**
 The fleet run stamp `<out>/run.json` (issue #569): `FleetStamp` carries the toolkit
 commit, plugin version, UTC scan date, effective window, maturity-model version, output mode
@@ -1376,9 +1392,12 @@ commit, plugin version, UTC scan date, effective window, maturity-model version,
 `fleet_config_sha256` and `fleet_config_entries` from `--fleet-config` (#706; null
 without one, absent before #706 and read as null, so the stamp version stays 1), and
 `platform` (#714: `--platform` ran the platform pass; absent before #714 and read as
-false through `fleet_legacy.stamp_value`). No path,
+false through `fleet_legacy.stamp_value`), and `coverage` (#745: the `--discovered`
+counts from `fleet_coverage.py`; null without a listing, absent before #745, not a
+comparability key). No path,
 salt, timing or input mode, so a
-root run, a list run and any `--jobs` give the same bytes on the same day. `write_stamp`
+root run, a list run and any `--jobs` give the same bytes on the same day (with
+`--discovered`, `coverage` counts the checkouts a list run left out). `write_stamp`
 writes atomically with sorted keys.
 
 **`fleet_config.py`**

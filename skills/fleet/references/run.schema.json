@@ -5,6 +5,49 @@
   "description": "run.json written by skills/fleet/scripts/fleet.py beside repos.jsonl: what produced the run and its repository counts. Generated from lib/fleet_stamp.py by lib/fleet_schema.py.",
   "type": "object",
   "properties": {
+    "coverage": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "discoverable": {
+              "type": "integer"
+            },
+            "assessed": {
+              "type": "integer"
+            },
+            "archived_or_empty": {
+              "type": "integer"
+            },
+            "not_cloned": {
+              "type": "integer"
+            },
+            "failed_scan": {
+              "type": "integer"
+            },
+            "excluded_by_filters": {
+              "type": "integer"
+            },
+            "not_in_listing": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "archived_or_empty",
+            "assessed",
+            "discoverable",
+            "excluded_by_filters",
+            "failed_scan",
+            "not_cloned",
+            "not_in_listing"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "fleet_stamp_version": {
       "type": "integer"
     },
