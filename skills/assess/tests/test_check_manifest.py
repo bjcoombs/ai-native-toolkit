@@ -132,6 +132,12 @@ def test_callables_resolve_to_the_registered_functions(manifest: cm.CheckManifes
         module = importlib.import_module(module_name)
         assert module.__name__ == module_name, f"{module_name}:{attr} resolves through a shim"
         assert attr in vars(module), f"{module_name}:{attr} is not defined in {module_name}"
+        # A re-export (``from lib.nested.worker import scan`` in lib.worker) is in
+        # the namespace too: a callable must be defined by the module it names.
+        value = _fn(vars(module)[attr])
+        if callable(value):
+            assert value.__module__ == module_name, (
+                f"{module_name}:{attr} is defined in {value.__module__}, not {module_name}")
 
 
 def test_headless_tables_match_manifest(manifest: cm.CheckManifest) -> None:

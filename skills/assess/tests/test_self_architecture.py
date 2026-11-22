@@ -103,32 +103,32 @@ def _is_main_guard(node: ast.stmt) -> bool:
     return isinstance(node, ast.If) and ast.unparse(node.test) == "__name__ == '__main__'"
 
 
-def _bound_to(tree: ast.Module, target: str) -> set[str]:
-    """Names an import statement binds to the module ``target``."""
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            names |= {a.asname or a.name for a in node.names if f"{node.module}.{a.name}" == target}
-        elif isinstance(node, ast.Import):
-            names |= {a.asname for a in node.names if a.name == target and a.asname}
-    return names
+def _import_binds(node: ast.stmt, target: str) -> set[str] | None:
+    """The names a top-level shim import binds to ``target``, or None when the
+    statement imports anything else. ``sys`` and ``runpy`` bind no alias."""
+    if isinstance(node, ast.Import):
+        if all(a.name in {"sys", "runpy"} and a.asname is None for a in node.names):
+            return set()
+        if all(a.name == target for a in node.names):
+            return {a.asname or a.name for a in node.names}
+    elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        if all(f"{node.module}.{a.name}" == target for a in node.names):
+            return {a.asname or a.name for a in node.names}
+    return None
 
 
-def _runs(tree: ast.Module, target: str) -> bool:
-    """True when the module calls ``runpy.run_module(target, run_name="__main__")``."""
-    return any(
-        isinstance(node, ast.Call) and ast.unparse(node.func) == "runpy.run_module"
-        and [ast.unparse(a) for a in node.args[:1]] == [repr(target)]
-        and any(k.arg == "run_name" and ast.unparse(k.value) == "'__main__'" for k in node.keywords)
-        for node in ast.walk(tree)
-    )
+def _runpy_call(target: str) -> str:
+    """The only statement a shim's ``__main__`` branch may hold."""
+    return ast.dump(ast.parse(f"runpy.run_module({target!r}, run_name='__main__')").body[0])
 
 
 def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
     """A shim holds the documented form and nothing else: a docstring naming the
-    new dotted path and the removal release, the import of the new module,
-    ``sys.modules[__name__]`` set to it, and, when the new module has a
-    ``__main__`` block, a ``__main__`` branch that runs it with ``runpy``."""
+    new dotted path and the removal release, imports of ``sys``, ``runpy`` and the
+    new module only, ``sys.modules[__name__]`` set to that module at top level (the
+    normal import path), and at most one ``__main__`` branch whose whole body is
+    ``runpy.run_module(target, run_name="__main__")``. That branch is required
+    when the new module has a ``__main__`` block."""
     rel = path.relative_to(LIB_DIR.parent).as_posix()
     doc = ast.get_docstring(tree) or ""
     found = SHIM_DOC.search(doc)
@@ -139,16 +139,26 @@ def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
     if not new.is_file() or _is_shim(_parse(new)):
         return [f"{rel}: shim target {target} is not a real module"]
     problems = []
-    allowed = (ast.Import, ast.ImportFrom, ast.Expr, ast.Assign, ast.If)
-    if any(not isinstance(n, allowed) or (isinstance(n, ast.Assign) and not _sets_sys_modules(n))
-           or (isinstance(n, ast.If) and not _is_main_guard(n))
-           or (isinstance(n, ast.Expr) and n is not tree.body[0]) for n in tree.body):
+    body = tree.body[1:]
+    imports = [n for n in body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    aliases: set[str] = set()
+    for node in imports:
+        bound = _import_binds(node, target)
+        if bound is None:
+            problems.append(f"{rel}: a shim imports only sys, runpy and {target}, not `{ast.unparse(node)}`")
+        else:
+            aliases |= bound
+    top_alias = [n for n in body if _sets_sys_modules(n)]
+    guards = [n for n in body if _is_main_guard(n)]
+    if len(imports) + len(top_alias) + len(guards) != len(body) or len(guards) > 1:
         problems.append(f"{rel}: a shim holds no code beyond the alias and the __main__ branch")
-    aliases = _bound_to(tree, target)
-    values = [ast.unparse(n.value) for n in ast.walk(tree) if isinstance(n, ast.stmt) and _sets_sys_modules(n)]
-    if not values or any(v not in aliases for v in values):
-        problems.append(f"{rel}: sys.modules[__name__] is not set to the imported {target}")
-    if any(_is_main_guard(n) for n in _parse(new).body) and not _runs(tree, target):
+    nested_alias = [n for n in ast.walk(tree) if isinstance(n, ast.stmt) and _sets_sys_modules(n)
+                    and n not in top_alias]
+    if not top_alias or nested_alias or any(ast.unparse(n.value) not in aliases for n in top_alias):
+        problems.append(f"{rel}: sys.modules[__name__] is not set to the imported {target} at top level")
+    if any(guard.orelse or [ast.dump(s) for s in guard.body] != [_runpy_call(target)] for guard in guards):
+        problems.append(f"{rel}: the __main__ branch must be exactly runpy.run_module({target!r}, run_name=\"__main__\")")
+    if any(_is_main_guard(n) for n in _parse(new).body) and not guards:
         problems.append(f"{rel}: {target} runs as a script, so its shim needs a runpy __main__ branch")
     return problems
 

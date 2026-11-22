@@ -303,6 +303,17 @@ def _lib_path(module: str) -> Path:
     return base if base.is_dir() else base.with_suffix(".py")
 
 
+def _absolute_from(path: Path, node: ast.ImportFrom) -> str:
+    """The absolute module a ``from ... import`` in ``path`` reads from: a relative
+    import (``from .gh_cli import x`` in ``lib/hosting/scan.py``) resolves against
+    the importing file's package (``lib.hosting.gh_cli``)."""
+    if node.level == 0:
+        return node.module or ""
+    package = list(path.relative_to(SCRIPTS).parent.parts)
+    base = package[:len(package) - (node.level - 1)]
+    return ".".join(base + ([node.module] if node.module else []))
+
+
 def _lib_imports(module: str) -> set[str]:
     """The ``lib.*`` modules ``module`` imports directly, as dotted names relative to
     ``lib`` (``hosting.gh_cli``); a package stands for any of its files."""
@@ -311,8 +322,8 @@ def _lib_imports(module: str) -> set[str]:
     found: set[str] = set()
     for path in files:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.ImportFrom) and node.level == 0 and _in_lib(node.module or ""):
-                found.update(_lib_module(f"{node.module}.{alias.name}") for alias in node.names)
+            if isinstance(node, ast.ImportFrom) and _in_lib(source := _absolute_from(path, node)):
+                found.update(_lib_module(f"{source}.{alias.name}") for alias in node.names)
             elif isinstance(node, ast.Import):
                 found.update(_lib_module(a.name) for a in node.names if _in_lib(a.name))
     return found - {""}
@@ -341,6 +352,9 @@ def test_reaches_gh_counts_both_platform_clients():
     assert _lib_module("lib.test_pressure.mutation") == "test_pressure.mutation"
     assert _lib_module("lib.test_pressure.scan_test_pressure") == "test_pressure"
     assert "test_pressure" in _lib_imports("core_scans")
+    # A relative import is an edge too: ``from .aggregate import ...`` in
+    # lib/test_pressure/__init__.py reaches lib.test_pressure.aggregate.
+    assert "test_pressure.aggregate" in _lib_imports("test_pressure")
 
 
 def test_the_network_flag_marks_exactly_the_gh_scans():
