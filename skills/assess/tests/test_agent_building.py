@@ -199,6 +199,36 @@ def test_same_host_pairing_needs_one_host_for_both_calls(tmp_path: Path) -> None
     assert (block["issue_trackers"], block["pairing"]) == ([], False)
 
 
+@pytest.mark.parametrize("issues_call", ["x = p.issues.list()", "issue = gl.Issues.GetIssue(pid, 1)"])
+def test_an_issues_call_two_declared_hosts_share_is_not_the_pairing(tmp_path: Path, issues_call: str) -> None:
+    # python-gitlab issues (or go-gitlab's Issues service) with a GitHub pull request, both clients declared.
+    files = {"requirements.txt": "openai\npython-gitlab\nPyGithub\n",
+             "bot.py": f"{issues_call}\nrepo.create_pull(title='t', head='b', base='main')\n"}
+    block = scan_agent_building(_repo(tmp_path, "ambiguous", files))
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == ([], False, "none")
+
+
+def test_an_unambiguous_issues_call_still_pairs_with_two_hosts_declared(tmp_path: Path) -> None:
+    files = {"requirements.txt": "openai\npython-gitlab\nPyGithub\n",
+             "bot.py": "issue = repo.get_issue(1)\nrepo.create_pull(title='t', head='b', base='main')\n"}
+    block = scan_agent_building(_repo(tmp_path, "gh2", files))
+    assert (block["issue_trackers"], block["pairing"]) == (["github"], True)
+
+
+def test_an_unrelated_issues_attribute_is_not_an_issues_call(tmp_path: Path) -> None:
+    # A Django related manager named issues, beside a real PyGithub pull-request call.
+    files = {"requirements.txt": "openai\nPyGithub\n",
+             "bot.py": "qs = self.issues.filter(x=1)\nrepo.get_pulls()\n"}
+    assert scan_agent_building(_repo(tmp_path, "django", files))["pairing"] is False
+
+
+@pytest.mark.parametrize("call", ["octokit.rest.issues.listForRepo(q)", "github.rest.issues.create(o, r)",
+                                  "p.issues.get(1)"])
+def test_issues_client_verbs_are_issues_calls(tmp_path: Path, call: str) -> None:
+    files = {"requirements.txt": "openai\nPyGithub\n", "bot.py": f"{call}\nrepo.get_pulls()\n"}
+    assert scan_agent_building(_repo(tmp_path, "verbs", files))["pairing"] is True
+
+
 def test_same_host_calls_without_a_declared_client_are_not_the_pairing(tmp_path: Path) -> None:
     files = {"bot.py": "x = p.issues.list()\np.mergerequests.create({})\n"}
     block = scan_agent_building(_repo(tmp_path, "noclient", files))

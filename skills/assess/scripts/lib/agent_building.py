@@ -24,7 +24,8 @@ Per repository it records four kinds of evidence:
   (``ISSUE_API_PATTERNS`` and ``CHANGE_API_PATTERNS``, issue #731): an agent
   that reads GitLab or GitHub issues and opens merge requests on the same host.
   Calls are credited only to a host already in ``git_hosts``, and both kinds
-  must be for that one host. ``pairing`` is true when the repository has at
+  must be for that one host; a call form two hosts' clients share counts only
+  when exactly one of those hosts is in ``git_hosts``. ``pairing`` is true when the repository has at
   least one issue tracker and one Git host: the marker of a
   ticket-to-merge-request agent.
 
@@ -143,8 +144,9 @@ class _Evidence:
         self.llm = False
         self.trackers: set[str] = set()
         self.hosts: set[str] = set()
-        self.issue_calls: set[str] = set()  # hosts whose issues API the source calls
-        self.change_calls: set[str] = set()  # hosts whose MR/PR API the source calls
+        # The candidate hosts of each matched call form, resolved once ``hosts`` is complete.
+        self.issue_calls: set[tuple[str, ...]] = set()  # issues API calls
+        self.change_calls: set[tuple[str, ...]] = set()  # merge-request / pull-request API calls
         self.manifests = 0
         self.config: set[str] = set()
         self.ci_agents: set[str] = set()
@@ -174,12 +176,25 @@ class _Evidence:
         for slug, kind, pattern in ENDPOINT_PATTERNS:
             if pattern.search(text):
                 (self.trackers if kind == "tracker" else self.hosts).add(slug)
-        self.issue_calls |= {slug for slug, pattern in ISSUE_API_PATTERNS if pattern.search(text)}
-        self.change_calls |= {slug for slug, pattern in CHANGE_API_PATTERNS if pattern.search(text)}
+        self.issue_calls |= {hosts for hosts, pattern in ISSUE_API_PATTERNS if pattern.search(text)}
+        self.change_calls |= {hosts for hosts, pattern in CHANGE_API_PATTERNS if pattern.search(text)}
+
+    def _credited(self, calls: set[tuple[str, ...]]) -> set[str]:
+        """The host each call belongs to, when exactly one of its candidates is a known host."""
+        credited: set[str] = set()
+        for candidates in calls:
+            owners = self.hosts.intersection(candidates)
+            if len(owners) == 1:
+                credited |= owners
+        return credited
 
     def same_host_trackers(self) -> set[str]:
-        """Hosts whose client the source uses for both issues and merge or pull requests."""
-        return self.hosts & self.issue_calls & self.change_calls
+        """Hosts whose client the source uses for both issues and merge or pull requests.
+
+        A call form two hosts' clients share counts only when one of those hosts
+        is in ``hosts``, so an ambiguous issues call never pairs.
+        """
+        return self._credited(self.issue_calls) & self._credited(self.change_calls)
 
     def add_ci(self, text: str) -> None:
         agents = {slug for slug, pattern in CI_AGENT_PATTERNS if pattern.search(text)}
