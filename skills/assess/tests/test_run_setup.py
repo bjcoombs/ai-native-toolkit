@@ -34,6 +34,11 @@ def test_read_plugin_version_degrades_to_unknown(tmp_path: Path) -> None:
     assert run_setup.read_plugin_version(bad) == "unknown"
     bad.write_text('{"version": "9.9.9"}', encoding="utf-8")
     assert run_setup.read_plugin_version(bad) == "9.9.9"
+    # The default path is the real manifest: a wrong Path(__file__).parents[N]
+    # after a #917 move would read ``unknown`` here without raising.
+    real = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"
+    assert run_setup.read_plugin_version() == json.loads(real.read_text(encoding="utf-8"))["version"]
+    assert run_setup.read_plugin_version() != "unknown"
 
 
 def test_run_header_emits_its_declared_keys_in_order(tmp_path: Path) -> None:

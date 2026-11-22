@@ -17,6 +17,7 @@ from __future__ import annotations
 import copy
 import importlib
 import json
+import re
 import tomllib
 import types
 from collections.abc import Iterable
@@ -121,6 +122,16 @@ def test_callables_resolve_to_the_registered_functions(manifest: cm.CheckManifes
     for f in cm.findings(manifest):
         if "derive" in f:
             assert callable(_resolve(f["derive"])), f["name"]
+    # Every "lib.x:attr" string in the file, in any table, names the module that
+    # holds attr: a #917 alias shim (another __name__) or a package __getattr__
+    # forward (attr not in the module's namespace) still resolves, so a stale
+    # path would otherwise pass.
+    refs = re.findall(r"""["'](lib(?:\.\w+)+):(\w+)["']""", cm.CORE_MANIFEST.read_text(encoding="utf-8"))
+    assert len(refs) >= 90, refs
+    for module_name, attr in refs:
+        module = importlib.import_module(module_name)
+        assert module.__name__ == module_name, f"{module_name}:{attr} resolves through a shim"
+        assert attr in vars(module), f"{module_name}:{attr} is not defined in {module_name}"
 
 
 def test_headless_tables_match_manifest(manifest: cm.CheckManifest) -> None:

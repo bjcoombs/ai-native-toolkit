@@ -26,6 +26,27 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 LIB_DIR = SCRIPTS_DIR / "lib"
 
+# #917 moves lib modules into subpackages. Each old path keeps a ``sys.modules``
+# alias shim for one release. ``fleet.py`` and ``counts_only.py`` share a name with
+# their new package, so that package's ``__init__.py`` holds a lazy ``__getattr__``
+# forward instead (decision 1 on #917). Every other package ``__init__.py`` is empty:
+# an eager import there would turn the lazy cycles between lib modules into
+# import-time ones.
+FORWARDS = {"fleet": "lib.fleet.runner", "counts_only": "lib.counts_only.content_free"}
+FORWARD_BODY = '''
+import importlib
+from typing import Any
+
+
+def __getattr__(name: str) -> Any:
+    return getattr(importlib.import_module("{target}"), name)
+'''
+# Packages that predate #917, whose ``__init__.py`` is a documented facade and whose
+# README entry is the package heading (``**`test_pressure/`**``).
+FACADE_PACKAGES = {"test_pressure"}
+SHIM_DOC = re.compile(r"Moved to ``(lib(?:\.\w+)+)``")
+REMOVAL_RELEASE = "4.0.0"
+
 
 def _orchestrator_modules() -> set[str]:
     """Importable module names of the orchestrator layer: every ``*.py`` directly
@@ -56,6 +77,103 @@ def _imported_names(tree: ast.AST) -> set[str]:
             if node.level == 0 and node.module:
                 names.add(node.module)
     return names
+
+
+def _parse(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
+def _sets_sys_modules(node: ast.stmt) -> bool:
+    """``sys.modules[__name__] = ...``: the alias that makes a path a shim."""
+    return isinstance(node, ast.Assign) and any(
+        isinstance(t, ast.Subscript) and ast.unparse(t) == "sys.modules[__name__]"
+        for t in node.targets
+    )
+
+
+def _is_shim(tree: ast.Module) -> bool:
+    return any(_sets_sys_modules(node) for node in ast.walk(tree))
+
+
+def _module_file(dotted: str) -> Path:
+    return LIB_DIR.parent.joinpath(*dotted.split(".")).with_suffix(".py")
+
+
+def _is_main_guard(node: ast.stmt) -> bool:
+    return isinstance(node, ast.If) and ast.unparse(node.test) == "__name__ == '__main__'"
+
+
+def _bound_to(tree: ast.Module, target: str) -> set[str]:
+    """Names an import statement binds to the module ``target``."""
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names |= {a.asname or a.name for a in node.names if f"{node.module}.{a.name}" == target}
+        elif isinstance(node, ast.Import):
+            names |= {a.asname for a in node.names if a.name == target and a.asname}
+    return names
+
+
+def _runs(tree: ast.Module, target: str) -> bool:
+    """True when the module calls ``runpy.run_module(target, run_name="__main__")``."""
+    return any(
+        isinstance(node, ast.Call) and ast.unparse(node.func) == "runpy.run_module"
+        and [ast.unparse(a) for a in node.args[:1]] == [repr(target)]
+        and any(k.arg == "run_name" and ast.unparse(k.value) == "'__main__'" for k in node.keywords)
+        for node in ast.walk(tree)
+    )
+
+
+def _shim_problems(path: Path, tree: ast.Module) -> list[str]:
+    """A shim holds the documented form and nothing else: a docstring naming the
+    new dotted path and the removal release, the import of the new module,
+    ``sys.modules[__name__]`` set to it, and, when the new module has a
+    ``__main__`` block, a ``__main__`` branch that runs it with ``runpy``."""
+    rel = path.relative_to(LIB_DIR.parent).as_posix()
+    doc = ast.get_docstring(tree) or ""
+    found = SHIM_DOC.search(doc)
+    if not found or REMOVAL_RELEASE not in doc:
+        return [f"{rel}: shim docstring must name the new path and {REMOVAL_RELEASE}"]
+    target = found.group(1)
+    new = _module_file(target)
+    if not new.is_file() or _is_shim(_parse(new)):
+        return [f"{rel}: shim target {target} is not a real module"]
+    problems = []
+    allowed = (ast.Import, ast.ImportFrom, ast.Expr, ast.Assign, ast.If)
+    if any(not isinstance(n, allowed) or (isinstance(n, ast.Assign) and not _sets_sys_modules(n))
+           or (isinstance(n, ast.If) and not _is_main_guard(n))
+           or (isinstance(n, ast.Expr) and n is not tree.body[0]) for n in tree.body):
+        problems.append(f"{rel}: a shim holds no code beyond the alias and the __main__ branch")
+    aliases = _bound_to(tree, target)
+    values = [ast.unparse(n.value) for n in ast.walk(tree) if isinstance(n, ast.stmt) and _sets_sys_modules(n)]
+    if not values or any(v not in aliases for v in values):
+        problems.append(f"{rel}: sys.modules[__name__] is not set to the imported {target}")
+    if any(_is_main_guard(n) for n in _parse(new).body) and not _runs(tree, target):
+        problems.append(f"{rel}: {target} runs as a script, so its shim needs a runpy __main__ branch")
+    return problems
+
+
+def _package_init_problems(init: Path) -> list[str]:
+    """A package ``__init__.py`` is empty apart from a docstring, or holds exactly
+    the lazy forward for a package in ``FORWARDS``."""
+    package = init.parent.relative_to(LIB_DIR).as_posix()
+    if package.split("/")[0] in FACADE_PACKAGES:
+        return []
+    tree = _parse(init)
+    doc = ast.get_docstring(tree)
+    body = [n for n in tree.body[1 if doc is not None else 0:]
+            if ast.unparse(n) != "from __future__ import annotations"]
+    target = FORWARDS.get(package)
+    rel = init.relative_to(LIB_DIR.parent).as_posix()
+    if target is None:
+        return [f"{rel}: a package __init__.py holds no code"] if body else []
+    expected = ast.parse(FORWARD_BODY.format(target=target)).body
+    problems = []
+    if ast.dump(ast.Module(body=body, type_ignores=[])) != ast.dump(ast.Module(body=expected, type_ignores=[])):
+        problems.append(f"{rel}: holds code beyond the lazy __getattr__ forward to {target}")
+    if not doc or target not in doc or REMOVAL_RELEASE not in doc:
+        problems.append(f"{rel}: docstring must name {target} and {REMOVAL_RELEASE}")
+    return problems
 
 
 def test_fixture_paths_resolve() -> None:
@@ -90,26 +208,39 @@ def test_core_does_not_import_orchestrators() -> None:
         + "\n  ".join(violations)
     )
 
+    # The #917 subpackage rules: every package __init__.py stays empty (or holds
+    # only its lazy forward), and every old path left behind is a shim of the
+    # documented form, so no import edge hides in either.
+    structure = [p for init in sorted(LIB_DIR.glob("*/**/__init__.py"))
+                 for p in _package_init_problems(init)]
+    structure += [p for module in _lib_modules()
+                  if _is_shim(tree := _parse(module)) for p in _shim_problems(module, tree)]
+    assert not structure, "lib subpackage rules (#917) broken:\n  " + "\n  ".join(structure)
+
 
 def test_every_lib_module_has_a_readme_entry() -> None:
     """`lib/README.md` is the per-module reference `CLAUDE.md` points agents at.
     A module merged without an entry is invisible to an agent that trusts the
     map (issue #412: `decline_markers.py` and `interactivity.py` were missing).
-    Every top-level ``lib/*.py`` except ``__init__.py`` must have an entry
-    heading in the README's form: a line of its own reading **`name.py`**,
-    optionally followed by an italic note such as *(co-change hotspot)*. A
-    mention in prose, a bullet or a code example, or a name inside a longer
-    filename (``stats.py`` in ``complexity_stats.py``), does not count."""
+    Every ``lib/`` module, at any depth, except ``__init__.py`` files and #917
+    shims must have an entry heading in the README's form: a line of its own
+    reading **`name.py`**, or **`pkg/name.py`** inside a subpackage, optionally
+    followed by an italic note such as *(co-change hotspot)*. A facade package
+    (``test_pressure/``) has one **`pkg/`** heading instead. A mention in prose,
+    a bullet or a code example, or a name inside a longer filename (``stats.py``
+    in ``complexity_stats.py``), does not count."""
     readme = (LIB_DIR / "README.md").read_text(encoding="utf-8")
     # A fenced code example is not the map, even when a line in it looks like
     # an entry heading.
     readme = re.sub(r"^```.*?^```", "", readme, flags=re.MULTILINE | re.DOTALL)
     entries = set(
-        re.findall(r"^\*\*`([\w.]+\.py)`\*\*(?:[ \t]+\*\([^)\n]*\)\*)?[ \t]*$",
+        re.findall(r"^\*\*`([\w./]+(?:\.py|/))`\*\*(?:[ \t]+\*\([^)\n]*\)\*)?[ \t]*$",
                    readme, flags=re.MULTILINE)
     )
-    missing = [
-        p.name for p in sorted(LIB_DIR.glob("*.py"))
-        if p.name != "__init__.py" and p.name not in entries
-    ]
+    modules = [p.relative_to(LIB_DIR) for p in _lib_modules()
+               if p.name != "__init__.py" and not _is_shim(_parse(p))]
+    assert any(len(m.parts) > 1 for m in modules), "the scan must reach lib subpackages"
+    missing = [m.as_posix() for m in modules
+               if m.parts[0] not in FACADE_PACKAGES and m.as_posix() not in entries]
+    missing += [f"{pkg}/" for pkg in sorted(FACADE_PACKAGES) if f"{pkg}/" not in entries]
     assert not missing, f"lib/README.md has no entry for: {missing}"
