@@ -416,14 +416,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `keyhole_summary.concerns.name` | token |
 | `keyhole_summary.summary_text` | dropped |
 
-## gap_actions
-
-| Field | Kept as |
-|---|---|
-| `gap_actions.signal` | token |
-| `gap_actions.action` | dropped |
-| `gap_actions.paths` | path (hashed when hashing is on) |
-
 ## exclusion_disclosures
 
 | Field | Kept as |
@@ -466,6 +458,21 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `decline_markers.version` | token |
 | `decline_markers.reason` | dropped |
 | `decline_disclosures` | dropped |
+
+## owner_exclusions
+
+| Field | Kept as |
+|---|---|
+| `owner_exclusions.exclusions.id` | token |
+| `owner_exclusions.exclusions.kind` | token |
+| `owner_exclusions.exclusions.reason` | dropped |
+| `owner_exclusions.exclusions.source` | token |
+| `owner_exclusions.exclusions.excluded_by` | dropped |
+| `owner_exclusions.exclusions.excluded_at` | token |
+| `owner_exclusions.exclusions.version` | token |
+| `owner_exclusions.skipped.id` | dropped |
+| `owner_exclusions.skipped.problem` | token |
+| `owner_exclusions.disclosures` | dropped |
 
 ## offers_block
 
@@ -641,6 +648,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `layer_grades.reason` | dropped |
 | `layer_grades.instructions_grade` | token |
+| `layer_grades.instruction_presence` | token |
+
+## gap_actions
+
+| Field | Kept as |
+|---|---|
+| `gap_actions.signal` | token |
+| `gap_actions.action` | dropped |
+| `gap_actions.paths` | path (hashed when hashing is on) |
 
 ## instruction_placement
 
@@ -732,6 +748,13 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.next_step.blockers.condition` | token |
 | `level.next_step.blockers.state` | token |
 | `level.next_step.blockers.reason` | token |
+| `level.conditions.disposition` | token |
+| `level.conditions.exclusion_kind` | token |
+| `level.next_step.blockers.disposition` | token |
+| `level.next_step.blockers.exclusion_kind` | token |
+| `level.excluded.id` | token |
+| `level.excluded.kind` | token |
+| `level.excluded.source` | token |
 
 ## headline
 

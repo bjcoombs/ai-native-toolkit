@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from lib import gh_cli, gitlab_cli  # noqa: E402
 from lib import merged_sample as ms  # noqa: E402
 from lib.delivery import scan_delivery  # noqa: E402
+from lib.external_ci import CALLS_PER_CHANGE, read_external_ci  # noqa: E402
 from lib.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
 from lib.gitlab_cli import GitlabProject  # noqa: E402
 from lib.platform_cli import CliResult  # noqa: E402
@@ -42,7 +43,7 @@ def _pr(i: int) -> dict[str, Any]:
             "author": {"login": "alice"}, "mergedBy": {"login": "bob"},
             "reviews": [{"author": {"login": "bob"}, "state": "APPROVED",
                          "submittedAt": _stamp(i + 1)}],
-            "comments": [], "reviewDecision": "APPROVED"}
+            "comments": [], "reviewDecision": "APPROVED", "headRefOid": f"sha{i}"}
 
 
 class FakeGh:
@@ -59,6 +60,8 @@ class FakeGh:
         self.calls.append(cmd)
         if cmd[1:3] == ["auth", "status"]:
             return CliResult(0, "", "")
+        if cmd[1] == "api" and cmd[2].endswith("/check-runs"):  # external_ci's first read
+            return CliResult(0, json.dumps({"check_runs": [{"app": {"slug": "buildkite"}}]}), "")
         if cmd[1] == "api":  # a bot-account probe: every login here is a person
             return CliResult(1, "", "gh: Not Found (HTTP 404)\n")
         fields = cmd[cmd.index("--json") + 1]
@@ -108,6 +111,20 @@ def test_a_stub_that_refuses_pages_above_25_gives_the_full_sample(monkeypatch):
     assert block["merged_count"] == ms.SAMPLE_CAP
     assert block["time_to_merge_hours_p50"] == 2.0  # measured, not unavailable
     assert block["sample_page_size"] == ms.PAGE_SIZE
+
+
+def test_check_runs_per_change_stay_within_their_ceiling_after_a_retry(monkeypatch):
+    """Paging changes the sample's listing calls, not the sample: ``external_ci`` reads
+    at most ``CALLS_PER_CHANGE`` per sampled change on top of ``GITHUB_SAMPLE_CALLS``."""
+    fake = FakeGh(200, max_page=ms.PAGE_SIZE // 2)
+    got = _github(monkeypatch, fake)
+    assert isinstance(got, ms.MergedSample) and len(got.changes) == ms.SAMPLE_CAP
+    fake.calls.clear()
+    reading = read_external_ci(got)
+    assert reading.sampled == reading.external == ms.SAMPLE_CAP and reading.applies
+    per_change = [c for c in fake.calls if c[1] == "api" and "/commits/" in c[2]]
+    assert len(per_change) <= CALLS_PER_CHANGE * ms.SAMPLE_CAP
+    assert len({c[2] for c in per_change}) == len(per_change)  # each head read once
 
 
 @pytest.mark.parametrize("status", ["502", "504"])

@@ -2,7 +2,8 @@
 
 ``review_reality`` and ``delivery`` describe the same changes: the registry runs
 :func:`merged_sample` once, as the private ``merged_sample`` spec
-(``network=True``), and both blocks read it. Under ``assess_signals.py
+(``network=True``), and both blocks read it, as does the private ``external_ci``
+spec (``lib/external_ci.py``, #928) that ``ci_checks`` reads. Under ``assess_signals.py
 --platform`` it runs because a scan in ``PLATFORM_SCANS`` reads it; without
 ``--platform`` it is never called. Interactive ``/assess`` runs it like any
 other registry entry.
@@ -49,8 +50,10 @@ calls (the light listing, then ``ceil(SAMPLE_CAP / PAGE_SIZE)`` pages, or after
 one retry ``1 + ceil(SAMPLE_CAP / (PAGE_SIZE // 2))``) and at most
 ``GITLAB_SAMPLE_CALLS`` ``glab api`` calls (``FETCH_LIMIT / PAGE_SIZE`` pages, or
 after one retry ``1 + FETCH_LIMIT / (PAGE_SIZE // 2)``). Per-change reads made
-from the sample (``external_ci``'s ``CALLS_PER_CHANGE``, GitLab approvals and
-notes) do not depend on the page size.
+from the sample do not depend on the page size, because the sample stays at most
+``SAMPLE_CAP`` changes: ``lib/external_ci.py`` adds at most ``CALLS_PER_CHANGE``
+REST reads per change (``CALLS_PER_CHANGE * SAMPLE_CAP``, 60, on GitHub), and GitLab
+reads each merge request's approvals and notes.
 
 A change merged in the window but last updated before the ``FETCH_LIMIT``
 most recently updated ones is missed; that needs more than ``FETCH_LIMIT``
@@ -117,7 +120,8 @@ STATUS_BOTS = frozenset({"github-actions", "github-actions[bot]"})
 # The pull request fields the sample reads. ``reviewDecision`` is fetched but not
 # scored: it reflects the current rule, not whether anyone other than the author
 # reviewed. ``createdAt`` dates time to merge and time to first human comment.
-PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt"
+# ``headRefOid`` is the head commit whose check runs ``lib/external_ci.py`` reads (#928).
+PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid"
 
 Provider = Literal["github", "gitlab"]
 

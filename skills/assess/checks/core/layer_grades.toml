@@ -5,11 +5,11 @@
 id = "core.layer_grades"
 kind = "collector"
 title = "Deterministic layer grades"
-summary = "The instruction-file grade republished as a block, so a maturity model can read it."
-issues = [620]
+summary = "The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them."
+issues = [620, 821]
 callable = "lib.layer_grades:scan_layer_grades"
 publishes = ["layer_grades"]
-reads = ["instruction_grading"]
+reads = ["instruction_grading", "nested_instructions"]
 stage = "post_offers"
 headless = { layer_grades = "registered" }
 shapes = [
@@ -19,6 +19,7 @@ revision = 1
   [entries.privacy]
   "layer_grades.reason" = "drop"
   "layer_grades.instructions_grade" = "token"
+  "layer_grades.instruction_presence" = "token"
 
 [[entries]]
 id = "core:layer_grades.instruction_file_present"
@@ -28,7 +29,7 @@ collector = "core.layer_grades"
 path = "layer_grades.instruction_file_present"
 type = "bool"
 evidence = "head_text"
-null_means = "never null; a missing layer_grades block is unknown"
+null_means = "no root instruction file and the nested_instructions block did not run, so a nested file was not looked for; a missing layer_grades block is unknown too"
 
 [[entries]]
 id = "core.cond.layer-0-instructions.1.instruction_file_present"
