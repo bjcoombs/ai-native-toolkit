@@ -91,6 +91,25 @@ def test_set_rejects_an_unknown_counter(before: Path) -> None:
         fc.fold(before, "3.0.0", RELEASE_DATE, {"nope": "1"})
 
 
+def test_set_rejects_a_counter_with_no_notes(before: Path) -> None:
+    snapshot = _tree(before)
+    with pytest.raises(fc.FoldError, match="no notes to fold: fleet_row"):
+        fc.fold(before, "3.0.0", RELEASE_DATE, {"fleet_row": "3"})
+    assert _tree(before) == snapshot
+
+
+@pytest.mark.parametrize(("name", "value"), [
+    ("assess_method", "abc"),
+    ("artifact_schema", "2.0"),
+    ("levels_default", "2026.12.01"),
+])
+def test_set_rejects_a_value_the_counter_cannot_take(before: Path, name: str, value: str) -> None:
+    snapshot = _tree(before)
+    with pytest.raises(fc.FoldError, match=re.escape(f"--set {name}={value} is not a value {name} takes")):
+        fc.fold(before, "3.0.0", RELEASE_DATE, {name: value})
+    assert _tree(before) == snapshot
+
+
 def test_fold_refuses_a_file_without_the_assignment_line(before: Path) -> None:
     (before / fc.COUNTERS["level_result"].path).write_text("# no counter here\n", encoding="utf-8")
     with pytest.raises(fc.FoldError, match="expected one level_result assignment line, found 0"):
