@@ -605,3 +605,72 @@ def test_interrupted_capture_has_no_marker_and_replay_warns(tmp_path):
     assert rep.returncode == 0, rep.stderr
     assert "no CAPTURE_COMPLETE marker" in rep.stderr
     assert "may be partial" in rep.stderr
+
+
+# ---- GitHub teams on the org fragment (#733) --------------------------------
+TEAMS = [{"slug": "platform", "parent": None},
+         {"slug": "payments", "parent": {"slug": "platform"}}]
+
+
+def _repo(name, role="write"):
+    return {"name": name, "role_name": role}
+
+
+def _captured_org_fragment(tmp_path, responses):
+    keep = tmp_path / "capture"
+    res, _ = _run_with_org(tmp_path, {"orgs/testorg": {"login": "testorg"}, **responses},
+                           "--no-file", "--keep-fragments", str(keep))
+    assert res.returncode == 0, res.stderr
+    return res, json.loads((keep / "settings" / "org.json").read_text())
+
+
+def test_org_fragment_carries_teams_with_parents_and_repos(tmp_path):
+    res, fragment = _captured_org_fragment(tmp_path, {
+        "orgs/testorg/teams": TEAMS,
+        "orgs/testorg/teams/platform/repos": [_repo("svc2")],
+        "orgs/testorg/teams/payments/repos": [_repo("svc1")],
+    })
+    assert fragment["teams"] == [
+        {"slug": "payments", "parent": "platform", "repos": ["svc1"]},
+        {"slug": "platform", "parent": None, "repos": ["svc2"]},
+    ]
+    assert set(ORG_SETTINGS) <= set(fragment)
+    # Not a setting: the report's settings section is unchanged.
+    assert "teams" not in _org_settings(res.stdout)
+    log = (tmp_path / "gh.log").read_text()
+    assert "orgs/testorg/teams/payments/repos" in log and "orgs/testorg/teams/platform/repos" in log
+
+
+def test_repos_a_child_team_inherits_stay_on_the_parent(tmp_path):
+    """A child team listing its parent's repositories with the parent's role
+    holds them by inheritance: each repository stays with the most specific
+    team that holds it directly, so parent repos do not all land in a child."""
+    _, fragment = _captured_org_fragment(tmp_path, {
+        "orgs/testorg/teams": TEAMS,
+        "orgs/testorg/teams/platform/repos": [_repo("svc2"), _repo("svc3")],
+        "orgs/testorg/teams/payments/repos": [
+            _repo("svc1"), _repo("svc2"), _repo("svc3", role="admin")],
+    })
+    by_slug = {t["slug"]: t for t in fragment["teams"]}
+    assert by_slug["platform"]["repos"] == ["svc2", "svc3"]
+    # svc2 is inherited (same role); svc3 is a direct grant (a different role).
+    assert by_slug["payments"]["repos"] == ["svc1", "svc3"]
+
+
+@pytest.mark.parametrize("responses", [
+    {"orgs/testorg/teams": 403},
+    {"orgs/testorg/teams": TEAMS, "orgs/testorg/teams/platform/repos": [_repo("svc2")],
+     "orgs/testorg/teams/payments/repos": 403},
+    {"orgs/testorg/teams": '{"message": "not a list"}'},
+], ids=["team-list-denied", "team-repos-denied", "team-list-malformed"])
+def test_unreadable_teams_leave_the_key_out(tmp_path, responses):
+    """An unread team list is never an empty one: the key is left out."""
+    res, fragment = _captured_org_fragment(tmp_path, responses)
+    assert "teams" not in fragment
+    assert set(ORG_SETTINGS) <= set(fragment)
+    assert "Org settings" in res.stdout
+
+
+def test_an_org_with_no_teams_has_an_empty_team_list(tmp_path):
+    _, fragment = _captured_org_fragment(tmp_path, {"orgs/testorg/teams": []})
+    assert fragment["teams"] == []

@@ -17,8 +17,9 @@ owners; repositories are the leaves. Two views exist, ``ownership`` and
 3. **CODEOWNERS** (fallback, ``lib/fleet_repo_facts.py``): a repository in a
    one-segment group (no nested groups to place it) that no team placed, whose
    catch-all owners name a team handle under its group (``@acme/team`` for a
-   repository in ``acme``), moves into unit ``acme/team``, the first such
-   handle in file order.
+   repository in ``acme``, matched ignoring case), moves into unit
+   ``acme/team`` (the team part lower-cased), the first such handle in file
+   order.
 4. **Mapping file** (``--units``): declared units replace an inferred unit of
    the same id (kind, parent, name, owners) or add one, and a declared
    placement moves a repository. The mapping always wins.
@@ -287,10 +288,13 @@ def _place_by_codeowners(units: dict[str, Unit], placement: dict[str, str], repo
     group = group_of(repo)
     for owner in owners:
         handle = owner[1:] if owner.startswith("@") else ""
-        if group and handle.startswith(group + "/") and _ID_RE.match(handle):
-            _add_chain(units, handle, SRC_CODEOWNERS, floor=group)
-            units[handle]["owners"] = sorted(set(units[handle]["owners"]) | {owner})
-            placement[repo] = handle
+        # Handles are case-insensitive on GitHub and GitLab: ``@Acme/Platform``
+        # in group ``acme`` is unit ``acme/platform`` (team slugs are lower case).
+        if group and handle.casefold().startswith(group.casefold() + "/") and _ID_RE.match(handle):
+            uid = f"{group}/{handle[len(group) + 1:].casefold()}"
+            _add_chain(units, uid, SRC_CODEOWNERS, floor=group)
+            units[uid]["owners"] = sorted(set(units[uid]["owners"]) | {owner})
+            placement[repo] = uid
             return
 
 

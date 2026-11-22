@@ -474,6 +474,44 @@ query_org_settings_github() {
         --argjson details "$details" --arg detail_err "$detail_err" > "$out"
 }
 
+# The org's GitHub teams, for the fleet units tree (lib/fleet_units.py), added
+# to the org fragment as `teams: [{slug, parent, repos}]` (parent a team slug
+# or null, repos the repository names, both sorted). Not a setting: the report
+# does not render it. The key is written only when the team list and every
+# team's repository list were read; an unreadable one leaves the key out, so
+# an unread team list is never an empty one.
+#
+# GitHub documents no answer to whether a child team's repository list also
+# holds the repositories it inherits from its parent team, so both cases are
+# handled: a repository a team lists with the same role as its parent team
+# lists it is taken as inherited and dropped from that team, which leaves each
+# repository with the most specific team that holds it directly. A child team
+# granted a different role than its parent keeps the repository.
+add_org_teams_github() {
+    local out=$1 raw teams_json slug repos all='{}'
+    raw=$(gh api "orgs/$ORG/teams?per_page=100" --paginate 2>/dev/null) || return 0
+    teams_json=$(jq -sc 'if length>0 and all(.[]; type=="array") then add
+                         else error("not a list") end' <<< "$raw" 2>/dev/null) || return 0
+    for slug in $(jq -r '.[] | .slug | select(type=="string" and test("^[A-Za-z0-9._-]+$"))' <<< "$teams_json"); do
+        raw=$(gh api "orgs/$ORG/teams/$slug/repos?per_page=100" --paginate 2>/dev/null) || return 0
+        repos=$(jq -sc 'if length>0 and all(.[]; type=="array") then add
+                        else error("not a list") end
+                        | map(select(.name|type=="string") | {key:.name, value:(.role_name // null)})
+                        | from_entries' <<< "$raw" 2>/dev/null) || return 0
+        all=$(jq -c --arg s "$slug" --argjson r "$repos" '. + {($s): $r}' <<< "$all")
+    done
+    jq --argjson teams "$teams_json" --argjson repos "$all" '
+      . + {teams: ([$teams[] | select((.slug | type) == "string" and $repos[.slug] != null)
+         | (.parent.slug? // null) as $p
+         | ($repos[$p // ""] // {}) as $inherited
+         | {slug, parent: $p,
+            repos: ([$repos[.slug] | to_entries[]
+                     | select(.key as $k | ($inherited | has($k) | not) or $inherited[$k] != .value)
+                     | .key] | sort)}]
+         | sort_by(.slug))}' "$out" > "$out.tmp" 2>/dev/null \
+        && mv "$out.tmp" "$out" || rm -f "$out.tmp"
+}
+
 query_group_settings_gitlab() {
     local group=$1 out=$2 enc raw g_json='{}' g_err="" pr_json='{}' pr_err=""
     enc=$(gitlab_encode "$group")
@@ -901,6 +939,7 @@ if [ "$PROVIDER" = gitlab ]; then
 else
     query_org_settings_github "$TMP_DIR/settings/org.json" \
         || settings_all_unknown "$ORG" "settings query failed" "$TMP_DIR/settings/org.json"
+    add_org_teams_github "$TMP_DIR/settings/org.json" || true
 fi
 
 i=0

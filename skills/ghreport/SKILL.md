@@ -98,6 +98,22 @@ GitHub reads `two_factor: unknown`, and on GitLab a `404` from `push_rule`
 own headline counts `off` and `unknown` separately, so an unreadable setting
 is never counted as off.
 
+**GitHub teams for `/fleet`.** The GitHub org fragment (`settings/org.json` in a
+`--keep-fragments` capture) also carries `teams`, `[{slug, parent, repos}]`,
+from `orgs/{org}/teams` and each team's `orgs/{org}/teams/{slug}/repos`:
+`parent` is the parent team's slug or `null`, `repos` the repository names.
+`fleet.py --settings` reads it to place repositories in the units tree. It is
+not a setting, so the report does not show it. The key is written only when
+the team list and every team's repository list were read; an unreadable one
+leaves it out, so an unread team list never reads as no teams. GitHub does not
+document whether a child team's list also holds the repositories it inherits
+from its parent, so a repository a team lists with the same role as its parent
+team is taken as inherited and kept on the parent only: each repository stays
+with the most specific team that holds it directly. A child granted another
+role keeps it. Team slugs and repository names are identities: the fragment is
+a local capture, and `/fleet` counts-only output keeps them only as unit keys
+(hashed under `--hash-paths`).
+
 ### The no-access rule
 
 Security-alert and branch-protection endpoints require admin on the repo. When
