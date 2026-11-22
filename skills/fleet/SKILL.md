@@ -317,9 +317,11 @@ names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, ev
 and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no
 name, owner or web URL is written: the file names no repository, group or host. Hashes
 join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` in
-`lib/counts_only_rules.py`. This key hashing applies to `fleet-data.json` only:
-`repos.jsonl` keeps repository ids in clear, so under hashing a `fleet-data.json`
-repository cannot be joined to its `repos.jsonl` row.
+`lib/counts_only_rules.py`. This path hashing applies to `fleet-data.json` only
+(`achievements.json`, built from it, carries the same hashed keys): `repos.jsonl` keeps
+repository ids in clear, so under hashing a `fleet-data.json` repository cannot be joined
+to its `repos.jsonl` row. GitHub team slugs from a `ghreport` fragment's `teams` list
+appear only as unit keys, so they are hashed with them.
 
 ## Output: `achievements.json`
 

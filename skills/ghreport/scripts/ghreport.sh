@@ -481,35 +481,54 @@ query_org_settings_github() {
 # team's repository list were read; an unreadable one leaves the key out, so
 # an unread team list is never an empty one.
 #
-# GitHub documents no answer to whether a child team's repository list also
-# holds the repositories it inherits from its parent team, so both cases are
-# handled: a repository a team lists with the same role as its parent team
-# lists it is taken as inherited and dropped from that team, which leaves each
-# repository with the most specific team that holds it directly. A child team
-# granted a different role than its parent keeps the repository.
+# GitHub's "List team repositories" docs say nothing on whether a child
+# team's list also holds the repositories it inherits from its parent team
+# (only "Check team permissions" says inherited repositories are checked), so
+# both cases are handled: a repository a team lists with the same role_name as
+# its parent team lists it is taken as inherited and dropped from that team,
+# which leaves each repository with the most specific team that holds it
+# directly. A child team granted a different role keeps the repository; one
+# granted it directly with the parent's role cannot be told apart from
+# inheritance and stays on the parent.
+#
+# Team and repository lists go through files, not jq arguments, so a large
+# org stays under the per-argument size limit.
 add_org_teams_github() {
-    local out=$1 raw teams_json slug repos all='{}'
-    raw=$(gh api "orgs/$ORG/teams?per_page=100" --paginate 2>/dev/null) || return 0
-    teams_json=$(jq -sc 'if length>0 and all(.[]; type=="array") then add
-                         else error("not a list") end' <<< "$raw" 2>/dev/null) || return 0
-    for slug in $(jq -r '.[] | .slug | select(type=="string" and test("^[A-Za-z0-9._-]+$"))' <<< "$teams_json"); do
-        raw=$(gh api "orgs/$ORG/teams/$slug/repos?per_page=100" --paginate 2>/dev/null) || return 0
-        repos=$(jq -sc 'if length>0 and all(.[]; type=="array") then add
-                        else error("not a list") end
-                        | map(select(.name|type=="string") | {key:.name, value:(.role_name // null)})
-                        | from_entries' <<< "$raw" 2>/dev/null) || return 0
-        all=$(jq -c --arg s "$slug" --argjson r "$repos" '. + {($s): $r}' <<< "$all")
+    local out=$1 work
+    work=$(mktemp -d) || return 0
+    if ! collect_org_teams_github "$out" "$work"; then
+        echo "Note: GitHub teams not read for $ORG; the org fragment has no teams list" >&2
+    fi
+    rm -rf "$work"
+}
+
+collect_org_teams_github() {
+    local out=$1 work=$2 raw slug
+    raw=$(gh api "orgs/$ORG/teams?per_page=100" --paginate 2>/dev/null) || return 1
+    jq -sc 'if length>0 and all(.[]; type=="array") then add else error("not a list") end
+            | map(select((.slug | type) == "string" and (.slug | test("^[A-Za-z0-9._-]+$")))
+                  | {slug, parent: (.parent.slug? // null)})' \
+        <<< "$raw" > "$work/teams.json" 2>/dev/null || return 1
+    : > "$work/repos.jsonl"
+    for slug in $(jq -r '.[].slug' "$work/teams.json"); do
+        raw=$(gh api "orgs/$ORG/teams/$slug/repos?per_page=100" --paginate 2>/dev/null) || return 1
+        jq -sc --arg s "$slug" 'if length>0 and all(.[]; type=="array") then add
+                                else error("not a list") end
+                                | {slug: $s, repos: (map(select(.name|type=="string")
+                                    | {key:.name, value:(.role_name // null)}) | from_entries)}' \
+            <<< "$raw" >> "$work/repos.jsonl" 2>/dev/null || return 1
     done
-    jq --argjson teams "$teams_json" --argjson repos "$all" '
-      . + {teams: ([$teams[] | select((.slug | type) == "string" and $repos[.slug] != null)
-         | (.parent.slug? // null) as $p
+    jq --slurpfile teams "$work/teams.json" --slurpfile lists "$work/repos.jsonl" '
+      ($lists | map({(.slug): .repos}) | add // {}) as $repos
+      | . + {teams: ([$teams[0][] | select($repos[.slug] != null)
+         | .parent as $p
          | ($repos[$p // ""] // {}) as $inherited
          | {slug, parent: $p,
             repos: ([$repos[.slug] | to_entries[]
                      | select(.key as $k | ($inherited | has($k) | not) or $inherited[$k] != .value)
                      | .key] | sort)}]
-         | sort_by(.slug))}' "$out" > "$out.tmp" 2>/dev/null \
-        && mv "$out.tmp" "$out" || rm -f "$out.tmp"
+         | sort_by(.slug))}' "$out" > "$work/fragment.json" 2>/dev/null || return 1
+    mv "$work/fragment.json" "$out"
 }
 
 query_group_settings_gitlab() {

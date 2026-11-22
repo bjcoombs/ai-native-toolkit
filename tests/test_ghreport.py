@@ -669,6 +669,7 @@ def test_unreadable_teams_leave_the_key_out(tmp_path, responses):
     assert "teams" not in fragment
     assert set(ORG_SETTINGS) <= set(fragment)
     assert "Org settings" in res.stdout
+    assert "GitHub teams not read for testorg" in res.stderr
 
 
 def test_an_org_with_no_teams_has_an_empty_team_list(tmp_path):

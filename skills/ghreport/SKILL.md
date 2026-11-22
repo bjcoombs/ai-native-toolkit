@@ -105,14 +105,16 @@ from `orgs/{org}/teams` and each team's `orgs/{org}/teams/{slug}/repos`:
 `fleet.py --settings` reads it to place repositories in the units tree. It is
 not a setting, so the report does not show it. The key is written only when
 the team list and every team's repository list were read; an unreadable one
-leaves it out, so an unread team list never reads as no teams. GitHub does not
-document whether a child team's list also holds the repositories it inherits
-from its parent, so a repository a team lists with the same role as its parent
+leaves it out (with a note on stderr), so an unread team list never reads as
+no teams. GitHub's "List team repositories" docs do not say whether a child
+team's list also holds the repositories it inherits from its parent (only
+"Check team permissions" says inherited repositories are checked), so a repository a team lists with the same role as its parent
 team is taken as inherited and kept on the parent only: each repository stays
 with the most specific team that holds it directly. A child granted another
-role keeps it. Team slugs and repository names are identities: the fragment is
-a local capture, and `/fleet` counts-only output keeps them only as unit keys
-(hashed under `--hash-paths`).
+role keeps it; one granted directly with the parent's role cannot be told
+apart from inheritance and stays on the parent. Team slugs are identities: the fragment is a local capture, and in
+`/fleet` counts-only output a slug appears only in unit keys, which
+`--hash-paths` hashes.
 
 ### The no-access rule
 
