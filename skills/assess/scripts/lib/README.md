@@ -3631,7 +3631,7 @@ whose number is not a coverage percentage (a count) needs its own `unit`, mapped
 null in `threshold_percent()`, so it reads unknown rather than credited.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
-other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov) so an empty
+other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
 Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
