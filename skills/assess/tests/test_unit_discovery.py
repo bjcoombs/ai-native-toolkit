@@ -381,6 +381,16 @@ def test_a_byte_order_mark_does_not_make_a_manifest_unreadable(tmp_path: Path):
     assert _paths(block) == ["a", "web"]
 
 
+def test_workspaces_that_list_each_other_do_not_recurse(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "package.json": '{"workspaces": ["packages/*"]}',
+        "packages/x/package.json": '{"workspaces": ["../*"]}', "packages/x/i.js": "",
+        "packages/y/package.json": '{"workspaces": ["../*"]}', "packages/y/i.js": "",
+    }))
+    assert block["unit_count"] == 2 and _paths(block) == ["packages/x", "packages/y"]
+    assert all(s["problem"] == "claimed" for s in block["skipped"])
+
+
 def test_excluded_folders_hold_no_units(tmp_path: Path):
     root = _write(tmp_path, {
         "node_modules/dep/package.json": "{}", "node_modules/dep/i.js": "",

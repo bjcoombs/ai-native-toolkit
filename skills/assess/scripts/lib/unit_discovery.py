@@ -532,7 +532,8 @@ class _Walk:
                            "manifest_only")
         for ws, members, _, _ in expanded:
             for member in members:
-                if any(_is_under(member, c) for c in self.claimed):
+                # visited too: two workspaces that list each other would otherwise recurse
+                if member in self.visited or any(_is_under(member, c) for c in self.claimed):
                     self._skip(member, "claimed")
                 else:
                     self.visit(member, "workspace_member", folder, ws.ecosystem)
