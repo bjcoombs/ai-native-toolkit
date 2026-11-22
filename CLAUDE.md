@@ -27,6 +27,7 @@ make test-assess            # skills/assess pytest, with its coverage floor
 make test-scripts           # scripts/ pytest, with its coverage floor
 make test-contract          # plugin contract pytest (tests/)
 make lint                   # ruff and mypy for both packages
+make regen                  # rewrite every generated file and golden; run after a conflict in one
 
 bash scripts/build-standalone-skills.sh   # standalone ZIPs into dist/standalone-skills/
 ```
