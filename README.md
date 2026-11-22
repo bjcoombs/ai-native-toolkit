@@ -269,6 +269,7 @@ Runs against the current directory (or pass a path). Produces:
 - `.assess/assess-report.md` - the Step and verified-practices headline, per-layer scorecard, top 3 leverage actions, hotspot callouts
 - `.assess/doc-graph.svg` - the doc-navigability graph shown above
 - `.assess/complexity-heatmap.svg` - the complexity treemap shown above
+- `.assess/evidence-waffle.svg` - one square per maturity-model condition, showing how much of the level rests on verified or measured evidence
 - `.assess/complexity-stats.json` - percentiles and ranked file lists that feed the report
 
 After writing, the skill asks whether to open a PR in the target repo with the report and both SVGs.

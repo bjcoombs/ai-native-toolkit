@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+import assess_diagrams_fixture
 import fleet_diagrams_fixture
 import fleet_trends_fixture
 from assess_report import render_report
@@ -59,6 +60,8 @@ def outputs(fleet_out: Path, tmp_path_factory: pytest.TempPathFactory) -> dict[s
         rendered[f"fleet run: {path.name}"] = _svg_prose(path.read_text(encoding="utf-8"))
     for name, content in fleet_diagrams_fixture.goldens(fleet_diagrams_fixture.FIXTURES).items():
         rendered[f"diagrams fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
+    for name, content in assess_diagrams_fixture.goldens().items():
+        rendered[f"assess diagrams fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
     for name, content in fleet_trends_fixture.goldens(fleet_trends_fixture.FIXTURES).items():
         rendered[f"trends fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
     base = tmp_path_factory.mktemp("vocabulary-fixtures")
@@ -116,7 +119,7 @@ def test_the_readme_documents_exactly_the_banned_list() -> None:
 def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -> None:
     """Every criterion's guidance and every signal's hint, not only the levels a fixture reaches."""
     from lib.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
-    from lib.headline import _reason_word
+    from lib.headline import reason_word
     from lib.level_signals import load_default_levels
     from lib.next_step_guidance import _LAYER5_PARTS, guidance, measure_hint
     texts = {"FULL_RUN_HINT": FULL_RUN_HINT, "PLATFORM_HINT": PLATFORM_HINT}
@@ -131,7 +134,7 @@ def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -
                     if worded is not None:
                         texts[f"{row['id']}.{number} {signal}"] = f"{worded['change']}\n{worded['done_when']}"
     for code in ("scan_failed", "missing_checkout", "no_python_packages", "build_failed"):
-        texts[f"reason {code}"] = _reason_word(code)
+        texts[f"reason {code}"] = reason_word(code)
     assert len(texts) > 40
     hits = [f"{term!r} in {name}: {text}" for name, content in texts.items()
             for term, _, text in banned_hits(content)]

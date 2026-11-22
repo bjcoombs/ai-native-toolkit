@@ -3,7 +3,8 @@
 The scan table only reads, so ``assess_core.build_run_context`` writes nothing;
 ``assess_core.build_and_publish_run`` (the CLI run) calls this step. It writes: the artifact directory, the
 ``.assess/`` wiki (hotspot pages, index.md, the log.md entry and its checksum
-chain, first-flagged.json), the findings badge, the committed findings snapshot
+chain, first-flagged.json), the findings badge, the diagrams
+(``lib/assess_diagrams.py``), the committed findings snapshot
 (findings.json) and ``run-context.json``. The
 wiki's results fill the four keys the run header reserved for them
 (``run_setup.WIKI_KEYS``) in place, so their position in the file is unchanged.
@@ -23,6 +24,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from lib.artifact_schema import ASSESS_METHOD_VERSION
+from lib.assess_diagrams import build_diagrams, write_diagrams
 from lib.badge import write_headline_badge
 from lib.headline import as_headline
 from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
@@ -63,6 +65,8 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     write_headline_badge(
         assess_dir, as_headline(ctx.get("headline")), run_id=state["run_id"], scope=scope_rel,
     )
+    # The /assess diagrams (#942), drawn from the finished context; the report links them.
+    write_diagrams(assess_dir, build_diagrams(ctx))
     # The committed findings snapshot (#554): read the previous one back before
     # overwriting it, so the gate can explain a method-version change by the
     # findings that appeared and cleared since.
