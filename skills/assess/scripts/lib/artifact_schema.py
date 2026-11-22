@@ -414,7 +414,13 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
-# Unreleased (the release PR assigns the version):
+# Unreleased (the 2.2.0 release PR assigns the number):
+# - the empty-set rule and two requires (issue #906): a file-size condition
+#   reads not measured (no_scored_files) when no file is scored, layer-2-design.2
+#   requires layer-2-design.1 and layer-4-architecture.2 requires
+#   layer-4-architecture.1. Fewer conditions count on docs-only repositories
+#   and tangled import graphs; no shape changes. The default maturity model's
+#   version moves with it.
 # - Layer 6 level 1, and so the Step 4 coverage_gate gate, reads
 #   coverage_gate.enforced_meets_minimum (issue #921): a threshold of at least 50
 #   percent that no enforced CI line runs is level 0, where it read 1, and CI the

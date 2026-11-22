@@ -51,7 +51,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
-from lib.counts_only import hash_value
+from lib.counts_only import hash_value, is_hashed
 from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
 from lib.fleet import STATUS_OK, FleetRow
 from lib.fleet_groups import repo_signals
@@ -173,7 +173,9 @@ class Privacy(NamedTuple):
     salt: str | None = None
 
     def key(self, value: str) -> str:
-        return value if self.salt is None else hash_value(value, self.salt)
+        """The repository or unit key; an id the outputs already hashed (a stored
+        ``repos.jsonl`` row the re-score joins, #909) is kept as it is."""
+        return value if self.salt is None or is_hashed(value) else hash_value(value, self.salt)
 
     def text(self, pattern: str, value: str | None) -> str | None:
         if value is None or self.full:

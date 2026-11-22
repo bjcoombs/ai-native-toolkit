@@ -63,3 +63,10 @@ UNMEASURED_VALUES: dict[str, tuple[bool, str]] = {
     "test_pressure.mutation_run": (False, "needs_full_run"),
     "promissory_markers.aging_reliable": (False, "degenerate_history"),
 }
+
+# Signal -> (its denominator's path, the tally's reason code when that count is 0).
+# A statistic over an empty set is not a measurement: a p95 of no files is 0 and
+# would pass any "at most" test (#906).
+EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
+    "stats_summary.loc.p95": ("stats_summary.files_scored", "no_scored_files"),
+}

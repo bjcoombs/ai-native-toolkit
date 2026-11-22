@@ -24,7 +24,7 @@ from lib.fleet import STATUS_FAILED, STATUS_OK
 from lib.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
 from lib.fleet_level_schema import SCHEMA_PATH, build_schema, render
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
-from lib.levels import LevelsError, MaturityModel, parse_levels
+from lib.levels import LevelsError, MaturityModel, evaluate_row, parse_levels
 from test_fleet_cli import fleet_cli
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -174,6 +174,72 @@ def test_thin_history_is_not_measured_not_unmet():
     assert _state(result, "lint.1") == ("not_measured", "degenerate_history")
 
 
+P95 = "stats_summary.loc.p95"
+
+
+@pytest.mark.parametrize("stats", [
+    {"files_scored": 0, "loc": {"p50": 0.0, "p95": 0.0, "max": 0.0}},  # the headless block
+    {"files_scored": 0, "loc": {}},  # a full run whose treemap scored nothing
+])
+def test_a_statistic_over_no_files_is_not_measured_in_both_run_kinds(stats):
+    """#906 A: a p95 of no files is 0 in fleet and absent in /assess; both read no_scored_files."""
+    model = _model(_row("size", [{"signal": P95, "op": "lte", "value": 500}]))
+    assert _state(lt.level_result(model, {"stats_summary": stats}), "size.1") == (
+        "not_measured", "no_scored_files")
+
+
+def test_a_scored_set_or_an_unavailable_block_keeps_the_usual_rules():
+    model = _model(_row("size", [{"signal": P95, "op": "lte", "value": 500}]))
+    scored = {"stats_summary": {"files_scored": 3, "loc": {"p95": 3.0}}}
+    big = {"stats_summary": {"files_scored": 3, "loc": {"p95": 900.0}}}
+    no_lizard = {"stats_summary": {"available": False, "reason": "no_lizard: lizard not installed"}}
+    assert _state(lt.level_result(model, scored), "size.1") == ("met", None)
+    assert _state(lt.level_result(model, big), "size.1") == ("unmet", None)
+    assert _state(lt.level_result(model, no_lizard), "size.1") == ("not_measured", "no_lizard")
+
+
+def _default_state(signals: dict[str, Any], cid: str) -> tuple[str, str | None]:
+    return _state(lt.level_result(lt.default_model(), signals), cid)
+
+
+def test_a_tangled_graph_does_not_count_front_door_imports():
+    """#906 C: three Go packages a->b->c and a->c have modularity 0, so level 2 waits on level 1."""
+    tangled = {"structure": {"modularity_q": 0.0, "cross_package_edges": 3, "front_door_ratio": 1.0}}
+    assert _default_state(tangled, "layer-2-design.1") == ("unmet", None)
+    assert _default_state(tangled, "layer-2-design.2") == ("unmet", "requires:layer-2-design.1")
+    modular = {"structure": {"modularity_q": 0.5, "cross_package_edges": 3, "front_door_ratio": 1.0}}
+    assert _default_state(modular, "layer-2-design.2") == ("met", None)
+
+
+def test_file_size_counts_only_beside_a_boundary_map():
+    small = {"stats_summary": {"files_scored": 4, "loc": {"p95": 40.0}}}
+    no_map = {**small, "structure_drift": {"available": False, "reason": "no_ownership_map: none"}}
+    assert _default_state(no_map, "layer-4-architecture.2") == (
+        "not_measured", "requires:layer-4-architecture.1")
+    mapped = {**small, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    assert _default_state(mapped, "layer-4-architecture.2") == ("met", None)
+    empty = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
+             "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    assert _default_state(empty, "layer-4-architecture.2") == ("not_measured", "no_scored_files")
+
+
+def test_a_real_unmet_sibling_outweighs_an_empty_set():
+    model = _model(_row("size", [_eq(INSTR), {"signal": P95, "op": "lte", "value": 500}]))
+    signals = {"layer_grades": {"instruction_file_present": False},
+               "stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}}}
+    assert _state(lt.level_result(model, signals), "size.1") == ("unmet", None)
+
+
+def test_the_row_level_agrees_with_the_tally_on_an_empty_set():
+    """A docs-only repository with a boundary map: the row is unknown above level 1, not 2."""
+    docs_only = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
+                 "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    row = next(r for r in lt.default_model()["rows"] if r["id"] == "layer-4-architecture")
+    evaluation = evaluate_row(row, docs_only)
+    assert evaluation["status"] == "unknown" and evaluation["floor"] == 1
+    assert evaluation["levels"][1]["unmet"][0]["reason"] == "no_scored_files"
+
+
 def test_a_real_unmet_criterion_outweighs_an_unknown_one():
     model = _model(_row("x", [_eq(INSTR), {"signal": DOC, "op": "lte", "value": 50}]))
     result = lt.level_result(model, {"layer_grades": {"instruction_file_present": False}})
@@ -274,11 +340,13 @@ def test_counts_only_keeps_every_field_of_the_level_block():
 def test_fleet_levels_skip_a_failed_row_and_a_run_without_a_model_removes_the_file(tmp_path):
     model = _stepped()
     rows: list[Any] = [
-        {"repo": "b", "status": STATUS_OK, "scans": _fresh()},
-        {"repo": "a", "status": STATUS_FAILED, "scans": None},
+        {"repo": "b", "status": STATUS_OK, "scans": _fresh(), "head_sha": "f" * 40, "dirty": True},
+        {"repo": "a", "status": STATUS_FAILED, "scans": None, "head_sha": None, "dirty": None},
+        {"repo": "c", "status": STATUS_OK, "scans": _fresh()},  # a row written before #907
     ]
     doc = fleet_levels(rows, model, toolkit_commit="abc", plugin_version="9.9.9")
-    assert list(doc["repos"]) == ["b"] and doc["levels_version"] == "fixture-t1"
+    assert list(doc["repos"]) == ["b", "c"] and doc["levels_version"] == "fixture-t1"
+    assert doc["commits"] == {"b": {"head_sha": "f" * 40, "dirty": True}, "c": {"head_sha": None, "dirty": None}}
     jsonschema.validate(doc, build_schema())
     path = write_fleet_levels(tmp_path, rows, model, toolkit_commit="abc", plugin_version="9.9.9")
     assert path is not None and json.loads(path.read_text(encoding="utf-8")) == doc
@@ -352,6 +420,28 @@ def test_fleet_reruns_are_byte_identical_and_steps_follow_the_gates(estate):
     assert repos["ci2/r"]["tally"]["met"] >= repos["ci0/r"]["tally"]["met"] + 1
     assert repos["inc/r"]["tally"]["met"] == repos["nci/r"]["tally"]["met"]
     assert repos["inc/r"]["tally"]["not_measured"] > repos["nci/r"]["tally"]["not_measured"]
+
+
+def test_an_uncommitted_change_keeps_the_step_of_the_commit(estate, tmp_path):
+    """#907: fleet scores HEAD's committed tree, and level.json names the commit and the dirty flag."""
+    repo = tmp_path / "ci2" / "r"
+    subprocess.run(["git", "clone", "-q", str(estate / "ci2" / "r"), str(repo)], check=True, capture_output=True)
+    (tmp_path / "list.txt").write_text("ci2/r\n", encoding="utf-8")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True,
+                          encoding="utf-8").stdout.strip()
+    clean = _fleet(tmp_path, "clean")
+    (repo / "CLAUDE.md").unlink()
+    (repo / "AGENTS.md").write_text("# untracked\n", encoding="utf-8")  # untracked: still ignored
+    dirty = _fleet(tmp_path, "dirty")
+    assert clean["repos"]["ci2/r"]["step"] > 1  # the instruction gate holds at HEAD
+    assert dirty["repos"] == clean["repos"]
+    assert clean["commits"] == {"ci2/r": {"head_sha": head, "dirty": False}}
+    assert dirty["commits"] == {"ci2/r": {"head_sha": head, "dirty": True}}
+    row = json.loads((tmp_path / "dirty" / "repos.jsonl").read_text(encoding="utf-8"))
+    assert (row["head_sha"], row["dirty"]) == (head, True)
+    clean_row = json.loads((tmp_path / "clean" / "repos.jsonl").read_text(encoding="utf-8"))
+    assert {**row, "dirty": False} == clean_row  # every scan block reads the commit, not the copy
+    assert not (repo / "CLAUDE.md").exists()
 
 
 def test_assess_gives_the_fleet_level_and_step_on_the_same_commit(estate, tmp_path):
