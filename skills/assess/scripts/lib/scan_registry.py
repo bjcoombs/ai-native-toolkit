@@ -564,7 +564,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # check is found but a CI file pulls jobs this run cannot read (an unresolved
     # include:, a remote reusable workflow; GitLab includes resolve offline against
     # `ghsync_root`, #766; under --platform, GitLab's merged configuration where one did
-    # not, #796). Layer 5 level 1 of the default maturity model. Offline itself.
+    # not, #796). enforced_check_runs (#775) leaves out masked
+    # checks and checks off the ordinary triggers (lib/ci_masking.py,
+    # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
+    # Offline itself.
     ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root", "gitlab_merged_ci"),
              STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an

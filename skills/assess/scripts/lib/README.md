@@ -1807,7 +1807,7 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `null_means`. No grade is authored: it follows from the class
   (`level_signals.INPUT_GRADES`).
 - `condition`: display metadata for one default criterion, keyed
-  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.test_or_lint_runs`, unique per
+  `<row>.<level>:<signal>` (`layer-5-ci.1:ci_checks.enforced_check_runs`, unique per
   manifest), with an id starting `core.cond.` (core uses `<row>.<level>.<leaf>`) and a
   supportive `fix`. The criterion itself stays in
   `levels/default.toml`; a custom `--levels` file needs no entries.
@@ -3121,13 +3121,14 @@ lines). Tests: `tests/test_check_command.py`, `tests/test_agent_environment.py`
 (`test_is_check_command`).
 
 **`ci_checks.py`**
-Does CI run a test or lint command (issue #698)? Layer 5 level 1 of the default
-maturity model reads it, so the CI row measures CI, not the instruction file.
+Does CI run a test or lint command (issue #698), and can it fail the job (#775)?
+Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not the instruction file.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
-unresolved_includes, includes[], test_or_lint_runs, basis}`. Each line,
+unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
+enforced_basis, masked_check_commands, off_trigger_check_commands}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
 (`command_index.ci_line_text`), is split into shell segments by
 `command_resolver.extract_commands` on its own (an apostrophe or fence on one line
@@ -3162,8 +3163,66 @@ unknown beats wrong. `merged_config` is `not_read`
 template that neither a clone nor the merge shows is not seen. With no GitLab CI file, or one with no `include:`, `merged_config` is
 `not_read`. The module itself is
 offline: it imports the value type, never a platform client.
+`enforced_check_runs` and `masked_check_commands` (issue #775) apply the same
+test to the lines `ci_masking.unmasked_lines` returns:
+`enforced_check_commands(text) -> (unmasked, masked)` counts the check lines that
+can fail their job and the rest (`masked = check_commands - unmasked`), and
+`enforced_check_runs` is true with any unmasked check line (own, included, or
+in the merged configuration when those hold none)
+whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
+off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
+null with `enforced_basis: unknown_trigger`), else null under the
+same `included_jobs` rule, else false. Layer 5 level 1 reads
+`enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
+still describes `test_or_lint_runs`, which keeps its meaning.
 Tests: `tests/test_ci_checks.py`, `tests/test_gitlab_ci_lint.py`, and the Layer 5 rows in
 `tests/test_level_signals.py`.
+
+**`ci_masking.py`**
+Which CI shell statements cannot fail their job (issue #775), with no YAML parser
+(an indentation model over the lines). `unmasked_lines(text) -> list[str]` is the
+result shape other CI classifiers build on: one entry per input line, same index,
+with every masked statement removed (`pytest || true; ruff check .` becomes
+`ruff check .`) and a line whose statements are all masked replaced by `""`. A
+classifier counts what can fail the job by running its line test over this list,
+and the masked count as its count over the original lines minus that.
+`split_statements(text)` splits one shell line into top-level `;` statements of
+`(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
+operator. Rules: a top-level `|| true` / `|| :` / `|| /bin/true` / `|| exit 0`
+masks the segments before it in its statement (`mkdir -p x || true && pytest`
+keeps `pytest`), unless they send output to a file (`>`, `&>`, `| tee`; not
+`/dev/null` or `$GITHUB_STEP_SUMMARY`) that a later line of the same job names,
+with a non-zero exit at or after it (a capture, the grafana `lint:circular`
+pattern); `continue-on-error: true` or `allow_failure:
+true` (literal, a trailing comment ignored) masks the mapping that holds it and
+everything under it (a step or a job); `set +e` masks the rest of its script body
+(a block scalar, or one `script:` list) until `set -e`, unless a later statement
+exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
+joined first.
+Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
+wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
+`before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
+`tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
+shared with `ci_triggers.py`.
+
+**`ci_triggers.py`**
+Does a CI line run on ordinary changes (issue #775)? It makes
+`ci_checks.enforced_check_runs` a `ci_executed` signal. `workflow_events(text)` lists a
+GitHub workflow's top-level `on` events (scalar, flow list or mapping, block list or
+mapping; `"on"` and YAML 1.1 `true` too), or None when it cannot; `workflow_trigger`
+maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
+`merge_group`), `called` (`workflow_call` / `workflow_run` only), `not_ordinary`
+(`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
+called workflow as `ordinary` when an ordinary workflow of the repository calls it
+(`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
+one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
+and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
+web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
+outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
+so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
+anchors and `workflow: rules:` are not resolved; branch and path filters are not
+read. Tests: `tests/test_ci_triggers.py`.
 
 **`merged_ci.py`**
 The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
