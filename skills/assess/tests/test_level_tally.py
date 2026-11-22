@@ -24,7 +24,7 @@ from lib.fleet import STATUS_FAILED, STATUS_OK
 from lib.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
 from lib.fleet_level_schema import SCHEMA_PATH, build_schema, render
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
-from lib.levels import LevelsError, MaturityModel, parse_levels
+from lib.levels import LevelsError, MaturityModel, evaluate_row, parse_levels
 from test_fleet_cli import fleet_cli
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -221,6 +221,23 @@ def test_file_size_counts_only_beside_a_boundary_map():
     empty = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
              "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
     assert _default_state(empty, "layer-4-architecture.2") == ("not_measured", "no_scored_files")
+
+
+def test_a_real_unmet_sibling_outweighs_an_empty_set():
+    model = _model(_row("size", [_eq(INSTR), {"signal": P95, "op": "lte", "value": 500}]))
+    signals = {"layer_grades": {"instruction_file_present": False},
+               "stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}}}
+    assert _state(lt.level_result(model, signals), "size.1") == ("unmet", None)
+
+
+def test_the_row_level_agrees_with_the_tally_on_an_empty_set():
+    """A docs-only repository with a boundary map: the row is unknown above level 1, not 2."""
+    docs_only = {"stats_summary": {"files_scored": 0, "loc": {"p95": 0.0}},
+                 "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    row = next(r for r in lt.default_model()["rows"] if r["id"] == "layer-4-architecture")
+    evaluation = evaluate_row(row, docs_only)
+    assert evaluation["status"] == "unknown" and evaluation["floor"] == 1
+    assert evaluation["levels"][1]["unmet"][0]["reason"] == "no_scored_files"
 
 
 def test_a_real_unmet_criterion_outweighs_an_unknown_one():

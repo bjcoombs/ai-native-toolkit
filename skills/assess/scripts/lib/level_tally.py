@@ -40,8 +40,9 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
   ``degenerate_history``). Any other unmet criterion makes the condition unmet;
 - a ``level_signals.EMPTY_DENOMINATORS`` code, when a criterion's signal is a
   statistic over a set whose count is 0 (``stats_summary.loc.p95`` with
-  ``files_scored`` 0: ``no_scored_files``, #906). It is checked first, so a
-  statistic over nothing never reads met or unmet, whatever its value;
+  ``files_scored`` 0: ``no_scored_files``, #906). ``lib.levels`` reads that
+  criterion as unknown, so the row level and the condition agree, and a real
+  unmet sibling criterion still makes the condition unmet;
 - ``needs_full_run``: the block is ``not_registered`` in a headless run;
 - ``needs_platform``: the block needs GitHub or GitLab (``network``);
 - the block's own reason code (``lib.counts_only.reason_code``, or the code a
@@ -66,7 +67,7 @@ from typing import Any
 from lib.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, LevelResult, NextStep
 from lib.levels import CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef, condition_id, evaluate_row
-from lib.levels import load_levels, resolve_signal
+from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
@@ -79,6 +80,8 @@ NEEDS_FULL_RUN = "needs_full_run"
 NEEDS_PLATFORM = "needs_platform"
 # Block reason codes that a different kind of run would measure (lib.signals).
 _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM}
+# The codes lib.levels gives a criterion whose signal is a statistic over an empty set.
+EMPTY_SET_CODES = frozenset(code for _, code in EMPTY_DENOMINATORS.values())
 
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
@@ -116,28 +119,8 @@ def _unmeasured(outcome: CriterionOutcome) -> str | None:
     return rule[1]
 
 
-def _empty_denominator(signals: list[str], data: Mapping[str, Any] | None) -> str | None:
-    """The ``EMPTY_DENOMINATORS`` code of the first signal whose set is empty, else None.
-
-    Only a count read as exactly 0 is empty: an unavailable or absent count leaves the
-    signal to the usual rules, so an unavailable block keeps its own reason (``no_lizard``).
-    """
-    for signal in signals:
-        rule = EMPTY_DENOMINATORS.get(signal)
-        if rule is None:
-            continue
-        count = resolve_signal(dict(data) if data is not None else None, rule[0])
-        if isinstance(count, (int, float)) and not isinstance(count, bool) and count == 0:
-            return rule[1]
-    return None
-
-
-def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None,
-               signals: list[str] | None = None) -> tuple[str, str | None]:
+def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[str, str | None]:
     """A condition's state from its own criteria, with the reason when not measured."""
-    empty = _empty_denominator(signals or [], data)
-    if empty is not None:
-        return "not_measured", empty
     if any(u["status"] == "unmet" and _unmeasured(u) is None for u in outcome["unmet"]):
         return "unmet", None
     if not outcome["unmet"]:
@@ -146,8 +129,8 @@ def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None,
     code = _unmeasured(first)
     if code is not None:
         return "not_measured", code
-    if first["reason"] == "type_mismatch":
-        return "not_measured", "type_mismatch"
+    if first["reason"] in EMPTY_SET_CODES or first["reason"] == "type_mismatch":
+        return "not_measured", first["reason"]
     return "not_measured", _block_reason(data, first["signal"])
 
 
@@ -159,7 +142,7 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[Co
         evaluation: Evaluation = evaluate_row(row, dict(data) if data is not None else None)
         for outcome, level in zip(evaluation["levels"], row["levels"]):
             cid = condition_id(row["id"], level["level"])
-            state, reason = _own_state(outcome, data, [c["signal"] for c in level["criteria"]])
+            state, reason = _own_state(outcome, data)
             own[cid] = (state, reason)
             requires[cid] = level.get("requires", [])
             grade = _grade(row, level["level"])

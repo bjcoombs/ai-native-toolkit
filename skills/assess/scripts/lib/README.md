@@ -2395,7 +2395,9 @@ a helper extraction.
 
 **`levels.py`**
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
-from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
+from signals with no model in the path. A criterion over a signal in
+`signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
+the table's code as its `reason` (`no_scored_files`, #906), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
@@ -2465,7 +2467,7 @@ fixtures through `/fleet` and `/assess` on the same commit.
 **`signal_grades.py`**
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
 `INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
-to its set's count and the code when that count is 0) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+to its set's count and the code when that count is 0, read by `levels.py`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`.
 
