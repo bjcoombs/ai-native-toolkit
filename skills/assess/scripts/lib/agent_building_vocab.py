@@ -33,6 +33,15 @@ fleet roll-up can compare repositories by it.
 
 Widening a table changes which repositories are classified, so it is a change
 of its own with a test.
+
+The pinned vocabulary of `agent_building` (issue #689): `PACKAGES` maps a declared
+dependency name (exact, or a `*` prefix family) to `(slug, kind)`; `lookup` tries the
+name as written and PEP 503-normalised (`normalise`), exact before the longest prefix.
+`TOOL_LOOP_PATTERNS`, `MCP_SERVER_PATTERNS`, `ENDPOINT_PATTERNS` and
+`CI_AGENT_PATTERNS` are the code, endpoint and CI heuristics; `ISSUE_API_PATTERNS` and
+`CHANGE_API_PATTERNS` (#731) tag a Git-host client's issues and merge-request or
+pull-request calls with the hosts whose clients use that form; a form two hosts share is credited only when exactly one of them is in `git_hosts`. Widening a table changes
+classes, so it is a change of its own. Tests: `tests/test_agent_building.py`.
 """
 from __future__ import annotations
 

@@ -5,6 +5,16 @@ moves the date to the current path. A run that measures the same commit on the
 same day as a still-unfinalized run supersedes it: its log entry and history
 rows are removed, and files only that run flagged and now excluded by config
 are retired (#355, #356, #421).
+
+The wiki state carried between runs. `load_first_flagged` / `save_first_flagged` read and
+write `first-flagged.json`, and `rekey_first_flagged` moves a renamed file's date to its
+current path, keeping the earlier date on a collision. `same_measurement_prior_run`
+finds the previous run-context when this run measures the same commit on the same day;
+`excluded_after_unfinalized_run` and `retire_excluded_unfinalized` handle the files only
+a never-finalized superseded run flagged and config now excludes (#356);
+`sweep_superseded_history` and `drop_superseded_log_entry` remove that run's history
+rows and log entry (#355, #421). Tests: `tests/test_wiki_state.py`,
+`tests/test_run_wiki.py` (index rows), `tests/test_log_supersede.py`.
 """
 
 from __future__ import annotations

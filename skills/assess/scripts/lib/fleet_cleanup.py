@@ -21,6 +21,19 @@ when nothing in it would be lost:
 Afterwards the sibling ``worktree/`` and the repository directory are removed
 only if empty (``rmdir``). Any check that cannot be run keeps the clone. The
 outcome is ``deleted`` or a keep-reason token; it never changes a row.
+
+`--delete-after` (issue #569). `CloneDeleter` is a `run_fleet` `after` hook;
+`delete_clone` removes only the scanned `<repo>/<repo>-main` checkout, then `rmdir`s an
+empty `worktree/` and repository directory (a missing `worktree/` does not stop the
+repository directory's `rmdir`). `deletion_problem` fails closed with a
+keep-reason token (`KEEP_REASONS`): a non-ok row, a non-layout or symlinked path, a
+checkout that is not a main clone at its work-tree root, one holding a protected path
+(`--out`, the working directory, the toolkit), any `git status --porcelain --ignored`
+output, a stash, a commit on `HEAD` or any ref (`rev-list --all`) that no remote branch holds, a
+linked worktree, or a git call that cannot run. Outcomes never reach a row or the stamp.
+The `rmtree` error hook (`_clear_read_only`, #712) makes a read-only file writable and
+retries its deletion once, since Windows refuses to delete git's read-only objects; any
+other failure keeps the clone as `delete_error`.
 """
 from __future__ import annotations
 

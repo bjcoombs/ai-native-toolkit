@@ -2,6 +2,17 @@
 
 The deterministic half of the compounding ``.assess/`` wiki. Pages carry
 placeholders the LLM fills later through ``assess_finalize``.
+
+Writes this run's wiki through `wiki_writer`: `write_run_wiki` writes a page per current
+top hotspot (status from the stats diff, first-flagged date, the `Has test file` row
+from `_has_sibling_test`, marker debt and accretion in the briefing), retires orphan and
+excluded-before-finalize pages, adds graduated hotspots to `index.md` with their current
+metrics, saves `first-flagged.json`, replaces a superseded unfinalized log entry and
+appends this run's, then verifies the log chain. The hot-file test index comes in as
+`hot_test_index`, built once by the scan table and shared with `test_focus`. It
+returns a `RunWiki` (the retired and dropped paths, the chain verdict) for
+`run_publish.publish_run` to copy into run-context.json. Tests: `tests/test_run_wiki.py`,
+`tests/test_sibling_tests.py`, `tests/test_log_supersede.py`.
 """
 
 from __future__ import annotations

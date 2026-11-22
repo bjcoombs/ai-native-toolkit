@@ -39,6 +39,27 @@ of ``scan_accretion_ratchet``.
 CLI (standalone use)::
 
     uv run accretion_ratchet.py <repo_root> [--deletion-threshold 0.15] [--json OUT]
+
+Write-side accretion instrument: detects files that only ever grow. Walks each
+file's full numstat history in author-time order (one `git log --no-merges
+--no-renames --numstat` pass, sorted explicitly by `%at` then SHA so the
+accumulation order is clone-independent) and flags a file when its running
+net-delta is non-decreasing *and* its deletion fraction (deletions over total
+churn) stays below a threshold - growth with almost no deletion pressure, the
+fingerprint of pure append-only accretion rather than ordinary maintenance. A
+multi-commit gate drops single-touch rename artifacts; binary files (numstat
+`-`) are skipped, and documentation files (`DOC_SUFFIXES`: `.md`, `.markdown`, `.mdx`,
+`.rst`, `.adoc`; not `.txt`, which covers `CMakeLists.txt` and `requirements.txt`) are never
+flagged, since an appended-to document carries no change risk. Compensates the *Accretion* contributor tendency named in the
+repo goal statement. Degrades to `available: False` on git failure and
+`reliable: False` on degenerate history (same verdict as `git_churn`). Reuses
+`git_churn`'s `GIT_TIMEOUT_SECONDS` and `churn_is_degenerate`; imports no
+orchestrator. `net_additions` is net physical lines (numstat additions minus
+deletions over the file's non-merge commits), not scored LOC, so the hotspot
+page's growth-profile line (`wiki_writer`) and the keyhole's per-file items
+label it "lines net" and the deletion share "of churn deleted". Add a
+fixture-backed test in `tests/test_accretion_ratchet.py` alongside any change
+to the flagging rule.
 """
 
 from __future__ import annotations

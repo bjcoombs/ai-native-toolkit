@@ -31,6 +31,42 @@ position in ``run-context.json``: ``build_run_context`` makes one
 table order. Every block is a table entry (#558); only ``anomalies`` uses a
 stage for placement, staying the last scan key however many entries follow
 it in the table.
+
+The declared table of run-context scans and the loop that runs it. A `ScanSpec` names
+the `key`, the callable, the names it `reads` (passed positionally: a core-provided
+input from `PROVIDED_INPUTS` or the key of an earlier spec), its `stage`, and whether it
+degrades. By default the
+value is published as `ctx[key]`; a `private` spec's value (the stats, the diff, a raw
+scan result) is kept in the inputs mapping for later specs and never reaches
+`run-context.json`; a `spread` spec returns a mapping whose keys, all declared, are
+copied into the context in returned order (the 25-key run header, the eleven keyhole
+keys), with optional keys simply absent. `run_scans` routes every degrading spec
+through `safe` (from `degrade.py`), which turns any exception into
+`{"available": False, "reason": ...}` labelled by `label` or the key, so one broken
+scan never stops the run; a degraded spread spec marks every key it declares. A spec
+opts out only with a `gate_reason` drawn from `GATE_REASONS` (the setup steps, the
+invalid-scope usage error, scans that normalise their own failure such as
+`test_pressure` and `plugin_version`, and serialisers whose source already degrades);
+every other entry degrades, and each reader of its key accepts the marker (#623:
+`gap_actions` proposes no coverage action for a failed coverage read, the report and
+gate say a failed `excluded_generated` was not disclosed, a failed
+`mutation_not_run_cap` keeps Layer 6 capped, and `counts_only` keeps a marker under
+a path-keyed or dropped key as `{"available": false}`). `validate` runs at import and raises `ScanRegistryError` on a
+duplicate key, an unknown stage, a read that nothing provides, a read of a key
+produced at a later stage, a callable that cannot take its declared reads, a spec
+both private and spread, or a run-context key written twice, so a mis-declared scan
+fails before any run. `run_scans` resolves reads outside the wrapper: an input the
+core did not pass raises `ScanRegistryError` and stops the run, while a failure inside
+the scan degrades. The core provides the `build_run_context` arguments
+(`repo_root`, `requested_scope`, `run_date`, `non_interactive`); `scope` (the
+absolute `--scope` path, or None), `instruction_files`, `excludes` (the
+`(dirs, patterns)` pair from `.assess/config.toml`) and `history_window` (the stats
+sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
+`fleet_config` (the repository's `[ai_usage]`, `[review]` and `[platform]` sections,
+`lib/fleet_config.py`) are setup specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
+stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
+order (#558). Only `anomalies` relies on its stage, staying the last scan key while
+later entries append to the table.
 """
 from __future__ import annotations
 

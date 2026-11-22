@@ -24,6 +24,30 @@ a unique name it is a loss, so with collisions present the A1 footprints and
 A3 front-door ratio can be understated. A root holding a colliding name is
 always a build of its own (``_partition_builds``), so an import of that name
 from another root is never pinned to whichever copy sorts first.
+
+The Python builder (`PYTHON_BUILDER`): `discover_packages` finds the top-level directories
+holding an `__init__.py`, `grimp` reads their imports, and `module_graph` turns the result
+into a `ModuleGraph`. A package is the top dotted component, front doors are the package
+roots and every `__init__` module, and the public surface is the count of public top-level
+`def` / `class` definitions read with `ast`. With packages but no grimp it raises
+`GraphUnavailable` (`grimp not installed; ...`); a grimp failure raises `grimp failed to
+build import graph (...)`.
+
+Packages resolve by path, never by import name. grimp's default finder asks
+`importlib.util.find_spec`, which answers from `sys.modules` first, so a target
+package named `lib` (this repo's own `skills/assess/scripts/lib`) or `json` was
+graphed from whichever module of that name the running `/assess` had already
+imported. `build_import_map` swaps in a finder that maps each name to the
+directory `discover_packages` found, for the length of each build, and leaves
+`sys.path` and `sys.modules` alone. Two discovered packages sharing a name
+(`a/lib`, `b/lib`) go in separate builds, are graphed under their repo-relative
+paths, and are listed in the block's `name_collisions`. Each root holding a
+colliding name is a build of its own; all other roots share one. Any import
+between builds is unresolved, not only an import of the colliding name, since
+which copy wins depends on a runtime `sys.path`. The finder implements both shapes of
+grimp's package-finder port (`determine_package_directory` before 3.14,
+`determine_package_directories` from 3.14), so the `grimp>=3.0` floor holds.
+Tests: `tests/test_structure_graph.py`, `tests/test_import_graph.py`.
 """
 from __future__ import annotations
 

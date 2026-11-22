@@ -19,6 +19,35 @@
   live in ``.editorconfig``, which the scan does not evaluate) ahead of
   ``compiler_gate_only`` (warnings as errors is the only static gate; maintainer decisions 1
   and 3 on #926).
+
+Layer 3 lint gates one CI line cannot show (issue #926), for `ci_checks.lint_runs`.
+`rewrite_gated(text)` is the set of line indices of rewrite-formatter lines
+(`check_command.is_format_rewrite`) that a later, or the same, unmasked line of the same
+job turns into a lint run with `git diff --exit-code` or `git diff --quiet`; a rewrite
+alone, followed by a commit, or with the diff in another job is not one, and nor is a diff
+whose failure an `||` handler absorbs without re-raising it (`git diff --quiet || git
+commit -am fmt`; `|| exit 1` and `|| false` re-raise). A diff under a GitLab `after_script:`
+key is no gate either (`_after_script`): GitLab ignores its exit codes. Nor is a diff piped
+into another command (`git diff --exit-code | tee d.txt`): without `pipefail`, which
+GitHub's default `bash -e` does not set, the step takes the last command's status. Nor is a diff with a
+`git add`, `git commit`, `git stash`, `git restore`, `git checkout -- .` or `git reset
+--hard` between it and the rewrite (`_stages`), since the working tree then shows no
+change, nor one that compares the index or commits (`_working_tree`: `--cached`,
+`--staged`, a revision such as `HEAD~1` before `--`). An `||` handler re-raises only when
+`exit 1` or `false` runs as a command, never inside echoed text. A property tag with a `Condition` attribute counts (it may apply, so
+it reads null, never false). `job_ids(lines)`
+numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
+under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
+`ci_checks` shares. `line_compiler_gate` and `line_dotnet_build` are per-line tests over
+`lint_vocabulary.compiler_gate` and `dotnet_build`. `dotnet_props(root, tracked)` reads
+the committed `Directory.Build.props` files, then the `*.csproj` files, by path through
+`command_index.read_config`, and returns two booleans: `TreatWarningsAsErrors` true, and
+the analysers on (`EnforceCodeStyleInBuild` true or an `AnalysisLevel` other than `none`);
+no text leaves the module. `lint_gate(root, tracked, compiler=, dotnet=)` is
+`analysers_in_build` for a CI .NET build with the analysers on, else
+`compiler_gate_only` for a compiler-gate line or a CI .NET build with
+`TreatWarningsAsErrors` committed, else None (decisions 1, 3 and 4 on #926). Tests:
+`tests/test_ci_lint_gates.py`.
 """
 from __future__ import annotations
 

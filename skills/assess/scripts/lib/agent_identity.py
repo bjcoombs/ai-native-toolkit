@@ -21,6 +21,45 @@ as well as the AI-assisted share, so it is a change of its own.
 wider pinned list and the ``[ai_usage]`` config rules move only that block. It
 also holds the GitLab access-token user recognition (``is_gitlab_token_user``)
 and the username form (``classify_username``) the ``--platform`` reads reuse.
+
+The one definition of an agent identity in a git history: `identity_is_agent(email,
+name)` (the `[bot]` marker on either, or an `AI_EMAIL_HINTS` e-mail; never a display
+name) and `coauthors_have_agent(field)` (any GS-separated `Co-authored-by` value whose
+bracketed e-mail is an agent). `is_ai_assistant` / `coauthors_have_ai_assistant` are
+the same matcher with non-Copilot `[bot]` accounts removed, for `ai_usage`: a GitHub
+squash merge credits every commit author as a co-author, so an automation bot's
+fix-up commit must not make a change read as AI-assisted. `COVERED_AGENTS` names the
+assistants that counts, in words with no address, for a block's stated limits; keep
+it in step with `AI_EMAIL_HINTS`.
+Consumers: `change_coupling.authorship_analysis`, `promissory_markers`,
+`understanding_analysis` and `ai_usage`. Widening the hints changes all four, so it is
+a change of its own.
+`ai_usage`'s author matcher (#695) is separate and moves no other block.
+`AuthorMatcher(config_rules, token_users_as_agents)` classifies an author into
+`agent`, `dependency_bot`, `token_user` or `other`, returning an `AuthorClass(bucket,
+rule_index)`. `classify(email, name, username=None)` takes a git author, deriving the
+username from a noreply e-mail (`username_from_email`); `classify_username(username)`
+takes a platform user (the `--platform` reads, #716/#717). Rules (`IdentityRule`:
+a case-insensitive regex searched, plus a field `email`, `username` or `name`; no field
+reads e-mail and username) come from `compile_config_rules` over the
+`[[ai_usage.agent_identities]]` tables. Pinned defaults (`AGENT_RULES`,
+`DEPENDENCY_BOT_RULES`) are written in the username form and never read a display
+name; `COVERED_AUTHOR_AGENTS` names them in words. Order: a dependency bot (always,
+whatever a rule says), then config rules in order (first match credited), then
+pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
+`project_<id>_bot_<hex>`, `group_<id>_bot_<hex>`, by username or its `@noreply.<host>` e-mail; never by display name, which is the
+token's owner-chosen name), which is `agent` under `token_users_as_agents` and
+`token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
+`--timeout` bounds a pathological repository pattern).
+Confirmed identities (#765): `AuthorMatcher(..., confirmed=ConfirmedIdentities)` holds the
+`[identities]` section as lower-case literal sets (`ConfirmedIdentities.from_section`;
+entries are exact accounts, never patterns). Right after the dependency-bot check, an
+identity whose `identity_keys(email, name, username)` (the e-mail, the noreply login and
+a `[bot]` display name) is a confirmed person or bot is `other`, and a confirmed agent is
+`agent` (rule_index None), ahead of every config rule and pinned default; a person or
+bot entry wins over an agent entry for the same account.
+Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
+`tests/test_identity_candidates.py`, `tests/test_change_coupling.py`.
 """
 from __future__ import annotations
 

@@ -5,6 +5,12 @@ Pure inspection of a run-context dict. No LLM, no file IO. Deterministic.
 The detail strings on each Anomaly are SAFE-TO-SHARE: counts and grades only,
 never paths or code. They form the body of self-feedback issues filed against
 the toolkit repo.
+
+Inspects a run-context dict for suspicious results (e.g. zero files scored, implausible
+CCN) and returns typed `Anomaly` records. Detail strings are sanitised (counts and
+grades only, no paths or code) so they are safe to include in self-feedback issues.
+`COMPLEXITY_UNRELIABLE` fires when `stats_summary.complexity_unreliable` is non-empty
+(`scc_coverage.py`); its detail counts files and languages and gives the largest NLOC.
 """
 from __future__ import annotations
 
