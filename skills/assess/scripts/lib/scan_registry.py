@@ -62,6 +62,7 @@ from lib.instruction_files import nested_instruction_surface
 from lib.instruction_placement import scan_instruction_placement
 from lib.layer_grades import scan_layer_grades
 from lib.merged_sample import merged_sample
+from lib.gitlab_ci_lint import no_merged_ci, read_merged_ci
 from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
@@ -548,8 +549,13 @@ SCANS: tuple[ScanSpec, ...] = (
     # listed in [review] ai_review_components), or an AI review app's config
     # file. Offline file reads; review_evidence (Layer 7 level 1) reads it with
     # review_reality and is rebuilt by the --platform pass (PLATFORM_SCANS).
+    # GitLab's merged CI configuration (#796, lib/gitlab_ci_lint.py): the CI lint API,
+    # asked only where an include did not resolve offline. Private, held in memory;
+    # review_automation and ci_checks read it. Offline it reads nothing.
+    ScanSpec("gitlab_merged_ci", read_merged_ci, ("repo_root", "ghsync_root"), STAGE_POST_OFFERS,
+             private=True, network=True, offline_fn=no_merged_ci),
     ScanSpec("review_automation", scan_review_automation,
-             ("repo_root", "fleet_config", "ghsync_root"),
+             ("repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"),
              STAGE_POST_OFFERS),
     ScanSpec("review_evidence", review_evidence, ("review_automation", "review_reality"),
              STAGE_POST_OFFERS),
@@ -557,10 +563,13 @@ SCANS: tuple[ScanSpec, ...] = (
     # test or lint command (check_command.is_check_command); null when no
     # check is found but a CI file pulls jobs this run cannot read (an unresolved
     # include:, a remote reusable workflow; GitLab includes resolve offline against
-    # `ghsync_root`, #766). enforced_check_runs (#775) leaves out masked checks
-    # (lib/ci_masking.py); Layer 5 level 1 of the default maturity model reads it.
-    # Offline.
-    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root"), STAGE_POST_OFFERS),
+    # `ghsync_root`, #766; under --platform, GitLab's merged configuration where one did
+    # not, #796). enforced_check_runs (#775) leaves out masked
+    # checks and checks off the ordinary triggers (lib/ci_masking.py,
+    # lib/ci_triggers.py); Layer 5 level 1 of the default maturity model reads it.
+    # Offline itself.
+    ScanSpec("ci_checks", scan_ci_checks, ("repo_root", "ghsync_root", "gitlab_merged_ci"),
+             STAGE_POST_OFFERS),
     # Agent building (issue #689): what the repository builds with agents, an
     # inventory and not scored - agent SDKs and frameworks in manifests, agent
     # configuration, a counts-only tool-call loop / MCP server heuristic and the

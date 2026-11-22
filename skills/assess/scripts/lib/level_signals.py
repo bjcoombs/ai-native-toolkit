@@ -214,7 +214,7 @@ SIGNAL_INPUTS: dict[str, InputClass] = {
     "structure_drift.tier_0.boundary_patterns": "config_text",
     "stats_summary.loc.p95": "head_structure",
     "ci_checks.enforced_check_runs": "ci_executed",
-    "coverage_gate.enforced": "config_text",
+    "coverage_gate.threshold_meets_minimum": "config_text",
     "test_pressure.mutation_run": "execution_artifact",
     "review_evidence.present": "head_text",
     "review_reality.reviewed_share": "platform",
