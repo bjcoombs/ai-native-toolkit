@@ -1566,7 +1566,7 @@ of literal accounts, #765), read through `identities_section` by `ai_usage.match
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
-any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/references/fleet-config.md`.
 A scan reads the merged config through the registry input `fleet_config` (a private setup
 spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
 the fleet file in the headless run). The value is private, never a run-context block, so it
@@ -2001,8 +2001,10 @@ the one a single file declares, and an error names the fragment
 (`core/ci_checks.toml entries[0] (core.ci_checks).stage`). Layout errors:
 `MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
 would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
-the file) and `FRAGMENTS_AND_ENTRIES`. An id declared in two fragments is `DUPLICATE_ID`,
-naming both files. A new collector adds its fragment and one line to `fragments`; a change
+the file), `FRAGMENT_OWNER` (#994: an entry outside the fragment of its owner, naming the
+entry, its fragment and the expected one; an owner that does not resolve or that two fragments claim, or an id
+declared twice, is left to validation) and `FRAGMENTS_AND_ENTRIES`. An id declared in two
+fragments is `DUPLICATE_ID`, naming both files. A new collector adds its fragment and one line to `fragments`; a change
 to an existing check edits its own fragment only. `read_manifest(path)` returns the merged
 document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
 list. A single-file manifest (any third-party owner) loads as before.
@@ -2124,7 +2126,9 @@ counts-only patterns, split by block for a spread collector), `used_by` (`rows`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
 (every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
-them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
+them, not manifest order, since fragments group signals by collector) and `findings`. `sources` (`catalog.SOURCES`) lists the
+files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
+manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -3202,7 +3206,8 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Both reads classify the remote with
+blocks and they describe the same changes; the private `external_ci` spec (#928) reads it
+too. Both reads classify the remote with
 `remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
 `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
 `gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
@@ -3217,8 +3222,8 @@ window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state me
 --search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
 (an update is never before its merge, so the newest merges are among the most
 recently updated), then the same search from the 30th newest `mergedAt` with
-`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
-for the heavy fields. GitLab, one read:
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid`)
+for the heavy fields; `headRefOid` is the head commit `external_ci.py` reads (#928). GitLab, one read:
 `projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
 then filtered and ordered by `merged_at` client-side (works on GitLab versions
 without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
@@ -3775,18 +3780,25 @@ target or script that may lint inside it; recipes are not read), `not_enforced`
 (false: every lint line is masked or off the ordinary triggers), `no_lint_command` or
 `no_ci` (false). Layer 3 level 1 reads `lint_runs`, so a suppression comment only
 caps the row; a stored scan without the key reads unknown there.
-CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tracked
-`UNREAD_CI_FILES` at the root (`Jenkinsfile`, `.circleci/config.yml`,
-`azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
-`.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
-root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
+CI systems the scan does not parse (issues #787, #928): `unread_ci_files` counts the
+tracked files at the unread-CI paths of `unread_ci.py` (listed there). With no own, included or merged check line and no pending
 included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_configured` stays false),
 and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
 `enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
 beside it still reads null). With no lint line on ordinary triggers and no check target,
 one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
 unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
+Off-repository CI (issue #928), after `unread_ci_system` and before the false cases:
+`external_ci` when the private `external_ci` reading (`external_ci.py`, `--platform`
+only) applies, else `external_ci_marker` when the tree tracks no CI file of any kind
+(no workflow, no `.gitlab-ci.yml`, no unread CI file) and the root holds a Prow
+`OWNERS_ALIASES` file. Either makes `enforced_check_runs` and `lint_runs` null with that
+basis in place of `not_enforced`, `no_check_command`, `no_lint_command` or `no_ci`, and
+`basis` reads it with `test_or_lint_configured` still false. Neither gives credit: a read
+enforced check still reads true. An `OWNERS` file alone, a nested `OWNERS_ALIASES` and an
+environment-variable read (`ENV["BUILDKITE"]`, `LUCI_`) are not markers.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
+`tests/test_external_ci.py` (#928),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.
 
@@ -3849,6 +3861,60 @@ outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other l
 so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
 anchors and `workflow: rules:` are not resolved; branch and path filters are not
 read. Tests: `tests/test_ci_triggers.py`.
+
+**`unread_ci.py`**
+The unread-CI paths (issues #787, #928): CI files of systems `ci_checks` and `coverage_ci`
+do not parse, shared by both through `unread_ci_paths(tracked)` / `is_unread_ci_path(rel)`.
+Every path is relative to the repository root; the same name in a subdirectory is not
+the repository's pipeline. The unread-CI path list:
+
+- Exact paths (`UNREAD_CI_FILES`): Jenkins `Jenkinsfile`; CircleCI `.circleci/config.yml`;
+  Bitbucket `bitbucket-pipelines.yml`; Travis CI `.travis.yml`; Azure Pipelines
+  `azure-pipelines.yml`, `azure-pipelines.yaml`, `.azure-pipelines.yml` and
+  `.azure-pipelines.yaml`; Buildkite `.buildkite/pipeline.yml`, `.buildkite/pipeline.yaml`,
+  `buildkite.yml` and `buildkite.yaml`; Flutter Cocoon / LUCI `.ci.yaml`; Prow
+  `.prow.yaml`; Zuul `.zuul.yaml`; Drone `.drone.yml`; Woodpecker `.woodpecker.yml`;
+  Cirrus CI `.cirrus.yml`; AppVeyor `appveyor.yml`; Semaphore `.semaphore/semaphore.yml`;
+  Google Cloud Build `cloudbuild.yaml`; Bitrise `bitrise.yml`; Codemagic `codemagic.yaml`.
+- Patterns (`UNREAD_CI_PATTERNS`, any depth below the directory): LUCI project
+  configuration `infra/config/**/*.star` and `infra/config/**/*.cfg`; Azure Pipelines
+  `.azure/pipelines/**/*.yml|yaml`, `eng/pipelines/**/*.yml|yaml` (the .NET Arcade
+  layout), `.azure-pipelines/**/*.yml|yaml` and `azure-pipelines/**/*.yml|yaml`;
+  Woodpecker `.woodpecker/**/*.yml|yaml`; Zuul any file under `zuul.d/`.
+
+The files are counted, never parsed or published. Tests: `tests/test_external_ci.py`.
+
+**`external_ci_rules.py`**
+The `external_ci` value type and allowlist (#928), apart from `external_ci.py` so
+`ci_checks` stays an offline module: `ExternalCi(sampled, external)`, `NOT_READ`,
+`as_external(value)` (anything else, such as a degraded spec's dict, is `NOT_READ`), and
+`ExternalCi.applies`, the majority rule (more than half of the sampled changes carry a
+known system). The allowlist of known CI systems: a check run's app slug in
+`EXTERNAL_CI_APPS` (`buildkite`, `circleci-checks`, `travis-ci`, `appveyor`, `cirrus-ci`,
+`azure-pipelines`, `google-cloud-build`, `flutter-dashboard` for LUCI, and others), or a
+status context equal to an entry of `EXTERNAL_CI_CONTEXTS` (`buildkite/`, `ci/circleci`,
+`continuous-integration/travis-ci`, `azure pipelines`, `luci`, Prow's `tide`, and others)
+or the entry followed by `/`, `:`, a space or `-` (so `tide` never matches `tidelift`),
+case-insensitive. An app or context on neither list
+(`github-actions`, `codecov`, `coderabbitai`, a CLA bot) changes nothing. Tests:
+`tests/test_external_ci.py`.
+
+**`external_ci.py`**
+The `--platform` external-CI reading.
+The private `network` spec `external_ci` (#928), read by `ci_checks`:
+`read_external_ci(merged_sample)`; offline the runner calls `no_external_ci`, which reads
+nothing. Under `--platform` it runs because `ci_checks` is in `signals.PLATFORM_SCANS`; a
+full `/assess` run reads it too. For each sampled merged pull request
+(`merged_sample.py`, up to `SAMPLE_CAP` = 30) with a `headRefOid`, at most
+`CALLS_PER_CHANGE` = 2 calls, both GET: `gh api repos/<o>/<r>/commits/<sha>/check-runs`
+(the app slug of each check run on the first page), then
+`gh api repos/<o>/<r>/commits/<sha>/status` (each status context), skipped when the check
+runs already name a known system. Both are made with `cache=False` (check-run output and
+status descriptions are free text); only the two counts leave the module. `external_ci`
+in `ci_checks` means an external check context on merged changes under `--platform`: more
+than half of the sampled merges carry a known external CI system. A GitLab sample, an
+empty or unread sample and any refused call (`GhUnavailable`) read `NOT_READ`, so the
+offline result stands; a `not_found` head counts that change as not external instead. Tests: `tests/test_external_ci.py`.
 
 **`merged_ci.py`**
 The value type of the private `gitlab_merged_ci` registry spec (#796): `MergedCi(status,
@@ -4310,7 +4376,7 @@ test`, `tox`, `mvn test`, a target or script named for coverage such as `make co
 `make cov`, `npm run coverage` or `just coverage`, or a Jest / Vitest run with no
 `--coverage`),
 `included_jobs` (`shared_tooling.pulls_jobs_from_elsewhere`), `unread_ci_system`
-(`ci_checks.UNREAD_CI_FILES` tracked, or the gate written in one or in a composite
+(a tracked file at an `unread_ci.py` path, the predicate `ci_checks` shares (#928), or the gate written in one or in a composite
 action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:
 GitHub step and job `if:`, branch filters, matrix values and composite-action
 internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
