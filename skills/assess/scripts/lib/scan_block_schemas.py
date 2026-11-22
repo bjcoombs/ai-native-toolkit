@@ -160,14 +160,14 @@ CI_CHECKS: JsonDict = {
         "enforced_check_runs": _field(
             {"type": ["boolean", "null"]},
             "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
-            "changes, null when none does but included jobs, unsettled triggers or a CI system the "
-            "scan does not parse may hold one, else false."),
+            "changes, null when none does but included jobs, unsettled triggers, a target whose "
+            "recipe is not read or a CI system the scan does not parse may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "unread_ci_system",
-                      "not_enforced", "no_check_command", "no_ci"]},
-            "The reason for enforced_check_runs: enforced_check (true), included_jobs or "
-            "unknown_trigger or unread_ci_system (null), not_enforced, no_check_command or no_ci "
-            "(false)."),
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_target",
+                      "unread_ci_system", "not_enforced", "no_check_command", "no_ci"]},
+            "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
+            "unknown_trigger, check_target or unread_ci_system (null), not_enforced, "
+            "no_check_command or no_ci (false)."),
         "masked_check_commands": _field(
             _INT, "CI lines that run a check whose failure cannot fail the job."),
         "off_trigger_check_commands": _field(

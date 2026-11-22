@@ -250,6 +250,12 @@ constant each.
 #   test_or_lint_configured and coverage_gate.enforced is configured. Values and
 #   meaning are unchanged; the fleet re-score reads a stored scan's old path under the
 #   new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+# - ci_checks.enforced_basis gains check_target (issue #920): no CI line runs a
+#   check, but one runs a target whose recipe is not read (make foo, npm run foo,
+#   ./scripts/foo.sh, docker run img), so enforced_check_runs reads null, never false. Common test
+#   runners (dotnet test, swift test, mix test, bundle exec rspec, deno test,
+#   phpunit, ctest, bazel test, turbo, nx, task) and wrappers (docker compose run,
+#   pnpm exec, hatch run, bundle exec) now count as checks.
 # - run-context.json structure_drift is the unavailable marker
 #   {"available": false, "reason": "no_ownership_map: ..."} when the repository
 #   commits no ownership or boundary map, where it was omitted (issue #908), so the

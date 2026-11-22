@@ -3580,9 +3580,36 @@ show: a check target of a runner or script (`make check`, `npm test`, `tox`,
 `./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
 (`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
 call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
-jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
-`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
-(`test_lint_runs_per_command`).
+jest`). `is_lint_command` keeps its meaning.
+Test runners and wrappers beyond `RUNNERS` (issue #920): `check_verdict(text)` is
+`is_check_command` as three states. True for a test program (`TEST_PROGRAMS`: `ctest`,
+`phpunit`, `pest`, `rspec` and the JS test runners, matched by basename so
+`vendor/bin/phpunit` counts), the `test` subcommand of a toolchain (`TEST_SUBCOMMANDS`:
+`dotnet`, `swift`, `mix`, `deno`, `bazel`, `bazelisk`, `hatch`, `flutter`, `rails`, `dart`), `php artisan test`, a
+Gradle test task (`./gradlew testDebugUnitTest`, `connectedAndroidTest`), the
+`test` action of `xcodebuild` or a check-named target of
+a target runner (`TARGET_RUNNERS`: `make`, `just`, `task`, `rake`, `turbo`, `nx`, with
+`nx affected -t test` and `nx run app:test` read). A wrapper is read by the program it
+runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`,
+`npx`, `pnpm exec`, `hatch run`), in `is_lint_command`, `is_lint_run` and `may_lint`
+too. None (`may_check(text)`) for a target whose recipe is not read: any other target
+of a target runner, its default target (a bare `make`), a `hatch run` script that is not
+check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
+(`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
+file or a path passed to `bash`/`sh`/`zsh`, read by file name so `./ci/deploy.sh` is
+false), and a container's default command or an unknown
+program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
+`poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
+Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
+`format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
+absolute paths and a container running a plain program (`echo`) or a modelled runner.
+A target runner asked for `--version` or its list (`task --list`, `rake -T`) is false.
+`may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
+`bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
+lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
+(`ci_checks._lone_check`). Tests: `tests/test_check_command.py`,
+`tests/test_check_runners.py` (#920), `tests/test_agent_environment.py`
+(`test_is_check_command`), `tests/test_ci_checks.py` (`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
@@ -3639,7 +3666,9 @@ in the merged configuration when those hold none)
 whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
 off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
 null with `enforced_basis: unknown_trigger`), else null under the
-same `included_jobs` rule, else false. Layer 5 level 1 reads
+same `included_jobs` rule, else null with `enforced_basis: check_target` when an
+unmasked line on ordinary changes runs a target whose recipe is not read
+(`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
 still describes `test_or_lint_configured`, which keeps its meaning.
 `lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking

@@ -1466,7 +1466,7 @@ id = "core.ci_checks"
 kind = "collector"
 title = "CI runs a test or lint command"
 summary = "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked."
-issues = [698, 775, 782, 787]
+issues = [698, 775, 782, 787, 920]
 callable = "lib.ci_checks:scan_ci_checks"
 publishes = ["ci_checks"]
 reads = ["repo_root", "ghsync_root", "gitlab_merged_ci"]
@@ -1481,7 +1481,7 @@ unknown_reasons = [
   { code = "included_jobs", carried_in = "basis", means = "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.", next_step = "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API." },
   { code = "merged_config_partial", carried_in = "basis", means = "GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API.", next_step = "Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false." },
   { code = "unknown_trigger", carried_in = "basis", means = "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).", next_step = "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it." },
-  { code = "check_target", carried_in = "basis", means = "In lint_basis: no CI line calls a linter, but one runs a check target or script that may run one inside it (make check, npm test, tox, ./scripts/test.sh, pre-commit run); recipes are not read.", next_step = "Nothing to change if the target lints; calling the linter in its own CI step (ruff check ., make lint) lets the scan read it." },
+  { code = "check_target", carried_in = "basis", means = "No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check.", next_step = "Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it." },
   { code = "unread_ci_system", carried_in = "basis", means = "In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them.", next_step = "Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent." },
 ]
   [entries.privacy]
@@ -1850,7 +1850,7 @@ collector = "core.ci_checks"
 path = "ci_checks.enforced_check_runs"
 type = "bool"
 evidence = "ci_executed"
-null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; unread_ci_system: the check may run in a CI system the scan does not parse"
+null_means = "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a target whose recipe is not read may run it; unread_ci_system: the check may run in a CI system the scan does not parse"
 
 [[entries]]
 id = "core:agent_environment.pinning.unlocked_total"
