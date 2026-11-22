@@ -743,6 +743,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.conditions.grade` | token |
 | `level.conditions.state` | token |
 | `level.conditions.reason` | token |
+| `level.conditions.polarity` | token |
 | `level.next_step.blockers.kind` | token |
 | `level.next_step.blockers.gate` | token |
 | `level.next_step.blockers.condition` | token |

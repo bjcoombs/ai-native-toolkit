@@ -122,6 +122,7 @@ class CatalogCriterion(TypedDict):
 
 class CatalogLevel(TypedDict):
     level: int
+    truth: list[str]  # the condition's truth tags (lib/levels_fields.py, #843)
     criteria: list[CatalogCriterion]
 
 
@@ -216,6 +217,8 @@ def _value_words(value: Scalar | list[Scalar]) -> str:
 
 def criterion_text(criterion: Criterion, title: str) -> str:
     """The criterion in plain words: the signal's title, the operator, the value."""
+    if "eq_signal" in criterion:  # two measured signals compared (lib/levels_fields.py)
+        return f"{title}: {OP_WORDS.get(criterion['op'], criterion['op'])} signal {criterion['eq_signal']}"
     return f"{title}: {OP_WORDS.get(criterion['op'], criterion['op'])} {_value_words(criterion['value'])}"
 
 
@@ -237,8 +240,9 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
                     key=key, signal=criterion["signal"], op=criterion["op"], value=criterion["value"],
                     text=criterion_text(criterion, title),
                     title=cond["title"] if cond else title, fix=cond["fix"] if cond else "",
-                    input_class=input_class, grade=grade, counts=counts(grade)))
-            levels.append(CatalogLevel(level=level["level"], criteria=criteria))
+                    input_class=input_class, grade=grade,
+                    counts=counts(grade) and level.get("polarity") != "hazard"))
+            levels.append(CatalogLevel(level=level["level"], truth=list(level["truth"]), criteria=criteria))
         agg = row["aggregation"]
         rows.append(CatalogRow(id=row["id"], title=row["title"], scope=row["scope"],
                                aggregation=agg["rule"] if agg else "min", levels=levels))

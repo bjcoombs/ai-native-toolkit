@@ -278,6 +278,9 @@ constant each.
 #   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
 #   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
 #   Additive: no existing key moves.
+# - run-context.json delivery gains sample_page_size (issue #995): the changes per
+#   heavy read the merged sample finished at, or null when none was made. Additive:
+#   no existing key moves.
 # - run-context.json agent_environment.pinning gains manifests_total (issue #927):
 #   the number of dependency manifests the lockfile check reads. Additive: no
 #   existing key moves, and complexity-stats.json is unchanged.

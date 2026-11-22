@@ -56,7 +56,7 @@ def recorded() -> list[dict[str, Any]]:
 
 def sample(prs: list[dict[str, Any]], bots: BotClassifier | None = None) -> MergedSample:
     return MergedSample("github", tuple(prs), date(2026, 5, 21), github=REPO,
-                        bots=bots or StubBots())
+                        bots=bots or StubBots(), page_size=ms.PAGE_SIZE if prs else None)
 
 
 def _pr(created: str = "2026-11-01T00:00:00Z", merged: str = "2026-11-01T10:00:00Z",
@@ -94,6 +94,7 @@ def test_recorded_sample_gives_every_github_figure():
         "ai_review_share": 1.0,
         "approved_share": 0.5, "self_merged_share": 1.0,
         "agent_authored_share": 0.0,
+        "sample_page_size": 20,
     }
     assert "github-actions" not in bots.probed  # a status bot is never probed
     assert len(bots.probed) == len(set(bots.probed))  # one probe per login
@@ -329,7 +330,7 @@ def _light(n: int) -> list[dict[str, Any]]:
     return [{"mergedAt": f"2026-10-{1 + (i * 7) % 28:02d}T{i % 24:02d}:00:00Z"} for i in range(n)]
 
 
-def test_github_sample_takes_the_newest_merges_in_two_reads(monkeypatch):
+def test_github_sample_takes_the_newest_merges_in_pages(monkeypatch):
     calls: list[list[str]] = []
     light = _light(40)
     newest = sorted((c["mergedAt"] for c in light), reverse=True)
@@ -341,30 +342,37 @@ def test_github_sample_takes_the_newest_merges_in_two_reads(monkeypatch):
         cached.append(cache)
         if args[-1] == "mergedAt":
             return light
-        floor = args[args.index("--search") + 1].split()[0].removeprefix("merged:>=")
-        return [{"mergedAt": m, "comments": []} for m in newest if m >= floor] + [
+        span = args[args.index("--search") + 1].split()[0].removeprefix("merged:")
+        lo, _, hi = span.removeprefix(">=").partition("..")
+        return [{"mergedAt": m, "comments": []} for m in newest
+                if m >= lo and (not hi or m <= hi)] + [
             {"mergedAt": "2026-05-01T00:00:00Z"}]  # before the window: dropped
 
     monkeypatch.setattr(ms, "gh_json", fake)
-    got = ms.github_changes(REPO, date(2026, 5, 21))
+    got, size = ms.github_changes(REPO, date(2026, 5, 21))
     assert [c["mergedAt"] for c in got] == newest[:ms.SAMPLE_CAP]
+    assert size == ms.PAGE_SIZE
+    page = ms.PAGE_SIZE
     assert calls[0][calls[0].index("--search") + 1] == "merged:>=2026-05-21 sort:updated-desc"
-    assert calls[1][calls[1].index("--search") + 1] == f"merged:>={newest[ms.SAMPLE_CAP - 1]} sort:updated-desc"
-    assert calls[1][-1] == ms.PR_FIELDS
+    assert calls[1][calls[1].index("--search") + 1] == f"merged:>={newest[page - 1]} sort:updated-desc"
+    assert calls[2][calls[2].index("--search") + 1] == (
+        f"merged:{newest[ms.SAMPLE_CAP - 1]}..{newest[page]} sort:updated-desc")
+    assert [c[c.index("--limit") + 1] for c in calls] == [str(ms.FETCH_LIMIT), str(page), str(page)]
+    assert calls[1][-1] == calls[2][-1] == ms.PR_FIELDS
     # Only the timestamps-only read may be cached; reviews and comments never are (#778).
-    assert cached == [True, False]
+    assert cached == [True, False, False]
     assert all(c[c.index("--repo") + 1] == "acme/widget" for c in calls)
 
 
 def test_github_sample_with_no_merges_reads_once(monkeypatch):
     calls: list[list[str]] = []
     monkeypatch.setattr(ms, "gh_json", lambda args, timeout=20, cache=True: calls.append(args) or [])
-    assert ms.github_changes(REPO, None) == []
+    assert ms.github_changes(REPO, None) == ([], None)
     assert len(calls) == 1
     assert calls[0][calls[0].index("--search") + 1] == "sort:updated-desc"
 
 
-def test_gitlab_sample_reads_one_page_and_orders_by_merge_time(monkeypatch):
+def test_gitlab_sample_reads_a_short_page_once_and_orders_by_merge_time(monkeypatch):
     paths: list[str] = []
     mrs = [{"iid": i, "merged_at": f"2026-10-{i:02d}T00:00:00Z"} for i in (3, 1, 2)]
     mrs.append({"iid": 9, "merged_at": "2026-01-01T00:00:00Z"})  # updated in, merged before
@@ -375,10 +383,11 @@ def test_gitlab_sample_reads_one_page_and_orders_by_merge_time(monkeypatch):
         return mrs
 
     monkeypatch.setattr(ms, "glab_api", fake)
-    got = ms.gitlab_changes(GitlabProject("gitlab.com", "grp/app"), date(2026, 5, 21))
+    got, size = ms.gitlab_changes(GitlabProject("gitlab.com", "grp/app"), date(2026, 5, 21))
     assert [mr["iid"] for mr in got] == [3, 2, 1]
+    assert size == ms.PAGE_SIZE
     assert paths == ["projects/grp%2Fapp/merge_requests?state=merged&updated_after=2026-05-21T00:00:00Z"
-                     "&order_by=updated_at&sort=desc&per_page=100"]
+                     f"&order_by=updated_at&sort=desc&per_page={ms.PAGE_SIZE}&page=1"]
 
 
 @pytest.mark.parametrize("listing,reason", [
@@ -417,8 +426,8 @@ def _full_gitlab_block() -> dict[str, Any]:
            {"iid": 2, "created_at": "2026-11-01T00:00:00Z", "merged_at": "2026-11-02T00:00:00Z"})
     notes = (NoteFacts(True, True, "2026-11-01T02:00:00Z"), NoteFacts(False, False, None))
     project = GitlabProject("gitlab.com", "grp/app")
-    return dict(scan_delivery(MergedSample("gitlab", mrs, None, gitlab=project), REVIEW,
-                              notes=notes))
+    return dict(scan_delivery(MergedSample("gitlab", mrs, None, gitlab=project,
+                                           page_size=ms.PAGE_SIZE), REVIEW, notes=notes))
 
 
 @pytest.mark.parametrize("build", [_full_github_block, _full_gitlab_block], ids=["github", "gitlab"])

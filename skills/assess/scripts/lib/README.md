@@ -2494,7 +2494,8 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 `share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
-key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
+key, a missing, empty or unknown `truth` (`MixedTruthError` for a partly tagged model), a bad
+`polarity`, `guarded_by` or `eq_signal`, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
 rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
@@ -2508,6 +2509,47 @@ the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`,
 `gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
 later Step keeps every gate of the one below and never lowers the threshold, or the load
 fails. A model without them loads exactly as before.
+Each level also carries `truth` (#843), and three additive fields ride along, all defined in
+`levels_fields.py` below. `load_levels` passes the file path to `parse_levels` (`source=`) so a
+`MixedTruthError` names the model file. `LevelsError` and `MixedTruthError` are defined in
+`levels_fields.py` and re-exported here, so callers keep importing them from `lib.levels`.
+
+**`levels_fields.py`**
+The rules for the four condition fields of a maturity model (#843); `levels.parse_levels`
+calls them, and the module docstring is the reference.
+
+- **`truth`** (required, multi-valued): every level carries a non-empty array of distinct tags
+  from `TRUTH_TAGS` (`behaviour`, `contracts`, `docs`, `structure`, `agent_context`,
+  `agent_runtime`, `governance`, `supply_chain`). An unknown tag, an empty array or a repeat
+  fails the load naming the row, the level and the cause.
+- **Legacy layer alias (rule A, maintainer decision of 2026-11-22):** the alias applies only
+  when **no condition in the model carries `truth`**. Each condition then takes
+  `legacy_truth(row id)`: a `layer-<n>-...` row takes `LEGACY_LAYER_TRUTH[n]` (0
+  `agent_context`; 1 `agent_runtime`; 2, 3, 4 `structure`; 5, 6 `behaviour`; 7, 8
+  `governance`), the default model's `doc-freshness` takes `docs` and `guardrails-stated` and
+  `agent-consistency` take `agent_context` (`LEGACY_ROW_TRUTH`), and any other row `[]`. A
+  model where some conditions carry `truth` and others do not raises **`MixedTruthError`**
+  (a `LevelsError`), whose message starts `MixedTruthError:` and names the model file, the
+  row id and the level of the first condition without it. There is no format-marker field.
+- **`polarity`** on a level: `"positive"` (default) or `"hazard"`. A hazard is parsed as
+  `polarity: "hazard"`; `level_tally` never counts it (it is listed when met) and marks its
+  condition with `polarity: "hazard"`. No row level or Step reads it (Step-blocking hazards
+  are #828).
+- **`guarded_by`** on a level: one condition id; default absent (no guard). One hop:
+  `level_tally` caps the condition's grade at `measured` while the guard is not `met`, which
+  never changes what is counted. An unknown id, the condition itself or a hazard fails the
+  load naming the id and `guarded_by`.
+- **`eq_signal`** on a criterion: `{ signal = "<path>", op = "eq" | "ne", eq_signal = "<path>" }`
+  with no `value`; default absent (compare with `value`). The criterion compares the two
+  measured signals: either unavailable is `unknown`, different kinds or a non-scalar
+  `type_mismatch`, and either side an empty-set statistic takes that signal's
+  `EMPTY_DENOMINATORS` code. The parsed criterion keeps the second path as its `value` as well, so the
+  catalog shows what it compares with; the `PathValidator` checks both paths. The fleet
+  next-step wording skips the signal's repository-native guidance for such a criterion and names
+  both paths. `levels.unavailable_signal` names the unavailable side in `missing_signals` and in
+  the tally's `not_measured` reason. The catalog never counts a hazard.
+
+Tests: `tests/test_levels_fields.py`.
 
 **`level_tally.py`**
 The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
@@ -2521,7 +2563,9 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
   excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
   that is not met, a `reason` code. An owner-excluded condition also carries
-  `disposition: "excluded_by_owner"` and `exclusion_kind`.
+  `disposition: "excluded_by_owner"` and `exclusion_kind`. A
+  `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
+  `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
 - Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
   entries (`owner_exclusions.py`, #910). An excluded condition is `not_applicable` whatever its
   criteria say, out of the tally and the denominator; a condition that `requires` it is
@@ -3051,7 +3095,9 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403, in both forms `gh`
 prints it: REST `(HTTP 403)` and GraphQL `HTTP 403: ...`, as GitLab's 403 does; #779), `not_found`
 (HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
-`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
+`gh_bad_json`. A `gh_error` (and `gitlab_cli`'s `glab_error`) also carries
+`GhUnavailable.status`, the HTTP status the CLI printed (`"502"`), so a caller retries a
+server error without parsing the reason (`merged_sample`, #995). `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
 lives here and is shared with `gitlab_cli`.
@@ -3209,15 +3255,30 @@ without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
 so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
-window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
+window) means no cutoff. GitHub: `gh pr list --repo <slug> --state merged
 --search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
 (an update is never before its merge, so the newest merges are among the most
-recently updated), then the same search from the 30th newest `mergedAt` with
-`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid`)
-for the heavy fields; `headRefOid` is the head commit `external_ci.py` reads (#928). GitLab, one read:
-`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
-then filtered and ordered by `merged_at` client-side (works on GitLab versions
-without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
+recently updated), then the 30 newest `mergedAt` values cut into pages of `PAGE_SIZE`
+(20), each one `gh pr list --limit <PAGE_SIZE> --json PR_FIELDS`
+(`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid`;
+`headRefOid` is the head commit `external_ci.py` reads, #928) over the page's span: `merged:>=<oldest>` for the newest page, `merged:<oldest>..<newest>` for the
+others (#995). A page runs on past `PAGE_SIZE` rather than split changes merged in the
+same second, so the spans are disjoint. GitLab:
+`projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=<PAGE_SIZE>&page=<n>`
+page after page until `FETCH_LIMIT` (100) are listed or a page is short, then filtered
+and ordered by `merged_at` client-side (works on GitLab versions without
+`order_by=merged_at`). Paging (#995): one 100-change GraphQL page with nested reviews
+and comments returned HTTP 502 on kubernetes/kubernetes. A heavy page refused with
+HTTP 502 or 504 (`GhUnavailable.status`, set by `gh_cli` and `gitlab_cli` from the
+CLI's stderr) or with no answer inside the CLI timeout is read again once at
+`PAGE_SIZE // 2`, and the rest of the sample uses that size; a second refusal is the
+reason. `MergedSample.page_size` is the size the heavy read finished at (None when no
+heavy read was made), published as `delivery.sample_page_size`. Call ceiling:
+`GITHUB_SAMPLE_CALLS` (5) `gh pr list` calls and `GITLAB_SAMPLE_CALLS` (11) `glab api`
+calls, each counting one retry; the per-change reads made from the sample do not depend
+on the page size, since the sample stays at most `SAMPLE_CAP`: `external_ci.py` adds at
+most `CALLS_PER_CHANGE` (2) REST reads per change, `CALLS_PER_CHANGE * SAMPLE_CAP` (60),
+and GitLab reads each merge request's approvals and notes. The `PR_FIELDS` read and the GitLab merged list are made
 with `cache=False`: reviews, comments, titles and descriptions are read in memory only and
 never reach the `--platform` response cache; only the light `--json mergedAt` read is
 cached (#778). A change with no readable merge time is
@@ -3230,14 +3291,16 @@ which each reader returns as its own block. `BotClassifier` (moved from
 users/<login>[bot]` (at most `MAX_LOGIN_PROBES`, 20): type `Bot` is a bot, 404 a
 person, anything else unknown. The value holds logins and text in memory only and
 never reaches a block. `login` lower-cases and drops `gh`'s `app/` prefix on an app author, so the author compares equal to the same app as a commenter. Tests: `tests/test_delivery.py`,
-`tests/test_platform_argv_contract.py`.
+`tests/test_platform_argv_contract.py`, `tests/test_merged_sample_paging.py` (gh and glab
+stubbed at `run_cli`: a 502 above 25 per page, a 502 or 504 at the page size, the ceilings).
 
 **`delivery.py`**
 The `delivery` platform block (#715, part of #702), reads `merged_sample`,
 `review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
-approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
+approved_share, self_merged_share, agent_authored_share, sample_page_size}`
+(`sample_page_size`: the sample's `page_size`, a count, #995). Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
