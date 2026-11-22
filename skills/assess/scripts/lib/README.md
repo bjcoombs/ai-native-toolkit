@@ -2414,7 +2414,9 @@ a helper extraction.
 
 **`levels.py`**
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
-from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
+from signals with no model in the path. A criterion over a signal in
+`signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
+the table's code as its `reason` (`no_scored_files`, #906), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
@@ -2468,7 +2470,9 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
   condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
 
-Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906); an
+`UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
 `needs_platform` for a `network` one; another unavailable block's own code (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
@@ -2481,8 +2485,8 @@ fixtures through `/fleet` and `/assess` on the same commit.
 
 **`signal_grades.py`**
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
-`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES` and the `DEFAULT_LEVELS`
-path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
+to its set's count and the code when that count is 0, read by `levels.py`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`.
 
