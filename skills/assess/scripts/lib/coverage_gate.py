@@ -28,7 +28,7 @@ keys, ``cargo tarpaulin --fail-under N`` and ``cargo llvm-cov
 --fail-under-lines N`` are read. Their other common gate is a script comparing
 ``go tool cover -func`` (or a report) to a number, which this scan cannot read,
 so when the walk holds a ``go.mod`` (or a ``Cargo.toml``) and no gate of that
-language is read, a ``threshold_meets_minimum`` that is not true reads null (not
+language is read, a ``threshold_meets_minimum`` that is false reads null (not
 measured) with ``unmeasured_reason`` ``go_rust_gate_form_not_read`` (#937: a low
 Python gate beside ``go.mod`` is not unmet). A gate meeting the minimum keeps true.
 
@@ -773,10 +773,10 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     manifests = _go_rust_manifests(root, scope_abs if scope_abs != root else None,
                                    excludes or (set(), []))
     meets = threshold_meets_minimum(gates)
-    # #937: no gate read for a Go or Rust module present makes a reading that is not
-    # true unknown; one language's low gate never reads unmet for another's.
+    # #937: no gate read for a Go or Rust module present makes a false reading unknown;
+    # one language's low gate never reads unmet for another's (a null keeps its reason).
     unread = {m for m in manifests if not any(g["tool"] in _MANIFEST_TOOLS[m] for g in gates)}
-    unmeasured = GO_RUST_UNMEASURED if unread and meets is not True else None
+    unmeasured = GO_RUST_UNMEASURED if unread and meets is False else None
     meets = None if unmeasured else meets
     enforced, basis = enforced_meets_minimum(
         gates, meets, read_ci_runs(root) if meets else NO_RUNS,

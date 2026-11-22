@@ -3719,7 +3719,7 @@ same `included_jobs` rule, else null with `enforced_basis: script_not_found` (is
 committed script that no tracked file matches (`check_command.script_path` names the
 file: `./ci.sh`, `bash scripts/test.sh`, `bin/test`; `_present(repo_files)` matches it
 at that path or as a suffix under a directory, for `cd svc && ./ci.sh` and
-`working-directory:`; a path outside what git tracks by design, an excluded tree such as
+`working-directory:`, leniently: any tracked `*/ci.sh` credits it; a path outside what git tracks by design, an excluded tree such as
 `./vendor/bin/phpunit` or a gitignored output, is not missing, as in `command_resolver`;
 `_line_runs_check(..., present=)` drops it and
 `_line_runs_missing_check` counts it), else null with `enforced_basis: check_target` when an
@@ -4221,12 +4221,13 @@ and excludes; on a scoped run, in the scope or in any directory above it up to t
 root, as Go and Cargo resolve a module; one under a `testdata/` directory is a fixture
 and does not count, `_go_rust_manifests`) and no gate of that language is read
 (`_MANIFEST_TOOLS`: go-test-coverage for `go.mod`, cargo-tarpaulin or cargo-llvm-cov for
-`Cargo.toml`), a `threshold_meets_minimum` that is not true reads null and
+`Cargo.toml`), a `threshold_meets_minimum` that is false reads null and
 `unmeasured_reason` is `go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because
 those ecosystems often gate in a script comparing `go tool cover -func` to a number,
 which is not read. So a low Python `fail_under = 10` (or `0`) beside a `go.mod` reads
 unknown, not unmet (#937): one language's low gate does not settle another's. A gate of
-at least 50 percent keeps true, and a gate read for every Go and Rust manifest present,
+at least 50 percent keeps true, a null from another gate (a templated threshold) keeps
+its own reason, and a gate read for every Go and Rust manifest present,
 even one gating nothing, keeps the normal reading, with `unmeasured_reason` null.
 The collector's manifest `revision` is 2 for the #788 change of meaning; the #937
 widening is listed for the 3.0.0 release PR.

@@ -532,10 +532,11 @@ def test_go_or_rust_with_no_readable_gate_is_not_measured(
     ({"Cargo.toml": _CARGO, _PY: _fail_under("10"),
       _CI: _workflow("cargo tarpaulin --fail-under 10")}, False, None),
     ({"go.mod": _GO_MOD, _PY: _fail_under("85")}, True, None),
+    ({"go.mod": _GO_MOD, _CI: _workflow(_TEMPLATED)}, None, None),
     ({_PY: _fail_under("10"), "testdata/x/go.mod": _GO_MOD}, False, None),
 ], ids=["l6_adv_go_plus_low_py", "go-plus-zero-py", "cargo-plus-low-py",
         "go-read-rust-unread", "go-read-low", "go-read-zero", "rust-read-low",
-        "go-plus-high-py", "testdata-go-mod"])
+        "go-plus-high-py", "go-plus-templated-py-keeps-its-reason", "testdata-go-mod"])
 def test_a_low_gate_beside_an_unread_language_is_not_measured(
         tmp_path: Path, files: dict[str, str], expected: bool | None,
         reason: str | None) -> None:

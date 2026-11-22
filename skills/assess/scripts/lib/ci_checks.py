@@ -582,6 +582,8 @@ def _present(root: Path, tracked: frozenset[str]) -> Present:
     ``command_resolver``: a step installs or builds it."""
     seen: dict[str, bool] = {}
 
+    # The suffix match is lenient on purpose: any tracked */ci.sh (even under testdata/)
+    # credits a root ./ci.sh, since the CI line's working directory is not resolved.
     def present(path: str) -> bool:
         if path not in seen:
             seen[path] = (path in tracked or any(rel.endswith("/" + path) for rel in tracked)
