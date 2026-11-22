@@ -298,14 +298,16 @@ def diagrams_section(diagrams: Sequence[AssessDiagram]) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
-def write_diagrams(assess_dir: Path, diagrams: Sequence[AssessDiagram]) -> list[Path]:
+def write_diagrams(assess_dir: Path, diagrams: Sequence[AssessDiagram],
+                   files: Sequence[str] = DIAGRAM_FILES) -> list[Path]:
     """Write each drawn SVG (LF line endings) and remove every diagram file not drawn this run;
     a symlink in a diagram's place is removed, never written through. A file that cannot be
     written (``OSError``) is named on stderr and skipped, so writing never stops the run either.
+    ``files`` are the diagram files this call owns (a sibling module passes its own, #943).
     Returns the paths written."""
     written: list[Path] = []
     drawn = {d["file"]: d["svg"] for d in diagrams if d["svg"] is not None}
-    for name in DIAGRAM_FILES:
+    for name in files:
         path = assess_dir / name
         try:
             if path.is_symlink() or (path.is_file() and name not in drawn):

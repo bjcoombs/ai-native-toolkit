@@ -6,7 +6,7 @@ Work from the target repo root (`$REPO_ROOT`). Do each step only if that artifac
 
 ## 1. Delete the `.assess/` directory
 
-The assessment wiki and all transient artifacts live here: `assess-report.md`, `complexity-heatmap.svg`, `doc-graph.svg`, `evidence-waffle.svg`, `run-context.json`, `complexity-stats.json` (+ `.prior.json`), `badge.json`, `actions.json`, `findings.json`, `index.md`, `log.md`, `hotspots/`, `config.toml`, the `.cache/` scratch dir, and any decline markers (see step 4).
+The assessment wiki and all transient artifacts live here: `assess-report.md`, `complexity-heatmap.svg`, `doc-graph.svg`, `evidence-waffle.svg`, `doc-drift.svg`, `review-strip.svg`, `run-context.json`, `complexity-stats.json` (+ `.prior.json`), `badge.json`, `actions.json`, `findings.json`, `index.md`, `log.md`, `hotspots/`, `config.toml`, the `.cache/` scratch dir, and any decline markers (see step 4).
 
 ```bash
 rm -rf "$REPO_ROOT/.assess"

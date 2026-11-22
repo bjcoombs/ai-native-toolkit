@@ -38,7 +38,7 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.assess_diagrams import build_diagrams, write_diagrams
+from lib.assess_diagrams_review import REVIEW_FILES, build_all, review_diagrams, write_all
 from lib.badge import write_headline_badge
 from lib.headline import as_headline, run_context_headline
 from lib.counts_only import COUNTS_ONLY_FILE
@@ -186,7 +186,7 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
             assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
         )
         # The evidence waffle draws the level's conditions (#942): redraw it with them.
-        write_diagrams(assess_dir, build_diagrams(ctx))
+        write_all(assess_dir, build_all(ctx))
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
     refresh_mutation_findings(
@@ -261,8 +261,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     content_free = apply_counts_only(ctx, parsed)
     if content_free is not None:
-        out = assess_dir_for(repo_root, ctx.get("scope_slug") or "") / COUNTS_ONLY_FILE
+        assess_dir = assess_dir_for(repo_root, ctx.get("scope_slug") or "")
+        out = assess_dir / COUNTS_ONLY_FILE
         out.write_text(json.dumps(content_free, indent=2), encoding="utf-8")
+        # The drift map names docs: under counts-only both review diagrams are redrawn from
+        # the counts-only copy, so a hashed run's pictures carry hashed labels (#943).
+        write_all(assess_dir, review_diagrams(content_free), REVIEW_FILES)
     print(json.dumps(ctx["diff"]))
     return 0
 
