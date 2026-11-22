@@ -495,6 +495,11 @@ query_org_settings_github() {
 # org stays under the per-argument size limit.
 add_org_teams_github() {
     local out=$1 work
+    # A personal account has no teams; query_org_settings_github has already
+    # marked its fragment, so there is nothing to read and nothing to note.
+    if jq -e '.two_factor.reason == "personal account: no org settings"' "$out" >/dev/null 2>&1; then
+        return 0
+    fi
     work=$(mktemp -d) || return 0
     if ! collect_org_teams_github "$out" "$work"; then
         echo "Note: GitHub teams not read for $ORG; the org fragment has no teams list" >&2

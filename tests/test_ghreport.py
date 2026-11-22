@@ -675,3 +675,16 @@ def test_unreadable_teams_leave_the_key_out(tmp_path, responses):
 def test_an_org_with_no_teams_has_an_empty_team_list(tmp_path):
     _, fragment = _captured_org_fragment(tmp_path, {"orgs/testorg/teams": []})
     assert fragment["teams"] == []
+
+
+def test_personal_account_skips_teams_without_a_note(tmp_path, monkeypatch):
+    """A personal account has no teams: no teams call, no key and no note."""
+    monkeypatch.setenv("GH_USER_TYPE", "User")
+    keep = tmp_path / "capture"
+    res, _ = _run_with_org(tmp_path, {}, "--no-file", "--keep-fragments", str(keep))
+    assert res.returncode == 0, res.stderr
+    fragment = json.loads((keep / "settings" / "org.json").read_text())
+    assert fragment["two_factor"]["reason"] == "personal account: no org settings"
+    assert "teams" not in fragment
+    assert "GitHub teams not read" not in res.stderr
+    assert "orgs/testorg/teams" not in (tmp_path / "gh.log").read_text()

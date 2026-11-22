@@ -106,7 +106,8 @@ from `orgs/{org}/teams` and each team's `orgs/{org}/teams/{slug}/repos`:
 not a setting, so the report does not show it. The key is written only when
 the team list and every team's repository list were read; an unreadable one
 leaves it out (with a note on stderr), so an unread team list never reads as
-no teams. GitHub's "List team repositories" docs do not say whether a child
+no teams. A personal account has no teams, so its fragment has no `teams` key
+and no note. GitHub's "List team repositories" docs do not say whether a child
 team's list also holds the repositories it inherits from its parent (only
 "Check team permissions" says inherited repositories are checked), so a repository a team lists with the same role as its parent
 team is taken as inherited and kept on the parent only: each repository stays
