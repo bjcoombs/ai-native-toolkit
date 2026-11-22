@@ -61,15 +61,17 @@ def _grades(catalog: Catalog) -> list[str]:
 def _rows(catalog: Catalog) -> list[str]:
     lines = ["## Maturity-model rows", "",
              "Each row holds conditions in order. A condition holds when all of its criteria "
-             "hold, and its key is `<row>.<n>:<signal>`.", ""]
+             "hold, and its key is `<row>.<n>:<signal>`. Truth names the truth tags the condition "
+             "keeps honest; a condition with several counts once.", ""]
     for row in catalog["rows"]:
         lines += [f"### {row['title']}", "",
                   f"Row `{row['id']}`, {row['scope']} scope, aggregated by `{row['aggregation']}`.", "",
-                  "| Condition | Criterion | Grade | Counts | Next step |", "|---|---|---|---|---|"]
+                  "| Condition | Truth | Criterion | Grade | Counts | Next step |", "|---|---|---|---|---|---|"]
         for level in row["levels"]:
             for c in level["criteria"]:
                 lines.append(
-                    f"| `{row['id']}.{level['level']}` {_cell(c['title'])} | {_cell(c['text'])} "
+                    f"| `{row['id']}.{level['level']}` {_cell(c['title'])} | "
+                    f"{', '.join(f'`{t}`' for t in level['truth'])} | {_cell(c['text'])} "
                     f"(`{_cell(c['signal'] + ' ' + c['op'] + ' ' + json.dumps(c['value']))}`) | "
                     f"`{c['grade']}` | "
                     f"{'yes' if c['counts'] else 'no, listed'} | {_cell(c['fix'])} |")

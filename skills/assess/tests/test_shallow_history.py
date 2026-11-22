@@ -25,7 +25,7 @@ def _git(repo: Path, *args: str, days_ago: int | None = None) -> str:
         ts = int(_dt.datetime.now().timestamp()) - days_ago * DAY
         env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = f"{ts} +0000"
     return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True,
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape",
         check=True, env=env,
     ).stdout
 
@@ -51,7 +51,7 @@ def _shallow(src: Path, dest: Path, depth: int) -> Path:
     # A plain local path ignores --depth; a file:// URL honours it.
     subprocess.run(
         ["git", "clone", "-q", f"--depth={depth}", src.resolve().as_uri(), str(dest)],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True,
     )
     return dest
 

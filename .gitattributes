@@ -7,3 +7,25 @@
 # (skills/assess/tests/test_catalog.py, #794), so it stays LF on Windows too.
 docs/what-we-measure.md text eol=lf
 skills/assess/references/measures.json text eol=lf
+
+# Generated files and goldens: never hand-edit or hand-merge them. On a merge
+# conflict in any of them, take either side, then run `make regen`, which
+# rewrites every one (docs/contributing/ci.md). tests/test_make_regen.py reads
+# this list: it overwrites each file below and checks `make regen` restores it.
+docs/what-we-measure.md linguist-generated
+skills/assess/references/measures.json linguist-generated
+skills/assess/references/counts-only.md linguist-generated
+skills/assess/references/signals.schema.json linguist-generated
+skills/fleet/references/*.schema.json linguist-generated
+skills/assess/tests/fixtures/fleet_data/*.json linguist-generated
+skills/assess/tests/fixtures/fleet_diagrams/repos.jsonl linguist-generated
+skills/assess/tests/fixtures/fleet_diagrams/expected-* linguist-generated
+skills/assess/tests/fixtures/assess_diagrams/expected-* linguist-generated
+skills/assess/tests/fixtures/fleet_trends/history/** linguist-generated
+skills/assess/tests/fixtures/fleet_trends/expected-* linguist-generated
+skills/assess/tests/fixtures/fleet_heatmap/groups.jsonl linguist-generated
+skills/assess/tests/fixtures/fleet_heatmap/earlier/groups.jsonl linguist-generated
+skills/assess/tests/fixtures/fleet_heatmap/expected*.svg linguist-generated
+skills/assess/tests/fixtures/fleet_golden/repos.jsonl linguist-generated
+skills/assess/tests/fixtures/fleet_next_steps/expected/** linguist-generated
+skills/assess/tests/fixtures/golden/decomposition-parity-report.md linguist-generated

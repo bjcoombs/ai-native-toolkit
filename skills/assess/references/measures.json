@@ -2,6 +2,7 @@
   "catalog_version": 1,
   "sources": [
     "skills/assess/checks/core.toml",
+    "skills/assess/checks/core/*.toml",
     "skills/assess/levels/default.toml",
     "skills/assess/scripts/lib/level_signals.py",
     "skills/assess/scripts/lib/signals.py",
@@ -49,6 +50,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "layer-0-instructions.1:layer_grades.instruction_file_present",
@@ -66,6 +70,10 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context",
+            "docs"
+          ],
           "criteria": [
             {
               "key": "layer-0-instructions.2:agent_environment.check.named_total",
@@ -115,6 +123,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-1-liveness.1:observability.rung",
@@ -132,6 +143,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-1-liveness.2:observability.rung",
@@ -157,6 +171,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-2-design.1:structure.modularity_q",
@@ -174,6 +191,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-2-design.2:structure.cross_package_edges",
@@ -211,6 +231,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-3-linters.1:ci_checks.lint_runs",
@@ -228,6 +251,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-3-linters.2:promissory_markers.families.suppression.stale",
@@ -265,6 +291,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns",
@@ -282,6 +311,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-4-architecture.2:stats_summary.loc.p95",
@@ -307,6 +339,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-5-ci.1:ci_checks.enforced_check_runs",
@@ -324,6 +359,10 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime",
+            "supply_chain"
+          ],
           "criteria": [
             {
               "key": "layer-5-ci.2:agent_environment.pinning.unlocked_total",
@@ -349,6 +388,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-6-coverage.1:coverage_gate.enforced_meets_minimum",
@@ -366,6 +408,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-6-coverage.2:test_pressure.mutation_run",
@@ -391,6 +436,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-7-review.1:review_evidence.present",
@@ -408,6 +456,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-7-review.2:review_reality.reviewed_share",
@@ -445,6 +496,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
@@ -462,6 +516,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
@@ -499,6 +556,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "docs"
+          ],
           "criteria": [
             {
               "key": "doc-freshness.1:doc_staleness.summary.stale_pct",
@@ -516,6 +576,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "docs"
+          ],
           "criteria": [
             {
               "key": "doc-freshness.2:doc_staleness.summary.stale_pct",
@@ -541,6 +604,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "guardrails-stated.1:guardrails.stated_pct",
@@ -558,6 +624,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "guardrails-stated.2:guardrails.stated_pct",
@@ -583,6 +652,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "agent-consistency.1:agent_consistency.conflicts",
@@ -600,6 +672,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "agent-consistency.2:agent_consistency.unlinked",
@@ -1256,12 +1331,13 @@
     {
       "name": "ci_checks",
       "title": "CI runs a test or lint command",
-      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and a CI system the scan does not parse (Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI, Buildkite) is tracked.",
+      "summary": "Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether one can fail its job on ordinary changes (not masked, not off the ordinary triggers), and whether such a line runs a linter; null when no check is found but a CI file pulls its jobs from elsewhere. Null too when no check is found and the tree tracks a CI file the scan does not parse, when under --platform most sampled merged pull requests carry an external CI check, or when a root Prow OWNERS_ALIASES is the only CI evidence.",
       "collector": "core.ci_checks",
       "reads": [
         "repo_root",
         "ghsync_root",
-        "gitlab_merged_ci"
+        "gitlab_merged_ci",
+        "external_ci"
       ],
       "network": false,
       "platform": true,
@@ -1319,8 +1395,20 @@
         },
         {
           "code": "unread_ci_system",
-          "means": "In basis, enforced_basis and lint_basis: no readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure, Bitbucket, Travis CI, Buildkite); unread_ci_files counts them.",
-          "next_step": "Nothing to change: the scanner cannot read Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI or Buildkite configuration, so their checks read as not measured rather than absent.",
+          "means": "No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; lib/README.md lists the paths); unread_ci_files counts them.",
+          "next_step": "Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "external_ci",
+          "means": "Under --platform only: no readable CI line settles the signal, and over half of the sampled merged pull requests carry a check run or status of a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit.",
+          "next_step": "Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "external_ci_marker",
+          "means": "The tree tracks no CI file of any kind and the root holds a Prow OWNERS_ALIASES file, so presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker.",
+          "next_step": "Nothing to change: run with --platform to read the checks on merged pull requests instead.",
           "carried_in": "basis"
         }
       ],
@@ -3600,6 +3688,18 @@
       "private": false
     },
     {
+      "name": "owner_exclusions",
+      "title": "Owner exclusions",
+      "publishes": [
+        "owner_exclusions"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "offers_block",
       "title": "End-of-run offers",
       "publishes": [
@@ -3755,6 +3855,16 @@
       "private": false
     },
     {
+      "name": "external_ci",
+      "title": "External CI on merged pull requests",
+      "publishes": [],
+      "reads": [
+        "merged_sample"
+      ],
+      "network": true,
+      "private": true
+    },
+    {
       "name": "ci_checks",
       "title": "CI runs a test or lint command",
       "publishes": [
@@ -3763,7 +3873,8 @@
       "reads": [
         "repo_root",
         "ghsync_root",
-        "gitlab_merged_ci"
+        "gitlab_merged_ci",
+        "external_ci"
       ],
       "network": false,
       "private": false
@@ -3908,7 +4019,8 @@
         "stats_summary",
         "structure",
         "structure_drift",
-        "test_pressure"
+        "test_pressure",
+        "owner_exclusions"
       ],
       "network": false,
       "private": false
@@ -4006,7 +4118,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: the linter may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a check target or script may run one inside it"
+      "null_means": "included_jobs: it may be in an included file; unknown_trigger: its triggers are not settled; check_target: a target may run one; unread_ci_system: an unparsed CI system may run one; external_ci: merged changes carry external CI checks; external_ci_marker: a root Prow OWNERS_ALIASES, no CI file"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -4051,7 +4163,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a target whose recipe is not read may run it; unread_ci_system: the check may run in a CI system the scan does not parse"
+      "null_means": "included_jobs: it may be in an included file; unknown_trigger: its triggers are not settled; check_target: an unread target may run it; unread_ci_system: an unparsed CI system may run it; external_ci: merged changes carry external CI checks; external_ci_marker: a root Prow OWNERS_ALIASES, no CI file"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",

@@ -447,7 +447,7 @@ def test_compare_script_exit_codes(froot2, tmp_path, capsys):
 def test_compare_script_runs_standalone(froot2, tmp_path):
     assert _run(froot2, tmp_path / "a", tmp_path / "h", "--no-history") == 0
     done = subprocess.run([sys.executable, str(COMPARE_SCRIPT), str(tmp_path / "a"), str(tmp_path / "a")],
-                          capture_output=True, text=True, env={**os.environ, "PYTHONPATH": ""}, check=False)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", env={**os.environ, "PYTHONPATH": ""}, check=False)
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout)["comparable"]
 

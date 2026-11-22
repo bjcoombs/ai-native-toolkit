@@ -45,16 +45,6 @@ WINDOWS_SKIP_MARKERS = {
     "needs_symlink": "symlink creation is not reliable on Windows",
     "needs_posix_perms": "chmod/getuid permission semantics are POSIX-only",
     "needs_posix_shell": "runs a #!/bin/sh stub or sh -c, which Windows cannot execute",
-    # Not a POSIX-only test: a known Windows failure awaiting its fix.
-    "windows_followup": "known Windows failure, tracked in "
-                        "https://github.com/bjcoombs/ai-native-toolkit/issues/762",
-}
-
-
-# windows_followup by node id, added while test_complexity_treemap.py sat at its
-# file-size ceiling (since split, #720).
-WINDOWS_FOLLOWUP_NODES = {
-    "tests/test_complexity_treemap.py::test_write_svg_token_tooltip_and_label_pluralise",
 }
 
 
@@ -63,8 +53,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if sys.platform != "win32":
         return
     for item in items:
-        if item.nodeid.split("[", 1)[0] in WINDOWS_FOLLOWUP_NODES:
-            item.add_marker(pytest.mark.windows_followup)
         for name, reason in WINDOWS_SKIP_MARKERS.items():
             if item.get_closest_marker(name):
                 item.add_marker(pytest.mark.skip(reason=f"Windows: {reason}"))
@@ -106,7 +94,7 @@ def tmp_assess_dir(tmp_path: Path) -> Path:
 def _git(repo: Path, *args: str, env: dict | None = None) -> None:
     full_env = {**os.environ, **(env or {})}
     subprocess.run(["git", "-C", str(repo), *args],
-                   check=True, capture_output=True, text=True, env=full_env)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=full_env)
 
 
 @pytest.fixture

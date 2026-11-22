@@ -157,7 +157,15 @@ def test_a_criterion_without_manifest_entries_still_renders() -> None:
 
 def test_every_source_exists() -> None:
     for source in build_catalog()["sources"]:
-        assert (gen_catalog.ROOT / source).is_file(), source
+        matched = sorted(gen_catalog.ROOT.glob(source))
+        assert matched and all(p.is_file() for p in matched), source
+
+
+def test_the_sources_name_every_manifest_fragment() -> None:
+    fragments = {p.relative_to(gen_catalog.ROOT) for p in cm.CORE_MANIFEST.with_suffix("").glob("*.toml")}
+    named = {p.relative_to(gen_catalog.ROOT) for source in build_catalog()["sources"]
+             for p in gen_catalog.ROOT.glob(source)}
+    assert fragments and fragments <= named
 
 
 def test_a_pipe_in_a_criterion_value_keeps_the_table_columns() -> None:
@@ -166,7 +174,7 @@ def test_a_pipe_in_a_criterion_value_keeps_the_table_columns() -> None:
     row_lines = [line for line in render_markdown(build_catalog(model=model)).splitlines()
                  if "x.y in" in line]
     assert len(row_lines) == 1
-    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == 6  # five columns
+    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == 7  # six columns
 
 
 def test_markdown_avoids_the_retired_vocabulary() -> None:

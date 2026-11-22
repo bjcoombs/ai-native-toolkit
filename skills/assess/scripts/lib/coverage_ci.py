@@ -42,7 +42,8 @@ when an enforced CI line runs a check target or script that may run it
 (``indirect_run``: ``make test``, ``npm test``, ``tox``, ``mvn test``; and a
 Jest or Vitest run with no ``--coverage``, whose config may enable it), when a
 CI file pulls jobs this run cannot read (``included_jobs``), when the tree holds
-a CI system this scan does not read (``unread_ci_system``, #787), or when the
+a CI system this scan does not read (``unread_ci_system``, #787; the paths are
+``lib.unread_ci``'s, shared with ``ci_checks``, #928), or when the
 gate itself is written in such a file or in a composite action.
 
 ``enforced_basis`` tokens: ``ci_run`` (true); ``no_gate`` and
@@ -62,10 +63,10 @@ from pathlib import Path
 from typing import Literal, TypeVar
 
 from lib.check_command import _exec_program, _info_program, is_info_invocation, may_lint
-from lib.ci_checks import UNREAD_CI_FILES
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
+from lib.unread_ci import unread_ci_paths
 from lib.command_resolver import command_words, extract_commands
 from lib.shared_tooling import pulls_jobs_from_elsewhere
 
@@ -196,7 +197,7 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
     elsewhere = False
     # A CI file read as empty that is not empty on disk (over the size cap, unreadable)
     # was not read: its runs are unknown, never absent.
-    unread = bool(UNREAD_CI_FILES & tracked) or any(
+    unread = bool(unread_ci_paths(tracked)) or any(
         not texts[rel] and _size(root / rel) != 0 for rel in files)
     for rel in files:
         text = texts[rel]

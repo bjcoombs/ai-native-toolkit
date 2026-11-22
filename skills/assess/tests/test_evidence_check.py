@@ -192,7 +192,7 @@ def test_cli_writes_both_lists_to_the_json_out_file(repo: Path, tmp_path_factory
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out)],
-        cwd=SCRIPTS_DIR, capture_output=True, text=True,
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert proc.returncode == 1
     assert "path_absent" in proc.stdout
@@ -208,7 +208,7 @@ def test_cli_refuses_input_that_is_not_a_flat_array(repo: Path, tmp_path_factory
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "out.json")],
-        cwd=SCRIPTS_DIR, capture_output=True, text=True,
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     assert proc.returncode == 2
     assert not (out_dir / "out.json").exists()
@@ -361,7 +361,7 @@ def test_cli_refuses_a_root_that_is_not_a_directory(tmp_path: Path) -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(tmp_path / "nope"), str(ev),
          "--json", str(tmp_path / "out.json")],
-        cwd=SCRIPTS_DIR, capture_output=True, text=True, timeout=30,
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     assert proc.returncode == 2
     assert not (tmp_path / "out.json").exists()
@@ -374,7 +374,7 @@ def test_cli_refuses_evidence_that_is_not_utf8(repo: Path, tmp_path_factory) -> 
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "out.json")],
-        cwd=SCRIPTS_DIR, capture_output=True, text=True, timeout=30,
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     assert proc.returncode == 2, proc.stderr
     assert "Traceback" not in proc.stderr
@@ -406,7 +406,7 @@ def test_cli_exits_2_when_the_json_output_cannot_be_written(repo: Path, tmp_path
     proc = subprocess.run(
         [sys.executable, "-m", "lib.evidence_check", str(repo), str(ev),
          "--json", str(out_dir / "missing-dir" / "out.json")],
-        cwd=SCRIPTS_DIR, capture_output=True, text=True, timeout=30,
+        cwd=SCRIPTS_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
     )
     assert proc.returncode == 2, proc.stderr
     assert "Traceback" not in proc.stderr

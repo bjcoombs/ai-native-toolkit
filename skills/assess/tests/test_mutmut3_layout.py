@@ -209,7 +209,7 @@ def test_scratch_copy_is_a_git_repository_at_the_copied_tree(
 
     def suite(cwd: Path) -> bool:
         proc = subprocess.run(["git", "show", "HEAD:FLOOR.md"], cwd=cwd,
-                              capture_output=True, text=True, check=False)
+                              capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=False)
         return proc.stdout == "floor"
 
     monkeypatch.setattr(tp.subprocess, "run", _fake_mutmut(suite, []))
@@ -442,10 +442,10 @@ def test_scratch_git_snapshot_includes_the_mirrored_tree(
     def suite(cwd: Path) -> bool:
         root = (cwd / "mutants" / "tests" / "test_x.py").parents[2]
         proc = subprocess.run(["git", "grep", "-l", "ANCHOR", "HEAD"], cwd=root,
-                              capture_output=True, text=True, check=False)
+                              capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=False)
         found = [line.split(":", 1)[1] for line in proc.stdout.splitlines()]
         status = subprocess.run(["git", "status", "--porcelain"], cwd=root,
-                                capture_output=True, text=True, check=False).stdout
+                                capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=False).stdout
         clean = all(line.endswith("mutants/") for line in status.splitlines())
         return found == ["skills/m/SKILL.md"] and (root / found[0]).is_file() and clean
 

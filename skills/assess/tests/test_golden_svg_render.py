@@ -52,7 +52,7 @@ def _chroma(rgb: tuple[int, int, int]) -> int:
 
 def _git(repo: Path, *args: str, env: dict) -> None:
     subprocess.run(["git", "-C", str(repo), *args],
-                   check=True, capture_output=True, text=True, env=env)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=env)
 
 
 def _git_env() -> dict:
@@ -80,7 +80,7 @@ def _run_script(script: str, repo: Path, out: Path, env: dict,
     result = subprocess.run(
         ["uv", "run", "--script", str(_SCRIPTS / script),
          str(repo), "-o", str(out), *extra],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
     )
     assert result.returncode == 0, (
         f"{script} failed (rc={result.returncode})\nstderr:\n{result.stderr}"
