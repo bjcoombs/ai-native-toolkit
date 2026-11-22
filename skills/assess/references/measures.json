@@ -1569,7 +1569,7 @@
       "unknown_reasons": [
         {
           "code": "go_rust_gate_form_not_read",
-          "means": "No coverage gate was found, and the repository holds a go.mod or Cargo.toml: its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
+          "means": "The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read.",
           "next_step": "Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.",
           "carried_in": "unmeasured_reason"
         }
@@ -2008,6 +2008,12 @@
           "code": "unknown_trigger",
           "means": "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).",
           "next_step": "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.",
+          "carried_in": "basis"
+        },
+        {
+          "code": "script_not_found",
+          "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
+          "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
           "carried_in": "basis"
         },
         {
@@ -4766,7 +4772,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET build analysers; compiler_gate_only: only warnings as errors"
+      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -4811,7 +4817,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: it may be in an included file; unknown_trigger: its triggers are not settled; check_target: an unread target may run it; unread_ci_system: an unparsed CI system may run it; external_ci: merged changes carry external CI checks; external_ci_marker: a root Prow OWNERS_ALIASES, no CI file"
+      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; script_not_found: its script is not committed; check_target: a target may run it; unread_ci_system: an unparsed CI system may; external_ci: merged changes carry external checks; external_ci_marker: a root Prow OWNERS_ALIASES"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",
