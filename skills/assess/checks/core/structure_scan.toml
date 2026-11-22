@@ -1,0 +1,14 @@
+# Check manifest fragment: the structure_scan collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.structure_scan"
+kind = "collector"
+title = "Import graph scan"
+callable = "lib.core_scans:structure_scan"
+publishes = []
+reads = ["repo_root", "excludes", "scope"]
+stage = "read_side"
+private = true
+label = "structure"
+revision = 1

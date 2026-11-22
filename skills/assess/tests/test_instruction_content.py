@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from lib import instruction_content
 from lib.instruction_content import (
     build_repo_context,
     check_paths,
@@ -124,7 +125,6 @@ def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
-@pytest.mark.windows_followup
 def test_git_repo_symbols_and_gitignored_paths(git_repo) -> None:
     repo, commit = git_repo
     _write(repo, {
@@ -156,7 +156,6 @@ def test_symbol_check_without_a_self_path(git_repo) -> None:
     assert [s["reference"] for s in stale] == ["gone_name"]
 
 
-@pytest.mark.windows_followup
 def test_gitignored_relative_to_a_nested_file(git_repo) -> None:
     repo, commit = git_repo
     _write(repo, {"packages/api/.gitignore": "coverage.xml\n", "packages/api/AGENTS.md": "x\n"})
@@ -164,6 +163,31 @@ def test_gitignored_relative_to_a_nested_file(git_repo) -> None:
     ctx = build_repo_context(repo)
     _, stale = check_paths("`coverage.xml` and `gone.md`\n", ctx, "packages/api/AGENTS.md")
     assert [s["reference"] for s in stale] == ["gone.md"]
+
+
+def test_gitignored_paths_go_to_git_as_nul_separated_bytes(monkeypatch, tmp_path: Path) -> None:
+    """No text-mode stdin (Windows writes CRLF) and no quoting: ``check-ignore -z``."""
+    seen: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        seen.update(cmd=cmd, **kwargs)
+        return subprocess.CompletedProcess(cmd, 0, stdout="café.xml\0b/c.xml\0".encode(), stderr=b"")
+
+    monkeypatch.setattr(instruction_content.subprocess, "run", fake_run)
+    assert instruction_content._gitignored(tmp_path, ["a.md", "b/c.xml", "café.xml"]) == {"café.xml", "b/c.xml"}
+    assert seen["cmd"][-2:] == ["-z", "--stdin"]  # type: ignore[index]
+    assert seen["input"] == "a.md\0b/c.xml\0café.xml\0".encode()
+    assert b"\r" not in seen["input"] and b"\n" not in seen["input"]  # type: ignore[operator]
+    assert not seen.get("text")
+
+
+def test_gitignored_non_ascii_path_is_matched_as_written(git_repo) -> None:
+    """Without ``-z`` git C-quotes these names (``"caf\\303\\251.log"``), matching no query."""
+    repo, commit = git_repo
+    _write(repo, {".gitignore": "*.log\n", "AGENTS.md": "x\n"})
+    commit("init")
+    queries = ["café.log", "gone.md", 'say"hi.log']
+    assert instruction_content._gitignored(repo, queries) == {"café.log", 'say"hi.log'}
 
 
 def test_symbol_only_in_the_instruction_file_is_stale(git_repo) -> None:

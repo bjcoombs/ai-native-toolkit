@@ -1,0 +1,68 @@
+# Check manifest fragment: the agent_consistency collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.agent_consistency"
+kind = "collector"
+title = "Cross-agent instruction consistency"
+summary = "Compares the root instruction files of every agent system present (Claude Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed): check commands one names and another does not, conflicting thresholds, and whether each links to one canonical file, with the pointer line for each unlinked system."
+issues = [768]
+callable = "lib.agent_consistency:scan_agent_consistency"
+publishes = ["agent_consistency"]
+reads = ["repo_root", "excludes"]
+stage = "post_offers"
+headless = { agent_consistency = "registered" }
+shapes = [
+  { path = "agent_consistency", type = "lib.agent_consistency:AgentConsistencyBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_consistency.systems" = "token"
+  "agent_consistency.canonical" = "path"
+  "agent_consistency.files.path" = "path"
+  "agent_consistency.files.system" = "token"
+  "agent_consistency.files.link" = "token"
+  "agent_consistency.divergences.kind" = "token"
+  "agent_consistency.divergences.value" = "drop"
+  "agent_consistency.divergences.named_in" = "token"
+  "agent_consistency.divergences.missing_from" = "token"
+  "agent_consistency.divergences.stated.system" = "token"
+  "agent_consistency.next_steps.system" = "token"
+  "agent_consistency.next_steps.path" = "path"
+  "agent_consistency.next_steps.pointer" = "drop"
+  "agent_consistency.next_steps.symlink" = "drop"
+  "agent_consistency.not_read" = "drop"
+
+[[entries]]
+id = "core:agent_consistency.conflicts"
+kind = "signal"
+title = "Commands and thresholds the agent systems disagree on"
+collector = "core.agent_consistency"
+path = "agent_consistency.conflicts"
+type = "number"
+evidence = "head_structure"
+null_means = "fewer than two agent systems: nothing to agree with"
+
+[[entries]]
+id = "core:agent_consistency.unlinked"
+kind = "signal"
+title = "Agent systems not linked to the canonical instruction file"
+collector = "core.agent_consistency"
+path = "agent_consistency.unlinked"
+type = "number"
+evidence = "head_structure"
+null_means = "fewer than two agent systems: nothing to link"
+
+[[entries]]
+id = "core.cond.agent-consistency.1.conflicts"
+kind = "condition"
+title = "Every agent system names the same checks"
+key = "agent-consistency.1:agent_consistency.conflicts"
+fix = "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives."
+
+[[entries]]
+id = "core.cond.agent-consistency.2.unlinked"
+kind = "condition"
+title = "Every agent system reads one canonical file"
+key = "agent-consistency.2:agent_consistency.unlinked"
+fix = "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool."

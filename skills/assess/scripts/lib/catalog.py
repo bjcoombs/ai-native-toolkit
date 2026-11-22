@@ -1,6 +1,7 @@
 """The measures catalog: what ``/assess`` and ``/fleet`` measure, generated from the check manifest (#794).
 
-``build_catalog`` joins the check manifest (``checks/core.toml``, ``lib.check_manifest``),
+``build_catalog`` joins the check manifest (``checks/core.toml`` and its fragments under
+``checks/core/``, ``lib.check_manifest``),
 the default maturity model (``levels/default.toml``) and the signal input classes
 (``lib.level_signals``, #783) into one ``Catalog`` document. ``lib.catalog_md`` renders it
 as ``docs/what-we-measure.md``; ``render_json`` writes it as
@@ -316,12 +317,25 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
     return out
 
 
+def _model_order(signals: Sequence[cm.SignalEntry], model: MaturityModel) -> list[cm.SignalEntry]:
+    """Signals in the order the model's criteria first read them, then any it does not read.
+
+    The manifest groups signals by collector (one fragment each, #982); the catalog lists
+    them in maturity-model order, row by row."""
+    rank: dict[str, int] = {}
+    for row in model["rows"]:
+        for level in row["levels"]:
+            for criterion in level["criteria"]:
+                rank.setdefault(criterion["signal"], len(rank))
+    return sorted(signals, key=lambda s: rank.get(s["path"], len(rank)))
+
+
 def build_catalog(manifest: cm.CheckManifest | None = None,
                   model: MaturityModel | None = None) -> Catalog:
     """The catalog of the core manifest and the default maturity model (or the given ones)."""
     manifest = cm.load_manifest() if manifest is None else manifest
     model = load_default_levels() if model is None else model
-    signals = cm.signals(manifest)
+    signals = _model_order(cm.signals(manifest), model)
     by_path = {s["path"]: s for s in signals}
     rows = _rows(model, by_path, {c["key"]: c for c in cm.conditions(manifest)})
     return Catalog(

@@ -1,0 +1,16 @@
+# Check manifest fragment: the coverage_report collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.coverage_report"
+kind = "collector"
+title = "Coverage report"
+callable = "lib.core_scans:coverage_report"
+publishes = ["coverage_report"]
+reads = ["repo_root", "coverage_data"]
+stage = "read_side"
+headless = { coverage_report = "unregistered" }
+revision = 1
+  [entries.privacy]
+  "coverage_report.source" = "path"
+  "coverage_report.format" = "token"

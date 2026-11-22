@@ -1,0 +1,26 @@
+# Check manifest fragment: the claude_config collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.claude_config"
+kind = "collector"
+title = "Claude Code configuration"
+callable = "lib.claude_config:scan_claude_config"
+publishes = ["claude_config"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+headless = { claude_config = "registered" }
+shapes = [
+  { path = "claude_config", type = "lib.claude_config:ClaudeConfigBlock" },
+  { path = "claude_config.findings", type = "lib.claude_config:ClaudeConfigFinding" },
+]
+revision = 1
+  [entries.privacy]
+  "claude_config.reason" = "drop"
+  "claude_config.snapshot_date" = "token"
+  "claude_config.source_urls" = "drop"
+  "claude_config.manifest_error" = "drop"
+  "claude_config.findings.kind" = "token"
+  "claude_config.findings.key" = "drop"
+  "claude_config.findings.value" = "drop"
+  "claude_config.findings.fix" = "drop"
