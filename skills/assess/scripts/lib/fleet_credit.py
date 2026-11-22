@@ -14,8 +14,9 @@ model, before the diagrams, so the report opens on credit and the next step:
    ``achievements.json``, ``lib/fleet_rescore.py``): each move the rule change alone caused,
    raised moves first. These are not achievements and take nothing away: every line says the
    repository did not change. At most ``PER_KIND`` lines.
-4. **Targets**, when a targets file was given: met, or the distance (in levels for a
-   level target, in share of top level for a share target).
+4. **Targets**, when a targets file was given: each Step target met, or the unit's lowest
+   Step, the gates of the target Step still missing with the repositories each holds back,
+   and how many repositories are below its threshold (#945).
 
 The section opens with a line starting ``In place:`` (``lib/vocabulary.IN_PLACE``, #743)
 that says what is already earned or held before any next step. Every line is phrased as
@@ -23,8 +24,8 @@ credit or as a next step. Deterministic; no date.
 
 `credit_section` renders `report.md`'s first section, "What changed and who earned it",
 from `achievements.json`, opening with an `In place:` line (#743): this run's credit lines by kind (capped per kind), each unit's
-nearest level-up (`team_steps`: fewest repositories needed, then row order) and target
-distances (in levels, or in share for a share target), plus a `### Recount` subsection
+nearest level-up (`team_steps`: fewest repositories needed, then row order) and each Step
+target's progress, plus a `### Recount` subsection
 after the credit lines when `achievements.json` holds a `recount` (#771, raised moves
 first). `fleet_diagrams.report_markdown` places it before the diagrams.
 """
@@ -32,8 +33,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from lib.fleet_achievements import KINDS, REPO_VIEW, Achievements, NextStep, TargetProgress
-from lib.fleet_next_steps import code, text
+from lib.fleet_achievements import KINDS, REPO_VIEW, Achievements, NextStep
+from lib.fleet_step_targets import TargetProgress
+from lib.fleet_next_steps import code
 from lib.fleet_rescore import NOW_MEASURED, UP
 from lib.levels import MaturityModel
 from lib.vocabulary import IN_PLACE
@@ -130,35 +132,27 @@ def _steps(doc: Achievements, order: Mapping[str, int]) -> list[str]:
     return lines
 
 
-def _pct(share: float) -> str:
-    return f"{share * 100:.0f}%"
-
-
-def _target(t: TargetProgress, titles: Mapping[str, str]) -> str:
-    title = text(titles.get(t["row"], t["row"]))
-    if t["share_target"] is not None:
-        where = f"{code(t['unit'])}, mean share {_pct(t['share_target'])} of top level on {title}"
-        if t["share"] is None or t["share_distance"] is None:
-            return f"- {where}: not measured this run; the next measured run shows the distance."
-        if t["share_distance"] == 0:
-            return f"- {where}: met ({_pct(t['share'])})."
-        return f"- {where}: at {_pct(t['share'])}, {_pct(t['share_distance'])} to go."
-    where = f"{code(t['unit'])}, level {t['target']} on {title}"
+def _target(t: TargetProgress) -> str:
+    where = f"{code(t['unit'])}, Step {t['step']}"
     if t["distance"] is None:
         return f"- {where}: not measured this run; the next measured run shows the distance."
     if t["distance"] == 0:
-        return f"- {where}: met."
-    plural = "level" if t["distance"] == 1 else "levels"
-    return f"- {where}: at level {t['level']}, {t['distance']} {plural} to go."
+        return f"- {where}: met (Step {t['lowest_step']}, {t['measured']} of {t['repos']} measured)."
+    gates = ", ".join(f"{code(g['gate'])} holds back {g['held']}" for g in t["missing_gates"])
+    parts = [f"at Step {t['lowest_step']} ({t['measured']} of {t['repos']} measured)"]
+    if gates:
+        parts.append(f"gates to go: {gates}")
+    if t["below_threshold"]:
+        parts.append(f"{t['below_threshold']} below the threshold of {t['threshold']} verified practices")
+    return f"- {where}: " + "; ".join(parts) + "."
 
 
 def credit_section(doc: Achievements, model: MaturityModel | None) -> str:
     """The section as Markdown, ending in a blank line."""
     rows = model["rows"] if model is not None else []
     order = {row["id"]: i for i, row in enumerate(rows)}
-    titles = {row["id"]: row["title"] for row in rows}
     lines = [f"## {TITLE}", "", _in_place(doc), "", _intro(doc), "", "### Earned this run", "", *_earned(doc), "",
              *_recount(doc), "### Next level-ups", "", *_steps(doc, order), ""]
     if doc["targets"]:
-        lines += ["### Targets", "", *(_target(t, titles) for t in doc["targets"]), ""]
+        lines += ["### Targets", "", *(_target(t) for t in doc["targets"]), ""]
     return "\n".join(lines)

@@ -623,11 +623,65 @@
               ],
               "additionalProperties": false
             }
+          },
+          "gate_blockers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "gate"
+                },
+                "gate": {
+                  "type": "string"
+                },
+                "condition": {
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "met",
+                    "unmet",
+                    "not_applicable",
+                    "not_measured",
+                    "declined"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "threshold": {
+                  "type": "integer"
+                },
+                "met": {
+                  "type": "integer"
+                },
+                "disposition": {
+                  "enum": [
+                    "excluded_by_owner"
+                  ]
+                },
+                "exclusion_kind": {
+                  "enum": [
+                    "not_applicable",
+                    "measured_elsewhere",
+                    "tool_unsupported",
+                    "false_positive",
+                    "other"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
           "active",
           "exclusions",
+          "gate_blockers",
           "key",
           "next_step",
           "owner_count",

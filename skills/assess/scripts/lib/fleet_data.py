@@ -22,7 +22,8 @@ they have no per-repository cell or unit roll-up; their levels stay in
 
 **Steps** (#944, ``lib/fleet_data_steps.py``): each repository carries ``step``,
 ``next_step`` and ``tally`` exactly as ``level.json`` gives them (``lib.fleet_level.repo_level``)
-and the owner's ``exclusions``; each unit carries a ``step`` roll-up: the lowest Step over
+the owner's ``exclusions`` and ``gate_blockers``, every Step gate that does not hold (#945,
+which a Step target above the next Step reads); each unit carries a ``step`` roll-up: the lowest Step over
 its measured repositories, "N of M measured", and for the next Step how many repositories
 each gate holds back and how many are below its threshold.
 
@@ -84,7 +85,7 @@ from lib.fleet_maturity import SCOPE
 from lib.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet_stamp import FleetStamp, RepositoryCounts
 from lib.fleet_units import Tree
-from lib.level_result_types import NextStep, Tally
+from lib.level_result_types import Blocker, NextStep, Tally
 from lib.levels import Evaluation, MaturityModel, Row, StepDef, evaluate_row
 
 # 1 (#703): first version. 2 (#772): the roll-up drops ``mean_share``, ``weakest`` and
@@ -162,6 +163,7 @@ class DataRepo(TypedDict):
     next_step: NextStep | None
     tally: Tally | None
     exclusions: list[RepoExclusion]  # the owner's, listed and never counted
+    gate_blockers: list[Blocker]  # #945: every Step gate that does not hold
 
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
@@ -347,8 +349,9 @@ def model_rows(maturity_model: MaturityModel | None) -> list[ModelRow]:
 
 def step_fields(maturity_model: MaturityModel | None, rows: Sequence[FleetRow]) -> dict[str, RepoSteps]:
     """Each repository's Step fields by id: its level result, or none when failed or without a model."""
+    steps = maturity_model.get("steps", []) if maturity_model is not None else []
     return {row["repo"]: repo_steps(repo_level(maturity_model, row) if maturity_model is not None
-                                    and row["status"] == STATUS_OK else None, row["scans"])
+                                    and row["status"] == STATUS_OK else None, row["scans"], steps)
             for row in rows}
 
 

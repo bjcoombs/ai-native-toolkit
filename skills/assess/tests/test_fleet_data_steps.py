@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -10,7 +10,7 @@ from fleet_data_fixture import ROWS, SALT, STAMP, VARIANTS, build, model
 from lib import fleet_data as fd
 from lib.counts_only import counts_only_scans
 from lib.fleet import FleetRow
-from lib.fleet_data_steps import NO_STEPS, RepoSteps, repo_steps, step_roll_up
+from lib.fleet_data_steps import NO_STEPS, RepoSteps, repo_steps, step_hold, step_roll_up
 from lib.fleet_level import fleet_levels
 from lib.fleet_units import build_trees, empty_map
 from lib.level_result_types import Blocker
@@ -113,18 +113,33 @@ STEPS: list[StepDef] = [
 ]
 
 
-def _at(step: int, *blockers: Blocker) -> RepoSteps:
-    return {"step": step, "tally": {"met": 0, "measured": 0, "not_measured": 0}, "exclusions": [],
-            "next_step": {"step": step + 1, "threshold": 2, "blockers": list(blockers)} if step < 2 else None}
+def _at(step: int, met: int = 2, *gates: Blocker) -> RepoSteps:
+    blockers: list[Blocker] = [*gates, *([{"kind": "threshold", "threshold": 2, "met": met}] if met < 2 else [])]
+    return {"step": step, "tally": {"met": met, "measured": 0, "not_measured": 0}, "exclusions": [],
+            "next_step": {"step": step + 1, "threshold": 2, "blockers": blockers} if step < 2 else None,
+            "gate_blockers": list(gates)}
 
 
 def test_the_roll_up_counts_the_threshold_and_ignores_repositories_already_past() -> None:
-    threshold: Blocker = {"kind": "threshold", "threshold": 2, "met": 1}
     gate: Blocker = {"kind": "gate", "gate": "g", "condition": "r.1", "state": "unmet"}
-    rolled = step_roll_up(STEPS, [_at(1, threshold), _at(1, gate, threshold), _at(1, gate), _at(2), NO_STEPS])
+    rolled = step_roll_up(STEPS, [_at(1, 1), _at(1, 1, gate), _at(1, 2, gate), _at(2), NO_STEPS])
     assert rolled == {"measured": 4, "repos": 5, "lowest_step": 1, "next_step": {
         "step": 2, "threshold": 2, "held": 3, "below_threshold": 2,
         "gates": [{"gate": "g", "row": "r", "level": 1, "held": 2, "not_measured": 0, "excluded": 0}]}}
+
+
+def test_the_hold_of_the_next_step_agrees_with_each_repositorys_own_next_step() -> None:
+    """#945: ``step_hold`` reads ``gate_blockers`` and the tally; for the Step above a repository's
+    own, that is exactly its ``next_step`` blockers."""
+    for repo in build(fd.Privacy(full=True))["repos"]:
+        nxt = repo["next_step"]
+        if nxt is None:
+            continue
+        (definition,) = [s for s in model()["steps"] if s["step"] == nxt["step"]]
+        hold = step_hold(definition, [cast(RepoSteps, repo)])
+        assert {g["gate"] for g in hold["gates"] if g["held"]} == {b["gate"] for b in nxt["blockers"]
+                                                                   if b["kind"] == "gate"}
+        assert hold["below_threshold"] == sum(b["kind"] == "threshold" for b in nxt["blockers"])
 
 
 def test_the_roll_up_at_the_top_step_or_with_none_measured_has_no_next_step() -> None:
