@@ -1865,7 +1865,9 @@ and `offline_callable`, in table order; a failure names the scan key), the headl
 tables, `ROOTS`, the default model's signals and criteria, and `SIGNAL_INPUTS`; and it
 validates the loaded manifest against the schema. Until later steps generate those tables
 from the manifest, adding a scan, criterion or typed root also adds its manifest entry. A
-finding or a counts-only rule is added in the manifest only. The generated tables are
+counts-only rule is added in the manifest only; a finding is added in the manifest plus
+its path derivation in `keyhole_signals._finding_path_inputs`
+(`test_every_finding_has_a_path_derivation` pins the two name sets). The generated tables are
 pinned through their builders (an edited copy of the manifest reorders the findings or
 reclassifies a field), the structure reason codes against
 `import_graph.STRUCTURE_REASON_CODES`, and the thresholds as all read.

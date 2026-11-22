@@ -267,6 +267,16 @@ def test_finding_tables_are_generated_from_the_manifest(manifest: cm.CheckManife
     assert _CHURN_DERIVED_FINDINGS == tables["churn_suppressed"] == {"hidden_coupling", "lying_map"}
 
 
+def test_every_finding_has_a_path_derivation() -> None:
+    """The manifest's finding names are the derivation's keys (a missing key would read empty)."""
+    from lib.keyhole_signals import _finding_path_inputs
+    inputs = _finding_path_inputs(
+        behaviour={}, documentation={}, understanding={}, drift_hidden_dirs=[],  # type: ignore[typeddict-item]
+        churn_degenerate=False, untrusted=[], self_ref_paths=[], unactioned=[],
+        accreting_paths=[], dead_weight=[], override_contradiction_paths=[])
+    assert list(inputs) == FINDING_ORDER
+
+
 def test_an_edited_finding_order_reorders_the_tables(manifest: cm.CheckManifest) -> None:
     edited = copy.deepcopy(manifest)
     hidden = _entry(edited, "core.finding.hidden_coupling")
