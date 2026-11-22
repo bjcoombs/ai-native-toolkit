@@ -1,0 +1,16 @@
+# Check manifest fragment: the ghsync_root collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.ghsync_root"
+kind = "collector"
+title = "ghsync root for GitLab includes"
+issues = [766]
+callable = "lib.run_setup:ghsync_root"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

@@ -1,0 +1,27 @@
+# Check manifest fragment: the promissory collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.promissory"
+kind = "collector"
+title = "Promissory marker scan"
+callable = "lib.core_scans:promissory_scan"
+publishes = []
+reads = ["repo_root", "excludes", "scope"]
+stage = "setup"
+private = true
+label = "promissory_markers"
+revision = 1
+
+[[entries]]
+id = "core.finding.unactioned_intent"
+kind = "finding"
+title = "Unactioned intent"
+name = "unactioned_intent"
+order = 5
+action = "action the promise: fix it, ticket it, or delete the marker/skip"
+mode = "verify_then_retire"
+concern = true
+inputs = ["promissory"]
+derive = "lib.keyhole_signals:_unactioned_intent_paths"
+headless = "unregistered"

@@ -1,0 +1,15 @@
+# Check manifest fragment: the assess_dir collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.assess_dir"
+kind = "collector"
+title = "Artifact directory"
+callable = "lib.run_setup:run_assess_dir"
+publishes = []
+reads = ["repo_root", "run_scope"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

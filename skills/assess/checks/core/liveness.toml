@@ -1,0 +1,13 @@
+# Check manifest fragment: the liveness collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.liveness"
+kind = "collector"
+title = "Liveness scan"
+callable = "lib.core_scans:liveness_scan"
+publishes = []
+reads = ["repo_root", "excludes", "scope"]
+stage = "read_side"
+private = true
+revision = 1

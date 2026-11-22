@@ -1,0 +1,17 @@
+# Check manifest fragment: the gate_cost_estimate collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.gate_cost_estimate"
+kind = "collector"
+title = "Gate cost estimate"
+callable = "lib.gate_cost:estimate_gate_cost"
+publishes = ["gate_cost_estimate"]
+reads = ["repo_root"]
+stage = "read_side"
+network = true
+headless = { gate_cost_estimate = "registered" }
+revision = 1
+  [entries.privacy]
+  "gate_cost_estimate.reason" = "drop"
+  "gate_cost_estimate.assumption" = "drop"

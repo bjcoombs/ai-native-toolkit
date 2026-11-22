@@ -1,0 +1,58 @@
+# Check manifest fragment: the promissory_markers collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.promissory_markers"
+kind = "collector"
+title = "Promissory markers"
+callable = "lib.core_scans:promissory_block"
+publishes = ["promissory_markers"]
+reads = ["promissory"]
+stage = "read_side"
+headless = { promissory_markers = "headless_variant" }
+headless_variants = [
+  { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },
+]
+shapes = [
+  { path = "promissory_markers", type = "lib.block_shapes:PromissoryMarkersBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "promissory_markers.reason" = "drop"
+  "promissory_markers.top_offenders.family" = "token"
+  "promissory_markers.top_offenders.text" = "drop"
+  "promissory_markers.top_offenders.commit" = "drop"
+  "promissory_markers.stale_by_file.{}.families" = "drop"
+
+[[entries]]
+id = "core:promissory_markers.families.suppression.stale"
+kind = "signal"
+title = "Stale suppression comments"
+collector = "core.promissory_markers"
+path = "promissory_markers.families.suppression.stale"
+type = "number"
+evidence = "git_history"
+null_means = "absent when no suppression was found"
+
+[[entries]]
+id = "core:promissory_markers.aging_reliable"
+kind = "signal"
+title = "Marker aging is reliable"
+collector = "core.promissory_markers"
+path = "promissory_markers.aging_reliable"
+type = "bool"
+evidence = "git_history"
+
+[[entries]]
+id = "core.cond.layer-3-linters.2.stale"
+kind = "condition"
+title = "Stale suppressions stay at 10 or fewer"
+key = "layer-3-linters.2:promissory_markers.families.suppression.stale"
+fix = "Revisit the oldest suppression comments and fix or remove them."
+
+[[entries]]
+id = "core.cond.layer-3-linters.2.aging_reliable"
+kind = "condition"
+title = "Suppression ages can be read from history"
+key = "layer-3-linters.2:promissory_markers.aging_reliable"
+fix = "Run on a full clone so suppression ages can be measured."

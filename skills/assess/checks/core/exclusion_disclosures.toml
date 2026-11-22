@@ -1,0 +1,21 @@
+# Check manifest fragment: the exclusion_disclosures collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.exclusion_disclosures"
+kind = "collector"
+title = "Exclusion disclosures"
+callable = "lib.core_scans:exclusion_disclosures"
+publishes = ["excluded_by_config", "excluded_as_archive", "pruned_finding_paths"]
+reads = ["keyhole", "excludes"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  "excluded_by_config.affected_finding_paths" = "path"
+  "excluded_by_config.dirs" = "path"
+  "excluded_by_config.patterns" = "path"
+  "excluded_as_archive.affected_finding_paths" = "path"
+  "pruned_finding_paths.paths" = "path"
