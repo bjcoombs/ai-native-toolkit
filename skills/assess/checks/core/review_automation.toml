@@ -1,0 +1,25 @@
+# Check manifest fragment: the review_automation collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.review_automation"
+kind = "collector"
+title = "AI review committed in CI"
+issues = [696]
+callable = "lib.review_automation:scan_review_automation"
+publishes = ["review_automation"]
+reads = ["repo_root", "fleet_config", "ghsync_root", "gitlab_merged_ci"]
+stage = "post_offers"
+platform_pass = true
+headless = { review_automation = "registered" }
+shapes = [
+  { path = "review_automation", type = "lib.review_automation:ReviewAutomationBlock" },
+]
+revision = 2
+  [entries.privacy]
+  "review_automation.reason" = "drop"
+  "review_automation.kinds" = "token"
+  "review_automation.matches.kind" = "token"
+  "review_automation.matches.rule" = "token"
+  "review_automation.matches.reviewer" = "token"
+  "review_automation.matches.path" = "path"

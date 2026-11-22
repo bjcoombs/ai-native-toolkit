@@ -1,0 +1,16 @@
+# Check manifest fragment: the merged_sample collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.merged_sample"
+kind = "collector"
+title = "Merged-change sample"
+issues = [715]
+callable = "lib.merged_sample:merged_sample"
+offline_callable = "lib.merged_sample:offline_merged_sample"
+publishes = []
+reads = ["repo_root", "history_window", "run_date"]
+stage = "read_side"
+private = true
+network = true
+revision = 1

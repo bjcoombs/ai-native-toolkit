@@ -1,0 +1,15 @@
+# Check manifest fragment: the working_notes collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.working_notes"
+kind = "collector"
+title = "Working notes"
+callable = "lib.core_scans:working_notes"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1

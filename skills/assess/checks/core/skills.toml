@@ -1,0 +1,17 @@
+# Check manifest fragment: the skills collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.skills"
+kind = "collector"
+title = "Skills factoring"
+callable = "lib.core_scans:skills_blocks"
+publishes = ["skills_present", "skills_count", "skill_files"]
+reads = ["instruction_grading"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  skill_files = "path"
