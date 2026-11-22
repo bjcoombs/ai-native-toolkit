@@ -162,7 +162,8 @@ unmasked line of its job runs ``git diff --exit-code`` (``lib.ci_lint_gates``).
   compiler run with warnings as errors (``mix compile --warnings-as-errors``,
   ``-Werror``, ``dotnet build -warnaserror``, a CI .NET build with
   ``TreatWarningsAsErrors`` committed). ``analysers_in_build`` wins when both apply.
-  Both sit after ``unread_ci_system`` and before the false cases.
+  Both sit after ``unread_ci_system`` and apply only where no lint line runs at all:
+  a masked or off-trigger linter keeps ``not_enforced``.
 - ``not_enforced`` (false): lint lines run, but each is masked or off the
   ordinary triggers (a masked compiler gate reads this too).
 - ``no_lint_command`` / ``no_ci`` (false): CI files with no lint or
@@ -194,6 +195,7 @@ from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
+from lib.lint_vocabulary import dotnet_build
 from lib.merged_ci import MergedStatus, as_merged
 from lib.shared_tooling import include_lines, pulls_jobs_from_elsewhere
 
@@ -363,6 +365,12 @@ def _lone_linter(text: str) -> bool:
     return len(words) == 1 and (words[0] in LINT_PROGRAMS or words[0] in TYPE_PROGRAMS)
 
 
+def _lone_build(text: str) -> bool:
+    """A lone .NET build program (``- msbuild``): under ``matrix:`` a value (#926)."""
+    words = command_words(text)
+    return len(words) == 1 and dotnet_build(words)
+
+
 def _lone_check(text: str) -> bool:
     """A test program or target runner with no argument (``pytest``, ``tox``, ``rspec``,
     ``make``): a value unless under ``script:``."""
@@ -387,8 +395,9 @@ def _script_items(lines: Sequence[str]) -> list[bool]:
     flags = [True] * len(lines)
     for i, line in enumerate(lines):
         text = ci_line_text(line)
-        if _BARE_ITEM.match(line) is None or not (_lone_check(text) or _lone_linter(text)):
-            continue   # only a lone always-check or linter item needs its parent
+        if _BARE_ITEM.match(line) is None or not (_lone_check(text) or _lone_linter(text)
+                                                  or _lone_build(text)):
+            continue   # only a lone always-check, linter or build item needs its parent
         depth = _indent(line)
         parent = ""
         for above in reversed(lines[:i]):
@@ -538,12 +547,14 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     lint_runs, lint_basis = _lint_state(lint_t, _max(may_t, may_check_t), elsewhere=bool(elsewhere),
                                         partial=partial, unread=bool(unread),
                                         has_files=bool(files))
-    if lint_runs is False and files:   # the #926 null codes, ahead of every false case
+    # The #926 null codes apply only where no lint line runs at all: a masked linter stays
+    # not_enforced (false), never not measured, whatever the build beside it does.
+    if lint_basis == "no_lint_command":
         gate = lint_gate(root, tracked, compiler=bool(gate_t[0] or gate_t[1]),
                          dotnet=bool(dotnet_t[0] or dotnet_t[1]))
         if gate is not None:
             lint_runs, lint_basis = None, gate
-        elif lint_basis == "no_lint_command" and (gate_t[2] or gate_t[3]):
+        elif gate_t[2] or gate_t[3]:
             lint_basis = "not_enforced"   # a masked or off-trigger compiler gate
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,

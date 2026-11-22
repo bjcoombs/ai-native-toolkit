@@ -115,6 +115,18 @@ def _props(*props: str) -> str:
                  (False, "not_enforced"), id="PHX-continue-on-error"),
     pytest.param(_wf(_step("vendor/bin/phpstan analyse || true")), (False, "not_enforced"),
                  id="phpstan-or-true"),
+    # A masked linter beside a compiler gate or a .NET build stays false, never null.
+    pytest.param(_wf(_step("ruff check . || true\ngcc -Werror -o a a.c")),
+                 (False, "not_enforced"), id="MASKED-LINT+WERROR"),
+    pytest.param({**_wf(_step("vendor/bin/phpstan analyse || true\ndotnet build")),
+                  _PROPS: _props("EnforceCodeStyleInBuild")}, (False, "not_enforced"),
+                 id="MASKED-LINT+NETAN"),
+    # A bare msbuild value under matrix: is not a build.
+    pytest.param({".github/workflows/ci.yml": _HEAD + "  t:\n    strategy:\n      matrix:\n"
+                  "        tool:\n          - msbuild\n    runs-on: x\n    steps:\n"
+                  "      - run: echo ${{ matrix.tool }}\n",
+                  _PROPS: _props("EnforceCodeStyleInBuild")}, (False, "no_lint_command"),
+                 id="MATRIX-MSBUILD"),
     # A lint line still wins over every new null code.
     pytest.param({**_wf(_step("dotnet build\ndotnet format --verify-no-changes")),
                   _PROPS: _props("EnforceCodeStyleInBuild")}, (True, "lint_command"),

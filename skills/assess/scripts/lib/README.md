@@ -3755,7 +3755,10 @@ formatter line counts as a lint line when `ci_lint_gates.rewrite_gated` names it
 (`count_check_lines(..., extra=)`). With `lint_runs` otherwise false, `ci_lint_gates.lint_gate`
 gives the two new null codes, `analysers_in_build` ahead of `compiler_gate_only`, from the
 `line_dotnet_build` and `line_compiler_gate` tallies (unmasked, on ordinary or unsettled
-triggers); a masked or off-trigger compiler gate alone reads `not_enforced`.
+triggers), and only where `lint_basis` would be `no_lint_command`: a masked linter beside a
+build keeps `not_enforced`. A masked or off-trigger compiler gate alone reads
+`not_enforced`. A lone `- msbuild` item reads its parent key like a lone linter
+(`_lone_build`), so a `matrix:` value is not a build.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
 `tests/test_ci_lint_gates.py` (the #926 fixtures), `tests/test_gitlab_ci_lint.py`, and the
 Layer 3 and Layer 5 rows in `tests/test_level_signals.py`.

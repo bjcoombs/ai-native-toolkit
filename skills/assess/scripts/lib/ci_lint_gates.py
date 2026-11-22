@@ -104,15 +104,27 @@ def rewrite_gated(text: str) -> frozenset[int]:
     return frozenset(i for i in rewrites if any(j >= i and jobs[j] == jobs[i] for j in diffs))
 
 
+# A YAML list item with no key (``- msbuild``), as ``ci_checks._BARE_ITEM`` reads it.
+_BARE_ITEM = re.compile(r"^\s*-\s+(?![\w.-]+:(?:\s|$))")
+
+
+def _line_words(line: str, script_item: bool) -> list[list[str]]:
+    """The words of each command on one CI line, without a lone one-word bare item whose
+    parent is not a script key (``- msbuild`` under ``matrix:`` is a value, not a run)."""
+    lone_value = not script_item and _BARE_ITEM.match(line) is not None
+    words = [command_words(c.text) for c in line_commands(line)]
+    return [w for w in words if not (lone_value and len(w) == 1)]
+
+
 def line_compiler_gate(line: str, *, script_item: bool = True) -> bool:
     """One CI line that runs a compiler with warnings as errors (``mix compile
     --warnings-as-errors``, ``cmake -DCMAKE_CXX_FLAGS=-Werror ..``, ``dotnet build -warnaserror``)."""
-    return any(compiler_gate(command_words(c.text)) for c in line_commands(line))
+    return any(compiler_gate(w) for w in _line_words(line, script_item))
 
 
 def line_dotnet_build(line: str, *, script_item: bool = True) -> bool:
     """One CI line that runs a .NET build (``dotnet build``, ``msbuild``)."""
-    return any(dotnet_build(command_words(c.text)) for c in line_commands(line))
+    return any(dotnet_build(w) for w in _line_words(line, script_item))
 
 
 _WARNASERROR = re.compile(r"<TreatWarningsAsErrors>\s*true\s*<", re.IGNORECASE)
