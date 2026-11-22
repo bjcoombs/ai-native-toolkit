@@ -15,11 +15,15 @@ that vocabulary and false under ``CHECK_WORDS`` (``python ci.py``, ``source ci.s
 ``cargo ci``, ``./gradlew ci``, ``mvn ci``, ``go ci``, whose ``./ci.sh`` and ``make ci``
 siblings already read null): ``lib.ci_checks._line_may_check`` counts it as a target whose
 recipe is not read, so Layer 5 and Layer 3 read null with ``check_target``, never a false 0.
+``may_lint_named(text)`` is ``check_command.may_lint`` under the instruction vocabulary;
+``lib.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
+coverage gate's null ``indirect_run`` rather than a false ``not_run_in_ci``.
 Pure, like ``lib.check_command``. Tests: ``tests/test_ci_target_word.py``.
 """
 from __future__ import annotations
 
-from lib.check_command import CHECK_NAMES, CHECK_WORDS, check_verdict, is_check_command, is_check_name
+from lib.check_command import (
+    CHECK_NAMES, CHECK_WORDS, check_verdict, is_check_command, is_check_name, may_lint)
 
 INSTRUCTION_CHECK_WORDS = CHECK_WORDS | {"ci"}
 
@@ -36,6 +40,16 @@ def is_named_check(text: str) -> bool:
 def is_named_check_name(name: str) -> bool:
     """A target or script name an instruction-side entry point counts (``ci``, ``test:unit``)."""
     return is_check_name(name, INSTRUCTION_CHECK_WORDS)
+
+
+def may_lint_named(text: str) -> bool:
+    """``check_command.may_lint`` under the instruction vocabulary: a ``make ci`` or
+    ``./ci.sh`` whose recipe is not read may still run a gate inside it."""
+    token = CHECK_NAMES.set(INSTRUCTION_CHECK_WORDS)
+    try:
+        return may_lint(text)
+    finally:
+        CHECK_NAMES.reset(token)
 
 
 def unread_ci_target(text: str) -> bool:

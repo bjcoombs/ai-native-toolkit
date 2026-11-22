@@ -19,6 +19,7 @@ from lib.agent_consistency import check_commands
 from lib.agent_environment import scan_agent_environment
 from lib.check_command import check_verdict, is_check_name
 from lib.ci_checks import scan_ci_checks
+from lib.coverage_gate import detect_coverage_gate
 from lib.named_check import is_named_check, is_named_check_name, unread_ci_target
 
 _CI_TARGETS = ["make ci", "just ci", "task ci", "npm run ci", "pnpm ci", "yarn ci", "bun run ci",
@@ -74,6 +75,20 @@ def test_other_commands_are_not_unread_ci_targets(text: str) -> None:
 
 def test_a_masked_ci_name_behind_a_runner_still_reads_false(tmp_path: Path) -> None:
     assert _scan(tmp_path, "cargo ci || true")[:2] == (False, "no_check_command")
+
+
+@pytest.mark.parametrize("run", ["make ci", "npm run ci", "./ci.sh", "task ci", "cargo ci"])
+def test_a_ci_target_keeps_the_coverage_gate_not_measured(tmp_path: Path, run: str) -> None:
+    """The Step 4 coverage gate: a recipe that is not read may run the gate, so it reads
+    null ``indirect_run``, as on main, never a false ``not_run_in_ci``."""
+    path = tmp_path / ".github/workflows/ci.yml"
+    path.parent.mkdir(parents=True)
+    path.write_text(f"on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: {run}\n",
+                    encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname = 'x'\n\n[tool.coverage.report]\nfail_under = 80\n", encoding="utf-8")
+    block = detect_coverage_gate(tmp_path)
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "indirect_run")
 
 
 def test_a_ci_target_beside_pytest_reads_true(tmp_path: Path) -> None:

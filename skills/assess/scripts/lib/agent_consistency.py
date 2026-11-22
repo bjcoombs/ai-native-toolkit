@@ -94,7 +94,7 @@ from typing import Literal, TypedDict
 
 from lib.agent_systems import AIDER_CONFIG, SYSTEM_BY_ID, SYSTEM_ORDER
 from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
-from lib.named_check import is_named_check as is_check_command
+from lib.named_check import is_named_check
 from lib.command_resolver import command_words, extract_commands
 from lib.doc_graph import is_repo_file
 from lib.git_churn import tracked_files
@@ -184,7 +184,7 @@ class AgentConsistencyBlock(TypedDict):
 def check_commands(text: str) -> set[str]:
     """The test and lint commands a text names, word-normalised."""
     found = {" ".join(command_words(c.text)) for c in extract_commands(text)
-             if is_check_command(c.text) or is_lint_command(c.text)}
+             if is_named_check(c.text) or is_lint_command(c.text)}
     in_fence = False
     for line in text.splitlines():
         if _FENCE.match(line):
