@@ -57,7 +57,7 @@
               "properties": {
                 "reason": {
                   "type": "string",
-                  "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                  "description": "Why the block is unavailable: a sentence, or 'code: sentence' for a block whose codes are listed under its own entry. A counts-only document keeps at most the code."
                 }
               },
               "required": [
@@ -101,7 +101,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                    "description": "Why the block is unavailable. A counts-only document drops it."
                   }
                 },
                 "required": [
@@ -225,7 +225,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                    "description": "Why the block is unavailable. A counts-only document drops it."
                   }
                 },
                 "required": [
@@ -356,7 +356,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'; a counts-only document keeps the code only. The structure block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, no_python_packages (a Python repository with no importable package), no_import_graph_<language> (no import graph for the dominant source language, for example no_import_graph_rust), invalid_import_graph (a builder returned a graph that breaks the module-graph contract) and no_source_files."
+                    "description": "Why the block is unavailable. A counts-only document drops it."
                   }
                 },
                 "required": [
@@ -439,6 +439,30 @@
                   ],
                   "description": "Share (0 to 1) of changes an agent identity authored; null when nothing was counted."
                 }
+              }
+            },
+            "structure": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "'code: sentence'. The codes name the missing piece: no_grimp (grimp, the Python import-graph builder, is not installed); no_networkx (networkx, which the structure metrics need, is not installed); grimp_failed (grimp could not build the Python import graph); no_python_packages (a Python repository with no importable package); no_import_graph_<language> (no import graph builder exists yet for the dominant source language, for example no_import_graph_rust); invalid_import_graph (a builder returned a graph that breaks the module-graph contract); no_source_files (the scope holds no source file in a language the assess skill recognises). A counts-only document keeps the code only."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
               }
             }
           }

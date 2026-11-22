@@ -14,20 +14,25 @@ against (``lib/level_signals.py``); regenerate after adding a scan. Per-scan
 blocks stay open objects - each scan owns its own shape - except that a block
 reporting ``"available": false`` must carry a string ``reason``. The blocks in
 ``lib/scan_block_schemas.py`` (``ai_usage``, ``ci_checks``, ``delivery``; #779)
-also name and describe their fields.
+also name and describe their fields. Each named block's ``reason`` description is
+generated from the check manifest (``reason_description``, #795): the codes its
+collector declares and how counts-only output keeps it, so the ``structure`` codes
+are described under ``structure`` only.
 """
 from __future__ import annotations
 
 import json
 import sys
 import types
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, Union, get_args, get_origin, get_type_hints, is_typeddict
 
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from lib.check_manifest import core_manifest, reason_codes  # noqa: E402
+from lib.counts_only_rules import DROP, REASON, TOKEN, classify  # noqa: E402
 from lib.run_context_types import JsonDict, SignalsDocument  # noqa: E402
 from lib.scan_block_schemas import BLOCK_SCHEMAS  # noqa: E402
 from lib.scan_registry import ScanSpec  # noqa: E402
@@ -38,22 +43,45 @@ SCHEMA_ID = "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/referen
 
 _SCALARS: dict[Any, str] = {str: "string", int: "integer", bool: "boolean", type(None): "null"}
 
-# A scan block: any object, but an unavailable one names its reason.
-SCAN_BLOCK: JsonDict = {
-    "type": "object",
-    "if": {"properties": {"available": {"const": False}}, "required": ["available"]},
-    "then": {"properties": {"reason": {
-        "type": "string",
-        "description": (
-            "'code: sentence'; a counts-only document keeps the code only. The structure "
-            "block's codes name the missing piece: no_grimp, no_networkx, grimp_failed, "
-            "no_python_packages (a Python repository with no importable package), "
-            "no_import_graph_<language> (no import graph for the dominant source language, "
-            "for example no_import_graph_rust), invalid_import_graph (a builder returned a graph "
-            "that breaks the module-graph contract) and no_source_files."
-        ),
-    }}, "required": ["reason"]},
+# How a counts-only document keeps a block's ``reason`` (its ``counts_only_rules`` class).
+_REASON_KEPT = {
+    REASON: "A counts-only document keeps the code only.",
+    DROP: "A counts-only document drops it.",
+    TOKEN: "A counts-only document keeps it while it is a short token.",
 }
+
+
+def reason_description(block: str | None = None) -> str:
+    """The ``reason`` description of one block, generated from the check manifest (#795).
+
+    A block whose collector declares reason codes (``unknown_reasons`` carried in
+    ``reason``) lists them with what each means; ``None`` is the shared text of every
+    other block. So one block's codes never appear under another block.
+    """
+    if block is None:
+        return ("Why the block is unavailable: a sentence, or 'code: sentence' for a block "
+                "whose codes are listed under its own entry. A counts-only document keeps at "
+                "most the code.")
+    codes = reason_codes(core_manifest(), block)
+    text = ("'code: sentence'. The codes name the missing piece: "
+            + "; ".join(f"{r['code']} ({r['means'][:1].lower()}{r['means'][1:].rstrip('.')})" for r in codes) + "."
+            if codes else "Why the block is unavailable.")
+    kept = _REASON_KEPT.get(classify(f"{block}.reason") or DROP, "")
+    return f"{text} {kept}".strip()
+
+
+def scan_block(block: str | None = None) -> JsonDict:
+    """A scan block: any object, but an unavailable one names its reason."""
+    return {
+        "type": "object",
+        "if": {"properties": {"available": {"const": False}}, "required": ["available"]},
+        "then": {"properties": {"reason": {
+            "type": "string", "description": reason_description(block),
+        }}, "required": ["reason"]},
+    }
+
+
+SCAN_BLOCK: JsonDict = scan_block()
 
 
 def type_schema(tp: Any) -> JsonDict:
@@ -80,8 +108,16 @@ def type_schema(tp: Any) -> JsonDict:
 
 
 def described_block(name: str) -> JsonDict:
-    """``SCAN_BLOCK`` plus the block's described fields (``lib/scan_block_schemas.py``)."""
-    return {"type": "object", **SCAN_BLOCK, **BLOCK_SCHEMAS[name]}
+    """The block's reason rule plus its described fields (``lib/scan_block_schemas.py``)."""
+    return {**scan_block(name), **BLOCK_SCHEMAS.get(name, {})}
+
+
+def described_blocks(known: Iterable[str]) -> dict[str, JsonDict]:
+    """The blocks a published schema names: every ``BLOCK_SCHEMAS`` block, then each known
+    block whose collector declares reason codes (``structure``), with its own reason text."""
+    known = set(known)
+    coded = sorted(b for b in known - set(BLOCK_SCHEMAS) if reason_codes(core_manifest(), b))
+    return {name: described_block(name) for name in [*BLOCK_SCHEMAS, *coded] if name in known}
 
 
 def build_schema(specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> JsonDict:
@@ -92,7 +128,7 @@ def build_schema(specs: Sequence[ScanSpec] = SIGNAL_SCANS) -> JsonDict:
     scans = document["properties"]["scans"]
     scans["propertyNames"] = {"enum": known}
     # The blocks a fleet reader compares (#779) name their fields; each keeps the reason rule.
-    scans["properties"] = {name: described_block(name) for name in BLOCK_SCHEMAS if name in known}
+    scans["properties"] = described_blocks(known)
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,

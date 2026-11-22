@@ -46,6 +46,30 @@ def test_both_published_schemas_describe_the_blocks() -> None:
     assert "review_automation" in row_scans
 
 
+def _reason_texts(block: dict[str, Any]) -> list[str]:
+    """Every ``reason`` description of a block schema: its field and its unavailable rule."""
+    return [r["description"] for r in (block.get("properties", {}).get("reason", {}),
+                                       block["then"]["properties"]["reason"]) if "description" in r]
+
+
+def test_each_block_describes_only_its_own_reason_codes() -> None:
+    """The structure codes are described under structure only (#795, from #790's review)."""
+    for scans in (build_schema()["properties"]["scans"],
+                  next(b for b in build_row_schema()["properties"]["scans"]["anyOf"]
+                       if b.get("type") == "object")):
+        for name in BLOCK_SCHEMAS:
+            texts = _reason_texts(scans["properties"][name])
+            assert texts and not [t for t in texts for code in ("no_grimp", "no_networkx",
+                                                                "grimp_failed") if code in t], name
+        structure = " ".join(_reason_texts(scans["properties"]["structure"]))
+        for code in ("no_grimp", "no_networkx", "grimp_failed", "no_python_packages",
+                     "no_import_graph_<language>", "invalid_import_graph", "no_source_files"):
+            assert code in structure
+        assert "keeps the code only" in structure
+        assert "no_grimp" not in " ".join(_reason_texts(scans["additionalProperties"]))
+    assert "drops it" in _reason_texts(described_block("ai_usage"))[-1]
+
+
 def _git(repo: Path, *args: str) -> None:
     env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull}
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env,

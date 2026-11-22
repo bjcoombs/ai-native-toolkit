@@ -17,8 +17,6 @@ a field of the block's TypedDict, and that real documents validate.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from lib.ci_includes import STATUSES
 from lib.run_context_types import JsonDict
 
@@ -158,7 +156,7 @@ DELIVERY: JsonDict = {
 }
 
 # Block name -> the block's described fields (no ``type``; each generator adds its own rules).
-BLOCK_SCHEMAS: dict[str, Any] = {
+BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
     "delivery": DELIVERY,
