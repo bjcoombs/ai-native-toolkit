@@ -144,7 +144,7 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "agent_environment.ci_duration.over_target",   # NotRequired field
     "test_pressure.reason",                        # a union arm (unavailable shape)
     "stats_summary.loc.p95",                       # typed field under an untyped block
-    "coverage_gate.enforced",                      # typed since #793
+    "coverage_gate.configured",                    # typed since #793
     "agent_ops.summary.permissions_encoded",       # typed since #793
     "promissory_markers.families.suppression.total",  # through an identifier-keyed map
     "structure_drift.tier_0.matched_patterns",     # typed since #793
@@ -155,6 +155,7 @@ def test_scan_names_come_from_the_published_schema() -> None:
     "agent_ops.available",                         # every block may report status
     "layer_grades.instructions_grade",             # deterministic layer grade (#620)
     "layer_grades.instruction_file_present",
+    "ci_checks.test_or_lint_configured",           # #783 config-only name
 ])
 def test_team_paths_accepted(path: str) -> None:
     assert team_path_ok(path)
@@ -183,6 +184,9 @@ def test_team_paths_accepted(path: str) -> None:
     "structure_drift.tier_1.human_static_agree",
     "review_reality.anything.deeper",
     "instruction_claims.failures.kind",        # steps into a list
+    # #783: the names before the config-only renames fail at load, never unknown.
+    "coverage_gate.enforced",
+    "ci_checks.test_or_lint_runs",
 ])
 def test_team_paths_rejected(path: str) -> None:
     assert not team_path_ok(path)
@@ -473,7 +477,7 @@ def test_layer_five_level_one_reads_ci_not_the_instruction_file(tmp_path: Path) 
     """Issue #698: a CI test job is level 1 with no instruction file; level 2 is the setup."""
     ci = _CI_WORKFLOW.replace("make check", "make test")
     unlocked = _ci_repo(tmp_path / "unlocked", ci, instructions=True, extra=_UNLOCKED)
-    assert unlocked["ci_checks"]["test_or_lint_runs"] is True
+    assert unlocked["ci_checks"]["test_or_lint_configured"] is True
     assert unlocked["ci_checks"]["enforced_check_runs"] is True
     assert unlocked["agent_environment"]["pinning"]["unlocked_total"] == 1
     assert _row(_run({"r": unlocked}), "layer-5-ci")["level"] == 1
@@ -531,7 +535,7 @@ def test_layer_five_is_zero_without_a_ci_check_even_when_a_check_is_named(tmp_pa
     for name, workflow in (("none", None), ("deploy", deploy)):
         scans = _ci_repo(tmp_path / name, workflow, instructions=True)
         assert scans["agent_environment"]["layer5_cap"]["applies"] is False
-        assert scans["ci_checks"]["test_or_lint_runs"] is False
+        assert scans["ci_checks"]["test_or_lint_configured"] is False
         assert scans["ci_checks"]["enforced_check_runs"] is False
         assert _row(_run({"r": scans}), "layer-5-ci")["level"] == 0
 
@@ -566,7 +570,7 @@ def test_layer_five_level_one_needs_an_enforced_check(tmp_path: Path) -> None:
     """Issue #775: a CI check that cannot fail its job does not meet Layer 5 level 1."""
     masked = _ci_repo(tmp_path / "masked", _CI_WORKFLOW.replace("make check", "pytest || true"),
                       instructions=False)
-    assert masked["ci_checks"]["test_or_lint_runs"] is True
+    assert masked["ci_checks"]["test_or_lint_configured"] is True
     assert masked["ci_checks"]["enforced_check_runs"] is False
     assert _row(_run({"r": masked}), "layer-5-ci")["level"] == 0
     plain = _ci_repo(tmp_path / "plain", _CI_WORKFLOW.replace("make check", "pytest"), instructions=False)
@@ -686,7 +690,7 @@ def test_coverage_threshold_signal_survives_counts_only(meets: bool | None) -> N
     """Counts-only output keeps the three-state signal and both percentages (#781)."""
     gate = {"file": "pom.xml", "line": 3, "tool": "jacoco", "form": "<rules> <minimum>",
             "threshold": 0.8, "unit": "ratio", "threshold_percent": 80.0, "metric": "line"}
-    block = {"available": True, "enforced": True, "gates": [gate], "max_threshold_percent": 80.0,
+    block = {"available": True, "configured": True, "gates": [gate], "max_threshold_percent": 80.0,
              "threshold_meets_minimum": meets, "not_detected": ["x"]}
     out = counts_only_scans({"coverage_gate": block})["coverage_gate"]
     assert out["threshold_meets_minimum"] is meets
@@ -709,7 +713,7 @@ def test_layer_six_is_unknown_on_a_go_repository_with_no_readable_gate(tmp_path:
 
 
 def test_unmeasured_reason_survives_counts_only() -> None:
-    block = {"available": True, "enforced": False, "gates": [], "max_threshold_percent": None,
+    block = {"available": True, "configured": False, "gates": [], "max_threshold_percent": None,
              "threshold_meets_minimum": None,
              "unmeasured_reason": "go_rust_gate_form_not_read", "not_detected": ["x"]}
     out = counts_only_scans({"coverage_gate": block})["coverage_gate"]

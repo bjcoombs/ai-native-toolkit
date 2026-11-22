@@ -95,7 +95,7 @@ def _root_with_template(tmp_path: Path, tpl: dict[str, str], ci: str = INCLUDE_T
 def test_a_project_include_resolves_from_the_root_and_runs_the_check(tmp_path: Path) -> None:
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL})
     block = scan_ci_checks(app, root)
-    assert (block["test_or_lint_runs"], block["basis"]) == (True, "check_command")
+    assert (block["test_or_lint_configured"], block["basis"]) == (True, "check_command")
     assert (block["check_commands"], block["included_check_commands"]) == (0, 1)
     assert block["includes"] == [{"kind": "project", "id": "gitlab_project:grp/ci-templates",
                                   "status": "resolved", "ref_basis": "ref", "depth": 1}]
@@ -105,27 +105,27 @@ def test_a_project_include_resolves_from_the_root_and_runs_the_check(tmp_path: P
 def test_without_a_root_a_project_include_stays_unknown(tmp_path: Path) -> None:
     _root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL})
     block = scan_ci_checks(app)
-    assert block["test_or_lint_runs"] is None and block["includes"][0]["status"] == "no_root"
+    assert block["test_or_lint_configured"] is None and block["includes"][0]["status"] == "no_root"
 
 
 def test_an_uncloned_template_stays_unknown(tmp_path: Path) -> None:
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL},
                                     ci="include:\n  - project: grp/not-cloned\n    file: /t.yml\n")
     block = scan_ci_checks(app, root)
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "included_jobs")
     assert block["includes"][0]["status"] == "not_cloned"
 
 
 def test_every_include_resolved_with_no_check_is_false(tmp_path: Path) -> None:
     root, app = _root_with_template(tmp_path, {"templates/test.yml": "docs:\n  script:\n    - make docs\n"})
     block = scan_ci_checks(app, root)
-    assert (block["test_or_lint_runs"], block["basis"]) == (False, "no_check_command")
+    assert (block["test_or_lint_configured"], block["basis"]) == (False, "no_check_command")
 
 
 def test_a_missing_file_stays_unknown(tmp_path: Path) -> None:
     root, app = _root_with_template(tmp_path, {"templates/other.yml": TEST_TPL})
     block = scan_ci_checks(app, root)
-    assert block["test_or_lint_runs"] is None and block["includes"][0]["status"] == "file_missing"
+    assert block["test_or_lint_configured"] is None and block["includes"][0]["status"] == "file_missing"
 
 
 @pytest.mark.parametrize("ref", ["v9", "$TPL_REF", "--output=/x"])
@@ -135,7 +135,7 @@ def test_a_pin_the_clone_cannot_read_is_unresolved_never_false(tmp_path: Path, r
     root, app = _root_with_template(tmp_path, {"templates/test.yml": "docs:\n  script:\n    - make docs\n"}, ci=ci)
     block = scan_ci_checks(app, root)
     assert [(r["status"], r["ref_basis"]) for r in block["includes"]] == [("ref_missing", None)]
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "included_jobs")
 
 
 def test_no_ref_reads_head_and_records_it(tmp_path: Path) -> None:
@@ -153,7 +153,7 @@ def test_a_pinned_ref_reads_that_commit_not_head(tmp_path: Path) -> None:
     app = _clone(root, "grp/app")
     _commit(app, {".gitlab-ci.yml": INCLUDE_TEST.replace("ref: main", "ref: v1")})
     block = scan_ci_checks(app, root)
-    assert block["test_or_lint_runs"] is True and block["includes"][0]["ref_basis"] == "ref"
+    assert block["test_or_lint_configured"] is True and block["includes"][0]["ref_basis"] == "ref"
 
 
 def test_local_includes_resolve_in_the_checkout_and_in_a_template(tmp_path: Path) -> None:
@@ -162,7 +162,7 @@ def test_local_includes_resolve_in_the_checkout_and_in_a_template(tmp_path: Path
         ci="include:\n  - local: ci/own.yml\n" + INCLUDE_TEST.removeprefix("include:\n"))
     _commit(app, {"ci/own.yml": "build:\n  script:\n    - make build\n"})
     block = scan_ci_checks(app, root)
-    assert block["test_or_lint_runs"] is True
+    assert block["test_or_lint_configured"] is True
     assert [(r["kind"], r["status"], r["ref_basis"], r["depth"]) for r in block["includes"]] == [
         ("local", "resolved", "worktree", 1), ("project", "resolved", "ref", 1),
         ("local", "resolved", "ref", 2)]
@@ -188,7 +188,7 @@ def test_a_component_resolves_from_its_project_clone(tmp_path: Path) -> None:
                                     ci="include:\n  - component: gl.test/grp/comps/unit@1.0\n")
     _commit(_clone(root, "grp/comps"), {"templates/unit/template.yml": TEST_TPL}, tag="1.0")
     block = scan_ci_checks(app, root)
-    assert block["test_or_lint_runs"] is True
+    assert block["test_or_lint_configured"] is True
     assert block["includes"][0] == {"kind": "component", "id": "gitlab_component:grp/comps/unit",
                                     "status": "resolved", "ref_basis": "ref", "depth": 1}
 
@@ -197,13 +197,13 @@ def test_a_cycle_reads_each_file_once_and_depth_is_bounded(tmp_path: Path, monke
     loop = "include:\n  - project: grp/ci-templates\n    file: /a.yml\n"
     root, app = _root_with_template(tmp_path, {"a.yml": loop + TEST_TPL}, ci=loop)
     block = scan_ci_checks(app, root)
-    assert block["test_or_lint_runs"] is True and block["unresolved_includes"] == 0
+    assert block["test_or_lint_configured"] is True and block["unresolved_includes"] == 0
     monkeypatch.setattr(ci_includes, "MAX_DEPTH", 1)
     chain = "include:\n  - project: grp/ci-templates\n    file: /b.yml\n"
     root2, app2 = _root_with_template(tmp_path / "two", {"a.yml": chain, "b.yml": TEST_TPL}, ci=loop)
     deep = scan_ci_checks(app2, root2)
     assert [r["status"] for r in deep["includes"]] == ["resolved", "depth_limit"]
-    assert deep["test_or_lint_runs"] is None
+    assert deep["test_or_lint_configured"] is None
 
 
 def test_a_symlinked_clone_outside_the_root_is_not_read(tmp_path: Path) -> None:
@@ -250,7 +250,7 @@ def test_counts_only_keeps_every_include_field_and_no_file_name(tmp_path: Path) 
     for field in ("included_check_commands", "resolved_includes", "unresolved_includes"):
         assert ci[field] == scans["ci_checks"][field], field  # a dropped field fails here
     assert ci["includes"] == scans["ci_checks"]["includes"]
-    assert ci["test_or_lint_runs"] is True
+    assert ci["test_or_lint_configured"] is True
     assert "templates/test.yml" not in json.dumps(out)
 
 
@@ -259,7 +259,7 @@ def test_assess_signals_reads_the_ghsync_root_flag(tmp_path: Path) -> None:
     out = tmp_path / "out.json"
     assert assess_signals.main([str(app), "--out", str(out), "--scans", "ci_checks",
                                 "--ghsync-root", str(root), "--counts-only"]) == 0
-    assert json.loads(out.read_text(encoding="utf-8"))["scans"]["ci_checks"]["test_or_lint_runs"] is True
+    assert json.loads(out.read_text(encoding="utf-8"))["scans"]["ci_checks"]["test_or_lint_configured"] is True
     assert assess_signals.main([str(app), "--out", str(out), "--ghsync-root", str(tmp_path / "nope")]) == 2
 
 
@@ -276,7 +276,7 @@ def test_an_untracked_local_fragment_is_not_read(tmp_path: Path) -> None:
     (app / "ci").mkdir()
     (app / "ci" / "unit.yml").write_text(TEST_TPL, encoding="utf-8")
     block = scan_ci_checks(app)
-    assert block["test_or_lint_runs"] is None and block["includes"][0]["status"] == "file_missing"
+    assert block["test_or_lint_configured"] is None and block["includes"][0]["status"] == "file_missing"
 
 
 def test_a_symlinked_gitlab_ci_file_is_never_fully_read(tmp_path: Path) -> None:
@@ -286,7 +286,7 @@ def test_a_symlinked_gitlab_ci_file_is_never_fully_read(tmp_path: Path) -> None:
     _commit(app, {})
     block = scan_ci_checks(app)
     assert block["included_files"] == 1 and block["includes"] == []
-    assert (block["test_or_lint_runs"], block["basis"]) == (None, "included_jobs")
+    assert (block["test_or_lint_configured"], block["basis"]) == (None, "included_jobs")
 
 
 def test_an_unreadable_entry_keeps_the_signal_unknown(tmp_path: Path) -> None:
@@ -295,7 +295,7 @@ def test_an_unreadable_entry_keeps_the_signal_unknown(tmp_path: Path) -> None:
         ci=INCLUDE_TEST + "  - project: ''\n")
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["unparsed", "resolved"]
-    assert block["test_or_lint_runs"] is None
+    assert block["test_or_lint_configured"] is None
 
 
 def test_counts_only_keeps_review_depth_and_null_ids(tmp_path: Path) -> None:
@@ -328,7 +328,7 @@ def test_a_file_from_a_failed_item_is_read_again_by_a_later_item(tmp_path: Path)
     root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["file_missing", "resolved"]
-    assert block["included_check_commands"] == 1 and block["test_or_lint_runs"] is True
+    assert block["included_check_commands"] == 1 and block["test_or_lint_configured"] is True
 
 
 def test_an_item_stopped_by_the_file_limit_says_so(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -337,7 +337,7 @@ def test_an_item_stopped_by_the_file_limit_says_so(tmp_path: Path, monkeypatch: 
     root, app = _root_with_template(tmp_path, {"a.yml": TEST_TPL, "b.yml": TEST_TPL}, ci=ci)
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["file_limit"]
-    assert block["test_or_lint_runs"] is None
+    assert block["test_or_lint_configured"] is None
 
 
 @pytest.mark.parametrize("text", [
@@ -359,4 +359,4 @@ def test_a_directory_or_symlink_in_a_template_is_not_read(tmp_path: Path, file: 
     _commit(tpl, {})
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["file_missing"]
-    assert block["test_or_lint_runs"] is None
+    assert block["test_or_lint_configured"] is None

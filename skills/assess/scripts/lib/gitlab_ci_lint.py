@@ -3,7 +3,7 @@
 ``lib/ci_includes.py`` resolves a ``.gitlab-ci.yml`` include offline when the
 included file is cloned in the ghsync root. An include it cannot read (a
 template project that is not cloned, a ``template:`` or ``remote:`` file)
-leaves ``ci_checks.test_or_lint_runs`` null. This module asks GitLab for the
+leaves ``ci_checks.test_or_lint_configured`` null. This module asks GitLab for the
 merged configuration of exactly those repositories, so ``ci_checks`` and
 ``review_automation`` see the included jobs.
 

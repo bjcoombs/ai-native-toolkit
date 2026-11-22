@@ -42,7 +42,7 @@ def _scans(*, bytes_: int = 900, lines: int = 40, named: int = 1, enforced: bool
         "nested_instructions": {"available": True, "budget": {"claude_code": {"bytes": bytes_, "lines": lines}}},
         "agent_environment": {"available": True, "check": {"named_total": named},
                               "layer5_cap": {"applies": bool(cap), "unmet": list(cap)}},
-        "coverage_gate": {"available": True, "enforced": enforced},
+        "coverage_gate": {"available": True, "configured": enforced},
         "test_pressure": {"available": True, "mutation_run": mutation},
         "agent_ops": {"available": True, "summary": {"permissions_encoded": permissions}},
         "shared_tooling": {"available": tooling},
@@ -352,7 +352,7 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
 
 
 @pytest.mark.parametrize(("signal", "op", "value"), [
-    ("coverage_gate.enforced", "eq", False), ("observability.rung", "gte", 9),
+    ("coverage_gate.configured", "eq", False), ("observability.rung", "gte", 9),
     ("coverage_gate.threshold_meets_minimum", "eq", False),
     ("observability.rung", "lt", 2), ("nested_instructions.budget.claude_code.lines", "gt", 5),
     ("agent_environment.check.named_total", "gt", 3), ("instruction_claims.failed", "gt", 0),
@@ -373,7 +373,7 @@ def test_measure_hints():
     assert "`not_git_root`" in measure_hint("doc_staleness.summary.stale_pct")
     assert "shallow clone" in measure_hint("doc_staleness.summary.stale_pct")
     assert "ghreport" in measure_hint("two_factor.value")
-    assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
+    assert "`coverage_gate` scan" in measure_hint("coverage_gate.configured")
     assert "${{ env.COV_MIN }}" in measure_hint("coverage_gate.threshold_meets_minimum")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
     assert "no_import_edges" in measure_hint("structure.modularity_q")
@@ -456,7 +456,7 @@ def test_parts_reads_the_cap_tokens():
     assert parts("agent_environment.layer5_cap.applies",
                  {"agent_environment": {"layer5_cap": {"unmet": "check_named"}}}) == ["check_named"]
     assert parts("agent_environment.layer5_cap.applies", {}) == []
-    assert parts("coverage_gate.enforced", scans) == []
+    assert parts("coverage_gate.configured", scans) == []
 
 
 def test_lint_runs_guidance_names_a_linter_command_in_ci():

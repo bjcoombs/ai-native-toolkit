@@ -44,7 +44,7 @@ def test_both_published_schemas_describe_the_blocks() -> None:
                   "agent_either_share", "dependency_bot_commits", "token_user_commits",
                   "agent_identity_rule_commits"):
         assert field in signals_scans["ai_usage"]["properties"]
-    assert {"test_or_lint_runs", "basis"} <= set(signals_scans["ci_checks"]["properties"])
+    assert {"test_or_lint_configured", "basis"} <= set(signals_scans["ci_checks"]["properties"])
     assert "hours" in signals_scans["delivery"]["properties"]["time_to_merge_hours_p50"]["description"]
     assert "review_automation" in row_scans
 
@@ -115,7 +115,7 @@ def _validate(scans: dict[str, Any]) -> None:
 def test_real_blocks_validate_full_and_counts_only(repo: Path) -> None:
     scans = collect(repo, ["ai_usage", "ci_checks"])
     assert scans["ai_usage"]["available"] is True
-    assert scans["ci_checks"]["test_or_lint_runs"] is True
+    assert scans["ci_checks"]["test_or_lint_configured"] is True
     _validate(scans)
     _validate(counts_only_scans(scans))
 

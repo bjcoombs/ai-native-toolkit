@@ -238,7 +238,12 @@ constant each.
 # mypy strict), whether an instruction file states each, a snippet for each
 # unstated one, and stated_pct. Additive: no existing key moves, and
 # complexity-stats.json is unchanged.
-ARTIFACT_SCHEMA_VERSION = "1.40.0"
+# 1.41.0: two run-context.json fields that read configuration text are renamed so
+# their names no longer claim a run (issue #783): ci_checks.test_or_lint_runs is
+# test_or_lint_configured and coverage_gate.enforced is configured. Values and
+# meaning are unchanged; the fleet re-score reads a stored scan's old path under
+# the new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions

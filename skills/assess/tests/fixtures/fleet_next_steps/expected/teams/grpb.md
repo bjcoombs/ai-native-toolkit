@@ -37,7 +37,7 @@ Level 0 of 2. To reach level 1: 0 of 1 repository already there; the rule needs 
 
 1. **Make the test run fail when line coverage drops below a floor.**
    - Done when: The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, `--cov-fail-under`, Jest `coverageThreshold` or similar), and a run below it fails.
-   - Re-run check (optional): the next fleet run reads `coverage_gate.enforced` = true.
+   - Re-run check (optional): the next fleet run reads `coverage_gate.configured` = true.
    - Holding the group back (1): `grpb/lib1` (now false).
 
 ## Runtime legibility

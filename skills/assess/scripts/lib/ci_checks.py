@@ -14,7 +14,7 @@ evidence is static, read from the files at HEAD:
   GitHub or GitLab line runs a check and no included jobs are pending, such a
   file makes ``basis`` (and ``enforced_basis`` and ``lint_basis``) ``unread_ci_system``
   and ``enforced_check_runs`` and ``lint_runs`` null: the scanner did not see that system's checks,
-  it did not find them absent. ``test_or_lint_runs`` keeps its meaning and stays
+  it did not find them absent. ``test_or_lint_configured`` keeps its meaning and stays
   false there. An empty ``Jenkinsfile`` reads the same (accepted: the scan
   cannot tell an empty pipeline from one it cannot parse).
 - Each line with its ``- `` / ``run:`` / ``script:`` lead dropped
@@ -73,7 +73,7 @@ of those or in the merged file); otherwise the signal stays null with
 ``basis: merged_config_partial``. Unknown beats wrong. A ``rules:`` include
 inside a template neither the clone nor the merge shows is not seen.
 
-``test_or_lint_runs`` is true when any CI line, own or included, runs a check.
+``test_or_lint_configured`` is true when any CI line, own or included, runs a check.
 With none it is false, except when a CI file pulls jobs from a file this run
 could not read (a GitLab include that did not resolve, a GitHub job-level
 ``uses:`` calling another repository's reusable workflow;
@@ -133,12 +133,12 @@ lint line such a check reads null. A direct test-program call (``pytest``,
 - ``no_lint_command`` / ``no_ci`` (false): CI files with no lint or
   may-lint line, or no CI file.
 
-``test_or_lint_runs`` and ``enforced_check_runs`` keep their meaning.
+``test_or_lint_configured`` and ``enforced_check_runs`` keep their meaning.
 
 ``masked_check_commands`` counts the masked check lines and
 ``off_trigger_check_commands`` the unmasked ones that do not run on ordinary
 changes, so a reader sees why the two signals disagree. ``basis`` describes
-``test_or_lint_runs``. Layer 5 level 1 reads ``enforced_check_runs``; a stored
+``test_or_lint_configured``. Layer 5 level 1 reads ``enforced_check_runs``; a stored
 scan without the key reads unknown there.
 """
 from __future__ import annotations
@@ -219,7 +219,7 @@ class CiChecksBlock(TypedDict):
     merged_config: MergedStatus  # the CI lint API read (#796)
     merged_config_reason: str | None  # its reason code when unavailable
     merged_check_commands: int  # check lines in the merged configuration
-    test_or_lint_runs: bool | None
+    test_or_lint_configured: bool | None
     basis: CiChecksBasis
     enforced_check_runs: bool | None
     enforced_basis: EnforcedBasis
@@ -331,7 +331,7 @@ def _script_items(lines: Sequence[str]) -> list[bool]:
     """Per line: false for a bare list item whose parent key is not a GitLab script key.
 
     Read for a lone always-check item (``- pytest``) and a lone linter (``- mypy``,
-    which only ``lint_runs`` reads by key: ``test_or_lint_runs`` never counts one).
+    which only ``lint_runs`` reads by key: ``test_or_lint_configured`` never counts one).
 
     The parent is the nearest line above at the item's indent or less that is not a
     sibling item, skipping blank and comment lines and lines nested deeper (a sibling's
@@ -409,7 +409,7 @@ def _trigger_tally(text: str, workflow: Trigger | None,
 
 def _basis(found: bool, merged: bool, *, elsewhere: bool, partial: bool, unread: bool,
            files: bool) -> tuple[bool | None, CiChecksBasis]:
-    """``(test_or_lint_runs, basis)``: an own or included check, the merged one, pending
+    """``(test_or_lint_configured, basis)``: an own or included check, the merged one, pending
     included jobs, an unread CI system (#787: the value stays false, its meaning unchanged)."""
     if found:
         return True, "check_command"
@@ -487,7 +487,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             "unresolved_includes": sum(r["status"] != "resolved" for r in records),
             "includes": records, "merged_config": merged.status,
             "merged_config_reason": merged.reason, "merged_check_commands": merged_checks,
-            "test_or_lint_runs": runs, "basis": basis,
+            "test_or_lint_configured": runs, "basis": basis,
             "enforced_check_runs": enforced_runs, "enforced_basis": enforced_basis,
             "masked_check_commands": masked, "off_trigger_check_commands": off,
             "lint_runs": lint_runs, "lint_basis": lint_basis,
