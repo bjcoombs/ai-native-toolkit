@@ -756,6 +756,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `structure_drift_block` | Structure drift | `repo_root`, `keyhole` | `structure_drift` | no |
 | `plugin_version` | Plugin version | - | `plugin_version` | no |
 | `decline` | Declined optional tools | `assess_dir`, `plugin_version` | `decline_markers`, `reoffer_mutation`, `decline_disclosures` | no |
+| `owner_exclusions` | Owner exclusions | `repo_root` | `owner_exclusions` | no |
 | `offers_block` | End-of-run offers | `non_interactive` | `interactive`, `offers` | no |
 | `uninstall_instructions_path` | Uninstall instructions path | - | `uninstall_instructions_path` | no |
 | `anomalies` | Anomalies | `run_header` | `anomalies` | no |
@@ -777,5 +778,5 @@ The scan registry in run order, including the private inputs other scans read.
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes` | `guardrails` | no |
-| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure` | `level` | no |
+| `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `headline` | Deterministic headline | `level` | `headline` | no |

@@ -168,7 +168,7 @@ _EXCLUDE_DAY = "2026-09-18"
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=T", *args],
-        check=True, capture_output=True, text=True, env=os.environ,
+        check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=os.environ,
     )
 
 

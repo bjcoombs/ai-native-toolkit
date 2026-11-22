@@ -27,7 +27,7 @@ from lib.understanding_analysis import analyze_understanding
 def _git(repo: Path, *args: str, env: dict | None = None) -> None:
     full_env = {**os.environ, **(env or {})}
     subprocess.run(["git", "-C", str(repo), *args],
-                   check=True, capture_output=True, text=True, env=full_env)
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", env=full_env)
 
 
 def _write(repo: Path, rel: str, text: str) -> None:

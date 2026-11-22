@@ -3612,6 +3612,18 @@
       "private": false
     },
     {
+      "name": "owner_exclusions",
+      "title": "Owner exclusions",
+      "publishes": [
+        "owner_exclusions"
+      ],
+      "reads": [
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "offers_block",
       "title": "End-of-run offers",
       "publishes": [
@@ -3920,7 +3932,8 @@
         "stats_summary",
         "structure",
         "structure_drift",
-        "test_pressure"
+        "test_pressure",
+        "owner_exclusions"
       ],
       "network": false,
       "private": false

@@ -45,7 +45,7 @@ def _copy_fixture(repo: Path, name: str, dest: str) -> None:
 
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args],
-                   check=True, capture_output=True, text=True,
+                   check=True, capture_output=True, text=True, encoding="utf-8", errors="surrogateescape",
                    env={**os.environ})
 
 
