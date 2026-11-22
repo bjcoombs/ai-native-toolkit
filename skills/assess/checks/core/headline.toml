@@ -1,0 +1,23 @@
+# Check manifest fragment: the headline collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.headline"
+kind = "collector"
+title = "Deterministic headline"
+summary = "The Step with its next unlock and 'Verified practices: N of M measured', worded from the level block; the report pastes it and the badge and log entry carry its summary."
+issues = [747]
+callable = "lib.core_scans:headline"
+publishes = ["headline"]
+reads = ["level"]
+stage = "post_offers"
+shapes = [
+  { path = "headline", type = "lib.level_result_types:Headline" },
+]
+revision = 1
+  [entries.privacy]
+  "headline.levels_version" = "token"
+  "headline.lines" = "drop"
+  "headline.markdown" = "drop"
+  "headline.summary" = "drop"
+  "headline.reason" = "token"

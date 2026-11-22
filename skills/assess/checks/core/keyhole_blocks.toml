@@ -1,0 +1,221 @@
+# Check manifest fragment: the keyhole_blocks collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.keyhole_blocks"
+kind = "collector"
+title = "Keyhole blocks"
+callable = "lib.core_scans:keyhole_blocks"
+publishes = ["structure", "behaviour", "documentation", "understanding", "runtime", "derived_findings", "attention", "attention_low_signal", "findings_markdown", "keyhole_summary", "prescribed_actions"]
+reads = ["keyhole"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+headless = { structure = "headless_variant", behaviour = "unregistered", documentation = "unregistered", understanding = "unregistered", runtime = "unregistered", derived_findings = "unregistered" }
+headless_variants = [
+  { block = "structure", callable = "lib.headless_layers:structure", reads = ["structure_scan"], stage = "read_side" },
+]
+shapes = [
+  { path = "behaviour", type = "lib.run_context_types:BehaviourBlock" },
+  { path = "documentation", type = "lib.run_context_types:DocumentationBlock" },
+  { path = "documentation.stale_doc_on_complexity", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "documentation.unexplained_complexity", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "documentation.good_contracts", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "understanding", type = "lib.run_context_types:UnderstandingBlock" },
+  { path = "understanding.modules", type = "lib.understanding_analysis:UnderstandingModule" },
+  { path = "runtime", type = "lib.run_context_types:RuntimeBlock" },
+  { path = "derived_findings", type = "lib.run_context_types:DerivedFinding" },
+  { path = "attention", type = "lib.run_context_types:AttentionRow" },
+  { path = "prescribed_actions", type = "lib.run_context_types:PrescribedAction" },
+  { path = "keyhole_summary", type = "lib.run_context_types:KeyholeSummary" },
+  { path = "structure", type = "lib.structure_graph:StructureBlock" },
+]
+# 2: attention, prescribed_actions and keyhole_summary leave out a path a done
+# review in the committed actions.json clears (#721).
+revision = 2
+unknown_reasons = [
+  { code = "no_grimp", block = "structure", means = "grimp, the Python import-graph builder, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "no_networkx", block = "structure", means = "networkx, which the structure metrics need, is not installed.", next_step = "Install the assess skill's Python dependencies (uv run does this) and run again." },
+  { code = "grimp_failed", block = "structure", means = "grimp could not build the Python import graph.", next_step = "Check that the packages import cleanly; the sentence after the code names grimp's error." },
+  { code = "no_python_packages", block = "structure", means = "A Python repository with no importable package.", next_step = "Nothing to change if the code is scripts; a package with an __init__.py is measured." },
+  { code = "no_import_graph_<language>", block = "structure", means = "No import graph builder exists yet for the dominant source language, for example no_import_graph_rust.", next_step = "Nothing to change: structure reads as not measured for this language." },
+  { code = "invalid_import_graph", block = "structure", means = "A builder returned a graph that breaks the module-graph contract.", next_step = "Report it against the toolkit; structure reads as not measured meanwhile." },
+  { code = "no_source_files", block = "structure", means = "The scope holds no source file in a language the assess skill recognises.", next_step = "Nothing to change if the scope has no code; check the scope and the excludes otherwise." },
+]
+  [entries.privacy]
+  "runtime.reason" = "drop"
+  "runtime.static_reachability.caveat" = "drop"
+  "runtime.static_reachability.candidates.kind" = "token"
+  "runtime.static_reachability.candidates.symbol" = "drop"
+  "runtime.static_reachability.tools.language" = "token"
+  "runtime.static_reachability.tools.tool" = "token"
+  "runtime.static_reachability.tools.status" = "token"
+  "runtime.static_reachability.tools.reason" = "drop"
+  "runtime.static_reachability.tools.consent" = "drop"
+  "structure.reason" = "reason"
+  "structure.language" = "token"
+  "structure.modularity_reason" = "token"
+  "structure.footprints.module" = "path"
+  "structure.sccs" = "path"
+  "structure.breakup_candidates.package" = "path"
+  "structure.breakup_candidates.clusters" = "path"
+  "structure.internal_burrow_edges.importer" = "path"
+  "structure.internal_burrow_edges.imported" = "path"
+  "structure.name_collisions.name" = "path"
+  "structure.name_collisions.paths" = "path"
+  "behaviour.reason" = "drop"
+  "behaviour.static_modularity_projection" = "drop"
+  "behaviour.static_history_disagreement.finding" = "token"
+  "behaviour.static_history_disagreement.recommendation" = "drop"
+  "behaviour.hidden_coupling_findings.finding" = "token"
+  "behaviour.hidden_coupling_findings.recommendation" = "drop"
+  "behaviour.refactor_boundaries.finding" = "token"
+  "behaviour.refactor_boundaries.recommendation" = "drop"
+  "documentation.reason" = "drop"
+  "documentation.stale_doc_on_complexity.finding" = "token"
+  "documentation.stale_doc_on_complexity.confidence" = "token"
+  "documentation.stale_doc_on_complexity.recommendation" = "drop"
+  "documentation.unexplained_complexity.finding" = "token"
+  "documentation.unexplained_complexity.confidence" = "token"
+  "documentation.unexplained_complexity.recommendation" = "drop"
+  "documentation.good_contracts.finding" = "token"
+  "documentation.good_contracts.confidence" = "token"
+  "documentation.good_contracts.recommendation" = "drop"
+  "understanding.reason" = "drop"
+  "understanding.authorship_class_by_path.{}" = "token"
+  "understanding.orphaned_understanding" = "path"
+  "understanding.modules.authorship_class" = "token"
+  "understanding.modules.finding" = "token"
+  "understanding.modules.recommendation" = "drop"
+  "derived_findings.name" = "token"
+  "derived_findings.paths" = "path"
+  "derived_findings.action" = "drop"
+  "derived_findings.reviewed.path" = "path"
+  "derived_findings.reviewed.completed_sha" = "drop"
+  "derived_findings.reviewed.note" = "drop"
+  "attention.findings" = "token"
+  "prescribed_actions.findings" = "token"
+  "prescribed_actions.action" = "drop"
+  findings_markdown = "drop"
+  "keyhole_summary.concerns.name" = "token"
+  "keyhole_summary.summary_text" = "drop"
+
+[[entries]]
+id = "core:structure.modularity_q"
+kind = "signal"
+title = "Import-graph modularity"
+collector = "core.keyhole_blocks"
+path = "structure.modularity_q"
+type = "number"
+evidence = "head_structure"
+null_means = "no_import_edges: modules that never import each other have no community structure to measure"
+
+[[entries]]
+id = "core:structure.cross_package_edges"
+kind = "signal"
+title = "Cross-package imports"
+collector = "core.keyhole_blocks"
+path = "structure.cross_package_edges"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core:structure.front_door_ratio"
+kind = "signal"
+title = "Cross-package imports through a package's front door"
+collector = "core.keyhole_blocks"
+path = "structure.front_door_ratio"
+type = "number"
+evidence = "head_structure"
+null_means = "null when no import crosses a package boundary"
+
+[[entries]]
+id = "core.cond.layer-2-design.1.modularity_q"
+kind = "condition"
+title = "The import graph has module structure"
+key = "layer-2-design.1:structure.modularity_q"
+fix = "Group related modules into packages that mostly import within themselves."
+
+[[entries]]
+id = "core.cond.layer-2-design.2.cross_package_edges"
+kind = "condition"
+title = "Packages import one another"
+key = "layer-2-design.2:structure.cross_package_edges"
+fix = "Nothing to change on its own: this is met once one package imports another."
+
+[[entries]]
+id = "core.cond.layer-2-design.2.front_door_ratio"
+kind = "condition"
+title = "Cross-package imports use a package's front door"
+key = "layer-2-design.2:structure.front_door_ratio"
+fix = "Import other packages through their public API rather than their submodules."
+
+[[entries]]
+id = "core.finding.hidden_coupling"
+kind = "finding"
+title = "Hidden coupling"
+name = "hidden_coupling"
+order = 0
+action = "investigate the seam"
+mode = "characterize_first"
+concern = true
+inputs = ["behaviour.hidden_coupling_findings", "structure_drift.tier_1"]
+derive = "lib.coupling_analysis:detect_hidden_coupling"
+suppressed_when = "doc_staleness.churn_degenerate == true"
+prune_missing_paths = true
+headless = "unregistered"
+  [entries.thresholds]
+  low_containment = 0.3
+  high_modularity_q = 0.3
+  high_front_door_ratio = 0.7
+
+[[entries]]
+id = "core.finding.lying_map"
+kind = "finding"
+title = "Stale doc over complex code"
+name = "lying_map"
+order = 1
+action = "fix or delete the doc"
+mode = "verify_then_retire"
+concern = true
+inputs = ["documentation.stale_doc_on_complexity"]
+suppressed_when = "doc_staleness.churn_degenerate == true"
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.unexplained_complexity"
+kind = "finding"
+title = "Unexplained complexity"
+name = "unexplained_complexity"
+order = 2
+action = "write the contract the code needs (do NOT auto-generate)"
+mode = "characterize_first"
+concern = true
+inputs = ["documentation.unexplained_complexity"]
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.orphaned_understanding"
+kind = "finding"
+title = "Orphaned understanding"
+name = "orphaned_understanding"
+order = 7
+action = "assign a human anchor before further change"
+mode = "characterize_first"
+concern = true
+inputs = ["understanding.orphaned_understanding"]
+headless = "unregistered"
+
+[[entries]]
+id = "core.finding.refactor_boundary"
+kind = "finding"
+title = "Refactor boundary"
+name = "refactor_boundary"
+order = 10
+action = "safe to hand an agent in isolation"
+mode = "refactor_safe"
+concern = false
+inputs = ["behaviour.refactor_boundaries"]
+prune_missing_paths = true
+headless = "unregistered"

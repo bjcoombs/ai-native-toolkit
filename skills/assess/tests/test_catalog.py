@@ -12,7 +12,6 @@ from __future__ import annotations
 import copy
 import json
 import re
-import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +32,7 @@ SCAN_FIELDS = {"name", "title", "summary", "collector", "reads", "network", "pla
 
 
 def _manifest_data() -> dict[str, Any]:
-    data: dict[str, Any] = tomllib.loads(cm.CORE_MANIFEST.read_text(encoding="utf-8"))
+    data: dict[str, Any] = cm.read_manifest()
     return data
 
 
@@ -45,6 +44,17 @@ def test_committed_catalog_is_current(path: Path) -> None:
     assert path.read_bytes() == expected.encode("utf-8"), (
         f"{path.relative_to(gen_catalog.ROOT).as_posix()} is stale: run `make catalog` from the "
         "repository root (or `uv run --locked python scripts/gen_catalog.py` from skills/assess)")
+
+
+def test_signal_order_follows_the_model_not_the_manifest() -> None:
+    """Fragments group signals by collector (#982); the catalog lists them in model order."""
+    data = _manifest_data()
+    shuffled = copy.deepcopy(data)
+    shuffled["entries"].reverse()
+    collectors = [e for e in shuffled["entries"] if e["kind"] == "collector"]
+    shuffled["entries"] = collectors[::-1] + [e for e in shuffled["entries"] if e["kind"] != "collector"]
+    assert render_json(build_catalog(cm.parse_manifest(data))) \
+        == render_json(build_catalog(cm.parse_manifest(shuffled)))
 
 
 def test_a_manifest_title_change_changes_both_outputs() -> None:

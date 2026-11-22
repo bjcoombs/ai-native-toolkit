@@ -1,0 +1,12 @@
+# Check manifest fragment: the instruction_file_size collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.instruction_file_size"
+kind = "collector"
+title = "Instruction file size"
+callable = "lib.core_scans:instruction_sizes"
+publishes = ["instruction_file_size"]
+reads = ["instruction_files"]
+stage = "read_side"
+revision = 1

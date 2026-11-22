@@ -52,6 +52,7 @@ from lib.run_context_types import (
 )
 
 from .common import MUTATION_TIMEOUT, _read
+from .reason_paths import cut_prefix as _cut_prefix
 
 # mutmut 3 exit codes per mutant, read from ``status_by_exit_code`` in
 # ``mutmut/__main__.py`` of mutmut 3.6.0: 1 and 3 killed; 24, -24, 36, 152 and
@@ -109,7 +110,7 @@ def _parse_mutmut3_meta(mutants_dir: Path) -> list[MutationFileResult]:
     out: list[MutationFileResult] = []
     if not mutants_dir.is_dir():
         return out
-    for meta in sorted(mutants_dir.rglob("*.meta")):
+    for meta in sorted(mutants_dir.rglob("*.meta"), key=lambda p: p.as_posix()):
         try:
             codes = json.loads(meta.read_text(encoding="utf-8")).get(
                 "exit_code_by_key") or {}
@@ -150,23 +151,6 @@ def _likely_cause(proc: subprocess.CompletedProcess[str]) -> str:
             if m:
                 return m.group(1)
     return ""
-
-
-def _cut_prefix(detail: str, path: Path, label: str | None) -> str:
-    """Cut ``path`` from ``detail``: with no ``label`` a path under it becomes
-    relative and the directory itself ``.``; with one, the prefix becomes the
-    label. Longest spelling first: where the directory sits behind a symlink
-    (macOS /var -> /private/var) the unresolved form is a substring of the
-    resolved one, and cutting it first would leave "/private" glued on."""
-    if label is not None and path == Path(path.anchor):
-        return detail  # a root home (HOME=/) would relabel every path separator
-    for prefix in sorted({str(path.resolve()), str(path)}, key=len, reverse=True):
-        if label is None:
-            detail = detail.replace(prefix + os.sep, "").replace(prefix, ".")
-        else:
-            # only at a separator, so /home/u does not rewrite /home/u2
-            detail = detail.replace(prefix + os.sep, label + os.sep)
-    return detail
 
 
 def _no_records_reason(tool: str, proc: subprocess.CompletedProcess[str],
@@ -404,7 +388,8 @@ def _package_entries(pkg: Path, sources: list[str]) -> list[str]:
     every top-level entry except the sources (mutmut copies those itself),
     the paths it copies by default, and tool state."""
     skip = _NEVER_MIRROR | _MUTMUT_DEFAULT_COPY | {s.split("/", 1)[0] for s in sources}
-    return [e.name for e in sorted(pkg.iterdir()) if e.name not in skip]
+    # by name, not Path: WindowsPath orders case-folded, so the order would differ by platform
+    return [n for n in sorted(e.name for e in pkg.iterdir()) if n not in skip]
 
 
 def _copy_entry(src: Path, dest: Path) -> None:
@@ -437,7 +422,7 @@ def _mirror_ancestors(work: Path, pkg_rel: str) -> None:
         ancestor = work.joinpath(*parts[:len(parts) - k])
         below = work.joinpath(*parts[:len(parts) - k + 1])
         down = parts[len(parts) - k]
-        for e in sorted(ancestor.iterdir()):
+        for e in sorted(ancestor.iterdir(), key=lambda p: p.name):
             if e.name in _NEVER_MIRROR or e.name == down or (below / e.name).exists():
                 continue
             if k == 1 and e.name in _MUTMUT_DEFAULT_COPY:

@@ -1,0 +1,15 @@
+# Check manifest fragment: the coverage_data collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.coverage_data"
+kind = "collector"
+title = "Coverage report data"
+callable = "lib.core_scans:coverage_data"
+publishes = []
+reads = ["repo_root"]
+stage = "read_side"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1

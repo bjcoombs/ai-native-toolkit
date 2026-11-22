@@ -1,0 +1,25 @@
+# Check manifest fragment: the doc_claims collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.doc_claims"
+kind = "collector"
+title = "Doc claims"
+issues = [491]
+callable = "lib.doc_claims:scan_doc_claims"
+publishes = ["doc_claims"]
+reads = ["repo_root", "instruction_files", "scope", "excludes"]
+stage = "post_offers"
+headless = { doc_claims = "registered" }
+shapes = [
+  { path = "doc_claims", type = "lib.doc_claims:DocClaimsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "doc_claims.excluded_trees" = "path"
+  "doc_claims.failures.kind" = "token"
+  "doc_claims.failures.version" = "drop"
+  "doc_claims.failures.reason" = "drop"
+  "doc_claims.contradictions.kind" = "token"
+  "doc_claims.contradictions.sites.value" = "drop"
+  "doc_claims.contradictions.conflict_pair.value" = "drop"
