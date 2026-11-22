@@ -5,7 +5,7 @@ keyed by its repository id (a failed scan has no entry), in an envelope of
 `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`.
 `commits` holds, under the same ids, `{head_sha, dirty}`: the commit each result measured
 and whether the checkout was dirty (its committed tree was then scored, as in
-`repos.jsonl`). The
+`repos.jsonl`); `dirty` is `null` when unknown, and the row's `dirty_reason` says why. The
 result (`scripts/lib/level_tally.py` in the assess skill, #744) treats each row level of
 the maturity model as one condition, `<row id>.<level>`, and reports:
 
