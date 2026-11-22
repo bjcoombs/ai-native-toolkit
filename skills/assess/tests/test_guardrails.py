@@ -202,3 +202,18 @@ def test_a_ratio_floor_is_stated_as_a_ratio_or_a_percentage(tmp_path: Path, line
     root = _write(tmp_path, {"AGENTS.md": f"{line}\n"})
     (gate,) = scan_guardrails(root, ["AGENTS.md"], coverage)["gates"]
     assert (gate["rule"], gate["threshold"], gate["stated"]) == ("threshold", 80.0, True)
+
+
+def test_package_configs_are_gates_of_their_own(tmp_path: Path) -> None:
+    root = _write(tmp_path, {
+        "pkg/pyproject.toml": PYPROJECT + "\n[tool.mypy]\nstrict = true\n",
+        "node_modules/dep/pyproject.toml": PYPROJECT,
+        "CLAUDE.md": "Keep coverage at or above 90 percent.\n",
+    })
+    block = scan_guardrails(root, ["CLAUDE.md"], detect_coverage_gate(root), (set(), []))
+    assert [(g["kind"], g["file"]) for g in block["gates"]] == [
+        ("complexity_limit", "pkg/pyproject.toml"), ("coverage_floor", "pkg/pyproject.toml"),
+        ("type_strictness", "pkg/pyproject.toml")]
+    assert (block["stated"], block["stated_pct"]) == (1, 33.3)
+    excluded = scan_guardrails(root, [], detect_coverage_gate(root), ({"pkg"}, []))
+    assert [g["kind"] for g in excluded["gates"]] == ["coverage_floor"]

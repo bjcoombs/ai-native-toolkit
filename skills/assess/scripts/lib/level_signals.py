@@ -67,7 +67,15 @@ in #783 requirement 2, under which text alone could reach a counted grade.
 ``is_declared`` is true when the grade is ``config_only`` or ``declared``: under
 #744 those conditions are listed, not counted. A signal one collector sets from two inputs takes the
 weaker (``review_evidence.present`` is ``head_text``; #789 3.4 splits it).
-Nothing in ``lib.levels`` reads this yet; counting is #744's engine work.
+``lib.level_tally`` (#744) reads it to count conditions; ``lib.levels`` does not.
+
+``UNMEASURED_VALUES`` names the signals whose value says the practice could not
+be measured, rather than that it is absent, with the reason code the tally
+gives: ``test_pressure.mutation_run`` is false until the opt-in mutation pass
+runs (``needs_full_run``, never unmet: #740 decision), and
+``promissory_markers.aging_reliable`` is false on a history too thin to age a
+suppression (``degenerate_history``; the huddle's "stale-suppression aging
+requires reliable history").
 
 Maintainer rulings (#783 and #789 triage decisions, 2026-11-21):
 
@@ -87,14 +95,19 @@ import json
 import types
 import typing
 from functools import lru_cache
-from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from lib.counts_only_schema import ROOTS
 from lib.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
 from lib.signals_schema import SCHEMA_PATH
+from lib.signal_grades import DEFAULT_LEVELS as DEFAULT_LEVELS
+from lib.signal_grades import INPUT_GRADES as INPUT_GRADES
+from lib.signal_grades import LISTED_GRADES as LISTED_GRADES
+from lib.signal_grades import SIGNAL_INPUTS as SIGNAL_INPUTS
+from lib.signal_grades import UNMEASURED_VALUES as UNMEASURED_VALUES
+from lib.signal_grades import Grade as Grade
+from lib.signal_grades import InputClass as InputClass
 
-DEFAULT_LEVELS = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
 
 # ghreport's settings fragment: {scope, provider, <setting>: {value, reason}}.
 ORG_SETTINGS = ("two_factor", "push_rules", "default_branch_protection", "rulesets")
@@ -182,51 +195,6 @@ def load_default_levels() -> MaturityModel:
 
 # --- signal classification (#783; see the module doc) -------------------------
 
-InputClass = Literal["config_text", "head_text", "head_structure", "ci_executed",
-                     "git_history", "execution_artifact", "platform"]
-Grade = Literal["config_only", "declared", "measured", "verified"]
-
-INPUT_GRADES: dict[InputClass, Grade] = {
-    "config_text": "config_only",
-    "head_text": "declared",
-    "head_structure": "measured",
-    "git_history": "measured",
-    "execution_artifact": "measured",
-    "ci_executed": "verified",
-    "platform": "verified",
-}
-_LISTED_GRADES = frozenset({"config_only", "declared"})
-
-# One entry per exact signal path; a new criterion signal needs its own line.
-SIGNAL_INPUTS: dict[str, InputClass] = {
-    "layer_grades.instruction_file_present": "head_text",
-    "agent_environment.check.named_total": "head_text",
-    "agent_environment.pinning.unlocked_total": "head_text",
-    "instruction_claims.failed": "head_structure",
-    "nested_instructions.budget.claude_code.lines": "head_structure",
-    "observability.rung": "head_text",
-    "structure.modularity_q": "head_structure",
-    "structure.cross_package_edges": "head_structure",
-    "structure.front_door_ratio": "head_structure",
-    "promissory_markers.families.suppression.total": "head_text",
-    "promissory_markers.families.suppression.stale": "git_history",
-    "promissory_markers.aging_reliable": "git_history",
-    "structure_drift.tier_0.boundary_patterns": "config_text",
-    "stats_summary.loc.p95": "head_structure",
-    "ci_checks.enforced_check_runs": "ci_executed",
-    "coverage_gate.threshold_meets_minimum": "config_text",
-    "test_pressure.mutation_run": "execution_artifact",
-    "review_evidence.present": "head_text",
-    "review_reality.reviewed_share": "platform",
-    "review_reality.approved_share": "platform",
-    "agent_ops.summary.permissions_encoded": "config_text",
-    "agent_ops.summary.hooks_present": "config_text",
-    "agent_ops.summary.routines_present": "config_text",
-    "doc_staleness.summary.stale_pct": "git_history",
-    "guardrails.stated_pct": "head_structure",
-}
-
-
 class UnclassifiedSignal(KeyError):
     """A criterion reads a signal ``SIGNAL_INPUTS`` has no producer input class for."""
 
@@ -247,4 +215,4 @@ def criterion_grade(criterion: Criterion) -> Grade:
 
 def is_declared(criterion: Criterion) -> bool:
     """True when the criterion grades ``config_only`` or ``declared``: listed, not counted."""
-    return criterion_grade(criterion) in _LISTED_GRADES
+    return criterion_grade(criterion) in LISTED_GRADES

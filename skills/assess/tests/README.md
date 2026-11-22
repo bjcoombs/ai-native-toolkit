@@ -152,6 +152,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_counts_only.py` | `lib/counts_only.py` + `lib/counts_only_rules.py` + `lib/counts_only_schema.py` - the content-free run-context mode: every typed string field has a keep/drop/path rule, and the counts-only document drops copied text |
 | `test_counts_only_reason.py` | `lib/counts_only.py` `reason_token` + the `REASON` rule - a full counts-only run keeps `structure.reason` as its code (`no_import_graph_rust` on a Rust repository), never the sentence (#764) |
 | `test_levels.py` | `lib/levels.py` - TOML maturity model loading and deterministic whole-level evaluation |
+| `test_level_tally.py` | `lib/level_tally.py`, `lib/fleet_level.py`, `lib/fleet_level_schema.py` - the verified tally, condition states, Steps and their gates, `requires` and `[[steps]]` loading, `level.json` and the run context's `level` block, and the #744 contract fixtures through `/fleet` and `/assess` |
 | `test_level_signals.py` | `lib/level_signals.py` - schema-backed signal paths and the shipped default maturity model |
 | `test_block_shapes.py` | `lib/block_shapes.py` - the typed shapes of the blocks a default criterion reads, against each builder's output and the fleet golden; a misspelt `--levels` sub-path under them fails at load (#793); their counts-only reduction |
 | `test_signal_inputs.py` | `lib/level_signals.py` - the producer input class of every default criterion signal, its grade and the declared predicate (#783) |

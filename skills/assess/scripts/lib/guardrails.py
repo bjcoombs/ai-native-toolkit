@@ -17,6 +17,11 @@ Gate kinds read (one gate per configuring file):
 - ``coverage_floor``: the ``coverage_gate`` block's gates that gate something (a
   non-zero threshold, or a tool default), read once, never re-parsed. The
   highest ``threshold_percent`` is the gate's threshold.
+Each ruff, flake8 and mypy config is read wherever it sits in the repository
+(a package's own ``pyproject.toml`` is a gate of its own), through the walk
+``coverage_gate`` uses, so a monorepo's package gates are counted beside its
+coverage floors.
+
 - ``pre_commit``: a root ``.pre-commit-config.yaml`` (or ``.yml``) with at least
   one ``- id:`` hook. One gate per config, whatever its hook count.
 - ``type_strictness``: mypy ``strict = true`` in ``[tool.mypy]`` of
@@ -53,7 +58,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-from lib.coverage_gate import CoverageGate, gates_something
+from lib.coverage_gate import CoverageGate, Excludes, gates_something, walk_named
 
 GateKind = Literal["complexity_limit", "coverage_floor", "pre_commit", "type_strictness"]
 
@@ -158,7 +163,7 @@ def _ruff_gate(root: Path, name: str) -> Guardrail | None:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         return None
-    base = _table(data, "tool.ruff") if name == "pyproject.toml" else data
+    base = _table(data, "tool.ruff") if Path(name).name == "pyproject.toml" else data
     if not base:
         return None
     lint = _table(base, "lint")
@@ -201,22 +206,24 @@ def _flake8_gate(root: Path, name: str) -> Guardrail | None:
                  _line_of(text, r"^\s*max[-_]complexity\s*[=:]"))
 
 
-def _mypy_gate(root: Path) -> Guardrail | None:
-    text = _read_text(root / "pyproject.toml")
-    if text is not None:
+def _mypy_gate(root: Path, name: str) -> Guardrail | None:
+    if Path(name).name == "pyproject.toml":
+        text = _read_text(root / name)
+        if text is None:
+            return None
         try:
             strict = _table(tomllib.loads(text), "tool.mypy").get("strict")
         except tomllib.TOMLDecodeError:
-            strict = None
-        if strict is True:
-            return _gate("type_strictness", "mypy", "strict", None, "pyproject.toml",
-                         _line_of(text, r"^\s*strict\s*="))
-    for name in _MYPY_FILES:
-        found = _ini_option(root, name, "mypy", "strict")
-        if found is not None and found[0].lower() in {"true", "1", "yes", "on"}:
-            return _gate("type_strictness", "mypy", "strict", None, name,
-                         _line_of(found[1], r"^\s*strict\s*[=:]"))
-    return None
+            return None
+        if strict is not True:
+            return None
+        return _gate("type_strictness", "mypy", "strict", None, name,
+                     _line_of(text, r"^\s*strict\s*="))
+    found = _ini_option(root, name, "mypy", "strict")
+    if found is None or found[0].lower() not in {"true", "1", "yes", "on"}:
+        return None
+    return _gate("type_strictness", "mypy", "strict", None, name,
+                 _line_of(found[1], r"^\s*strict\s*[=:]"))
 
 
 def _pre_commit_gate(root: Path) -> Guardrail | None:
@@ -247,11 +254,25 @@ def _gate(kind: GateKind, tool: str, rule: str, threshold: float | None,
             "line": line, "stated": False, "stated_in": None, "snippet": None}
 
 
-def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None) -> list[Guardrail]:
-    """Every gate this module reads at ``root``, in kind order then file order."""
-    gates: list[Guardrail | None] = [_ruff_gate(root, name) for name in _RUFF_FILES]
-    gates += [_flake8_gate(root, name) for name in _FLAKE8_FILES]
-    gates += [_coverage_gate(coverage_gate), _pre_commit_gate(root), _mypy_gate(root)]
+def config_files(root: Path, excludes: Excludes | None = None) -> list[str]:
+    """Repo-relative POSIX paths of the ruff, flake8 and mypy config files anywhere
+    under ``root`` (a package's own ``pyproject.toml`` included), the walk
+    ``coverage_gate`` uses: bounded depth, built-in and user excludes."""
+    wanted = set(_RUFF_FILES) | set(_FLAKE8_FILES) | set(_MYPY_FILES) | {"pyproject.toml"}
+    return [rel.as_posix() for rel in walk_named(root, excludes or (set(), []), wanted)]
+
+
+def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None,
+               excludes: Excludes | None = None) -> list[Guardrail]:
+    """Every gate this module reads under ``root``, in kind order then file order."""
+    files = config_files(root, excludes)
+    names = [(rel, Path(rel).name) for rel in files]
+    gates: list[Guardrail | None] = [_ruff_gate(root, rel) for rel, name in names
+                                     if name in _RUFF_FILES]
+    gates += [_flake8_gate(root, rel) for rel, name in names if name in _FLAKE8_FILES]
+    gates += [_coverage_gate(coverage_gate), _pre_commit_gate(root)]
+    gates += [_mypy_gate(root, rel) for rel, name in names
+              if name in _MYPY_FILES or name == "pyproject.toml"]
     return [gate for gate in gates if gate is not None]
 
 
@@ -335,14 +356,16 @@ def _instruction_lines(root: Path, files: Iterable[str]) -> tuple[list[tuple[str
 
 
 def scan_guardrails(repo_root: Path | str, instruction_files: Iterable[str],
-                    coverage_gate: Mapping[str, Any] | None) -> GuardrailsBlock:
+                    coverage_gate: Mapping[str, Any] | None,
+                    excludes: Excludes | None = None) -> GuardrailsBlock:
     """Return the ``guardrails`` run-context block for ``repo_root``.
 
     ``instruction_files`` are paths relative to ``repo_root`` (the keys of the
-    core's ``instruction_files``); ``coverage_gate`` is that scan's block.
+    core's ``instruction_files``); ``coverage_gate`` is that scan's block;
+    ``excludes`` is the user's ``(dirs, patterns)`` pair.
     """
     root = Path(repo_root)
-    gates = find_gates(root, coverage_gate)
+    gates = find_gates(root, coverage_gate, excludes)
     lines, read = _instruction_lines(root, instruction_files)
     for gate in gates:
         where = next((rel for rel, line in lines if states(gate, line)), None)
