@@ -2035,7 +2035,7 @@ no prompts and an audit trail. Pure stdlib, no side effects. Called by
 `ARTIFACT_SCHEMA_VERSION`, the run_id provenance schema stamped on every artifact a run
 writes (run-context.json, the badge, the wiki pages); the version history is in the
 module comment. `complexity-treemap.py` carries a copy that
-`tests/test_complexity_treemap.py` holds equal to it.
+`tests/test_complexity_treemap_schema_versions.py` holds equal to it.
 It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
 independent of plugin releases, bumped by one in any change that moves which findings
 a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
@@ -2232,7 +2232,7 @@ voids the diff (MAJOR also resets the trend); a MINOR/PATCH bump keeps it armed 
 complexity backend's version moved (`stats_tool_versions` reads the `<tool>_version`
 stamps, skipping `_NON_TOOL_VERSION_KEYS`). `prior_stamps` reads the prior snapshot's
 plugin and schema versions. Stdlib only. Tests: `tests/test_diff_reliability.py`,
-`tests/test_complexity_treemap.py`.
+`tests/test_complexity_treemap_schema_versions.py`.
 
 **`stats_rows.py`**
 The per-file row lists `complexity-treemap.py` writes into `complexity-stats.json`.
