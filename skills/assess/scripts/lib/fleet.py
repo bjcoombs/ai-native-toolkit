@@ -246,8 +246,12 @@ def _under(path: Path, root: Path) -> bool:
 
 def _locate(entry: str, root: Path | None, base: Path) -> tuple[Path, Path]:
     """``(repo_dir, checkout)`` for one list entry."""
+    head = entry.replace("\\", "/").split("/", 1)[0]
     try:
         path = Path(entry).expanduser()
+        # POSIX raises for an unknown user; Windows builds <users dir>\<name> unchecked
+        if head.startswith("~") and head != "~" and not Path(head).expanduser().is_dir():
+            raise RuntimeError(f"no home directory at {Path(head).expanduser()}")
     except RuntimeError as e:  # ~nosuchuser/repo: no such user's home
         raise ValueError(f"list entry {entry!r}: cannot expand {entry.split('/', 1)[0]!r} ({e})") from e
     if not path.is_absolute():
