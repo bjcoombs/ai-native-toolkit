@@ -4142,7 +4142,9 @@ GitHub workflows and `.gitlab-ci.yml` with #775's rules unchanged
 `gitlab_line_triggers`), one `Run` per command, a folded `run: >-` paragraph read as one
 command and `sh -c '...'` and a quoted `run:` value read through. A word holding
 whitespace (a quoted argument) is dropped, so a flag inside an `echo` string is no flag.
-A gate written on a CI line must sit on an enforced command that carries its flag. A
+A gate written on a CI line must sit on an enforced command that carries its flag and
+whose program can run it (`runs_a_program`: not `echo` / `printf` and the like, not an
+install such as `pip install` or `npm install`), so `echo --cov-fail-under=90` runs nothing. A
 config gate needs an enforced command whose program is its tool (`program` resolves the
 wrappers `check_command._program` and `_exec_program` read, so `pip install pytest --cov`
 and `npm install jest` run neither; `runs_tool`, `gate_family`):

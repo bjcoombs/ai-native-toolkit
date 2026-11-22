@@ -227,6 +227,26 @@ def program(words: tuple[str, ...]) -> tuple[str, list[str]]:
     return rest[0].rsplit("/", 1)[-1], rest[1:]
 
 
+# Programs that print, set or install, and so run no gate their arguments name.
+_NOT_RUNS = frozenset({"echo", "printf", "cat", "true", ":", "export", "set", "test", "["})
+_INSTALLERS = frozenset({"pip", "pip3", "pipx", "npm", "yarn", "pnpm", "bun", "gem", "cargo",
+                         "go", "brew", "apt", "apt-get", "uv", "poetry"})
+_INSTALL_VERBS = frozenset({"install", "add", "i", "ci"})
+
+
+def runs_a_program(words: tuple[str, ...]) -> bool:
+    """A command whose program can carry a threshold flag: not ``echo`` / ``printf`` and
+    the like, and not an install (``pip install``, ``npm install``, ``uv pip install``)."""
+    name, args = program(words)
+    if not name or name in _NOT_RUNS:
+        return False
+    positionals = [a for a in args if not a.startswith("-")]
+    if name in _INSTALLERS and (positionals[:1] == ["pip"] or bool(
+            set(positionals[:1]) & _INSTALL_VERBS)):
+        return False
+    return True
+
+
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
@@ -304,8 +324,9 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool 
         for run in ci.runs:
             if run.file != file or _line(gate) - 1 not in run.span:
                 continue
-            carried = any(g["tool"] == gate["tool"] and g["form"] == gate["form"]
-                          for g in line_gates(" ".join(run.words)))
+            carried = runs_a_program(run.words) and any(
+                g["tool"] == gate["tool"] and g["form"] == gate["form"]
+                for g in line_gates(" ".join(run.words)))
             if carried:
                 states.append(True if run.trigger == "ordinary"
                               else "unknown_trigger" if run.trigger == "unknown" else False)

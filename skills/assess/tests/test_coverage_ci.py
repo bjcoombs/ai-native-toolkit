@@ -172,12 +172,16 @@ JEST_COLLECTS = '{"jest":{"collectCoverage":true,"coverageThreshold":{"global":{
     {**_ci("pip install pytest pytest-cov"), "pyproject.toml": ADDOPTS_COV},
     {**_ci("pip install pytest --cov"), "pyproject.toml": PYPROJECT_80},
     {**_ci("echo pytest --cov"), "pyproject.toml": PYPROJECT_80},
+    _ci("echo --cov-fail-under=90"),
+    _ci("printf '%s' --cov-fail-under=90"),
+    _ci("pip install pytest-cov --cov-fail-under=90"),
     {**_ci("npm install --save-dev jest"), "package.json": JEST_COLLECTS},
     {**_ci("npm install --save-dev jest --coverage"), "package.json": JEST_COLLECTS},
     {**_ci("uv pip install coverage report"), "pyproject.toml": PYPROJECT_80},
     {**_ci("mvn-wrapper-setup verify"),
      "pom.xml": _pom("<value>COVEREDRATIO</value><minimum>0.80</minimum>")},
-], ids=["pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "npm-install-jest",
+], ids=["pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "echo-unquoted-flag",
+        "printf-flag", "pip-install-flag", "npm-install-jest",
         "npm-install-jest-coverage", "uv-pip-coverage", "not-maven"])
 def test_a_tool_named_as_an_argument_is_not_run(tmp_path: Path, files: dict[str, str]) -> None:
     """Issue #921 review: the tool must be the program a command runs, never an argument."""
