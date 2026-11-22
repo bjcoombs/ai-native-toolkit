@@ -2430,7 +2430,7 @@ a helper extraction.
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
 from signals with no model in the path. A criterion over a signal in
 `signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
-the table's code as its `reason` (`no_scored_files`, #906), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
+the table's code as its `reason` (`no_scored_files`, #906; `no_manifests`, #927), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
@@ -2485,7 +2485,8 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
-is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906); an
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906, and
+`agent_environment.pinning.unlocked_total` with `manifests_total` 0: `no_manifests`, #927); an
 `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
 `needs_platform` for a `network` one; another unavailable block's own code (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
@@ -2500,7 +2501,8 @@ fixtures through `/fleet` and `/assess` on the same commit.
 **`signal_grades.py`**
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
 `INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
-to its set's count and the code when that count is 0, read by `levels.py`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+to its set's count and the code when that count is 0, read by `levels.py`: `no_scored_files`,
+`no_manifests`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`.
 
@@ -3526,7 +3528,7 @@ Can an agent set up the repository and check its own work (issue #514)?
 `scan_agent_environment(repo_root, instruction_files, agent_harness, excludes)` reads the
 files at HEAD through `command_index.build_index` and writes `{available,
 setup{present, sources[]}, check{entry_points[], named[], named_total,
-unresolved[]}, pinning{manifests[], all_locked, unlocked_total}, ci_duration, findings[],
+unresolved[]}, pinning{manifests[], all_locked, unlocked_total, manifests_total}, ci_duration, findings[],
 setup_ready, layer5_cap{applies, ceiling, unmet[], reason}}`. Setup sources:
 `copilot-setup-steps.yml` (credited only when it passes the checks), a dev
 container, `.cursor/environment.json`, a `SessionStart` hook in a tracked
@@ -3541,8 +3543,10 @@ constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `setup_ready` is the
 setup half of that cap on its own (committed setup, or every manifest locked, or
-no manifest). `pinning.unlocked_total` counts manifests with no lock (0 with no
-manifest); Layer 5 level 2 of the maturity model reads it `eq 0`, so committed
+no manifest). `pinning.manifests_total` counts the manifests the lock check reads
+and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
+model reads `unlocked_total` `eq 0`, and reads not measured (`no_manifests`,
+`signal_grades.EMPTY_DENOMINATORS`, #927) when `manifests_total` is 0, so committed
 setup does not stand in for a lockfile and the named check is read once, by
 Layer 0 level 2 (issue #786). The cap itself is unchanged for
 the /assess scorer. `ci_duration` is the one

@@ -162,8 +162,10 @@
 #   never 0: the check may live in the included file. Level 2 is pinned
 #   dependencies: agent_environment.pinning.unlocked_total is 0, so every
 #   dependency manifest has its lockfile committed (a requirements*.txt pinned
-#   with == is its own lock); a repository with no manifest has nothing to
-#   lock. Committed setup does not stand in for a lockfile. Naming a check
+#   with == is its own lock). A repository with no manifest has nothing to
+#   lock: the condition reads not measured (no_manifests, the count
+#   agent_environment.pinning.manifests_total is 0,
+#   signal_grades.EMPTY_DENOMINATORS, #927), never met. Committed setup does not stand in for a lockfile. Naming a check
 #   command that resolves is read once, by Layer 0 level 2, so a missing named
 #   check costs Layer 0 only (#786). A repository with locked dependencies but
 #   no CI check line is 0.

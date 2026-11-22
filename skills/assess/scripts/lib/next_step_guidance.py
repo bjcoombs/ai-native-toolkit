@@ -482,6 +482,9 @@ _MEASURE_HINTS = {
                       "calls, so this is not measured there.",
     "review_evidence": "Unknown when no AI review step is committed to CI and review on merged "
                        "changes is not read: a headless fleet scan reads it with `--platform`.",
+    "agent_environment": "With no dependency manifest read (`manifests_total` 0, a repository "
+                         "with no `package.json`, `pyproject.toml` or other known manifest) the "
+                         "lockfile check is not measured (`no_manifests`): there is nothing to lock.",
     "ci_checks": "Unknown when no GitHub Actions or GitLab CI line runs a test or lint command "
                  "that can stop its job but a CI file pulls jobs from a file the run could not read (`basis: "
                  "included_jobs`: a GitLab `include:` whose template is not cloned in the "

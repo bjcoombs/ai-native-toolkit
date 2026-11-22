@@ -264,6 +264,10 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
+# Unreleased (the 3.0.0 release PR assigns the number):
+# - run-context.json agent_environment.pinning gains manifests_total (issue #927):
+#   the number of dependency manifests the lockfile check reads. Additive: no
+#   existing key moves, and complexity-stats.json is unchanged.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -451,4 +455,8 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   ./scripts/foo.sh, docker run img) reads enforced_check_runs null
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
+# Unreleased (the 3.0.0 release PR assigns the number):
+# - the empty lockfile set (issue #927): layer-5-ci.2 reads not measured
+#   (no_manifests) when agent_environment.pinning.manifests_total is 0, where it
+#   read met. Fewer conditions count on repositories with no dependency manifest.
 ASSESS_METHOD_VERSION = 37
