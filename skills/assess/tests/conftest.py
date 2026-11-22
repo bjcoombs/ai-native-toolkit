@@ -45,9 +45,6 @@ WINDOWS_SKIP_MARKERS = {
     "needs_symlink": "symlink creation is not reliable on Windows",
     "needs_posix_perms": "chmod/getuid permission semantics are POSIX-only",
     "needs_posix_shell": "runs a #!/bin/sh stub or sh -c, which Windows cannot execute",
-    # Not a POSIX-only test: a known Windows failure awaiting its fix.
-    "windows_followup": "known Windows failure, tracked in "
-                        "https://github.com/bjcoombs/ai-native-toolkit/issues/762",
 }
 
 
