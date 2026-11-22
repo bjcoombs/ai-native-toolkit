@@ -3514,7 +3514,8 @@ false otherwise, including no counted gate. Measured coverage is never read: a r
 is a working-tree file, so the level would stop being a function of the commit.
 Go and Rust (#788): when no gate at all is found and the walk holds a `go.mod` or a
 `Cargo.toml` (same depth and excludes; on a scoped run, in the scope or in any
-directory above it up to the repo root, as Go and Cargo resolve a module), `threshold_meets_minimum` is null and `unmeasured_reason` is
+directory above it up to the repo root, as Go and Cargo resolve a module; one under a
+`testdata/` directory is a fixture and does not count), `threshold_meets_minimum` is null and `unmeasured_reason` is
 `go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because those ecosystems often gate
 in a script comparing `go tool cover -func` to a number, which is not read. Any gate
 found, even `fail_under = 0`, keeps the normal reading; `unmeasured_reason` is null then.

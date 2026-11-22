@@ -504,8 +504,9 @@ def test_go_and_rust_gates_feed_the_minimum(tmp_path: Path, files: dict[str, str
     ({"Cargo.toml": _CARGO, "src/main.rs": "fn main() {}\n"}, None,
      "go_rust_gate_form_not_read"),
     ({"svc/go.mod": _GO_MOD}, None, "go_rust_gate_form_not_read"),
+    ({_PY: "[project]\nname = 'x'\n", "testdata/x/go.mod": _GO_MOD}, False, None),
     ({_PY: "[project]\nname = 'x'\nversion = '0.1.0'\n"}, False, None),
-], ids=["go-only", "cargo-only", "nested-go-mod", "pyproject-only"])
+], ids=["go-only", "cargo-only", "nested-go-mod", "testdata-fixture", "pyproject-only"])
 def test_go_or_rust_with_no_readable_gate_is_not_measured(
         tmp_path: Path, files: dict[str, str], expected: bool | None,
         reason: str | None) -> None:

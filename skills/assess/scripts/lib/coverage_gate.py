@@ -573,9 +573,10 @@ def _candidate_files(root: Path, scope: Path | None,
 def _holds_go_or_rust(root: Path, scope: Path | None, excludes: Excludes) -> bool:
     """A ``go.mod`` or ``Cargo.toml`` in the walk; on a scoped run, in the scope
     or in a directory above it up to the repo root (the module or workspace the
-    scope belongs to, as Go and Cargo resolve it)."""
-    def wanted(name: str, _parts: tuple[str, ...]) -> bool:
-        return name in _GO_RUST_MANIFESTS
+    scope belongs to, as Go and Cargo resolve it). A manifest under a ``testdata``
+    directory is a fixture (the Go tool ignores it too), so it does not count."""
+    def wanted(name: str, parts: tuple[str, ...]) -> bool:
+        return name in _GO_RUST_MANIFESTS and "testdata" not in parts
     base = root if scope is None else scope
     if next(_walk(root, base, excludes, wanted), None) is not None:
         return True

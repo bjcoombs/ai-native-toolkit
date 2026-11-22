@@ -152,7 +152,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.15"
+version = "default-2026.11.16"
 
 [[rows]]
 id = "layer-0-instructions"
