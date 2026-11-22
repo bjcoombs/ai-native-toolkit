@@ -336,6 +336,7 @@ def test_every_default_levels_signal_has_repository_native_wording():
     ("promissory_markers.families.suppression.stale", "lte", 10, "10 or fewer suppressions"),
     ("stats_summary.loc.p95", "lte", 500, "500 lines or fewer"),
     ("structure_drift.tier_0.matched_patterns", "gt", 0, "CODEOWNERS"),
+    ("coverage_gate.threshold_meets_minimum", "eq", True, "below 50 does not count"),
     ("structure_drift.tier_0.boundary_patterns", "gt", 0, "tracked, non-excluded source file"),
     ("structure_drift.tier_0.boundary_patterns", "gte", 1, "a `CODEOWNERS` line per module path"),
 ])
@@ -352,6 +353,7 @@ def test_a_strict_bound_is_never_worded_at_least(signal):
 
 @pytest.mark.parametrize(("signal", "op", "value"), [
     ("coverage_gate.enforced", "eq", False), ("observability.rung", "gte", 9),
+    ("coverage_gate.threshold_meets_minimum", "eq", False),
     ("observability.rung", "lt", 2), ("nested_instructions.budget.claude_code.lines", "gt", 5),
     ("agent_environment.check.named_total", "gt", 3), ("instruction_claims.failed", "gt", 0),
     ("agent_environment.layer5_cap.applies", "eq", True), ("two_factor.value", "lt", 1),
@@ -372,6 +374,7 @@ def test_measure_hints():
     assert "shallow clone" in measure_hint("doc_staleness.summary.stale_pct")
     assert "ghreport" in measure_hint("two_factor.value")
     assert "`coverage_gate` scan" in measure_hint("coverage_gate.enforced")
+    assert "${{ env.COV_MIN }}" in measure_hint("coverage_gate.threshold_meets_minimum")
     assert "`no_grimp`" in measure_hint("structure.modularity_q")
     assert "no_import_edges" in measure_hint("structure.modularity_q")
     assert "`no_lizard`" in measure_hint("stats_summary.loc.p95")

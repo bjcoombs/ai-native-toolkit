@@ -91,11 +91,11 @@ CASES = [
     }, _NONE_FILED),
     _case("l6-1-fail-under-1", "layer-6-coverage", 1, {
         "pyproject.toml": "[project]\nname = 'x'\nversion = '0'\n\n[tool.coverage.report]\nfail_under = 1\n",
-    }, _ISSUES + "781"),
+    }, None),
     # The threshold is null, so it should read as unknown.
     _case("l6-1-templated-threshold", "layer-6-coverage", 1,
-          {".github/workflows/ci.yml": _workflow("pytest --cov-fail-under=${{ env.COV_MIN }}")}, _ISSUES + "781"),
-    _case("l6-1-jacoco-ratio", "layer-6-coverage", 1, {"pom.xml": _JACOCO_POM}, _ISSUES + "781"),
+          {".github/workflows/ci.yml": _workflow("pytest --cov-fail-under=${{ env.COV_MIN }}")}, None),
+    _case("l6-1-jacoco-ratio", "layer-6-coverage", 1, {"pom.xml": _JACOCO_POM}, None),
     _case("l7-1-review-config-file", "layer-7-review", 1, {".coderabbit.yaml": "reviews: {}\n"}, _NONE_FILED),
     # Layer 8 has no fixing child of #776.
     _case("l8-1-one-allow-entry", "layer-8-agent-ops", 1,

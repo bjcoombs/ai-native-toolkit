@@ -922,7 +922,7 @@ reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
 headless = { coverage_gate = "registered" }
 shapes = [
-  { path = "coverage_gate", type = "lib.block_shapes:CoverageGateBlock" },
+  { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
 revision = 1
   [entries.privacy]
@@ -1715,14 +1715,14 @@ type = "number"
 evidence = "head_text"
 
 [[entries]]
-id = "core:coverage_gate.enforced"
+id = "core:coverage_gate.threshold_meets_minimum"
 kind = "signal"
-title = "A coverage threshold is set"
+title = "A coverage threshold of at least 50 percent is set"
 collector = "core.coverage_gate"
-path = "coverage_gate.enforced"
+path = "coverage_gate.threshold_meets_minimum"
 type = "bool"
 evidence = "config_text"
-null_means = "never null; a block that could not be read is available: false"
+null_means = "no counted gate reaches 50 percent and one has a threshold that is not a readable percentage (a template, an nyc/c8 default, a Jest uncovered-line count)"
 
 [[entries]]
 id = "core:test_pressure.mutation_run"
@@ -1912,11 +1912,11 @@ key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
 fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests."
 
 [[entries]]
-id = "core.cond.layer-6-coverage.1.enforced"
+id = "core.cond.layer-6-coverage.1.threshold_meets_minimum"
 kind = "condition"
-title = "A coverage gate is configured"
-key = "layer-6-coverage.1:coverage_gate.enforced"
-fix = "Add a fail_under (or your tool's threshold) near your current coverage, so CI holds the line you have reached."
+title = "A coverage gate of at least 50 percent is configured"
+key = "layer-6-coverage.1:coverage_gate.threshold_meets_minimum"
+fix = "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, so CI holds the line you have reached."
 
 [[entries]]
 id = "core.cond.layer-6-coverage.2.mutation_run"
