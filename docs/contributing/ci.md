@@ -22,7 +22,7 @@ The CI reference for `ai-native-toolkit`, moved out of the root `CLAUDE.md` so i
 
 ## Generated files and goldens
 
-The schemas, the measures catalog, `references/counts-only.md` and the fixture goldens under `skills/assess/tests/fixtures/` are committed generator output. A test byte-compares each against a fresh build, so a stale copy fails CI. `.gitattributes` lists every one as `linguist-generated`, which also folds them out of GitHub diffs.
+The schemas, the measures catalog, `references/counts-only.md` and the fixture goldens under `skills/assess/tests/fixtures/` are committed generator output. A test byte-compares each against a fresh build, so a stale copy fails CI. `.gitattributes` lists every one as `linguist-generated`, which also folds them out of GitHub diffs. When a PR changes a generator, a renderer or a report, expand the folded files in review: a golden such as the parity report or a team page is where the behaviour change shows.
 
 They conflict on most parallel merges. The recipe for a conflict in any of them, whichever files it touches:
 
