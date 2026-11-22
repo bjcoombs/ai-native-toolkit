@@ -192,16 +192,3 @@ def test_dart_scanner_unreadable_or_empty_file_has_no_functions(
     empty.write_text("// only a comment\n", encoding="utf-8")
     assert dart_function_scores(empty) == ([], None)
 
-
-# TEMPORARY probe for the #967 PR body: reports the Windows CPU time in the
-# -ra skip summary. Removed before merge.
-@pytest.mark.no_cover
-def test_probe_967_unclosed_functions_cpu() -> None:
-    text = "void f() {" * 100_000
-
-    def cpu_seconds() -> float:
-        start = time.process_time()
-        scan_dart_functions(text)
-        return time.process_time() - start
-
-    pytest.skip(f"probe-967 unclosed-functions {min(cpu_seconds() for _ in range(3)):.3f}s")
