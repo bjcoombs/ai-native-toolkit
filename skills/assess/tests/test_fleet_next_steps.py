@@ -388,6 +388,10 @@ def test_measure_hints():
     assert "full `/assess` run" not in measure_hint("structure_drift.tier_0.boundary_patterns")
     assert "no lint suppressions" in measure_hint("promissory_markers.families.suppression.total")
     assert "`DESIGN.md`" in measure_hint("structure_drift.tier_0.boundary_patterns")
+    # #927: the lockfile reason is added to the generic hint, never in place of it.
+    for signal in ("agent_environment.pinning.unlocked_total", "agent_environment.check.named_total"):
+        hint = measure_hint(signal)
+        assert "`--scans`" in hint and "`no_manifests`" in hint and "`unlocked_total`" in hint
 
 
 def test_default_levels_toml_parses():
