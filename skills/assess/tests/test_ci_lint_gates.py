@@ -78,6 +78,13 @@ def _props(*props: str) -> str:
     pytest.param({".gitlab-ci.yml": "fmt:\n  script:\n    - dart format .\n"
                                     "    - git diff --exit-code\n"},
                  (True, "lint_command"), id="GITLAB-REWRITE-DIFF"),
+    pytest.param({".gitlab-ci.yml": "fmt:\n  script:\n    - clang-format -i src/a.cc\n"
+                                    "  after_script:\n    - git diff --exit-code\n"},
+                 (False, "no_lint_command"), id="GITLAB-AFTER-SCRIPT-DIFF"),
+    pytest.param({".gitlab-ci.yml": "fmt:\n  after_script:\n    - echo done\n"
+                                    "  script:\n    - clang-format -i src/a.cc\n"
+                                    "    - git diff --exit-code\n"},
+                 (True, "lint_command"), id="GITLAB-SCRIPT-AFTER-AFTER-SCRIPT"),
     pytest.param({".gitlab-ci.yml": "a:\n  script:\n    - dart format .\n"
                                     "b:\n  script:\n    - git diff --exit-code\n"},
                  (False, "no_lint_command"), id="GITLAB-OTHERJOB"),

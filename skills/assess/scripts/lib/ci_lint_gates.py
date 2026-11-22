@@ -93,6 +93,27 @@ def _diff_gate(line: str) -> bool:
     return handler is None or _RERAISE.search(handler.group(1)) is not None
 
 
+_AFTER_SCRIPT = re.compile(r"^(\s*)after_script:")
+
+
+def _after_script(lines: Sequence[str]) -> frozenset[int]:
+    """Indices of the lines under a GitLab ``after_script:`` key, whose exit codes GitLab
+    ignores: a ``git diff --exit-code`` there cannot fail the job."""
+    out: set[int] = set()
+    depth = -1
+    for i, line in enumerate(lines):
+        text = _content(line)
+        if not text:
+            continue
+        indent = _indent(line)
+        if depth >= 0 and (indent > depth or (indent == depth and text.startswith("-"))):
+            out.add(i)
+            continue
+        match = _AFTER_SCRIPT.match(line)
+        depth = len(match.group(1)) if match else -1
+    return frozenset(out)
+
+
 def rewrite_gated(text: str) -> frozenset[int]:
     """Indices of the rewrite-formatter lines a later unmasked ``git diff`` gate of the same
     job turns into a lint run (the same line counts: ``clang-format -i a && git diff --quiet``)."""
@@ -101,7 +122,9 @@ def rewrite_gated(text: str) -> frozenset[int]:
     if not rewrites:
         return frozenset()
     jobs = job_ids(lines)
-    diffs = [j for j, line in enumerate(unmasked_lines(text)) if _diff_gate(line)]
+    ignored = _after_script(lines)
+    diffs = [j for j, line in enumerate(unmasked_lines(text))
+             if j not in ignored and _diff_gate(line)]
     return frozenset(i for i in rewrites if any(j >= i and jobs[j] == jobs[i] for j in diffs))
 
 
