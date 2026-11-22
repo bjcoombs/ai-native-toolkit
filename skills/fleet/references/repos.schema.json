@@ -953,6 +953,56 @@
                 }
               }
             },
+            "layer_grades": {
+              "type": "object",
+              "if": {
+                "properties": {
+                  "available": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "available"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Why the block is unavailable. A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              },
+              "description": "Deterministic layer grades (lib/layer_grades.py): the best instruction-file grade and where the agent instruction files are. Tokens and a boolean, kept whole by counts-only output; no path is carried.",
+              "properties": {
+                "instruction_presence": {
+                  "enum": [
+                    "root",
+                    "nested_only",
+                    "none",
+                    null
+                  ],
+                  "description": "root: a file at a root location (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md and the others instruction_files grades) or one the tool loads at session start, always loaded. nested_only: no root file, but a nested or path-scoped file (pkg/AGENTS.md, a .claude/rules file with paths), loaded on demand where the agent works. none: no instruction file at any known location. Null when there is no root file and the nested_instructions scan did not run."
+                },
+                "instruction_file_present": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "True for root and nested_only, false for none, null with instruction_presence. Layer 0 level 1 of the default maturity model reads it."
+                },
+                "instructions_grade": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Best letter grade (A to F) of the files instruction_presence counts: the root files, else the always-loaded or nested ones. Null only for none."
+                }
+              }
+            },
             "review_evidence": {
               "type": "object",
               "if": {

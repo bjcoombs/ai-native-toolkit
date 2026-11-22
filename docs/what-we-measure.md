@@ -337,12 +337,12 @@ Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether 
 
 ### `layer_grades`: Deterministic layer grades
 
-The instruction-file grade republished as a block, so a maturity model can read it.
+The instruction-file grade and where the instruction files are (root, nested only or none), republished as a block, so a maturity model can read them.
 
-- Collector: `core.layer_grades`, reading `instruction_grading`.
+- Collector: `core.layer_grades`, reading `instruction_grading`, `nested_instructions`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `layer_grades.instructions_grade` token, `layer_grades.reason` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `layer_grades.instruction_presence` token, `layer_grades.instructions_grade` token, `layer_grades.reason` drop.
 - Used by: row `layer-0-instructions`.
 - Evidence: `layer_grades.instruction_file_present` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
@@ -660,7 +660,7 @@ Each doc's last content change against its code subject's churn, following renam
 
 ### `gap_actions`: Gap actions
 
-- Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`.
+- Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.paths` path, `gap_actions.signal` token.
@@ -751,7 +751,6 @@ The scan registry in run order, including the private inputs other scans read.
 | `accretion_ratchet` | Accretion ratchet | `accretion_scan`, `current` | `accretion_ratchet` | no |
 | `keyhole` | Keyhole integration | `repo_root`, `current`, `doc_staleness`, `liveness_blocks`, `structure_scan`, `test_pressure`, `promissory`, `accretion_ratchet`, `archetype`, `excludes`, `scope`, `rename_map`, `doc_join` | private input | no |
 | `keyhole_blocks` | Keyhole blocks | `keyhole` | `structure`, `behaviour`, `documentation`, `understanding`, `runtime`, `derived_findings`, `attention`, `attention_low_signal`, `findings_markdown`, `keyhole_summary`, `prescribed_actions` | no |
-| `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype` | `gap_actions` | no |
 | `exclusion_disclosures` | Exclusion disclosures | `keyhole`, `excludes` | `excluded_by_config`, `excluded_as_archive`, `pruned_finding_paths` | no |
 | `excluded_generated` | Excluded generated files | `current` | `excluded_generated` | no |
 | `structure_drift_block` | Structure drift | `repo_root`, `keyhole` | `structure_drift` | no |
@@ -771,7 +770,8 @@ The scan registry in run order, including the private inputs other scans read.
 | `review_evidence` | Review evidence | `review_automation`, `review_reality` | `review_evidence` | no |
 | `ci_checks` | CI runs a test or lint command | `repo_root`, `ghsync_root`, `gitlab_merged_ci` | `ci_checks` | no |
 | `agent_building` | Agent building | `repo_root` | `agent_building` | no |
-| `layer_grades` | Deterministic layer grades | `instruction_grading` | `layer_grades` | no |
+| `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
+| `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions` | `gap_actions` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |

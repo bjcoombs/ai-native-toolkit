@@ -264,7 +264,13 @@ constant each.
 #   (issue #921): the threshold reading with an enforced CI run of the gate
 #   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
 #   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
-# Unreleased (bumped once by the 3.0.0 release PR; run 4 version freeze):
+# Unreleased (bumped once by the 3.0.0 release PR):
+# - run-context.json layer_grades gains instruction_presence (issue #821): root,
+#   nested_only or none. instruction_file_present is true for nested_only, and
+#   instructions_grade there is the best nested grade, where both read as no
+#   instruction file before; both are null when there is no root file and the
+#   nested_instructions scan did not run. gap_actions gains a layer_grades entry for
+#   nested_only and now sits after layer_grades in run-context.json.
 # - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
 #   #926), both with lint_runs null: a CI .NET build whose committed project files
 #   turn on the analysers, and a compiler run with warnings as errors as the only

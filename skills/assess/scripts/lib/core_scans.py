@@ -278,10 +278,12 @@ def keyhole_blocks(integration: KeyholeIntegration) -> dict[str, Any]:
 
 def gap_actions(
     coverage: dict[str, Any], doc_graph_block: Any, current: dict[str, Any], archetype: Any,
+    layer_grades: Any = None, nested_instructions: Any = None,
 ) -> Any:
-    """Top 3 candidates read from the coverage and doc-graph signals."""
+    """Top 3 candidates read from the instruction-presence, coverage and doc-graph signals."""
     return build_gap_actions(
         coverage, doc_graph_block, current.get("top_hotspots"), dict_or(archetype, None),
+        dict_or(layer_grades, None), dict_or(nested_instructions, None),
     )
 
 
