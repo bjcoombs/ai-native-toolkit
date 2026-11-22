@@ -17,7 +17,6 @@ from __future__ import annotations
 import copy
 import importlib
 import json
-import tomllib
 import types
 from collections.abc import Iterable
 from functools import partial
@@ -53,7 +52,7 @@ def manifest() -> cm.CheckManifest:
 def raw() -> cm.CheckManifest:
     """The manifest as parsed TOML, unvalidated: the registry comparison still names a scan
     whose entry is missing when a dangling reference stops the strict loader."""
-    return cast(cm.CheckManifest, tomllib.loads(cm.CORE_MANIFEST.read_text(encoding="utf-8")))
+    return cast(cm.CheckManifest, cm.read_manifest())
 
 
 def _clean(problems: Iterable[str]) -> None:

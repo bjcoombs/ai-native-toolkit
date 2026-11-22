@@ -1,0 +1,16 @@
+# Check manifest fragment: the plugin_version collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.plugin_version"
+kind = "collector"
+title = "Plugin version"
+callable = "lib.run_setup:read_plugin_version"
+publishes = ["plugin_version"]
+reads = []
+stage = "read_side"
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+  [entries.privacy]
+  plugin_version = "token"

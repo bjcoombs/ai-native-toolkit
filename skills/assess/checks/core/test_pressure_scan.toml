@@ -1,0 +1,14 @@
+# Check manifest fragment: the test_pressure_scan collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.test_pressure_scan"
+kind = "collector"
+title = "Test pressure scan"
+callable = "lib.core_scans:test_pressure_scan"
+publishes = []
+reads = ["repo_root", "current", "coverage_data"]
+stage = "read_side"
+private = true
+label = "test_pressure"
+revision = 1

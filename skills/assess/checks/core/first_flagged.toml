@@ -1,0 +1,15 @@
+# Check manifest fragment: the first_flagged collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.first_flagged"
+kind = "collector"
+title = "First-flagged hotspot dates"
+callable = "lib.run_setup:first_flagged"
+publishes = []
+reads = ["assess_dir", "rename_map"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

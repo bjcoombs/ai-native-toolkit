@@ -1,0 +1,15 @@
+# Check manifest fragment: the accretion_by_file collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.accretion_by_file"
+kind = "collector"
+title = "Accretion by file"
+callable = "lib.core_scans:accretion_by_file"
+publishes = []
+reads = ["accretion_scan"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

@@ -13,7 +13,7 @@ relatively.
 **Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
 root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
 `tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
-so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml` or `level_signals.py` regenerates the catalog.
 `make check` runs it through `test-assess`.
 """
 from __future__ import annotations

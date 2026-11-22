@@ -1,0 +1,15 @@
+# Check manifest fragment: the instruction_grading collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.instruction_grading"
+kind = "collector"
+title = "Instruction-file grading"
+callable = "lib.run_setup:instruction_grading"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

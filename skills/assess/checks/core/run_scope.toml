@@ -1,0 +1,15 @@
+# Check manifest fragment: the run_scope collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.run_scope"
+kind = "collector"
+title = "Run scope"
+callable = "lib.run_setup:run_scope"
+publishes = []
+reads = ["repo_root", "requested_scope"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "bad_scope"
+revision = 1

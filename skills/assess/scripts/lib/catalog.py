@@ -1,6 +1,7 @@
 """The measures catalog: what ``/assess`` and ``/fleet`` measure, generated from the check manifest (#794).
 
-``build_catalog`` joins the check manifest (``checks/core.toml``, ``lib.check_manifest``),
+``build_catalog`` joins the check manifest (``checks/core.toml`` and its fragments under
+``checks/core/``, ``lib.check_manifest``),
 the default maturity model (``levels/default.toml``) and the signal input classes
 (``lib.level_signals``, #783) into one ``Catalog`` document. ``lib.catalog_md`` renders it
 as ``docs/what-we-measure.md``; ``render_json`` writes it as
@@ -33,8 +34,8 @@ restructure:
 - ``findings``: each derived finding, in report order, with its inputs and rules.
 
 (#789 step 2, #794)
-`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
-default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml` and its
+fragments), the default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
 1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
 row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
@@ -44,7 +45,8 @@ the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known
 counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
-(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+(every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
+them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -333,12 +335,25 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
     return out
 
 
+def _model_order(signals: Sequence[cm.SignalEntry], model: MaturityModel) -> list[cm.SignalEntry]:
+    """Signals in the order the model's criteria first read them, then any it does not read.
+
+    The manifest groups signals by collector (one fragment each, #982); the catalog lists
+    them in maturity-model order, row by row."""
+    rank: dict[str, int] = {}
+    for row in model["rows"]:
+        for level in row["levels"]:
+            for criterion in level["criteria"]:
+                rank.setdefault(criterion["signal"], len(rank))
+    return sorted(signals, key=lambda s: rank.get(s["path"], len(rank)))
+
+
 def build_catalog(manifest: cm.CheckManifest | None = None,
                   model: MaturityModel | None = None) -> Catalog:
     """The catalog of the core manifest and the default maturity model (or the given ones)."""
     manifest = cm.load_manifest() if manifest is None else manifest
     model = load_default_levels() if model is None else model
-    signals = cm.signals(manifest)
+    signals = _model_order(cm.signals(manifest), model)
     by_path = {s["path"]: s for s in signals}
     rows = _rows(model, by_path, {c["key"]: c for c in cm.conditions(manifest)})
     return Catalog(

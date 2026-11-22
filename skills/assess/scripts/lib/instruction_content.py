@@ -36,7 +36,7 @@ exist (and stale ones, with URLs, globs, placeholders, absolute paths, excluded 
 gitignored paths and `owner/repo`-shaped slugs left unchecked), backticked code symbols
 no other tracked file names (`git grep`, skipped outside git), directory-tree blocks,
 repository-overview headings and the share of lines repeated from the root README.
-`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
+`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Gitignored candidates go to `git check-ignore -z --stdin` as NUL-separated UTF-8 bytes (`surrogateescape` both ways), never text-mode stdin, so Windows newline translation and git's path quoting cannot hide a match. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
 `tests/test_instruction_content.py`.
 """
 from __future__ import annotations
@@ -223,18 +223,23 @@ def _uncheckable_slash_path(index: RepoIndex, ref: str) -> bool:
 
 
 def _gitignored(root: Path, paths: list[str]) -> set[str]:
+    """Which ``paths`` git ignores, asked as NUL-separated bytes (``check-ignore -z``).
+
+    Bytes keep Windows text-mode newline translation off stdin, and ``-z`` turns off
+    git's quoting of unusual names, so each match comes back spelled as queried.
+    """
     if not paths:
         return set()
+    payload = b"\0".join(p.encode("utf-8", "surrogateescape") for p in paths) + b"\0"
     try:
         proc = subprocess.run(
-            ["git", "-C", str(root), "check-ignore", "--stdin"],
-            input="\n".join(paths), capture_output=True, text=True,
-            encoding="utf-8", errors="surrogateescape",
+            ["git", "-C", str(root), "check-ignore", "-z", "--stdin"],
+            input=payload, capture_output=True,
             timeout=GIT_TIMEOUT_SECONDS, check=False, env=git_env(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return set()
-    return set(proc.stdout.splitlines())
+    return {p for p in proc.stdout.decode("utf-8", "surrogateescape").split("\0") if p}
 
 
 def _symbols_present(root: Path, names: list[str], self_rel: str) -> set[str] | None:
