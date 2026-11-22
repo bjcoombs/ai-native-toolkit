@@ -55,7 +55,7 @@ def _write(root: Path, files: dict[str, str]) -> Path:
 
 def _block(tmp_path: Path, files: dict[str, str]) -> tuple[bool | None, str, int]:
     block = scan_ci_checks(_write(tmp_path, files))
-    assert block["test_or_lint_runs"] is True
+    assert block["test_or_lint_configured"] is True
     return block["enforced_check_runs"], block["enforced_basis"], block["off_trigger_check_commands"]
 
 
@@ -126,7 +126,7 @@ _MATRIX_TOX = ("on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    s
 @pytest.mark.parametrize("workflow", [_NEEDS_PYTEST, _MATRIX_TOX], ids=["needs_pytest", "matrix_tox"])
 def test_a_lone_list_item_is_not_an_enforced_run(tmp_path: Path, workflow: str) -> None:
     block = scan_ci_checks(_write(tmp_path, {".github/workflows/ci.yml": workflow}))
-    assert (block["test_or_lint_runs"], block["enforced_check_runs"]) == (False, False)
+    assert (block["test_or_lint_configured"], block["enforced_check_runs"]) == (False, False)
     group: Group = {"name": "g", "settings": None, "repos": {"r": {"ci_checks": block}}}
     row = next(r for r in evaluate(load_default_levels(), group)["rows"] if r["id"].startswith("layer-5-"))
     assert row["level"] == 0

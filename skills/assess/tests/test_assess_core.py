@@ -334,13 +334,13 @@ def test_coverage_gate_block_reports_configured_threshold(tmp_path: Path) -> Non
     the file, line and threshold once a fail_under is configured."""
     repo = _minimal_repo(tmp_path)
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
-    assert ctx["coverage_gate"]["enforced"] is False
+    assert ctx["coverage_gate"]["configured"] is False
     assert ctx["coverage_gate"]["gates"] == []
 
     (repo / ".coveragerc").write_text("[report]\nfail_under = 80\n")
     ctx = build_and_publish_run(repo_root=repo, run_date="2026-05-27")
     gate = ctx["coverage_gate"]["gates"][0]
-    assert ctx["coverage_gate"]["enforced"] is True
+    assert ctx["coverage_gate"]["configured"] is True
     assert (gate["file"], gate["line"], gate["threshold"]) == (".coveragerc", 2, 80.0)
 
 
