@@ -1,6 +1,6 @@
-"""Headless observability, doc graph, doc staleness and archetype blocks (issue #699).
+"""Headless observability, doc graph, doc staleness, archetype and owner exclusions blocks (issue #699).
 
-``assess_core`` publishes these four blocks through its own table entries in
+``assess_core`` publishes these five blocks through its own table entries in
 ``lib.core_scans`` (``signals.CORE_MODULES``), so the headless runner
 (``lib/signals.py``) used to report each as ``not_registered``. Each scan is
 static: it reads committed files and, for doc staleness, git history, and none
@@ -17,16 +17,21 @@ per block here, outside the core, as ``lib.headless_layers`` does for the layer
   and needs git: a target that is not the top of a git work tree reports
   ``not_git_root``.
 - ``archetype`` is the core's software-or-knowledge-base verdict.
+- ``owner_exclusions`` is the core's ``[checks] exclude`` block (#910), so a fleet
+  row's level result applies the owner's exclusions as ``/assess`` does (#944). It
+  never degrades: a bad entry is listed under ``skipped``.
 
 Each block degrades to the bare ``{"available": false, "reason": ...}`` marker
 with a ``code: sentence`` reason (``scan_failed`` when the scan raises), so
 counts-only keeps a named code and a maturity-model row reads unknown.
 
-The headless runner's entries for the four static blocks the core publishes from
+The headless runner's entries for the five static blocks the core publishes from
 `core_scans.py` (#699): `observability` (`liveness_scan.scan_observability` called
 directly, so the dead-code tools `scan_liveness` also runs stay full-run only),
 `doc_graph` (needs networkx: `no_networkx`), `doc_staleness` (over the doc graph's
-doc->code edges; needs a git work tree: `not_git_root`) and `archetype`. A scan that
+doc->code edges; needs a git work tree: `not_git_root`), `archetype` and `owner_exclusions`
+(#944: `owner_exclusions.owner_exclusions_block`, so a fleet row's level applies the
+owner's exclusions). A scan that
 raises is the bare marker `scan_failed: <error>`, so counts-only keeps a code and a
 maturity-model row reads `unknown`. `dead_code`, `understanding` and `runtime` stay in
 `signals.UNREGISTERED_SCANS` (`not_registered`). Tests: `tests/test_headless_static.py`.
@@ -44,6 +49,7 @@ from lib.context_blocks import doc_to_code_edges
 from lib.doc_graph import build_doc_graph
 from lib.doc_staleness import analyze_doc_staleness
 from lib.liveness_scan import scan_observability
+from lib.owner_exclusions import owner_exclusions_block
 from lib.run_context_types import JsonDict
 from lib.scan_registry import STAGE_READ_SIDE, STAGE_SETUP, ScanSpec
 
@@ -122,7 +128,12 @@ def archetype(repo_root: Path) -> JsonDict:
     return _guarded("archetype", lambda: analyze_archetype(repo_root))
 
 
-# The headless runner's entries for the four blocks. Each replaces the core
+def owner_exclusions(repo_root: Path) -> JsonDict:
+    """The owner's ``[checks] exclude`` entries (#910), so a fleet row's level applies them (#944)."""
+    return dict(owner_exclusions_block(repo_root))
+
+
+# The headless runner's entries for the five blocks. Each replaces the core
 # entry that publishes the same name (``signals.signal_scans``). The doc graph
 # runs at the setup stage, as in the core, so doc staleness can read it.
 HEADLESS_SCANS: tuple[ScanSpec, ...] = (
@@ -131,4 +142,5 @@ HEADLESS_SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("doc_staleness", doc_staleness, ("repo_root", "doc_graph", "excludes"),
              STAGE_READ_SIDE),
     ScanSpec("archetype", archetype, ("repo_root",), STAGE_READ_SIDE),
+    ScanSpec("owner_exclusions", owner_exclusions, ("repo_root",), STAGE_READ_SIDE),
 )

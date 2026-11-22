@@ -197,7 +197,8 @@
 #   working-tree artifact, not part of the commit. Go's go-test-coverage
 #   .testcoverage.yml, cargo tarpaulin --fail-under and cargo llvm-cov
 #   --fail-under-lines are read (#788). A repository holding a go.mod or a
-#   Cargo.toml with no gate found is unknown, never 0: its gate may be a script
+#   Cargo.toml with no gate of that language found, and none of 50 or more for
+#   another (#937), is unknown, never 0: its gate may be a script
 #   comparing go tool cover to a number, which the scan does not read
 #   (coverage_gate.unmeasured_reason go_rust_gate_form_not_read). Level 2 reads
 #   test_pressure.mutation_run, which a headless run does not build.
