@@ -34,11 +34,15 @@ and the commit message, title and SHA variables. Any other variable is unknown. 
 ``external_pull_request_event``, ``external`` or a value GitLab does not list reads
 unknown: a child or downstream pipeline can run for an ordinary change.
 
+A rule list that runs the job only through a varying condition gives ``some``, not ``yes``,
+so a caller can tell that a ``workflow:`` limited to one branch and a job limited to another
+may never meet.
+
 Known limits: a varying rule that runs the job after a varying rule that stopped it reads
 ``unknown`` (``$CI_COMMIT_BRANCH == "main"`` with ``never``, then ``$CI_COMMIT_BRANCH =~
 /feat/``), since this reader does not compare the two; two varying conditions are taken as independent (``$CI_COMMIT_BRANCH ==
 "a" && $CI_COMMIT_BRANCH == "b"`` reads varies), regexes are read with Python ``re``
-(GitLab uses RE2), ``exists:`` reads unknown, and rule ``variables:`` are not applied.
+(GitLab uses RE2; a nested quantifier such as ``(a+)+`` reads unknown), ``exists:`` reads unknown, and rule ``variables:`` are not applied.
 """
 from __future__ import annotations
 
@@ -47,7 +51,8 @@ from collections.abc import Mapping, Sequence
 from typing import Literal, NamedTuple
 
 Truth = Literal["true", "false", "varies", "unknown"]
-Outcome = Literal["yes", "no", "unknown"]
+# ``some``: runs in some pipelines of the kind, only through a varying condition (a branch).
+Outcome = Literal["yes", "some", "no", "unknown"]
 Context = Literal["merge_request", "push"]
 CONTEXTS: tuple[Context, ...] = ("merge_request", "push")
 
@@ -201,6 +206,10 @@ def _equals(left: _Value, right: _Value) -> Truth:
     return "varies"
 
 
+# A quantified group holding a quantifier (``(a+)+``, ``((.*)*)*``): read as unknown.
+_NESTED_QUANTIFIER = re.compile(r"[*+}][^()]*\)[*+{]")
+
+
 def _matches(left: _Value, right: _Value) -> Truth:
     if right.kind != "regex" or left.kind in ("unknown", "regex"):
         return "unknown"
@@ -209,6 +218,8 @@ def _matches(left: _Value, right: _Value) -> Truth:
         if flag not in "ims":
             return "unknown"
         flags |= {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL}[flag]
+    if _NESTED_QUANTIFIER.search(re.sub(r"\\.", "", right.text)):
+        return "unknown"  # Python re backtracks without bound on these; GitLab's RE2 does not
     try:
         pattern = re.compile(right.text, flags)
     except re.error:
@@ -321,9 +332,13 @@ def _unquote(value: str) -> str | None:
     return value
 
 
+def _readable(rule: Rule) -> bool:
+    return bool(rule.fields) and all(key in _RULE_KEYS for key in rule.fields)
+
+
 def _rule_match(rule: Rule, context: Context) -> Truth:
     fields = rule.fields
-    if not fields or any(key not in _RULE_KEYS for key in fields):
+    if not _readable(rule):
         return "unknown"
     parts: list[Truth] = []
     if "if" in fields:
@@ -348,6 +363,8 @@ def outcome(rules: Sequence[Rule], context: Context, default_when: str = "on_suc
         raw_when = rule.fields.get("when")
         when = default_when if raw_when is None else (_unquote(raw_when) or "")
         runs: bool | None = True if when in _RUN_WHEN else False if when in _STOP_WHEN else None
+        if not _readable(rule):
+            runs = None  # a !reference or anchor merge brings its own when:
         if runs is None or match == "unknown":
             if runs is not False:
                 may_run = True
@@ -358,8 +375,8 @@ def outcome(rules: Sequence[Rule], context: Context, default_when: str = "on_suc
             continue
         if runs:
             if match == "true":
-                return "unknown" if unknown_stop else "yes"
-            return "unknown" if unknown_stop or varies_stop else "yes"
+                return "unknown" if unknown_stop else "some" if varies_stop else "yes"
+            return "unknown" if unknown_stop or varies_stop else "some"
         if match == "true":
             return "unknown" if may_run else "no"
         varies_stop = True

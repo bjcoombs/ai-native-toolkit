@@ -57,6 +57,10 @@ _TAG_ONLY = "$CI_COMMIT_TAG && $CI_COMMIT_BRANCH == null"
     ("$CI_COMMIT_BRANCH =~ /[/", "unknown", "unknown"),
     ("$CI_COMMIT_BRANCH =~ /x/x", "unknown", "unknown"),
     ("$CI_COMMIT_BRANCH =~ $PATTERN", "unknown", "unknown"),
+    # Nested quantifiers backtrack without bound in Python re: not run.
+    ("$CI_PIPELINE_SOURCE =~ /^((.*)*)*Z$/", "unknown", "unknown"),
+    ("$CI_PIPELINE_SOURCE =~ /^(a+)+$/", "unknown", "unknown"),
+    ("$CI_PIPELINE_SOURCE =~ /^(push){1}$/", "false", "true"),
 ])
 def test_evaluate(expression: str, mr: Truth, push: Truth) -> None:
     assert (evaluate(expression, "merge_request"), evaluate(expression, "push")) == (mr, push)
@@ -85,16 +89,19 @@ _MR = '$CI_PIPELINE_SOURCE == "merge_request_event"'
     (_rules({"if": "$RUN"}, {"when": "always"}), "push", "yes"),
     (_rules({"if": "$RUN"}), "push", "unknown"),
     # Branch-dependent rules: some pipelines run.
-    (_rules({"if": '$CI_COMMIT_BRANCH == "main"', "when": "never"}, {"when": "always"}), "push", "yes"),
+    (_rules({"if": '$CI_COMMIT_BRANCH == "main"', "when": "never"}, {"when": "always"}), "push", "some"),
+    (_rules({"if": '$CI_COMMIT_BRANCH == "main"'}), "push", "some"),
     (_rules({"if": '$CI_COMMIT_BRANCH == "main"', "when": "never"}, {"if": "$CI_COMMIT_BRANCH =~ /main/"}),
      "push", "unknown"),
     # A child-pipeline-only job: never read as running in neither ordinary pipeline.
     (_rules({"if": '$CI_PIPELINE_SOURCE != "parent_pipeline"', "when": "never"}, {"when": "always"}),
      "push", "unknown"),
-    (_rules({"if": _MR, "changes": "[src/**]"}), "merge_request", "yes"),
+    (_rules({"if": _MR, "changes": "[src/**]"}), "merge_request", "some"),
     (_rules({"if": _MR, "exists": "[Dockerfile]"}), "merge_request", "unknown"),
     # A rule this reader cannot read (an anchor merge, a !reference) is unknown.
     (_rules({"": "!reference [.rules, mr]"}), "merge_request", "unknown"),
+    # An unread rule may bring when: never: a later catch-all does not settle it.
+    (_rules({"": "!reference [.stop, rules]"}, {"when": "always"}), "push", "unknown"),
     (_rules({"if": _MR, "when": "$WHEN"}), "merge_request", "unknown"),
     (_rules({"if": "|"}), "merge_request", "unknown"),
     (_rules(), "push", "no"),
@@ -163,6 +170,15 @@ _WORKFLOW_MR = (f"workflow:\n  rules:\n    - if: {_MR}\n"
      "not_ordinary"),
     ("workflow:\n  rules:\n    - if: $CREATE\n", "test:\n  script:\n    - pytest\n", "unknown"),
     ("workflow:\n  name: ci\n", "test:\n  script:\n    - pytest\n", "ordinary"),
+    # A workflow limited to main and a job limited to release may never meet.
+    ('workflow:\n  rules:\n    - if: $CI_COMMIT_BRANCH == "main"\n',
+     'test:\n  rules:\n    - if: $CI_COMMIT_BRANCH == "release"\n  script:\n    - pytest\n', "unknown"),
+    ('workflow:\n  rules:\n    - if: $CI_COMMIT_BRANCH == "main"\n', "test:\n  script:\n    - pytest\n", "ordinary"),
+    ("workflow:\n  rules:\n    - if: $CI_COMMIT_BRANCH\n",
+     'test:\n  rules:\n    - if: $CI_COMMIT_BRANCH == "release"\n  script:\n    - pytest\n', "ordinary"),
+    # default: lines run only in the pipelines the workflow creates.
+    (_WORKFLOW_SCHEDULE, "default:\n  before_script:\n    - pytest\n", "not_ordinary"),
+    ("", "default:\n  before_script:\n    - pytest\n", "ordinary"),
 ])
 def test_workflow_rules_gate_every_job(head: str, job: str, trigger: str) -> None:
     assert _trigger(head + job) == trigger

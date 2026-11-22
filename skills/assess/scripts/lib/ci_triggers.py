@@ -40,7 +40,10 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
 - No such key: branch pushes, and merge requests too when ``workflow: rules:`` exists.
 - A top-level ``workflow: rules:`` decides which of the two pipelines GitLab creates,
   with the same reader; a job runs only in a pipeline that is created.
-- Lines outside a job (``default:``, a top-level ``before_script:``) are ``ordinary``.
+- Lines outside a job (``default:``, a top-level ``before_script:``) are ``ordinary``
+  when ``workflow: rules:`` (if any) creates either pipeline.
+- A job limited to some branches inside a workflow limited to some branches is
+  ``unknown``: the two limits are not compared.
 
 Known limits: rules and ``when`` inherited through ``extends:``, ``default:``
 or a YAML anchor are not read, nor ``except:``; ``workflow: rules:`` is read only
@@ -191,9 +194,9 @@ def _only_outcomes(tree: IndentTree, key: int) -> _Outcomes:
             return unknown
     if not values:
         return unknown
-    branch = any(v not in _SPECIAL_ONLY and v != "merge_requests" for v in values)
-    return {"merge_request": "yes" if "merge_requests" in values else "no",
-            "push": "yes" if branch else "no"}
+    named = [v for v in values if v not in _SPECIAL_ONLY and v != "merge_requests"]
+    push: Outcome = "yes" if {"branches", "pushes"} & set(named) else "some" if named else "no"
+    return {"merge_request": "yes" if "merge_requests" in values else "no", "push": push}
 
 
 def _rules(tree: IndentTree, key: int) -> list[Rule] | None:
@@ -241,7 +244,13 @@ def _trigger(job: _Outcomes, workflow: _Outcomes) -> Trigger:
     both: list[Outcome] = []
     for c in CONTEXTS:
         pair = (job[c], workflow[c])
-        both.append("no" if "no" in pair else "unknown" if "unknown" in pair else "yes")
+        if "no" in pair:
+            both.append("no")
+        elif "unknown" in pair or pair == ("some", "some"):
+            # Two branch limits may never meet (workflow on main, job on release): not read.
+            both.append("unknown")
+        else:
+            both.append("yes")
     if "yes" in both:
         return "ordinary"
     return "unknown" if "unknown" in both else "not_ordinary"
@@ -252,13 +261,15 @@ def gitlab_line_triggers(text: str) -> list[Trigger]:
     tree = IndentTree(parse_lines(text.splitlines()))
     workflow = _workflow_outcomes(tree)
     created: _Outcomes = workflow or {c: "yes" for c in CONTEXTS}
+    # default: and a top-level before_script: run with the jobs, in the pipelines created.
+    outside = _trigger({c: "yes" for c in CONTEXTS}, created)
     jobs: dict[int, Trigger] = {}
     out: list[Trigger] = []
     for i in range(len(tree.lines)):
         ancestors = tree.ancestors(i)
         top = ancestors[-1] if ancestors else None
         if top is None or tree.lines[top].level != 0 or tree.lines[top].key in _GITLAB_RESERVED:
-            out.append("ordinary")
+            out.append(outside)
             continue
         if top not in jobs:
             jobs[top] = _trigger(_job_outcomes(tree, top, workflow is not None), created)

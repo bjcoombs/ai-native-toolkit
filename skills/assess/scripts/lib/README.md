@@ -3893,8 +3893,9 @@ push pipeline: `ordinary` when the job runs in either, `not_ordinary` in neither
 `unknown` otherwise. `rules:` goes through `gitlab_rules` (first match wins, the
 job-level `when:` is each rule's default), `only:` names merge requests or branches,
 `when: manual` / `never` / `on_failure` on a job without rules runs in neither, and a
-top-level `workflow: rules:` decides which of the two pipelines exist (#884); lines
-outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
+top-level `workflow: rules:` decides which of the two pipelines exist (#884), for
+lines outside a job (`default:`) too; a branch-limited job in a branch-limited
+workflow is `unknown`. `keep(lines, triggers, wanted)` blanks the other lines,
 so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
 anchors, `except:` and a `workflow: rules:` in an included file are not resolved;
 branch and path filters are not read. Tests: `tests/test_ci_triggers.py`,
@@ -3911,9 +3912,11 @@ pipeline: `true`, `false`, `varies` (which branch, which merge request) or `unkn
 `unknown` for `parent_pipeline`, `pipeline` and `external_pull_request_event`;
 `CI_COMMIT_TAG` is unset in both, `CI_COMMIT_BRANCH` in a merge request pipeline and
 `CI_MERGE_REQUEST_*` in a push pipeline. `outcome(rules, context, default_when)`
-walks `Rule` items in order: the first match decides, `never` / `manual` /
-`on_failure` do not run, `changes:` varies, `exists:` and an unread rule key (an
-anchor merge, `!reference`) are unknown, and a rule that may match with an unknown
+walks `Rule` items in order and gives `yes`, `some` (only through a varying
+condition), `no` or `unknown`: the first match decides, `never` / `manual` /
+`on_failure` do not run, `changes:` varies, a regex with a nested quantifier is
+unknown, `exists:` is unknown, an unread rule (an anchor merge, `!reference`) has
+unknown match and unknown `when:`, and a rule that may match with an unknown
 result makes the answer `unknown`, never `no`; so does a varying rule that runs after a
 varying rule that stopped the job (the two are not compared). A `CI_PIPELINE_SOURCE`
 `!=` against `parent_pipeline` is `unknown` too, so a child-pipeline-only job never
