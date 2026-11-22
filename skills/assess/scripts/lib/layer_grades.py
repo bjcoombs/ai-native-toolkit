@@ -35,8 +35,8 @@ Fields:
   ``nested_only``; null with it. The default maturity model reads this for
   Layer 0 level 1, so a nested-only repository meets that level (harnesses load
   nested ``AGENTS.md`` where the agent works; maintainer decision on #821), and
-  its advice is ``lib.gap_actions``' ``root_instructions`` entry: add a root
-  file that names the check command.
+  its advice is the ``gap_actions`` entry whose ``signal`` is ``layer_grades``
+  (``lib.gap_actions``): add a root file that names the check command.
 
 Only Layer 0 has a deterministic grade today. Layers 2 (code design), 3
 (linters) and 4 (architecture tests) are judged by the assess-layer-scorer
