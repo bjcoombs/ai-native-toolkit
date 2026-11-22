@@ -43,7 +43,7 @@
               "boolean",
               "null"
             ],
-            "description": "true when tracked files differed from HEAD (untracked files and .assess/ outputs are left out, .assess/config.toml is not); the result is then scored from HEAD's committed tree"
+            "description": "true when tracked files differed from HEAD (untracked files and .assess/ outputs are left out, .assess/config.toml is not); the result is then scored from HEAD's committed tree. null when the state is unknown (repos.jsonl dirty_reason says why), and then a checkout with a HEAD was scored from its committed tree too"
           }
         },
         "required": [
@@ -177,6 +177,12 @@
                   "false_positive",
                   "other"
                 ]
+              },
+              "polarity": {
+                "enum": [
+                  "hazard"
+                ],
+                "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"
               }
             },
             "required": [

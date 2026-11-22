@@ -281,6 +281,13 @@ constant each.
 # - run-context.json delivery gains sample_page_size (issue #995): the changes per
 #   heavy read the merged sample finished at, or null when none was made. Additive:
 #   no existing key moves.
+# - ci_checks.lint_basis gains analysers_in_build and compiler_gate_only (issue
+#   #926), both with lint_runs null: a CI .NET build whose committed project files
+#   turn on the analysers, and a compiler run with warnings as errors as the only
+#   static gate. The lint and analyser commands of .NET, Gradle, PHP, Elixir, Dart,
+#   Swift and C++ count as lint runs, a rewriting formatter followed by git diff
+#   --exit-code in its job counts, and a target whose recipe is not read reads
+#   check_target (null) at Layer 3 as it does at Layer 5. Additive: no key moves.
 # - run-context.json gains units (issue #862), after owner_exclusions: the monorepo
 #   units (shallowest build-manifest folders, workspace members in place of their
 #   aggregator, or the [[units]] of .assess/config.toml), the aggregators and the
@@ -473,6 +480,11 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   (check_target) where it read false; setup-named targets (make build) still
 #   read false. Layer 5 level 1 can move from 0 to met or unknown.
 # Unreleased (bumped once by the 3.0.0 release PR):
+# - agent_consistency drops a leading heading or list ordinal before reading
+#   threshold numbers (issue #960): `## 2. Coverage` beside a stated 90 is no
+#   conflict, so agent-consistency level 1 can move from unmet to met. A
+#   next step for an unlinked system names its primary file (CLAUDE.md) before
+#   a supplementary rule file.
 # - ci_checks masks a check in an errexit-exempt position before a top-level `exit 0`
 #   under the default `bash -e` (issue #936): `pytest && echo ok; exit 0`, `pytest | tee
 #   log; exit 0` without pipefail, an `if` / `while` condition or a `!` pipeline.
