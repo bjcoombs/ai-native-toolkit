@@ -232,6 +232,7 @@ scope = "org"
 
   [[rows.levels]]
   level = 1
+  truth = ["governance"]
   criteria = [{ signal = "two_factor.value", op = "eq", value = "on" }]
 """
 
