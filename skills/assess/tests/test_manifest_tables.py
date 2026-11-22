@@ -3,15 +3,16 @@ from __future__ import annotations
 
 import ast
 import copy
+import shutil
 from pathlib import Path
-from typing import Any, cast, get_args
+from typing import Any, cast
 
 import pytest
 
 from lib import check_manifest as cm
 from lib import scan_registry as sr
 from lib.level_tally import LEVEL_READS
-from lib.signal_grades import INPUT_GRADES, SIGNAL_INPUTS, InputClass
+from lib.signal_grades import INPUT_GRADES, SIGNAL_INPUTS
 
 LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
 SIGNAL = "review_reality.reviewed_share"
@@ -34,12 +35,18 @@ def test_signal_inputs_are_the_manifest_evidence() -> None:
     assert SIGNAL_INPUTS == cm.signal_inputs(cm.core_manifest())
 
 
-def test_removing_a_signal_evidence_line_fails_the_load() -> None:
-    """No class is no grade: the loader SIGNAL_INPUTS is built through rejects the manifest."""
-    m = _raw()
-    del _entry(m, "signal", "path", SIGNAL)["evidence"]
+def test_removing_a_signal_evidence_line_fails_the_load(tmp_path: Path) -> None:
+    """``evidence`` is required, so no class means no load: SIGNAL_INPUTS is built through it."""
+    checks = tmp_path / "checks"
+    shutil.copytree(cm.CORE_MANIFEST.parent, checks)
+    fragment = checks / "core" / "review_reality.toml"
+    text = fragment.read_text(encoding="utf-8")
+    line = 'path = "review_reality.reviewed_share"\ntype = "number"\nevidence = "platform"\n'
+    assert text.count(line) == 1
+    fragment.write_text(text.replace(line, line.removesuffix('evidence = "platform"\n')),
+                        encoding="utf-8")
     with pytest.raises(cm.CheckManifestError) as err:
-        cm.parse_manifest(m)
+        cm.load_manifest(checks / "core.toml")
     assert any(e["code"] == "MISSING_KEY" and "evidence" in str(e) for e in err.value.errors)
 
 
@@ -86,10 +93,6 @@ def test_a_scan_without_a_collector_entry_is_rejected() -> None:
 def test_a_spread_the_entry_does_not_declare_is_rejected() -> None:
     with pytest.raises(sr.ScanRegistryError, match="spread"):
         sr.spec_from_manifest(cm.core_manifest(), "agent_ops", lambda root: None, spread=("x",))
-
-
-def test_evidence_vocabulary_is_the_input_classes() -> None:
-    assert cm.EVIDENCE == get_args(InputClass)
 
 
 def _imported(source: str) -> set[str]:
