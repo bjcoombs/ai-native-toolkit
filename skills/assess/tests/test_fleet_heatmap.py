@@ -107,17 +107,17 @@ def test_every_group_and_row_present_and_unknown_hatched_apart_from_zero(tmp_pat
     groups = [g["group"] for g in _groups()]
     titles = ["Two-factor", "Team instructions and shared tooling across repositories"]
     assert sorted(cells) == sorted(f"{g} · {t}" for g in groups for t in titles)
-    assert cells["grpb · Two-factor"] == fh.ORRD_9[0]  # level 0: a ramp colour
+    assert cells["grpb · Two-factor"] == fh.LEVEL_RAMP[0]  # level 0: a ramp colour
     assert cells["grpc · Two-factor"] == fh.UNKNOWN_FILL  # unknown: the hatch
-    assert cells["grpa · Two-factor"] == fh.ORRD_9[-1]  # top level of its row
-    assert fh.UNKNOWN_FILL not in fh.ORRD_9
+    assert cells["grpa · Two-factor"] == fh.LEVEL_RAMP[-1]  # top level of its row
+    assert fh.UNKNOWN_FILL not in fh.LEVEL_RAMP
 
 
 def test_unknown_cells_name_the_missing_signal_in_visible_text(tmp_path):
     svg = _render(tmp_path)
     texts = [t.text or "" for t in ET.fromstring(svg).iter(f"{SVG_NS}text")]
-    assert "? a" in texts and "missing two_factor.value" in texts
-    assert "missing shared_tooling.available" in texts
+    assert "? a" in texts and "not measured yet: two_factor.value" in texts
+    assert "not measured yet: shared_tooling.available" in texts
     assert any(t.startswith("unknown: not measured, never level 0") for t in texts)
 
 
@@ -164,7 +164,7 @@ def test_without_a_levels_file_levels_index_the_ramp(tmp_path):
     assert cli.main([str(FIXTURES / "groups.jsonl"), "--output", str(out)]) == 0
     svg = out.read_text(encoding="utf-8")
     assert "not scaled to each row" in svg
-    assert _cells(svg)["grpa · teamdocs"] == fh.ORRD_9[2]
+    assert _cells(svg)["grpa · teamdocs"] == fh.LEVEL_RAMP[2]
 
 
 @pytest.mark.needs_posix_perms
@@ -191,7 +191,7 @@ def test_ramp_step(level, top, step):
 
 
 def test_text_colour_table_covers_every_step():
-    assert len(fh.STEP_TEXT) == len(fh.ORRD_9)
+    assert len(fh.STEP_TEXT) == len(fh.LEVEL_RAMP)
     assert fh.STEP_TEXT[0] == fh.TEXT_DARK and fh.STEP_TEXT[-1] == fleet_svg.TEXT_LIGHT
 
 

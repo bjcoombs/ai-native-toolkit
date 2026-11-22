@@ -1,5 +1,7 @@
 # Team next steps
 
+In place: 3 groups with a page, holding 6 rows at the top level between them.
+
 Maturity model `next-steps-fixture-1`: 7 rows. One page per group.
 
 | Group | Repositories | Rows at top level | Rows with next steps | Rows unknown |

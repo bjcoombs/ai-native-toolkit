@@ -17,7 +17,7 @@ An unknown repository whose confirmed criteria reach a floor (#697,
 ramp colour of its floor under a hatch, so it reads as "at least N", apart from
 both a known level and plain unknown. The notes name it with its floor.
 
-Levels are coloured with the heat map's ramp (``fleet_svg.ORRD_9``) by their
+Levels are coloured with the heat map's ramp (``fleet_svg.LEVEL_RAMP``) by their
 share of the row's top level, so a row's top level is always the darkest step
 whatever its number of levels; each segment prints its count in the ramp's
 fixed text colour. Deterministic: bars in maturity-model order, fixed number
@@ -32,7 +32,7 @@ from typing import NotRequired, TypedDict
 from lib import fleet_svg as svg
 from lib.fleet import FleetRow
 from lib.fleet_groups import repo_signals
-from lib.fleet_svg import HATCH_FILL, ORRD_9, STEP_TEXT, THEMED_HATCH, LinearScale
+from lib.fleet_svg import HATCH_FILL, LEVEL_RAMP, STEP_TEXT, THEMED_HATCH, LinearScale
 from lib.levels import MaturityModel, evaluate_row, floor_of
 
 TITLE = "Fleet maturity by layer"
@@ -139,7 +139,7 @@ def _legend(bars: Sequence[LayerBar], left: float, cursor: float) -> tuple[list[
             if x + 20 + svg.text_width(label, 11.5) > WIDTH - PAD:  # wrap a long ramp
                 x, cursor = start, cursor + LINE_H + 2
             parts.append(f'<rect x="{x:.1f}" y="{cursor - 11:.1f}" width="14.0" height="14.0" '
-                         f'fill="{ORRD_9[step]}" class="s-muted" stroke-width="0.6"/>')
+                         f'fill="{LEVEL_RAMP[step]}" class="s-muted" stroke-width="0.6"/>')
             parts.append(svg.text(x + 20, cursor, label, size=11.5, cls="fg"))
             x += 20 + svg.text_width(label, 11.5) + 16
         cursor += LINE_H + 2
@@ -150,7 +150,7 @@ def _legend(bars: Sequence[LayerBar], left: float, cursor: float) -> tuple[list[
     if any(b.get("floored") for b in bars):
         cursor += LINE_H + 2
         parts += [f'<rect x="{left:.1f}" y="{cursor - 11:.1f}" width="14.0" height="14.0" '
-                  f'fill="{ORRD_9[2]}"/>',
+                  f'fill="{LEVEL_RAMP[2]}"/>',
                   f'<rect x="{left:.1f}" y="{cursor - 11:.1f}" width="14.0" height="14.0" '
                   f'fill="{FLOOR_FILL}" class="s-muted" stroke-width="0.6"/>',
                   svg.text(left + 20, cursor, "At least level N: confirmed up to N, a higher level not "
@@ -197,14 +197,14 @@ def render_layer_bars(bars: Sequence[LayerBar], org_rows: Sequence[str] = ()) ->
                 continue
             ramp = svg.ramp_step(level, bar["top"])
             tip = f"{bar['title']}: {count} at level {level} of {bar['top']}"
-            body += _segment(x(acc), x(acc + count), y, ORRD_9[ramp], STEP_TEXT[ramp], count, tip)
+            body += _segment(x(acc), x(acc + count), y, LEVEL_RAMP[ramp], STEP_TEXT[ramp], count, tip)
             acc += count
         floored = bar.get("floored", {})
         for floor, count in floor_counts(bar):
             ramp = svg.ramp_step(floor, bar["top"])
             names = ", ".join(n for n in bar["unknown"] if floored.get(n) == floor)
             tip = f"{bar['title']}: at least level {floor} of {bar['top']} for {names}"
-            rect, *label = _segment(x(acc), x(acc + count), y, ORRD_9[ramp], STEP_TEXT[ramp], count, tip)
+            rect, *label = _segment(x(acc), x(acc + count), y, LEVEL_RAMP[ramp], STEP_TEXT[ramp], count, tip)
             overlay = (f'<rect x="{x(acc):.1f}" y="{y:.1f}" width="{x(acc + count) - x(acc):.1f}" '
                        f'height="{BAR_H:.1f}" fill="{FLOOR_FILL}" pointer-events="none"/>')
             body += [rect, overlay, *label]

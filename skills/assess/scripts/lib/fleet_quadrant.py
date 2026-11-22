@@ -54,10 +54,10 @@ FLOOR_NOTE = ("\"At least\" (in a tooltip or below) is a lower bound: unknown te
               "their confirmed floor beside the known rows; the dot sits on the known-only mean.")
 # Quadrant captions: (x, y, text, anchor, theme role, weight); labels are placed around them.
 CAPTIONS: tuple[tuple[float, float, str, str, str, str | None], ...] = (
-    (PLOT_R - 8, _BOTTOM - 10, "Invest here: busy and immature", "end", "bad", "600"),
-    (PLOT_R - 8, PLOT_T + 16, "Healthy", "end", "accent", "600"),
+    (PLOT_R - 8, _BOTTOM - 10, "Most room to grow: busy, early levels", "end", "warn", "600"),
+    (PLOT_R - 8, PLOT_T + 16, "Busy and well along", "end", "accent", "600"),
     (PLOT_L + 8, _BOTTOM - 10, "Quiet; can wait", "start", "muted", None),
-    (PLOT_L + 8, PLOT_T + 16, "Mature, little change", "start", "muted", None),
+    (PLOT_L + 8, PLOT_T + 16, "Well along, little change", "start", "muted", None),
 )
 
 
@@ -195,7 +195,7 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
     hidden: list[str] = []
     for point, placed in zip(plotted, labels):
         cx, cy = x(point["commits"] or 0), y(point["maturity"] or 0.0)
-        tone = "bad" if at_risk(point, split) else "accent"
+        tone = "warn" if at_risk(point, split) else "accent"
         tip = (f"{point['repo']}: {point['commits']} commits, maturity {point['maturity']:.2f} "
                f"({point['measured_rows']} of {point['team_rows']} team rows measured"
                + (f"; {floor_text(point)})" if floor_text(point) else ")"))
@@ -207,7 +207,7 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
             body.append(svg.text(placed.x, placed.y, point["repo"], size=11.5, anchor=placed.anchor,
                                  cls="fg"))
     cursor = bottom + 56
-    for swatch, label in (("bad", f"Busy (at least {split} commits) and below half the top level"),
+    for swatch, label in (("warn", f"Busy (at least {split} commits) and below half the top level"),
                           ("accent", "Other repositories")):
         body.append(f'<circle cx="{PLOT_L + 6:.1f}" cy="{cursor - 4:.1f}" r="5" class="f-{swatch}"/>')
         body.append(svg.text(PLOT_L + 18, cursor, label, size=11.5, cls="muted"))
@@ -233,6 +233,6 @@ def render_quadrant(points: Sequence[RepoPoint], window: str) -> str:
         body.extend(parts)
         cursor += height
     desc = ("Scatter plot of fleet repositories: commits in the history window across, mean "
-            "maturity up; busy, immature repositories are shaded; repositories with an unknown "
+            "maturity up; busy repositories at early levels are shaded; repositories with an unknown "
             "level or commit count are listed on a hatched strip, not drawn at zero.")
     return svg.document(WIDTH, float(int(cursor + PAD)), TITLE, desc, body, defs=THEMED_HATCH)

@@ -51,8 +51,8 @@ WINDOWS_SKIP_MARKERS = {
 }
 
 
-# windows_followup by node id, for a test file at its file-size ceiling where a
-# decorator line would breach the ratchet (.file-size-ratchet.toml).
+# windows_followup by node id, added while test_complexity_treemap.py sat at its
+# file-size ceiling (since split, #720).
 WINDOWS_FOLLOWUP_NODES = {
     "tests/test_complexity_treemap.py::test_write_svg_token_tooltip_and_label_pluralise",
 }

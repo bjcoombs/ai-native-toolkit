@@ -111,7 +111,7 @@ NEAREST_LEVEL_UP = "nearest_level_up"
 KINDS = (LEVEL_UP, FIRST, TARGET_HIT, STREAK)  # report and sort order
 STREAK_MILESTONES = (3, 5, 10, 25, 50, 100)
 # the note of a kept run with no earlier comparable run; any other note says why none was read
-BASELINE_NOTE = "no earlier comparable run in the history: this run is the baseline"
+BASELINE_NOTE = "no earlier comparable run in the history, so this run is the baseline"
 
 
 class Move(TypedDict):

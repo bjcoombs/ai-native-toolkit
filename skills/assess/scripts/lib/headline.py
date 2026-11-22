@@ -57,7 +57,10 @@ REASON_WORDS = {
     "no_value": "no value read",
     "type_mismatch": "value of another type",
     "no_remote": "no remote",
+    "scan_failed": "scan did not complete",
 }
+# Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
+_SUPPORTIVE = (("failed", "did not complete"), ("missing", "not found"))
 
 
 def _step_names(model: MaturityModel) -> dict[int, str]:
@@ -67,7 +70,12 @@ def _step_names(model: MaturityModel) -> dict[int, str]:
 def _reason_word(code: str) -> str:
     if code.startswith("requires:"):
         return f"waits on {code.split(':', 1)[1]}"
-    return REASON_WORDS.get(code, code.replace("_", " "))
+    if code in REASON_WORDS:
+        return REASON_WORDS[code]
+    words = f" {code.replace('_', ' ')} "
+    for word, instead in _SUPPORTIVE:
+        words = words.replace(f" {word} ", f" {instead} ")
+    return words.strip()
 
 
 def _gate_change(blocker: Blocker) -> str:

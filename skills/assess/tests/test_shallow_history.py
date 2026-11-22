@@ -156,7 +156,7 @@ def test_report_names_the_truncation() -> None:
     ctx = {"doc_staleness": {"churn_window": "90d", "history_truncated": True,
                              "history_boundary_date": "2026-08-01"}}
     assert _render_churn_window(ctx) == (
-        "90d - shallow clone, history before 2026-08-01 missing")
+        "90d - shallow clone, history before 2026-08-01 not in the clone")
     ctx["doc_staleness"]["history_truncated"] = False
     assert _render_churn_window(ctx) == "90d"
 
