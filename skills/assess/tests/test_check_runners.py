@@ -65,6 +65,8 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
     "bash -c 'foo'", "/usr/bin/foo", "./gradlew assembleDebug", "xcodebuild build -scheme App",
     "xcodebuild -scheme test build", "flutter build apk", "dart compile exe bin/x.dart",
     "php artisan migrate",
+    # #926: a package-manager head running a target runner reads as that runner.
+    "pnpm turbo run build", "yarn nx affected -t build", "pnpm nx run app:build", "pnpm make build",
     # Review (#924): a directory names no check, a YAML path value is not a script, a
     # container is read by its entrypoint, and a detached one cannot fail its step.
     "./ci/deploy.sh", "bash ci/deploy.sh", "test-results/junit.xml", "coverage/lcov.info", "scripts/foo",

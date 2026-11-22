@@ -82,7 +82,20 @@ _OR_AFTER_DIFF = re.compile(r"\bgit\s+diff\b[^|]*\|\|(.*)$")
 _PIPED_DIFF = re.compile(r"\bgit\s+diff\b[^|;&]*\|(?!\|)")
 # A handler that still fails the step: ``|| exit 1``, ``|| (echo x; exit 1)``, ``|| false``.
 # ``false`` counts only as a command, never inside echoed text (``|| echo "false alarm"``).
-_RERAISE = re.compile(r"\bexit\s+(?:[1-9]|\$\?)|(?:^|[;&|({])\s*false\b")
+# Both count only as a command, never inside echoed text (``|| echo "exit 1 is wise"``).
+_RERAISE = re.compile(r"(?:^|[;&|({])\s*(?:exit\s+(?:[1-9]|\$\?)|false\b)")
+# A diff that compares the index or commits, not the working tree a rewrite changed:
+# ``git diff --cached``, ``--staged``, ``git diff --exit-code HEAD~1 HEAD``.
+_INDEX_FLAGS = frozenset({"--cached", "--staged"})
+_REVISION = re.compile(r"^(?:HEAD|FETCH_HEAD|ORIG_HEAD|origin/\S+|[0-9a-f]{7,40})(?:[~^]\d*)*$|\.\.")
+
+
+def _working_tree(words: list[str]) -> bool:
+    """A ``git diff`` that compares the working tree: no ``--cached`` / ``--staged`` and no
+    revision argument before ``--`` (paths after it are fine)."""
+    args = words[2:words.index("--")] if "--" in words else words[2:]
+    return not (_INDEX_FLAGS & set(args)
+                or any(_REVISION.search(a) for a in args if not a.startswith("-")))
 
 
 def _diff_gate(line: str) -> bool:
@@ -90,7 +103,8 @@ def _diff_gate(line: str) -> bool:
     failure handled by ``||`` counts only when the handler re-raises it (``|| exit 1``):
     ``git diff --quiet || git commit -am fmt`` commits the fix and never fails."""
     if not any((words := command_words(c.text))[:2] == ["git", "diff"]
-               and {"--exit-code", "--quiet"} & set(words) for c in line_commands(line)):
+               and {"--exit-code", "--quiet"} & set(words) and _working_tree(words)
+               for c in line_commands(line)):
         return False
     text = ci_line_text(line)
     if _PIPED_DIFF.search(text):   # git diff --exit-code | tee d.txt: the pipe hides its status
@@ -121,9 +135,19 @@ def _after_script(lines: Sequence[str]) -> frozenset[int]:
 
 
 def _stages(line: str) -> bool:
-    """``git add`` or ``git commit``: after either, ``git diff`` sees no working-tree change."""
-    return any(command_words(c.text)[:2] in (["git", "add"], ["git", "commit"])
-               for c in line_commands(line))
+    """A git command after which ``git diff`` sees no working-tree change: one that stages
+    or commits the rewrite (``git add``, ``git commit``) or throws it away (``git stash``,
+    ``git restore``, ``git checkout -- .``, ``git reset --hard``)."""
+    for c in line_commands(line):
+        words = command_words(c.text)
+        sub = words[1] if words[:1] == ["git"] and len(words) > 1 else ""
+        if sub in ("add", "commit", "stash", "restore"):
+            return True
+        if sub == "checkout" and ("--" in words or "." in words):
+            return True
+        if sub == "reset" and "--hard" in words:
+            return True
+    return False
 
 
 def rewrite_gated(text: str) -> frozenset[int]:

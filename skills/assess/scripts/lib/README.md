@@ -3858,8 +3858,11 @@ commit -am fmt`; `|| exit 1` and `|| false` re-raise). A diff under a GitLab `af
 key is no gate either (`_after_script`): GitLab ignores its exit codes. Nor is a diff piped
 into another command (`git diff --exit-code | tee d.txt`): without `pipefail`, which
 GitHub's default `bash -e` does not set, the step takes the last command's status. Nor is a diff with a
-`git add` or `git commit` between it and the rewrite (`_stages`), since the working tree
-then shows no change. A property tag with a `Condition` attribute counts (it may apply, so
+`git add`, `git commit`, `git stash`, `git restore`, `git checkout -- .` or `git reset
+--hard` between it and the rewrite (`_stages`), since the working tree then shows no
+change, nor one that compares the index or commits (`_working_tree`: `--cached`,
+`--staged`, a revision such as `HEAD~1` before `--`). An `||` handler re-raises only when
+`exit 1` or `false` runs as a command, never inside echoed text. A property tag with a `Condition` attribute counts (it may apply, so
 it reads null, never false). `job_ids(lines)`
 numbers the jobs: each top-level key (a GitLab job) and each key at the first indent
 under a top-level `jobs:` (GitHub). `line_commands(line)` is the per-line command reader
