@@ -404,8 +404,10 @@ List the accounts awaiting confirmation (deterministic, never prompts, prints to
 
 <!-- chat-skip:start -->
 ```bash
-uv run "${CLAUDE_SKILL_DIR}/scripts/identity_candidates.py" "$REPO_ROOT" --window "$(jq -r .ai_usage.window "$REPO_ROOT/.assess/run-context.json")"   # add --json for a machine-readable list
+uv run "${CLAUDE_SKILL_DIR}/scripts/identity_candidates.py" "$REPO_ROOT"            # add --json for a machine-readable list
 ```
+
+`--window` (default `6mo`, the headless default; `all-time` for full history) should match the run's `ai_usage.window` when it differs, so the listing covers the commits the count covered.
 
 Each line names the account, its commits and its evidence (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`, `agent_name_hint`, `automation_name_hint`, with `co_author_trailer`, `noreply_address` and `uniform_subjects` as supporting evidence). In an interactive run with at least one candidate, ask **one AskUserQuestion call** with one question per candidate (up to four per call; batch the rest), showing the evidence, with the options **AI agent**, **Automation bot** and **Person**. Record the answers, then re-run the core so `ai_usage` reads them:
 

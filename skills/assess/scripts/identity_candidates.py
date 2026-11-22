@@ -25,8 +25,13 @@ is kept as written.
 Exit codes:
     0  listed, or answers written
     2  usage error: no repository, a path that is not a directory, an unreadable --from-list, an invalid --fleet-config, a bad
-       --confirm, --confirm over several repos without --config, or git unavailable
+       --confirm, a bad --window, a --config that is not valid TOML, --confirm over
+       several repos without --config, or git unavailable
 """
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 from __future__ import annotations
 
 import argparse
@@ -40,7 +45,7 @@ from typing import TypedDict
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib.ai_usage import matcher_from_config, window_commits  # noqa: E402
+from lib.ai_usage import ALL_TIME, matcher_from_config, resolve_window, window_commits  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, load_fleet_config, repo_fleet_config  # noqa: E402
 from lib.account_discovery import EVIDENCE, Candidate, discover  # noqa: E402
 from lib.signals import DEFAULT_WINDOW  # noqa: E402
@@ -85,6 +90,8 @@ def write_answers(config: Path, answers: list[tuple[str, str]]) -> None:
     """Merge ``answers`` (class key, account) into ``config``'s ``[identities]``."""
     text = config.read_text(encoding="utf-8") if config.is_file() else ""
     section = tomllib.loads(text).get("identities", {}) if text else {}
+    if not isinstance(section, dict):
+        raise ValueError("identities: expected a table ([identities])")
     lists = {key: [v for v in section.get(key, []) if isinstance(v, str)] for key in CLASSES.values()}
     for key, account in answers:
         for other in lists.values():
@@ -138,7 +145,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--from-list", metavar="FILE",
                         help="A file of repository paths, one per line (# comments allowed), as fleet.py reads.")
     parser.add_argument("--window", default=DEFAULT_WINDOW,
-                        help="History window, as ai_usage reads it (default: %(default)s); 'all' for full history.")
+                        help="History window, as ai_usage reads it (default: %(default)s, the headless "
+                             "signals default); 'all-time' for full history.")
     parser.add_argument("--fleet-config", metavar="FILE", help="Fleet settings whose [identities] extend each repo's.")
     parser.add_argument("--json", action="store_true", help="Print the candidates as a JSON array.")
     parser.add_argument("--confirm", action="append", default=[], metavar="CLASS=ACCOUNT",
@@ -172,7 +180,11 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return 2
         target = Path(args.config) if args.config else repos[0] / ".assess" / "config.toml"
-        write_answers(target, answers)
+        try:
+            write_answers(target, answers)
+        except (OSError, UnicodeDecodeError, ValueError) as e:  # TOMLDecodeError is a ValueError
+            print(f"error: --config {target}: {e}", file=sys.stderr)
+            return 2
         print(f"Recorded {len(answers)} answers in {target}.")
         return 0
     fleet: FleetConfig | None = None
@@ -182,7 +194,12 @@ def main(argv: list[str] | None = None) -> int:
         except FleetConfigError as e:
             print(f"error: --fleet-config {args.fleet_config}: {e}", file=sys.stderr)
             return 2
-    window = None if args.window == "all" else args.window
+    window = None if args.window in ("all", ALL_TIME) else args.window
+    try:
+        resolve_window(window)
+    except ValueError as e:
+        print(f"error: --window: {e}", file=sys.stderr)
+        return 2
     rows = collect(repos, window, fleet)
     if isinstance(rows, str):
         print(f"error: {rows}", file=sys.stderr)

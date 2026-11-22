@@ -156,9 +156,20 @@ def test_fleet_listing_aggregates_and_the_fleet_config_extends_each_repo(
     assert "codecov[bot]" not in {r["account"] for r in json.loads(capsys.readouterr().out)}
 
 
-@pytest.mark.parametrize("argv", [["--confirm", "robot=x"], ["--confirm", "agent="], []])
+@pytest.mark.parametrize("argv", [["--confirm", "robot=x"], ["--confirm", "agent="], [],
+                                  ["--window", ""], ["--window", "null"]])
 def test_bad_arguments_exit_2(repo: Path, argv: list[str]) -> None:
     assert cli.main(([str(repo)] if argv else []) + argv) == 2
+
+
+def test_full_history_window_and_a_bad_config_file(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main([str(repo), "--window", "all-time", "--json"]) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 3
+    (repo / ".assess").mkdir()
+    (repo / ".assess" / "config.toml").write_text("identities = 3\n", encoding="utf-8")
+    assert cli.main([str(repo), "--confirm", "bot=codecov[bot]"]) == 2
+    (repo / ".assess" / "config.toml").write_text("[identities\n", encoding="utf-8")
+    assert cli.main([str(repo), "--confirm", "bot=codecov[bot]"]) == 2
 
 
 def test_a_missing_directory_or_bad_fleet_config_exits_2(repo: Path, tmp_path: Path) -> None:

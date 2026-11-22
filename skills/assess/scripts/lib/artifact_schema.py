@@ -321,5 +321,7 @@ ARTIFACT_SCHEMA_VERSION = "1.32.0"
 # 28: ``ai_usage`` buckets an account confirmed in the ``[identities]`` section of
 #     ``.assess/config.toml`` or ``--fleet-config`` (issue #765) before any pinned
 #     rule: a confirmed agent counts in ``agent_authored_commits``, a confirmed bot
-#     or person never does. Without the section the counts are unchanged.
+#     or person never does. The same matcher serves ``delivery`` and the GitLab
+#     note classifier (``gitlab_notes``) under --platform, so a confirmed account
+#     moves their agent counts too. Without the section nothing changes.
 ASSESS_METHOD_VERSION = 28
