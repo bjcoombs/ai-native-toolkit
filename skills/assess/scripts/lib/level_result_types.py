@@ -19,6 +19,7 @@ class ConditionResult(TypedDict):
     reason: NotRequired[str]  # not_measured, or a requires that is not met
     disposition: NotRequired[str]  # "excluded_by_owner": the owner excluded this condition (#910)
     exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
+    polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
 
 
 class NotMeasured(TypedDict):

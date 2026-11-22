@@ -483,7 +483,8 @@ def _wording(row: Row, level: int, signal: str) -> tuple[str, str]:
         if 0 < level <= len(row["levels"]) else []
     if not criteria:
         return f"Meet {code(signal)}.", f"the next fleet run reads {code(signal)} met."
-    words = guidance(signal, criteria[0]["op"], criteria[0]["value"])
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    words = None if "eq_signal" in criteria[0] else guidance(signal, criteria[0]["op"], criteria[0]["value"])
     if words is None:
         return f"Meet {expression(criteria[0])}.", f"the next fleet run reads {expression(criteria[0])}."
     return words["change"], words["done_when"]
