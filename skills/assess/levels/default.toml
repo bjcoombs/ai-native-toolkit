@@ -109,8 +109,7 @@
 #   when there is no root file and nested_instructions did not run, and a
 #   missing layer_grades block is unknown. A nested-only repository's advice
 #   is the gap_actions layer_grades entry: add a root file that names the
-#   check command. Unreleased: this comment changed with #821 and the
-#   criterion did not; the 3.0.0 release PR bumps "version".
+#   check command.
 #   layer_grades.instructions_grade (the letter grade, null with no
 #   file) is available to a maturity model too; this one does not grade on the
 #   letter, since /assess weighs it with the instruction text. Level 2 reads
@@ -240,9 +239,6 @@
 # tally and no Step.
 #
 # Changing a criterion changes results: bump "version" with every edit.
-#
-# Unreleased (the 3.0.0 release PR bumps "version" once): every condition
-# gains "truth" (#843); no criterion, grade or Step changes.
 
 version = "default-2026.11.22"
 

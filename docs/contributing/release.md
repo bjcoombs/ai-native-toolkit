@@ -25,6 +25,21 @@ ${BODY}"
 
 When several PRs share one marathon, the standalone build fires on the **first** version-changing merge. The final merged tree must therefore carry the highest version (have the last-merging PR bump one step higher; see [the version hot file](./marathon.md#the-version-hot-file)), otherwise the published `standalone-skills-v<version>` bundle is missing the later PRs and no further build re-fires for that version.
 
+## Version-freeze notes
+
+While a version freeze holds, a PR leaves every version counter at its value on `main` and records the bump it would have made as a note file, `skills/assess/changes/<issue>.<counter>.md`, holding one or more markdown bullets. It lists the counter in its PR body under "Version bumps for the release PR". It never writes an `Unreleased` block into a history comment: each PR adds its own file, so two PRs that change the same counter do not conflict. The counter names and the file each one's history lives in are in [the notes README](../../skills/assess/changes/README.md).
+
+`scripts/tests/test_fold_changes.py` fails on a note whose name is not `<issue>.<counter>.md`, whose counter is unknown, or whose text is not bullets, and on an `Unreleased` line left in a history comment.
+
+The release PR folds the notes, from `scripts/`:
+
+```bash
+uv run --locked python fold_changes.py --check        # validate only
+uv run --locked python fold_changes.py --release 3.0.0
+```
+
+For each counter with notes, the fold writes one history entry directly above the counter, `# <new> (<release> release): <n> changes since <old>.` followed by the notes in issue order, sets the counter to `<new>` and deletes the notes. `<new>` is the next minor version for `ARTIFACT_SCHEMA_VERSION`, the next integer for an integer counter, and `default-<date>` for the default maturity model (`--date`, default today). Pass `--set artifact_schema=2.0.0` (one `--set` per counter) to pick a different value. The fold does not touch the copies and pins elsewhere: `complexity-treemap.py`, the tests and goldens that name a counter's value, and `.claude-plugin/plugin.json` still move by hand in the same PR.
+
 ## Marketplace listing (manual, web-only)
 
 The repo also publishes the [AI-Readiness Assess Gate action](https://github.com/marketplace/actions/ai-readiness-assess-gate). The listing's "latest version" does **not** advance with `gh release create`, and no API exists for the Marketplace flag. To refresh it: edit the release in the web UI, tick "Publish this Action to the GitHub Marketplace", update. Do this on marathon releases. Consumers are unaffected either way: their `uses:` pins and Dependabot bumps read git tags, not the listing.

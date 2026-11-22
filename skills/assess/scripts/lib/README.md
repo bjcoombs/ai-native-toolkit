@@ -2221,7 +2221,10 @@ module comment. `complexity-treemap.py` carries a copy that
 It also holds `ASSESS_METHOD_VERSION`, the finding method version: an integer,
 independent of plugin releases, bumped by one in any change that moves which findings
 a run produces on unchanged code. `assess_core` stamps it in run-context.json and in
-`findings.json`.
+`findings.json`. During a version freeze a change to either counter, or to
+`LEVEL_RESULT_VERSION`, `SIGNALS_SCHEMA_VERSION` or the default model's `version`, adds a
+note file under `skills/assess/changes/` instead of editing the history comment;
+`scripts/fold_changes.py` writes the notes in at release (#1011).
 
 **`findings_snapshot.py`**
 The committed findings snapshot (#554). `build_snapshot` reduces `derived_findings` to
