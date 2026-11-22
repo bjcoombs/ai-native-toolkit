@@ -413,6 +413,23 @@ def test_a_version_1_entry_with_the_old_roll_up_is_still_replayed(tmp_path: Path
     assert _earned(doc) == _earned(_build())
 
 
+def test_a_version_2_entry_without_opportunities_is_still_replayed(tmp_path: Path) -> None:
+    """#746 bumped FLEET_DATA_VERSION to 3 for ``opportunities`` only, which the engine never
+    reads, so a fleet's earlier version 2 entries keep their achievements."""
+    org = tmp_path / "grp"
+    for date, spec in HISTORY[:3]:
+        old = json.loads(dumps_fleet_data(_data(date, spec)))
+        old["fleet_data_version"] = 2
+        del old["opportunities"]
+        _entry(org, date, spec)
+        (org / date / FLEET_DATA_FILE).write_text(json.dumps(old), encoding="utf-8")
+    current: FleetStamp = {**STAMP, "scan_date": "2026-11-22"}
+    runs = earlier_runs(org, current, frozenset(BASE))
+    assert [r.run_id for r in runs] == ["2026-11-01", "2026-11-08", "2026-11-15"]
+    doc = fa.build_achievements(fa.HistoryRun("2026-11-22", _data("2026-11-22", HISTORY[3][1])), runs, MODEL)
+    assert _earned(doc) == _earned(_build())
+
+
 @pytest.mark.parametrize("version", [[1], {"v": 1}, True, "1", 1.0, None])
 def test_a_history_entry_with_a_malformed_version_is_passed_over(tmp_path: Path, version: object) -> None:
     org = tmp_path / "grp"

@@ -306,6 +306,27 @@ def _guardrails_stated(op: str, value: Operand) -> Guidance | None:
                          "under complexity 15 (ruff C901): run `ruff check .`\")."}
 
 
+def _agents_agree(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Make every agent system's instruction file name the same test and lint "
+                      "commands and the same coverage, complexity and line-length numbers, "
+                      "ideally by keeping them in `AGENTS.md` only.",
+            "done_when": "No check command or threshold is named in one tool's instruction file "
+                         "and missing from, or different in, another's."}
+
+
+def _agents_linked(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Keep `AGENTS.md` as the one canonical source and replace each other "
+                      "tool's file with the pointer line `/assess` gives for it (`@AGENTS.md` "
+                      "for Claude Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: "
+                      "AGENTS.md` in `.aider.conf.yml`), or make it a symlink to `AGENTS.md`.",
+            "done_when": "Every agent system's root instruction file is `AGENTS.md`, a symlink to "
+                         "it, an `@AGENTS.md` import or a line pointing to it."}
+
+
 def _setting(name: str) -> Wording:
     label = SETTING_NAMES.get(name, f"`{name}` setting")
 
@@ -374,6 +395,8 @@ _WORDING: dict[str, Wording] = {
     "stats_summary.loc.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
     "guardrails.stated_pct": _guardrails_stated,
+    "agent_consistency.conflicts": _agents_agree,
+    "agent_consistency.unlinked": _agents_linked,
     "coverage_gate.configured": _flag(
         "Make the test run fail when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -419,6 +442,9 @@ _MEASURE_HINTS = {
     "guardrails": "Unknown when the `guardrails` scan finds no configured gate (a ruff or "
                   "flake8 complexity limit, a coverage floor, pre-commit hooks, mypy "
                   "strict): with nothing to state there is no share to measure.",
+    "agent_consistency": "Not measured when fewer than two agent systems have a root "
+                         "instruction file: one system has nothing to agree with, so "
+                         "`conflicts` and `unlinked` are null (`applicable: false`).",
     "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
                  "the dominant source language: `no_import_graph_<language>` when no "

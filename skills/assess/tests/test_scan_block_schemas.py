@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+from lib.agent_consistency import AgentConsistencyBlock  # noqa: E402
 from lib.ai_usage import AiUsageBlock  # noqa: E402
 from lib.ci_checks import CiChecksBlock  # noqa: E402
 from lib.counts_only import counts_only_scans  # noqa: E402
@@ -24,7 +25,8 @@ from lib.signals import collect  # noqa: E402
 from lib.signals_schema import REASON_KEPT, build_schema, described_block  # noqa: E402
 
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
-         "delivery": DeliveryBlock, "guardrails": GuardrailsBlock}
+         "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,
+         "agent_consistency": AgentConsistencyBlock}
 
 
 @pytest.mark.parametrize("name", sorted(BLOCK_SCHEMAS))
