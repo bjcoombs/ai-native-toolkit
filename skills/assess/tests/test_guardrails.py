@@ -256,3 +256,10 @@ def test_each_file_with_a_coverage_floor_is_one_gate(tmp_path: Path) -> None:
     gates = scan_guardrails(tmp_path, [], block)["gates"]
     assert [(g["file"], g["threshold"]) for g in gates] == [
         ("a/pyproject.toml", 90), ("b/pyproject.toml", 70)]
+
+
+@pytest.mark.parametrize("key", ["max-complexity", "max_complexity"])
+def test_flake8_reads_the_hyphen_and_underscore_spellings(tmp_path: Path, key: str) -> None:
+    root = _write(tmp_path, {".flake8": f"[flake8]\n{key} = 11\n"})
+    (gate,) = scan_guardrails(root, [], None)["gates"]
+    assert (gate["tool"], gate["threshold"], gate["line"]) == ("flake8", 11, 2)

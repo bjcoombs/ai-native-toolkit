@@ -12,7 +12,7 @@ Gate kinds read (one gate per configuring file):
   or ``extend-select`` names ``C901``, ``C90``, ``C9``, ``C`` or ``ALL``) in
   ``pyproject.toml`` (``[tool.ruff]`` / ``[tool.ruff.lint]``), ``ruff.toml`` or
   ``.ruff.toml``; the threshold is ``max-complexity`` (``[...mccabe]``), or ruff's
-  default 10 when unset. flake8's ``max-complexity`` in ``[flake8]`` of
+  default 10 when unset. flake8's ``max-complexity`` (or ``max_complexity``) in ``[flake8]`` of
   ``.flake8``, ``setup.cfg`` or ``tox.ini`` (setting it turns C901 on).
 - ``coverage_floor``: the ``coverage_gate`` block's gates that gate something (a
   non-zero threshold, or a tool default), read once, never re-parsed. One gate
@@ -200,7 +200,9 @@ def _ini_option(root: Path, name: str, section: str, option: str) -> tuple[str, 
 
 
 def _flake8_gate(root: Path, name: str) -> Guardrail | None:
-    found = _ini_option(root, name, "flake8", "max-complexity")
+    # flake8 accepts the option with a hyphen or an underscore.
+    found = (_ini_option(root, name, "flake8", "max-complexity")
+             or _ini_option(root, name, "flake8", "max_complexity"))
     if found is None:
         return None
     value, text = found

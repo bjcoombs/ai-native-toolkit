@@ -3882,7 +3882,7 @@ stated_pct, instruction_files_read, not_read}`. Each gate (`Guardrail`) is `{kin
 rule, threshold, file, line, stated, stated_in, snippet}`, one per configuring file:
 `complexity_limit` (ruff's mccabe `max-complexity` when `C901` is selected, ruff's
 default 10 when unset, in `pyproject.toml`, `ruff.toml` or `.ruff.toml`; flake8
-`max-complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (per file
+`max-complexity` or `max_complexity` in `.flake8`, `setup.cfg` or `tox.ini`), `coverage_floor` (per file
 of the `coverage_gate` block, its counted gate with the highest `threshold_percent`, through
 `coverage_gate.gates_something`, never re-parsed), `pre_commit` (a root
 `.pre-commit-config.yaml` with at least one `- id:` hook, one gate whatever its hook
