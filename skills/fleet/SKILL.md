@@ -98,6 +98,7 @@ there.
 | `--history-dir DIR` | Run history root (default `${XDG_DATA_HOME:-~/.local/share}/ai-native-toolkit/fleet`). |
 | `--history-org NAME` | The `<org>` directory in the history (default: from the repository ids). |
 | `--no-history` | Do not keep this run in the history. |
+| `--discovered FILE` | What ghsync discovered: its `--porcelain` output (one path per line) or `--porcelain-json` output (one object per line). `report.md` and `run.json` then say how many of these repositories were assessed and count each gap. Needs `ROOT`; a malformed line exits 2 and names the line. See [Coverage](#coverage---discovered). |
 | `--name-agent-clusters` | Name the member repositories and groups of each cluster in `DIR/agent_clusters.json`. Off by default, in counts-only and `--full` alike: a cluster then carries counts and SDK slugs only. See [agent clusters](#output-agent_clustersjson). |
 | `--targets FILE` | Targets (TOML) for [`achievements.json`](#output-achievementsjson): each `[[target]]` names a `view`, a `unit`, a team `row` and either a `level` or a mean `share` of top level (see the targets file format below). Needs `--levels`. An invalid file exits 2 before any scan. Not part of the run stamp, so changing a target never stops runs comparing. |
 | `--first-achievements` | Also credit `first` achievements in [`achievements.json`](#output-achievementsjson) (a unit reaching a level no unit of its view and kind has held on that row in this fleet's history). Off by default (#772), since it compares a unit with its peers. Not part of the run stamp. |
@@ -503,6 +504,7 @@ it. Schema: [`references/run.schema.json`](references/run.schema.json).
 | `fleet_config_entries` | Entries per section (`ai_usage`, `review`, `platform`): a list counts its items, any other key 1. `null` without `--fleet-config`. Never a pattern or value. |
 | `platform` | `true` when `--platform` ran a platform read; `false` without it, and also when `--scans` selects no platform scan (nothing was read). A comparability key. Absent in a run from before #714, which reads as `false`. |
 | `repositories` | `selected` (every row), `scanned_ok` (rows `ok`), `failed` (rows `failed`) and `qualifying` (rows `ok` with `active` true). |
+| `coverage` | The [`--discovered`](#coverage---discovered) counts: `discoverable`, `assessed`, `archived_or_empty`, `not_cloned`, `failed_scan`, `excluded_by_filters` and `not_in_listing`. `null` without `--discovered` (coverage unknown), and absent in a run from before #745. Counts only, and not a comparability key. |
 
 The stamp holds no path, salt, timing or input mode: a root run, a list run and
 any `--jobs` over unchanged checkouts on the same day write the same bytes.
@@ -807,6 +809,43 @@ A scanner change that alters a signal's meaning ships under a new signal name or
 `signals_schema_version` bump, so an earlier run reads the new signal as absent; these causes
 are the backstop for a change that kept the name.
 
+## Coverage: `--discovered`
+
+A repository ghsync never cloned leaves no row, so on its own a run cannot say what it
+missed. `--discovered FILE` reconciles the run against ghsync's discovery listing and
+reports "N of M discoverable repositories were assessed", each gap named and counted:
+
+```bash
+# /ghsync's discovery listing (its --porcelain output works too), then the run against it
+ghsync.sh --org my-org --porcelain-json > discovered.jsonl
+fleet.py ~/dev/github.com/my-org --discovered discovered.jsonl --out fleet-out
+```
+
+Each discovered path lands in one bucket, the first that matches:
+
+| Bucket (`run.json` key) | When |
+|-------------------------|------|
+| `assessed` | its row is `ok` |
+| `failed_scan` | its row is `failed`: cloned, but it could not be scanned (the reason is in `repos.jsonl`) |
+| `archived_or_empty` | `archived` is true or `default_branch` is empty: ghsync skips both |
+| `excluded_by_filters` | a `<repo>-main` checkout under `ROOT` this run was not given, such as one a `--from-list` run left out |
+| `not_cloned` | anything else: discovered, but there is no checkout |
+
+The buckets sum to `discoverable`. A path names a row the way the root layout does: a
+one-segment GitHub path `svc` is the row `<root name>/svc`. `not_in_listing` counts the rows
+no discovered path names; they are left out of the other counts.
+
+ghsync's listing leaves archived and empty repositories out, so `archived_or_empty` counts
+the listing's own archived or branchless lines plus the paths in ghsync's archived-repos
+cache, `ROOT/.gh_archived_repos`, that the listing lacks. ghsync records no cache of empty
+repositories, so an empty one appears only when your list includes it.
+
+`report.md` gives the coverage line first, above every section and diagram, and
+`run.json` records the counts under `coverage`. Both are counts only in every output mode:
+no repository is named, so nothing outside `repos.jsonl` names an unassessed repository.
+Without `--discovered`, the line says the coverage is unknown and `coverage` is `null`.
+Logic: `lib/fleet_coverage.py`.
+
 ## Output: `report.md` and diagrams
 
 Every run draws diagrams from its own rows, with no model call, and writes them beside
@@ -814,8 +853,8 @@ Every run draws diagrams from its own rows, with no model call, and writes them 
 in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipped and the
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
-The report opens with "What changed and who earned it", before the diagrams (see
-[`achievements.json`](#output-achievementsjson)).
+The report opens with the [coverage line](#coverage---discovered), then "What changed and who
+earned it", before the diagrams (see [`achievements.json`](#output-achievementsjson)).
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows

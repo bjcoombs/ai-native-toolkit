@@ -34,7 +34,10 @@ It also draws the fleet diagrams (``lib/fleet_diagrams.py``): ``<out>/report.md`
 embedding ``quadrant.svg``, ``shared-tooling.svg``, ``trend.svg`` (group trend lines
 over the run history, ``lib/fleet_trends.py``), ``slope.svg`` (from the ``--compare``
 result) and ``layer-bars.svg``, or the reason each was skipped;
-``--no-diagrams`` turns them off.
+``--no-diagrams`` turns them off. ``report.md`` opens with the coverage line: with
+``--discovered FILE`` (ghsync's ``--porcelain`` or ``--porcelain-json`` listing) how many of
+the discoverable repositories were assessed and each gap counted, also in ``run.json``
+(``lib/fleet_coverage.py``, #745); without it, coverage unknown.
 
 ``--fleet-config FILE`` (``lib/fleet_config.py``, #706) is validated before any scan
 and every repository scan gets the same copy of it; a repository's own
@@ -78,13 +81,14 @@ Exit codes:
        a list entry whose ~user cannot be expanded, bad scan arguments, an --out that
        cannot be created or written (checked before any scan), an unusable history
        location, an unreadable --compare run, or an unreadable or invalid
-       --fleet-config (the message names the key)
+       --fleet-config (the message names the key), or an unreadable or malformed
+       --discovered listing (the message names the line)
 
 Run:
     uv run fleet.py ROOT --out DIR [--levels FILE] [--settings PATH] [--units FILE] [--jobs N] [--window 6mo]
         [--scans a,b] [--timeout SECONDS] [--full | --hash-paths | --hash-salt VALUE]
         [--delete-after] [--compare [RUN_DIR]] [--history-dir DIR] [--history-org NAME]
-        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters]
+        [--no-history] [--no-diagrams] [--fleet-config FILE] [--name-agent-clusters] [--discovered FILE]
         [--platform [--platform-jobs N] [--platform-timeout SECONDS]]
     uv run fleet.py --from-list FILE [ROOT] --out DIR [...]
 """
@@ -139,6 +143,7 @@ from lib.fleet_activity import window_start  # noqa: E402
 from lib.fleet_agent_building import clusters, write_clusters  # noqa: E402
 from lib.fleet_doc_freshness import freshness_rows, summary_line, write_freshness  # noqa: E402
 from lib.fleet_cleanup import CloneDeleter  # noqa: E402
+from lib.fleet_coverage import Discovered, DiscoveryError, coverage_line, read_discovery, reconcile  # noqa: E402
 from lib.fleet_compare import (  # noqa: E402
     Comparison,
     FleetRun,
@@ -332,6 +337,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              f"unavailable (default: [platform] timeout in --fleet-config, else {DEFAULT_PLATFORM_TIMEOUT}).",
     )
     parser.add_argument(
+        "--discovered", metavar="FILE",
+        help="What ghsync discovered: its --porcelain or --porcelain-json output (one path or "
+             "object per line). report.md and run.json then say how many of these repositories "
+             "were assessed and count each gap: archived or empty, not cloned, could not be "
+             "scanned, excluded by filters. Needs ROOT. Without it, coverage reads unknown.",
+    )
+    parser.add_argument(
         "--name-agent-clusters", action="store_true",
         help="Name the member repositories and groups of each agent cluster in "
              "OUT/agent_clusters.json. Off by default: a cluster carries counts and SDK slugs only.",
@@ -344,6 +356,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                      "(fleet.py ROOT --out DIR --compare [RUN_DIR]) or write --compare=RUN_DIR")
     if args.root is None and args.from_list is None:
         parser.error("give a ghsync ROOT or --from-list FILE")
+    if args.discovered is not None and args.root is None:
+        parser.error("--discovered needs ROOT, the ghsync root its paths are under")
     if args.full and (args.hash_paths or args.hash_salt is not None):
         parser.error("--hash-paths and --hash-salt apply to counts-only output, not --full")
     if args.hash_salt == "":
@@ -489,14 +503,15 @@ def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
 
 def _diagrams(out_dir: Path, no_diagrams: bool, maturity_model: MaturityModel | None, rows: list[FleetRow],
               window: str, *, history: list[TrendRun] | None = None,
-              comparison: Comparison | None = None, credit: str | None = None) -> None:
+              comparison: Comparison | None = None, credit: str | None = None,
+              coverage: str | None = None) -> None:
     """Draw the diagrams and their report, or clear them; a failure never changes the exit code."""
     try:
         if no_diagrams:
             clear_diagrams(out_dir)
             return
         diagrams = build_diagrams(maturity_model, rows, window, history=history, comparison=comparison)
-        write_diagrams(out_dir, diagrams, credit)
+        write_diagrams(out_dir, diagrams, credit, coverage)
     except Exception as e:  # noqa: BLE001 - a diagram never fails a completed run
         print(f"fleet: diagrams: not written ({type(e).__name__}: {e})", file=sys.stderr)
         return
@@ -595,6 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     units: UnitsMap = empty_map()
     fleet_config: FleetConfig | None = None
     fleet_config_text: str | None = None
+    discovered: list[Discovered] | None = None
     try:
         if args.fleet_config is not None:
             fleet_config_text = read_fleet_config(Path(args.fleet_config))
@@ -611,6 +627,11 @@ def main(argv: list[str] | None = None) -> int:
             parse_window(args.window)
         level_targets = load_targets(Path(args.targets), maturity_model) if args.targets is not None else []
         targets = _targets(args)
+        if args.discovered is not None:
+            discovered = read_discovery(Path(args.discovered), Path(args.root).resolve())
+    except DiscoveryError as e:
+        print(f"error: --discovered {args.discovered}: {e}", file=sys.stderr)
+        return 2
     except TargetsError as e:
         print(f"error: --targets {args.targets}: {e}", file=sys.stderr)
         return 2
@@ -706,13 +727,15 @@ def main(argv: list[str] | None = None) -> int:
     path = write_rows(out_dir, rows)
     groups = roll_up(rows, maturity_model, settings, counts_only=not args.full)
     groups_path = write_groups(out_dir, groups)
+    coverage = (None if discovered is None else
+                reconcile(discovered, rows, Path(args.root).resolve(), frozenset(t.repo for t in targets)))
     agent_clusters = clusters(rows, name=args.name_agent_clusters)
     write_clusters(out_dir, agent_clusters)
     stamp = build_stamp(
         rows, toolkit_commit=toolkit_commit(), plugin_version=read_plugin_version(),
         today=today, window=window, levels_version=maturity_model["version"] if maturity_model is not None else None,
         counts_only=options.counts_only, paths_hashed=options.hash_salt is not None, scans=scans,
-        fleet_config=fleet_config, platform=platform_ran,
+        fleet_config=fleet_config, platform=platform_ran, coverage=coverage,
     )
     write_stamp(out_dir, stamp)
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
@@ -723,7 +746,7 @@ def main(argv: list[str] | None = None) -> int:
                            privacy_for(args.full, hash_salt).key, args.first_achievements)
     history = None if args.no_diagrams else _trend_history(org_dir, entry, stamp, groups, rows, maturity_model)
     _diagrams(out_dir, args.no_diagrams, maturity_model, rows, window, history=history, comparison=comparison,
-              credit=credit)
+              credit=credit, coverage=coverage_line(coverage, len(rows)))
     failed = [row for row in rows if row["status"] == STATUS_FAILED]
     print(f"fleet: {len(rows)} repositories, {len(failed)} failed -> {path}, {groups_path.name}",
           file=sys.stderr)

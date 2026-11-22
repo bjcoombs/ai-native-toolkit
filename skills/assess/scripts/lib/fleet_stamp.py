@@ -26,6 +26,11 @@ version stays 1.
 comparability key. A stamp written before #714 lacks it and reads as false
 (``lib/fleet_legacy.py`` ``STAMP_DEFAULTS``), so the stamp version stays 1.
 
+``coverage`` (#745) holds the ``--discovered`` reconciliation counts
+(``lib/fleet_coverage.py``): how many discoverable repositories were assessed and
+each gap, counts only. It is null without a listing, and in a stamp written before
+#745. It is no comparability key, so the stamp version stays 1.
+
 The stamp holds no absolute path, salt, timing or input mode, so a root run,
 a list run and any ``--jobs`` value over unchanged checkouts on the same day
 write a byte-identical ``run.json``.
@@ -40,6 +45,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from lib.fleet import STATUS_OK, FleetRow
+from lib.fleet_coverage import Coverage
 from lib.fleet_config import FleetConfig, FleetConfigEntries, config_sha256, section_entries
 
 # Bumped when the stamp's keys change, except for the 2.0.0 maturity-model key renames
@@ -70,6 +76,7 @@ class FleetStamp(TypedDict):
     fleet_config_entries: FleetConfigEntries | None
     platform: bool  # --platform ran the platform pass; absent before #714 (reads as False)
     repositories: RepositoryCounts
+    coverage: Coverage | None  # None without --discovered (unknown); absent before #745
 
 
 def count_repositories(rows: list[FleetRow]) -> RepositoryCounts:
@@ -86,6 +93,7 @@ def build_stamp(
     rows: list[FleetRow], *, toolkit_commit: str | None, plugin_version: str,
     today: date, window: str, levels_version: str | None, counts_only: bool, paths_hashed: bool,
     scans: list[str] | None, fleet_config: FleetConfig | None = None, platform: bool = False,
+    coverage: Coverage | None = None,
 ) -> FleetStamp:
     return {
         "fleet_stamp_version": FLEET_STAMP_VERSION,
@@ -101,6 +109,7 @@ def build_stamp(
         "fleet_config_entries": section_entries(fleet_config) if fleet_config is not None else None,
         "platform": platform,
         "repositories": count_repositories(rows),
+        "coverage": coverage,
     }
 
 
