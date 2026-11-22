@@ -1449,7 +1449,7 @@ def main() -> int:
     )
     if not files:
         print(_no_files_message(scope, excluded_generated), file=sys.stderr)
-        if args.stats:  # the measured empty set: no_scored_files, not no_complexity_stats (#959)
+        if args.stats and shutil.which("scc"):  # scc reads every language: a measured empty set (#959)
             write_stats([], aux_data, aux_label, root, args.stats, excluded_generated=excluded_generated)
         return 1
 

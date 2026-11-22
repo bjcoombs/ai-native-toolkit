@@ -2165,9 +2165,10 @@ outside-repo path; a whole-repo run returns `(None, None, "")`. `assess_dir_for`
 carries `available: false` and `NO_STATS_REASON` (`no_complexity_stats`, #959), and
 `run_setup.run_header` turns it into an unavailable `stats_summary` with `files_scored`
 null, so a run whose treemap step wrote nothing reads not measured
-(`no_complexity_stats`), never the measured empty set (`no_scored_files`). The treemap
-writes a zero-file sidecar when nothing is scorable (`complexity-treemap.py`, still exit 1),
-so a docs-only repository keeps reading `no_scored_files`. Tests:
+(`no_complexity_stats`), never the measured empty set (`no_scored_files`). With `scc` on
+PATH (it reads every language) the treemap writes a zero-file sidecar when nothing is
+scorable (`complexity-treemap.py`, still exit 1), so the run reads `no_scored_files`;
+without `scc` zero files is not a measurement and no sidecar is written. Tests:
 `tests/test_scope.py`, `tests/test_run_setup.py`.
 
 **`assess_config.py`**

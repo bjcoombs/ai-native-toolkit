@@ -186,9 +186,9 @@ def test_main_no_files_under_scope_names_it(treemap, monkeypatch, tmp_path, caps
 
 
 def test_main_with_no_files_writes_a_zero_file_sidecar(treemap, monkeypatch, tmp_path):
-    """#959: a tree with nothing to score is a measured empty set. The sidecar is written
-    (files_scored 0), so the run reads no_scored_files, never a missing sidecar
-    (no_complexity_stats), whose rerun advice would loop on a docs-only repository."""
+    """#959: with scc on PATH (it reads every language) a tree with nothing to score is a
+    measured empty set. The sidecar is written (files_scored 0), so the run reads
+    no_scored_files, never a missing sidecar (no_complexity_stats)."""
     from lib import level_tally, run_setup
     from lib.run_scope import load_current_stats
 
@@ -196,6 +196,11 @@ def test_main_with_no_files_writes_a_zero_file_sidecar(treemap, monkeypatch, tmp
     out = tmp_path / ".assess" / "complexity-stats.json"
     out.parent.mkdir()
     monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", str(tmp_path), "--stats", str(out)])
+    # Without scc nothing outside lizard's languages is read: zero files is not a
+    # measurement, so no sidecar is written and the run reads no_complexity_stats.
+    monkeypatch.setattr(treemap.shutil, "which", lambda name: None)
+    assert treemap.main() == 1 and not out.exists()
+    monkeypatch.setattr(treemap.shutil, "which", lambda name: f"/usr/bin/{name}")
     assert treemap.main() == 1  # still an error exit: no treemap is drawn
     current = load_current_stats(out.parent)
     assert current["files_scored"] == 0 and "available" not in current

@@ -466,8 +466,9 @@ _MEASURE_HINTS = {
                      "the file size is not measured (`no_scored_files`): a percentile of "
                      "no files says nothing. A full run with no `complexity-stats.json` "
                      "reads `no_complexity_stats`: the treemap step did not run or did not "
-                     "finish (it writes the file even when no file is scored), so check its "
-                     "output in the `/assess` run.",
+                     "finish, or scored nothing without `scc` on `PATH` (with it, an empty "
+                     "set is written as `files_scored` 0). Install `scc`, then check the "
+                     "treemap step's output in the next `/assess` run.",
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",
