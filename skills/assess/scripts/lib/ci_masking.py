@@ -279,9 +279,13 @@ def _capture_targets(statement: list[tuple[str, str]]) -> list[str]:
 
 
 def _checked_later(targets: list[str], later: list[str]) -> bool:
-    """A later line names a captured file, and that line or one after it exits non-zero."""
+    """A later line names a captured file, and that line or one after it exits non-zero.
+
+    The file must appear as a whole path token: ``out`` does not match ``layout``.
+    """
+    named = [re.compile(r"(?<![\w./-])" + re.escape(t) + r"(?![\w./-])") for t in targets]
     for idx, line in enumerate(later):
-        if any(t in line for t in targets):
+        if any(n.search(line) for n in named):
             return any(_EXIT_NONZERO.search(rest) for rest in later[idx:])
     return False
 

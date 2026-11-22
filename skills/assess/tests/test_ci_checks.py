@@ -193,6 +193,9 @@ def test_a_local_reusable_workflow_is_not_an_include() -> None:
     pytest.param("run: pytest | tee -a $GITHUB_STEP_SUMMARY || true\n", id="step_summary_is_masked"),
     pytest.param("steps:\n  - run: pytest > out.txt || true\n  - run: |\n      make build\n      exit 1\n",
                  id="redirect_then_unrelated_exit_is_masked"),
+    # The captured name only as a substring of another word (`out` in `layout`) is not a read-back.
+    pytest.param("steps:\n  - run: pytest > out || true\n  - run: |\n      make layout\n      exit 1\n",
+                 id="capture_name_as_substring_is_masked"),
     # Trimmed `.github/workflows/windows.yml`: job-level continue-on-error.
     pytest.param("jobs:\n  windows:\n    runs-on: windows-latest\n    continue-on-error: true\n"
                  "    steps:\n      - uses: actions/checkout@v4\n      - name: tests\n"
