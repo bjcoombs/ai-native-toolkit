@@ -47,6 +47,8 @@ from lib.instruction_files import (
 )
 from lib.interactivity import build_offers_block
 from lib.keyhole_signals import integrate
+from lib.level_result_types import LevelResult
+from lib.level_tally import DEFAULT_BLOCKS, run_context_level
 from lib.liveness_scan import scan_liveness
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
@@ -330,3 +332,9 @@ def anomalies(header: dict[str, Any]) -> list[dict[str, Any]]:
         {"code": a.code, "description": a.description, "detail": a.detail}
         for a in detect_anomalies(header)
     ]
+
+
+def level(*blocks: Any) -> LevelResult:
+    """The run context's ``level`` block (#744): the tally over ``level_tally.DEFAULT_BLOCKS``,
+    which the registry entry reads in that order."""
+    return run_context_level(dict(zip(DEFAULT_BLOCKS, blocks)))

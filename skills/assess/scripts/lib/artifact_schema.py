@@ -207,11 +207,16 @@ constant each.
 # go_rust_gate_form_not_read when no gate is found in a repository holding a
 # go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
 # the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
-# 1.34.0: run-context.json derived_findings rows gain an optional reviewed list of
+# 1.34.0: run-context.json gains the level block (issue #744): the default maturity
+# model's conditions with state, grade and reason, the verified tally (met, measured,
+# not_measured), the autonomy Step and the next Step's blockers
+# (lib/level_tally.py). Additive: no existing key moves, and complexity-stats.json is
+# unchanged.
+# 1.35.0: run-context.json derived_findings rows gain an optional reviewed list of
 # {path, completed_sha, note} (issue #721): the paths a done review in the
 # committed .assess/actions.json clears. actions.json gains an optional completed
 # list for done entries that left the Top 3. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.34.0"
+ARTIFACT_SCHEMA_VERSION = "1.35.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
