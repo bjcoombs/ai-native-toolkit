@@ -2,6 +2,7 @@
   "catalog_version": 1,
   "sources": [
     "skills/assess/checks/core.toml",
+    "skills/assess/checks/core/*.toml",
     "skills/assess/levels/default.toml",
     "skills/assess/scripts/lib/level_signals.py",
     "skills/assess/scripts/lib/signals.py",

@@ -1990,8 +1990,10 @@ the one a single file declares, and an error names the fragment
 (`core/ci_checks.toml entries[0] (core.ci_checks).stage`). Layout errors:
 `MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
 would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
-the file) and `FRAGMENTS_AND_ENTRIES`. An id declared in two fragments is `DUPLICATE_ID`,
-naming both files. A new collector adds its fragment and one line to `fragments`; a change
+the file), `FRAGMENT_OWNER` (#994: an entry outside the fragment of its owner, naming the
+entry, its fragment and the expected one; an owner that does not resolve or that two fragments claim, or an id
+declared twice, is left to validation) and `FRAGMENTS_AND_ENTRIES`. An id declared in two
+fragments is `DUPLICATE_ID`, naming both files. A new collector adds its fragment and one line to `fragments`; a change
 to an existing check edits its own fragment only. `read_manifest(path)` returns the merged
 document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
 list. A single-file manifest (any third-party owner) loads as before.
@@ -2113,7 +2115,9 @@ counts-only patterns, split by block for a spread collector), `used_by` (`rows`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
 (every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
-them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
+them, not manifest order, since fragments group signals by collector) and `findings`. `sources` (`catalog.SOURCES`) lists the
+files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
+manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
