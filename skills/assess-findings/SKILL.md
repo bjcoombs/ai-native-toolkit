@@ -7,6 +7,8 @@ description: Renders the /assess report from the deterministic run-context.json 
 
 The report-writing half of `/assess`. The deterministic core has written `.assess/run-context.json` (the data bus) and the `assess-layer-scorer` agent has returned the 0-8 scorecard. Your job is to assemble `.assess/assess-report.md`: the scorecard, the snapshots, the **verbatim** cross-layer findings, the lying signals, and the Top 3 Actions.
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 The deterministic parts are not yours to invent - you paste them. You write the prose *around* a findings section you cannot omit or reorder. This is the deterministic-core-writes-data / LLM-writes-prose split that makes the report reproducible regardless of which model drives the run.
 
 ## Inputs

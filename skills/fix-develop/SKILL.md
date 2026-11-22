@@ -9,6 +9,8 @@ argument-hint: "[branch] (optional - defaults to the repo's default branch)"
 
 Assess failing CI on the repo's default branch (main / develop / etc., or nightly build), create a worktree with a fix, push a PR, and loop until CI passes and review comments are addressed.
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 **Usage**: `/fix-develop [repo-path]` - defaults to current repo context. (Command name is historical; works on whichever branch the repo treats as default.)
 
 ---

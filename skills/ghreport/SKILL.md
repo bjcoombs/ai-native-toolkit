@@ -213,6 +213,7 @@ replaying one shows the same warning; the report itself is unchanged.
 - **Windows:** the script is bash, so run it under Git Bash, which ships with
   Git for Windows (Claude Code on Windows already needs it). Install `jq`
   separately (`winget install jqlang.jq`); Git Bash does not include it.
+  Installs and PATH notes: the [Windows setup guide](../../docs/windows.md).
 - `jq` 1.6 or later. An endpoint that answers with an empty or non-JSON body
   reads as unreadable (`unknown` / `no-access`) on every jq version.
 - Very large orgs make many API calls (~5 per repo); use `--limit` to sample.

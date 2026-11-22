@@ -39,7 +39,7 @@ tracked source file, so a very large repository can need a longer `--timeout`. `
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
 A repository with no import graph names its dominant
-language instead (`no_import_graph_go`, `no_import_graph_rust`), so the
+language instead (for example `no_import_graph_rust`), so the
 fleet output says which language is missing; `no_python_packages` is a Python
 repository with no importable package and `no_source_files` one with no source.
 
@@ -118,7 +118,8 @@ inside it.
 ### Windows
 
 Python 3.11+ and Git for Windows are enough; uv and admin rights are not
-needed.
+needed. Installs, PATH notes and the make-free commands are in the
+[Windows setup guide](../../docs/windows.md).
 
 <!-- chat-skip:start -->
 A Claude Code session on Windows runs PowerShell, so use `python` (not

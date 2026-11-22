@@ -12,6 +12,8 @@ argument-hint: "[scope-label] (optional - narrows which open issues are consider
 > Thin orchestrator. Triages open issues, then delegates execution of `agent-ready` issues
 > to the marathon skill (same engine as `/tm`).
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 ## Configuration
 
 Read the repo's CLAUDE.md `## Marathon Configuration` (GitHub Issues subsection) for label
