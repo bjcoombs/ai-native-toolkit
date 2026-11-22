@@ -41,7 +41,10 @@ GitLab CI, per job (a top-level key of the file):
 Known limits: rules and ``when`` inherited through ``extends:``, ``default:``
 or a YAML anchor are not read, nor a top-level ``workflow: rules:``; hidden
 jobs (``.name:``) are read like any job; GitHub branch and path filters and
-job-level ``if:`` are not read.
+``if:`` conditions are not read here (a literal ``if: false`` is a mask in
+``lib.ci_masking``, #919). Only a workflow file directly under
+``.github/workflows/`` is read: GitHub does not run one in a subfolder
+(``command_index.ci_config_files``).
 """
 from __future__ import annotations
 

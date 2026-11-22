@@ -61,7 +61,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from lib.check_command import _exec_program, _program, may_lint
+from lib.check_command import _exec_program, _info_program, is_info_invocation, may_lint
 from lib.ci_checks import UNREAD_CI_FILES
 from lib.ci_masking import unmasked_lines
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
@@ -212,14 +212,15 @@ _BIN_TOOLS = frozenset({"jest", "vitest", "nyc", "c8"})
 
 def program(words: tuple[str, ...]) -> tuple[str, list[str]]:
     """``(program name, its arguments)`` for one command, through the wrappers
-    ``check_command`` reads (``uv run``, ``poetry run``, ``uvx``, ``npx``, ``python -m``,
-    ``pnpm exec``, ``yarn dlx``) and ``yarn jest`` / ``pnpm vitest``. The name is the
+    ``check_command`` reads (``_exec_program``, then ``_info_program``: ``uv run``,
+    ``poetry run``, ``uvx``, ``npx``, ``python -m``, ``bundle exec``, ``docker compose
+    run``, ``pnpm exec``, ``yarn dlx``) and ``yarn jest`` / ``pnpm vitest``. The name is the
     basename (``./mvnw`` is ``mvnw``). ``pip install pytest`` names ``pip``, and ``echo
     pytest --cov`` names ``echo``: a tool named as an argument is not run."""
     if not words:
         return "", []
     run = _exec_program(list(words))
-    rest = _program(run if run is not None else list(words))
+    rest = _info_program(run if run is not None else list(words))
     if rest and rest[0] in _BIN_RUNNERS and len(rest) > 1 and rest[1] in _BIN_TOOLS:
         rest = rest[1:]
     if not rest:
@@ -238,7 +239,7 @@ def runs_a_program(words: tuple[str, ...]) -> bool:
     """A command whose program can carry a threshold flag: not ``echo`` / ``printf`` and
     the like, and not an install (``pip install``, ``npm install``, ``uv pip install``)."""
     name, args = program(words)
-    if not name or name in _NOT_RUNS:
+    if not name or name in _NOT_RUNS or is_info_invocation(" ".join(words)):
         return False
     positionals = [a for a in args if not a.startswith("-")]
     if name in _INSTALLERS and (positionals[:1] == ["pip"] or bool(
@@ -252,6 +253,8 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config)."""
+    if is_info_invocation(" ".join(words)):   # pytest --version runs no gate (#919)
+        return False
     name, args = program(words)
     if family in ("coverage.py", "pytest"):
         if name in ("pytest", "py.test"):

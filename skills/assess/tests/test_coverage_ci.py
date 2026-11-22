@@ -173,6 +173,8 @@ JEST_COLLECTS = '{"jest":{"collectCoverage":true,"coverageThreshold":{"global":{
     {**_ci("pip install pytest --cov"), "pyproject.toml": PYPROJECT_80},
     {**_ci("echo pytest --cov"), "pyproject.toml": PYPROJECT_80},
     _ci("echo --cov-fail-under=90"),
+    _ci("pytest --cov --cov-fail-under=90 --version"),
+    {**_ci("pytest --cov --co"), "pyproject.toml": PYPROJECT_80},
     _ci("printf '%s' --cov-fail-under=90"),
     _ci("pip install pytest-cov --cov-fail-under=90"),
     {**_ci("npm install --save-dev jest"), "package.json": JEST_COLLECTS},
@@ -180,7 +182,8 @@ JEST_COLLECTS = '{"jest":{"collectCoverage":true,"coverageThreshold":{"global":{
     {**_ci("uv pip install coverage report"), "pyproject.toml": PYPROJECT_80},
     {**_ci("mvn-wrapper-setup verify"),
      "pom.xml": _pom("<value>COVEREDRATIO</value><minimum>0.80</minimum>")},
-], ids=["pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "echo-unquoted-flag",
+], ids=["pip-install-addopts", "pip-install-cov-flag", "echo-pytest", "echo-unquoted-flag", "pytest-version",
+        "pytest-collect-only",
         "printf-flag", "pip-install-flag", "npm-install-jest",
         "npm-install-jest-coverage", "uv-pip-coverage", "not-maven"])
 def test_a_tool_named_as_an_argument_is_not_run(tmp_path: Path, files: dict[str, str]) -> None:
@@ -240,6 +243,8 @@ def test_folded_paragraphs_are_one_command_each() -> None:
     (("uv", "run", "--locked", "pytest", "--cov"), "coverage.py", True),
     (("python", "-m", "pytest", "--cov"), "coverage.py", True),
     (("yarn", "jest", "--coverage"), "jest", True),
+    (("bundle", "exec", "pytest", "--cov"), "coverage.py", True),
+    (("docker", "compose", "run", "app", "pytest", "--cov"), "coverage.py", True),
     (("pip", "install", "pytest", "--cov"), "coverage.py", False),
     (("echo", "pytest", "--cov"), "coverage.py", False),
     (("npm", "install", "jest"), "jest", False),

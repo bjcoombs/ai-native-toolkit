@@ -1313,8 +1313,8 @@
         },
         {
           "code": "check_target",
-          "means": "In lint_basis: no CI line calls a linter, but one runs a check target or script that may run one inside it (make check, npm test, tox, ./scripts/test.sh, pre-commit run); recipes are not read.",
-          "next_step": "Nothing to change if the target lints; calling the linter in its own CI step (ruff check ., make lint) lets the scan read it.",
+          "means": "No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check.",
+          "next_step": "Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.",
           "carried_in": "basis"
         },
         {
@@ -4044,7 +4044,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; unread_ci_system: the check may run in a CI system the scan does not parse"
+      "null_means": "included_jobs: the check may live in an included file; unknown_trigger: its workflow or job triggers are not settled; check_target: a target whose recipe is not read may run it; unread_ci_system: the check may run in a CI system the scan does not parse"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",
