@@ -96,7 +96,12 @@ run on ordinary changes left out too (a ``workflow_dispatch``- or
 ``lint_runs`` (issue #782) is Layer 3 level 1: does CI run a linter? It reads
 the same lines with the same masking and trigger rules, but only lint lines
 count (``check_command.is_lint_run``: ``is_lint_command`` without
-``--version`` / ``--help`` / ``-V``, plus a go-task lint target). A check
+``--version`` / ``--help`` / ``-V``, plus a go-task lint target), and so does
+a GitHub ``uses:`` step of a known lint action (``LINT_ACTIONS``:
+golangci-lint-action, ruff-action, pre-commit/action, super-linter,
+``reviewdog/action-*``, lint-action, markdownlint-cli2-action; an unknown
+third-party action is not read), masked by ``continue-on-error`` and kept off
+by triggers like any step. A check
 target or script may run a linter inside it, and the line alone cannot show
 it (``check_command.may_lint``: ``make check``, ``npm test``, ``tox``,
 ``./scripts/test.sh``, ``pre-commit run``; recipes are not read), so with no
@@ -225,9 +230,31 @@ def _line_runs_check(line: str, *, script_item: bool = True) -> bool:
     )
 
 
+# GitHub Actions that run a linter as a step (#782): ``uses: <one of these>@<ref>``.
+# An unknown third-party action is not read.
+LINT_ACTIONS = frozenset({
+    "golangci/golangci-lint-action", "astral-sh/ruff-action", "chartboost/ruff-action",
+    "pre-commit/action", "github/super-linter", "super-linter/super-linter",
+    "wearerequired/lint-action", "davidanson/markdownlint-cli2-action",
+})
+_USES = re.compile(r"""^\s*(?:-\s+)?uses:\s*["']?([\w.-]+/[\w.-]+)(?:/[^@\s"']*)?@""")
+
+
+def lint_action(line: str) -> bool:
+    """A workflow step ``uses:`` line calling a known lint action (``reviewdog/action-*`` too)."""
+    match = _USES.match(line)
+    if match is None:
+        return False
+    name = match.group(1).lower()
+    return name in LINT_ACTIONS or name.startswith("reviewdog/action-")
+
+
 def _line_runs_lint(line: str, *, script_item: bool = True) -> bool:
-    """One CI line that runs a linter (#782): ``is_lint_run``, never a bare ``- mypy`` item."""
+    """One CI line that runs a linter (#782): ``is_lint_run``, never a bare ``- mypy`` item,
+    or a ``uses:`` step of a known lint action (``LINT_ACTIONS``)."""
     del script_item   # a lone linter item is a value under any key
+    if lint_action(line):
+        return True
     bare_item = _BARE_ITEM.match(line) is not None
     return any(is_lint_run(c.text) and not (bare_item and _lone_linter(c.text))
                for c in _line_commands(line))

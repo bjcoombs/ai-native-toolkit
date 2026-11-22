@@ -438,3 +438,53 @@ def test_a_lint_job_in_a_resolved_local_include_counts(tmp_path: Path) -> None:
         "ci/lint.yml": "lint:\n  script:\n    - ruff check .\n",
     }))
     assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def _uses(action: str, extra: str = "", on: str = "[pull_request]") -> dict[str, str]:
+    return {".github/workflows/lint.yml": (
+        f"on: {on}\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n"
+        f"      - uses: actions/checkout@v4\n      - uses: {action}\n{extra}")}
+
+
+@pytest.mark.parametrize("action", [
+    "golangci/golangci-lint-action@v6", "astral-sh/ruff-action@v3", "chartboost/ruff-action@v1",
+    "pre-commit/action@v3.0.1", "github/super-linter@v5", "super-linter/super-linter/slim@v7",
+    "reviewdog/action-eslint@v1", "wearerequired/lint-action@v2",
+    "DavidAnson/markdownlint-cli2-action@v16", "'astral-sh/ruff-action@v3'",
+    "golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc",
+])
+def test_a_known_lint_action_is_a_lint_step(tmp_path: Path, action: str) -> None:
+    block = scan_ci_checks(_write(tmp_path, _uses(action)))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+    assert block["test_or_lint_runs"] is False   # unchanged by #782: actions are not read there
+
+
+@pytest.mark.parametrize("action", [
+    "actions/setup-python@v5", "someone/lint-action@v1", "reviewdog/reviewdog@v1",
+    "golangci/golangci-lint-action-fork@v1", "./.github/actions/lint",
+])
+def test_an_unknown_action_is_not_a_lint_step(tmp_path: Path, action: str) -> None:
+    block = scan_ci_checks(_write(tmp_path, _uses(action)))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "no_lint_command")
+
+
+def test_a_lint_action_with_continue_on_error_is_not_enforced(tmp_path: Path) -> None:
+    files = _uses("golangci/golangci-lint-action@v6", "        continue-on-error: true\n")
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_action_off_the_ordinary_triggers_does_not_count(tmp_path: Path) -> None:
+    block = scan_ci_checks(_write(tmp_path, _uses("astral-sh/ruff-action@v3", on="[workflow_dispatch]")))
+    assert (block["lint_runs"], block["lint_basis"]) == (False, "not_enforced")
+
+
+def test_a_lint_action_with_unsettled_triggers_is_unknown(tmp_path: Path) -> None:
+    text = "jobs:\n  lint:\n    steps:\n      - uses: astral-sh/ruff-action@v3\n"
+    block = scan_ci_checks(_write(tmp_path, {".github/workflows/lint.yml": text}))
+    assert (block["lint_runs"], block["lint_basis"]) == (None, "unknown_trigger")
+
+
+def test_a_lint_action_with_step_inputs_counts(tmp_path: Path) -> None:
+    files = _uses("golangci/golangci-lint-action@v6", "        with:\n          version: v1.60\n")
+    assert scan_ci_checks(_write(tmp_path, files))["lint_runs"] is True

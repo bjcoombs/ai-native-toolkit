@@ -54,7 +54,10 @@
 #   footprint (issue #782). Level 1 is ci_checks.lint_runs: a line of a
 #   GitHub Actions workflow or .gitlab-ci.yml runs a linter or type checker
 #   (ruff check, eslint, mypy, golangci-lint, go vet, cargo clippy, a lint
-#   target such as make lint or npm run lint), under the same masking and
+#   target such as make lint or npm run lint), or a GitHub step that uses a
+#   known lint action (golangci-lint-action, ruff-action, pre-commit/action,
+#   super-linter, reviewdog/action-*, lint-action, markdownlint-cli2-action;
+#   an unknown third-party action is not read), under the same masking and
 #   trigger rules as Layer 5 (lib/ci_masking.py, lib/ci_triggers.py): a
 #   masked lint step (ruff check . || true) or one off the ordinary triggers
 #   does not count. A linter asked only for --version, --help or -V does not
