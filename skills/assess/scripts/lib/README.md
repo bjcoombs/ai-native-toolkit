@@ -2208,24 +2208,28 @@ manifest (`MANIFESTS`: Cargo, Go, pnpm, npm, Gradle, Maven, Python) is a candida
 shallowest first, so a manifest inside a unit is part of it. A candidate that declares a
 workspace (Cargo `[workspace] members`/`exclude`, `pnpm-workspace.yaml` `packages` with `!`
 excludes, npm/Yarn `workspaces`, `go.work` `use`, uv `[tool.uv.workspace]`, Gradle
-`settings.gradle[.kts]` `include`, Maven `<module>`) is an aggregator: its members are the
-units (`origin: workspace_member`, `workspace` naming the aggregator), expanded one level,
-and the search continues below it outside the members. A root that is a member too (`go.work`
-`use .`, a Cargo `[package]` or uv `[project]` root) is a unit of the source files no nested
-manifest owns. A `pnpm-workspace.yaml` without `packages` holds settings only and is no
-workspace; Gradle `include` is read over several lines. Glob members (`*`, `**`) match only
-folders that hold a manifest; a workspace-excluded folder is found later as a plain unit.
-A candidate with no `doc_graph.CODE_EXTENSIONS` file below it is skipped as `manifest_only`;
-a literal member with no tracked file is `missing`, one above the root `outside_repo`, one inside
-an earlier unit `claimed`. A manifest folder above claimed members is a unit of its own files
-only, so units never nest. An
-unparseable workspace manifest is listed in `unreadable_manifests` and its folder is a plain
-unit. `[[units]]` (`path`, optional `name`) in `.assess/config.toml` replaces discovery when
-at least one entry is valid; a bad entry is skipped with a `PROBLEMS` code (`not_a_list`,
-`not_a_table`, `no_path`, `missing`, `duplicate`) and a stderr warning. A `scan_registry`
-entry (`core_scans.units`), core-only until #866. Counts-only drops every path and name,
-keeping counts, the `origin`/`ecosystem` tokens and the skip codes. Tests:
-`tests/test_unit_discovery.py`.
+`settings.gradle[.kts]` `include` over several lines with `projectDir` moves, Maven
+`<module>`) is an aggregator. Every declaration in the folder is read and their members
+unioned, each tagged with its ecosystem. The members are the units (`origin:
+workspace_member`, `workspace` naming the aggregator); a member that declares a workspace is
+an aggregator in turn, except Maven, expanded one level. The search continues below the
+aggregator outside the members. The aggregator is a unit of the source files no nested
+manifest owns when it is a member too (`go.work` `use .`, Cargo `[package]`, uv `[project]`)
+or holds such files (an npm root with `src/`); a workspace listing no member is a plain unit.
+A settings-only `pnpm-workspace.yaml` is no workspace. A `pyproject.toml` or `package.json`
+declaring no package (only `[tool.ruff]`, only devDependencies) claims nothing: a unit of its
+own files or `tooling_only`. A manifest folder above claimed members is a unit of its own files
+only, so units never nest. Skip codes (`PROBLEMS`): `manifest_only` (no
+`doc_graph.CODE_EXTENSIONS` file below; build scripts are not sources), `missing`, `no_match`
+(a glob matching nothing), `outside_repo`, `claimed` (a member inside an earlier unit),
+`tooling_only`. An unparseable workspace manifest is listed in `unreadable_manifests`, its
+folder is an aggregator with `member_count` null, and `unit_count` reads null with
+`unit_count_reason: unreadable_manifest`. `[[units]]` (`path`, optional `name`) in
+`.assess/config.toml` replaces discovery when at least one entry is valid; a bad entry is
+skipped with `not_a_list`, `not_a_table`, `no_path`, `missing` or `duplicate` and a stderr
+warning. A `scan_registry` entry (`core_scans.units`), core-only until #866. Counts-only drops
+every path and name, keeping counts, the `origin`/`ecosystem`/`source` tokens, the count
+reason and the skip codes. Tests: `tests/test_unit_discovery.py`.
 
 **`interactivity.py`**
 Decides whether a run may prompt a human. Interactive is the default; the run is

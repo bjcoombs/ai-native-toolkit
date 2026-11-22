@@ -12,12 +12,16 @@ minus the doc graph's ``EXCLUDE_DIRS`` and the ``.assess/config.toml`` excludes:
    declared member is a unit instead, and the search goes on below the
    aggregator outside its members (``openai/codex``: the root pnpm workspace
    lists ``codex-cli``, and ``codex-rs/`` is a Cargo workspace of its own).
-   A root that is a member too (``go.work`` ``use .``, a Cargo ``[package]`` or uv
-   ``[project]`` beside the workspace table) is a unit of the source files no
-   member or nested manifest owns, or ``manifest_only`` without any.
-   Members are expanded one level: a member that is itself an aggregator (a
-   Maven ``pom`` module with ``<modules>``) is one unit, as the Helidon spike on
-   #800 counted its top-level areas. Workspace declarations read:
+   Every declaration in the folder is read and their members unioned (a Cargo
+   workspace with npm bindings beside it), each member tagged with its ecosystem.
+   A member that declares a workspace of its own is an aggregator in turn, except
+   that Maven ``<modules>`` are expanded one level only: a ``pom`` member with
+   modules is one unit, as the Helidon spike on #800 counted its top-level areas.
+   The aggregator itself is a unit of the source files no member or nested
+   manifest owns when it is a member too (``go.work`` ``use .``, a Cargo
+   ``[package]``, a uv ``[project]``) or holds such files (an npm or pnpm root
+   with ``src/``). A workspace that lists no member is a plain unit. Workspace
+   declarations read:
 
    - Cargo: ``[workspace] members`` and ``exclude`` in ``Cargo.toml``;
    - pnpm: ``packages`` in ``pnpm-workspace.yaml`` (``!`` excludes; a file without
@@ -27,21 +31,28 @@ minus the doc graph's ``EXCLUDE_DIRS`` and the ``.assess/config.toml`` excludes:
    - uv: ``[tool.uv.workspace] members`` and ``exclude`` in ``pyproject.toml``;
    - Gradle: ``include`` in ``settings.gradle`` or ``settings.gradle.kts``, over
      several lines too (``includeBuild`` is no member);
+   - Gradle ``project(':x').projectDir = file('dir')`` moves a member to ``dir``;
    - Maven: ``<module>`` entries in ``pom.xml``.
 
    A member pattern may be a glob (``crates/*``, ``packages/**``); a glob match
-   counts only when the folder holds a manifest. A literal member that no
+   counts only when the folder holds a manifest, and one that matches no folder is
+   skipped as ``no_match``. A literal member that no
    tracked file sits under is skipped as ``missing``, and one that resolves
    outside the repository as ``outside_repo``; a member inside a unit found earlier
    is skipped as ``claimed``. A manifest folder above units already claimed (a
    ``packages/package.json`` over the ``packages/*`` members) is a unit of the
    source files no nested manifest owns, so units never nest.
-3. A unit with no source file below it (``doc_graph.CODE_EXTENSIONS``) is a
+3. A ``pyproject.toml`` or ``package.json`` that declares no package (only
+   ``[tool.ruff]``, only devDependencies) claims nothing: its folder is a unit of
+   the source files no nested manifest owns, or ``tooling_only`` without any, so
+   a tooling root does not fold a polyglot repository into one unit.
+4. A unit with no source file below it (``doc_graph.CODE_EXTENSIONS``) is a
    manifest-only aggregator (a BOM, a parent POM) and is skipped as
    ``manifest_only``.
 
-A workspace manifest that cannot be parsed is named in ``unreadable_manifests``
-and its folder is a plain unit: the manifest is there, its members are unknown.
+A workspace manifest that cannot be parsed is named in ``unreadable_manifests``;
+its folder is an aggregator with ``member_count`` null, and ``unit_count`` reads
+null with ``unit_count_reason`` ``unreadable_manifest``: its members are unknown.
 A repository with no build manifest has no units (``unit_count`` 0).
 
 **Declared units.** ``[[units]]`` in ``.assess/config.toml`` replaces discovery::
@@ -96,10 +107,11 @@ MANIFESTS: tuple[tuple[str, Ecosystem], ...] = (
 MANIFEST_NAMES = frozenset(name for name, _ in MANIFESTS)
 
 SECTION = "units"
+UNREADABLE_REASON = "unreadable_manifest"
 SOURCES = ("discovered", "config")
 # Why a unit candidate or a [[units]] entry was skipped, as SkippedUnit.problem holds it.
 PROBLEMS = (
-    "manifest_only", "missing", "outside_repo", "claimed", "not_a_list", "not_a_table",
+    "manifest_only", "missing", "no_match", "outside_repo", "claimed", "tooling_only", "not_a_list", "not_a_table",
     "no_path", "duplicate",
 )
 _GLOB_CHARS = frozenset("*?[")
@@ -120,7 +132,7 @@ class AggregatorEntry(TypedDict):
 
     path: str
     ecosystem: Ecosystem
-    member_count: int
+    member_count: int | None  # None when its manifest cannot be parsed
 
 
 class SkippedUnit(TypedDict):
@@ -134,7 +146,8 @@ class UnitsBlock(TypedDict):
     """The run context's ``units`` block (#862)."""
 
     source: Literal["discovered", "config"]
-    unit_count: int
+    unit_count: int | None  # None, with unit_count_reason, when a workspace manifest is unreadable
+    unit_count_reason: str | None
     units: list[UnitEntry]
     aggregators: list[AggregatorEntry]
     aggregator_count: int
@@ -261,6 +274,9 @@ def _go(path: Path) -> _Workspace:
 # continued on the next line after a trailing comma).
 _GRADLE_INCLUDE = re.compile(r"\binclude\b(?!Build)\s*(?:\(([^)]*)\)|((?:[^\n]*,[ \t]*\n)*[^\n]*))")
 _QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
+# ``project(':core').projectDir = file('modules/core')``: the member lives elsewhere.
+_GRADLE_PROJECT_DIR = re.compile(
+    r"""project\(\s*['"]([^'"]+)['"]\s*\)\.projectDir\s*=\s*file\(\s*['"]([^'"]+)['"]\s*\)""")
 
 
 def _gradle(path: Path) -> _Workspace | None:
@@ -268,10 +284,12 @@ def _gradle(path: Path) -> _Workspace | None:
         text = re.sub(r"//[^\n]*", "", path.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, OSError) as e:
         raise _Unreadable(str(path)) from e
+    moved = {name.strip(":").replace(":", "/"): folder
+             for name, folder in _GRADLE_PROJECT_DIR.findall(text)}
     members = [q.strip(":").replace(":", "/")
                for paren, bare in _GRADLE_INCLUDE.findall(text)
                for q in _QUOTED.findall(paren or bare)]
-    return _Workspace("gradle", [m for m in members if m], []) if members else None
+    return _Workspace("gradle", [moved.get(m, m) for m in members if m], []) if members else None
 
 
 _MAVEN_MODULE = re.compile(r"<module>\s*([^<]+?)\s*</module>")
@@ -286,7 +304,7 @@ def _maven(path: Path) -> _Workspace | None:
     return _Workspace("maven", modules, []) if modules else None
 
 
-# Checked in order; the first declaration found makes the folder an aggregator.
+# Every declaration a folder holds is read; their members are unioned.
 _DECLARATIONS = (
     ("Cargo.toml", _cargo),
     ("go.work", _go),
@@ -299,18 +317,43 @@ _DECLARATIONS = (
 )
 
 
-def _workspace(root: Path, folder: str, names: frozenset[str]) -> _Workspace | None:
-    """The workspace ``folder`` declares, or None; ``_Unreadable`` names the manifest by its
-    repo-relative path when one cannot be parsed."""
+def _workspaces(root: Path, folder: str, names: frozenset[str]) -> list[_Workspace]:
+    """Every workspace ``folder`` declares (a Cargo workspace with npm bindings declares
+    two); ``_Unreadable`` names the manifest by its repo-relative path when one cannot be
+    parsed."""
+    found: list[_Workspace] = []
     for name, parse in _DECLARATIONS:
         if name in names:
             try:
                 ws = parse(root / folder / name)
             except _Unreadable as e:
                 raise _Unreadable(posixpath.normpath(posixpath.join(folder, name))) from e
-            if ws is not None:
-                return ws
-    return None
+            if ws is not None and all(w.ecosystem != ws.ecosystem for w in found):
+                found.append(ws)
+    return found
+
+
+_PACKAGE_KEYS = {"pyproject.toml": ("project", "tool.poetry"), "package.json": ("name",)}
+
+
+def _tooling_only(root: Path, folder: str, names: frozenset[str]) -> bool:
+    """True when every manifest in ``folder`` is a ``pyproject.toml`` or ``package.json``
+    that declares no package: a root ``[tool.ruff]`` or a devDependencies-only file."""
+    if not names or not names <= _PACKAGE_KEYS.keys():
+        return False
+    for name in names:
+        text = (root / folder / name).read_text(encoding="utf-8", errors="replace")
+        try:
+            data: Any = json.loads(text) if name == "package.json" else tomllib.loads(text)
+        except (ValueError, tomllib.TOMLDecodeError):
+            return False
+        for key in _PACKAGE_KEYS[name]:
+            node = data
+            for part in key.split("."):
+                node = node.get(part) if isinstance(node, Mapping) else None
+            if node is not None:
+                return False
+    return True
 
 
 # -- member expansion ---------------------------------------------------------
@@ -345,7 +388,10 @@ def _expand(folder: str, ws: _Workspace, dirs: frozenset[str],
         if joined is None:
             skipped.append({"path": raw, "problem": "outside_repo"})
         elif _GLOB_CHARS & set(joined):
-            members.update(d for d in manifest_dirs if _glob_match(joined, d))
+            matched = {d for d in manifest_dirs if _glob_match(joined, d)}
+            if not matched - {folder}:
+                skipped.append({"path": joined, "problem": "no_match"})
+            members.update(matched)
         elif joined in dirs:
             members.add(joined)
         else:
@@ -394,72 +440,115 @@ class _Discovery(NamedTuple):
     unreadable: list[str]
 
 
-def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
-    """The units of ``files`` (repo-relative POSIX paths) by the rules in the module docstring."""
-    files = list(files)
-    dirs = frozenset(p for rel in files for p in _parents(rel))
-    by_dir: dict[str, set[str]] = {}
-    for rel in files:
-        name = posixpath.basename(rel)
-        if name in MANIFEST_NAMES:
-            by_dir.setdefault(posixpath.dirname(rel) or ".", set()).add(name)
-    manifest_dirs = {d: frozenset(n) for d, n in by_dir.items()}
-    sources = [rel for rel in files if PurePosixPath(rel).suffix.lower() in CODE_EXTENSIONS]
-    source_dirs = frozenset(p for rel in sources for p in _parents(rel))
-    # the manifest folder nearest each source file: a root package owns only these
-    owning = frozenset(next(p for p in _parents(rel) if p in manifest_dirs or p == ".")
-                       for rel in sources)
+class _Walk:
+    """The discovery state over one file list; ``discover_units`` drives it."""
 
-    units: list[UnitEntry] = []
-    aggregators: list[AggregatorEntry] = []
-    skipped: list[SkippedUnit] = []
-    unreadable: list[str] = []
-    claimed: list[str] = []  # unit folders: nothing below one is a new candidate
+    def __init__(self, repo_root: Path, files: list[str]) -> None:
+        self.root = repo_root
+        self.dirs = frozenset(p for rel in files for p in _parents(rel))
+        by_dir: dict[str, set[str]] = {}
+        for rel in files:
+            if posixpath.basename(rel) in MANIFEST_NAMES:
+                by_dir.setdefault(posixpath.dirname(rel) or ".", set()).add(posixpath.basename(rel))
+        self.manifest_dirs = {d: frozenset(n) for d, n in by_dir.items()}
+        # a build script (build.gradle.kts) is a manifest, never a source file
+        sources = [rel for rel in files if PurePosixPath(rel).suffix.lower() in CODE_EXTENSIONS
+                   and posixpath.basename(rel) not in MANIFEST_NAMES]
+        self.source_dirs = frozenset(p for rel in sources for p in _parents(rel))
+        # the manifest folder nearest each source file: a folder claiming nothing owns these
+        self.owning = frozenset(next(p for p in _parents(rel) if p in self.manifest_dirs or p == ".")
+                                for rel in sources)
+        self.found = _Discovery([], [], [], [])
+        self.claimed: list[str] = []  # unit folders: nothing below one is a new candidate
+        self.visited: set[str] = set()  # handled candidates (a nested aggregator claims nothing)
 
-    def add(path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None) -> None:
+    def _unit(self, path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None) -> None:
+        self.found.units.append({"path": path, "origin": origin, "ecosystem": eco,
+                                 "workspace": workspace, "name": None})
+
+    def _skip(self, path: str, problem: str) -> None:
+        self.found.skipped.append({"path": path, "problem": problem})
+
+    def own_files(self, path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None,
+                  empty: str) -> None:
+        """A unit of the source files no nested manifest owns; it claims nothing."""
+        if path in self.owning:
+            self._unit(path, origin, eco, workspace)
+        else:
+            self._skip(path, empty)
+
+    def add(self, path: str, origin: Origin, eco: Ecosystem | None, workspace: str | None) -> None:
         # A folder above units already claimed (a non-member manifest over workspace
         # members) is a unit of its own files only and claims nothing, so units never nest.
-        holds = any(c != path and _is_under(c, path) for c in claimed)
-        if not holds:
-            claimed.append(path)
-        if path not in (owning if holds else source_dirs):
-            skipped.append({"path": path, "problem": "manifest_only"})
+        if any(c != path and _is_under(c, path) for c in self.claimed):
+            self.own_files(path, origin, eco, workspace, "manifest_only")
             return
-        units.append({"path": path, "origin": origin, "ecosystem": eco,
-                      "workspace": workspace, "name": None})
+        self.claimed.append(path)
+        if path in self.source_dirs:
+            self._unit(path, origin, eco, workspace)
+        else:
+            self._skip(path, "manifest_only")
 
-    depth = {d: (0 if d == "." else d.count("/") + 1) for d in manifest_dirs}
-    for folder in sorted(manifest_dirs, key=lambda d: (depth[d], d)):
-        if any(_is_under(folder, c) for c in claimed):
-            continue
-        names = manifest_dirs[folder]
+    def visit(self, folder: str, origin: Origin, workspace: str | None,
+              member_eco: Ecosystem | None = None) -> None:
+        """One candidate: an aggregator when it declares a workspace, else a unit.
+
+        A workspace member (``member_eco`` set) keeps its workspace's ecosystem, and its
+        Maven ``<modules>`` are not expanded."""
+        self.visited.add(folder)
+        names = self.manifest_dirs.get(folder, frozenset())
         try:
-            ws = _workspace(repo_root, folder, names)
+            declared = _workspaces(self.root, folder, names)
         except _Unreadable as e:
-            unreadable.append(str(e))
-            ws = None
-        if ws is None:
-            add(folder, "manifest", _ecosystem(names), None)
-            continue
-        members, member_skips, root_member = _expand(folder, ws, dirs, manifest_dirs)
-        skipped.extend(member_skips)
-        aggregators.append({"path": folder, "ecosystem": ws.ecosystem,
-                            "member_count": len(members) + root_member})
-        if root_member:
-            # the root package is a unit of its own files; it claims nothing below it
-            if folder in owning:
-                units.append({"path": folder, "origin": "workspace_member",
-                              "ecosystem": ws.ecosystem, "workspace": folder, "name": None})
-            else:
-                skipped.append({"path": folder, "problem": "manifest_only"})
-        for member in members:
-            if any(_is_under(member, c) for c in claimed):
-                skipped.append({"path": member, "problem": "claimed"})
-                continue
-            add(member, "workspace_member", ws.ecosystem, folder)
+            # the members are unknown: an aggregator of unknown size, claimed whole
+            self.found.unreadable.append(str(e))
+            self.found.aggregators.append({"path": folder, "member_count": None,
+                                           "ecosystem": dict(MANIFESTS)[posixpath.basename(str(e))]})
+            self.claimed.append(folder)
+            return
+        if member_eco is not None:
+            declared = [ws for ws in declared if ws.ecosystem != "maven"]
+        expanded = [(ws, *_expand(folder, ws, self.dirs, self.manifest_dirs)) for ws in declared]
+        for _, _, member_skips, _ in expanded:
+            self.found.skipped.extend(member_skips)
+        eco = member_eco or (_ecosystem(names) if names else None)
+        if not any(members or root for _, members, _, root in expanded):
+            if origin == "manifest" and _tooling_only(self.root, folder, names):
+                self.own_files(folder, origin, eco, workspace, "tooling_only")
+            else:  # no workspace, or one that lists no member: a plain unit
+                self.add(folder, origin, eco, workspace)
+            return
+        self.aggregate(folder, expanded)
 
-    units.sort(key=lambda u: u["path"])
-    return _Discovery(units, aggregators, skipped, sorted(unreadable))
+    def aggregate(self, folder: str,
+                  expanded: list[tuple[_Workspace, list[str], list[SkippedUnit], bool]]) -> None:
+        for ws, members, _, root in expanded:
+            self.found.aggregators.append({"path": folder, "ecosystem": ws.ecosystem,
+                                           "member_count": len(members) + root})
+        if any(root for *_, root in expanded) or folder in self.owning:
+            # the root package (Cargo [package], uv [project], go.work `use .`, or an npm or
+            # pnpm root with sources of its own) is a unit of its own files
+            self.own_files(folder, "workspace_member", expanded[0][0].ecosystem, folder,
+                           "manifest_only")
+        for ws, members, _, _ in expanded:
+            for member in members:
+                if any(_is_under(member, c) for c in self.claimed):
+                    self._skip(member, "claimed")
+                else:
+                    self.visit(member, "workspace_member", folder, ws.ecosystem)
+
+
+def discover_units(repo_root: Path, files: Iterable[str]) -> _Discovery:
+    """The units of ``files`` (repo-relative POSIX paths) by the rules in the module docstring."""
+    walk = _Walk(repo_root, list(files))
+    depth = {d: (0 if d == "." else d.count("/") + 1) for d in walk.manifest_dirs}
+    for folder in sorted(walk.manifest_dirs, key=lambda d: (depth[d], d)):
+        if folder not in walk.visited and not any(_is_under(folder, c) for c in walk.claimed):
+            walk.visit(folder, "manifest", None)
+    found = walk.found
+    found.units.sort(key=lambda u: u["path"])
+    found.unreadable.sort()
+    return found
 
 
 def declared_units(config: Mapping[str, Any], dirs: frozenset[str]) -> tuple[list[UnitEntry], list[SkippedUnit]]:
@@ -500,10 +589,13 @@ def scan_units(repo_root: Path, excludes: tuple[set[str], list[str]] | None = No
         print(f"warning: .assess/config.toml [[units]] entry skipped ({skip['problem']}): "
               f"{skip['path'] or '(no path)'}", file=sys.stderr)
     if declared:
-        return {"source": "config", "unit_count": len(declared), "units": declared,
-                "aggregators": [], "aggregator_count": 0, "skipped": declared_skips,
+        return {"source": "config", "unit_count": len(declared), "unit_count_reason": None,
+                "units": declared, "aggregators": [], "aggregator_count": 0, "skipped": declared_skips,
                 "unreadable_manifests": []}
     found = discover_units(repo_root, files)
-    return {"source": "discovered", "unit_count": len(found.units), "units": found.units,
+    # an unreadable workspace manifest leaves its members unknown, so the count is too
+    known = not found.unreadable
+    return {"source": "discovered", "unit_count": len(found.units) if known else None,
+            "unit_count_reason": None if known else UNREADABLE_REASON, "units": found.units,
             "aggregators": found.aggregators, "aggregator_count": len(found.aggregators),
             "skipped": declared_skips + found.skipped, "unreadable_manifests": found.unreadable}

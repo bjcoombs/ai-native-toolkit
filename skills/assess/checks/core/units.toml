@@ -17,6 +17,7 @@ shapes = [
 revision = 1
   [entries.privacy]
   "units.source" = "token"
+  "units.unit_count_reason" = "token"
   "units.units.path" = "drop"
   "units.units.origin" = "token"
   "units.units.ecosystem" = "token"

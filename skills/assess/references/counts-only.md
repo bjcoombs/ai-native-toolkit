@@ -479,6 +479,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `units.source` | token |
+| `units.unit_count_reason` | token |
 | `units.units.path` | dropped |
 | `units.units.origin` | token |
 | `units.units.ecosystem` | token |

@@ -178,7 +178,8 @@ def test_a_pnpm_flow_list_is_read_and_an_unparseable_value_is_named(tmp_path: Pa
     odd = scan_units(_write(tmp_path / "odd", {
         "pnpm-workspace.yaml": "packages: *anchor\n", "package.json": "{}", "i.ts": "",
     }))
-    assert odd["unreadable_manifests"] == ["pnpm-workspace.yaml"] and _paths(odd) == ["."]
+    assert odd["unreadable_manifests"] == ["pnpm-workspace.yaml"] and _paths(odd) == []
+    assert odd["unit_count"] is None and odd["unit_count_reason"] == "unreadable_manifest"
 
 
 @pytest.mark.parametrize("settings", [
@@ -233,7 +234,7 @@ def test_a_manifest_above_claimed_members_never_nests_units(tmp_path: Path, file
     if "crates" in expected:  # it owns src/, so it is a unit of those files beside crates/a
         assert block["units"][0]["origin"] == "manifest"
     else:
-        assert _skipped(block) == {"packages": "manifest_only"}
+        assert _skipped(block) == {"packages": "tooling_only"}
 
 
 def test_a_member_inside_an_earlier_unit_is_skipped_as_claimed(tmp_path: Path):
@@ -277,13 +278,98 @@ def test_a_member_outside_the_repository_is_skipped(tmp_path: Path):
     assert _skipped(block) == {"../elsewhere": "outside_repo"}
 
 
-def test_an_unparseable_workspace_manifest_is_named_and_its_folder_is_a_plain_unit(tmp_path: Path):
+def test_an_unparseable_workspace_manifest_makes_the_count_unknown(tmp_path: Path):
     block = scan_units(_write(tmp_path, {
-        "svc/Cargo.toml": "[workspace\nmembers = [", "svc/src/main.rs": "",
+        "Cargo.toml": '[workspace\nmembers = ["crates/*"]', "crates/a/Cargo.toml": "",
+        "crates/a/src/lib.rs": "", "crates/b/Cargo.toml": "", "crates/b/src/lib.rs": "",
         "web/package.json": "{not json", "web/i.js": "",
     }))
-    assert _paths(block) == ["svc", "web"]
-    assert block["unreadable_manifests"] == ["svc/Cargo.toml", "web/package.json"]
+    assert block["unit_count"] is None and block["unit_count_reason"] == "unreadable_manifest"
+    assert block["unreadable_manifests"] == ["Cargo.toml"]
+    assert block["aggregators"] == [{"path": ".", "ecosystem": "cargo", "member_count": None}]
+    assert _paths(block) == []
+
+
+def test_a_plain_unparseable_manifest_folder_is_still_unknown(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {"web/package.json": "{not json", "web/i.js": ""}))
+    assert block["unit_count"] is None and block["unreadable_manifests"] == ["web/package.json"]
+
+
+def test_a_glob_matching_nothing_is_skipped_and_an_empty_workspace_is_a_plain_unit(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "package.json": "{}", "pnpm-workspace.yaml": "packages: ['packages/*']\n", "src/i.ts": "",
+    }))
+    assert _paths(block) == ["."] and block["unit_count"] == 1
+    assert _skipped(block) == {"packages/*": "no_match"}
+    assert block["aggregators"] == []
+
+
+@pytest.mark.parametrize("workspaces", ['{"nohoist": ["x"]}', "[]"])
+def test_a_yarn_workspace_without_members_is_a_plain_unit(tmp_path: Path, workspaces: str):
+    block = scan_units(_write(tmp_path, {
+        "package.json": f'{{"name": "r", "workspaces": {workspaces}}}', "src/i.ts": "",
+    }))
+    assert _paths(block) == ["."] and block["units"][0]["origin"] == "manifest"
+
+
+def test_an_npm_root_with_its_own_sources_is_a_unit_too(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "package.json": '{"name": "r", "workspaces": ["packages/*"]}', "src/i.ts": "",
+        "packages/a/package.json": "{}", "packages/a/i.ts": "",
+    }))
+    assert [(u["path"], u["workspace"]) for u in block["units"]] == [(".", "."), ("packages/a", ".")]
+
+
+def test_a_member_that_is_a_workspace_is_an_aggregator_in_turn(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "package.json": "{}", "pnpm-workspace.yaml": "packages:\n  - 'pkgs/*'\n",
+        "pkgs/rs/package.json": '{"name": "rs"}',
+        "pkgs/rs/Cargo.toml": '[workspace]\nmembers = ["a", "b"]\n',
+        "pkgs/rs/a/Cargo.toml": "", "pkgs/rs/a/src/lib.rs": "",
+        "pkgs/rs/b/Cargo.toml": "", "pkgs/rs/b/src/lib.rs": "",
+        "pkgs/ui/package.json": "{}", "pkgs/ui/i.ts": "",
+    }))
+    assert [(u["path"], u["ecosystem"], u["workspace"]) for u in block["units"]] == [
+        ("pkgs/rs/a", "cargo", "pkgs/rs"), ("pkgs/rs/b", "cargo", "pkgs/rs"), ("pkgs/ui", "pnpm", "."),
+    ]
+    assert [(a["path"], a["ecosystem"]) for a in block["aggregators"]] == [
+        (".", "pnpm"), ("pkgs/rs", "cargo"),
+    ]
+
+
+def test_every_workspace_a_folder_declares_is_read(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "Cargo.toml": '[workspace]\nmembers = ["crates/*"]\n',
+        "package.json": '{"workspaces": ["npm/*"]}',
+        "crates/core/Cargo.toml": "", "crates/core/src/lib.rs": "",
+        "npm/cli/package.json": "{}", "npm/cli/i.js": "",
+        "npm/wasm/package.json": "{}", "npm/wasm/i.js": "",
+    }))
+    assert [(u["path"], u["ecosystem"]) for u in block["units"]] == [
+        ("crates/core", "cargo"), ("npm/cli", "npm"), ("npm/wasm", "npm"),
+    ]
+    assert [(a["ecosystem"], a["member_count"]) for a in block["aggregators"]] == [("cargo", 1), ("npm", 2)]
+
+
+@pytest.mark.parametrize("root", [
+    {"pyproject.toml": "[tool.ruff]\nline-length = 100\n"},
+    {"package.json": '{"devDependencies": {"prettier": "3"}}'},
+], ids=["ruff-only-pyproject", "dev-only-package-json"])
+def test_a_tooling_root_manifest_does_not_fold_the_repository(tmp_path: Path, root: dict[str, str]):
+    block = scan_units(_write(tmp_path, root | {
+        "svc/a/pyproject.toml": "[project]\nname = 'a'\n", "svc/a/a.py": "",
+        "svc/b/go.mod": "m", "svc/b/b.go": "",
+    }))
+    assert _paths(block) == ["svc/a", "svc/b"]
+    assert _skipped(block) == {".": "tooling_only"}
+
+
+def test_a_gradle_project_dir_moves_its_member(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "settings.gradle": "include ':core'\nproject(':core').projectDir = file('modules/core')\n",
+        "modules/core/build.gradle": "", "modules/core/C.java": "",
+    }))
+    assert _paths(block) == ["modules/core"] and block["skipped"] == []
 
 
 def test_excluded_folders_hold_no_units(tmp_path: Path):
@@ -341,12 +427,21 @@ def test_counts_only_never_carries_a_unit_path_or_name(tmp_path: Path):
         text = json.dumps(out)
         assert "codex" not in text and "sdk/" not in text and "gone" not in text
         assert out["unit_count"] == 10 and out["aggregator_count"] == 2
+        assert out["unit_count_reason"] is None
         assert out["source"] == "discovered"
         assert [u["ecosystem"] for u in out["units"]].count("cargo") == 7
         assert {u["origin"] for u in out["units"]} == {"workspace_member", "manifest"}
         assert out["aggregators"][1] == {"ecosystem": "cargo", "member_count": 6}
         assert out["skipped"] == [{"problem": "missing"}]
         assert out["unreadable_manifests"] == 0
+
+
+def test_counts_only_keeps_the_unknown_count_reason(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {"web/package.json": "{not json", "web/i.js": ""}))
+    out = counts_only({"units": block})["units"]
+    assert out["unit_count"] is None and out["unit_count_reason"] == "unreadable_manifest"
+    assert out["aggregators"] == [{"ecosystem": "npm", "member_count": None}]
+    assert out["unreadable_manifests"] == 1
 
 
 def test_codes_are_tokens():
