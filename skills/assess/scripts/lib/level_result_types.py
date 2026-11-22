@@ -17,6 +17,7 @@ class ConditionResult(TypedDict):
     counted: bool
     state: str  # one of STATES
     reason: NotRequired[str]  # not_measured, or a requires that is not met
+    polarity: NotRequired[str]  # "hazard" only: a harm, never counted (#843); absent: positive
 
 
 class NotMeasured(TypedDict):

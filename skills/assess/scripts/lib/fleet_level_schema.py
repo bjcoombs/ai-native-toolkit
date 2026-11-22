@@ -38,6 +38,7 @@ def level_result_schema() -> JsonDict:
     grades = sorted(set(INPUT_GRADES.values()), key=list(INPUT_GRADES.values()).index)
     condition["grade"] = {"enum": [*grades, None]}
     condition["counted"]["description"] = f"true when the grade is one of {', '.join(sorted(COUNTED_GRADES))}"
+    condition["polarity"] = {"enum": ["hazard"], "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"}
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
     blocker["properties"]["blockers"]["items"]["properties"]["kind"] = {"enum": ["gate", "threshold"]}
     return schema

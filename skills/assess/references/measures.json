@@ -49,6 +49,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "layer-0-instructions.1:layer_grades.instruction_file_present",
@@ -66,6 +69,10 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context",
+            "docs"
+          ],
           "criteria": [
             {
               "key": "layer-0-instructions.2:agent_environment.check.named_total",
@@ -115,6 +122,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-1-liveness.1:observability.rung",
@@ -132,6 +142,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-1-liveness.2:observability.rung",
@@ -157,6 +170,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-2-design.1:structure.modularity_q",
@@ -174,6 +190,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-2-design.2:structure.cross_package_edges",
@@ -211,6 +230,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-3-linters.1:ci_checks.lint_runs",
@@ -228,6 +250,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-3-linters.2:promissory_markers.families.suppression.stale",
@@ -265,6 +290,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns",
@@ -282,6 +310,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "structure"
+          ],
           "criteria": [
             {
               "key": "layer-4-architecture.2:stats_summary.loc.p95",
@@ -307,6 +338,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-5-ci.1:ci_checks.enforced_check_runs",
@@ -324,6 +358,10 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime",
+            "supply_chain"
+          ],
           "criteria": [
             {
               "key": "layer-5-ci.2:agent_environment.pinning.unlocked_total",
@@ -349,6 +387,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-6-coverage.1:coverage_gate.enforced_meets_minimum",
@@ -366,6 +407,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "behaviour"
+          ],
           "criteria": [
             {
               "key": "layer-6-coverage.2:test_pressure.mutation_run",
@@ -391,6 +435,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-7-review.1:review_evidence.present",
@@ -408,6 +455,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-7-review.2:review_reality.reviewed_share",
@@ -445,6 +495,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "governance"
+          ],
           "criteria": [
             {
               "key": "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded",
@@ -462,6 +515,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_runtime"
+          ],
           "criteria": [
             {
               "key": "layer-8-agent-ops.2:agent_ops.summary.hooks_present",
@@ -499,6 +555,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "docs"
+          ],
           "criteria": [
             {
               "key": "doc-freshness.1:doc_staleness.summary.stale_pct",
@@ -516,6 +575,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "docs"
+          ],
           "criteria": [
             {
               "key": "doc-freshness.2:doc_staleness.summary.stale_pct",
@@ -541,6 +603,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "guardrails-stated.1:guardrails.stated_pct",
@@ -558,6 +623,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "guardrails-stated.2:guardrails.stated_pct",
@@ -583,6 +651,9 @@
       "levels": [
         {
           "level": 1,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "agent-consistency.1:agent_consistency.conflicts",
@@ -600,6 +671,9 @@
         },
         {
           "level": 2,
+          "truth": [
+            "agent_context"
+          ],
           "criteria": [
             {
               "key": "agent-consistency.2:agent_consistency.unlinked",

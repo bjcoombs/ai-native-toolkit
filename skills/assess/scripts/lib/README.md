@@ -2448,7 +2448,8 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 `share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
-key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
+key, a missing, empty or unknown `truth` (`MixedTruthError` for a partly tagged model), a bad
+`polarity`, `guarded_by` or `eq_signal`, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
 rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
@@ -2462,6 +2463,44 @@ the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`,
 `gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
 later Step keeps every gate of the one below and never lowers the threshold, or the load
 fails. A model without them loads exactly as before.
+Each level also carries `truth` (#843), and three additive fields ride along, all defined in
+`levels_fields.py` below. `load_levels` passes the file path to `parse_levels` (`source=`) so a
+`MixedTruthError` names the model file. `LevelsError` and `MixedTruthError` are defined in
+`levels_fields.py` and re-exported here, so callers keep importing them from `lib.levels`.
+
+**`levels_fields.py`**
+The rules for the four condition fields of a maturity model (#843); `levels.parse_levels`
+calls them, and the module docstring is the reference.
+
+- **`truth`** (required, multi-valued): every level carries a non-empty array of distinct tags
+  from `TRUTH_TAGS` (`behaviour`, `contracts`, `docs`, `structure`, `agent_context`,
+  `agent_runtime`, `governance`, `supply_chain`). An unknown tag, an empty array or a repeat
+  fails the load naming the row, the level and the cause.
+- **Legacy layer alias (rule A, maintainer decision of 2026-11-22):** the alias applies only
+  when **no condition in the model carries `truth`**. Each condition then takes
+  `legacy_truth(row id)`: a `layer-<n>-...` row takes `LEGACY_LAYER_TRUTH[n]` (0
+  `agent_context`; 1 `agent_runtime`; 2, 3, 4 `structure`; 5, 6 `behaviour`; 7, 8
+  `governance`), the default model's `doc-freshness` takes `docs` and `guardrails-stated` and
+  `agent-consistency` take `agent_context` (`LEGACY_ROW_TRUTH`), and any other row `[]`. A
+  model where some conditions carry `truth` and others do not raises **`MixedTruthError`**
+  (a `LevelsError`), whose message starts `MixedTruthError:` and names the model file, the
+  row id and the level of the first condition without it. There is no format-marker field.
+- **`polarity`** on a level: `"positive"` (default) or `"hazard"`. A hazard is parsed as
+  `polarity: "hazard"`; `level_tally` never counts it (it is listed when met) and marks its
+  condition with `polarity: "hazard"`. No row level or Step reads it (Step-blocking hazards
+  are #828).
+- **`guarded_by`** on a level: one condition id; default absent (no guard). One hop:
+  `level_tally` caps the condition's grade at `measured` while the guard is not `met`, which
+  never changes what is counted. An unknown id or the condition itself fails the load naming
+  the id and `guarded_by`.
+- **`eq_signal`** on a criterion: `{ signal = "<path>", op = "eq" | "ne", eq_signal = "<path>" }`
+  with no `value`; default absent (compare with `value`). The criterion compares the two
+  measured signals: either unavailable is `unknown`, different kinds or a non-scalar
+  `type_mismatch`. The parsed criterion keeps the second path as its `value` as well, so the
+  catalog and next-step text show what it compares with; the `PathValidator` checks both
+  paths.
+
+Tests: `tests/test_levels_fields.py`.
 
 **`level_tally.py`**
 The verified tally and the autonomy Step: result = f(commit, maturity-model version), from
@@ -2473,7 +2512,9 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
 - `conditions[]`: `id`, `row`, `level`, `grade` (the weakest `level_signals` criterion grade;
   null for a signal with no producer class), `counted` (grade `measured` or `verified`),
   `state` (`met`, `unmet`, `not_measured`; `not_applicable` and `declined` are reserved for
-  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code.
+  #827 and #828) and, when not measured or held by an unmet `requires`, a `reason` code. A
+  `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
+  `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
 - `tally`: `met` (the level: counted conditions met), `measured` (counted conditions met or
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or

@@ -26,6 +26,13 @@ takes the state of the first required condition that is not met (``unmet``, or
 ``not_measured`` with that condition's reason), with reason
 ``requires:<condition id>``.
 
+Two additive model fields (``lib/levels_fields.py``, #843) adjust this, and
+neither moves a row level or, in the shipped model, anything at all: a
+``polarity = "hazard"`` condition is a harm, so it is never counted (listed when
+met) and carries ``polarity: "hazard"``; a ``guarded_by`` condition's grade is
+capped at ``measured`` while its guard is not ``met``, so it reads ``verified``
+only when its own check is under test, and what is counted does not change.
+
 Gates read state, never grade. A declared condition (an instruction file) or a
 config-only one (an enforced coverage gate) holds its gate while staying out of
 the tally (#783 decision). A gate holds when every condition of its row up to
@@ -71,6 +78,8 @@ from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
+# Unreleased (the 3.0.0 release PR bumps it once): a condition may carry
+# ``polarity: "hazard"``, and a hazard is never counted (#843).
 LEVEL_RESULT_VERSION = 2
 
 STATES = ("met", "unmet", "not_applicable", "not_measured", "declined")
@@ -138,6 +147,7 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[Co
     own: dict[str, tuple[str, str | None]] = {}
     built: list[ConditionResult] = []
     requires: dict[str, list[str]] = {}
+    guards: dict[str, str] = {}
     for row in model["rows"]:
         evaluation: Evaluation = evaluate_row(row, dict(data) if data is not None else None)
         for outcome, level in zip(evaluation["levels"], row["levels"]):
@@ -145,9 +155,15 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[Co
             state, reason = _own_state(outcome, data)
             own[cid] = (state, reason)
             requires[cid] = level.get("requires", [])
+            if "guarded_by" in level:
+                guards[cid] = level["guarded_by"]
             grade = _grade(row, level["level"])
-            built.append({"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
-                          "counted": grade in COUNTED_GRADES, "state": state})
+            hazard = level.get("polarity") == "hazard"
+            entry: ConditionResult = {"id": cid, "row": row["id"], "level": level["level"], "grade": grade,
+                                      "counted": grade in COUNTED_GRADES and not hazard, "state": state}
+            if hazard:
+                entry["polarity"] = "hazard"
+            built.append(entry)
     final: dict[str, tuple[str, str | None]] = {}
 
     def resolve(cid: str) -> tuple[str, str | None]:
@@ -167,6 +183,10 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None) -> list[Co
         entry["state"], reason = resolve(entry["id"])
         if reason is not None:
             entry["reason"] = reason
+    for entry in built:  # one hop: a guard's own guard does not matter here
+        guard = guards.get(entry["id"])
+        if guard is not None and entry["grade"] == "verified" and final[guard][0] != "met":
+            entry["grade"] = "measured"
     return built
 
 
