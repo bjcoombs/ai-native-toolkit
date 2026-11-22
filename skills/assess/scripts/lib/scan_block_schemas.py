@@ -4,7 +4,8 @@
 blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
-here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698) and ``delivery`` (#715).
+here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781)
+and ``delivery`` (#715).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -88,7 +89,11 @@ CI_CHECKS: JsonDict = {
         "read (an unresolved GitLab include, a reusable workflow in another repository); basis "
         "says which. Under --platform, a repository with an unresolved GitLab include also gets "
         "GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted "
-        "apart in merged_check_commands; a template resolved offline wins."),
+        "apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with "
+        "masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e "
+        "without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out "
+        "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
+        "lines left out."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -140,6 +145,60 @@ CI_CHECKS: JsonDict = {
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
             "pipeline), no_check_command or no_ci (false)."),
+        "enforced_check_runs": _field(
+            {"type": ["boolean", "null"]},
+            "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
+            "changes, null when none does but included jobs or unsettled triggers may hold one, "
+            "else false."),
+        "enforced_basis": _field(
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "not_enforced",
+                      "no_check_command", "no_ci"]},
+            "The reason for enforced_check_runs: enforced_check (true), included_jobs or "
+            "unknown_trigger (null), not_enforced, no_check_command or no_ci (false)."),
+        "masked_check_commands": _field(
+            _INT, "CI lines that run a check whose failure cannot fail the job."),
+        "off_trigger_check_commands": _field(
+            _INT, "Unmasked CI check lines whose workflow or job does not run on ordinary changes "
+            "(workflow_dispatch or schedule only, a manual GitLab job)."),
+    },
+}
+
+COVERAGE_GATE: JsonDict = {
+    "description": (
+        "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI "
+        "files at HEAD, never from measured coverage. Each gate keeps its threshold as written "
+        "beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80)."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "reason": _field({"type": "string"}, "Why the block is unavailable."),
+        "enforced": _field({"type": "boolean"},
+                           "True when any gate gates something (a non-zero threshold, or a "
+                           "null one from a tool default or a templated flag)."),
+        "gates": _field(
+            {"type": "array", "items": {"type": "object", "properties": {
+                "file": {"type": "string"},
+                "line": _INT,
+                "tool": {"type": "string"},
+                "form": {"type": "string"},
+                "threshold": _field(_NUM_OR_NULL, "The threshold as written; null when not "
+                                                  "read (a template variable, a tool default)."),
+                "unit": {"enum": ["percent", "ratio", "uncovered_count"]},
+                "threshold_percent": _field(
+                    _NUM_OR_NULL, "The threshold as a percentage: as written for percent, "
+                                      "times 100 for ratio; null for uncovered_count or a "
+                                      "threshold not read."),
+                "metric": {"type": ["string", "null"]},
+            }}},
+            "Each gate found, with its file and 1-based line."),
+        "max_threshold_percent": _field(
+            _NUM_OR_NULL, "The highest non-null threshold_percent across the gates; null "
+                              "when no gate has one."),
+        "threshold_meets_minimum": _field(
+            {"type": ["boolean", "null"]},
+            "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
+            "least 50; null (unknown) when none is but a counted gate's percentage was not "
+            "read; false otherwise. Gates counted are those enforced counts."),
+        "not_detected": _STRINGS,
     },
 }
 
@@ -176,5 +235,6 @@ DELIVERY: JsonDict = {
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
+    "coverage_gate": COVERAGE_GATE,
     "delivery": DELIVERY,
 }

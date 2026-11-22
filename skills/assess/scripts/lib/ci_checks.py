@@ -73,6 +73,31 @@ signal is null (unknown), never false. A GitLab file whose every include
 resolved and holds no check reads false, and so does one whose merged
 configuration was read in full and holds none. ``basis`` names which case applied:
 ``merged_config`` when only the merged configuration found the check.
+
+``enforced_check_runs`` (issue #775) is the same test with masked checks left
+out: a check that runs but cannot fail its job (``pytest || true``,
+``continue-on-error: true``, ``allow_failure: true``, ``set +e``; the rules and
+their known limits are in ``lib.ci_masking``), and with checks that do not
+run on ordinary changes left out too (a ``workflow_dispatch``- or
+``schedule``-only workflow, a GitLab ``when: manual`` job; ``lib.ci_triggers``).
+``enforced_basis`` says which case applied:
+
+- ``enforced_check`` (true): an own or included line runs an unmasked check on
+  ordinary changes (GitLab's merged configuration is read the same way when the
+  files alone hold none).
+- ``included_jobs`` (null): none does, and a CI file pulls jobs this run could
+  not read.
+- ``unknown_trigger`` (null): none does, but an unmasked check sits in a
+  workflow or job whose triggers this reader cannot settle.
+- ``not_enforced`` (false): checks run, but each is masked or off the ordinary
+  triggers.
+- ``no_check_command`` / ``no_ci`` (false): as ``basis``.
+
+``masked_check_commands`` counts the masked check lines and
+``off_trigger_check_commands`` the unmasked ones that do not run on ordinary
+changes, so a reader sees why the two signals disagree. ``basis`` describes
+``test_or_lint_runs``. Layer 5 level 1 reads ``enforced_check_runs``; a stored
+scan without the key reads unknown there.
 """
 from __future__ import annotations
 
@@ -83,6 +108,8 @@ from typing import Literal, NotRequired, TypedDict
 
 from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_check_command, is_lint_command
 from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
+from lib.ci_masking import unmasked_lines
+from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
 from lib.merged_ci import MergedStatus, as_merged
@@ -119,6 +146,8 @@ def merged_partial(text: str, resolution: Resolution | None, merged_text: str | 
 
 CiChecksBasis = Literal["check_command", "merged_config", "included_jobs",
                         "merged_config_partial", "no_check_command", "no_ci"]
+EnforcedBasis = Literal[
+    "enforced_check", "included_jobs", "unknown_trigger", "not_enforced", "no_check_command", "no_ci"]
 
 
 class CiChecksBlock(TypedDict):
@@ -138,6 +167,10 @@ class CiChecksBlock(TypedDict):
     merged_check_commands: int  # check lines in the merged configuration
     test_or_lint_runs: bool | None
     basis: CiChecksBasis
+    enforced_check_runs: bool | None
+    enforced_basis: EnforcedBasis
+    masked_check_commands: int
+    off_trigger_check_commands: int
 
 
 # A YAML list item with no key (``- mypy``), as opposed to ``- run: ...``.
@@ -221,6 +254,29 @@ def check_commands(text: str) -> int:
     return count_check_lines(text.splitlines())
 
 
+def enforced_check_commands(text: str) -> tuple[int, int]:
+    """``(unmasked, masked)``: the check lines of one CI file that can fail their job, and the rest."""
+    lines = text.splitlines()
+    total = count_check_lines(lines)
+    enforced = count_check_lines(unmasked_lines(text), context=lines)
+    return enforced, max(total - enforced, 0)
+
+
+def _trigger_tally(text: str, workflow: Trigger | None) -> tuple[int, int, int, int]:
+    """``(ordinary, unknown trigger, off trigger, masked)`` check lines of one CI file.
+
+    ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
+    """
+    lines = text.splitlines()
+    unmasked = unmasked_lines(text)
+    triggers: list[Trigger] = (gitlab_line_triggers(text) if workflow is None
+                               else [workflow] * len(lines))
+    counts = [count_check_lines(keep(unmasked, triggers, t), context=lines)
+              for t in ("ordinary", "unknown", "not_ordinary")]
+    masked = max(count_check_lines(lines) - sum(counts), 0)
+    return counts[0], counts[1], counts[2], masked
+
+
 def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                    merged_ci: object = None) -> CiChecksBlock:
     """Build the ``ci_checks`` block for the repository at ``repo_root``. ``merged_ci`` is the
@@ -250,6 +306,20 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     included_checks = sum(check_commands(f.text) for f in resolution.files) if resolution else 0
     merged_checks = check_commands(merged.text) if merged.read and merged.text is not None else 0
     records = list(resolution.includes) if resolution else []
+    texts = {rel: read_config(root, rel) for rel in files}
+    workflows = resolve_workflows(
+        {rel: workflow_trigger(texts[rel]) for rel in files if rel not in CI_CONFIG_FILES}, texts)
+    tallies = [_trigger_tally(texts[rel], workflows.get(rel)) for rel in files]
+    tallies += [_trigger_tally(f.text, None) for f in resolution.files] if resolution else []
+    ordinary, unknown, off, masked = (sum(t[k] for t in tallies) for k in range(4))
+    if merged.read and merged.text is not None:
+        # GitLab's merged configuration (#796) repeats the file's own jobs: read it only
+        # where the files alone found no enforced check, as basis reads merged_config.
+        m_ordinary, m_unknown, m_off, m_masked = _trigger_tally(merged.text, None)
+        if not ordinary:
+            ordinary, unknown = m_ordinary, max(unknown, m_unknown)
+        if not (checks or included_checks):
+            off, masked = m_off, m_masked
     runs: bool | None
     basis: CiChecksBasis
     if checks or included_checks:
@@ -262,10 +332,24 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
         runs, basis = False, "no_check_command"
     else:
         runs, basis = False, "no_ci"
+    enforced_runs: bool | None
+    enforced_basis: EnforcedBasis
+    if ordinary:
+        enforced_runs, enforced_basis = True, "enforced_check"
+    elif elsewhere:
+        enforced_runs, enforced_basis = None, "included_jobs"
+    elif unknown:
+        enforced_runs, enforced_basis = None, "unknown_trigger"
+    elif checks or included_checks or merged_checks:
+        enforced_runs, enforced_basis = False, "not_enforced"
+    else:
+        enforced_runs, enforced_basis = False, ("no_check_command" if files else "no_ci")
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,
             "resolved_includes": sum(r["status"] == "resolved" for r in records),
             "unresolved_includes": sum(r["status"] != "resolved" for r in records),
             "includes": records, "merged_config": merged.status,
             "merged_config_reason": merged.reason, "merged_check_commands": merged_checks,
-            "test_or_lint_runs": runs, "basis": basis}
+            "test_or_lint_runs": runs, "basis": basis,
+            "enforced_check_runs": enforced_runs, "enforced_basis": enforced_basis,
+            "masked_check_commands": masked, "off_trigger_check_commands": off}

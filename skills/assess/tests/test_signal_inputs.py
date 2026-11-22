@@ -48,7 +48,7 @@ def test_an_unclassified_signal_fails_the_classification_check(tmp_path: Path) -
 
 @pytest.mark.parametrize(("criterion", "declared"), [
     ({"signal": "layer_grades.instruction_file_present", "op": "eq", "value": True}, True),
-    ({"signal": "coverage_gate.enforced", "op": "eq", "value": True}, True),
+    ({"signal": "coverage_gate.threshold_meets_minimum", "op": "eq", "value": True}, True),
     ({"signal": "promissory_markers.families.suppression.total", "op": "gt", "value": 0}, True),
     ({"signal": "observability.rung", "op": "gte", "value": 1}, True),
     ({"signal": "observability.rung", "op": "gte", "value": 3}, True),
@@ -63,8 +63,8 @@ def test_is_declared_matches_the_classification_table(criterion: Criterion, decl
 
 
 @pytest.mark.parametrize(("criterion", "grade"), [
-    ({"signal": "coverage_gate.enforced", "op": "eq", "value": True}, "config_only"),
-    ({"signal": "ci_checks.test_or_lint_runs", "op": "eq", "value": True}, "declared"),
+    ({"signal": "coverage_gate.threshold_meets_minimum", "op": "eq", "value": True}, "config_only"),
+    ({"signal": "ci_checks.enforced_check_runs", "op": "eq", "value": True}, "verified"),
     ({"signal": "observability.rung", "op": "gte", "value": 3}, "declared"),
     ({"signal": "stats_summary.loc.p95", "op": "lte", "value": 500}, "measured"),
     ({"signal": "doc_staleness.summary.stale_pct", "op": "lte", "value": 50}, "measured"),
@@ -79,7 +79,7 @@ def test_criterion_grade_follows_the_input_class(criterion: Criterion, grade: Gr
     {"signal": "agent_environment.check.named_total", "op": "lte", "value": 0},
     {"signal": "promissory_markers.families.suppression.total", "op": "lt", "value": 1},
     {"signal": "observability.rung", "op": "ne", "value": 3},
-    {"signal": "coverage_gate.enforced", "op": "gte", "value": True},
+    {"signal": "coverage_gate.threshold_meets_minimum", "op": "gte", "value": True},
 ])
 def test_no_operator_lifts_a_text_signal_to_a_counted_grade(criterion: Criterion) -> None:
     # #789: the grade comes from the evidence, never from the criterion's operator.

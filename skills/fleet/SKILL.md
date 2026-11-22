@@ -39,7 +39,7 @@ tracked source file, so a very large repository can need a longer `--timeout`. `
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
 A repository with no import graph names its dominant
-language instead (`no_import_graph_go`, `no_import_graph_rust`), so the
+language instead (for example `no_import_graph_rust`), so the
 fleet output says which language is missing; `no_python_packages` is a Python
 repository with no importable package and `no_source_files` one with no source.
 
@@ -80,7 +80,7 @@ there.
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
 | `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json` and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](#output-groupsjsonl). |
-| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` does not write it yet, so add it to the fragment yourself. Unreadable input exits 2. |
+| `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](#output-fleet-datajson); `ghreport` writes it on a GitHub org fragment. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
 | `--fleet-config FILE` | Fleet settings (TOML) passed to every repository scan. Validated before any scan: an unknown section or key, or a value of the wrong kind, exits 2 and names the key. See [Fleet settings](#fleet-settings---fleet-config). |
 | `--platform` | After the offline scan, run a separate platform pass that reads GitHub or GitLab through `gh` or `glab` and joins its blocks into each `ok` row. Off by default: without it no network call is made. See [Platform pass](#platform-pass---platform). |
@@ -118,7 +118,8 @@ inside it.
 ### Windows
 
 Python 3.11+ and Git for Windows are enough; uv and admin rights are not
-needed.
+needed. Installs, PATH notes and the make-free commands are in the
+[Windows setup guide](../../docs/windows.md).
 
 <!-- chat-skip:start -->
 A Claude Code session on Windows runs PowerShell, so use `python` (not
@@ -261,8 +262,8 @@ built from, in order:
 1. the repository path: GitLab nested groups (`grp/sub/proj` sits in `grp/sub`, under `grp`);
 2. GitHub teams from a `--settings` fragment's `teams` list (a repository in several teams takes the deepest, then the first slug);
 3. CODEOWNERS, as a fallback for a repository in a one-segment group no team placed: a
-   catch-all (`*`) owner that is a team under its group (`@acme/platform`) places it in
-   that team;
+   catch-all (`*`) owner that is a team under its group (`@acme/platform`, matched
+   ignoring case, so `@Acme/Platform` too) places it in that team;
 4. the `--units` mapping, which always wins.
 
 An inferred unit's kind follows its place: a root is `org`, a unit that holds a
@@ -317,7 +318,11 @@ names and owners (`owner_count` stays). With `--hash-paths` or `--hash-salt`, ev
 and repository key, and every reference to one, is hashed (`h:` plus 16 hex digits) and no
 name, owner or web URL is written: the file names no repository, group or host. Hashes
 join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` in
-`lib/counts_only_rules.py`.
+`lib/counts_only_rules.py`. This path hashing applies to `fleet-data.json` only
+(`achievements.json`, built from it, carries the same hashed keys): `repos.jsonl` keeps
+repository ids in clear, so under hashing a `fleet-data.json` repository cannot be joined
+to its `repos.jsonl` row. GitHub team slugs from a `ghreport` fragment's `teams` list
+appear only as unit keys, so they are hashed with them.
 
 ## Output: `achievements.json`
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from lib.coverage_gate import detect_coverage_gate
 
 
@@ -55,7 +57,8 @@ def test_pyproject_fail_under(tmp_path: Path) -> None:
     gate = _only_gate(tmp_path)
     assert gate == {"file": "pyproject.toml", "line": 5, "tool": "coverage.py",
                     "form": "[tool.coverage.report] fail_under",
-                    "threshold": 85.0, "unit": "percent", "metric": "lines"}
+                    "threshold": 85.0, "unit": "percent", "threshold_percent": 85.0,
+                    "metric": "lines"}
     assert detect_coverage_gate(tmp_path)["enforced"] is True
 
 
@@ -109,7 +112,8 @@ def test_ci_workflow_cov_fail_under(tmp_path: Path) -> None:
     gate = _only_gate(tmp_path)
     assert gate == {"file": ".github/workflows/tests.yml", "line": 4,
                     "tool": "pytest-cov", "form": "--cov-fail-under",
-                    "threshold": 88.0, "unit": "percent", "metric": "lines"}
+                    "threshold": 88.0, "unit": "percent", "threshold_percent": 88.0,
+                    "metric": "lines"}
 
 
 def test_commented_ci_line_is_ignored(tmp_path: Path) -> None:
@@ -225,7 +229,7 @@ def test_pom_jacoco_minimum_keeps_ratio(tmp_path: Path) -> None:
     gate = _only_gate(tmp_path)
     assert gate == {"file": "pom.xml", "line": 8, "tool": "jacoco",
                     "form": "<rules> <minimum>", "threshold": 0.8,
-                    "unit": "ratio", "metric": "line"}
+                    "unit": "ratio", "threshold_percent": 80.0, "metric": "line"}
 
 
 def test_pom_jacoco_percent_minimum_is_percent(tmp_path: Path) -> None:
@@ -356,3 +360,94 @@ def test_this_repository_block_is_unchanged() -> None:
     gates = [g for g in detect_coverage_gate(repo)["gates"]
              if g["file"] in {"skills/assess/pyproject.toml", "scripts/pyproject.toml"}]
     assert gates and all(g["metric"] == "lines" for g in gates)
+
+
+# --- the 50 percent minimum (#781) -----------------------------------------
+
+def _pom(minimum: str) -> str:
+    return ("<project>\n  <artifactId>jacoco-maven-plugin</artifactId>\n"
+            "  <counter>LINE</counter>\n"
+            f"  <minimum>{minimum}</minimum>\n</project>\n")
+
+
+def _gradle(minimum: str) -> str:
+    return ('plugins { jacoco }\ntasks.jacocoTestCoverageVerification {\n'
+            '  violationRules { rule { limit {\n'
+            f'    minimum = {minimum}\n'
+            '  } } }\n}\n')
+
+
+def _fail_under(value: str) -> str:
+    return f"[project]\nname = 'x'\n\n[tool.coverage.report]\nfail_under = {value}\n"
+
+
+def _workflow(run: str) -> str:
+    return f"jobs:\n  t:\n    steps:\n      - run: {run}\n"
+
+
+_TEMPLATED = "pytest --cov=src --cov-fail-under=${{ env.COV_MIN }}"
+
+
+@pytest.mark.parametrize(("rel", "text", "threshold", "percent"), [
+    ("pom.xml", _pom("0.80"), 0.8, 80.0),
+    ("pom.xml", _pom("0.55"), 0.55, 55.0),  # 0.55 * 100 is 55.00000000000001 unrounded
+    ("pom.xml", _pom("80%"), 80.0, 80.0),
+    ("build.gradle", _gradle("0.5"), 0.5, 50.0),
+    ("pyproject.toml", _fail_under("49.9"), 49.9, 49.9),
+])
+def test_threshold_percent_normalises_ratio_and_percent(
+        tmp_path: Path, rel: str, text: str, threshold: float, percent: float) -> None:
+    _write(tmp_path, rel, text)
+    gate = _only_gate(tmp_path)
+    assert gate["threshold_percent"] == percent
+    assert gate["threshold"] == threshold  # as written, never rescaled
+
+
+def test_threshold_percent_is_null_for_counts_and_unread_values(tmp_path: Path) -> None:
+    _write(tmp_path, "jest.config.js",
+           "module.exports = { coverageThreshold: { global: { lines: -10 } } };\n")
+    _write(tmp_path, ".github/workflows/ci.yml", _workflow(_TEMPLATED))
+    block = detect_coverage_gate(tmp_path)
+    assert [(g["unit"], g["threshold_percent"]) for g in block["gates"]] == [
+        ("uncovered_count", None), ("percent", None)]
+    assert block["max_threshold_percent"] is None
+
+
+_PY = "pyproject.toml"
+_CI = ".github/workflows/ci.yml"
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({_PY: _fail_under("1")}, False),
+    ({_PY: _fail_under("49.9")}, False),
+    ({_PY: _fail_under("50")}, True),
+    ({"pom.xml": _pom("0.80")}, True),
+    ({"pom.xml": _pom("0.01")}, False),
+    ({"pom.xml": _pom("80%")}, True),
+    ({"build.gradle": _gradle("0.5")}, True),
+    ({_CI: _workflow(_TEMPLATED)}, None),
+    ({"jest.config.js": "module.exports = { coverageThreshold: { global: { lines: -10 } } };\n"},
+     None),
+    ({_PY: _fail_under("1"), _CI: _workflow("pytest --cov=src --cov-fail-under=85")}, True),
+    ({_PY: _fail_under("1"), _CI: _workflow(_TEMPLATED)}, None),
+    ({_PY: _fail_under("0")}, False),
+    ({"jest.config.js": "module.exports = { coverageThreshold: {} };\n"}, False),
+    ({}, False),
+], ids=["fail-under-1", "fail-under-49.9", "fail-under-50", "jacoco-0.80", "jacoco-0.01",
+        "jacoco-80pct", "gradle-0.5", "templated-only", "jest-uncovered-count",
+        "max-wins", "low-plus-templated", "fail-under-0", "jest-empty", "no-gate"])
+def test_threshold_meets_minimum(tmp_path: Path, files: dict[str, str],
+                                 expected: bool | None) -> None:
+    for rel, text in files.items():
+        _write(tmp_path, rel, text)
+    block = detect_coverage_gate(tmp_path)
+    assert block["threshold_meets_minimum"] is expected
+
+
+def test_max_threshold_percent_is_the_highest_read_percentage(tmp_path: Path) -> None:
+    _write(tmp_path, _PY, _fail_under("1"))
+    _write(tmp_path, "pom.xml", _pom("0.70"))
+    _write(tmp_path, _CI, _workflow(_TEMPLATED))
+    assert detect_coverage_gate(tmp_path)["max_threshold_percent"] == 70.0
+    (tmp_path / "empty").mkdir()
+    assert detect_coverage_gate(tmp_path / "empty")["max_threshold_percent"] is None

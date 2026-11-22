@@ -111,13 +111,26 @@
 #   review_reality, which needs GitHub or GitLab through gh or glab: a headless
 #   run without --platform makes no network calls, so a repository with an AI
 #   review step reads "at least 1" there, and one without reads unknown.
-# - Layer 5 level 1 reads ci_checks.test_or_lint_runs: a line of a GitHub
-#   Actions workflow or .gitlab-ci.yml runs a test or lint command (pytest,
+# - Layer 5 level 1 reads ci_checks.enforced_check_runs (issue #775): a line
+#   of a GitHub Actions workflow or .gitlab-ci.yml runs a test or lint command
+#   whose exit code can fail the job. A masked check runs but does not count:
+#   pytest || true (or || exit 0, || :), a step or job with
+#   continue-on-error: true, a GitLab job with allow_failure: true, or a
+#   set +e script body that never re-raises the status (lib/ci_masking.py).
+#   || echo, a pipe without pipefail and allow_failure inherited through
+#   default:/extends: are known limits and still count. The check must also
+#   run on ordinary changes (lib/ci_triggers.py): a workflow only on
+#   workflow_dispatch or schedule, or a GitLab job kept off ordinary
+#   pipelines by when: manual, only: or rules:, does not count, and triggers
+#   the reader cannot settle (no on: key, a custom rules: if:) read unknown.
+#   A stored scan from before this signal has no enforced_check_runs and
+#   reads unknown. The
+#   command test is the one ci_checks.test_or_lint_runs uses (pytest,
 #   make check, npm test, a ./scripts/test.sh, as
 #   check_command.is_check_command classifies an instruction file's
-#   commands, or a lint target or linter: make lint, ruff, eslint). Triggers
-#   are not read: a check in a push-only workflow counts the same as one on
-#   pull requests. Other CI systems (Jenkins, CircleCI) are not read, so a
+#   commands, or a lint target or linter: make lint, ruff, eslint). Branch and
+#   path filters are not read: a check in a push-only workflow counts the same
+#   as one on pull requests. Other CI systems (Jenkins, CircleCI) are not read, so a
 #   repository on them alone is level 0. A CI file with no check line that
 #   pulls its jobs from elsewhere (a GitLab include: or component, a GitHub
 #   job-level uses: of another repository's reusable workflow) is unknown,
@@ -132,12 +145,23 @@
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
 #   a run, a known limit.
+# - Layer 6 level 1 reads coverage_gate.threshold_meets_minimum
+#   (lib/coverage_gate.py): a committed coverage gate whose threshold is at
+#   least 50 percent, with units normalised (a JaCoCo ratio 0.80 is 80). Only
+#   gates that gate something count, so fail_under = 0 is level 0, and the
+#   highest threshold wins (fail_under = 1 beside --cov-fail-under=85 is met).
+#   A gate whose percentage is not read (a templated --cov-fail-under, an
+#   nyc/c8 default, a Jest uncovered-line count) with none at 50 or more is
+#   unknown, never 0. Measured coverage is not read: a coverage report is a
+#   working-tree artifact, not part of the commit. Go and Rust gate forms are
+#   not read yet (#788), so such a repository is level 0. Level 2 reads
+#   test_pressure.mutation_run, which a headless run does not build.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.13"
+version = "default-2026.11.15"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -229,7 +253,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "ci_checks.test_or_lint_runs", op = "eq", value = true }]
+  criteria = [{ signal = "ci_checks.enforced_check_runs", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2
@@ -243,7 +267,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "coverage_gate.enforced", op = "eq", value = true }]
+  criteria = [{ signal = "coverage_gate.threshold_meets_minimum", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2

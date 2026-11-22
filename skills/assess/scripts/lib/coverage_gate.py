@@ -9,9 +9,18 @@ the scorer noticing a threshold by hand.
 
 Honesty contract: every gate reported carries the file, the 1-based line and the
 threshold exactly as written (a JaCoCo ``0.80`` stays ``0.80`` with unit
-``ratio``; it is never rescaled or guessed). When nothing is found the block says
-``enforced: false`` with an empty ``gates`` list - a gate is never inferred from
-coverage *measurement*. ``not_detected`` names the common forms this scan does
+``ratio``; ``threshold`` is never rescaled or guessed). Beside it,
+``threshold_percent`` is the same number as a percentage (``80.0`` for that
+ratio), derived from ``unit`` alone, and null when it is not a percentage of
+coverage (an uncovered-line count) or was not read (a template, a tool default).
+When nothing is found the block says ``enforced: false`` with an empty ``gates``
+list - a gate is never inferred from coverage *measurement*.
+
+``threshold_meets_minimum`` is the Layer 6 level 1 signal (#781): true when a
+counted gate's ``threshold_percent`` is at least ``MINIMUM_THRESHOLD_PERCENT``
+(50), null when none is but a counted gate's percentage was not read (it could
+be 50 or more), false otherwise. It is read from config at HEAD only, never
+from measured coverage, so the level stays a function of the commit. ``not_detected`` names the common forms this scan does
 not read, so "no gate found" is never misread as "no gate exists".
 
 A configured threshold is evidence the tooling fails below it *when coverage
@@ -26,7 +35,7 @@ import os
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.doc_graph import is_excluded_path
@@ -147,6 +156,9 @@ NOT_DETECTED_SCOPED: tuple[str, ...] = (
 
 Unit = Literal["percent", "ratio", "uncovered_count"]
 
+# The lowest configured threshold, as a percentage, that Layer 6 level 1 credits.
+MINIMUM_THRESHOLD_PERCENT = 50.0
+
 
 class CoverageGate(TypedDict):
     """One enforced threshold, as the ``coverage_gate.gates`` entries carry it."""
@@ -157,7 +169,19 @@ class CoverageGate(TypedDict):
     form: str
     threshold: float | None
     unit: Unit
+    threshold_percent: float | None
     metric: str | None
+
+
+class CoverageGateBlock(TypedDict):
+    """The ``coverage_gate`` run-context block."""
+
+    available: bool
+    enforced: bool
+    gates: list[CoverageGate]
+    max_threshold_percent: float | None
+    threshold_meets_minimum: bool | None
+    not_detected: list[str]
 
 
 # Tools whose check runs at a built-in default when no number is given, so a
@@ -170,10 +194,20 @@ _DEFAULT_THRESHOLD_TOOLS = {"nyc", "c8", "nyc/c8"}
 _NULL_THRESHOLD_GATES = _DEFAULT_THRESHOLD_TOOLS | {"coverage.py", "pytest-cov"}
 
 
+def threshold_percent(threshold: float | None, unit: Unit) -> float | None:
+    """``threshold`` as a percentage of coverage: as written for ``percent``, times
+    100 for ``ratio`` (rounded, so ``0.55`` is ``55.0``), and None for an
+    ``uncovered_count`` or a threshold that was not read."""
+    if threshold is None or unit == "uncovered_count":
+        return None
+    return threshold if unit == "percent" else round(threshold * 100, 6)
+
+
 def _gate(file: str, line: int, tool: str, form: str,
           threshold: float | None, unit: Unit, metric: str | None) -> CoverageGate:
     return {"file": file, "line": line, "tool": tool, "form": form,
-            "threshold": threshold, "unit": unit, "metric": metric}
+            "threshold": threshold, "unit": unit,
+            "threshold_percent": threshold_percent(threshold, unit), "metric": metric}
 
 
 def _num(text: str) -> float:
@@ -487,12 +521,38 @@ def _gates_something(gate: CoverageGate) -> bool:
     return gate["threshold"] != 0
 
 
+def max_threshold_percent(gates: list[CoverageGate]) -> float | None:
+    """The highest non-null ``threshold_percent`` across ``gates``, or None."""
+    percents = [g["threshold_percent"] for g in gates if g["threshold_percent"] is not None]
+    return max(percents) if percents else None
+
+
+def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
+    """Layer 6 level 1: does a counted gate hold coverage at 50 percent or more?
+
+    Only the gates ``enforced`` counts are read, so a ``fail_under = 0`` still
+    gates nothing. True when one has ``threshold_percent`` of at least
+    ``MINIMUM_THRESHOLD_PERCENT``; otherwise None (not measured) when one has a
+    null ``threshold_percent`` (a template, an nyc/c8 default, an uncovered-line
+    count), since it could be 50 or more; otherwise False.
+    """
+    counted = [g for g in gates if _gates_something(g)]
+    percents = [g["threshold_percent"] for g in counted]
+    if any(p is not None and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
+        return True
+    if any(p is None for p in percents):
+        return None
+    return False
+
+
 def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
-                         excludes: Excludes | None = None) -> dict[str, Any]:
+                         excludes: Excludes | None = None) -> CoverageGateBlock:
     """Return the ``coverage_gate`` run-context block for ``repo_root``.
 
-    ``{"available": True, "enforced": bool, "gates": [...], "not_detected": [...]}``
-    where each gate is ``{file, line, tool, form, threshold, unit, metric}``.
+    ``{"available": True, "enforced": bool, "gates": [...],
+    "max_threshold_percent": float | None, "threshold_meets_minimum": bool | None,
+    "not_detected": [...]}`` where each gate is ``{file, line, tool, form,
+    threshold, unit, threshold_percent, metric}``.
     ``enforced`` is true when at least one gate has a non-zero threshold, or a
     null one from a tool that checks at a built-in default (nyc/c8). A
     ``fail_under = 0``, and a Jest/Vitest anchor whose threshold was not read, are
@@ -516,6 +576,8 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
         "available": True,
         "enforced": any(_gates_something(g) for g in gates),
         "gates": gates,
+        "max_threshold_percent": max_threshold_percent(gates),
+        "threshold_meets_minimum": threshold_meets_minimum(gates),
         "not_detected": list(NOT_DETECTED) + (
             list(NOT_DETECTED_SCOPED) if scope_abs not in (None, root) else []),
     }

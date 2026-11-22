@@ -11,6 +11,8 @@ argument-hint: "[tag [task-id] | feature description] (optional - derives contex
 
 **$ARGUMENTS**
 
+**Windows:** run the bash blocks below in Git Bash, which ships with Git for Windows. Installs, PATH notes and the make-free commands are in the [Windows setup guide](../../docs/windows.md).
+
 > Thin orchestrator. Delegates to subagents for implementation and review loops.
 >
 > **Planning Mode** (`/tm use stripe as kyc provider`): When args don't match an existing tag, explores the codebase, writes a PRD, creates a tag, generates tasks, runs complexity analysis, and expands. Stops after planning - run `/tm <tag>` to start work.

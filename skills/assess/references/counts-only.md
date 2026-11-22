@@ -608,6 +608,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `ci_checks.reason` | dropped |
 | `ci_checks.basis` | token |
+| `ci_checks.enforced_basis` | token |
 | `ci_checks.includes.kind` | token |
 | `ci_checks.includes.id` | external id (hashed when hashing is on) |
 | `ci_checks.includes.status` | token |

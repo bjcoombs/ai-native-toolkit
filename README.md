@@ -186,6 +186,8 @@ From inside a Claude Code session (not a shell - `/plugin` is a Claude Code comm
 
 Skills appear namespaced: `/ai-native-toolkit:assess`, `/ai-native-toolkit:fleet`, `/ai-native-toolkit:doc-contradictions`, and so on. Update with `/plugin update ai-native-toolkit`. Remove with `/plugin remove ai-native-toolkit`. The plugin doesn't touch your existing `~/.claude/` files.
 
+**On Windows**, the [Windows setup guide](docs/windows.md) covers the baseline (Git for Windows with Git Bash, Python 3.11+, uv optional), installing rg, jq, gh and glab, PATH notes, and the commands to run in place of `make`.
+
 ## Standalone skill ZIPs (any AI assistant)
 
 `/assess`, `/huddle`, `/deslop`, `/skill-forge`, and `/semantic-compress` ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs - **no Claude Code required**. They are plain skill folders (a `SKILL.md` plus reference files), so they work in any assistant that supports the skills format. Verified in claude.ai web, Claude Desktop, and Cowork; usable anywhere the format is accepted. Each ZIP is fully self-contained - download just the skill you want.
@@ -448,6 +450,7 @@ ai-native-toolkit/
 └── docs/
     ├── index.md                       # Map of Content - navigation index for the whole repo
     ├── testing-a-branch-locally.md    # Runbook: test an unmerged branch as a real plugin
+    ├── windows.md                     # Windows setup: installs, PATH notes, make-free commands
     ├── floor-anchor-proof.md          # Why the floor checks cannot be silently disarmed
     ├── superpowers/                   # Design history: plans/ + specs/ behind the skills
     ├── design/                        # Modernization programme specs
