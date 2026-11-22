@@ -20,8 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from lib import fleet, fleet_cleanup
-from lib.fleet_cleanup import delete_clone
+import lib.fleet.runner as fleet
+import lib.fleet.fleet_cleanup as fleet_cleanup
+from lib.fleet.fleet_cleanup import delete_clone
 from lib.run_scope import resolve_scope
 from test_fleet import make_checkout
 from test_fleet_run_stamp import _pushed_repo, _row, _target
@@ -108,7 +109,7 @@ def test_every_fleet_writer_pins_lf_line_endings():
     """Fleet run files are compared byte for byte across hosts (#713, #752)."""
     fleet_files = {rel for rel, _ in _sources()
                    if rel.startswith(("skills/assess/scripts/lib/fleet", "skills/fleet/scripts/"))}
-    assert "skills/assess/scripts/lib/fleet_achievements.py" in fleet_files
+    assert "skills/assess/scripts/lib/fleet/fleet_achievements.py" in fleet_files
     missing = []
     for rel, tree in _sources():
         if rel not in fleet_files:
@@ -210,7 +211,7 @@ CHILD = """
 import locale, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
-from lib import fleet
+import lib.fleet.runner as fleet
 repo = sys.argv[2]
 print("locale:" + locale.getpreferredencoding(False))
 try:

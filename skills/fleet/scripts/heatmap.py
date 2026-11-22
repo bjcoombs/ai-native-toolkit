@@ -4,8 +4,8 @@ Reads ``<out>/groups.jsonl`` written by ``fleet.py --levels`` and writes one SVG
 groups as rows, maturity model rows as columns, each cell the whole level reached,
 ``unknown`` hatched apart from level 0 with the missing signal named in a key.
 No rescan, no model, no network: the same run gives a byte-identical file. The
-logic lives in ``skills/assess/scripts/lib/fleet_heatmap.py`` and the shared
-reader in ``lib/fleet_view.py``.
+logic lives in ``skills/assess/scripts/lib/fleet/fleet_heatmap.py`` and the shared
+reader in ``lib/fleet/fleet_view.py``.
 
 Exit codes:
     0  the SVG was written
@@ -33,10 +33,10 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet_compare import view_check  # noqa: E402
-from lib.fleet_heatmap import columns_for, render_heatmap  # noqa: E402
-from lib.fleet_groups import GroupRow  # noqa: E402
-from lib.fleet_view import (  # noqa: E402
+from lib.fleet.fleet_compare import view_check  # noqa: E402
+from lib.fleet.fleet_heatmap import columns_for, render_heatmap  # noqa: E402
+from lib.fleet.fleet_groups import GroupRow  # noqa: E402
+from lib.fleet.fleet_view import (  # noqa: E402
     Comparison,
     FleetViewError,
     check_levels,
@@ -84,7 +84,7 @@ def _write(path: Path, text: str) -> None:
 
 
 def _compare(run: Path, earlier: Path, groups: list[GroupRow]) -> Comparison:
-    """The level change per cell, gated by the fleet comparison rule (``lib/fleet_compare.py``).
+    """The level change per cell, gated by the fleet comparison rule (``lib/fleet/fleet_compare.py``).
 
     Two stamped run directories are refused on any fleet_compare reason (window,
     scans and the rest, not only the maturity-model version), and a note names the groups

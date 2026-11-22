@@ -61,7 +61,7 @@ new signal has to be classified on purpose; ``input_class`` raises
 Config-only names (#783). A signal read from configuration text says so in its name,
 never that something ran or was enforced: ``ci_checks.test_or_lint_configured`` (was
 ``test_or_lint_runs``) and ``coverage_gate.configured`` (was ``enforced``). Both are pure
-renames, so ``lib.fleet_rescore.SIGNAL_ALIASES`` reads a stored scan's old path under the
+renames, so ``lib.fleet.fleet_rescore.SIGNAL_ALIASES`` reads a stored scan's old path under the
 new name; a maturity model naming an old path fails at load, since both blocks are typed.
 
 ``criterion_grade`` grades one criterion: the grade of its signal's input

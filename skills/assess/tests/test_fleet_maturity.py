@@ -1,7 +1,7 @@
-"""Tests for the shared maturity mean (issue #684): lib/fleet_maturity.py."""
+"""Tests for the shared maturity mean (issue #684): lib/fleet/fleet_maturity.py."""
 from __future__ import annotations
 
-from lib import fleet_maturity as fm
+import lib.fleet.fleet_maturity as fm
 
 
 def test_mean_share_is_each_known_level_over_its_top_level():

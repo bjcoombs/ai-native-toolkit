@@ -233,7 +233,7 @@ repositories, so an empty one appears only when your list includes it.
 the coverage line and `coverage` name no repository. (A repository whose scan exits
 non-zero is still named by its row and its `logs/<repo>.stderr`, as in [`repos.jsonl`](references/repos.md#output-reposjsonl).)
 Without `--discovered`, the line says the coverage is unknown and `coverage` is `null`.
-Logic: `lib/fleet_coverage.py`.
+Logic: `lib/fleet/fleet_coverage.py`.
 
 ## Leadership heat map: `heatmap.py`
 
@@ -391,7 +391,7 @@ across runs. Both files are byte-identical with and without the label step. Labe
 model's guess: the counts-only signals say little about what a repository is,
 so a label leans mostly on the repository's name. Present them as such.
 
-The logic lives in `skills/assess/scripts/lib/fleet.py`, `lib/fleet_stamp.py`,
-`lib/fleet_history.py`, `lib/fleet_compare.py`,
-`lib/fleet_activity.py`, `lib/fleet_cleanup.py`, `lib/fleet_diagrams.py` and
-`skills/assess/scripts/lib/fleet_labels.py` (each module's docstring documents it).
+The logic lives in `skills/assess/scripts/lib/fleet/runner.py`, `lib/fleet/fleet_stamp.py`,
+`lib/fleet/fleet_history.py`, `lib/fleet/fleet_compare.py`,
+`lib/fleet_activity.py`, `lib/fleet/fleet_cleanup.py`, `lib/fleet/fleet_diagrams.py` and
+`skills/assess/scripts/lib/fleet/fleet_labels.py` (each module's docstring documents it).

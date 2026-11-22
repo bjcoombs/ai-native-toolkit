@@ -19,4 +19,4 @@ join runs before any scan (so `--delete-after` cannot remove a checkout it
 needs), costs one `git log` per mapping plus one content-clock pass per docs
 repository, makes no model call, and is kept in the run history beside the
 other files. Schema: [`references/doc_freshness.schema.json`](doc_freshness.schema.json).
-Logic: `skills/assess/scripts/lib/fleet_doc_freshness.py`.
+Logic: `skills/assess/scripts/lib/fleet/fleet_doc_freshness.py`.

@@ -308,7 +308,7 @@ def test_the_catalog_never_counts_a_hazard() -> None:
 
 
 def test_next_step_wording_names_both_paths_of_an_eq_signal_criterion() -> None:
-    from lib.fleet_next_steps import _step
+    from lib.fleet.fleet_next_steps import _step
 
     (criterion,) = _eq_row()["levels"][0]["criteria"]
     text = "\n".join(_step(1, criterion, ["repo"]))

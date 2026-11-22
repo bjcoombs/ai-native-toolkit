@@ -20,9 +20,9 @@ import pytest
 import lib.level_tally as lt
 from lib import level_signals
 from lib.counts_only import counts_only
-from lib.fleet import STATUS_FAILED, STATUS_OK
-from lib.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
-from lib.fleet_level_schema import SCHEMA_PATH, build_schema, render
+from lib.fleet.runner import STATUS_FAILED, STATUS_OK
+from lib.fleet.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
+from lib.fleet.fleet_level_schema import SCHEMA_PATH, build_schema, render
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
 from lib.levels import LevelsError, MaturityModel, evaluate_row, parse_levels
 from test_fleet_cli import fleet_cli

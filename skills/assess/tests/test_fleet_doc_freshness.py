@@ -9,12 +9,12 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from lib import fleet_doc_freshness as fdf
+import lib.fleet.fleet_doc_freshness as fdf
 from lib.assess_config import load_describes
 from lib.doc_staleness import analyze_doc_staleness
-from lib.fleet_doc_freshness import Checkout, freshness_rows, measure
-from lib.fleet_history import persist
-from lib.fleet_schema import FRESHNESS_SCHEMA_PATH, build_freshness_schema, render_freshness
+from lib.fleet.fleet_doc_freshness import Checkout, freshness_rows, measure
+from lib.fleet.fleet_history import persist
+from lib.fleet.fleet_schema import FRESHNESS_SCHEMA_PATH, build_freshness_schema, render_freshness
 from test_fleet_cli import fleet_cli
 
 DOC_EDIT = 1_700_000_000

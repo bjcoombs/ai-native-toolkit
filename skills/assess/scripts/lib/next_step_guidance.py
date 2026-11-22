@@ -1,6 +1,6 @@
 """Repository-native wording for a maturity model criterion: the change and its "done when".
 
-A team page (``lib/fleet_next_steps.py``) turns each unmet maturity model criterion into
+A team page (``lib/fleet/fleet_next_steps.py``) turns each unmet maturity model criterion into
 one next step a team can accept or decline on its own. A signal path such as
 ``agent_environment.check.named_total`` means nothing to a maintainer without
 the plugin, so each step leads with:

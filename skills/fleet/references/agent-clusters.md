@@ -2,7 +2,7 @@
 
 Which teams are building the same agent? Written on every run from the
 `agent_building` blocks in `repos.jsonl` (an unscored inventory, issue #689).
-Logic: `skills/assess/scripts/lib/fleet_agent_building.py`; per-repository scan:
+Logic: `skills/assess/scripts/lib/fleet/fleet_agent_building.py`; per-repository scan:
 `skills/assess/scripts/lib/agent_building.py`. Not kept in the run history.
 
 Each repository gets one class, first match wins:

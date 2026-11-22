@@ -29,7 +29,7 @@ A new diagram adds its ``FILE`` and heading to ``HEADINGS``, a builder returning
 theme with the shared helpers here (``cell``, a square in a category's look;
 ``legend``, swatches with labels and indented notes; ``wrap``, caption lines by
 character budget; ``style``, ``fleet_svg.theme_style`` plus ``ROLES``) over
-``lib/fleet_svg.py``. Deterministic: model order, fixed formatting, no date, no set
+``lib/fleet/fleet_svg.py``. Deterministic: model order, fixed formatting, no date, no set
 iteration; two renders of one context are byte-identical. Captions name no layer
 number: row labels drop a model title's ``Layer N:`` prefix (``row_label``).
 
@@ -46,7 +46,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from lib import fleet_svg as svg
+import lib.fleet.fleet_svg as svg
 from lib.headline import reason_word
 from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import default_model

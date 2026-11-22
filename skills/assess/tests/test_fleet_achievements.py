@@ -10,16 +10,16 @@ import jsonschema
 import pytest
 
 from fleet_data_fixture import LEVELS, STAMP
-from lib import fleet_achievements as fa
-from lib.fleet import FLEET_ROW_VERSION, FleetRow
-from lib.fleet_achievements_runs import earlier_runs
-from lib.fleet_achievements_schema import SCHEMA_PATH, render
-from lib.fleet_credit import TITLE, credit_section
-from lib.fleet_data import FLEET_DATA_FILE, FleetData, Privacy, build_fleet_data, dumps_fleet_data
-from lib.fleet_diagrams import report_markdown
-from lib.fleet_stamp import FleetStamp, RUN_FILE
-from lib.fleet_targets import TargetSpec, TargetsError, parse_targets, resolve
-from lib.fleet_units import build_trees, empty_map
+import lib.fleet.fleet_achievements as fa
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.fleet.fleet_achievements_runs import earlier_runs
+from lib.fleet.fleet_achievements_schema import SCHEMA_PATH, render
+from lib.fleet.fleet_credit import TITLE, credit_section
+from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, Privacy, build_fleet_data, dumps_fleet_data
+from lib.fleet.fleet_diagrams import report_markdown
+from lib.fleet.fleet_stamp import FleetStamp, RUN_FILE
+from lib.fleet.fleet_targets import TargetSpec, TargetsError, parse_targets, resolve
+from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
 
 MODEL: MaturityModel = parse_levels(tomllib.loads(LEVELS))

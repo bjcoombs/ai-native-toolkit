@@ -1,6 +1,6 @@
 """Builds the fixture fleet runs under ``tests/fixtures/fleet_heatmap/`` (issue #570).
 
-The ``groups.jsonl`` files there are the real ``lib/fleet_groups.roll_up`` output
+The ``groups.jsonl`` files there are the real ``lib/fleet/fleet_groups.roll_up`` output
 for the synthetic repository rows below. ``test_fleet_heatmap.py`` fails when the
 committed files differ from a fresh build; regenerate them (then the goldens) with
 ``uv run --locked python tests/fleet_heatmap_fixture.py`` from ``skills/assess``.
@@ -12,8 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib import fleet_groups as fg  # noqa: E402
-from lib.fleet import FLEET_ROW_VERSION, FleetRow  # noqa: E402
+import lib.fleet.fleet_groups as fg  # noqa: E402
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow  # noqa: E402
 from lib.levels import load_levels  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 

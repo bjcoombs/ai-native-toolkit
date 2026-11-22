@@ -1,6 +1,6 @@
 """Builds the fixture fleet run under ``tests/fixtures/fleet_diagrams/`` (issue #674).
 
-``repos.jsonl`` there is synthetic repository rows written by ``lib/fleet.write_rows``;
+``repos.jsonl`` there is synthetic repository rows written by ``lib/fleet/runner.write_rows``;
 ``test_fleet_diagrams.py`` fails when the committed file differs from a fresh build.
 Regenerate it and the golden renders with ``uv run --locked python tests/fleet_diagrams_fixture.py``
 from ``skills/assess``, then review the diff.
@@ -13,12 +13,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.fleet import FLEET_ROW_VERSION, FleetRow, write_rows  # noqa: E402
-from lib.fleet_compare import Comparison, FleetRun, compare  # noqa: E402
-from lib.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
-from lib.fleet_groups import roll_up  # noqa: E402
-from lib.fleet_stamp import build_stamp  # noqa: E402
-from lib.fleet_view import read_repos  # noqa: E402
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, write_rows  # noqa: E402
+from lib.fleet.fleet_compare import Comparison, FleetRun, compare  # noqa: E402
+from lib.fleet.fleet_diagrams import build_diagrams, report_markdown  # noqa: E402
+from lib.fleet.fleet_groups import roll_up  # noqa: E402
+from lib.fleet.fleet_stamp import build_stamp  # noqa: E402
+from lib.fleet.fleet_view import read_repos  # noqa: E402
 from lib.levels import MaturityModel, load_levels  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
