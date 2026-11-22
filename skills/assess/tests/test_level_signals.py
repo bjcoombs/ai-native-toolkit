@@ -600,7 +600,8 @@ def test_no_instruction_file_is_zero_but_a_missing_block_is_unknown(
     golden_repos: dict[str, dict[str, Any]],
 ) -> None:
     scans = copy.deepcopy(golden_repos["golden-doc-repo"])
-    assert scans["layer_grades"] == {"instructions_grade": None, "instruction_file_present": False}
+    assert scans["layer_grades"] == {"instructions_grade": None, "instruction_file_present": False,
+                                     "instruction_presence": "none"}
     assert _row(_run({"r": scans}), "layer-0-instructions")["level"] == 0
 
     del scans["layer_grades"]
@@ -621,6 +622,21 @@ def test_another_tools_instruction_file_reaches_layer_zero_partial(tmp_path: Pat
     assert scans["layer_grades"]["instructions_grade"] in {"A", "B", "C", "D", "F"}
     assert scans["nested_instructions"]["budget"]["claude_code"]["bytes"] == 0
     assert _row(_run({"r": scans}), "layer-0-instructions")["level"] == 1
+
+
+def test_nested_only_instructions_meet_layer_zero_level_one(tmp_path: Path) -> None:
+    """#821: a repository whose only instruction file is pkg/AGENTS.md reads nested_only,
+    with a non-null grade, and meets Layer 0 level 1 (harnesses load it on demand)."""
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "golden-doc-repo", repo)
+    (repo / "pkg").mkdir(exist_ok=True)
+    (repo / "pkg" / "AGENTS.md").write_text(
+        "# Pkg\n\nRun `make test` before every commit.\n", encoding="utf-8")
+    scans = _scans(_commit(repo))
+    assert scans["layer_grades"]["instruction_presence"] == "nested_only"
+    assert scans["layer_grades"]["instruction_file_present"] is True
+    assert scans["layer_grades"]["instructions_grade"] in {"A", "B", "C", "D", "F"}
+    assert _row(_run({"r": scans}), "layer-0-instructions")["level"] >= 1
 
 
 def test_a_maturity_model_row_on_a_layer_grade_loads_and_evaluates(

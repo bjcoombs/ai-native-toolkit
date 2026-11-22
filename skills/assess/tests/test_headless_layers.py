@@ -44,7 +44,7 @@ LONG_OWNER = "@an-owner-team-name-long-enough-to-fail-the-forty-character-rule"
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True,
-                          text=True, check=True).stdout
+                          text=True, encoding="utf-8", errors="surrogateescape", check=True).stdout
 
 
 def _write(repo: Path, rel: str, text: str) -> None:

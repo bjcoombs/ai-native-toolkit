@@ -134,10 +134,10 @@ def _run_at(repo: Path, out: Path, fake: Path, epoch: int) -> dict[str, object]:
            "GIT_TEST_DATE_NOW": str(epoch)}
     year = subprocess.run(
         [sys.executable, "-c", "import datetime; print(datetime.datetime.now().year)"],
-        env=env, capture_output=True, text=True, check=True).stdout.strip()
+        env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout.strip()
     assert year == str(datetime.fromtimestamp(epoch, timezone.utc).year), "fake clock not applied"
     subprocess.run([sys.executable, str(SCRIPTS / "assess_signals.py"), str(repo), "--out", str(out)],
-                   env=env, capture_output=True, text=True, check=True)
+                   env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
     doc: dict[str, object] = json.loads(out.read_text(encoding="utf-8"))
     return doc
 

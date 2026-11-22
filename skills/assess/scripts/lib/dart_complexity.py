@@ -22,10 +22,18 @@ each scored on their own as ``<anonymous>``.
 Everything inside ``//`` and ``/* */`` comments (which nest in Dart) and inside
 single-, double-, triple-quoted and raw strings is skipped; ``${...}``
 interpolations are scanned as code. The scanner is one forward pass over at
-most ``_READ_BYTES`` of each file: every regex is a single character class or
-a literal alternation with no nested quantifier, so a pathological input
-(deep nesting, one very long line, an unterminated string or comment) costs
-time linear in its length and cannot backtrack.
+most ``_READ_BYTES`` of each file. Every regex is a character class or a
+literal alternation, at most behind one ``\\s*`` and with no nested
+quantifier, so a pathological input (deep nesting, one very long line, an
+unterminated string or comment) costs time linear in its length and cannot
+backtrack.
+
+The pass has two paths (#967). A run of plain code up to the next quote,
+``/``, ``?`` or raw-string prefix, outside any interpolation, is tokenised by
+one ``findall`` call and handled inline; everything else (comments, strings,
+``?``, and code inside ``${...}``) goes one token at a time through
+``_CODE_TOKEN``. Both paths see the same tokens, so the output is the same
+either way; the fast path only drops the per-token match object and call.
 """
 from __future__ import annotations
 
@@ -53,18 +61,40 @@ _CONTROL_HEADS = frozenset({"if", "for", "while", "switch", "catch"})
 # Tokens allowed between a parameter list's `)` and its body.
 _BODY_MODIFIERS = frozenset({"async", "sync", "*"})
 
+# One code token with the whitespace before it folded into the same match, so
+# a run of whitespace costs no loop iteration of its own (#967). `eof` takes
+# trailing whitespace; `\s*` never backtracks, since `op` matches any other
+# character.
 _CODE_TOKEN = re.compile(
-    r"(?P<ws>\s+)"
+    r"\s*(?:"
+    r"(?P<eof>\Z)"
     r"|(?P<lc>//)"
     r"|(?P<bc>/\*)"
     r"|(?P<raw>r(?:'''|\"\"\"|'|\"))"
     r"|(?P<str>'''|\"\"\"|'|\")"
     r"|(?P<id>[A-Za-z_$][A-Za-z0-9_$]*)"
     r"|(?P<num>[0-9][0-9A-Za-z_]*)"
-    r"|(?P<op>=>|&&|\|\||\?\?=|\?\?|\?\.|.)",
+    r"|(?P<op>=>|&&|\|\||\?\?=|\?\?|\?\.|.))",
     re.DOTALL,
 )
 _BLOCK_COMMENT_EDGE = re.compile(r"/\*|\*/")
+
+# The fast path (#967) scans a run of code up to the next character that can
+# open a string or a comment, or that needs the per-token path: a quote, a
+# `/`, a `?` (a ternary counts only after whitespace) or an `r` that starts a
+# raw string (an `r` at a token start, directly before a quote).
+_RUN_END = re.compile(r"['\"/?]|(?<![A-Za-z0-9_$])r(?=['\"])")
+# The tokens such a run can hold, the `id`, `num` and `op` branches of
+# `_CODE_TOKEN` without a group per kind, so `findall` returns plain strings.
+# `\Z` takes trailing whitespace as an empty match.
+_RUN_TOKEN = re.compile(
+    r"\s*([A-Za-z_$][A-Za-z0-9_$]*|[0-9][0-9A-Za-z_]*|=>|&&|\|\||.|\Z)",
+    re.DOTALL,
+)
+_WORD_START = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$")
+_DIGITS = frozenset("0123456789")
+_WS_CHAR = re.compile(r"\s")
 
 
 def _string_end_pattern(quote: str, raw: bool) -> re.Pattern[str]:
@@ -84,11 +114,11 @@ _STRING_END = {
 
 
 class _Fn:
-    __slots__ = ("name", "start", "count")
+    __slots__ = ("name", "order", "count")
 
-    def __init__(self, name: str, start: int) -> None:
+    def __init__(self, name: str, order: int) -> None:
         self.name = name
-        self.start = start
+        self.order = order  # ordinal of its opening: source order
         self.count = 0
 
 
@@ -124,16 +154,25 @@ class _Scanner:
         self.generic_name = ""  # identifier before the last `<` (name<T>(...))
         self.closed_head: str | None = None  # head of a just-closed `)`
         self.getter: str | None = None       # name after `get`, if pending
+        self.opened = 0  # functions opened so far: the next one's ordinal
 
     def run(self) -> list[tuple[str, float]]:
-        n = len(self.text)
+        text, n = self.text, len(self.text)
+        run_end = _RUN_END.search
         while self.pos < n:
             if self.string is not None:
                 self._in_string()
+            elif self.interps:
+                self._code_token()  # a `}` may end the interpolation
             else:
-                self._code_token()
+                e = run_end(text, self.pos)
+                end = n if e is None else e.start()
+                if end > self.pos:
+                    self._code_run(end)
+                else:
+                    self._code_token()
         self.done.extend(self.fns)  # unterminated bodies (truncated input)
-        self.done.sort(key=lambda f: f.start)
+        self.done.sort(key=lambda f: f.order)
         return [(f.name, float(1 + f.count)) for f in self.done]
 
     # -- lexing ------------------------------------------------------------
@@ -155,25 +194,73 @@ class _Scanner:
         self.string = None
         self._reset("'")
 
+    def _code_run(self, end: int) -> None:
+        """Scan the code in ``text[pos:end]``, which holds no quote, slash,
+        ``?`` or raw-string prefix and lies outside any interpolation.
+
+        The hot path (#967): ``findall`` hands back every token as a plain
+        string in one call, so a token costs no match object, and the word,
+        parenthesis and brace cases, the commonest, are handled inline. Nothing in
+        such a run can move the position or end the run early.
+        """
+        on_op, fns = self._on_op, self.fns
+        parens, braces = self.parens, self.braces
+        for tok in _RUN_TOKEN.findall(self.text, self.pos, end):
+            first = tok[:1]
+            if first in _WORD_START:
+                if tok in _DECISION_WORDS and fns:
+                    fns[-1].count += 1
+                self.getter = tok if self.prev == "get" and _is_name(tok) \
+                    else None
+                if tok not in _BODY_MODIFIERS:
+                    self.closed_head = None
+                self.prev = tok
+            elif first == "(":
+                parens.append(
+                    self.generic_name if self.prev == ">" else self.prev)
+                self.prev, self.closed_head, self.getter = "(", None, None
+            elif first == ")":
+                head = parens.pop() if parens else ""
+                if self.arrows:
+                    self._close_arrows()
+                self.prev, self.closed_head, self.getter = ")", head, None
+            elif first == "{":
+                name = self._body_name()
+                braces.append(self._open(name) if name else None)
+                self.prev, self.closed_head, self.getter = "{", None, None
+            elif first in _DIGITS:
+                self.prev, self.closed_head, self.getter = tok, None, None
+            elif tok:  # the empty match at `end` is not a token
+                on_op(tok, False)
+        self.pos = end
+        # Whitespace right before the next token, for a ternary `?`.
+        self.prev_ws = _WS_CHAR.match(self.text, end - 1) is not None
+
     def _code_token(self) -> None:
+        """Scan one code token at ``pos``, with any whitespace before it."""
         m = _CODE_TOKEN.match(self.text, self.pos)
-        assert m is not None  # the op branch matches any single character
+        assert m is not None  # `eof` or the op branch always matches
+        kind = m.lastgroup
+        assert kind is not None
+        tok = m.group(kind)
         self.pos = m.end()
-        kind, tok = m.lastgroup, m.group()
-        ws_before, self.prev_ws = self.prev_ws, kind in ("ws", "lc", "bc")
-        if kind == "lc":
-            nl = self.text.find("\n", self.pos)
-            self.pos = len(self.text) if nl < 0 else nl
-        elif kind == "bc":
-            self._skip_block_comment()
-        elif kind in ("raw", "str"):
-            self.string = (tok[1:] if kind == "raw" else tok, kind == "raw")
-        elif kind == "id":
+        ws_before = self.prev_ws or m.start(kind) > m.start()
+        self.prev_ws = False
+        if kind == "id":
             self._on_word(tok)
+        elif kind == "op":
+            self._on_op(tok, ws_before)
         elif kind == "num":
             self._reset(tok)
-        elif kind == "op":
-            self._on_op(tok, ws_before, m.start())
+        elif kind == "lc":
+            nl = self.text.find("\n", self.pos)
+            self.pos = len(self.text) if nl < 0 else nl
+            self.prev_ws = True
+        elif kind == "bc":
+            self._skip_block_comment()
+            self.prev_ws = True
+        elif kind in ("raw", "str"):
+            self.string = (tok[1:] if kind == "raw" else tok, kind == "raw")
 
     def _skip_block_comment(self) -> None:
         depth = 1  # Dart block comments nest
@@ -195,14 +282,14 @@ class _Scanner:
             self.closed_head = None
         self.prev = tok
 
-    def _on_op(self, tok: str, ws_before: bool, start: int) -> None:
+    def _on_op(self, tok: str, ws_before: bool) -> None:
         if tok in _DECISION_OPS or (tok == "?" and ws_before):
             self._count()
         if tok == ")":
             head = self.parens.pop() if self.parens else ""
-            self._close_arrows()
-            self._reset(")")
-            self.closed_head = head
+            if self.arrows:
+                self._close_arrows()
+            self.prev, self.closed_head, self.getter = ")", head, None
             return
         if tok == "}" and self.interps and self.interps[-1][2] == 0:
             quote, raw, _ = self.interps.pop()
@@ -211,24 +298,23 @@ class _Scanner:
             return
         handler = _OP_HANDLERS.get(tok)
         if handler is not None:
-            handler(self, start)
+            handler(self)
         keep = self.closed_head if tok in _BODY_MODIFIERS else None
-        self._reset(tok)
-        self.closed_head = keep
+        self.prev, self.closed_head, self.getter = tok, keep, None
 
-    def _on_lt(self, _start: int) -> None:
+    def _on_lt(self) -> None:
         self.generic_name = self.prev if _is_name(self.prev) else ""
 
-    def _on_open_paren(self, _start: int) -> None:
+    def _on_open_paren(self) -> None:
         self.parens.append(self.generic_name if self.prev == ">" else self.prev)
 
-    def _on_open_brace(self, start: int) -> None:
+    def _on_open_brace(self) -> None:
         if self.interps:
             self.interps[-1][2] += 1
         name = self._body_name()
-        self.braces.append(self._open(name, start) if name else None)
+        self.braces.append(self._open(name) if name else None)
 
-    def _on_close_brace(self, _start: int) -> None:
+    def _on_close_brace(self) -> None:
         if self.interps:
             self.interps[-1][2] -= 1
         opened = self.braces.pop() if self.braces else None
@@ -236,13 +322,13 @@ class _Scanner:
             self._close(opened)
         self._close_arrows()
 
-    def _on_arrow(self, start: int) -> None:
+    def _on_arrow(self) -> None:
         name = self._body_name()
         if name is not None:
-            fn = self._open(name, start)
+            fn = self._open(name)
             self.arrows.append((fn, len(self.braces), len(self.parens)))
 
-    def _on_semicolon(self, _start: int) -> None:
+    def _on_semicolon(self) -> None:
         self._close_arrows(at_semicolon=True)
 
     # -- function frames ---------------------------------------------------
@@ -268,8 +354,10 @@ class _Scanner:
             return "<anonymous>"
         return None
 
-    def _open(self, name: str, start: int) -> _Fn:
-        fn = _Fn(name, start)
+    def _open(self, name: str) -> _Fn:
+        # Functions open in source order, so an ordinal sorts like a position.
+        fn = _Fn(name, self.opened)
+        self.opened += 1
         self.fns.append(fn)
         return fn
 

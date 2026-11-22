@@ -1936,16 +1936,21 @@ graph already surfaces it.
 
 **`gap_actions.py`**
 Builds the run-context `gap_actions` list: Top 3 candidates for the slots
-`prescribed_actions` leaves free, read from two blocks `assess_core` already holds. Each
-entry is `{signal, action, paths}`. A `coverage_report` entry fires when no coverage
+`prescribed_actions` leaves free, read from blocks `assess_core` already holds. Each
+entry is `{signal, action, paths}`. A `layer_grades` entry (issue #821) fires when
+`layer_grades.instruction_presence` is `nested_only`: its action is to add a root
+instruction file (`AGENTS.md` or `CLAUDE.md`) that names the check command, and it names
+up to five nested files (`MAX_NESTED_PATHS`); it comes first. The registry runs the
+scan at the post-offers stage, after `layer_grades` and `nested_instructions`.
+A `coverage_report` entry fires when no coverage
 report was found in a repo whose archetype is `software` and names up to three
 `top_hotspots` to measure, skipping `archive/`, `archived/` and `attic/` paths (via
 `keyhole_signals.is_archive_path`); it is silent on a knowledge base (test layers N/A)
-and when no hotspot remains, and when it fires it comes first.
+and when no hotspot remains, and when it fires it comes next.
 A `doc_graph` entry fires when `reachability_pct` is below `REACHABILITY_FLOOR` (0.5, with
 its rationale beside it) and names up to ten unreachable docs. A repo with no markdown
 reports reachability 0.0, but nothing is unreachable there, so no `doc_graph` entry fires.
-`[]` when neither fires. There is no lint complexity-rule gap: the core has no detector
+`[]` when none fires. There is no lint complexity-rule gap: the core has no detector
 for it, and the layer scorer owns that check.
 
 **`understanding_analysis.py`**
@@ -2921,7 +2926,14 @@ closures fold into their enclosing function. `dart_function_scores` reads at mos
 of a file (the `generated_files.py` bound) and returns the per-function values and the
 worst function's name. The treemap's `collect` runs it on scc-scored `.dart` files and
 registers it in `FN_BACKENDS` as `dart-scanner` with `approximate: true`. No regex has a
-nested quantifier, so a pathological file costs linear time. Pure stdlib.
+nested quantifier, so a pathological file costs linear time. The pass has two paths
+(#967): a run of plain code up to the next quote, `/`, `?` or raw-string prefix,
+outside any `${...}`, is tokenised by one `findall` call and handled inline, and
+everything else goes one token at a time through `_CODE_TOKEN`. Both see the same
+tokens, so the output does not depend on the path; the fast path cuts the per-token
+cost of the common case, which keeps the pathological-input budget in
+`test_dart_complexity.py` on the Windows runner. Functions sort by the ordinal of their
+opening, which is source order. Pure stdlib.
 
 **`promissory_markers.py`**
 Write-side erosion instrument: detects the four families of promissory markers
@@ -4083,12 +4095,22 @@ Tests: `tests/test_shared_tooling.py`.
 **`layer_grades.py`**
 Deterministic layer grades as one registered block (issue #620), so the headless
 signals document carries them and a maturity model can name them.
-`scan_layer_grades(instruction_grading)` reads the setup grading
-(`run_setup.instruction_grading`) and writes `{instructions_grade,
-instruction_file_present}`: the best letter grade of the tracked, present instruction
-files (null with none, the top-level `instructions_grade` value, which stays) and
-whether one exists, so a maturity model can score "no instruction file" as level 0 rather
-than unknown. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
+`scan_layer_grades(instruction_grading, nested_instructions)` reads the setup grading
+(`run_setup.instruction_grading`) and the `nested_instructions` block and writes
+`{instructions_grade, instruction_file_present, instruction_presence}`.
+`instruction_presence` (issue #821) is three-way: `root` (a tracked file at a root
+location, or a discovered file its tool loads at session start, `scope.always_loaded`:
+always loaded), `nested_only` (no root file, but `nested_instructions.files` lists one,
+such as `pkg/AGENTS.md`: present, loaded on demand) or `none` (no instruction file at any
+known location); null only when there is no root file and the nested block is
+unavailable, so a nested file was not looked for. `instructions_grade` is the best letter
+grade of the files that value counts (the root grading, the top-level
+`instructions_grade` value, which stays root-only; else the always-loaded or nested
+grades), null only for `none`. `instruction_file_present` is true for `root` and
+`nested_only` and false for `none` (null with the presence), so a maturity model scores
+"no instruction file" as level 0 rather than unknown and a nested-only repository meets
+Layer 0 level 1 (maintainer decision on #821); its advice is the `gap_actions`
+`layer_grades` entry. Only Layer 0 has a deterministic grade; Layers 2-4 have none (the
 default maturity model's rows for them read proxies, and its header says how they diverge). A short token and a boolean, kept whole by the
 counts-only filter. Tests: `tests/test_layer_grades.py`, and the maturity model rows in
 `tests/test_level_signals.py`.

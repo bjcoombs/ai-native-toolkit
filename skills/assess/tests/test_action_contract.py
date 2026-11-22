@@ -152,7 +152,7 @@ def test_action_yml_is_git_tracked():
 
     out = subprocess.run(
         ["git", "-C", str(_ACTION_PATH.parent), "ls-files", "--", "action.yml"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="surrogateescape",
     )
     assert out.stdout.strip() == "action.yml"
 

@@ -2,9 +2,14 @@
 
 ``prescribed_actions`` fills the Top 3 from the attention ranking. When that
 ranking is low signal (or empty) it leaves slots free, and the report writer
-used to fill them by judgement alone. ``build_gap_actions`` turns two measured
+used to fill them by judgement alone. ``build_gap_actions`` turns three measured
 gaps into ready-made actions for those slots, so a free slot is filled from a
 signal before it is filled from judgement:
+
+- ``layer_grades`` (issue #821): the only instruction files are nested
+  (``layer_grades.instruction_presence`` is ``nested_only``), so an agent
+  starting at the root reads none of them. Advises a root ``AGENTS.md`` or
+  ``CLAUDE.md`` that names the check command, and names the nested files.
 
 - ``coverage_report``: no line-coverage report was found in a software repo,
   so test depth on the hotspots is unmeasured. Names the top non-archive
@@ -14,7 +19,8 @@ signal before it is filled from judgement:
   from the entry points. Names the unreachable docs.
 
 Each entry is ``{signal, action, paths}``, where ``signal`` is the run-context
-block the gap was read from. The coverage entry, when present, comes first.
+block the gap was read from. The root-instructions entry, when present, comes
+first, then coverage.
 A lint complexity-rule gap is deliberately absent: the core has no detector for
 it, and the layer scorer owns that check.
 """
@@ -77,6 +83,29 @@ def _coverage_gap(
     }
 
 
+# How many nested instruction files the root-instructions action names; the rest
+# are in nested_instructions.files.
+MAX_NESTED_PATHS = 5
+
+
+def _root_instructions_gap(layer_grades: JsonDict, nested: JsonDict) -> GapAction | None:
+    if layer_grades.get("instruction_presence") != "nested_only":
+        return None
+    listed = nested.get("files")
+    files = listed if isinstance(listed, list) else []
+    paths = sorted(f["path"] for f in files if isinstance(f, dict) and isinstance(f.get("path"), str))
+    return {
+        "signal": "layer_grades",
+        "action": (
+            "Add a root instruction file (`AGENTS.md` or `CLAUDE.md` at the repository "
+            "root) that names the check command an agent runs before every commit: "
+            "the only instruction files are nested, so they load only when an agent "
+            "works in their directory, and a session that starts at the root reads none."
+        ),
+        "paths": paths[:MAX_NESTED_PATHS],
+    }
+
+
 def _reachability_gap(doc_graph: JsonDict) -> GapAction | None:
     # A repo with no markdown reports reachability 0.0 with available: true.
     # Nothing is unreachable there, so no link-the-docs action applies; a
@@ -103,9 +132,12 @@ def build_gap_actions(
     doc_graph: JsonDict | None,
     top_hotspots: list[JsonDict] | None,
     archetype: JsonDict | None,
+    layer_grades: JsonDict | None = None,
+    nested_instructions: JsonDict | None = None,
 ) -> list[GapAction]:
-    """Return the gap actions that fire, coverage first; ``[]`` when none do."""
+    """Return the gap actions that fire, root instructions then coverage first; ``[]`` when none do."""
     gaps = [
+        _root_instructions_gap(layer_grades or {}, nested_instructions or {}),
         _coverage_gap(coverage_report or {}, top_hotspots or [], archetype or {}),
         _reachability_gap(doc_graph or {}),
     ]

@@ -482,8 +482,6 @@ SCANS: tuple[ScanSpec, ...] = (
     ),
     ScanSpec("keyhole_blocks", cs.keyhole_blocks, ("keyhole",), STAGE_READ_SIDE,
              degrade=False, gate_reason=_SERIALISER, spread=KEYHOLE_KEYS),
-    ScanSpec("gap_actions", cs.gap_actions,
-             ("coverage_report", "doc_graph", "current", "archetype"), STAGE_READ_SIDE),
     ScanSpec("exclusion_disclosures", cs.exclusion_disclosures, ("keyhole", "excludes"),
              STAGE_READ_SIDE, degrade=False, gate_reason=_SERIALISER,
              spread=("excluded_by_config", "excluded_as_archive", "pruned_finding_paths")),
@@ -591,8 +589,17 @@ SCANS: tuple[ScanSpec, ...] = (
     # fleet roll-up counts classes per group and clusters similar builders.
     ScanSpec("agent_building", scan_agent_building, ("repo_root",), STAGE_POST_OFFERS),
     # Deterministic layer grades (issue #620): instructions_grade republished as
-    # a block, so a maturity model can name it in a headless or full run.
-    ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading",), STAGE_POST_OFFERS),
+    # a block, so a maturity model can name it in a headless or full run, with
+    # the three-way instruction presence (root, nested_only, none; issue #821)
+    # read from the root grading and the nested block.
+    ScanSpec("layer_grades", scan_layer_grades, ("instruction_grading", "nested_instructions"),
+             STAGE_POST_OFFERS),
+    # Top 3 candidates read from measured gaps. Post-offers since #821: the
+    # root-instructions gap reads layer_grades.
+    ScanSpec("gap_actions", cs.gap_actions,
+             ("coverage_report", "doc_graph", "current", "archetype", "layer_grades",
+              "nested_instructions"),
+             STAGE_POST_OFFERS),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and

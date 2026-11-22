@@ -485,7 +485,7 @@ def test_ci_duration_without_gh_or_remote(tmp_path: Path, monkeypatch: pytest.Mo
     _git(root, "remote", "add", "origin", "git@github.com:acme/widget.git")
     git_dir = tmp_path / "only-git"
     git_dir.mkdir()
-    real_git = subprocess.run(["which", "git"], capture_output=True, text=True).stdout.strip()
+    real_git = subprocess.run(["which", "git"], capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     (git_dir / "git").symlink_to(real_git)
     monkeypatch.setenv("PATH", str(git_dir))
     assert ci_duration(root)["reason"].startswith("gh_not_installed")

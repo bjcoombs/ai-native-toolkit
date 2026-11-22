@@ -416,14 +416,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `keyhole_summary.concerns.name` | token |
 | `keyhole_summary.summary_text` | dropped |
 
-## gap_actions
-
-| Field | Kept as |
-|---|---|
-| `gap_actions.signal` | token |
-| `gap_actions.action` | dropped |
-| `gap_actions.paths` | path (hashed when hashing is on) |
-
 ## exclusion_disclosures
 
 | Field | Kept as |
@@ -641,6 +633,15 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `layer_grades.reason` | dropped |
 | `layer_grades.instructions_grade` | token |
+| `layer_grades.instruction_presence` | token |
+
+## gap_actions
+
+| Field | Kept as |
+|---|---|
+| `gap_actions.signal` | token |
+| `gap_actions.action` | dropped |
+| `gap_actions.paths` | path (hashed when hashing is on) |
 
 ## instruction_placement
 

@@ -22,7 +22,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True,
+        ["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape", check=True,
     ).stdout
 
 
