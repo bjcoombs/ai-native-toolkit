@@ -102,13 +102,13 @@ def test_issue_acceptance(tmp_path: Path, files: dict[str, str],
     ({".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
       "      - run: |\n          pytest --cov=src \\\n            --cov-fail-under=80\n"},
      (True, "ci_run")),
-    (_ci('"pytest --cov-fail-under=80"'), (True, "ci_run")),
+    (_ci('"pytest --cov --cov-fail-under=80"'), (True, "ci_run")),
     (_ci("sh -c 'pytest --cov --cov-fail-under=80'"), (True, "ci_run")),
     (_ci("cd pkg && pytest --cov --cov-fail-under=80; echo done"), (True, "ci_run")),
     ({".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n    steps:\n"
       "      - run: >-\n          uv run pytest -v\n          --cov=scripts\n",
       "pyproject.toml": PYPROJECT_80}, (True, "ci_run")),
-    ({".gitlab-ci.yml": "test:\n  script:\n    - pytest --cov-fail-under=90\n"}, (True, "ci_run")),
+    ({".gitlab-ci.yml": "test:\n  script:\n    - pytest --cov --cov-fail-under=90\n"}, (True, "ci_run")),
     ({**_ci("mvn -B verify"), "pom.xml": _pom("<value>COVEREDRATIO</value><minimum>0.80</minimum>")},
      (True, "ci_run")),
     ({**_ci("mvn -B compile"), "pom.xml": _pom("<value>COVEREDRATIO</value><minimum>0.80</minimum>")},
@@ -263,3 +263,51 @@ def test_folded_paragraphs_are_one_command_each() -> None:
 ])
 def test_runs_tool(words: tuple[str, ...], family: str, expected: bool | None) -> None:
     assert runs_tool(words, family) is expected
+
+
+# --- final review round (#921) ------------------------------------------------
+
+JEST_80 = {"jest.config.js": "module.exports = { coverageThreshold: { global: { lines: 80 } } };\n"}
+GO_TC = {"go.mod": "module x\n", ".testcoverage.yml": "threshold:\n  total: 80\n"}
+
+
+def _action_step(extra: str) -> dict[str, str]:
+    return {".github/workflows/ci.yml": "on: pull_request\njobs:\n  t:\n    runs-on: x\n"
+            f"    steps:\n      - uses: vladopajic/go-test-coverage@v2\n{extra}"}
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    ({**_ci("make coverage"), "pyproject.toml": PYPROJECT_80}, (None, "indirect_run")),
+    ({**_ci("make cov"), "pyproject.toml": PYPROJECT_80}, (None, "indirect_run")),
+    ({**_ci("npm run coverage"), **JEST_80}, (None, "indirect_run")),
+    ({**_ci("just coverage"), "pyproject.toml": PYPROJECT_80}, (None, "indirect_run")),
+    ({**_ci("npm install"), "pyproject.toml": PYPROJECT_80}, (False, "not_run_in_ci")),
+    ({**_action_step(""), **GO_TC}, (True, "ci_run")),
+    ({**_action_step("        continue-on-error: true\n"), **GO_TC}, (False, "not_run_in_ci")),
+    ({**_action_step("        if: false\n"), **GO_TC}, (False, "not_run_in_ci")),
+    ({**_ci("pytest --cov-report=xml"), "pyproject.toml": PYPROJECT_80}, (False, "not_run_in_ci")),
+    (_ci("pytest --cov-fail-under=80"), (False, "not_run_in_ci")),
+    ({**_ci("pytest"), "pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"--cov-report=xml\"\n"
+      "[tool.coverage.report]\nfail_under = 80\n"}, (False, "not_run_in_ci")),
+    ({**_ci("npx jest --coverage=false"), **JEST_80}, (False, "not_run_in_ci")),
+    ({**_ci("npx jest --coverage=true"), **JEST_80}, (True, "ci_run")),
+    ({**_ci("npx jest --coverageDirectory=out"), **JEST_80}, (None, "indirect_run")),
+    ({**_ci("npx jest"), "jest.config.js": "module.exports = {\n  // collectCoverage: true,\n"
+      "  coverageThreshold: { global: { lines: 80 } },\n};\n"}, (None, "indirect_run")),
+    ({**_ci("npx jest"), "jest.config.js": "module.exports = {\n  /* collectCoverage: true */\n"
+      "  coverageThreshold: { global: { lines: 80 } },\n};\n"}, (None, "indirect_run")),
+], ids=["make-coverage", "make-cov", "npm-run-coverage", "just-coverage", "npm-install",
+        "go-tc-action", "go-tc-action-continue-on-error", "go-tc-action-if-false",
+        "pytest-cov-report-only", "pytest-fail-under-only", "addopts-cov-report-only",
+        "jest-coverage-false", "jest-coverage-true", "jest-coverage-directory",
+        "jest-collect-line-comment", "jest-collect-block-comment"])
+def test_final_review_round(tmp_path: Path, files: dict[str, str],
+                            expected: tuple[bool | None, str]) -> None:
+    assert _read(tmp_path, files) == expected
+
+
+def test_an_oversized_ci_file_is_unread_not_absent(tmp_path: Path) -> None:
+    """A CI file over the read cap was not read: the run is unknown, never absent."""
+    big = _wf("pytest --cov") + "#" + "x" * 2_100_000 + "\n"
+    assert _read(tmp_path, {".github/workflows/ci.yml": big, "pyproject.toml": PYPROJECT_80}) == (
+        None, "unread_ci_system")

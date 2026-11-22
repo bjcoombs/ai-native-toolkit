@@ -165,7 +165,9 @@ _GRADLE_MAXIMUM_RE = re.compile(r"\bmaximum\s*=\s*[^0-9\n]{0,20}?" + _NUM)
 _GRADLE_VALUE_RE = re.compile(r"\bvalue\s*=\s*[\"'](\w+)[\"']")
 # pytest ``addopts`` holding a ``--cov`` flag: a plain ``pytest`` runs coverage.
 _ADDOPTS_RE = re.compile(r"^\s*addopts\s*=(.*)$")
-_COV_FLAG_RE = re.compile(r"--cov\b")
+# pytest-cov's enabling flag: ``--cov`` or ``--cov=src``, not ``--cov-report``.
+_COV_FLAG_RE = re.compile(r"--cov(?![\w-])")
+_JS_COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\"'])//[^\n]*", re.S)
 _PYTEST_CONFIG_FILES = {"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
 _PYTEST_SECTIONS = {"pytest", "tool:pytest", "tool.pytest.ini_options"}
 _JEST_COLLECTS_RE = re.compile(r"[\"']?collectCoverage[\"']?\s*:\s*true\b")
@@ -756,7 +758,8 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
             pytest_lines.update((rel, n) for n in _pytest_section_lines(lines))
         pytest_cov = pytest_cov or (path.name in _PYTEST_CONFIG_FILES
                                     and _addopts_cov(lines))
-        jest_collects = jest_collects or any(_JEST_COLLECTS_RE.search(x) for x in lines)
+        jest_collects = jest_collects or bool(
+            _JEST_COLLECTS_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines))))
     walk_excludes = excludes or (set(), [])
     unmeasured = (GO_RUST_UNMEASURED if not gates
                   and _holds_go_or_rust(root, scope_abs if scope_abs != root else None,

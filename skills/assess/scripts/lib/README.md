@@ -4214,9 +4214,17 @@ nothing), any `pytest` for a threshold flag inside a pytest config section (`[py
 `collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
 or `jacoco:check`, Gradle `jacocoTestCoverageVerification`, the go-test-coverage
 program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)
-is reached only through a target. Null, never false: `unknown_trigger`,
+is reached only through a target. pytest-cov is on only with `--cov` or `--cov=<source>` on the line or in `addopts`
+(`--cov-report` or `--cov-fail-under` alone turns nothing on), and an inline
+`--cov-fail-under` on a `pytest` line needs it too. Jest and Vitest `--coverage` is read
+with its value (`--coverage=false` runs no gate; `--coverageDirectory` is not the flag), and
+`collectCoverage: true` is read with comments stripped. A coverage action step
+(go-test-coverage) is masked like a `run:` line. A CI file read as empty that is not empty
+on disk (over the size cap, unreadable) is unread. Null, never false: `unknown_trigger`,
 `indirect_run` (an enforced `check_command.may_lint` line such as `make test`, `npm
-test`, `tox`, `mvn test`, or a Jest / Vitest run with no `--coverage`),
+test`, `tox`, `mvn test`, a target or script named for coverage such as `make coverage`,
+`make cov`, `npm run coverage` or `just coverage`, or a Jest / Vitest run with no
+`--coverage`),
 `included_jobs` (`shared_tooling.pulls_jobs_from_elsewhere`), `unread_ci_system`
 (`ci_checks.UNREAD_CI_FILES` tracked, or the gate written in one or in a composite
 action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:

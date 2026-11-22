@@ -194,6 +194,10 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
         {rel: workflow_trigger(texts[rel]) for rel in files if rel not in CI_CONFIG_FILES}, texts)
     runs: list[Run] = []
     elsewhere = False
+    # A CI file read as empty that is not empty on disk (over the size cap, unreadable)
+    # was not read: its runs are unknown, never absent.
+    unread = bool(UNREAD_CI_FILES & tracked) or any(
+        not texts[rel] and _size(root / rel) != 0 for rel in files)
     for rel in files:
         text = texts[rel]
         gitlab = rel in CI_CONFIG_FILES
@@ -201,14 +205,23 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
         lines = text.splitlines()
         triggers: list[Trigger] = (gitlab_line_triggers(text) if gitlab
                                    else [workflows.get(rel, "unknown")] * len(lines))
-        for span, line_text in _command_groups(lines, unmasked_lines(text)):
-            if _GO_TC_ACTION.search(lines[span[0]]):
+        unmasked = unmasked_lines(text)
+        for span, line_text in _command_groups(lines, unmasked):
+            # An action step is masked like a run: line (continue-on-error, if: false).
+            if _GO_TC_ACTION.search(unmasked[span[0]]):
                 runs.append(Run(rel, span, ("go-test-coverage",), line_text, triggers[span[0]]))
                 continue
             for words, command in _word_lists(line_text):
                 if words:
                     runs.append(Run(rel, span, words, command, triggers[span[0]]))
-    return CiRuns(tuple(runs), frozenset(files), elsewhere, bool(UNREAD_CI_FILES & tracked))
+    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread)
+
+
+def _size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return -1
 
 
 def _line(gate: Gate) -> int:
@@ -259,6 +272,23 @@ def runs_a_program(words: tuple[str, ...]) -> bool:
     return True
 
 
+def cov_enabled(args: Iterable[str]) -> bool:
+    """pytest-cov is on: ``--cov`` or ``--cov=<source>``. ``--cov-report`` or
+    ``--cov-fail-under`` alone does not turn it on."""
+    return any(w == "--cov" or w.startswith("--cov=") for w in args)
+
+
+def coverage_flag(args: Iterable[str]) -> bool | None:
+    """Jest / Vitest ``--coverage`` as given: True for ``--coverage``, ``--coverage=true``
+    or ``--coverage.enabled[=true]``, False for ``=false``, None when absent
+    (``--coverageDirectory`` and ``--coverage.reporter`` are not the flag)."""
+    for word in args:
+        head, _, value = word.partition("=")
+        if head in ("--coverage", "--coverage.enabled"):
+            return value.lower() not in ("false", "0")
+    return None
+
+
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
@@ -269,16 +299,16 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     name, args = program(words)
     if family in ("coverage.py", "pytest"):
         if name in ("pytest", "py.test"):
-            return (family == "pytest" or pytest_cov
-                    or any(w == "--cov" or w.startswith(("--cov=", "--cov-")) for w in args))
+            return family == "pytest" or pytest_cov or cov_enabled(args)
         return (family == "coverage.py" and name == "coverage"
                 and bool(args) and args[0] in _COVERAGE_REPORTS)
     if family in ("jest", "vitest"):
         if name != family:
             return False
-        if any(w.startswith("--coverage") for w in args) or (family == "jest" and jest_collects):
-            return True
-        return None
+        flag = coverage_flag(args)
+        if flag is not None:
+            return flag
+        return True if family == "jest" and jest_collects else None
     if family == "nyc":
         return name in ("nyc", "c8")
     if family == "maven-jacoco":
@@ -338,7 +368,7 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool 
         for run in ci.runs:
             if run.file != file or _line(gate) - 1 not in run.span:
                 continue
-            carried = runs_a_program(run.words) and any(
+            carried = runs_a_program(run.words) and _activates(gate, run.words, pytest_cov) and any(
                 g["tool"] == gate["tool"] and g["form"] == gate["form"]
                 for g in line_gates(" ".join(run.words)))
             if carried:
@@ -360,6 +390,16 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates, *, pytest_cov: bool 
     return found
 
 
+def _activates(gate: Gate, words: tuple[str, ...], pytest_cov: bool) -> bool:
+    """A ``--cov-fail-under`` on a ``pytest`` line gates only with pytest-cov on (``--cov``
+    on the line or in ``addopts``); through a wrapper (``hatch run cov --``) the script
+    may set it, so the flag is taken as given."""
+    name, args = program(words)
+    if gate["tool"] != "pytest-cov" or name not in ("pytest", "py.test"):
+        return True
+    return pytest_cov or cov_enabled(args)
+
+
 def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool) -> bool | None | str:
     state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects)
     if state is False or run.trigger == "not_ordinary":
@@ -373,7 +413,26 @@ def _indirect(ci: CiRuns) -> bool | str:
     """``indirect_run`` when an enforced CI line runs a check target or script whose recipe
     this scan does not follow (``unknown_trigger`` when its triggers are not settled)."""
     return _merge(("indirect_run" if run.trigger == "ordinary" else "unknown_trigger")
-                  for run in ci.runs if run.trigger != "not_ordinary" and may_lint(run.text))
+                  for run in ci.runs if run.trigger != "not_ordinary"
+                  and (may_lint(run.text) or coverage_target(run.words)))
+
+
+_TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "invoke", "nox", "tox"})
+_SCRIPT_RUNNERS = frozenset({"npm", "yarn", "pnpm", "bun"})
+
+
+def coverage_target(words: tuple[str, ...]) -> bool:
+    """A runner target or package script named for coverage (``make coverage``, ``make
+    cov``, ``npm run coverage``, ``just coverage``): it may run the gate inside it."""
+    if not words:
+        return False
+    name = words[0].rsplit("/", 1)[-1]
+    positionals = [w for w in words[1:] if not w.startswith("-")]
+    if name in _SCRIPT_RUNNERS and positionals[:1] == ["run"]:
+        positionals = positionals[1:]
+    elif name not in _TARGET_RUNNERS | _SCRIPT_RUNNERS:
+        return False
+    return any("cov" in w.lower() for w in positionals[:1 if name in _SCRIPT_RUNNERS else None])
 
 
 def enforced_meets_minimum(
