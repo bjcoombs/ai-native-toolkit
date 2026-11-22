@@ -76,6 +76,8 @@ from lib.level_tally import default_model
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAGS
 
+# Held at 1 during the version freeze (skills/assess/changes/README.md): #844 adds
+# `verified` and `tags`, so the release PR moves it to 2; it has no changes/ counter.
 HEADLINE_VERSION = 1
 
 __all__ = ["Headline", "as_headline", "headline", "run_context_headline"]
@@ -224,8 +226,7 @@ def _tag_cells(level: LevelResult, model: MaturityModel) -> list[TagCell]:
             cell["not_measured"] += state == "not_measured"
             cell["hazards"] += c.get("polarity") == "hazard" and state == "met"
             cell["declined"] += state == "declined"
-    return [cells[t] for t in TRUTH_TAGS if t in cells] + [
-        cells[t] for t in sorted(cells) if t not in TRUTH_TAGS]
+    return [cells[t] for t in TRUTH_TAGS if t in cells]  # the model load admits no other tag
 
 
 def _strip_line(cells: list[TagCell]) -> str:
