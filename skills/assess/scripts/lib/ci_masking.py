@@ -87,6 +87,59 @@ errexit stops there; a ``{ }`` group would not); a compound command in an exempt
 internals are not read. A check that is the last statement after ``set +e`` is masked by
 design (issue #775 scope): bash would exit with its status, but any trailing line would
 hide it.
+
+Which CI shell statements cannot fail their job (issue #775), with no YAML parser
+(an indentation model over the lines). `unmasked_lines(text) -> list[str]` is the
+result shape other CI classifiers build on: one entry per input line, same index,
+with every masked statement removed (`pytest || true; ruff check .` becomes
+`ruff check .`) and a line whose statements are all masked replaced by `""`. A
+classifier counts what can fail the job by running its line test over this list,
+and the masked count as its count over the original lines minus that.
+`split_statements(text)` splits one shell line into top-level `;` statements of
+`(operator before, segment)` pairs; quotes, `$(...)` and backticks hold no
+operator. Rules: a top-level `|| true` / `|| :` / `|| /bin/true` / `|| exit 0`
+masks the segments before it in its statement (`mkdir -p x || true && pytest`
+keeps `pytest`), unless they send output to a file (`>`, `&>`, `| tee`; not
+`/dev/null` or `$GITHUB_STEP_SUMMARY`) that a later line of the same job names,
+with a non-zero exit at or after it (a capture, the grafana `lint:circular`
+pattern); `continue-on-error: true` or `allow_failure:
+true` (literal, a trailing comment ignored) masks the mapping that holds it and
+everything under it (a step or a job); `set +e` masks the rest of its script body
+(a block scalar, or one `script:` list) until `set -e`, unless a later statement
+exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). Issue #919 adds
+three: a segment with an exit-zero flag (`--exit-zero`, `--issues-exit-code=0` or `0` as
+the next word) is masked on its own; in a GitHub `run:` body with errexit off (`set +e`,
+`shell: pwsh` / `powershell` / `cmd` / `python`, named or as a custom command's first
+word, a custom `bash` / `sh` / `dash` / `zsh` command without `-e` such as `bash {0}`, or
+a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
+step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
+statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
+grammar read only in a bash or sh body and only `{ }` / `( )` nesting in a pwsh,
+powershell, cmd or python body; `_depths`, `_not_code`; a `{`, `(` or `<<EOF` inside
+quotes opens nothing) masks the statements before it, unless one of them or a statement
+between re-raises a status. Issue #936 adds the errexit-exempt positions
+(`ci_exempt.py`): with errexit on, a later top-level `exit 0` masks the segments bash
+does not stop on (the left of `&&` / `||`, a pipeline but its last command with pipefail
+off, an `if` / `elif` / `while` condition, a `!` pipeline). `run_errexit` returns
+`(errexit, bash grammar, pipefail)`: pipefail is on for `shell: bash` and a custom
+`-o pipefail`, off for the default `bash -e {0}` and `sh`, and `set -o pipefail` /
+`set +o pipefail` in the body move it; a statement in or opening a `( )` / `{ }` group
+is not read (`_depths` second value). After an exit-zero segment that ends its
+pipeline, the `||` pipelines up to the next `&&` are dropped (`ruff check . --exit-zero
+|| pytest` drops `pytest`), and a folded block scalar (`run: >`) is folded into one
+line before any rule reads it. The default `bash -e` stops at the failing check first, so
+`pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
+`exit 0` rule; a literal `if: false`,
+`if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
+`\\` continuations are joined first.
+Known limits (module docstring): `|| echo`, an exempt check with no later `exit 0`
+(a lone `pytest | tee log` without pipefail, `pytest && echo ok` followed by any passing
+statement), an `until` loop that breaks out, an exempt check inside a `( )` / `{ }` group
+(a subshell or function returns its status, so it is not read as exempt), `allow_failure` through `default:` / `extends:` / anchors, a
+`before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
+`tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
+shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
 """
 from __future__ import annotations
 

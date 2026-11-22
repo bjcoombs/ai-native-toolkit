@@ -16,6 +16,19 @@ embedded as a base64 string. Two content checks catch them:
 
 Both are pure stdlib and read a bounded head of the file. An unreadable file is
 never excluded.
+
+Content checks for files that are not hand-written source but carry an ordinary name:
+`has_generated_header` sniffs the first 5 lines for a comment line carrying a generator marker (`GENERATED FILE` only when it opens the comment,
+`DO NOT EDIT`, `@generated`, `auto-generated` spaced, hyphenated or joined; matched
+case-insensitively; a marker further down is ignored), and `is_long_line_artifact` flags an
+average line length over the first 1 MB above `LONG_LINE_THRESHOLD` (1,000 characters, the shape of a base64 or
+minified payload). `generated_reason` returns `generated-header`, `long-lines` or None. The
+treemap's `collect` drops matching files unless `--include-artifacts` is passed and lists them
+in the stats file's `excluded_generated`, which `assess_core` copies into `run-context.json`
+for the report and gate to disclose. `GENERATED_NAME_PATTERNS` (`*.generated.*`, `*.gen.ts`,
+`database.types.ts`) is the shared list of generated-name globs: the treemap adds it to its filename
+excludes, and `assess_core` calls `matches_generated_name` so a file those globs newly exclude is never
+recorded as a graduated hotspot. Pure stdlib; an unreadable file is never excluded.
 """
 from __future__ import annotations
 

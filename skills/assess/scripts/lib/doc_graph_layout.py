@@ -9,6 +9,16 @@ only -- so all of it is unit-testable without numpy or matplotlib.
 
 Inward-only: stdlib only, no runtime ``lib`` import (the row shapes come from
 ``lib.run_context_types`` under ``TYPE_CHECKING`` only).
+
+Render-side helpers over a built doc graph, used by `doc-graph-svg.py`:
+`radial_shells` orders nodes into concentric shells by link distance from the entry
+points, with unreachable docs chunked into widening outer rings; `classify_node` names a
+node's status (entry, reachable, orphan, island); `group_broken_links` collapses broken
+links into one ghost per missing file, keying markdown targets by their resolved path
+(root-absolute and `../` spellings merge) and wikilinks by bare name. Graph traversal and
+bookkeeping only, no plotting, so it is unit-tested without numpy or matplotlib.
+Stdlib only. Co-changes with `doc-graph-svg.py` and its test
+`tests/test_doc_graph_layout.py`.
 """
 from __future__ import annotations
 

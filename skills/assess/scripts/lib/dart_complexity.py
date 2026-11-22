@@ -34,6 +34,25 @@ one ``findall`` call and handled inline; everything else (comments, strings,
 ``?``, and code inside ``${...}``) goes one token at a time through
 ``_CODE_TOKEN``. Both paths see the same tokens, so the output is the same
 either way; the fast path only drops the per-token match object and call.
+
+Approximate per-function cyclomatic complexity for Dart (issue #364), because lizard
+has no Dart reader. `scan_dart_functions` is a brace-and-keyword scanner: one forward
+pass that skips `//` and nesting `/* */` comments and single-, double-, triple-quoted
+and raw strings (scanning `${...}` interpolations as code), and counts `if`, `for`,
+`while`, `case`, `catch`, `&&`, `||`, `??` and a ternary `?` per function body.
+Functions are `name(...)` / `name<T>(...)` bodies (`{` or `=>`) and getters; anonymous
+closures fold into their enclosing function. `dart_function_scores` reads at most 1 MB
+of a file (the `generated_files.py` bound) and returns the per-function values and the
+worst function's name. The treemap's `collect` runs it on scc-scored `.dart` files and
+registers it in `FN_BACKENDS` as `dart-scanner` with `approximate: true`. No regex has a
+nested quantifier, so a pathological file costs linear time. The pass has two paths
+(#967): a run of plain code up to the next quote, `/`, `?` or raw-string prefix,
+outside any `${...}`, is tokenised by one `findall` call and handled inline, and
+everything else goes one token at a time through `_CODE_TOKEN`. Both see the same
+tokens, so the output does not depend on the path; the fast path cuts the per-token
+cost of the common case, which keeps the pathological-input budget in
+`test_dart_complexity.py` on the Windows runner. Functions sort by the ordinal of their
+opening, which is source order. Pure stdlib.
 """
 from __future__ import annotations
 

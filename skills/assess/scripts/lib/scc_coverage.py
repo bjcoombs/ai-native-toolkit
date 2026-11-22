@@ -13,6 +13,21 @@ the rest of the file, so a 2,000-line script can score 5. The check compares
 each file's density (ccn per NLOC) with the median density of the scc-only
 files of the same language: a large file an order of magnitude below its
 language's median is flagged, and the run reports it as an anomaly. Stdlib only.
+
+What scc's file-level complexity covers. `DATA_LANGUAGES` (JSON, YAML, JSONL) splits
+code from data; `backend_by_language` maps each scc language to its per-function
+backend, or null when scc alone scored a file of it with decision points.
+`complexity_unreliable` flags scc-only code files whose density (ccn per NLOC) is under
+`UNRELIABLE_DENSITY_RATIO` (0.1) of their language's median, for files of at least
+`MIN_UNRELIABLE_NLOC` (200) in a language with at least two files of
+`MIN_MEDIAN_NLOC` (20) or more (issue #590): scc's keyword counter loses its place on
+some shell quoting and scores a 2,000-line script near zero. `complexity-treemap.py`
+writes the rows (`UnreliableCcnRow`, defined here) as `complexity_unreliable` in the stats sidecar
+(`STATS_SCHEMA_VERSION` 7), `run_setup.py` copies them into `stats_summary`,
+`anomaly_detector.py` reports `COMPLEXITY_UNRELIABLE`, and `assess_report.py` labels
+scc-only CCN cells `~N (approximate)` and flagged ones `~N (unreliable)` (the skills' prose
+adds the `ccn` prefix: `ccn ~N (approximate)`, `ccn ~N (unreliable)`). Ranking is
+unchanged. Stdlib only. Tests: `tests/test_scc_coverage.py`.
 """
 
 from __future__ import annotations

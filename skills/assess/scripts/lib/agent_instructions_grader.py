@@ -32,6 +32,39 @@ and path references are counted unverified.
 
 No LLM calls. Pure regex + arithmetic over the text and the tracked files (the working tree, so a clean checkout is HEAD).
 Deterministic.
+
+Heuristic scoring of agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md,
+.cursorrules, .github/copilot-instructions.md), filename-agnostic, no model calls. Since
+#512 it grades on what outcome studies say helps an agent: verified commands earn the most
+credit (12 each, cap 40, resolved by `command_resolver.py`; a standard CLI such as `gh` earns
+4 each, cap 16, inside the same 40), backticked paths count only
+when they exist at HEAD, and directives, tradeoff phrases and verifiable outcomes are a
+small capped floor. Size is scored on always-on size and share (#560, replacing the
+#517 whole-file curve, its skills halving and its word leg): `grade_instructions` splits
+the file with `instruction_placement.analyse_file` (given `skills`, the
+`skill_texts` map) and `placement_penalty` (whose `fetch_words` is a required
+keyword, as is `loaded_equivalent_lines`'s, so no caller can understate the loaded words) charges one point per 10 always-on lines
+past 200, capped at 30, plus one point per 10 fetch-on-need lines, capped at 30; a
+file over 400 loaded lines (always-on and fetch-on-need) is capped at 59 (a B). Lines
+are line-equivalents, the larger of the lines and the words / 12, so a file of very
+long lines cannot dodge the term or the cap. Wording and padding inside a section never
+lower the penalty (#619): the always-on count is the loaded line-equivalents minus the
+fetch-on-need lines the relocatable term charges (fetch lines past its cap stay
+always-on), both terms are summed in lines and rounded once, and the cap reads the
+whole loaded file, so a section reclassified to fetch-on-need never earns points; on the
+placement side `command_reference` is an absolute fenced-line count and a size signal
+beats always-on wording. Tests: `tests/test_instruction_grading_robustness.py`. Neither term reads the block's
+`flagged` (which also needs over half the file): gated on it, adding reference lines
+could lower a file's penalty. `always_on_flagged` mirrors `flagged` as evidence. The subscores `always_on_lines`,
+`always_on_pct`, `fetch_on_need_lines`, `always_on_flagged`, `always_on_penalty` and
+`relocatable_penalty` (and `always_on_words`) carry the split; `bloat_penalty` is their sum. Directory-tree
+blocks, repository-overview sections and lines repeated from the root README cost points
+too (`instruction_content.py`). The A-F scale and the subscore keys downstream code reads
+(`positive_directives`, `tradeoff_phrases`, `path_references`, `verifiable_outcomes`,
+`line_count`, `word_count`, `bloat_penalty`) are unchanged; new keys are added beside them.
+Commands naming a missing target and stale paths or symbols are `Grade.findings`, never a
+hard fail. Tests: `tests/test_agent_instructions_grader.py`,
+`tests/test_instruction_bloat.py`.
 """
 from __future__ import annotations
 

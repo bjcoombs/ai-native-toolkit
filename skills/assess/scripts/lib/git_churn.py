@@ -6,9 +6,25 @@ two things: a per-file commit count over a window, and a way to pick a window
 that gives a visible gradient. This module is the single source for both so
 churn is computed one way, not three (PRD: "do not reinvent churn").
 
-Pure subprocess + git. No heavy dependencies, so it imports cleanly in the
-deterministic core (which runs with only networkx) as well as in the treemap
-scripts (which also pull in lizard/matplotlib/squarify).
+Shared git-churn machinery: per-file commit counts over a configurable window, plus
+`git_commit_info` for snapshotting the exact SHA and timestamp at run time. Used by the
+code heatmap, the doc-staleness heatmap, and `doc_staleness.py` - churn is computed
+one way, not three. Pure subprocess + stdlib, no heavy dependencies.
+`bulk_commit_need(population)` is the one bulk-commit rule (#333): the content clock
+applies it over the repo's docs, `fleet_doc_freshness` over a service's tracked files.
+Churn follows renames (issue #425): `git_churn_scores`, `pick_churn_window` and
+`commit_epochs_by_file` (the per-commit walk behind `code_churn_since_doc_change`) take
+the `change_coupling.build_rename_map` paths and credit a commit made under an old name
+to the file's current name, once per commit. A rename-only commit (contract I425-2) is
+not a content change: `git log --follow` less such commits (a file committed five times,
+renamed with no edit, then committed once scores 6), and the same holds for the content
+clock, so a pure `git mv` neither adds doc churn nor resets a doc's last-change age. `pick_churn_window`
+builds the map when it is not given one; `rename_paths` does that for the treemap's
+`--by churn` call and prints a stderr note when the map is incomplete. `doc_staleness`
+shares one map per HEAD between the churn reads and the content clock, and marks every
+doc row `confidence: low` when the map is incomplete, which keeps it out of `lying_map`.
+Git's own rename detection is off (`--no-renames`) in every walk, so `diff.renames`
+does not move a count. Tests: `tests/test_rename_churn.py`.
 """
 from __future__ import annotations
 

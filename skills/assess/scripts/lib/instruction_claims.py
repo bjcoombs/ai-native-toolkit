@@ -67,6 +67,45 @@ it raises ``Unverifiable`` when the repository cannot settle the claim).
 Sentences are read per paragraph, so a claim wrapped across lines is still
 found; its ``line`` is the 1-based line the sentence starts on. Fenced code is
 not prose and is not read.
+
+Verifies the checkable claims an agent instruction file makes (issues #368, #369), no
+model. `scan_instruction_claims(repo_root, files)` reads each graded instruction
+file (the keys of `instruction_files`; two keys resolving to one file are read
+once), splits prose into sentences per paragraph (fenced code skipped, a wrapped
+sentence reported at the line it starts on, a heading its own block) and extracts three kinds: `enforcement`
+(a backticked shell script, or any script under `scripts/`, `bin/`, `tools/`,
+`ci/` or `hack/`, in a sentence with "enforced", "runs in", "checked by" or "CI";
+verified when the path occurs in any CI configuration or in a task runner CI
+calls through such as `Makefile` or `package.json`; skipped when the repo has no
+CI configuration, since nothing can confirm or refute it) and `pin` ("pinned in"
+a backticked file plus exactly one dotted version in the sentence, verified when
+the file exists and contains the version as a substring; the word before the
+version, unless a function word, is kept as the claim's `subject`, the tool, for
+`doc_claims` and never reported) and `count` (a
+sentence of the form `<integer> <noun> ... <link> <backticked glob>`, where the
+link is a `COUNT_LINK_WORDS` word: in, under, matching, across, beneath, within,
+inside; the pattern is globbed from the repo root and matching files counted;
+verified when the difference is at most the larger of 10% or 2, a failure adding
+`claimed` and `actual`; no noun table, so a sentence with no pattern, no wildcard,
+two integers, two patterns, a year as its number, a pattern that is not
+path-shaped (`**kwargs`) or one that is absolute or holds `..` is skipped, as is
+a Windows drive or UNC path, and a claim whose wildcard-free directory is
+missing, whose glob cannot be evaluated, whose subtree cannot be read, or whose
+pattern matches only directories (or, when not recursive, mixes files and
+directories), since that is unverifiable rather than false; an integer followed
+by a size or time unit or governed by a comparator ("below 500 lines", "at most
+10") is a threshold, not a count (`COUNT_NOT_A_COUNT`, a closed list that only
+removes claims); below the fixed prefix, `doc_graph.is_excluded_path` trees such as `.assess/`
+and `node_modules/` are not counted). Each failure carries a `reason`. The
+enforcement and pin checks use
+`evidence_check.is_referenced_in`, so the search is the same fail-closed one.
+The core writes the result as the run-context block `instruction_claims`
+(`{total, verified, failed, failures[{file, line, kind, path, reason, ...}]}`, zeros when
+nothing matched; `{available: false, reason}` with no counts when the scan itself
+raised, since it runs from the `scan_registry` table); failures feed Layer 0 evidence and a Lying Signals row. A new
+claim kind is one extractor in `_EXTRACTORS` and one verifier in `_VERIFIERS`
+(which returns the extra failure fields). `tally_claims` and `has_ci_config` are
+public for `doc_claims`. Tests: `tests/test_instruction_claims.py`.
 """
 from __future__ import annotations
 
