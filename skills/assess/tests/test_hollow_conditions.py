@@ -97,10 +97,10 @@ CASES = [
         "    steps:\n      - run: pytest\n")}, None),
     _case("l5-1-subfolder-workflow", "layer-5-ci", 1,
           {".github/workflows/sub/ci.yml": _workflow("pytest")}, None),
-    # Declared, not counted under #744.
+    # A lockfile with no manifest beside it: nothing to lock, so not measured (#927).
     _case("l5-2-named-check-and-lockfile", "layer-5-ci", 2, {
         **_NOOP_CHECK, "uv.lock": "version = 1\n", ".github/workflows/ci.yml": _workflow("make test"),
-    }, _NONE_FILED),
+    }, None),
     _case("l6-1-fail-under-1", "layer-6-coverage", 1, {
         "pyproject.toml": "[project]\nname = 'x'\nversion = '0'\n\n[tool.coverage.report]\nfail_under = 1\n",
     }, None),

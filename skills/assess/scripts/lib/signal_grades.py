@@ -69,4 +69,6 @@ UNMEASURED_VALUES: dict[str, tuple[bool, str]] = {
 # would pass any "at most" test (#906).
 EMPTY_DENOMINATORS: dict[str, tuple[str, str]] = {
     "stats_summary.loc.p95": ("stats_summary.files_scored", "no_scored_files"),
+    # No manifest to lock is not a lockfile check passed (#927).
+    "agent_environment.pinning.unlocked_total": ("agent_environment.pinning.manifests_total", "no_manifests"),
 }
