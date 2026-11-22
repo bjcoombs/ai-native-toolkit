@@ -30,7 +30,7 @@ Adding a key (a consumer PR): add one line to the section's table in
 ``SECTION_KEYS`` naming a validator (``string_list``, ``table_list``,
 ``string``, ``boolean``, ``positive_int``, or your own with the ``Validator``
 signature; ``regex`` and ``one_of`` are here too), add the key to the section's TypedDict (``total=False``), and
-document it in ``skills/fleet/SKILL.md``. Scans read the merged config through
+document it in ``skills/fleet/references/fleet-config.md``. Scans read the merged config through
 the registry input ``fleet_config`` (add it to the spec's ``reads``).
 
 Merge rule. A repository's ``.assess/config.toml`` may carry the same sections.
