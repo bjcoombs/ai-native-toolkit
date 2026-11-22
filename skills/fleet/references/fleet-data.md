@@ -81,7 +81,12 @@ repository's [`level.json`](level.md) entry for the same commit (`null` when fai
 without `--levels`), and `exclusions` lists the conditions the owner excluded in its
 `.assess/config.toml` (#910): `id`, `kind`, `source` and `reason`, listed and never
 counted. The reason is the owner's own words, so it is written only under `--full`
-(`null` otherwise); `id` and `kind` are always written.
+(`null` otherwise); `id` and `kind` are always written. `gate_blockers` (#945) lists every
+gate of the model's `[[steps]]` that does not hold, once per gate id in Step order, each
+as `level.json` writes a gate blocker (`kind` `gate`, `gate`, `condition`, `state`, and
+`reason`, `disposition` and `exclusion_kind` when they apply); empty when every gate holds
+or the repository is not measured. A Step target above the repository's next Step reads
+its missing gates from it.
 
 **Privacy.** `--full` keeps everything. Counts-only (the default) keeps keys, which carry
 the group and team paths (`ownership/acme/platform`) and repository ids unless
