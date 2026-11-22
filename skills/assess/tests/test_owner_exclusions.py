@@ -48,6 +48,15 @@ def test_an_entry_with_id_and_reason_is_in_force_with_its_provenance():
         "`ci.1` excluded by owner: CI runs elsewhere. (measured elsewhere, by ben on 2026-11-22, plugin v2.2.0)"]
 
 
+def test_an_unquoted_toml_date_is_kept_as_iso_text():
+    import tomllib
+
+    config = tomllib.loads('[checks]\nexclude = [{ id = "ci.1", reason = "r", excluded_at = 2026-11-22 }]\n')
+    block = parse_exclusions(config, KNOWN)
+    assert block["exclusions"][0]["excluded_at"] == "2026-11-22"
+    assert block["disclosures"] == ["`ci.1` excluded by owner: r (other on 2026-11-22)"]
+
+
 def test_kind_defaults_to_other_and_provenance_is_optional():
     block = parse_exclusions(_config({"id": "ci.1", "reason": "r"}), KNOWN)
     assert block["exclusions"][0]["kind"] == "other"

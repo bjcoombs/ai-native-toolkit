@@ -36,6 +36,7 @@ repository's own file only.
 """
 from __future__ import annotations
 
+import datetime
 import sys
 from collections.abc import Collection, Mapping
 from pathlib import Path
@@ -57,6 +58,8 @@ PROBLEMS = ("not_a_list", "not_a_table", "no_id", "no_reason", "unknown_kind", "
 
 def _text(entry: Mapping[str, Any], key: str) -> str | None:
     value = entry.get(key)
+    if isinstance(value, (datetime.date, datetime.datetime, datetime.time)):
+        return value.isoformat()  # an unquoted TOML date, such as excluded_at = 2026-11-22
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
