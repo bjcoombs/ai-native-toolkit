@@ -113,9 +113,12 @@ team's list also holds the repositories it inherits from its parent (only
 team is taken as inherited and kept on the parent only: each repository stays
 with the most specific team that holds it directly. A child granted another
 role keeps it; one granted directly with the parent's role cannot be told
-apart from inheritance and stays on the parent. Team slugs are identities: the fragment is a local capture, and in
-`/fleet` counts-only output a slug appears only in unit keys, which
-`--hash-paths` hashes.
+apart from inheritance and stays on the parent. Team slugs are identities, and the fragment holds them in clear. In
+`/fleet`'s `fleet-data.json`, each team unit's key carries its slug
+(`ownership/acme/platform`) in clear by default; `--full` also writes the
+unit's name (the slug) and owners (`@acme/platform`), which counts-only output
+drops. With `--hash-paths` or `--hash-salt` the slug is hashed with the unit
+key and no name or owner is written.
 
 ### The no-access rule
 
