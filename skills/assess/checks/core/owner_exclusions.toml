@@ -1,0 +1,30 @@
+# Check manifest fragment: the owner_exclusions collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.owner_exclusions"
+kind = "collector"
+title = "Owner exclusions"
+summary = "The conditions the owner excluded in .assess/config.toml [checks], each with its kind, reason and provenance, and the entries skipped with why."
+issues = [910]
+callable = "lib.core_scans:owner_exclusions"
+publishes = ["owner_exclusions"]
+reads = ["repo_root"]
+stage = "read_side"
+degrade = false
+gate_reason = "self_degrading"
+shapes = [
+  { path = "owner_exclusions", type = "lib.level_result_types:OwnerExclusionsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "owner_exclusions.exclusions.id" = "token"
+  "owner_exclusions.exclusions.kind" = "token"
+  "owner_exclusions.exclusions.reason" = "drop"
+  "owner_exclusions.exclusions.source" = "token"
+  "owner_exclusions.exclusions.excluded_by" = "drop"
+  "owner_exclusions.exclusions.excluded_at" = "token"
+  "owner_exclusions.exclusions.version" = "token"
+  "owner_exclusions.skipped.id" = "drop"
+  "owner_exclusions.skipped.problem" = "token"
+  "owner_exclusions.disclosures" = "drop"

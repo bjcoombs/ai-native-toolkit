@@ -17,7 +17,11 @@ fix:
 3. the tally: ``Verified practices: N of M measured · K not measured (reasons) ·
    model V``. N is ``tally.met``, M is ``tally.measured`` (measured conditions only),
    K is ``tally.not_measured`` with each reason code and its count, V the
-   maturity-model version.
+   maturity-model version. When the owner excluded conditions (#910), the line
+   adds "E not applicable (excluded by owner)" before the model, where E counts
+   every condition that left the denominator that way, the excluded ones and those
+   whose ``requires`` names one. A blocking gate whose condition is excluded says
+   so in the Next line: the Step stays out of reach.
 
 The per-tag strip is a later third line (#844); the model carries no tags yet.
 
@@ -35,9 +39,12 @@ the change that reaches it (`GATE_CHANGE` per blocking gate id, then, only when 
 count still falls short once the gates hold and their counted conditions join the
 tally, "N more verified practices are met, for example `<first unmet counted
 condition>`"; a not-measured gate says
-so with its reason; at the top Step it says the Step holds while its gates hold),
-and "Verified practices: N of M measured · K not measured (reason: count, ...) ·
-model V" (`REASON_WORDS` words the reason codes). Also `markdown` (the lines, the
+so with its reason, and a gate whose condition the owner excluded says "excluded by
+owner: <kind>; the Step waits while the exclusion stands"; at the top Step it says the
+Step holds while its gates hold), and "Verified practices: N of M measured · K not
+measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes), with
+"E not applicable (excluded by owner)" before the model when the level lists exclusions,
+E counting the excluded conditions and those whose `requires` names one (#910). Also `markdown` (the lines, the
 first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
 badge message and the `log.md` readiness line), `step`, `next_step`,
 `levels_version` and `headline_version`. A missing or degraded `level` block gives
@@ -103,7 +110,10 @@ def _reason_word(code: str) -> str:
 def _gate_change(blocker: Blocker) -> str:
     gate = blocker.get("gate", "")
     change = GATE_CHANGE.get(gate, f"the {gate} gate holds")
-    if blocker.get("state") == "not_measured":
+    if blocker.get("disposition") == "excluded_by_owner":
+        kind = blocker.get("exclusion_kind", "other").replace("_", " ")
+        change += f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
+    elif blocker.get("state") == "not_measured":
         change += f" (not measured here: {_reason_word(blocker.get('reason', ''))})"
     return change
 
@@ -163,6 +173,10 @@ def _tally_line(level: LevelResult) -> str:
     reasons = Counter(entry["reason"] for entry in level["not_measured"])
     detail = ", ".join(f"{_reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
     line += f" · {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
+    if level.get("excluded"):
+        # only an exclusion makes a condition not_applicable, directly or through `requires`
+        gone = sum(c["state"] == "not_applicable" for c in level["conditions"])
+        line += f" · {gone} not applicable (excluded by owner)"
     return line + f" · model {level['levels_version']}"
 
 

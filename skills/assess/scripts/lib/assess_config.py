@@ -37,6 +37,11 @@ pattern = "^inhouse-agent"
 [review]
 [platform]
 
+# Owner exclusions of maturity-model conditions (issue #910), read by
+# `lib/owner_exclusions.py`, not here: a condition id, a required reason and a kind.
+[checks]
+exclude = [{ id = "layer-6-coverage.1", kind = "measured_elsewhere", reason = "Gated in the release repo." }]
+
 # Cross-repo doc freshness (issue #664), measured by /fleet only: `path` (a doc
 # or folder here) describes `scope` (required, paths inside fleet repo `repo`).
 [[describes]]

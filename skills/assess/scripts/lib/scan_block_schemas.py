@@ -112,10 +112,24 @@ CI_CHECKS: JsonDict = {
         "(lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the "
         "lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 "
         "level 1); a check target or script that may run a linter inside it reads null. "
-        "Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and "
-        "Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no "
-        "readable check one makes basis unread_ci_system and enforced_check_runs null (and "
-        "lint_runs null with no readable lint line)."),
+        "CI files of other systems are not parsed (issues #787, #928): unread_ci_files counts "
+        "them, and with no readable check one makes basis unread_ci_system and "
+        "enforced_check_runs null (and lint_runs null with no readable lint line). The "
+        "unread-CI paths, all relative to the repository root: Jenkinsfile, "
+        ".circleci/config.yml, bitbucket-pipelines.yml, .travis.yml, azure-pipelines.yml, "
+        "azure-pipelines.yaml, .azure-pipelines.yml, .azure-pipelines.yaml, "
+        ".buildkite/pipeline.yml, .buildkite/pipeline.yaml, buildkite.yml, buildkite.yaml, "
+        ".ci.yaml (Flutter Cocoon / LUCI), .prow.yaml, .zuul.yaml, .drone.yml, .woodpecker.yml, "
+        ".cirrus.yml, appveyor.yml, .semaphore/semaphore.yml, cloudbuild.yaml, bitrise.yml and "
+        "codemagic.yaml; any *.star or *.cfg file under infra/config/ (LUCI project "
+        "configuration); any *.yml or *.yaml file under .azure/pipelines/, eng/pipelines/, "
+        ".azure-pipelines/, azure-pipelines/ (Azure Pipelines) or .woodpecker/; and any file "
+        "under zuul.d/ (lib/unread_ci.py). Off-repository CI (issue #928): under --platform, "
+        "when more than half of the sampled merged pull requests carry a check run or commit "
+        "status of a known external CI system (lib/external_ci.py, at most two GET calls per "
+        "sampled pull request), the false cases read null with basis external_ci; offline, a "
+        "root Prow OWNERS_ALIASES file with no CI file of any kind reads null with basis "
+        "external_ci_marker. Neither earns credit."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -161,24 +175,35 @@ CI_CHECKS: JsonDict = {
             "the check."),
         "basis": _field(
             {"enum": ["check_command", "merged_config", "included_jobs", "merged_config_partial",
-                      "unread_ci_system", "no_check_command", "no_ci"]},
+                      "unread_ci_system", "external_ci", "external_ci_marker",
+                      "no_check_command", "no_ci"]},
             "The reason for test_or_lint_configured: check_command or merged_config (true; the second "
             "when only the merged configuration ran a check), included_jobs or "
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
             "pipeline), unread_ci_system (false: no readable check, but a CI file of a system "
-            "the scan does not parse is tracked), no_check_command or no_ci (false)."),
+            "the scan does not parse is tracked), external_ci or external_ci_marker (false: no "
+            "readable check, but CI runs off the repository; as enforced_basis), "
+            "no_check_command or no_ci (false)."),
         "enforced_check_runs": _field(
             {"type": ["boolean", "null"]},
             "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
             "changes, null when none does but included jobs, unsettled triggers, a target whose "
-            "recipe is not read or a CI system the scan does not parse may hold one, else false."),
+            "recipe is not read, a CI system the scan does not parse or an external CI system "
+            "may hold one, else false."),
         "enforced_basis": _field(
             {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_target",
-                      "unread_ci_system", "not_enforced", "no_check_command", "no_ci"]},
+                      "unread_ci_system", "external_ci", "external_ci_marker", "not_enforced",
+                      "no_check_command", "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
-            "unknown_trigger, check_target or unread_ci_system (null), not_enforced, "
-            "no_check_command or no_ci (false)."),
+            "unknown_trigger, check_target or unread_ci_system (null), external_ci (null: an "
+            "external check context on merged changes under --platform; more than half of the "
+            "sampled merged pull requests carry a check run or commit status of a known "
+            "external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with "
+            "at most two GET calls per sampled pull request; it never gives credit), "
+            "external_ci_marker (null: offline, a root Prow OWNERS_ALIASES file with no CI file "
+            "present, neither a workflow, a .gitlab-ci.yml nor an unread CI file; an OWNERS file "
+            "alone is not a marker), not_enforced, no_check_command or no_ci (false)."),
         "masked_check_commands": _field(
             _INT, "CI lines that run a check whose failure cannot fail the job."),
         "off_trigger_check_commands": _field(
@@ -194,17 +219,14 @@ CI_CHECKS: JsonDict = {
             "hold one, else false."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "check_target", "unread_ci_system", "not_enforced", "no_lint_command",
-                      "no_ci"]},
+                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
+                      "not_enforced", "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger, check_target or unread_ci_system (null), not_enforced, no_lint_command "
-            "or no_ci "
-            "(false)."),
+            "unknown_trigger, check_target, unread_ci_system, external_ci or external_ci_marker "
+            "(null; as enforced_basis), not_enforced, no_lint_command or no_ci (false)."),
         "unread_ci_files": _field(
-            _INT, "Tracked root CI files of systems the scan does not parse (Jenkinsfile, "
-            ".circleci/config.yml, azure-pipelines.yml, bitbucket-pipelines.yml, .travis.yml, "
-            ".buildkite/pipeline.yml, and the Azure and Buildkite .yaml / buildkite.yml "
-            "spellings)."),
+            _INT, "Tracked CI files of systems the scan does not parse, at the unread-CI paths "
+            "the block description lists; a count, never the paths."),
     },
 }
 

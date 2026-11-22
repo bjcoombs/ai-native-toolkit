@@ -21,6 +21,8 @@ class ConditionResult(TypedDict):
     counted: bool
     state: str  # one of STATES
     reason: NotRequired[str]  # not_measured, or a requires that is not met
+    disposition: NotRequired[str]  # "excluded_by_owner": the owner excluded this condition (#910)
+    exclusion_kind: NotRequired[str]  # the exclusion's kind (lib.owner_exclusions.KINDS)
 
 
 class NotMeasured(TypedDict):
@@ -42,6 +44,16 @@ class Blocker(TypedDict):
     reason: NotRequired[str]
     threshold: NotRequired[int]
     met: NotRequired[int]
+    disposition: NotRequired[str]  # the gate condition's disposition, when the owner excluded it
+    exclusion_kind: NotRequired[str]
+
+
+class ExcludedCondition(TypedDict):
+    """A condition the owner excluded, as the level result lists it (#910)."""
+
+    id: str  # a condition id of the model
+    kind: str  # one of lib.owner_exclusions.KINDS
+    source: str  # "repo": .assess/config.toml
 
 
 class NextStep(TypedDict):
@@ -60,6 +72,38 @@ class LevelResult(TypedDict):
     conditions: list[ConditionResult]
     step: int | None  # None: the model defines no Steps
     next_step: NextStep | None  # None: no Steps, or the top Step is held
+    excluded: NotRequired[list[ExcludedCondition]]  # present only when the owner excluded a condition
+
+
+class OwnerExclusion(TypedDict):
+    """One ``[checks] exclude`` entry in force (``lib/owner_exclusions.py``, #910).
+
+    The provenance fields mirror a decline marker's (``lib/decline_markers.py``).
+    """
+
+    id: str
+    kind: str
+    reason: str  # the owner's own words: dropped from counts-only output
+    source: str  # "repo"
+    excluded_by: str | None
+    excluded_at: str | None
+    version: str | None  # the plugin version recorded with the entry
+
+
+class SkippedExclusion(TypedDict):
+    """A ``[checks] exclude`` entry not applied, so its condition stays in force."""
+
+    index: int  # the entry's position in the list, from 0
+    id: str | None  # as written: dropped from counts-only output
+    problem: str  # a reason code (lib.owner_exclusions.PROBLEMS)
+
+
+class OwnerExclusionsBlock(TypedDict):
+    """The run context's ``owner_exclusions`` block (``lib/owner_exclusions.py``, #910)."""
+
+    exclusions: list[OwnerExclusion]
+    skipped: list[SkippedExclusion]
+    disclosures: list[str]  # one line per exclusion in force, for the report
 
 
 class Headline(TypedDict):

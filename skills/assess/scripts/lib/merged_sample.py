@@ -2,7 +2,8 @@
 
 ``review_reality`` and ``delivery`` describe the same changes: the registry runs
 :func:`merged_sample` once, as the private ``merged_sample`` spec
-(``network=True``), and both blocks read it. Under ``assess_signals.py
+(``network=True``), and both blocks read it, as does the private ``external_ci``
+spec (``lib/external_ci.py``, #928) that ``ci_checks`` reads. Under ``assess_signals.py
 --platform`` it runs because a scan in ``PLATFORM_SCANS`` reads it; without
 ``--platform`` it is never called. Interactive ``/assess`` runs it like any
 other registry entry.
@@ -53,7 +54,8 @@ listing, timestamps alone, may be cached. GitLab notes are never cached either
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Both reads classify the remote with
+blocks and they describe the same changes; the private `external_ci` spec (#928) reads it
+too. Both reads classify the remote with
 `remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
 `gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
 `gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
@@ -68,8 +70,8 @@ window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state me
 --search "merged:>=<since> sort:updated-desc" --limit FETCH_LIMIT --json mergedAt`
 (an update is never before its merge, so the newest merges are among the most
 recently updated), then the same search from the 30th newest `mergedAt` with
-`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt`)
-for the heavy fields. GitLab, one read:
+`--json PR_FIELDS` (`author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid`)
+for the heavy fields; `headRefOid` is the head commit `external_ci.py` reads (#928). GitLab, one read:
 `projects/<id>/merge_requests?state=merged&updated_after=<since>T00:00:00Z&order_by=updated_at&sort=desc&per_page=100`,
 then filtered and ordered by `merged_at` client-side (works on GitLab versions
 without `order_by=merged_at`). The `PR_FIELDS` read and the GitLab merged list are made
@@ -117,7 +119,8 @@ STATUS_BOTS = frozenset({"github-actions", "github-actions[bot]"})
 # The pull request fields the sample reads. ``reviewDecision`` is fetched but not
 # scored: it reflects the current rule, not whether anyone other than the author
 # reviewed. ``createdAt`` dates time to merge and time to first human comment.
-PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt"
+# ``headRefOid`` is the head commit whose check runs ``lib/external_ci.py`` reads (#928).
+PR_FIELDS = "author,mergedBy,mergedAt,reviews,reviewDecision,comments,createdAt,headRefOid"
 
 Provider = Literal["github", "gitlab"]
 

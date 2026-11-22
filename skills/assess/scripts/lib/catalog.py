@@ -46,7 +46,9 @@ counts-only patterns, split by block for a spread collector), `used_by` (`rows`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
 (every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
-them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
+them, not manifest order, since fragments group signals by collector) and `findings`. `sources` (`catalog.SOURCES`) lists the
+files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
+manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -65,8 +67,10 @@ from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, kno
 CATALOG_VERSION = 1
 GRADE_ORDER = ("config_only", "declared", "measured", "verified")
 UNCLASSIFIED = "unclassified"
-# The sources the catalog is generated from, repo-relative.
-SOURCES = ("skills/assess/checks/core.toml", "skills/assess/levels/default.toml",
+# The sources the catalog is generated from, repo-relative; a glob names a set of files
+# (the check manifest's fragments, #994).
+SOURCES = ("skills/assess/checks/core.toml", "skills/assess/checks/core/*.toml",
+           "skills/assess/levels/default.toml",
            "skills/assess/scripts/lib/level_signals.py", "skills/assess/scripts/lib/signals.py",
            "skills/assess/scripts/lib/scan_registry.py")
 

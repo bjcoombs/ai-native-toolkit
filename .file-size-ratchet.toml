@@ -54,8 +54,8 @@ lines = 1493
 reason = "raised by #468: mypy strict type annotations; lowered to 1517 after #556 (top lists moved to lib/stats_rows.py); lowered to 1493 after #590 (backend_by_language moved to lib/scc_coverage.py)"
 
 [ceilings."skills/assess/scripts/lib/check_manifest.py"]
-lines = 835
-reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it"
+lines = 880
+reason = "#981: the module's lib/README.md entry moved into its docstring (documentation, no code); split the module to lower it; raised to 880 when #996 grew the code and the entry before the merge"
 
 [ceilings."skills/assess/scripts/lib/coverage_gate.py"]
 lines = 874

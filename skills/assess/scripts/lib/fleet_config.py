@@ -30,7 +30,7 @@ Adding a key (a consumer PR): add one line to the section's table in
 ``SECTION_KEYS`` naming a validator (``string_list``, ``table_list``,
 ``string``, ``boolean``, ``positive_int``, or your own with the ``Validator``
 signature; ``regex`` and ``one_of`` are here too), add the key to the section's TypedDict (``total=False``), and
-document it in ``skills/fleet/SKILL.md``. Scans read the merged config through
+document it in ``skills/fleet/references/fleet-config.md``. Scans read the merged config through
 the registry input ``fleet_config`` (add it to the spec's ``reads``).
 
 Merge rule. A repository's ``.assess/config.toml`` may carry the same sections.
@@ -87,7 +87,7 @@ of literal accounts, #765), read through `identities_section` by `ai_usage.match
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
-any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/SKILL.md`.
+any `Validator`), the key in the section's TypedDict, and a row in `skills/fleet/references/fleet-config.md`.
 A scan reads the merged config through the registry input `fleet_config` (a private setup
 spec, `run_setup.fleet_config`, in `/assess`; `signals.build_inputs` supplies it merged with
 the fleet file in the headless run). The value is private, never a run-context block, so it
