@@ -132,12 +132,16 @@ uv --directory scripts run --locked mypy
 ```bash
 uv --directory skills/assess lock --check
 uv --directory scripts lock --check
-uv --directory skills/assess run --locked pytest -v --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
-uv --directory scripts run --locked pytest -v --cov=. --cov-report=term --cov-report=xml:coverage.xml
-uv run --with pytest --with pyyaml pytest -v tests/
+uv --directory skills/assess run --locked pytest -v -n auto --dist loadfile --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
+uv --directory scripts run --locked pytest -v -n auto --dist loadfile --cov=. --cov-report=term --cov-report=xml:coverage.xml
+uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v -n auto --dist loadfile tests/
 ```
 
 then the four `make lint` lines above.
+
+`-n auto --dist loadfile` runs each suite on every core with pytest-xdist, one
+test file per worker, as CI does. To debug a failure serially, replace those
+flags with `-p no:xdist`.
 
 Some tests need POSIX-only features (symlinks, file modes, a `#!/bin/sh` stub)
 and skip on Windows, so a coverage floor can read lower there than on Linux.

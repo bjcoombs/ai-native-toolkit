@@ -12,6 +12,11 @@
 .POSIX:
 .PHONY: help setup check lock-check test-assess test-scripts test-contract lint catalog
 
+# The test targets run each suite on every core with pytest-xdist, one test
+# file per worker, as CI does. For a serial run to debug a failure:
+#   make check XDIST="-p no:xdist"
+XDIST = -n auto --dist loadfile
+
 help:
 	@echo "make setup          sync the locked dev environments for skills/assess and scripts"
 	@echo "make check          run everything below (the required CI checks)"
@@ -36,13 +41,13 @@ lock-check:
 	cd scripts && uv lock --check
 
 test-assess:
-	cd skills/assess && uv run --locked pytest -v --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
+	cd skills/assess && uv run --locked pytest -v $(XDIST) --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
 
 test-scripts:
-	cd scripts && uv run --locked pytest -v --cov=. --cov-report=term --cov-report=xml:coverage.xml
+	cd scripts && uv run --locked pytest -v $(XDIST) --cov=. --cov-report=term --cov-report=xml:coverage.xml
 
 test-contract:
-	uv run --with pytest --with pyyaml pytest -v tests/
+	uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4" pytest -v $(XDIST) tests/
 
 # The measures catalog, generated from skills/assess/checks/core.toml, the default
 # maturity model, lib/level_signals.py, lib/signals.py (the headless scan list) and

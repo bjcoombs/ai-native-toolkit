@@ -71,6 +71,32 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
                 break
 
 
+@pytest.hookimpl(hookwrapper=True, trylast=True)
+def pytest_runtest_call(item: pytest.Item) -> Iterator[None]:
+    """Pause every running coverage for a ``no_cover`` test, not only pytest-cov's own.
+
+    In a pytest-xdist worker pytest-cov 7 starts two controllers (a DistMaster
+    when it reads ``-n``, then a DistWorker), and its ``no_cover`` hook stops
+    only the DistWorker; coverage then resumes the other, which keeps tracing.
+    trylast puts this hook inside pytest-cov's, so it runs after that pause and
+    stops whatever ``Coverage.current()`` still returns. Serially nothing is
+    left running and the loop is a no-op (#930).
+    """
+    coverage = sys.modules.get("coverage")
+    if coverage is None or not item.get_closest_marker("no_cover"):
+        yield
+        return
+    paused = []
+    while (running := coverage.Coverage.current()) is not None:
+        running.stop()
+        paused.append(running)
+    try:
+        yield
+    finally:
+        for cov in reversed(paused):
+            cov.start()
+
+
 def skip_without_posix_shell() -> None:
     """Call first in a fixture that puts a ``#!/bin/sh`` stub (fake gh/glab) on PATH.
 

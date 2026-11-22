@@ -38,9 +38,14 @@ jobs:
       # Line coverage is gated by a floor: [tool.coverage.report] fail_under
       # in skills/assess/pyproject.toml fails this step below it. A ratchet -
       # raise it when coverage rises (docs/contributing/ci.md, "Coverage floor").
+      # pytest-xdist (in the same dev group) runs the suite on every core;
+      # --dist loadfile keeps each test file on one worker, so state shared
+      # across a file's tests (#831) cannot interleave. pytest-cov combines the
+      # workers' data before the floor is checked. Serial for debugging:
+      # replace `-n auto --dist loadfile` with `-p no:xdist`.
       - name: Run pytest
         run: >-
-          uv run --locked pytest -v
+          uv run --locked pytest -v -n auto --dist loadfile
           --cov=scripts --cov-report=term --cov-report=xml:coverage.xml
         working-directory: skills/assess
 
@@ -64,9 +69,10 @@ jobs:
       # Line coverage is gated by a floor: [tool.coverage.report] fail_under
       # in scripts/pyproject.toml fails this step below it. A ratchet - raise
       # it when coverage rises (docs/contributing/ci.md, "Coverage floor").
+      # Parallel with pytest-xdist from the dev group, as in the job above.
       - name: Run pytest
         run: >-
-          uv run --locked pytest -v
+          uv run --locked pytest -v -n auto --dist loadfile
           --cov=. --cov-report=term --cov-report=xml:coverage.xml
         working-directory: scripts
 
@@ -103,8 +109,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
 
+      # tests/ has no project or lockfile, so pytest-xdist comes in with
+      # --with at the same range the two dev groups pin; parallel as above.
       - name: Run pytest
-        run: uv run --with pytest --with pyyaml pytest -v tests/
+        run: >-
+          uv run --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"
+          pytest -v -n auto --dist loadfile tests/
 
   lint:
     name: ruff + mypy gates
