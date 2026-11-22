@@ -42,8 +42,9 @@ minus the doc graph's ``EXCLUDE_DIRS`` and the ``.assess/config.toml`` excludes:
    is skipped as ``claimed``. A manifest folder above units already claimed (a
    ``packages/package.json`` over the ``packages/*`` members) is a unit of the
    source files no nested manifest owns, so units never nest.
-3. A ``pyproject.toml`` or ``package.json`` that declares no package (only
-   ``[tool.ruff]``, only devDependencies) claims nothing: its folder is a unit of
+3. A root ``pyproject.toml`` or ``package.json`` that declares no package (only
+   ``[tool.ruff]``; a name and devDependencies with no entry point or runtime
+   dependency) claims nothing: its folder is a unit of
    the source files no nested manifest owns, or ``tooling_only`` without any, so
    a tooling root does not fold a polyglot repository into one unit.
 4. A unit with no source file below it (``doc_graph.CODE_EXTENSIONS``) is a
@@ -333,12 +334,18 @@ def _workspaces(root: Path, folder: str, names: frozenset[str]) -> list[_Workspa
     return found
 
 
-_PACKAGE_KEYS = {"pyproject.toml": ("project", "tool.poetry"), "package.json": ("name",)}
+# What makes a manifest a package rather than tooling. A monorepo root package.json
+# usually has a name and devDependencies, so neither counts: a package body does.
+_PACKAGE_KEYS = {
+    "pyproject.toml": ("project", "tool.poetry"),
+    "package.json": ("main", "module", "exports", "bin", "dependencies", "peerDependencies"),
+}
 
 
 def _tooling_only(root: Path, folder: str, names: frozenset[str]) -> bool:
     """True when every manifest in ``folder`` is a ``pyproject.toml`` or ``package.json``
-    that declares no package: a root ``[tool.ruff]`` or a devDependencies-only file."""
+    that declares no package: a root ``[tool.ruff]``, or a ``package.json`` with a name and
+    devDependencies but no entry point or runtime dependency."""
     if not names or not names <= _PACKAGE_KEYS.keys():
         return False
     for name in names:
@@ -513,7 +520,8 @@ class _Walk:
             self.found.skipped.extend(member_skips)
         eco = member_eco or (_ecosystem(names) if names else None)
         if not any(members or root for _, members, _, root in expanded):
-            if origin == "manifest" and _tooling_only(self.root, folder, names):
+            # only the root: a nested package.json with sources is an app, entry point or not
+            if folder == "." and _tooling_only(self.root, folder, names):
                 self.own_files(folder, origin, eco, workspace, "tooling_only")
             else:  # no workspace, or one that lists no member: a plain unit
                 self.add(folder, origin, eco, workspace)

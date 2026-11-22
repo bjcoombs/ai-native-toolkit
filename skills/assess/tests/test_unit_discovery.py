@@ -234,7 +234,7 @@ def test_a_manifest_above_claimed_members_never_nests_units(tmp_path: Path, file
     if "crates" in expected:  # it owns src/, so it is a unit of those files beside crates/a
         assert block["units"][0]["origin"] == "manifest"
     else:
-        assert _skipped(block) == {"packages": "tooling_only"}
+        assert _skipped(block) == {"packages": "manifest_only"}
 
 
 def test_a_member_inside_an_earlier_unit_is_skipped_as_claimed(tmp_path: Path):
@@ -354,7 +354,8 @@ def test_every_workspace_a_folder_declares_is_read(tmp_path: Path):
 @pytest.mark.parametrize("root", [
     {"pyproject.toml": "[tool.ruff]\nline-length = 100\n"},
     {"package.json": '{"devDependencies": {"prettier": "3"}}'},
-], ids=["ruff-only-pyproject", "dev-only-package-json"])
+    {"package.json": '{"name": "acme-monorepo", "private": true, "devDependencies": {"husky": "9"}}'},
+], ids=["ruff-only-pyproject", "dev-only-package-json", "named-private-root"])
 def test_a_tooling_root_manifest_does_not_fold_the_repository(tmp_path: Path, root: dict[str, str]):
     block = scan_units(_write(tmp_path, root | {
         "svc/a/pyproject.toml": "[project]\nname = 'a'\n", "svc/a/a.py": "",
@@ -362,6 +363,14 @@ def test_a_tooling_root_manifest_does_not_fold_the_repository(tmp_path: Path, ro
     }))
     assert _paths(block) == ["svc/a", "svc/b"]
     assert _skipped(block) == {".": "tooling_only"}
+
+
+def test_a_package_json_with_an_entry_point_is_a_package(tmp_path: Path):
+    block = scan_units(_write(tmp_path, {
+        "package.json": '{"name": "lib", "main": "index.js"}', "index.js": "",
+        "tools/go.mod": "m", "tools/t.go": "",
+    }))
+    assert _paths(block) == ["."]
 
 
 def test_a_gradle_project_dir_moves_its_member(tmp_path: Path):
