@@ -656,7 +656,8 @@
                         "enum": [
                           "percent",
                           "ratio",
-                          "uncovered_count"
+                          "uncovered_count",
+                          "missed_ratio"
                         ]
                       },
                       "threshold_percent": {
@@ -664,7 +665,7 @@
                           "number",
                           "null"
                         ],
-                        "description": "The threshold as a percentage: as written for percent, times 100 for ratio; null for uncovered_count or a threshold not read."
+                        "description": "The threshold as a percentage: as written for percent, times 100 for ratio; null for uncovered_count, missed_ratio (a JaCoCo MISSEDRATIO maximum) or a threshold not read."
                       },
                       "metric": {
                         "type": [
@@ -696,6 +697,28 @@
                     "null"
                   ],
                   "description": "Why threshold_meets_minimum is null with no gate found: go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml and its gate may be a script this scan does not read; null otherwise."
+                },
+                "enforced_meets_minimum": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run required. True when it is true and an enforced CI line (unmasked, on ordinary triggers; lib/ci_masking.py, lib/ci_triggers.py) passes a counted threshold of at least 50 itself or runs the tool that reads it; null when threshold_meets_minimum is null or the run cannot be told (see enforced_basis); false otherwise."
+                },
+                "enforced_basis": {
+                  "enum": [
+                    "ci_run",
+                    "no_gate",
+                    "threshold_below_minimum",
+                    "threshold_not_read",
+                    "unknown_trigger",
+                    "indirect_run",
+                    "included_jobs",
+                    "unread_ci_system",
+                    "not_run_in_ci",
+                    "no_ci"
+                  ],
+                  "description": "The reason for enforced_meets_minimum: ci_run (true); no_gate, threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, unknown_trigger, indirect_run (a check target or script such as make test may run it), included_jobs and unread_ci_system (null)."
                 },
                 "not_detected": {
                   "type": [

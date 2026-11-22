@@ -165,14 +165,20 @@
 #   The scan reads CI files line by line, with no YAML parser: a command
 #   inside a non-script value (an env: block scalar holding pytest) counts as
 #   a run, a known limit.
-# - Layer 6 level 1 reads coverage_gate.threshold_meets_minimum
-#   (lib/coverage_gate.py): a committed coverage gate whose threshold is at
-#   least 50 percent, with units normalised (a JaCoCo ratio 0.80 is 80). Only
+# - Layer 6 level 1 reads coverage_gate.enforced_meets_minimum
+#   (lib/coverage_gate.py, lib/coverage_ci.py, #921): a committed coverage gate
+#   whose threshold is at least 50 percent, and an enforced CI line that runs
+#   it: the line passes the threshold itself (--cov-fail-under=80) or runs the
+#   tool that reads it (pytest --cov, coverage report, jest --coverage, mvn
+#   verify), unmasked and on ordinary triggers, as Layer 5 level 1 reads CI.
+#   A configured threshold that no CI line runs is level 0; CI the scan cannot
+#   read (a check target such as make test, an unsettled trigger, an unread CI
+#   system or included jobs) is unknown. Units are normalised (a JaCoCo ratio 0.80 is 80). Only
 #   gates that gate something count, so fail_under = 0 is level 0, and the
 #   highest threshold wins (fail_under = 1 beside --cov-fail-under=85 is met).
 #   A gate whose percentage is not read (a templated --cov-fail-under, an
-#   nyc/c8 default, a Jest uncovered-line count) with none at 50 or more is
-#   unknown, never 0. Measured coverage is not read: a coverage report is a
+#   nyc/c8 default, a Jest uncovered-line count, a JaCoCo MISSEDCOUNT maximum)
+#   with none at 50 or more is unknown, never 0. Measured coverage is not read: a coverage report is a
 #   working-tree artifact, not part of the commit. Go's go-test-coverage
 #   .testcoverage.yml, cargo tarpaulin --fail-under and cargo llvm-cov
 #   --fail-under-lines are read (#788). A repository holding a go.mod or a
@@ -322,7 +328,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
-  criteria = [{ signal = "coverage_gate.threshold_meets_minimum", op = "eq", value = true }]
+  criteria = [{ signal = "coverage_gate.enforced_meets_minimum", op = "eq", value = true }]
 
   [[rows.levels]]
   level = 2

@@ -250,6 +250,10 @@ constant each.
 #   test_or_lint_configured and coverage_gate.enforced is configured. Values and
 #   meaning are unchanged; the fleet re-score reads a stored scan's old path under the
 #   new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+# - run-context.json coverage_gate gains enforced_meets_minimum and enforced_basis
+#   (issue #921): the threshold reading with an enforced CI run of the gate
+#   required. A gate's unit gains missed_ratio, and a JaCoCo MISSEDCOUNT /
+#   MISSEDRATIO maximum is reported as a gate. Additive: no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -410,4 +414,9 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
+# Unreleased (the release PR assigns the version):
+# - Layer 6 level 1, and so the Step 4 coverage_gate gate, reads
+#   coverage_gate.enforced_meets_minimum (issue #921): a threshold of at least 50
+#   percent that no enforced CI line runs is level 0, where it read 1, and CI the
+#   scan cannot read is unknown. A JaCoCo MISSEDCOUNT maximum reads unknown, not 0.
 ASSESS_METHOD_VERSION = 36

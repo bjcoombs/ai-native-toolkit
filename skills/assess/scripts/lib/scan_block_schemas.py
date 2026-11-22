@@ -216,10 +216,11 @@ COVERAGE_GATE: JsonDict = {
                 "form": {"type": "string"},
                 "threshold": _field(_NUM_OR_NULL, "The threshold as written; null when not "
                                                   "read (a template variable, a tool default)."),
-                "unit": {"enum": ["percent", "ratio", "uncovered_count"]},
+                "unit": {"enum": ["percent", "ratio", "uncovered_count", "missed_ratio"]},
                 "threshold_percent": _field(
                     _NUM_OR_NULL, "The threshold as a percentage: as written for percent, "
-                                      "times 100 for ratio; null for uncovered_count or a "
+                                      "times 100 for ratio; null for uncovered_count, "
+                                      "missed_ratio (a JaCoCo MISSEDRATIO maximum) or a "
                                       "threshold not read."),
                 "metric": {"type": ["string", "null"]},
             }}},
@@ -239,6 +240,21 @@ COVERAGE_GATE: JsonDict = {
             "Why threshold_meets_minimum is null with no gate found: "
             "go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml "
             "and its gate may be a script this scan does not read; null otherwise."),
+        "enforced_meets_minimum": _field(
+            {"type": ["boolean", "null"]},
+            "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "
+            "required. True when it is true and an enforced CI line (unmasked, on ordinary "
+            "triggers; lib/ci_masking.py, lib/ci_triggers.py) passes a counted threshold of at "
+            "least 50 itself or runs the tool that reads it; null when threshold_meets_minimum "
+            "is null or the run cannot be told (see enforced_basis); false otherwise."),
+        "enforced_basis": _field(
+            {"enum": ["ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read",
+                      "unknown_trigger", "indirect_run", "included_jobs", "unread_ci_system",
+                      "not_run_in_ci", "no_ci"]},
+            "The reason for enforced_meets_minimum: ci_run (true); no_gate, "
+            "threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, "
+            "unknown_trigger, indirect_run (a check target or script such as make test may run "
+            "it), included_jobs and unread_ci_system (null)."),
         "not_detected": _STRINGS,
     },
 }

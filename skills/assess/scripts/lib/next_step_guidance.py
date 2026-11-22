@@ -409,6 +409,14 @@ _WORDING: dict[str, Wording] = {
         "</minimum>`, go-test-coverage `threshold: total: 50`, `cargo tarpaulin --fail-under 50`, "
         "or similar) is in the repository as a number, not a variable. A threshold "
         "below 50 does not count, even when measured coverage is higher."),
+    "coverage_gate.enforced_meets_minimum": _flag(
+        "Run the coverage check in CI on pull requests or pushes, with a threshold of at least 50 "
+        "percent, so a drop below it stops the job (`pytest --cov --cov-fail-under=80`, or `pytest "
+        "--cov` with `fail_under = 80` in `pyproject.toml`).",
+        "A committed coverage threshold of at least 50 percent, and a CI step that runs the tool "
+        "that reads it (`pytest --cov`, `coverage report`, `jest --coverage`, `mvn verify`) or "
+        "passes the threshold itself, is not masked and runs on ordinary changes. A threshold no "
+        "CI step runs does not count (`coverage_gate.enforced_basis` names the reason)."),
     "test_pressure.mutation_run": _flag(
         "Run mutation testing against the test suite.",
         "A mutation tool (mutmut, Stryker, PIT or similar) is configured in the repository and a "

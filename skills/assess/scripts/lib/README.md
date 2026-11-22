@@ -3961,7 +3961,8 @@ reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
 `coverage_gate` block (`CoverageGateBlock`): `{available, configured, gates,
-max_threshold_percent, threshold_meets_minimum, unmeasured_reason, not_detected}`, each gate
+max_threshold_percent, threshold_meets_minimum, unmeasured_reason, enforced_meets_minimum,
+enforced_basis, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
 (`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
@@ -4024,9 +4025,47 @@ Nothing found is `configured: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
-fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
-Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.
-Tests: `tests/test_coverage_gate.py`.
+fails below it when coverage runs; `enforced_meets_minimum` (below) adds the run.
+JaCoCo `<maximum>` on a `MISSEDCOUNT` or `MISSEDRATIO` counter (and Gradle's `maximum =`
+beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_ratio`:
+its `threshold_percent` is null, so it reads unknown, never 0, and any such bound
+(zero included) gates something.
+Stdlib plus `lib.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`
+and `lib.coverage_ci`. Tests: `tests/test_coverage_gate.py`.
+
+**`coverage_ci.py`**
+Does CI run the coverage gate? (#921, the maintainer decision on the Step 4 gate).
+`enforced_meets_minimum(gates, threshold, ci, line_gates, ...)` returns the
+`coverage_gate` block's `enforced_meets_minimum` and `enforced_basis`, which Layer 6
+level 1 of the default maturity model, and so the Step 4 `coverage_gate` gate, reads.
+A false or null `threshold_meets_minimum` stays false or null (`no_gate`,
+`threshold_below_minimum`, `threshold_not_read`); a true one needs a counted gate of at
+least 50 percent that an enforced CI line runs. `read_ci_runs(repo_root)` reads the
+GitHub workflows and `.gitlab-ci.yml` with #775's rules unchanged
+(`ci_masking.unmasked_lines`, `ci_triggers.workflow_trigger` / `resolve_workflows` /
+`gitlab_line_triggers`), one `Run` per command, a folded `run: >-` paragraph read as one
+command and `sh -c '...'` and a quoted `run:` value read through. A word holding
+whitespace (a quoted argument) is dropped, so a flag inside an `echo` string is no flag.
+A gate written on a CI line must sit on an enforced command that carries its flag. A
+config gate needs an enforced command that runs its tool (`runs_tool`, `gate_family`):
+`pytest --cov` (or a pytest `addopts` holding `--cov`) or `coverage
+report|xml|json|html|lcov` for coverage.py `fail_under` (`coverage run` alone checks
+nothing), any `pytest` for an `addopts` threshold, `jest --coverage` (or `jest` with
+`collectCoverage: true` committed), `vitest --coverage`, nyc/c8, `mvn verify|install|deploy`
+or `jacoco:check`, Gradle `jacocoTestCoverageVerification`, the go-test-coverage
+program or action. A task-runner gate (`Makefile`, `tox.ini`, `package.json` scripts)
+is reached only through a target. Null, never false: `unknown_trigger`,
+`indirect_run` (an enforced `check_command.may_lint` line such as `make test`, `npm
+test`, `tox`, `mvn test`, or a Jest / Vitest run with no `--coverage`),
+`included_jobs` (`shared_tooling.pulls_jobs_from_elsewhere`), `unread_ci_system`
+(`ci_checks.UNREAD_CI_FILES` tracked, or the gate written in one or in a composite
+action). Otherwise false: `not_run_in_ci`, or `no_ci` with no CI file. Known limits:
+GitHub step and job `if:`, branch filters, matrix values and composite-action
+internals are not read, as for `ci_checks`; `mvn test` with a check bound to the test
+phase reads null. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
+`lib.command_index`, `lib.command_resolver`, `lib.check_command` and
+`lib.shared_tooling`; never `lib.coverage_gate` (which calls it) or an orchestrator.
+Tests: `tests/test_coverage_ci.py`.
 
 **`guardrails.py`**
 Guardrails stated (#767): does an instruction file tell an agent what the gates
