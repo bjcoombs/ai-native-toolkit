@@ -292,6 +292,27 @@ def _stale_docs(op: str, value: Operand) -> Guidance | None:
                          "declared source changed after the doc was generated."}
 
 
+def _agents_agree(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Make every agent system's instruction file name the same test and lint "
+                      "commands and the same coverage, complexity and line-length numbers, "
+                      "ideally by keeping them in `AGENTS.md` only.",
+            "done_when": "No check command or threshold is named in one tool's instruction file "
+                         "and missing from, or different in, another's."}
+
+
+def _agents_linked(op: str, value: Operand) -> Guidance | None:
+    if not (op == "eq" and value == 0):
+        return None
+    return {"change": "Keep `AGENTS.md` as the one canonical source and replace each other "
+                      "tool's file with the pointer line `/assess` gives for it (`@AGENTS.md` "
+                      "for Claude Code and Gemini CLI, `#[[file:AGENTS.md]]` for Kiro, `read: "
+                      "AGENTS.md` in `.aider.conf.yml`), or make it a symlink to `AGENTS.md`.",
+            "done_when": "Every agent system's root instruction file is `AGENTS.md`, a symlink to "
+                         "it, an `@AGENTS.md` import or a line pointing to it."}
+
+
 def _setting(name: str) -> Wording:
     label = SETTING_NAMES.get(name, f"`{name}` setting")
 
@@ -352,6 +373,8 @@ _WORDING: dict[str, Wording] = {
         "more than one commit in the history."),
     "stats_summary.loc.p95": _file_size,
     "doc_staleness.summary.stale_pct": _stale_docs,
+    "agent_consistency.conflicts": _agents_agree,
+    "agent_consistency.unlinked": _agents_linked,
     "coverage_gate.enforced": _flag(
         "Make the test run fail when line coverage drops below a floor.",
         "The test command CI runs enforces a coverage threshold (`fail_under` in `pyproject.toml`, "
@@ -394,6 +417,9 @@ _NEEDS = "A headless scan reports the `{}` block unavailable when {}; install it
 
 # Why a signal can be unavailable, by its first path segment (the block name).
 _MEASURE_HINTS = {
+    "agent_consistency": "Not measured when fewer than two agent systems have a root "
+                         "instruction file: one system has nothing to agree with, so "
+                         "`conflicts` and `unlinked` are null (`applicable: false`).",
     "structure": _NEEDS.format("structure", "grimp or networkx is missing (`no_grimp`, "
                                "`no_networkx`)") + " With no import graph the reason names "
                  "the dominant source language: `no_import_graph_<language>` when no "

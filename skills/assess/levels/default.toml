@@ -160,6 +160,17 @@
 #   comparing go tool cover to a number, which the scan does not read
 #   (coverage_gate.unmeasured_reason go_rust_gate_form_not_read). Level 2 reads
 #   test_pressure.mutation_run, which a headless run does not build.
+# - Cross-agent consistency reads agent_consistency (lib/agent_consistency.py,
+#   #768): the root instruction files of every agent system present (Claude
+#   Code, AGENTS.md, Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q,
+#   Kiro, Continue, Zed; lib/agent_systems.py). Level 1 is no conflict: no
+#   test or lint command one system names and another does not, and no two
+#   systems stating different coverage, complexity or line-length numbers.
+#   Level 2 adds every system linked to one canonical file (AGENTS.md when
+#   present) by symlink, import or pointer line, and requires level 1. With
+#   fewer than two systems there is nothing to agree with: both signals are
+#   null and the row is unknown, never 0. Graded measured: it compares the
+#   files and their links at the commit, as instruction_claims.failed does.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
 #
@@ -176,7 +187,7 @@
 #
 # Changing a criterion changes results: bump "version" with every edit.
 
-version = "default-2026.11.17"
+version = "default-2026.11.18"
 
 [[rows]]
 id = "layer-0-instructions"
@@ -336,6 +347,21 @@ aggregation = "min"
   [[rows.levels]]
   level = 2
   criteria = [{ signal = "doc_staleness.summary.stale_pct", op = "lte", value = 20 }]
+
+[[rows]]
+id = "agent-consistency"
+title = "Cross-agent instruction consistency"
+scope = "team"
+aggregation = "min"
+
+  [[rows.levels]]
+  level = 1
+  criteria = [{ signal = "agent_consistency.conflicts", op = "eq", value = 0 }]
+
+  [[rows.levels]]
+  level = 2
+  requires = ["agent-consistency.1"]
+  criteria = [{ signal = "agent_consistency.unlinked", op = "eq", value = 0 }]
 
 [[steps]]
 step = 1

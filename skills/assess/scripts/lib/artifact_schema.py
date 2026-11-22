@@ -219,7 +219,13 @@ constant each.
 # 1.36.0: run-context.json ai_usage gains identities_awaiting_confirmation (issue
 # #765): the window's accounts that look automated and are not yet classified in
 # the [identities] config section, a count with no identity. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.36.0"
+# 1.37.0: run-context.json gains the agent_consistency block (issue #768): the root
+# instruction files of every agent system present, the check commands and
+# thresholds they disagree on, each file's link to the canonical source and the
+# pointer line per unlinked system. nested_instructions also discovers the
+# Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue and Zed files.
+# Additive: no existing key moves, and complexity-stats.json is unchanged.
+ARTIFACT_SCHEMA_VERSION = "1.37.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -358,4 +364,8 @@ ARTIFACT_SCHEMA_VERSION = "1.36.0"
 #     or person never does. The same matcher serves ``delivery`` and the GitLab
 #     note classifier (``gitlab_notes``) under --platform, so a confirmed account
 #     moves their agent counts too. Without the section nothing changes.
-ASSESS_METHOD_VERSION = 31
+# 32: the agent_consistency block and its conflicts and unlinked signals (issue
+#     #768): the default maturity model gains the agent-consistency row (no
+#     conflict is level 1, every system linked to the canonical file level 2,
+#     fewer than two systems unknown). Existing rows are unchanged.
+ASSESS_METHOD_VERSION = 32

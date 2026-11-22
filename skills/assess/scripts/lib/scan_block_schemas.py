@@ -4,8 +4,8 @@
 blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
-here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781)
-and ``delivery`` (#715).
+here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
+``delivery`` (#715) and ``agent_consistency`` (#768).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -245,7 +245,67 @@ DELIVERY: JsonDict = {
 }
 
 # Block name -> the block's described fields (no ``type``; each generator adds its own rules).
+_SYSTEMS: JsonDict = {"type": ["array", "integer"],
+                      "description": "Agent system ids (lib/agent_systems.py SYSTEMS)."}
+AGENT_CONSISTENCY: JsonDict = {
+    "description": (
+        "Cross-agent instruction consistency (lib/agent_consistency.py): the root instruction "
+        "files of every agent system present at HEAD (Claude Code, AGENTS.md, Copilot, Cursor, "
+        "Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue, Zed), the check commands and "
+        "thresholds they disagree on, and how each links to one canonical file."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "reason": _field({"type": "string"}, "Why the block is unavailable."),
+        "systems": _SYSTEMS,
+        "systems_total": _field(_INT, "Agent systems with a root instruction file."),
+        "applicable": _field({"type": "boolean"},
+                             "False with fewer than two systems: nothing to agree with."),
+        "canonical": _field({"type": ["string", "null"]},
+                            "The canonical file: AGENTS.md when present, else the first root "
+                            "file in system order; null with no instruction file."),
+        "files": _field(
+            {"type": "array", "items": {"type": "object", "properties": {
+                "path": {"type": "string"},
+                "system": {"type": "string"},
+                "link": {"enum": ["canonical", "symlink", "import", "pointer", "config_read",
+                                  "mirror", "independent"]},
+            }}},
+            "Each root-context instruction file, its system and how it links to the canonical."),
+        "divergences": _field(
+            {"type": "array", "items": {"type": "object", "properties": {
+                "kind": {"enum": ["command", "threshold"]},
+                "value": _field({"type": "string"}, "The command, or the threshold keyword; "
+                                                    "dropped from counts-only output."),
+                "named_in": _SYSTEMS,
+                "missing_from": _SYSTEMS,
+                "stated": {"type": "array"},
+            }}},
+            "A command one system names and another does not, or a threshold two state "
+            "differently."),
+        "conflicts": _field({"type": ["integer", "null"]},
+                            "The agent-consistency row's level 1 signal: divergences; null "
+                            "when not applicable."),
+        "unlinked": _field({"type": ["integer", "null"]},
+                           "The level 2 signal: systems not linked to the canonical file; null "
+                           "when not applicable."),
+        "consistent": _field({"type": ["boolean", "null"]},
+                             "No divergence and every system linked; null when not applicable."),
+        "next_steps": _field(
+            {"type": "array", "items": {"type": "object", "properties": {
+                "system": {"type": "string"},
+                "path": {"type": "string"},
+                "pointer": _field({"type": "string"}, "The exact pointer line for the tool; "
+                                                      "dropped from counts-only output."),
+                "symlink": _field({"type": ["string", "null"]},
+                                  "A symlink command; null for Aider (config-only)."),
+            }}},
+            "One per unlinked system."),
+        "not_read": _STRINGS,
+    },
+}
+
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
+    "agent_consistency": AGENT_CONSISTENCY,
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
     "coverage_gate": COVERAGE_GATE,
