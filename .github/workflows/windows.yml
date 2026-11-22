@@ -148,8 +148,45 @@ jobs:
           pytest -ra -p no:cacheprovider -n auto --dist loadfile tests/
           --ignore-glob='tests/test_ghsync*.py' --ignore-glob='tests/test_ghreport*.py'
 
-      - name: ghsync and ghreport suites under Git Bash
+      # The ghsync/ghreport suites take about 12 minutes and test only these
+      # paths (#971). A step-level gate, not a workflow `paths:` filter: the
+      # job is a required check and must always report. A push to main always
+      # runs them; so does a PR whose diff cannot be computed.
+      - name: Decide whether the ghsync and ghreport suites run
+        id: ghsync_gate
         if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "ghsync/ghreport suites: run ($EVENT_NAME event)"
+            exit 0
+          fi
+          if ! changed=$(git diff --name-only "origin/$BASE_REF...HEAD"); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "ghsync/ghreport suites: run (diff against origin/$BASE_REF failed)"
+            exit 0
+          fi
+          hit=""
+          while IFS= read -r f; do
+            case "$f" in
+              skills/ghsync/*|skills/ghreport/*|tests/gitbash.py|tests/conftest.py|tests/test_ghsync*.py|tests/test_ghreport*.py|.github/workflows/windows.yml)
+                hit="$f"; break ;;
+            esac
+          done <<< "$changed"
+          if [ -n "$hit" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "ghsync/ghreport suites: run ($hit changed)"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "ghsync/ghreport suites: skipped (no change under skills/ghsync, skills/ghreport, tests/gitbash.py, tests/conftest.py, tests/test_ghsync*.py, tests/test_ghreport*.py or windows.yml)"
+          fi
+
+      - name: ghsync and ghreport suites under Git Bash
+        if: ${{ !cancelled() && steps.ghsync_gate.outputs.run != 'false' }}
         shell: bash
         run: >-
           uv run --python 3.11 --with pytest --with pyyaml --with "pytest-xdist>=3.6,<4"

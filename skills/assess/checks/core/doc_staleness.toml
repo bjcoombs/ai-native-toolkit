@@ -1,0 +1,64 @@
+# Check manifest fragment: the doc_staleness collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.doc_staleness"
+kind = "collector"
+title = "Doc staleness"
+summary = "Each doc's last content change against its code subject's churn, following renames."
+callable = "lib.core_scans:doc_staleness"
+publishes = ["doc_staleness"]
+reads = ["repo_root", "doc_graph", "excludes", "scope"]
+stage = "read_side"
+headless = { doc_staleness = "headless_variant" }
+headless_variants = [
+  { block = "doc_staleness", callable = "lib.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },
+]
+shapes = [
+  { path = "doc_staleness", type = "lib.doc_staleness:DocStalenessBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "doc_staleness.churn_window" = "drop"
+  "doc_staleness.docs.subject_method" = "token"
+  "doc_staleness.docs.subject_roots" = "path"
+  "doc_staleness.docs.subject_paths" = "path"
+  "doc_staleness.docs.base_doc_dir" = "path"
+  "doc_staleness.docs.confidence" = "token"
+  "doc_staleness.docs.last_change_basis" = "token"
+  "doc_staleness.docs.last_commit_days_bound" = "token"
+  "doc_staleness.history_boundary_date" = "token"
+  "doc_staleness.docs.provenance.method" = "token"
+  "doc_staleness.docs.provenance.sources" = "path"
+  "doc_staleness.docs.provenance.generated_by" = "drop"
+  "doc_staleness.bulk_commits_skipped.sha" = "drop"
+  "doc_staleness.bulk_commits_skipped.date" = "token"
+  "doc_staleness.declared_cross_repo.path" = "path"
+  "doc_staleness.declared_cross_repo.repo" = "id"
+  "doc_staleness.declared_cross_repo.scope" = "path"
+  "doc_staleness.declared_cross_repo.status" = "token"
+  "doc_staleness.declared_cross_repo.reason" = "token"
+
+[[entries]]
+id = "core:doc_staleness.summary.stale_pct"
+kind = "signal"
+title = "Share of mapped docs outrun by their code"
+collector = "core.doc_staleness"
+path = "doc_staleness.summary.stale_pct"
+type = "number"
+evidence = "git_history"
+null_means = "a shallow or degenerate history, no git work tree or no mapped doc"
+
+[[entries]]
+id = "core.cond.doc-freshness.1.stale_pct"
+kind = "condition"
+title = "Most mapped docs keep pace with their code"
+key = "doc-freshness.1:doc_staleness.summary.stale_pct"
+fix = "Refresh the docs the report lists under doc freshness."
+
+[[entries]]
+id = "core.cond.doc-freshness.2.stale_pct"
+kind = "condition"
+title = "Four in five mapped docs keep pace"
+key = "doc-freshness.2:doc_staleness.summary.stale_pct"
+fix = "Refresh the docs the report lists under doc freshness, oldest first."

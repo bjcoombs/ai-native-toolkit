@@ -1048,7 +1048,8 @@ ghsync root or a list, one JSONL row per repository. `discover_root` walks
 checkout is reported rather than skipped), never descending into a found repository,
 `worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
 directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
-expanded is a `ValueError`, a usage error); `layout_id` gives both inputs the
+expanded is a `ValueError`, a usage error, and so is one whose expanded home directory
+does not exist, since Windows expands `~name` without checking the account, #965); `layout_id` gives both inputs the
 same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
@@ -1972,6 +1973,24 @@ raising, and `parse_manifest(data)` validates an already-parsed document. Helper
 id minus its owner), `block_collectors` (run-context block to publishing collector id)
 and `condition_key(row, level, signal)`.
 
+**Fragments (#982).** A root manifest may list `fragments` instead of declaring
+`[[entries]]`. The core does: `checks/core.toml` holds `manifest_version`, `owner` and
+`fragments`, the scan keys in scan-table order, and each entry lives in
+`checks/core/<scan key>.toml`. A fragment holds `[[entries]]` only: exactly one collector,
+the one its file is named for, plus the signals, conditions and findings it owns (a signal
+names its collector, a condition reads one signal, a finding belongs to the collector of
+its first input). The loader merges the fragments by kind (collectors, signals,
+conditions, findings) and, within a kind, in the listed order, so the merged document is
+the one a single file declares, and an error names the fragment
+(`core/ci_checks.toml entries[0] (core.ci_checks).stage`). Layout errors:
+`MISSING_FRAGMENT` (listed, no file), `UNLISTED_FRAGMENT` (a file the list leaves out, which
+would not load), `DUPLICATE_FRAGMENT`, `FRAGMENT_COLLECTOR` (not one collector named for
+the file) and `FRAGMENTS_AND_ENTRIES`. An id declared in two fragments is `DUPLICATE_ID`,
+naming both files. A new collector adds its fragment and one line to `fragments`; a change
+to an existing check edits its own fragment only. `read_manifest(path)` returns the merged
+document unvalidated (the registry-agreement tests read it), and `fragment_names(path)` the
+list. A single-file manifest (any third-party owner) loads as before.
+
 The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` and
 `[[entries]]` of four kinds:
 
@@ -2077,8 +2096,8 @@ Meridian's distance and closest-match tables.
 ### Measures catalog
 
 **`catalog.py`** *(#789 step 2, #794)*
-`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
-default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml` and its
+fragments), the default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
 1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
 grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
 row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
@@ -2088,7 +2107,8 @@ the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known
 counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
 `findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
 reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
-(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+(every `scan_registry.SCANS` entry), `signals` (in the order the model's criteria first read
+them, not manifest order, since fragments group signals by collector) and `findings`. A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -2101,7 +2121,7 @@ relatively.
 **Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
 root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
 `tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
-so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+so a PR that changes `core.toml`, a fragment under `checks/core/`, `default.toml` or `level_signals.py` regenerates the catalog.
 `make check` runs it through `test-assess`.
 
 **`measured_appendix.py`**
@@ -2828,7 +2848,7 @@ exist (and stale ones, with URLs, globs, placeholders, absolute paths, excluded 
 gitignored paths and `owner/repo`-shaped slugs left unchecked), backticked code symbols
 no other tracked file names (`git grep`, skipped outside git), directory-tree blocks,
 repository-overview headings and the share of lines repeated from the root README.
-`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
+`build_repo_context` reads the repo once per call; the root and nested instruction scans each build one. Gitignored candidates go to `git check-ignore -z --stdin` as NUL-separated UTF-8 bytes (`surrogateescape` both ways), never text-mode stdin, so Windows newline translation and git's path quoting cannot hide a match. Paths and symbols are checked against the tracked files (`git ls-files`, `git grep`), so on a dirty checkout an uncommitted edit counts. Tests:
 `tests/test_instruction_content.py`.
 
 **`liveness_scan.py`**
@@ -4496,7 +4516,13 @@ Layer 1 write-side truth pressure. Two tiers:
   puts the last line of its error output (skipping Python warning lines, such as
   mutmut's `paths_to_mutate` deprecation) in the result's `reason` (surfaced as
   `mutation_note`), and the mutmut 3 path appends `; first failure:` with the first
-  import error, else pytest's first failing test, scratch and home paths labelled. mutmut
+  import error, else pytest's first failing test, scratch and home paths labelled
+  (`test_pressure/reason_paths.py`, `cut_prefix`: each spelling of a directory, as given
+  and resolved, is cut under `/`, `\` and a repr's doubled `\\` (an `OSError` quotes its
+  filename that way), longest first and only before a separator, so a Windows path the
+  tool printed with `/` is cut too and the rest of the path reads with `/`; on Windows the
+  match ignores case; a root home is never a label, issue #964). Directory entries are mirrored and
+  `.meta` files read in code-point name order on every platform (#965). mutmut
   runs pytest under the interpreter that launches it, so `_resolve_runner` picks one that
   can import the suite's dependencies (`runner`): a package `.venv` / `venv` that already
   holds mutmut 3 (read only, no bytecode written), else `uv run --project` with

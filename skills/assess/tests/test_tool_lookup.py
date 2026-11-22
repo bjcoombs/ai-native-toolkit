@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import subprocess
 import venv
@@ -202,7 +203,7 @@ def test_svg_scripts_print_the_install_hint_in_a_bare_interpreter(
     tmp_path: Path, script: str, needs: str,
 ) -> None:
     env_dir = tmp_path / "venv"
-    venv.create(env_dir, with_pip=False)
+    venv.create(env_dir, with_pip=False, symlinks=(os.name != "nt"))
     python = next(p for p in (env_dir / "bin" / "python", env_dir / "Scripts" / "python.exe")
                   if p.exists())
     (tmp_path / "r").mkdir()

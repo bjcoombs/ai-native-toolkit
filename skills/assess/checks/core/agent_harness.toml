@@ -1,0 +1,25 @@
+# Check manifest fragment: the agent_harness collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.agent_harness"
+kind = "collector"
+title = "Committed agent harness"
+issues = [513]
+callable = "lib.agent_harness:scan_agent_harness"
+publishes = ["agent_harness"]
+reads = ["repo_root", "scope", "excludes"]
+stage = "post_offers"
+headless = { agent_harness = "registered" }
+shapes = [
+  { path = "agent_harness", type = "lib.agent_harness:AgentHarnessBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_harness.reason" = "drop"
+  "agent_harness.executes.kind" = "token"
+  "agent_harness.executes.name" = "drop"
+  "agent_harness.executes.detail" = "drop"
+  "agent_harness.findings.kind" = "token"
+  "agent_harness.findings.detail" = "drop"
+  "agent_harness.findings.fix" = "drop"

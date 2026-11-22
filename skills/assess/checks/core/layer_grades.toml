@@ -1,0 +1,38 @@
+# Check manifest fragment: the layer_grades collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.layer_grades"
+kind = "collector"
+title = "Deterministic layer grades"
+summary = "The instruction-file grade republished as a block, so a maturity model can read it."
+issues = [620]
+callable = "lib.layer_grades:scan_layer_grades"
+publishes = ["layer_grades"]
+reads = ["instruction_grading"]
+stage = "post_offers"
+headless = { layer_grades = "registered" }
+shapes = [
+  { path = "layer_grades", type = "lib.layer_grades:LayerGradesBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "layer_grades.reason" = "drop"
+  "layer_grades.instructions_grade" = "token"
+
+[[entries]]
+id = "core:layer_grades.instruction_file_present"
+kind = "signal"
+title = "A committed instruction file exists"
+collector = "core.layer_grades"
+path = "layer_grades.instruction_file_present"
+type = "bool"
+evidence = "head_text"
+null_means = "never null; a missing layer_grades block is unknown"
+
+[[entries]]
+id = "core.cond.layer-0-instructions.1.instruction_file_present"
+kind = "condition"
+title = "An instruction file is committed"
+key = "layer-0-instructions.1:layer_grades.instruction_file_present"
+fix = "Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works."

@@ -1,0 +1,15 @@
+# Check manifest fragment: the excludes collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.excludes"
+kind = "collector"
+title = "Config excludes"
+callable = "lib.run_setup:config_excludes"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

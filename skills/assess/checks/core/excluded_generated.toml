@@ -1,0 +1,17 @@
+# Check manifest fragment: the excluded_generated collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.excluded_generated"
+kind = "collector"
+title = "Excluded generated files"
+callable = "lib.core_scans:generated_exclusions"
+publishes = ["excluded_generated"]
+reads = ["current"]
+stage = "read_side"
+shapes = [
+  { path = "excluded_generated", type = "lib.run_context_types:GeneratedExclusion" },
+]
+revision = 1
+  [entries.privacy]
+  "excluded_generated.reason" = "drop"

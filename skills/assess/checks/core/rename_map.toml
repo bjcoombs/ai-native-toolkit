@@ -1,0 +1,15 @@
+# Check manifest fragment: the rename_map collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.rename_map"
+kind = "collector"
+title = "Git rename map"
+callable = "lib.run_setup:rename_map"
+publishes = []
+reads = ["repo_root"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

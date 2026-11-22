@@ -1,0 +1,29 @@
+# Check manifest fragment: the shared_tooling collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.shared_tooling"
+kind = "collector"
+title = "Shared tooling"
+issues = [566]
+callable = "lib.shared_tooling:scan_shared_tooling"
+publishes = ["shared_tooling"]
+reads = ["repo_root"]
+stage = "post_offers"
+headless = { shared_tooling = "registered" }
+shapes = [
+  { path = "shared_tooling", type = "lib.shared_tooling:SharedToolingBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "shared_tooling.reason" = "drop"
+  "shared_tooling.ci_includes.kind" = "token"
+  "shared_tooling.ci_includes.source" = "drop"
+  "shared_tooling.ci_includes.id" = "id"
+  "shared_tooling.ci_includes.ref" = "token"
+  "shared_tooling.marketplaces.kind" = "token"
+  "shared_tooling.marketplaces.name" = "drop"
+  "shared_tooling.marketplaces.source" = "drop"
+  "shared_tooling.marketplaces.id" = "id"
+  "shared_tooling.ci_source_ids" = "id"
+  "shared_tooling.marketplace_ids" = "id"

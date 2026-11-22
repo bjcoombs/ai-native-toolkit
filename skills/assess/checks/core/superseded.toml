@@ -1,0 +1,15 @@
+# Check manifest fragment: the superseded collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.superseded"
+kind = "collector"
+title = "Superseded run"
+callable = "lib.run_setup:superseded_run"
+publishes = []
+reads = ["assess_dir", "run_date", "measured_commit"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1
