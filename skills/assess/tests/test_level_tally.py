@@ -21,6 +21,7 @@ import lib.level_tally as lt
 from lib import level_signals
 from lib.counts_only import counts_only
 from lib.fleet.runner import STATUS_FAILED, STATUS_OK
+from lib.merged_sample import UNSUPPORTED_HOST_REASON
 from lib.fleet.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
 from lib.fleet.fleet_level_schema import SCHEMA_PATH, build_schema, render
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
@@ -263,6 +264,13 @@ def test_a_network_block_needs_the_platform():
     model = _model(_row("rev", [{"signal": "review_reality.reviewed_share", "op": "gte", "value": 0.8}]))
     result = lt.level_result(model, {"review_reality": {"available": False, "reason": "network: reads GitHub"}})
     assert result["not_measured"] == [{"id": "rev.1", "reason": "needs_platform"}]
+
+
+def test_an_unsupported_host_names_the_limit_not_the_platform():
+    model = _model(_row("rev", [{"signal": "review_reality.reviewed_share", "op": "gte", "value": 0.8}]))
+    block = {"available": False, "reason": UNSUPPORTED_HOST_REASON}
+    result = lt.level_result(model, {"review_reality": block})
+    assert result["not_measured"] == [{"id": "rev.1", "reason": "unsupported_host"}]
 
 
 def test_a_condition_reads_its_own_criteria_not_the_level_below():

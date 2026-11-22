@@ -62,6 +62,24 @@ def _header_for(current: dict) -> dict:
     )
 
 
+def test_a_missing_stats_sidecar_reads_unavailable_not_zero(tmp_path: Path) -> None:
+    """#959: no complexity-stats.json is not a measured zero, so the empty-set rule
+    (no_scored_files) never fires on it and the tally names the missing sidecar."""
+    from lib import level_tally
+    from lib.run_scope import NO_STATS_REASON, load_current_stats
+
+    stats = _header_for(load_current_stats(tmp_path))["stats_summary"]
+    assert stats["available"] is False and stats["reason"] == NO_STATS_REASON
+    assert stats["files_scored"] is None and stats["loc"] == {}
+    signals = {"stats_summary": stats, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    result = level_tally.level_result(level_tally.default_model(), signals)
+    reasons = {c["id"]: c.get("reason") for c in result["conditions"]}
+    assert reasons["layer-4-architecture.2"] == "no_complexity_stats"
+    # a written sidecar with no file scored is still the measured empty set
+    scored = _header_for({"files_scored": 0, "loc": {}})["stats_summary"]
+    assert "available" not in scored and scored["files_scored"] == 0
+
+
 def test_run_header_copies_complexity_unreliable() -> None:
     """A schema-7 sidecar's complexity_unreliable reaches stats_summary (#590);
     a schema-6 sidecar without the key reads as an empty list."""

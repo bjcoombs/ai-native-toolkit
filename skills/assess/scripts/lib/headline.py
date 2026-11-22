@@ -80,6 +80,7 @@ GATE_CHANGE = {
 REASON_WORDS = {
     "needs_full_run": "needs a full run",
     "needs_platform": "needs GitHub or GitLab access",
+    "unsupported_host": "the remote's host is not GitHub or a reachable GitLab",
     "block_absent": "scan did not run",
     "no_value": "no value read",
     "type_mismatch": "value of another type",
@@ -88,6 +89,7 @@ REASON_WORDS = {
     "scan_failed": "scan did not complete",
     "no_scored_files": "no files scored",
     "no_manifests": "no manifests read",
+    "no_complexity_stats": "no complexity stats written",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
 _SUPPORTIVE = (("failed", "did not complete"), ("missing", "not found"))

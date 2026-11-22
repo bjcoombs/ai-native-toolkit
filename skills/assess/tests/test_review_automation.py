@@ -11,6 +11,7 @@ from lib.delivery import AI_REVIEWERS
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet_config import empty_config, parse_fleet_config
 from lib.fleet.fleet_groups import platform_only
+from lib.merged_sample import UNSUPPORTED_HOST_REASON
 from lib.fleet.fleet_platform import failed_blocks, join
 from lib.level_signals import load_default_levels
 from lib.levels import evaluate_row
@@ -308,6 +309,9 @@ def test_review_evidence_is_registered_after_its_inputs_and_rebuilt_by_platform(
     assert not platform_only({}, "delivery.merged_count")  # a failed row has no scans
     assert not platform_only({"delivery": {"available": True}}, "delivery.merged_count")
     assert not platform_only(measured, "ai_usage.total_commits")
+    # a host no platform read supports is never a gap --platform closes (#959)
+    unsupported = {"review_reality": {"available": False, "reason": UNSUPPORTED_HOST_REASON}}
+    assert not platform_only(unsupported, "review_reality.reviewed_share")
 
 
 # --- Layer 7 in a headless run --------------------------------------------------------

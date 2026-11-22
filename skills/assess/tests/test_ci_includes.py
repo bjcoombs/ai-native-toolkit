@@ -224,6 +224,21 @@ def test_an_unparsed_include_section_stays_unknown(tmp_path: Path) -> None:
     assert resolution.unresolved >= 1
 
 
+def test_an_unparsed_entry_is_kind_unknown_never_local(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _commit(app, {".gitlab-ci.yml": "include:\n  - project: ''\n  - unknown_key: x\n"})
+    records = resolve_includes(app).includes
+    assert [(r["kind"], r["status"], r["id"]) for r in records] == [("unknown", "unparsed", None)] * 2
+
+
+def test_a_yaml_tag_or_alias_entry_is_unparsed_not_a_local_path(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _commit(app, {".gitlab-ci.yml": "include:\n  - !reference [x]\n  - *shared\n  - '*quoted.yml'\n"})
+    records = resolve_includes(app).includes
+    assert [(r["kind"], r["status"]) for r in records] == [
+        ("unknown", "unparsed"), ("unknown", "unparsed"), ("local", "glob")]
+
+
 # --- review automation through a template -------------------------------------
 
 
@@ -294,7 +309,8 @@ def test_an_unreadable_entry_keeps_the_signal_unknown(tmp_path: Path) -> None:
         tmp_path, {"templates/test.yml": "docs:\n  script:\n    - make docs\n"},
         ci=INCLUDE_TEST + "  - project: ''\n")
     block = scan_ci_checks(app, root)
-    assert [r["status"] for r in block["includes"]] == ["unparsed", "resolved"]
+    assert [(r["kind"], r["status"]) for r in block["includes"]] == [
+        ("unknown", "unparsed"), ("project", "resolved")]
     assert block["test_or_lint_configured"] is None
 
 

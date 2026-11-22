@@ -258,6 +258,22 @@ def test_a_degraded_block_is_not_an_absent_signal():
     assert row["cause"] == fc.CAUSE_LEVEL and "absent_signals" not in row
 
 
+def test_a_degraded_nested_block_is_not_an_absent_signal():
+    # agent_environment.ci_duration-style: the top-level block is fine, a sub-block degraded
+    degraded = {**_scans(5), "nested_instructions": {"budget": {"available": False, "reason": "scan_error"}}}
+    comparison = compare(_run([_row("grpa/svc1", degraded)]), _run([_row("grpa/svc1", _scans(5))]))
+    row = _row_move(comparison, "grpa", "teamdocs")
+    assert row["then"]["status"] == "unknown"
+    assert row["cause"] == fc.CAUSE_LEVEL and "absent_signals" not in row
+
+
+def test_degraded_walks_the_signal_path():
+    scans = {"a": {"b": {"available": False}, "c": {"d": 1}}, "e": {"available": False}}
+    assert sd._degraded(scans, "a.b.x") and sd._degraded(scans, "e.f") and sd._degraded(scans, "a.b")
+    assert not sd._degraded(scans, "a.c.d") and not sd._degraded(scans, "a.z.y")
+    assert not sd._degraded(None, "a.b") and not sd._degraded({"a": 3}, "a.b")
+
+
 def test_a_toolkit_commit_that_is_not_a_hash_never_reaches_git(tmp_path):
     target = tmp_path / "written"
     for bad in (f"--output={target}", "HEAD", "abc", "a" * 41, "ABCDEF1"):
