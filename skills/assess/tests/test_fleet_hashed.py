@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -139,6 +140,32 @@ def test_default_counts_only_output_keeps_repository_ids(zroot, tmp_path):
     _run(zroot, out, tmp_path / "hist", "--no-history")
     rows = _jsonl(_files(out)["repos.jsonl"])
     assert [row["repo"] for row in rows] == list(REPOS)
+
+
+def _head(checkout: Path) -> str:
+    return subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"], check=True, capture_output=True,
+                          encoding="utf-8").stdout.strip()
+
+
+def test_the_commit_sha_is_hashed_and_dirty_kept_under_a_salt(zroot, tmp_path):
+    """#907: a commit sha finds its repository by search, so --hash-paths hashes it with the id;
+    the default counts-only output keeps it in clear, and dirty is kept either way."""
+    alpha = zroot / "zqorg" / "zqalpha" / "zqalpha-main"
+    (alpha / "CLAUDE.md").unlink()  # dirty: scored from HEAD
+    heads = [_head(c) for c in (alpha, zroot / "zqorg" / "zqbeta" / "zqbeta-main")]
+    out, plain = tmp_path / "out", tmp_path / "plain"
+    _run(zroot, out, tmp_path / "hist", "--hash-salt", "s907")
+    _run(zroot, plain, tmp_path / "hist2", "--no-history")
+    texts = {**_files(out), **{f"hist/{k}": v for k, v in _files(tmp_path / "hist").items()}}
+    assert [f"{path}: {head[:12]}" for path, text in texts.items() for head in heads if head[:12] in text] == []
+    rows = {row["repo"]: row for row in _jsonl(_files(out)["repos.jsonl"])}
+    hashed_alpha = rows[hash_value("zqorg/zqalpha", "s907")]
+    assert (hashed_alpha["head_sha"], hashed_alpha["dirty"]) == (hash_value(heads[0], "s907"), True)
+    commits = json.loads(_files(out)["level.json"])["commits"]
+    assert commits[hash_value("zqorg/zqalpha", "s907")] == {"head_sha": hash_value(heads[0], "s907"), "dirty": True}
+    clear = {row["repo"]: row for row in _jsonl(_files(plain)["repos.jsonl"])}
+    assert (clear["zqorg/zqalpha"]["head_sha"], clear["zqorg/zqalpha"]["dirty"]) == (heads[0], True)
+    assert clear["zqorg/zqgamma"]["head_sha"] is None  # a failed row has no commit
 
 
 def test_public_helpers_are_the_identity_without_a_salt():

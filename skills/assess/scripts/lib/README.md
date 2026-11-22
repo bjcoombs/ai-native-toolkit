@@ -1064,7 +1064,16 @@ its schema version - no stamp field, path or timing - so reruns are byte-identic
 stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
-`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
+`fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
+no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
+`git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
+when failed (`dirty` is also `null` on an ok row with no commit or a failed `git status`).
+`_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
+`git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
+(no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
+copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
+`run_signals` too, so it reads the same tree. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -1183,7 +1192,7 @@ read gives no URL and no owners.
 
 **`fleet_hashed.py`**
 Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
-(#909). `public_rows` hashes each row's `repo` and `group` with `counts_only.hash_value`
+(#909). `public_rows` hashes each row's `repo`, `group` and `head_sha` (#907: a sha finds its repository) with `counts_only.hash_value`
 under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
 `settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
 hashed id set the history entry is chosen and compared by. The ids equal the
@@ -2504,7 +2513,8 @@ import cycle. Tests: `tests/test_level_tally.py`.
 **`fleet_level.py`**
 `OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
 over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
-envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
+plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
 stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 

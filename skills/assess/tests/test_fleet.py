@@ -288,7 +288,7 @@ def test_scan_failures_become_reason_tokens(tmp_path, monkeypatch, body, reason)
     row = fleet.scan_target(target, tmp_path, ScanOptions(timeout=2))
     assert row == {"fleet_row_version": fleet.FLEET_ROW_VERSION, "repo": "grp/r", "group": "grp",
                    "status": "failed", "reason": reason, "signals_schema_version": None, "scans": None,
-                   "active": None}
+                   "active": None, "head_sha": None, "dirty": None}
     jsonschema.validate(row, build_schema())
 
 
@@ -315,7 +315,143 @@ def test_scan_ok_keeps_only_the_scans(tmp_path, monkeypatch):
     assert row["status"] == "ok" and row["reason"] is None
     assert row["scans"] == {"a": {"n": 1}} and row["signals_schema_version"] == 1
     assert list(scratch.iterdir()) == []  # the scan's document is cleaned up
+    assert row["head_sha"] == _git(tmp_path / "r", "rev-parse", "HEAD").strip() and row["dirty"] is False
     jsonschema.validate(row, build_schema())
+
+
+# --- the committed tree (#907) ---------------------------------------------
+
+GUIDE = {"CLAUDE.md": "# guide\n", "src/a.py": "x = 1\n", ".assess/config.toml": "exclude_dirs = []\n",
+         ".assess/findings.json": "{}\n"}
+
+
+def _git_dir_state(checkout: Path) -> dict[str, bytes]:
+    """Every file under ``.git`` with its bytes: a scan that wrote there changes it."""
+    git_dir = checkout / ".git"
+    return {p.relative_to(git_dir).as_posix(): p.read_bytes() for p in sorted(git_dir.rglob("*")) if p.is_file()}
+
+
+@pytest.mark.parametrize(("change", "dirty"), [
+    (lambda r: None, False),
+    (lambda r: (r / "CLAUDE.md").unlink(), True),
+    (lambda r: _git(r, "rm", "-q", "CLAUDE.md"), True),  # staged: the index differs from HEAD too
+    (lambda r: (r / "src/a.py").write_text("x = 2\n", encoding="utf-8"), True),
+    (lambda r: (r / ".assess/config.toml").write_text("exclude_dirs = ['src']\n", encoding="utf-8"), True),
+    (lambda r: (r / ".assess/findings.json").write_text("[]\n", encoding="utf-8"), False),  # a tool output
+    (lambda r: (r / "NOTES.md").write_text("untracked\n", encoding="utf-8"), False),
+])
+def test_commit_state_uses_the_assess_definition_of_dirty(tmp_path, change, dirty):
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    change(repo)
+    assert fleet.commit_state(repo) == {"head_sha": _git(repo, "rev-parse", "HEAD").strip(), "dirty": dirty}
+
+
+def test_an_inherited_repository_env_never_redirects_the_reads(tmp_path, monkeypatch):
+    """A run from a hook or CI step inherits GIT_DIR and friends; fleet reads the target anyway."""
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    other = make_checkout(tmp_path / "other", {"x.txt": "other\n"})
+    (repo / "CLAUDE.md").unlink()
+    for key, value in {"GIT_DIR": other / ".git", "GIT_WORK_TREE": other, "GIT_INDEX_FILE": other / ".git" / "index",
+                       "GIT_OBJECT_DIRECTORY": other / ".git" / "objects", "GIT_CONFIG_COUNT": "1",
+                       "GIT_CONFIG_KEY_0": "core.bare", "GIT_CONFIG_VALUE_0": "true"}.items():
+        monkeypatch.setenv(key, str(value))
+    commit = fleet.commit_state(repo)
+    assert commit["dirty"] is True
+    with fleet.committed_tree(repo, tmp_path, commit) as tree:
+        assert tree is not None and (tree / "CLAUDE.md").exists() and not (tree / "x.txt").exists()
+    env = fleet._read_only_env()
+    assert not {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_CONFIG_COUNT",
+                "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"} & env.keys()
+    for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_CONFIG_COUNT"):
+        monkeypatch.delenv(key)
+    assert commit["head_sha"] == _git(repo, "rev-parse", "HEAD").strip()  # the target's, not other's
+
+
+def test_commit_state_without_a_commit(tmp_path):
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    assert fleet.commit_state(repo) == {"head_sha": None, "dirty": None}
+
+
+def test_a_clean_checkout_is_scanned_in_place(tmp_path):
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    with fleet.committed_tree(repo, tmp_path, fleet.commit_state(repo)) as tree:
+        assert tree == repo
+
+
+def test_a_dirty_checkout_is_scanned_from_head_and_never_written(tmp_path):
+    repo = make_checkout(tmp_path / "r-main", GUIDE, remote="git@example.com:grp/r.git")
+    (repo / "CLAUDE.md").unlink()
+    (repo / "src/a.py").write_text("x = 2\n", encoding="utf-8")
+    (repo / "NOTES.md").write_text("untracked\n", encoding="utf-8")
+    before = _git_dir_state(repo)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    commit = fleet.commit_state(repo)
+    with fleet.committed_tree(repo, scratch, commit) as tree:
+        assert tree is not None and tree != repo and tree.name == "r-main" and scratch in tree.parents
+        assert (tree / "CLAUDE.md").read_text(encoding="utf-8") == "# guide\n"
+        assert (tree / "src/a.py").read_text(encoding="utf-8") == "x = 1\n"
+        assert not (tree / "NOTES.md").exists()  # untracked files stay out
+        assert _git(tree, "rev-parse", "HEAD").strip() == commit["head_sha"]
+        assert _git(tree, "status", "--porcelain").strip() == ""
+        assert fleet.remote_path(tree) == "grp/r"  # platform scans read the same origin
+        assert fleet.checkout_problem(tree) is None
+    assert list(scratch.iterdir()) == []  # the copy is removed
+    assert _git_dir_state(repo) == before  # nothing written into the target, .git included
+    assert not (repo / "CLAUDE.md").exists()
+
+
+def test_a_dirty_checkout_without_origin_has_no_origin_in_the_copy(tmp_path):
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    (repo / "CLAUDE.md").unlink()
+    with fleet.committed_tree(repo, tmp_path, fleet.commit_state(repo)) as tree:
+        assert tree is not None and fleet.remote_path(tree) is None
+        assert _git(tree, "remote").strip() == ""
+
+
+_SEES_GUIDE = ("import os\nrepo = sys.argv[1]\n"
+               "doc = {'signals_schema_version': 1, 'stamp': {}, "
+               "'scans': {'probe': {'guide': os.path.exists(os.path.join(repo, 'CLAUDE.md'))}}}\n"
+               "open(out, 'w').write(json.dumps(doc))\n")
+
+
+def test_scan_target_scores_a_dirty_checkout_at_head(tmp_path, monkeypatch):
+    _fake_signals(tmp_path, monkeypatch, _SEES_GUIDE)
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    head = _git(repo, "rev-parse", "HEAD").strip()
+    clean = fleet.scan_target(Target("g/r", repo), tmp_path, ScanOptions())
+    (repo / "CLAUDE.md").unlink()
+    dirty = fleet.scan_target(Target("g/r", repo), tmp_path, ScanOptions())
+    assert clean["scans"] == dirty["scans"] == {"probe": {"guide": True}}
+    assert (clean["head_sha"], clean["dirty"]) == (head, False)
+    assert (dirty["head_sha"], dirty["dirty"]) == (head, True)
+    jsonschema.validate(dirty, build_schema())
+
+
+def test_a_committed_tree_that_cannot_be_made_fails_the_row(tmp_path, monkeypatch):
+    _fake_signals(tmp_path, monkeypatch, _SEES_GUIDE)
+    monkeypatch.setattr(fleet, "_clone_at", lambda *args: False)
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    (repo / "CLAUDE.md").unlink()
+    row = fleet.scan_target(Target("g/r", repo), tmp_path, ScanOptions())
+    assert (row["status"], row["reason"], row["head_sha"], row["dirty"]) == (
+        "failed", fleet.COMMITTED_TREE_ERROR, None, None)
+    jsonschema.validate(row, build_schema())
+
+
+def test_clone_failure_is_reported_not_raised(tmp_path):
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    assert fleet._clone_at(repo, tmp_path / "copy", "0" * 40, timeout=30) is False
+
+
+def test_run_signals_reads_the_commit_itself_for_the_platform_pass(tmp_path, monkeypatch):
+    _fake_signals(tmp_path, monkeypatch, _SEES_GUIDE)
+    repo = make_checkout(tmp_path / "r", GUIDE)
+    (repo / "CLAUDE.md").unlink()
+    document = fleet.run_signals(Target("g/r", repo), tmp_path, ScanOptions(), ".platform.stderr")
+    assert isinstance(document, dict) and document["scans"] == {"probe": {"guide": True}}
 
 
 def test_run_fleet_isolates_a_raising_scan_and_sorts(tmp_path):

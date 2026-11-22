@@ -159,13 +159,15 @@ One line per repository, sorted by `repo`, keys sorted. Schema:
 
 | Key | Value |
 |-----|-------|
-| `fleet_row_version` | Row envelope version (2; 2 added `active`). |
+| `fleet_row_version` | Row envelope version (2; 2 added `active`; `head_sha` and `dirty` came later without a bump, so an earlier row reads them as absent). |
 | `repo` | The repository id: its path under the root, prefixed with the root's own name when that path is one segment (a GitHub org root gives `org/repo`). A listed entry outside `ROOT` (or with no `ROOT`) takes its `origin` remote's path, else its last two directory names. The same checkout gets the same id from a root run or a list run. |
 | `group` | `repo` without its last segment (`grpa/svc1` is in `grpa`); hashed on its own under `--hash-paths` ([Hashed runs](#hashed-runs)). |
 | `status` | `ok` or `failed`. |
-| `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, or `scan_exit_<code>`. |
+| `reason` | `null` when ok; a token when failed: `missing_checkout`, `not_a_git_work_tree`, `scan_timeout`, `invalid_output`, `scan_error`, `committed_tree_error` (a dirty checkout whose `HEAD` could not be checked out in the scratch directory), or `scan_exit_<code>`. |
 | `signals_schema_version` | The `assess_signals` document version; `null` when failed. |
 | `active` | `true` when the committer date of the checkout's `HEAD` falls inside the window (`--window`, default `6mo`, counting back from the run's UTC date in whole days, months and years by calendar), read locally from git; `null` when failed. Close to `ghsync --active-since` but not identical: ghsync counts 30-day months from the current time on platform dates, so cutoffs can differ by a few days. |
+| `head_sha` | The `HEAD` commit the row measured; `null` when failed or the checkout has no commit. Counts-only rows keep it in clear, as they keep the repository id. A commit sha identifies its repository (a search for it finds the repository), so under `--hash-paths` or `--hash-salt` it is hashed with the run's salt like the id (`h:` plus 16 hex digits), in `repos.jsonl` and `level.json` alike; `dirty` is always kept. `/assess` counts-only output drops the sha (`measured_commit.head_sha`). |
+| `dirty` | `true` when tracked files differ from `HEAD`, by `/assess`'s `measured_commit.dirty` rule: untracked files and the tool's own `.assess/` outputs never count, `.assess/config.toml` does. A dirty checkout is scanned from its committed tree: a `git clone --shared` of it, checked out at `head_sha` in the scratch directory with the `origin` URL copied over, so an uncommitted edit (an `rm CLAUDE.md`, say) never moves the row or its level. Nothing is written into the checkout. Untracked files are ignored in both cases. `null` when failed, and on an ok row when the checkout has no commit or `git status` fails (the dirty state is then unknown and the checkout is scanned in place). Fleet's git calls drop the repository-local `GIT_*` variables (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and the rest of `git rev-parse --local-env-vars`), so a run from a hook or CI step still reads each target. |
 | `scans` | The `assess_signals.py` `scans` map (counts-only unless `--full`); the block shapes are `skills/assess/references/signals.schema.json` and `skills/assess/references/counts-only.md`. `null` when failed. `scans.review_automation.present` is the row's "AI review in CI: yes / no" (#696): an AI review step or review app config in a git-tracked file, with `kinds` saying which (`ci_action`, `ci_component`, `config_file`). A GitHub review action counts only when its workflow runs on pull requests (`pull_request`, `pull_request_target`, `merge_group`); one wired only to `issue_comment` or `issues` is listed with `on_changes: false`. A GitLab include counts as committed: whether its jobs run in merge-request pipelines is not read. Includes inside a template resolved from the root (see GitLab includes below) are matched too, each such match carrying the `depth` it was found at. |
 
 **`logs/<repo>.stderr`.** When a scan process exits non-zero, the last 4000
@@ -270,7 +272,10 @@ inputs on the same day is byte-identical.
 
 Written with `--levels`, beside `groups.jsonl`: each scanned repository's level result,
 keyed by its repository id (a failed scan has no entry), in an envelope of
-`level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`. The
+`level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`.
+`commits` holds, under the same ids, `{head_sha, dirty}`: the commit each result measured
+and whether the checkout was dirty (its committed tree was then scored, as in
+`repos.jsonl`). The
 result (`scripts/lib/level_tally.py` in the assess skill, #744) treats each row level of
 the maturity model as one condition, `<row id>.<level>`, and reports:
 
