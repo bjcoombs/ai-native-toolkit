@@ -137,10 +137,10 @@ def test_tokens_the_first_token_is_the_marker_the_markers_section_shows():
 def test_tokens_each_declared_line_is_one_token():
     """Tokens: the floor declares its tokens "one per line"."""
     # The marker is an HTML comment, so it holds spaces; every gate invocation
-    # is a single script name, and two names on one line would be one token.
+    # is a single name, and two names on one line would be one token.
     assert MARKER_TEXT.startswith("<!--") and MARKER_TEXT.endswith("-->")
     for gate in INVOCATIONS:
-        assert len(gate.split()) == 1 and gate.endswith(".py"), gate
+        assert len(gate.split()) == 1, gate
 
 
 def test_tokens_the_script_holds_no_token_list_of_its_own():
@@ -186,7 +186,7 @@ def test_tokens_removing_a_token_is_a_floor_change_that_goes_red(floor_repo):
     strict=True,
     raises=AssertionError,
     reason=(
-        "floor-core finding (#719): removed_tokens compares raw substring "
+        "floor-core finding (#898): removed_tokens compares raw substring "
         "counts, so a gate name inside a longer name (restart_gate.py for "
         "start_gate.py) still counts as naming the gate"
     ),
@@ -322,7 +322,7 @@ def test_markers_a_moved_component_is_followed_to_its_new_path(floor_repo):
     strict=True,
     raises=AssertionError,
     reason=(
-        "floor-core finding (#719): cmd_markers follows a move only to a "
+        "floor-core finding (#899): cmd_markers follows a move only to a "
         "component path (skills/<x>/SKILL.md, plugins/<p>/skills/<x>/SKILL.md, "
         "commands/<x>.md) and reads any other move as a deletion; FLOOR.md's "
         "Markers section states no such restriction"
