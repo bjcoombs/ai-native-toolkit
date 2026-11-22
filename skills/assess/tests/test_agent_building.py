@@ -16,8 +16,10 @@ from lib.agent_building import (
     scan_agent_building,
 )
 from lib.agent_building_vocab import (
+    CHANGE_API_PATTERNS,
     CI_AGENT_PATTERNS,
     ENDPOINT_PATTERNS,
+    ISSUE_API_PATTERNS,
     MCP_SERVER_PATTERNS,
     PACKAGES,
     TOOL_LOOP_PATTERNS,
@@ -127,6 +129,153 @@ def test_ticket_to_merge_request_pairing_makes_an_sdk_repo_an_agent(tmp_path: Pa
     assert block["agent_class"] == "builds-agent"
 
 
+GITLAB_BOT = """\
+import anthropic
+import gitlab
+def run():
+    gl = gitlab.Gitlab('https://gl.test')
+    p = gl.projects.get('grp/x')
+    issue = p.issues.list()[0]
+    text = anthropic.Anthropic().messages.create(model='m', max_tokens=10, messages=[{'role': 'user', 'content': issue.title}])
+    p.mergerequests.create({'source_branch': 'b', 'target_branch': 'main', 'title': str(text)})
+"""
+GITLAB_PYPROJECT = "[project]\nname = 'x'\nversion = '0.1.0'\ndependencies = ['anthropic', 'python-gitlab']\n"
+
+
+def test_same_host_issues_and_merge_requests_are_the_pairing(tmp_path: Path) -> None:
+    # src/bot.py sorts before pyproject.toml: the client is declared after the calls are read.
+    block = scan_agent_building(_repo(tmp_path, "pair", {"pyproject.toml": GITLAB_PYPROJECT,
+                                                         "src/bot.py": GITLAB_BOT}))
+    assert (block["issue_trackers"], block["git_hosts"], block["pairing"]) == (["gitlab"], ["gitlab"], True)
+    assert block["agent_class"] == "builds-agent"
+
+
+def test_same_host_issues_without_merge_requests_is_not_the_pairing(tmp_path: Path) -> None:
+    bot = GITLAB_BOT.rsplit("    p.mergerequests", 1)[0]
+    block = scan_agent_building(_repo(tmp_path, "issues", {"pyproject.toml": GITLAB_PYPROJECT,
+                                                           "src/bot.py": bot}))
+    assert (block["issue_trackers"], block["git_hosts"], block["pairing"]) == ([], ["gitlab"], False)
+    assert block["agent_class"] == "none"
+
+
+@pytest.mark.parametrize(("deps", "source", "host"), [
+    ({"@octokit/rest": "^20"},
+     "await octokit.rest.issues.listForRepo(q);\nawait octokit.rest.pulls.create(pr);\n", "github"),
+    ({"@gitbeaker/rest": "^40"},
+     "const i = await api.Issues.all({projectId});\nawait api.MergeRequests.create(p, 'b', 'main', 't');\n",
+     "gitlab"),
+])
+def test_same_host_pairing_through_javascript_clients(tmp_path: Path, deps: dict[str, str], source: str,
+                                                      host: str) -> None:
+    files = {"package.json": json.dumps({"dependencies": {"openai": "^4", **deps}}), "src/bot.ts": source}
+    block = scan_agent_building(_repo(tmp_path, host, files))
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == ([host], True, "builds-agent")
+
+
+@pytest.mark.parametrize(("manifest", "source"), [
+    ("requirements.txt", "issue = repo.get_issue(1)\nrepo.create_pull(title='t', head='b', base='main')\n"),
+    ("go.mod", "client.Issues.Get(ctx, o, r, 1)\nclient.PullRequests.Create(ctx, o, r, pr)\n"),
+])
+def test_same_host_pairing_through_pygithub_and_go_github(tmp_path: Path, manifest: str, source: str) -> None:
+    manifests = {"requirements.txt": "openai\nPyGithub\n",
+                 "go.mod": "module x\n\ngo 1.22\n\nrequire (\n\tgithub.com/google/go-github/v60 v60.0.0\n"
+                           "\tgithub.com/openai/openai-go v0.1.0\n)\n"}
+    name = "bot.go" if manifest == "go.mod" else "bot.py"
+    block = scan_agent_building(_repo(tmp_path, "gh", {manifest: manifests[manifest], name: source}))
+    assert (block["issue_trackers"], block["git_hosts"], block["pairing"]) == (["github"], ["github"], True)
+
+
+def test_go_gitlab_issues_and_merge_requests_are_the_pairing(tmp_path: Path) -> None:
+    files = {"go.mod": "module x\n\ngo 1.22\n\nrequire gitlab.com/gitlab-org/api/client-go v0.1.0\n",
+             "bot.go": "git.Issues.ListProjectIssues(pid, opt)\ngit.MergeRequests.CreateMergeRequest(pid, mr)\n"}
+    assert scan_agent_building(_repo(tmp_path, "gogl", files))["pairing"] is True
+
+
+def test_same_host_pairing_needs_one_host_for_both_calls(tmp_path: Path) -> None:
+    # GitLab issues (gitlab4j) and a GitHub pull request (PyGithub) are not one host's pairing.
+    files = {"requirements.txt": "openai\npython-gitlab\nPyGithub\n",
+             "bot.py": "api.getIssuesApi()\nrepo.create_pull(title='t', head='b', base='main')\n"}
+    block = scan_agent_building(_repo(tmp_path, "mixed", files))
+    assert (block["issue_trackers"], block["pairing"]) == ([], False)
+
+
+@pytest.mark.parametrize("issues_call", ["x = p.issues.list()", "issue = gl.Issues.GetIssue(pid, 1)"])
+def test_an_issues_call_two_declared_hosts_share_is_not_the_pairing(tmp_path: Path, issues_call: str) -> None:
+    # python-gitlab issues (or go-gitlab's Issues service) with a GitHub pull request, both clients declared.
+    files = {"requirements.txt": "openai\npython-gitlab\nPyGithub\n",
+             "bot.py": f"{issues_call}\nrepo.create_pull(title='t', head='b', base='main')\n"}
+    block = scan_agent_building(_repo(tmp_path, "ambiguous", files))
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == ([], False, "none")
+
+
+POM_BOTH_HOSTS = """<project><dependencies>
+<dependency><groupId>com.anthropic</groupId><artifactId>anthropic-java</artifactId></dependency>
+<dependency><groupId>org.gitlab4j</groupId><artifactId>gitlab4j-api</artifactId></dependency>
+<dependency><groupId>org.kohsuke</groupId><artifactId>github-api</artifactId></dependency>
+</dependencies></project>
+"""
+
+
+@pytest.mark.parametrize("issues_call", [
+    "List<Issue> issues = issuesApi.getIssues(projectId);",  # gitlab4j or Kohsuke: ambiguous
+    "GHIssue issue = repo.getIssue(1);",                     # the same form, singular
+])
+def test_a_java_issues_call_two_declared_hosts_share_is_not_the_pairing(tmp_path: Path, issues_call: str) -> None:
+    files = {"pom.xml": POM_BOTH_HOSTS,
+             "src/main/java/Bot.java": f"{issues_call}\nrepo.createPullRequest(\"t\", \"b\", \"main\", \"x\");\n"}
+    block = scan_agent_building(_repo(tmp_path, "java", files))
+    assert block["git_hosts"] == ["github", "gitlab"]
+    assert block["llm_sdk"] is True
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == ([], False, "none")
+
+
+def test_a_java_issues_call_pairs_with_one_declared_host(tmp_path: Path) -> None:
+    pom = POM_BOTH_HOSTS.replace(
+        "<dependency><groupId>org.gitlab4j</groupId><artifactId>gitlab4j-api</artifactId></dependency>\n", "")
+    files = {"pom.xml": pom,
+             "src/main/java/Bot.java": "GHIssue i = repo.getIssue(1);\nrepo.createPullRequest(\"t\", \"b\", \"main\", \"x\");\n"}
+    block = scan_agent_building(_repo(tmp_path, "java1", files))
+    assert (block["issue_trackers"], block["pairing"], block["agent_class"]) == (["github"], True, "builds-agent")
+
+
+def test_an_unambiguous_issues_call_still_pairs_with_two_hosts_declared(tmp_path: Path) -> None:
+    files = {"requirements.txt": "openai\npython-gitlab\nPyGithub\n",
+             "bot.py": "issue = repo.get_issue(1)\nrepo.create_pull(title='t', head='b', base='main')\n"}
+    block = scan_agent_building(_repo(tmp_path, "gh2", files))
+    assert (block["issue_trackers"], block["pairing"]) == (["github"], True)
+
+
+def test_an_unrelated_issues_attribute_is_not_an_issues_call(tmp_path: Path) -> None:
+    # A Django related manager named issues, beside a real PyGithub pull-request call.
+    files = {"requirements.txt": "openai\nPyGithub\n",
+             "bot.py": "qs = self.issues.filter(x=1)\nrepo.get_pulls()\n"}
+    assert scan_agent_building(_repo(tmp_path, "django", files))["pairing"] is False
+
+
+@pytest.mark.parametrize("call", ["octokit.rest.issues.listForRepo(q)", "github.rest.issues.create(o, r)",
+                                  "p.issues.get(1)"])
+def test_issues_client_verbs_are_issues_calls(tmp_path: Path, call: str) -> None:
+    files = {"requirements.txt": "openai\nPyGithub\n", "bot.py": f"{call}\nrepo.get_pulls()\n"}
+    assert scan_agent_building(_repo(tmp_path, "verbs", files))["pairing"] is True
+
+
+def test_same_host_calls_without_a_declared_client_are_not_the_pairing(tmp_path: Path) -> None:
+    files = {"bot.py": "x = p.issues.list()\np.mergerequests.create({})\n"}
+    block = scan_agent_building(_repo(tmp_path, "noclient", files))
+    assert (block["issue_trackers"], block["git_hosts"], block["pairing"]) == ([], [], False)
+
+
+def test_same_host_calls_in_test_files_are_not_the_pairing(tmp_path: Path) -> None:
+    files = {"pyproject.toml": GITLAB_PYPROJECT, "testdata/bot.py": GITLAB_BOT, "tests/test_bot.py": GITLAB_BOT}
+    assert scan_agent_building(_repo(tmp_path, "tests", files))["pairing"] is False
+
+
+def test_the_docstring_lists_every_excluded_test_directory() -> None:
+    import lib.agent_building as ab
+    doc = ab.__doc__ or ""
+    assert [d for d in sorted(ab._TEST_DIRS) if f"``{d}``" not in doc] == []
+
+
 def test_endpoints_in_source_count_as_api_clients(tmp_path: Path) -> None:
     files = {"bot.py": 'J = "https://jira.example.com/rest/api/2/issue"\nG = "https://gl/api/v4/projects"\n'}
     block = scan_agent_building(_repo(tmp_path, "raw", files))
@@ -188,7 +337,8 @@ def test_symlinked_config_is_not_credited(tmp_path: Path) -> None:
 def test_the_scan_never_matches_its_own_source(module: str) -> None:
     text = (Path(__file__).resolve().parents[1] / "scripts" / "lib" / module).read_text(encoding="utf-8")
     # The patterns matched against source files (the CI patterns read CI files only).
-    patterns = [*TOOL_LOOP_PATTERNS, *MCP_SERVER_PATTERNS, *(p for _, _, p in ENDPOINT_PATTERNS)]
+    patterns = [*TOOL_LOOP_PATTERNS, *MCP_SERVER_PATTERNS, *(p for _, _, p in ENDPOINT_PATTERNS),
+                *(p for _, p in ISSUE_API_PATTERNS), *(p for _, p in CHANGE_API_PATTERNS)]
     assert [p.pattern for p in patterns if p.search(text)] == []
 
 
