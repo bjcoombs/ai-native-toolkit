@@ -152,6 +152,7 @@ The final step, once every PR is merged and the retro is done: one GitHub releas
 - Marathon settings explained: `docs/contributing/marathon.md`
 - Releasing: `docs/contributing/release.md`
 - Standalone skill pipeline (markers, vendoring, build): `docs/contributing/standalone-skills.md`
+- Scoring model, current decisions only (read before changing levels, Steps or the headline): `skills/assess/references/scoring-model.md`
 - `/assess` architecture and the `.assess/` wiki: `docs/contributing/assess-architecture.md`
 - Testing an unmerged branch as a real plugin (`/plugin install` only sees `main`), and how `${CLAUDE_SKILL_DIR}` substitution works: `docs/testing-a-branch-locally.md`
 - Every shipped doc: `docs/index.md`

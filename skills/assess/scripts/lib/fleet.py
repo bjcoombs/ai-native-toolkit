@@ -28,7 +28,8 @@ carry no absolute path, duration, stderr text or per-run stamp field (the run
 stamp is ``run.json``, lib/fleet_stamp.py). An ``ok`` row's ``active`` says
 whether its ``HEAD`` was committed inside the window (lib/fleet_activity.py). Two runs over unchanged checkouts on the same day write
 byte-identical files. ``--hash-paths`` without a salt draws one salt per run,
-so such a run joins within itself but is not byte-identical across runs.
+so such a run joins within itself but is not byte-identical across runs. Under a
+salt the output files name each repository by its hashed id (``lib/fleet_hashed.py``).
 
 Read only: every git call here and in the scan runs with
 ``GIT_OPTIONAL_LOCKS=0``, scans run with the scratch directory as their working
@@ -346,7 +347,8 @@ def run_signals(target: Target, scratch: Path, options: ScanOptions, log_suffix:
     except OSError:
         return SCAN_ERROR
     if done.returncode != 0:
-        write_stderr_tail(options.log_dir, target, done.stderr, log_suffix)
+        if options.hash_salt is None:  # free text can name the checkout: none under hashing (#909)
+            write_stderr_tail(options.log_dir, target, done.stderr, log_suffix)
         return f"scan_exit_{done.returncode}"
     document = _load_document(out)
     out.unlink(missing_ok=True)

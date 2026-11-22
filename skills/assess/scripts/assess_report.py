@@ -11,7 +11,9 @@ It renders:
 - a metrics dashboard (complexity profile, churn window, total LOC),
 - the top-hotspots table,
 - the keyhole-readiness summary + the six cross-layer findings, and
-- the regression deltas (graduated / new / regressed / restructured / persistent).
+- the regression deltas (graduated / new / regressed / restructured / persistent), and
+- "How this was measured": the scans that ran and were skipped, with the catalog link
+  (``lib/measured_appendix.py``, #794).
 
 It deliberately does NOT reproduce (these require LLM judgement and are written
 elsewhere by the orchestrator, see SKILL.md):
@@ -43,6 +45,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.headline import as_headline  # noqa: E402
+from lib.measured_appendix import measured_section  # noqa: E402
 
 # Caps on rows rendered so a pathological repo can't bloat the frozen report.
 # The structured arrays in run-context.json keep the full lists.
@@ -601,7 +604,11 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         structure_drift_section=_structure_drift_section(ctx, repo_name),
         diff_section=render_diff_section(ctx),
     )
-    return report.rstrip() + "\n"
+    # The scans this run measured, the ones it skipped and why, and the catalog link (#794).
+    # A full run runs every scan; one that left no block (structure_drift with no ownership
+    # map, or a degraded scan) ran but was not measured.
+    measured = measured_section([ctx], absent_code="no_block")
+    return f"{report.rstrip()}\n\n{measured}\n"
 
 
 def _structure_drift_section(ctx: dict[str, Any], repo_name: str) -> str:

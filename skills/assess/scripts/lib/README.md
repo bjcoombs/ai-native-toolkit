@@ -128,9 +128,12 @@ source, a real fleet run with the shipped maturity model (`report.md`, every dia
 map and the team next-steps pages), the in-repo diagram, trend, heat map and next-steps
 fixtures, and the /assess deterministic report with every cross-layer finding. It fails,
 naming the word, the output and the line, when one of these words appears in the prose as a
-whole word, case-insensitive. Fenced code, backticked spans and identifiers containing an
-underscore are not prose (`prose`), so machine field names, JSON keys, finding names and
-signal paths (`lying_map`, `instruction_claims.failed`, `fail_under`) stay unchanged.
+whole word, case-insensitive. Fenced code, backticked spans, URLs (bare, or a Markdown link
+target) and identifiers containing an underscore are not prose (`prose`), so machine field
+names, JSON keys, finding names, signal paths (`lying_map`, `instruction_claims.failed`,
+`fail_under`) and links into the toolkit repository stay unchanged. The retired label
+`AI-Native` matches, in any case, only as a whole token not followed by `-toolkit`, because
+`ai-native-toolkit` is the product's own name (#794).
 
 | Word | Say instead |
 |------|-------------|
@@ -1057,7 +1060,8 @@ A list entry repeating an earlier id is skipped with a note on stderr. `run_flee
 a raising scan as `scan_error` and sorts rows by `repo`; `write_rows` writes
 `repos.jsonl` atomically with sorted keys. Rows keep only the signals `scans` map and
 its schema version - no stamp field, path or timing - so reruns are byte-identical.
-`run_salt` draws one salt per run for `--hash-paths`. `run_fleet`'s optional `after`
+`run_salt` draws one salt per run for `--hash-paths`; under a salt a failed scan's
+stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
 `fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
@@ -1177,6 +1181,22 @@ CODEOWNERS file in `.github/`, `.gitlab/`, the root or `docs/`, skipping GitLab 
 headers. `collect_facts` reads every target with a worker pool; a checkout that cannot be
 read gives no URL and no owners.
 
+**`fleet_hashed.py`**
+Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
+(#909). `public_rows` hashes each row's `repo` and `group` with `counts_only.hash_value`
+under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
+`settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
+hashed id set the history entry is chosen and compared by. The ids equal the
+`fleet-data.json` repository keys, so every file joins on them. The scan, the coverage
+reconcile, the group roll-up (the settings join) and `build_fleet_data` keep the real ids.
+Without a salt every function is the identity, so default counts-only output is
+unchanged. `fleet_next_steps.page_path` writes a hashed group as `teams/h-<hex>.md` and
+`group_scopes` rejoins `--settings` through the recorded `settings_scope` under the run's
+salt; `fleet_achievements_runs` passes over a re-score of an entry whose hashed ids share
+none with this run (another salt). Tests:
+`tests/test_fleet_hashed.py` (every file under `--out`, SVGs and team pages included,
+holds no repository id; the joins; fixed-salt reruns are byte-identical).
+
 **`fleet_data.py`**
 `fleet-data.json`, the versioned bundle the fleet artifact reads (#703, `FLEET_DATA_VERSION`;
 #704 and #705 build on it). `build_fleet_data` joins the run stamp, the maturity model rows,
@@ -1188,7 +1208,9 @@ per team row, `measured` of `repos` and `lowest_level`, the lowest known level b
 repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.jsonl`.
 `Privacy` applies `counts_only_rules.FLEET_DATA_RULES`: full keeps all; counts-only drops
 names and owners and writes a non-token value as `set`; with a salt every unit and
-repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
+repository key is `counts_only.hash_value`d and no name, owner or web URL is written;
+`Privacy.key` keeps an id that is already hashed (`counts_only.is_hashed`), so the re-score
+joins a stored `repos.jsonl` row hashed at the output boundary (#909).
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
 Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
 without a model).
@@ -1263,8 +1285,10 @@ Re-scores a stored run under the current maturity model and builds the Recount (
 cells from `fleet_data.repo_cells` (values through `Privacy().value`) and each unit's row
 roll-ups (`row_roll_up`) over the stored placements (a version 1 entry's `mean_share` and
 `overall` are dropped, #772); None when a stored key does not join under the run's key
-function. `SIGNAL_ALIASES` (old path to new, pure renames only, empty until #783) is
-applied to the scans first (`aliased`). `recount` lists every (repository, team row) whose
+function. `SIGNAL_ALIASES` (old path to new, pure renames only: #783's
+`ci_checks.test_or_lint_runs` to `ci_checks.test_or_lint_configured` and
+`coverage_gate.enforced` to `coverage_gate.configured`) is applied to the scans first
+(`aliased`). `recount` lists every (repository, team row) whose
 stored and re-scored cells differ, each attributed to the rules (`direction` `down`, `up`,
 `now_measured`, `not_measured`) with a one-template `text`; display-only, never replayed.
 `rule_unknowns` names the cells the re-score made unknown (stored known, a new row, or now unknown on another signal), which the replay keeps neutral
@@ -1413,7 +1437,8 @@ is the trend's runs (`fleet_trends`), `None` when the run is not kept in the his
 `fleet_coverage.coverage_line` paragraph when given, then the
 `fleet_credit` section when given, then the `fleet_opportunities_section` section when
 given, then embeds each with a relative clickable image link or says
-why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
+why it is not drawn, then the `measured_appendix` section when given (`fleet.py` passes it,
+built from the ok rows' `scans`). `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
 report heading and question to `HEADINGS` (one source for a drawn, skipped or failed diagram,
@@ -2035,6 +2060,50 @@ Structured validation findings ported from meridianhub/meridian
 target's length, case-insensitive). Tests: `tests/test_check_manifest_loader.py`, with
 Meridian's distance and closest-match tables.
 
+### Measures catalog
+
+**`catalog.py`** *(#789 step 2, #794)*
+`build_catalog(manifest=None, model=None)` joins the check manifest (`checks/core.toml`), the
+default maturity model and `level_signals.INPUT_GRADES` into one `Catalog` (`CATALOG_VERSION`
+1); `render_json` writes it as `skills/assess/references/measures.json`. Keys: `grades` (each
+grade, its input classes and whether it `counts`: `measured` and `verified` do), `rows` (each
+row's levels and criteria with the condition `key`, plain-words `text`, `title` and `fix` from
+the manifest, `input_class`, `grade`, `counts`), `scans` (one per `signals.known_scans()` name:
+`collector`, `reads`, `network`, `platform`, `headless` (`registered`, `headless_variant`,
+`unregistered` or `platform_only`), `privacy` (`written`, `strings_kept`: the collector's
+counts-only patterns, split by block for a spread collector), `used_by` (`rows`, `conditions`,
+`findings`), `unknown_reasons` (the generic `not_registered`, `network` or `platform_only`
+reason plus the manifest's declared ones), `evidence` per signal and `grades`), `collectors`
+(every `scan_registry.SCANS` entry), `signals` and `findings`. A scan no criterion reads is
+graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
+every relation a named key, so later fields (the #843 truth tags, #870) are added keys. No date,
+commit or version string is read, so a version-only bump of the model leaves it unchanged.
+
+**`catalog_md.py`**
+`render_markdown(catalog)`: `docs/what-we-measure.md`, with the grading table, each row's
+conditions in plain words, each scan, the findings and the registry, linking `measures.json`
+relatively.
+
+**Generator and staleness test.** `scripts/gen_catalog.py` (`make catalog` from the repository
+root) writes both files; `--check` writes nothing and exits 1 naming a stale one.
+`tests/test_catalog.py::test_committed_catalog_is_current` fails when a committed copy differs,
+so a PR that changes `core.toml`, `default.toml` or `level_signals.py` regenerates the catalog.
+`make check` runs it through `test-assess`.
+
+**`measured_appendix.py`**
+`measured_section(documents, names=None, absent=...)`: the "How this was measured" section. One
+`{block: block}` mapping per repository (a fleet row's `scans`, or a run-context); for each
+known scan, **Ran** when its block exists without a `not_registered` or `network` reason in at
+least one repository (with "not measured in k of n" and the reason codes where the block is
+unavailable), else **Skipped** with why (full `/assess` only, needs the network with or without
+a `--platform` remedy, platform only, or `absent`: "not selected by --scans" for a fleet,
+`assess_report.py` instead passes `absent_code="no_block"`: a full run runs every scan, so a
+missing block, such as `structure_drift` with no ownership map, is listed under Ran as not
+measured). Its first line starts `In place:`
+(`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
+measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+Tests: `tests/test_measured_appendix.py`.
+
 ### Configuration
 
 **`run_scope.py`**
@@ -2477,7 +2546,9 @@ returns the signal's class grade whatever the operator (the #789 grades design: 
 threshold or absence test lifts text to a counted grade). `is_declared(criterion)` is true for `config_only` and `declared`, the
 conditions #744 lists without counting. The module doc records the rulings (platform
 reads are their own class; instruction files stay declared but still gate Steps).
-`level_tally.py` reads it to count conditions; `levels.py` does not. `UNMEASURED_VALUES`
+`level_tally.py` reads it to count conditions; `levels.py` does not.
+`counts_toward_level(grade)` is that rule for a grade (`measured` and `verified` count;
+`lib/catalog.py` reads it). `UNMEASURED_VALUES`
 names the values that mean "could not be measured" with the tally's reason code
 (`test_pressure.mutation_run` false: `needs_full_run`; `promissory_markers.aging_reliable`
 false: `degenerate_history`). A new criterion signal needs its own `SIGNAL_INPUTS` line, and a removed one loses it (the table holds exactly the default signals).
@@ -3495,7 +3566,7 @@ the instruction file; Layer 3 level 1 reads `lint_runs`.
 selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
-unresolved_includes, includes[], test_or_lint_runs, basis, enforced_check_runs,
+unresolved_includes, includes[], test_or_lint_configured, basis, enforced_check_runs,
 enforced_basis, masked_check_commands, off_trigger_check_commands, lint_runs,
 lint_basis, unread_ci_files}`. Each line,
 with its `- ` / `run:` / `script:` lead and a trailing `\` dropped
@@ -3509,7 +3580,7 @@ a GitLab `script:` / `before_script:` / `after_script:` (#725: under `needs:` or
 `matrix:` axis it is a value). `count_check_lines(lines, context=)` is the same count over a
 line list, reading parent keys from `context` (the original lines) when given. Triggers are
 not read. Known limit: lines are read without a YAML parser, so a command inside a
-non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_runs` is true with any check
+non-script value (an `env:` block scalar holding `pytest`) counts as a run. `test_or_lint_configured` is true with any check
 line, own or included (`included_check_commands` counts the included ones); with none it
 is null (`basis: included_jobs`) when a CI file pulls jobs this run could not read
 (`shared_tooling.pulls_jobs_from_elsewhere`: a GitLab `include:` with any unresolved
@@ -3543,7 +3614,7 @@ off those triggers are `off_trigger_check_commands`, and an unsettled trigger re
 null with `enforced_basis: unknown_trigger`), else null under the
 same `included_jobs` rule, else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
-still describes `test_or_lint_runs`, which keeps its meaning.
+still describes `test_or_lint_configured`, which keeps its meaning.
 `lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
 and trigger rules, the same own, included and merged files, with
 `count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
@@ -3568,7 +3639,7 @@ CI systems the scan does not parse (issue #787): `unread_ci_files` counts the tr
 `azure-pipelines.yml`, `bitbucket-pipelines.yml`, `.travis.yml`,
 `.buildkite/pipeline.yml`, plus `azure-pipelines.yaml`, `.buildkite/pipeline.yaml` and a
 root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check line and no pending
-included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
+included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_configured` stays false),
 and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
 `enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
 beside it still reads null). With no lint line on ordinary triggers and no check target,
@@ -3948,7 +4019,7 @@ separately. Stdlib only, imports no orchestrator. Add fixtures + cases in
 
 **`coverage_gate.py`**
 Answers the Layer 6 question measurement cannot: is a line-coverage threshold
-*enforced*? `detect_coverage_gate(repo_root, scope, excludes)` runs from the scan
+*configured*? `detect_coverage_gate(repo_root, scope, excludes)` runs from the scan
 registry and walks config files (built-in and user excludes via
 `assess_config.is_user_excluded`, depth 4 below the walk base, so a monorepo
 package's own config counts). A scoped run walks the scope plus the root CI and
@@ -3958,7 +4029,7 @@ package; a package-level config outside the scope is dropped. A root CI gate is
 reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
-`coverage_gate` block (`CoverageGateBlock`): `{available, enforced, gates,
+`coverage_gate` block (`CoverageGateBlock`): `{available, configured, gates,
 max_threshold_percent, threshold_meets_minimum, unmeasured_reason, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
@@ -3988,7 +4059,8 @@ run time, which is not resolved). A templated value may also be Make's escaped
 `$$COV_MIN`. Jest, Vitest and nyc/c8 metrics are read inside
 the braced object the anchor opens or sits in, so one Jest project's threshold is
 never credited to another and a one-line `"c8": {...}` is counted once. Gates are
-typed by the `CoverageGate` TypedDict. `enforced` is true when
+typed by the `CoverageGate` TypedDict. `configured` (named `enforced` before #783: it
+reads configuration text, not a run) is true when
 any gate has a non-zero threshold, or a null one from nyc/c8 (which check at a
 built-in default) or a templated coverage.py / pytest-cov flag; `fail_under = 0` and a Jest/Vitest anchor whose threshold was
 not read are listed but gate nothing.
@@ -3999,7 +4071,7 @@ from `unit` alone by `threshold_percent()`: as written for `percent`, times 100 
 `ratio` (rounded to 6 places, so `0.55` is `55.0`), and null for `uncovered_count` or
 a null threshold. `threshold` and `unit` stay as written. `max_threshold_percent` is the
 highest non-null `threshold_percent` across all gates, null when none has one.
-`threshold_meets_minimum` reads only the gates `enforced` counts (`gates_something`),
+`threshold_meets_minimum` reads only the gates `configured` counts (`gates_something`),
 in this order: true when one has `threshold_percent >= MINIMUM_THRESHOLD_PERCENT` (50);
 null (not measured) when none does but one has a null `threshold_percent` (a templated
 value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
@@ -4017,7 +4089,7 @@ Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to
 null in `threshold_percent()`, so it reads unknown rather than credited.
-Nothing found is `enforced: false`, never inferred from a coverage report, and
+Nothing found is `configured: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
 other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool

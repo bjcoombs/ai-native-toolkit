@@ -31,7 +31,7 @@ module imports none of those modules (they import it), so the agreement checks l
 in the tests.
 
 Ids: a collector is ``<owner>.<scan key>`` (``core.ci_checks``), a signal
-``<owner>:<run-context path>`` (``core:ci_checks.test_or_lint_runs``), a condition
+``<owner>:<run-context path>`` (``core:ci_checks.enforced_check_runs``), a condition
 ``<owner>.cond.<name>`` (core uses ``<row>.<level>.<leaf>``), keyed by a unique
 ``<row>.<level>:<signal path>``, and a
 finding ``<owner>.finding.<name>``. Grades are never authored: a signal carries its

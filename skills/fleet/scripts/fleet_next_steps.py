@@ -8,7 +8,8 @@ and for an ``unknown`` row the signals that could not be measured. No rescan;
 the logic lives in ``skills/assess/scripts/lib/fleet_next_steps.py``.
 
 Pass the maturity model and settings the fleet run used: every page level is checked
-against ``groups.jsonl`` and a difference exits 2.
+against ``groups.jsonl`` and a difference exits 2. A run with ``--hash-salt`` hashed its
+group names (#909): pass the same ``--hash-salt`` with ``--settings`` to join them.
 
 Exit codes:
     0  pages written
@@ -16,7 +17,7 @@ Exit codes:
        invalid maturity model or settings, a maturity model or settings that differ from the run's)
 
 Run:
-    uv run fleet_next_steps.py OUT [--levels FILE] [--settings PATH]
+    uv run fleet_next_steps.py OUT [--levels FILE] [--settings PATH [--hash-salt VALUE]]
 """
 # /// script
 # requires-python = ">=3.11"
@@ -49,6 +50,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="The maturity model the fleet run used (default: the shipped default maturity model).")
     parser.add_argument("--settings", metavar="PATH",
                         help="The ghreport settings the fleet run used, if any.")
+    parser.add_argument("--hash-salt", metavar="VALUE",
+                        help="The --hash-salt the fleet run used: joins --settings to its hashed groups.")
     add_renamed_flag(parser)
     return parser.parse_args(argv)
 
@@ -61,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         maturity_model = load_levels(Path(args.levels), signal_path_validator())
         if args.settings is not None:
             settings = load_settings(Path(args.settings))
-        pages = build_pages(maturity_model, read_repos(out_dir), load_groups(out_dir), settings)
+        pages = build_pages(maturity_model, read_repos(out_dir), load_groups(out_dir), settings, args.hash_salt)
         written = write_pages(out_dir, pages)
     except (LevelsError, SettingsError, FleetViewError, NextStepsError) as e:
         print(f"error: {e}", file=sys.stderr)

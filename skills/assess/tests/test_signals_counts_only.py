@@ -136,7 +136,7 @@ def test_counts_only_scans_keeps_a_reason_on_every_unavailable_block() -> None:
 def test_counts_only_keeps_the_enforced_ci_check_fields() -> None:
     """Issue #775: Layer 5 level 1 reads enforced_check_runs, so counts-only output must keep both fields."""
     block = {"available": True, "ci_files": 1, "check_commands": 2, "included_files": 0,
-             "test_or_lint_runs": True, "basis": "check_command",
+             "test_or_lint_configured": True, "basis": "check_command",
              "enforced_check_runs": False, "enforced_basis": "not_enforced",
              "masked_check_commands": 1, "off_trigger_check_commands": 1}
     assert counts_only_scans({"ci_checks": block})["ci_checks"] == block
@@ -145,7 +145,7 @@ def test_counts_only_keeps_the_enforced_ci_check_fields() -> None:
 def test_counts_only_keeps_the_lint_run_fields() -> None:
     """Issue #782: Layer 3 level 1 reads lint_runs, so counts-only output must keep it and its basis."""
     block = {"available": True, "ci_files": 1, "check_commands": 1, "included_files": 0,
-             "test_or_lint_runs": True, "basis": "check_command",
+             "test_or_lint_configured": True, "basis": "check_command",
              "lint_runs": None, "lint_basis": "check_target"}
     assert counts_only_scans({"ci_checks": block})["ci_checks"] == block
 
@@ -153,10 +153,22 @@ def test_counts_only_keeps_the_lint_run_fields() -> None:
 def test_counts_only_keeps_the_unread_ci_system_fields() -> None:
     """Issue #787: the unread-system basis and file count survive counts-only output."""
     block = {"available": True, "ci_files": 0, "check_commands": 0, "included_files": 0,
-             "test_or_lint_runs": False, "basis": "unread_ci_system",
+             "test_or_lint_configured": False, "basis": "unread_ci_system",
              "enforced_check_runs": None, "enforced_basis": "unread_ci_system",
              "masked_check_commands": 0, "off_trigger_check_commands": 0, "unread_ci_files": 2}
     assert counts_only_scans({"ci_checks": block})["ci_checks"] == block
+
+
+def test_counts_only_keeps_the_config_only_fields_under_their_783_names() -> None:
+    """Issue #783: the renamed config-only booleans survive counts-only output, the old names never appear."""
+    ci = {"available": True, "ci_files": 1, "check_commands": 1, "included_files": 0,
+          "test_or_lint_configured": True, "basis": "check_command"}
+    gate = {"available": True, "configured": False, "gates": [], "max_threshold_percent": None,
+            "threshold_meets_minimum": False, "unmeasured_reason": None}
+    kept = counts_only_scans({"ci_checks": ci, "coverage_gate": gate})
+    assert kept["ci_checks"]["test_or_lint_configured"] is True
+    assert kept["coverage_gate"]["configured"] is False
+    assert "test_or_lint_runs" not in kept["ci_checks"] and "enforced" not in kept["coverage_gate"]
 
 
 def test_counts_only_keeps_the_guardrails_counts_and_drops_the_snippets() -> None:

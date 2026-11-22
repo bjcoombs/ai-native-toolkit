@@ -53,10 +53,16 @@ new signal has to be classified on purpose; ``input_class`` raises
   ``merge_group`` event, a GitLab job no ``when: manual``, ``only:`` or
   ``rules:`` keeps off ordinary pipelines); triggers it cannot settle read
   null. ``ci_checks.lint_runs`` (#782) reads lint lines under the same
-  rules, so it has the class too. ``ci_checks.test_or_lint_runs`` reads
+  rules, so it has the class too. ``ci_checks.test_or_lint_configured`` reads
   neither and would be ``head_text``.
 - ``platform``: read from the GitHub or GitLab API (``review_reality``,
   ``agent_environment.ci_duration``). Grade ``verified``.
+
+Config-only names (#783). A signal read from configuration text says so in its name,
+never that something ran or was enforced: ``ci_checks.test_or_lint_configured`` (was
+``test_or_lint_runs``) and ``coverage_gate.configured`` (was ``enforced``). Both are pure
+renames, so ``lib.fleet_rescore.SIGNAL_ALIASES`` reads a stored scan's old path under the
+new name; a maturity model naming an old path fails at load, since both blocks are typed.
 
 ``criterion_grade`` grades one criterion: the grade of its signal's input
 class, whatever the operator. Per the #789 grades design, the grade comes from
@@ -212,6 +218,12 @@ def input_class(signal: str) -> InputClass:
 def criterion_grade(criterion: Criterion) -> Grade:
     """The confidence grade of one criterion: its signal's input-class grade, whatever the op."""
     return INPUT_GRADES[input_class(criterion["signal"])]
+
+
+def counts_toward_level(grade: str) -> bool:
+    """True when a condition at ``grade`` counts toward a level (``measured``, ``verified``);
+    ``config_only`` and ``declared`` are listed, not counted, and any other value never counts."""
+    return grade in INPUT_GRADES.values() and grade not in LISTED_GRADES
 
 
 def is_declared(criterion: Criterion) -> bool:
