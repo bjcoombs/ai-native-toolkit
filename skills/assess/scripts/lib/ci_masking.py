@@ -38,9 +38,13 @@ parser (the core has no YAML dependency). Only literal values count.
   as ``python -c "..."``), masks the statements before it that ran with errexit
   off, unless the statement or one between it and the ``exit 0`` re-raises a
   status (``pytest || exit 1; exit 0`` keeps ``pytest``). Errexit is off after
-  ``set +e``, under ``shell: pwsh`` / ``powershell`` / ``cmd`` / ``python``, a custom
-  ``shell:`` command without ``-e`` (``bash {0}``), or on a Windows ``runs-on``
-  with no ``shell:`` (``pwsh`` is the default there); the step's ``shell:``, then
+  ``set +e``, under ``shell: pwsh`` / ``powershell`` / ``cmd`` / ``python`` (named,
+  or as the first word of a custom command such as ``powershell -NoProfile -File
+  {0}``), a custom ``bash`` / ``sh`` / ``dash`` / ``zsh`` command without ``-e``
+  (``bash {0}``), or on a Windows ``runs-on`` with no ``shell:`` (``pwsh`` is the
+  default there). Nesting is read with bash grammar only in a bash or sh body; in
+  a pwsh, powershell, cmd or python body any ``exit 0`` statement after a check
+  masks it; the step's ``shell:``, then
   the job's and the workflow's ``defaults.run.shell`` are read (``run_errexit``).
   GitHub's default ``bash -e`` and ``sh -e`` stop at the failing check before
   ``exit 0``, so ``pytest; exit 0`` there is enforced. GitLab checks each
@@ -69,6 +73,7 @@ its status, but any trailing line would hide it.
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath
 from dataclasses import dataclass
 
 from lib.command_index import ci_line_text
@@ -85,8 +90,8 @@ _NEVER = re.compile(r"""^(["']?)(?:false|\$\{\{\s*false\s*\}\})\1$""", re.IGNORE
 # ``golangci-lint run --issues-exit-code=0``): the check runs but cannot fail.
 _EXIT_ZERO_FLAG = re.compile(r"(?:^|\s)(?:--exit-zero|--issues-exit-code(?:=|\s+)0)(?=\s|$)")
 # Shell words that open and close a compound command, read at the start of a segment.
-_OPENERS = frozenset({"if", "while", "until", "for", "case", "select", "{", "("})
-_CLOSERS = frozenset({"fi", "done", "esac", "}", ")"})
+_OPENERS = frozenset({"if", "while", "until", "for", "case", "select"})
+_CLOSERS = frozenset({"fi", "done", "esac"})
 _PREFIXES = frozenset({"then", "do", "else", "!"})
 _EXIT_NONZERO = re.compile(r"\bexit\s+(?:[1-9]\d*|\"?\$\{?\w+\}?\"?)")
 # A status re-raised: ``exit`` / ``return`` with a non-zero literal, a variable or ``$?``
@@ -373,22 +378,33 @@ def _drop_exit_zero(statement: list[tuple[str, str]]) -> list[tuple[str, str]]:
 
 
 def _depths(statements: list[list[tuple[str, str]]]) -> list[int]:
-    """Per statement of one script body: how many compound commands (``if``, loops,
-    ``case``, ``{ }``) it sits in, read from the first word of each segment."""
-    depth = 0
+    """Per statement of one bash or sh body: how many compound commands it sits in.
+
+    ``if`` / loops / ``case`` open on their first word and ``fi`` / ``done`` / ``esac``
+    close; ``{ }`` and ``( )`` are counted across the whole segment, so a group that
+    closes on the same line (``{ echo; }``, ``( cd sub && make build )``) nets to zero.
+    Inside ``case`` a pattern's ``)`` is not counted.
+    """
+    stack: list[str] = []
     out: list[int] = []
     for statement in statements:
-        out.append(depth)
+        out.append(len(stack))
         for _, seg in statement:
             words = seg.split()
             while words and words[0] in _PREFIXES:
                 words = words[1:]
-            if not words:
-                continue
-            if words[0] in _CLOSERS:
-                depth = max(depth - 1, 0)
-            elif words[0] in _OPENERS or words[-1] == "{":
-                depth += 1
+            if words and words[0] in _CLOSERS and stack:
+                stack.pop()
+            elif words and words[0] in _OPENERS:
+                stack.append(words[0])
+            delta = seg.count("{") - seg.count("}")
+            if not stack or stack[-1] != "case":
+                delta += seg.count("(") - seg.count(")")
+            for _ in range(delta):
+                stack.append("{")
+            for _ in range(-delta):   # a group closes only a group frame, never a keyword's
+                if stack and stack[-1] == "{":
+                    stack.pop()
     return out
 
 
@@ -401,24 +417,32 @@ def _exit_zero(statement: list[tuple[str, str]]) -> bool:
 # Shells GitHub Actions runs without errexit: ``pwsh`` / ``powershell`` (a Windows runner's
 # default), ``cmd`` and ``python``. ``bash`` and ``sh`` run with ``-e``.
 _NO_ERREXIT_SHELLS = frozenset({"pwsh", "powershell", "cmd", "python"})
+_POSIX_SHELLS = frozenset({"bash", "sh", "dash", "zsh"})
 _ERREXIT_FLAG = re.compile(r"(?:^|\s)(?:-[a-zA-Z]*e[a-zA-Z]*|-o\s+errexit)(?=\s|$)")
 _HEREDOC = re.compile(r"(?<!<)<<-?\s*(['\"]?)([A-Za-z_]\w*)\1")
 
 
-def _shell_errexit(shell: str | None, windows: bool) -> bool:
-    """Does a ``run:`` body start with errexit on? ``shell`` is the step's, job's or
+def _shell_errexit(shell: str | None, windows: bool) -> tuple[bool, bool]:
+    """``(errexit, bash grammar)`` for a ``run:`` body. ``shell`` is the step's, job's or
     workflow's ``shell:`` value, None when none is set.
 
-    Unset: on, unless ``runs-on`` names Windows (default ``pwsh``). ``bash`` / ``sh``: on.
-    A named shell in ``_NO_ERREXIT_SHELLS``: off. A custom command (``bash {0}``): on only
-    with ``-e`` or ``-o errexit``. An expression or an unknown name: on (not read).
+    Unset: bash with errexit, unless ``runs-on`` names Windows (default ``pwsh``).
+    ``bash`` / ``sh``: errexit. A shell in ``_NO_ERREXIT_SHELLS``, named or as the first
+    word of a custom command (``powershell -NoProfile -File {0}``, a path and ``.exe``
+    stripped): no errexit and not bash grammar. A custom ``bash`` / ``sh`` / ``dash`` /
+    ``zsh`` command: errexit only with ``-e`` or ``-o errexit`` (``bash {0}`` has none).
+    An expression or another program: errexit (not read).
     """
     if shell is None:
-        return not windows
+        return (False, False) if windows else (True, True)
     value = shell.strip().strip("'\"")
-    if "{0}" in value:
-        return _ERREXIT_FLAG.search(value.replace("{0}", "")) is not None
-    return value.lower() not in _NO_ERREXIT_SHELLS
+    words = value.split()
+    head = PurePosixPath(words[0].replace("\\", "/")).name.lower().removesuffix(".exe") if words else ""
+    if head in _NO_ERREXIT_SHELLS:
+        return False, False
+    if "{0}" in value and head in _POSIX_SHELLS:
+        return _ERREXIT_FLAG.search(" ".join(words[1:]).replace("{0}", "")) is not None, True
+    return True, True
 
 
 def _child(tree: IndentTree, line: int, *path: str) -> int | None:
@@ -445,8 +469,8 @@ def _runs_on_windows(tree: IndentTree, job: int) -> bool:
     return "${{" not in text and "windows" in text
 
 
-def run_errexit(tree: IndentTree, body: int) -> bool:
-    """Whether the GitHub ``run:`` body at line ``body`` starts with errexit on (#919).
+def run_errexit(tree: IndentTree, body: int) -> tuple[bool, bool]:
+    """``(errexit, bash grammar)`` for the GitHub ``run:`` body at line ``body`` (#919).
 
     Reads the step's ``shell:``, then the job's and the workflow's ``defaults.run.shell``,
     then the job's ``runs-on`` (a Windows runner defaults to ``pwsh``).
@@ -499,18 +523,20 @@ def _not_code(texts: list[str]) -> list[bool]:
 
 
 def _masked_in_body(refs: list[tuple[int, int]], parsed: dict[int, list[list[tuple[str, str]]]],
-                    texts: dict[int, str], run_shell: bool | None) -> list[tuple[int, int]]:
+                    texts: dict[int, str], run_shell: tuple[bool, bool] | None) -> list[tuple[int, int]]:
     """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``.
 
     ``refs`` are ``(first line, statement index)`` in order. A re-raise (``exit 1``,
     ``exit $?``) after a statement un-masks it; for ``exit 0`` its own re-raise does too.
-    ``run_shell`` is whether a GitHub ``run:`` body starts with errexit on, None for any
-    other body: only a ``run:`` body read with errexit off (``set +e``, ``pwsh``, a Windows
+    ``run_shell`` is ``(errexit, bash grammar)`` for a GitHub ``run:`` body, None for any
+    other body. In a pwsh, powershell, cmd or python body nesting is not read, so any
+    ``exit 0`` statement after a check masks it. Otherwise only a ``run:`` body read with errexit off (``set +e``, ``pwsh``, a Windows
     runner, ``shell: bash {0}``) is masked by a later ``exit 0``. With errexit on the failing
     check stops the step first, and GitLab checks each ``script:`` item's status.
     """
     errexit = True
-    shell_errexit = True if run_shell is None else run_shell
+    shell_errexit = True if run_shell is None else run_shell[0]
+    bash = run_shell is None or run_shell[1]
     state: list[bool] = []
     off: list[bool] = []
     for first, k in refs:
@@ -520,7 +546,8 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: dict[int, list[list[tup
         off.append(run_shell is not None and not shell_errexit)
     data = dict(zip(texts, _not_code(list(texts.values())), strict=True))
     code = [not data.get(first, False) for first, _ in refs]
-    depths = _depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
+    depths = (_depths([parsed[first][k] if keep else [] for (first, k), keep in zip(refs, code)])
+              if bash else [0] * len(refs))
     out: list[tuple[int, int]] = []
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success

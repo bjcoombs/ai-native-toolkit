@@ -3694,11 +3694,13 @@ exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit
 `[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). Issue #919 adds
 three: a segment with an exit-zero flag (`--exit-zero`, `--issues-exit-code=0` or `0` as
 the next word) is masked on its own; in a GitHub `run:` body with errexit off (`set +e`,
-`shell: pwsh` / `powershell` / `cmd` / `python`, a custom `shell:` without `-e` such as
-`bash {0}`, or a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
+`shell: pwsh` / `powershell` / `cmd` / `python`, named or as a custom command's first
+word, a custom `bash` / `sh` / `dash` / `zsh` command without `-e` such as `bash {0}`, or
+a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
 step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
-statement (outside `if`, loops, `case`, `{ }`, heredocs and multi-line quotes; `_depths`,
-`_not_code`) masks the statements before it, unless one of them or a statement between
+statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
+grammar read only in a bash or sh body; `_depths`, `_not_code`) masks the statements
+before it, unless one of them or a statement between
 re-raises a status. The default `bash -e` stops at the failing check first, so
 `pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
 `exit 0` rule; a literal `if: false`,
