@@ -1806,11 +1806,12 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   under its blocks), `privacy` (its counts-only patterns and classes, from which
   `counts_only_rules.RULES` is generated; a pattern is classified by one collector only;
   `archived_finding_paths` sits with the private `keyhole` collector that produces it),
-  `unknown_reasons` (`code`, `carried_in` `reason` or `basis`, an optional `block` naming
-  the published block whose reason carries it, `means`, `next_step`; a trailing `<name>`
-  in a code stands for a family, as in `no_import_graph_<language>`),
-  `revision` (1 for every collector; bumped when a published value changes meaning,
-  #774) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
+  `unknown_reasons` (`code`, `carried_in` `reason`, `basis` or `unmeasured_reason`, an
+  optional `block` naming the published block whose reason carries it, `means`,
+  `next_step`; a trailing `<name>` in a code stands for a family, as in
+  `no_import_graph_<language>`),
+  `revision` (starts at 1; bumped when a published value changes meaning, #774, as
+  `ci_checks`, `review_automation` and `coverage_gate` have been) and an optional `evidence`. Collector `evidence` is left to #789 step 6; only
   signals carry it now.
 - `signal`: a leaf a default criterion reads, id `core:<path>`, with `path`, `type`
   (`bool` or `number` here), `collector` (the collector publishing its first segment),
@@ -3642,7 +3643,7 @@ reported for every scoped run whether or not its command targets the scope, so a
 scoped run appends `NOT_DETECTED_SCOPED` to `not_detected` naming that and the
 dropped root package configs. It emits the run-context
 `coverage_gate` block (`CoverageGateBlock`): `{available, enforced, gates,
-max_threshold_percent, threshold_meets_minimum, not_detected}`, each gate
+max_threshold_percent, threshold_meets_minimum, unmeasured_reason, not_detected}`, each gate
 `{file, line, tool, form, threshold, unit, threshold_percent, metric}`. Forms read: coverage.py
 `fail_under` in `[tool.coverage.report]` (`pyproject.toml`), `[report]`
 (`.coveragerc`) and `[coverage:report]` (`setup.cfg`, `tox.ini`); `--cov-fail-under`
@@ -3652,7 +3653,14 @@ composite actions, CircleCI, `.gitlab-ci.yml`, Jenkins, Azure, Travis, Bitbucket
 task-runner files; Jest `coverageThreshold` (config or
 `package.json`); Vitest `coverage.thresholds`; nyc/c8 `check-coverage` (rc file,
 `package.json`, or `--check-coverage --lines N`); JaCoCo `<minimum>` in a `pom.xml`
-and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo. The threshold is
+and `minimum =` in a `build.gradle(.kts)` that applies JaCoCo; go-test-coverage's
+`.testcoverage.yml` / `.testcoverage.yaml` (#788), one gate per `file:`, `package:` or
+`total:` key under `threshold:` (or in an inline `threshold: {total: 80}` map), with
+`metric` that key and `line` the line holding the value (read at the repo root on a
+scoped run too, like the root CI files); and `cargo tarpaulin
+--fail-under N` and `cargo llvm-cov --fail-under-lines N` in the CLI files (metric
+`lines`, anchored on the tool so a coverage.py `--fail-under` never reads as Rust, and a
+templated value still gates). The threshold is
 reported as written (`unit` `percent`, `ratio` for a JaCoCo `0.80`, or
 `uncovered_count` for a negative Jest value), never rescaled; a templated value
 (`--cov-fail-under=${{ env.COV_MIN }}`, `$COV_MIN`, `$(COV_MIN)`) is a gate with
@@ -3681,13 +3689,21 @@ null (not measured) when none does but one has a null `threshold_percent` (a tem
 value, an nyc/c8 default, a Jest uncovered-line count), because it could be 50 or more;
 false otherwise, including no counted gate. Measured coverage is never read: a report
 is a working-tree file, so the level would stop being a function of the commit.
-Adding a gate form (Go, Rust under #788): build the gate with `_gate` and the right
+Go and Rust (#788): when no gate at all is found and the walk holds a `go.mod` or a
+`Cargo.toml` (same depth and excludes; on a scoped run, in the scope or in any
+directory above it up to the repo root, as Go and Cargo resolve a module; one under a
+`testdata/` directory is a fixture and does not count), `threshold_meets_minimum` is null and `unmeasured_reason` is
+`go_rust_gate_form_not_read` (`GO_RUST_UNMEASURED`), because those ecosystems often gate
+in a script comparing `go tool cover -func` to a number, which is not read. Any gate
+found, even `fail_under = 0`, keeps the normal reading; `unmeasured_reason` is null then.
+The collector's manifest `revision` is 2 for this change of meaning.
+Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to
 null in `threshold_percent()`, so it reads unknown rather than credited.
 Nothing found is `enforced: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
-other CI systems, Codecov / Coveralls status targets, Kover, scoverage, tarpaulin, SimpleCov) so an empty
+other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; whether CI runs coverage is the Layer 5 read.
 Stdlib plus `lib.doc_graph.is_excluded_path` and `lib.assess_config.is_user_excluded`.

@@ -43,7 +43,7 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
 - the block's own reason code (``lib.counts_only.reason_code``, or the code a
   known reason sentence maps to, ``reason_token``), when a block on
   the path reports ``available: false``;
-- ``block_absent`` (the run has no such block), ``no_value`` (the signal is
+- ``block_absent`` (the run has no such block, or it is null), ``no_value`` (the signal is
   missing or null) or ``type_mismatch``.
 
 Every value is a count, a boolean, an id from the model or a reason code, so the
@@ -79,7 +79,9 @@ _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
     """The reason code for an unavailable signal (see the module doc)."""
-    if not isinstance(data, Mapping) or signal.split(".")[0] not in data:
+    # A null block reads as an absent one: an omitted spread key is null in the run
+    # context's entry and missing on a recount, and both must give the same code.
+    if not isinstance(data, Mapping) or data.get(signal.split(".")[0]) is None:
         return "block_absent"
     node: Any = data
     for part in signal.split("."):

@@ -197,7 +197,14 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
-            "read; false otherwise. Gates counted are those enforced counts."),
+            "read, or when no gate is found in a repository holding a go.mod or Cargo.toml "
+            "(see unmeasured_reason); false otherwise. Gates counted are those enforced "
+            "counts."),
+        "unmeasured_reason": _field(
+            {"type": ["string", "null"]},
+            "Why threshold_meets_minimum is null with no gate found: "
+            "go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml "
+            "and its gate may be a script this scan does not read; null otherwise."),
         "not_detected": _STRINGS,
     },
 }

@@ -141,6 +141,9 @@ def test_an_unknown_never_counts_and_is_listed_with_its_reason():
     assert blind["tally"] == {"met": 0, "measured": 0, "not_measured": 1}
     assert blind["not_measured"] == [{"id": "fresh.1", "reason": "shallow"}]
     assert lt.level_result(model, {})["not_measured"] == [{"id": "fresh.1", "reason": "block_absent"}]
+    # a null block (an omitted spread key in the run context's entry) reads the same
+    assert lt.level_result(model, {"doc_staleness": None})["not_measured"] == [
+        {"id": "fresh.1", "reason": "block_absent"}]
     nulled = lt.level_result(model, {"doc_staleness": {"available": True, "summary": {"stale_pct": None}}})
     assert nulled["not_measured"] == [{"id": "fresh.1", "reason": "no_value"}]
     wrong = lt.level_result(model, {"doc_staleness": {"summary": {"stale_pct": "x"}}})
@@ -366,5 +369,9 @@ def test_assess_gives_the_fleet_level_and_step_on_the_same_commit(estate, tmp_pa
     level = build_and_publish_run(repo_root=repo, run_date="2026-11-21", non_interactive=True)["level"]
     assert (level["tally"]["met"], level["step"], level["counted"], level["listed"]) == (
         fleet["tally"]["met"], fleet["step"], fleet["counted"], fleet["listed"])
-    on_disk = json.loads((assess / "run-context.json").read_text(encoding="utf-8"))["level"]
+    assert [n["id"] for n in level["not_measured"]] == [n["id"] for n in fleet["not_measured"]]
+    on_disk = json.loads((assess / "run-context.json").read_text(encoding="utf-8"))
+    # the --opt-in-mutation recount reads the stored run context: it agrees with the entry
+    assert lt.run_context_level(on_disk) == on_disk["level"]
+    on_disk = on_disk["level"]
     assert on_disk == level

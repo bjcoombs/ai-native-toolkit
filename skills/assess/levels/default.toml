@@ -153,8 +153,12 @@
 #   A gate whose percentage is not read (a templated --cov-fail-under, an
 #   nyc/c8 default, a Jest uncovered-line count) with none at 50 or more is
 #   unknown, never 0. Measured coverage is not read: a coverage report is a
-#   working-tree artifact, not part of the commit. Go and Rust gate forms are
-#   not read yet (#788), so such a repository is level 0. Level 2 reads
+#   working-tree artifact, not part of the commit. Go's go-test-coverage
+#   .testcoverage.yml, cargo tarpaulin --fail-under and cargo llvm-cov
+#   --fail-under-lines are read (#788). A repository holding a go.mod or a
+#   Cargo.toml with no gate found is unknown, never 0: its gate may be a script
+#   comparing go tool cover to a number, which the scan does not read
+#   (coverage_gate.unmeasured_reason go_rust_gate_form_not_read). Level 2 reads
 #   test_pressure.mutation_run, which a headless run does not build.
 # - Layer 8 counts the agent_ops booleans only; /assess also weighs evidence
 #   of repeated AI work cycles, which no scan measures.
