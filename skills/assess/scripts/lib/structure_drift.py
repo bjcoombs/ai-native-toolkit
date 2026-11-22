@@ -245,13 +245,9 @@ def _count_declared_and_matched(repo_root: Path) -> tuple[int, int, int]:
 
     Counts both sides' declarations: every CODEOWNERS glob, and every distinct
     architecture-doc path reference (per declaring boundary). ``matched`` is the
-    declarations whose resolution is non-empty. ``boundary`` counts the CODEOWNERS
-    globs and architecture-doc references ``is_boundary_pattern`` accepts: a
-    catch-all, an extension glob, or a path owning no module source (``/.github/``,
-    ``README.md``, ``docs/``, ``CONTRIBUTING.md``) leaves the code with one owner
-    (#785, #874).
-    Reuses the same parse/resolve path as the empty-set detectors so the two never
-    disagree on what "declared" means.
+    declarations whose resolution is non-empty; ``boundary`` those that
+    ``is_boundary_pattern`` accepts (#785, #874). Reuses the empty-set detectors'
+    parse/resolve path so the two never disagree on what "declared" means.
     """
     codeowners = parse_codeowners(repo_root)
     declared = len(codeowners)
@@ -284,8 +280,6 @@ def _declared_refs_in_doc(
     empties, so totals and the empty list are derived from the identical walk. The
     boundary name is irrelevant to a count, so sectioning here only flushes the
     buffer at each header rather than tracking the current boundary key.
-    ``boundary`` counts the matched references whose resolved set holds module
-    source, through the CODEOWNERS predicate ``is_boundary_pattern`` (#874).
     """
     body = _FENCE_RE.sub("\n", text)
     buffer: list[str] = []
