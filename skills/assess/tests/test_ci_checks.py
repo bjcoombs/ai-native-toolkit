@@ -546,9 +546,8 @@ _GH_MASKED = "on: [pull_request]\njobs:\n  t:\n    steps:\n      - run: pytest |
      (None, False, "unread_ci_system", "unread_ci_system", 3)),
     ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_PYTEST},
      (True, True, "check_command", "enforced_check", 1)),
-    # make deploy's recipe is not read, so it may run the tests (#920).
     ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_DEPLOY},
-     (None, False, "unread_ci_system", "check_target", 1)),
+     (None, False, "unread_ci_system", "unread_ci_system", 1)),
     # A masked check beside an unread system: the unread system may run it unmasked.
     ({"Jenkinsfile": "sh 'pytest'\n", ".github/workflows/ci.yml": _GH_MASKED},
      (None, True, "check_command", "unread_ci_system", 1)),

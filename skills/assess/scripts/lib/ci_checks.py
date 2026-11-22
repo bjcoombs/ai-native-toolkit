@@ -105,9 +105,9 @@ run on ordinary changes left out too (a ``workflow_dispatch``- or
   workflow or job whose triggers this reader cannot settle.
 - ``check_target`` (null): none does, but an unmasked line on ordinary changes
   runs a target whose recipe is not read (#920, ``check_command.may_check``):
-  ``make build``, ``task foo``, a bare ``make``, ``just foo``, ``hatch run foo``,
-  ``docker compose run app`` with the service's default command. A setup target
-  (``make install``, ``task deps``) is not one; masked or off-trigger, it reads false.
+  ``make foo``, ``task foo``, a bare ``make``, ``hatch run foo``, ``npm run foo``,
+  ``./scripts/foo.sh``, ``docker run img``. A setup-named one (``make install``,
+  ``npm run build``, ``./scripts/deploy.sh``) is not; masked or off-trigger, it reads false.
 - ``unread_ci_system`` (null): none does, and the tree holds a CI file of a
   system this scan does not read (#787). A masked or off-trigger check beside it
   still reads null: the unread system may run the check unmasked.
@@ -318,7 +318,7 @@ def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
 
 def _line_may_check(line: str, *, script_item: bool = True) -> bool:
     """One CI line whose target's recipe is not read, so it may run a check (#920):
-    ``make build``, ``task foo``, ``hatch run foo``, ``docker compose run app``."""
+    ``make foo``, ``npm run foo``, ``./scripts/foo.sh``, ``docker compose run app``."""
     bare_item = _BARE_ITEM.match(line) is not None
     return any(may_check(c.text) and not (bare_item and not script_item and _lone_check(c.text))
                for c in _line_commands(line))
@@ -340,7 +340,7 @@ def _lone_check(text: str) -> bool:
     """A test program or target runner with no argument (``pytest``, ``tox``, ``rspec``,
     ``make``): a value unless under ``script:``."""
     words = command_words(text)
-    return len(words) == 1 and words[0] in BARE_RUN_PROGRAMS
+    return len(words) == 1 and (words[0] in BARE_RUN_PROGRAMS or "/" in words[0])
 
 
 def _indent(line: str) -> int:

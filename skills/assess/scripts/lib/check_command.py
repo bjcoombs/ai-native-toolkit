@@ -127,8 +127,8 @@ def is_check_command(text: str) -> bool:
 
 
 def may_check(text: str) -> bool:
-    """A target whose recipe is not read, so it may run a check (#920): ``make build``,
-    ``task foo``, a bare ``make``, ``hatch run foo``, ``docker compose run app``."""
+    """A target whose recipe is not read, so it may run a check (#920): ``make foo``,
+    ``task foo``, a bare ``make``, ``npm run foo``, ``./scripts/foo.sh``, ``docker run img``."""
     return check_verdict(text) is None
 
 
@@ -336,6 +336,17 @@ _TEST_ONLY_SUBCOMMANDS = TEST_SUBCOMMANDS - {"bazel", "bazelisk"}
 TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "turbo", "nx"})
 SETUP_TARGETS = frozenset({
     "install", "deps", "dependencies", "setup", "bootstrap", "clean", "help", "init",
+    "build", "compile", "deploy", "release", "publish", "docs", "format", "fmt", "prepare",
+    "start", "serve", "dev", "watch", "configure", "generate", "codegen", "package", "dist",
+})
+# Programs a container may run that are known not to be a check (``docker run img echo hi``).
+_PLAIN_PROGRAMS = frozenset({"echo", "true", "printf", "cat", "ls", "env", "sleep", "exit"})
+_DOCKER_RUN_FLAGS = frozenset({
+    "-e", "--env", "--env-file", "-v", "--volume", "--mount", "-w", "--workdir", "--name",
+    "-u", "--user", "-p", "--publish", "--network", "--net", "--entrypoint", "-l", "--label",
+    "--platform", "--cpus", "-m", "--memory", "--add-host", "--device", "--gpus", "--cap-add",
+    "--hostname", "-h", "--ipc", "--pull", "--restart", "--shm-size", "--ulimit",
+    "--security-opt", "--tmpfs", "--volumes-from", "--cidfile", "--log-driver", "--log-opt",
 })
 # A program named alone as a bare YAML list item (``- rspec``, ``- make`` under ``needs:``)
 # is a value unless its parent key is a script key (``lib.ci_checks._lone_check``).
@@ -367,6 +378,9 @@ def _outer_wrapper(words: list[str]) -> list[str] | None:
             return None
         rest = _drop_leading_flags(words[words.index("exec") + 1:])
         return rest or None
+    if words[:2] == ["docker", "run"]:   # docker run [flags] image [command]
+        rest = _drop_leading_flags(words[2:], _DOCKER_RUN_FLAGS)
+        return rest[1:]
     if words[0] != "docker-compose":
         return None
     pos = _positionals(words[1:], _COMPOSE_FLAGS)
@@ -407,13 +421,52 @@ def _targets(head: str, args: list[str]) -> list[str]:
     return pos
 
 
+def _setup_name(name: str) -> bool:
+    """A target, script or file named for setup or a build (``install``, ``build:prod``,
+    ``scripts/deploy.sh``): its first word is in ``SETUP_TARGETS``."""
+    stem = PurePosixPath(name).name.lower().removesuffix(".sh")
+    return re.split(r"[:_.-]", stem)[0] in SETUP_TARGETS
+
+
 def _target_verdict(targets: list[str], *, rake: bool = False) -> bool | None:
     """True for a check-named target, False when every target is a setup one, else None."""
     if any(is_check_name(t) or (rake and t in ("spec", "specs")) for t in targets):
         return True
-    if targets and all(t in SETUP_TARGETS for t in targets):
+    if targets and all(_setup_name(t) for t in targets):
         return False
     return None
+
+
+def _js_script_verdict(head: str, words: list[str]) -> bool | None:
+    """A package script whose recipe is not read (``npm run foo``, ``pnpm foo``, ``yarn foo``):
+    an install or exec form is not one, a setup-named script is false, any other is None."""
+    pos = _positionals(words[1:])
+    if not pos:
+        return False   # bare yarn installs; bare npm run lists the scripts
+    if pos[0] in ("run", "run-script"):
+        return _target_verdict(pos[1:2]) if len(pos) > 1 else False
+    if head == "npm" or pos[0] in _PM_INSTALL or (head == "bun" and pos[0] == "ci"):
+        return False
+    rest = words[words.index(pos[0]):]   # pnpm turbo run test: a bin of the package
+    return True if _check_verdict(rest) is True else _target_verdict(pos[:1])
+
+
+def _script_verdict(words: list[str]) -> bool | None:
+    """A committed script whose body is not read (``./scripts/foo.sh``, ``bash ci/x.sh``)."""
+    head = words[0]
+    path = head
+    if head in ("bash", "sh", "zsh"):
+        if any(w.startswith("-") and "c" in w[1:] for w in words[1:]):
+            return False   # bash -c '...': the program is a string, read elsewhere
+        pos = _positionals(words[1:])
+        if not pos:
+            return False
+        path = pos[0]
+    elif head in RUNNERS:
+        return False   # ./gradlew, ./mvnw: modelled runners
+    if path.startswith(("/", "$", "~")) or ("/" not in path and not path.endswith(".sh")):
+        return False
+    return _target_verdict([path])
 
 
 def _check_verdict(words: list[str]) -> bool | None:
@@ -428,12 +481,17 @@ def _check_verdict(words: list[str]) -> bool | None:
         if not hatch or _check_verdict(hatch) is True or is_check_name(hatch[0]):
             return bool(hatch)
         return None
+    container = words[0] in ("docker", "docker-compose")
     compose = _outer_wrapper(words)
-    if compose == []:   # docker compose run app: the service's default command is not read
+    if compose == [] and container:   # the image's or service's default command is not read
         return None
     program = _wrapped(words)
     if program is not None:
-        return _check_verdict(program)
+        verdict = _check_verdict(program)
+        if container and verdict is False and program[0] not in _PLAIN_PROGRAMS | frozenset(
+                RUNNERS) | TARGET_RUNNERS | TEST_SUBCOMMANDS:
+            return None   # docker run img some-tool: a program this scan does not know
+        return verdict
     pos = _positionals(words[1:])
     if head == "deno" and pos[:1] == ["task"]:
         return _target_verdict(pos[1:2])
@@ -443,7 +501,9 @@ def _check_verdict(words: list[str]) -> bool | None:
         if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
             return False
         return _target_verdict(_targets(head, words[1:]), rake=head == "rake")
-    return False
+    if head in ("npm", "pnpm", "yarn", "bun"):
+        return _js_script_verdict(head, words)
+    return _script_verdict(words)
 
 
 def check_verdict(text: str) -> bool | None:

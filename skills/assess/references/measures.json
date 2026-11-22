@@ -1296,7 +1296,7 @@
         },
         {
           "code": "check_target",
-          "means": "No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make build, task foo or hatch run foo for a check.",
+          "means": "No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check.",
           "next_step": "Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.",
           "carried_in": "basis"
         },

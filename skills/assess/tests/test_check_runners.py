@@ -27,6 +27,7 @@ _ISSUE_RUNNERS = [
     "docker compose exec app pytest", "bundle exec rake spec", "nx run app:test",
     "npx nx run-many --target=lint,test", "turbo test", "deno task test", "uv run make test",
     "make -C sub VAR=1 test", "hatch run pytest", "vitest run", "rspec",
+    "docker run --rm -v src:/src img pytest", "pnpm turbo run test",
 ])
 def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
     assert check_verdict(text) is True
@@ -34,9 +35,12 @@ def test_a_test_runner_or_wrapped_test_is_a_check(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", [
-    "make foo", "task foo", "make", "task", "make build", "make deploy", "just foo", "turbo run build",
-    "npx nx affected -t build", "hatch run foo", "bundle exec rake", "uv run make foo",
+    "make foo", "task foo", "make", "task", "just foo", "turbo run e2e",
+    "npx nx affected -t e2e", "hatch run foo", "bundle exec rake", "uv run make foo",
     "docker compose run app", "deno task foo",
+    # Package scripts, committed scripts and containers whose body is not read (#920).
+    "npm run foo", "pnpm run foo", "pnpm foo", "yarn foo", "./scripts/foo.sh",
+    "bash scripts/foo.sh", "scripts/foo", "docker run img", "docker run --rm img foo",
 ])
 def test_an_unrecognised_target_reads_null(text: str) -> None:
     """The recipe is not read, so the target may run a check: unknown, never false."""
@@ -46,8 +50,12 @@ def test_an_unrecognised_target_reads_null(text: str) -> None:
 
 @pytest.mark.parametrize("text", [
     "dotnet build", "swift build", "mix compile", "bazel build //...", "make install",
-    "task deps", "make clean install", "bundle install", "npm ci", "uv sync --extra test",
-    "npm run build", "go build ./...", "docker compose build", "docker compose up -d", "npx",
+    "task deps", "make clean install", "bundle install", "make build", "make deploy",
+    "make format", "turbo run build", "npm run build", "npm run build:prod", "pnpm build",
+    "yarn install", "yarn", "npm run", "./scripts/install.sh", "./scripts/deploy.sh",
+    "./configure", "./gradlew assemble", "docker run img echo hi", "docker build .",
+    "bash -c 'foo'", "/usr/bin/foo", "npm ci", "uv sync --extra test",
+    "go build ./...", "docker compose build", "docker compose up -d", "npx",
     "pnpm exec", "hatch run", "make --version", "just --list", "task --list", "rake -T",
 ])
 def test_setup_and_build_commands_are_not_checks(text: str) -> None:
@@ -106,13 +114,17 @@ def test_each_listed_runner_reads_true_in_ci(tmp_path: Path, run: str) -> None:
 
 
 @pytest.mark.parametrize("run", ["make foo", "task foo", "make", "hatch run foo",
-                                 "docker compose run app"])
+                                 "docker compose run app", "npm run foo", "yarn foo",
+                                 "./scripts/foo.sh", "docker run img"])
 def test_an_unrecognised_target_in_ci_reads_check_target(tmp_path: Path, run: str) -> None:
     assert _scan(tmp_path, _gha(run)) == (None, "check_target")
 
 
 @pytest.mark.parametrize(("files", "expected"), [
     (_gha("make install"), (False, "no_check_command")),
+    (_gha("npm ci", "npm run build", "./scripts/deploy.sh"), (False, "no_check_command")),
+    ({".gitlab-ci.yml": "build:\n  cache:\n    paths:\n      - ./node_modules\n  script:\n    - echo hi\n"},
+     (False, "no_check_command")),
     (_gha("make foo || true"), (False, "no_check_command")),
     (_gha("make foo", on="workflow_dispatch"), (False, "no_check_command")),
     (_gha("pytest || true", "make foo"), (None, "check_target")),

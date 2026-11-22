@@ -3546,8 +3546,13 @@ runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`
 `npx`, `pnpm exec`, `hatch run`), in `is_lint_command`, `is_lint_run` and `may_lint`
 too. None (`may_check(text)`) for a target whose recipe is not read: any other target
 of a target runner, its default target (a bare `make`), a `hatch run` script that is not
-check-named, and `docker compose run app` with the service's default command.
-`SETUP_TARGETS` (`install`, `deps`, `clean`, `deploy`, `release`, ...) stay false.
+check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
+(`./scripts/foo.sh`, `bash ci/foo.sh`), and a container's default command or unknown
+program (`docker compose run app`, `docker run img`, `docker run img some-tool`).
+Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
+`format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
+absolute paths and a container running a plain program (`echo`) or a modelled runner.
+A target runner asked for `--version` or its list (`task --list`, `rake -T`) is false.
 `may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
 `bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
 lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
