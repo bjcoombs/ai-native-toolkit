@@ -375,3 +375,14 @@ def test_assess_gives_the_fleet_level_and_step_on_the_same_commit(estate, tmp_pa
     assert lt.run_context_level(on_disk) == on_disk["level"]
     on_disk = on_disk["level"]
     assert on_disk == level
+
+
+@pytest.mark.parametrize("lint_runs", [False, None])
+def test_layer_three_suppressions_earn_no_tally_credit_without_a_linter(lint_runs: bool | None) -> None:
+    """Issue #782: layer-3-linters.2 requires a linter run in CI (layer-3-linters.1)."""
+    signals = {"ci_checks": {"lint_runs": lint_runs},
+               "promissory_markers": {"aging_reliable": True, "families": {"suppression": {"stale": 0}}}}
+    state, reason = _state(lt.level_result(load_default_levels(), signals), "layer-3-linters.2")
+    assert state != "met" and reason == "requires:layer-3-linters.1"
+    linted = {**signals, "ci_checks": {"lint_runs": True}}
+    assert _state(lt.level_result(load_default_levels(), linted), "layer-3-linters.2") == ("met", None)

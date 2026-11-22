@@ -67,7 +67,9 @@
 #   no lint line shows, since recipes are not read; a direct test run
 #   (pytest, go test, cargo test) is not a linter. No CI file, or CI with no
 #   lint line, is level 0, whatever the suppression comments say: a
-#   suppression only caps the row, never grants it. Level 2 holds the stale
+#   suppression only caps the row, never grants it, and the level 2
+#   condition requires layer-3-linters.1, so the tally never credits
+#   suppressions with no linter running. Level 2 holds the stale
 #   bare suppressions to 10 or fewer, the erosion cap /assess applies. The
 #   promissory_markers scan lists a family only when it found a marker, so a
 #   repository with no suppressions is unknown at level 2, not 0. A
@@ -260,6 +262,7 @@ aggregation = "min"
     { signal = "promissory_markers.families.suppression.stale", op = "lte", value = 10 },
     { signal = "promissory_markers.aging_reliable", op = "eq", value = true },
   ]
+  requires = ["layer-3-linters.1"]
 
 [[rows]]
 id = "layer-4-architecture"
