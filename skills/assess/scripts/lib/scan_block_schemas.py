@@ -103,7 +103,8 @@ CI_CHECKS: JsonDict = {
         "level 1); a check target or script that may run a linter inside it reads null. "
         "Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and "
         "Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no "
-        "readable check one makes basis unread_ci_system and enforced_check_runs null."),
+        "readable check one makes basis unread_ci_system and enforced_check_runs null (and "
+        "lint_runs null with no readable lint line)."),
     "properties": {
         "available": {"type": "boolean"},
         "reason": _field({"type": "string"}, "Why the block is unavailable."),
@@ -182,9 +183,11 @@ CI_CHECKS: JsonDict = {
             "hold one, else false."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "check_target", "not_enforced", "no_lint_command", "no_ci"]},
+                      "check_target", "unread_ci_system", "not_enforced", "no_lint_command",
+                      "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger or check_target (null), not_enforced, no_lint_command or no_ci "
+            "unknown_trigger, check_target or unread_ci_system (null), not_enforced, no_lint_command "
+            "or no_ci "
             "(false)."),
         "unread_ci_files": _field(
             _INT, "Tracked root CI files of systems the scan does not parse (Jenkinsfile, "

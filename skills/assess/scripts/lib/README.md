@@ -3395,7 +3395,9 @@ root `buildkite.yml` / `buildkite.yaml`). With no own, included or merged check 
 included jobs, one makes `basis` `unread_ci_system` (`test_or_lint_runs` stays false),
 and with no enforced check and no `included_jobs` / `unknown_trigger` case, it makes
 `enforced_check_runs` null with `enforced_basis: unread_ci_system` (a masked check
-beside it still reads null). Their commands are not read; an empty `Jenkinsfile` reads the same.
+beside it still reads null). With no lint line on ordinary triggers and no check target,
+one also makes `lint_runs` null with `lint_basis: unread_ci_system` (Layer 3 level 1
+unknown). Their commands are not read; an empty `Jenkinsfile` reads the same.
 Tests: `tests/test_ci_checks.py` (`test_lint_runs_states` is the #782 fixture table),
 `tests/test_gitlab_ci_lint.py`, and the Layer 3 and Layer 5 rows in
 `tests/test_level_signals.py`.

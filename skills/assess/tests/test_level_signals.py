@@ -512,6 +512,11 @@ def test_layer_five_is_unknown_on_a_ci_system_the_scanner_cannot_read(tmp_path: 
     row = _row(_run({"r": scans}), "layer-5-ci")
     assert (row["status"], row["level"]) == ("unknown", None)
     assert "ci_checks.enforced_check_runs" in row["missing_signals"]
+    layer3 = _row(_run({"r": scans}), "layer-3-linters")
+    assert (scans["ci_checks"]["lint_runs"], scans["ci_checks"]["lint_basis"]) == (
+        None, "unread_ci_system")
+    assert (layer3["status"], layer3["level"]) == ("unknown", None)
+    assert "ci_checks.lint_runs" in layer3["missing_signals"]
     both = _ci_repo(tmp_path / "both", _CI_WORKFLOW.replace("make check", "make test"),
                     instructions=False, extra={"Jenkinsfile": "sh 'pytest'\n"})
     assert _row(_run({"r": both}), "layer-5-ci")["repos"]["r"]["levels"][0]["met"] is True

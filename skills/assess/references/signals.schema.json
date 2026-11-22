@@ -272,7 +272,7 @@
               "reason"
             ]
           },
-          "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which. Under --platform, a repository with an unresolved GitLab include also gets GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out (lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 level 1); a check target or script that may run a linter inside it reads null. Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no readable check one makes basis unread_ci_system and enforced_check_runs null.",
+          "description": "Does CI run a test or lint check (lib/ci_checks.py), read from the git-tracked CI files and the GitLab includes resolved offline (lib/ci_includes.py: local files, and project or component files of clones in the --ghsync-root). test_or_lint_runs is true when an own or included CI line runs one, false when none does and every include resolved, and null (unknown) when a CI file pulls jobs from a file this run could not read (an unresolved GitLab include, a reusable workflow in another repository); basis says which. Under --platform, a repository with an unresolved GitLab include also gets GitLab's merged configuration from the CI lint API (lib/gitlab_ci_lint.py), counted apart in merged_check_commands; a template resolved offline wins. enforced_check_runs (issue #775) is the same test with masked checks left out (|| true, continue-on-error: true, allow_failure: true, set +e without a re-raise; lib/ci_masking.py) and checks off the ordinary triggers left out (lib/ci_triggers.py); masked_check_commands and off_trigger_check_commands count the lines left out. lint_runs (issue #782) is the enforced test for lint lines only (Layer 3 level 1); a check target or script that may run a linter inside it reads null. Jenkins, CircleCI, Azure Pipelines, Bitbucket Pipelines, Travis CI and Buildkite files are not parsed (issue #787): unread_ci_files counts them, and with no readable check one makes basis unread_ci_system and enforced_check_runs null (and lint_runs null with no readable lint line).",
           "properties": {
             "available": {
               "type": "boolean"
@@ -443,11 +443,12 @@
                 "merged_config_partial",
                 "unknown_trigger",
                 "check_target",
+                "unread_ci_system",
                 "not_enforced",
                 "no_lint_command",
                 "no_ci"
               ],
-              "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger or check_target (null), not_enforced, no_lint_command or no_ci (false)."
+              "description": "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, unknown_trigger, check_target or unread_ci_system (null), not_enforced, no_lint_command or no_ci (false)."
             },
             "unread_ci_files": {
               "type": "integer",

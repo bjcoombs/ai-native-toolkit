@@ -562,3 +562,16 @@ def test_unread_ci_system_is_not_measured(
     block = scan_ci_checks(_write(tmp_path, files))
     assert (block["enforced_check_runs"], block["test_or_lint_runs"], block["basis"],
             block["enforced_basis"], block["unread_ci_files"]) == expected
+
+
+@pytest.mark.parametrize(("files", "lint"), [
+    ({"Jenkinsfile": "sh 'ruff check .'\n"}, (None, "unread_ci_system")),
+    ({"Jenkinsfile": "", **_gha("pytest")}, (None, "unread_ci_system")),
+    ({"Jenkinsfile": "", **_gha("ruff check .")}, (True, "lint_command")),
+    ({"Jenkinsfile": "", **_gha("make check")}, (None, "check_target")),
+])
+def test_lint_runs_on_an_unread_ci_system_is_not_measured(
+        tmp_path: Path, files: dict[str, str], lint: tuple[bool | None, str]) -> None:
+    """Issue #787: Layer 3 level 1 reads unknown, never false, beside an unread CI system."""
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == lint

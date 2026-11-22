@@ -12,8 +12,8 @@ evidence is static, read from the files at HEAD:
   ``.travis.yml``, ``.buildkite/pipeline.yml``, the Azure and Buildkite ``.yaml``
   spellings and a root ``buildkite.yml``, at the repository root). When no
   GitHub or GitLab line runs a check and no included jobs are pending, such a
-  file makes ``basis`` (and ``enforced_basis``) ``unread_ci_system`` and
-  ``enforced_check_runs`` null: the scanner did not see that system's checks,
+  file makes ``basis`` (and ``enforced_basis`` and ``lint_basis``) ``unread_ci_system``
+  and ``enforced_check_runs`` and ``lint_runs`` null: the scanner did not see that system's checks,
   it did not find them absent. ``test_or_lint_runs`` keeps its meaning and stays
   false there. An empty ``Jenkinsfile`` reads the same (accepted: the scan
   cannot tell an empty pipeline from one it cannot parse).
@@ -201,7 +201,7 @@ UNREAD_CI_FILES = frozenset({
     ".buildkite/pipeline.yaml", "buildkite.yml", "buildkite.yaml",
 })
 LintBasis = Literal["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                    "check_target", "not_enforced", "no_lint_command", "no_ci"]
+                    "check_target", "unread_ci_system", "not_enforced", "no_lint_command", "no_ci"]
 
 
 class CiChecksBlock(TypedDict):
@@ -479,7 +479,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
         ordinary, unknown, elsewhere=bool(elsewhere), unread=bool(unread),
         any_check=bool(found or merged_checks), has_files=bool(files))
     lint_runs, lint_basis = _lint_state(lint_t, may_t, elsewhere=bool(elsewhere),
-                                        partial=partial, has_files=bool(files))
+                                        partial=partial, unread=bool(unread),
+                                        has_files=bool(files))
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,
             "resolved_includes": sum(r["status"] == "resolved" for r in records),
@@ -521,9 +522,10 @@ def _enforced_state(ordinary: int, unknown: int, *, elsewhere: bool, unread: boo
     return False, "no_check_command" if has_files else "no_ci"
 
 
-def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool,
+def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool, unread: bool,
                 has_files: bool) -> tuple[bool | None, LintBasis]:
-    """``lint_runs`` and ``lint_basis`` from the lint and may-lint tallies (#782)."""
+    """``lint_runs`` and ``lint_basis`` from the lint and may-lint tallies (#782); an unread
+    CI system (#787) reads null ahead of the false cases, as for ``enforced_check_runs``."""
     ordinary, unknown, off, masked = lint
     if ordinary:
         return True, "lint_command"
@@ -533,6 +535,8 @@ def _lint_state(lint: Tally, may: Tally, *, elsewhere: bool, partial: bool,
         return None, "unknown_trigger"
     if may[0] or may[1]:
         return None, "check_target"
+    if unread:
+        return None, "unread_ci_system"
     if not has_files:
         return False, "no_ci"
     return False, "not_enforced" if off or masked else "no_lint_command"
