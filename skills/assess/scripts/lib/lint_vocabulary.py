@@ -68,6 +68,8 @@ def formatter_mode(words: list[str]) -> FormatMode | None:
         if flags & {"--dry-run", "-n"} and flags & {"--Werror", "-Werror"}:   # LLVM takes both
             return "check"
         return "rewrite" if "-i" in flags else None
+    if head == "swiftlint" and ("--fix" in flags or sub == ["autocorrect"]):
+        return "rewrite"   # swiftlint --fix / autocorrect rewrite files, like clang-format -i
     if head == "swift-format":
         if sub == ["lint"]:
             return "check"
@@ -138,8 +140,9 @@ def ecosystem_lint(words: list[str]) -> bool:
         return False
     if program_name(words[0]) == "php" and len(words) > 1 and not words[1].startswith("-"):
         return ecosystem_lint(words[1:])
-    return (program_name(words[0]) in ANALYSER_PROGRAMS or formatter_mode(words) == "check"
-            or subcommand_lint(words))
+    mode = formatter_mode(words)
+    return mode != "rewrite" and (program_name(words[0]) in ANALYSER_PROGRAMS or mode == "check"
+                                  or subcommand_lint(words))
 
 
 _COMPILERS = frozenset({

@@ -148,6 +148,8 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
+    if formatter_mode(words) == "rewrite":   # swiftlint --fix rewrites, like clang-format -i
+        return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
             words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
         return True
@@ -332,6 +334,8 @@ def is_lint_run(text: str) -> bool:
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
     if not words or is_info_invocation(text):
+        return False
+    if formatter_mode(words) == "rewrite":   # swiftlint --fix: gated only by a git diff (#926)
         return False
     if ecosystem_lint(words):   # phpstan, mix credo, ./gradlew ktlintCheck, pint --test (#926)
         return True

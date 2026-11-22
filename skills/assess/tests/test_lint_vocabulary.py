@@ -34,7 +34,8 @@ NOT_LINT_RUNS = [
     "./gradlew lintFix", "./gradlew ktlintFormat", "./gradlew spotlessApply",
     "./gradlew detektBaseline", "./gradlew build -x lint", "mix dialyzer --plt",
     "php-cs-fixer fix", "clang-format --Werror a.cc", "clang-tidy-18 --version",
-    "swiftlint --help", "dart pub get", "xargs rm -f",
+    "swiftlint --help", "dart pub get", "xargs rm -f", "swiftlint --fix", "swiftlint lint --fix",
+    "swiftlint autocorrect",
 ]
 
 
