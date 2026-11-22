@@ -476,4 +476,11 @@ ARTIFACT_SCHEMA_VERSION = "1.42.0"
 #   folded, a quoted `{` or `<<EOF` no longer hides a later `exit 0`, and `hatch run
 #   pytest -V` / `--co` are info calls. Layer 3 and Layer 5 level 1 can move from met to
 #   unmet; a folded pwsh `pytest` / `exit 0` can move from unmet to met.
+# - GitLab `rules:` are read as GitLab runs them (issue #884): the first matching rule
+#   decides, `if:` expressions are evaluated per merge request and branch push pipeline,
+#   and a top-level `workflow: rules:` gates every job of its file. A job gated by
+#   `$CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH` or
+#   `$CI_COMMIT_TAG && ...` no longer runs a check (enforced_check_runs can move from
+#   true to false); a custom variable, inline or anchored rules and `exists:` read
+#   unknown. Layer 5 level 1 can move from met to unmet or unknown.
 ASSESS_METHOD_VERSION = 37

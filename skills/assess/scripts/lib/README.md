@@ -3888,13 +3888,34 @@ maps them to `ordinary` (`push`, `pull_request`, `pull_request_target`,
 (`workflow_dispatch`, `schedule` ...) or `unknown`; `resolve_workflows` settles a
 called workflow as `ordinary` when an ordinary workflow of the repository calls it
 (`uses: ./.github/workflows/<file>`), else `unknown`. `gitlab_line_triggers(text)` gives
-one trigger per line from its job: `when: manual` / `never` is `not_ordinary`; `only:`
-and `rules:` are read for merge request and branch forms (`ordinary`), schedule, tag,
-web, trigger and api forms (`not_ordinary`) and anything else (`unknown`); lines
+one trigger per line from its job, read for a merge request pipeline and a branch
+push pipeline: `ordinary` when the job runs in either, `not_ordinary` in neither,
+`unknown` otherwise. `rules:` goes through `gitlab_rules` (first match wins, the
+job-level `when:` is each rule's default), `only:` names merge requests or branches,
+`when: manual` / `never` / `on_failure` on a job without rules runs in neither, and a
+top-level `workflow: rules:` decides which of the two pipelines exist (#884); lines
 outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other lines,
 so `count_check_lines` counts each class. Known limits: `extends:`, `default:`,
-anchors and `workflow: rules:` are not resolved; branch and path filters are not
-read. Tests: `tests/test_ci_triggers.py`.
+anchors, `except:` and a `workflow: rules:` in an included file are not resolved;
+branch and path filters are not read. Tests: `tests/test_ci_triggers.py`,
+`tests/test_gitlab_rules.py`.
+
+**`gitlab_rules.py`**
+GitLab `rules:` lists read as GitLab runs them (issue #884). `evaluate(expression,
+context)` gives a `rules:if` expression's value in a `merge_request` or `push`
+pipeline: `true`, `false`, `varies` (which branch, which merge request) or `unknown`
+(a custom variable, an unparsed expression). It reads `&&` before `||`, parentheses,
+`!`, `==` / `!=` against strings, `null` and variables, and `=~` / `!~` against
+`/regex/flags`. `CI_PIPELINE_SOURCE` is exact for `merge_request_event`, `push`,
+`schedule`, `web`, `trigger`, `api` and the other listed manual sources, and
+`unknown` for `parent_pipeline`, `pipeline` and `external_pull_request_event`;
+`CI_COMMIT_TAG` is unset in both, `CI_COMMIT_BRANCH` in a merge request pipeline and
+`CI_MERGE_REQUEST_*` in a push pipeline. `outcome(rules, context, default_when)`
+walks `Rule` items in order: the first match decides, `never` / `manual` /
+`on_failure` do not run, `changes:` varies, `exists:` and an unread rule key (an
+anchor merge, `!reference`) are unknown, and a rule that may match with an unknown
+result makes the answer `unknown`, never `no`. Imports nothing from `lib`. Tests:
+`tests/test_gitlab_rules.py`.
 
 **`unread_ci.py`**
 The unread-CI paths (issues #787, #928): CI files of systems `ci_checks` and `coverage_ci`
