@@ -572,6 +572,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_environment.pinning.manifests.ecosystem` | token |
 | `agent_environment.pinning.manifests.manifest` | path (hashed when hashing is on) |
 | `agent_environment.pinning.manifests.lockfile` | path (hashed when hashing is on) |
+| `agent_environment.pinning.manifests.note` | token |
 | `agent_environment.ci_duration.reason` | dropped |
 | `agent_environment.ci_duration.branch` | dropped |
 | `agent_environment.ci_duration.workflows.workflow` | dropped |
