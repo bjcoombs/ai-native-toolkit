@@ -39,6 +39,7 @@ from lib.coupling_analysis import (
 from lib.doc_complexity_join import _extract_file_ccn, _high_ccn_threshold, analyze_doc_complexity_join
 from lib.import_graph import is_graph_source
 from lib.liveness_scan import STATIC_REACHABILITY_CAVEAT
+from lib.reviewed_findings import mark_reviewed, open_findings, render_reviewed_markdown
 from lib.run_context_types import (
     AttentionRow, BehaviourBlock, BehaviourFields, CoChangePair, CouplingRow, DerivedFinding,
     DocumentationBlock, FindingPaths, FindingProducts, JsonDict, KeyholeConcern, KeyholeIntegration,
@@ -1408,20 +1409,22 @@ def finding_products(
     attic/ never ranks in attention (so never becomes a prescribed action);
     ``archived_finding_paths`` carries those out for the `excluded_as_archive`
     disclosure. Equal-score rows order by hotspot rank, then finding severity,
-    then path. A top score of 1 is a weak ranking: only its rank-1 row is
-    prescribed.
+    then path. A top score of 1 prescribes only its rank-1 row. A reviewed path
+    (``lib.reviewed_findings``) shows only in the markdown's "Reviewed" section.
     """
+    open_ = open_findings(findings)
     attention, archived = exclude_archive_from_attention(
-        findings, attention_tie_break(complexity_stats, promissory_markers, behaviour),
+        open_, attention_tie_break(complexity_stats, promissory_markers, behaviour),
     )
     low_signal = is_attention_low_signal(attention)
     return {
         "attention": attention,
-        "findings_markdown": render_findings_markdown(findings, attention),
-        "keyhole_summary": build_keyhole_summary(findings),
+        "findings_markdown": render_findings_markdown(open_, attention)
+        + render_reviewed_markdown(findings, finding_display_name),
+        "keyhole_summary": build_keyhole_summary(open_),
         "attention_low_signal": low_signal,
         "prescribed_actions": build_prescribed_actions(
-            attention, findings, 1 if low_signal else MAX_PRESCRIBED_ACTIONS,
+            attention, open_, 1 if low_signal else MAX_PRESCRIBED_ACTIONS,
         ),
         "archived_finding_paths": archived,
     }
@@ -1531,6 +1534,7 @@ def integrate(
     findings, pruned_finding_paths, excluded_finding_paths = _filter_findings(
         findings, top, rename_map, exclude_dirs, exclude_patterns,
     )
+    mark_reviewed(findings, repo_root)  # a done review clears a path (#721)
     return {
         "structure": structure,
         "behaviour": behaviour,
@@ -1539,18 +1543,14 @@ def integrate(
         "runtime": runtime,
         "derived_findings": findings,
         **finding_products(findings, complexity_stats, promissory_markers, behaviour),
-        # Paths dropped from the findings because a config exclude covered them -
-        # the raw material for the run-context `excluded_by_config` disclosure.
+        # Raw material for the `excluded_by_config` disclosure (config-excluded paths).
         "excluded_finding_paths": excluded_finding_paths,
-        # Git-history finding paths absent from the working tree (not HEAD: an
-        # uncommitted delete counts) - the raw material for the run-context
-        # `pruned_finding_paths` disclosure.
+        # Git-history finding paths absent from the working tree (an uncommitted
+        # delete counts), for the `pruned_finding_paths` disclosure.
         "pruned_finding_paths": pruned_finding_paths,
-        # False when the rename map could not be built: renames were not folded
-        # and the prune stood down, so the disclosure can say so.
+        # False when the rename map could not be built (nothing folded or pruned).
         "rename_map_complete": rename_map.complete,
-        # The Tier 1 grouping disagreement, computed once here from the behaviour
-        # block's co-change pairs, so the orchestrator can build the run-context
-        # structure_drift tier_1 sub-block from it without a second computation.
+        # The Tier 1 grouping disagreement, computed once from the co-change pairs,
+        # for the run-context structure_drift tier_1 sub-block.
         "structure_drift_tier1": structure_drift_tier1,
     }
