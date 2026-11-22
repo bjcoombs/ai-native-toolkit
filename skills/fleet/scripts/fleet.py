@@ -10,6 +10,9 @@ line per group in ``<out>/groups.jsonl`` (``lib/fleet_groups.py``, schema
 ``skills/fleet/references/groups.schema.json``): repository counts, distinct
 shared CI sources and marketplaces, the joined ``--settings`` and each
 ``--levels`` row's whole level, plus each group's agent-building class counts.
+With ``--levels`` each scanned repository's verified tally, condition states and
+autonomy Step go to ``<out>/level.json`` (``lib/fleet_level.py``, schema
+``skills/fleet/references/level.schema.json``; #744).
 Similar ``builds-agent`` repositories across groups are clustered into
 ``<out>/agent_clusters.json`` (``lib/fleet_agent_building.py``): counts and SDK
 slugs only, member repositories named only with ``--name-agent-clusters``.
@@ -165,6 +168,7 @@ from lib.fleet_achievements import (  # noqa: E402
 )
 from lib.fleet_achievements_runs import earlier_runs  # noqa: E402
 from lib.fleet_credit import credit_section  # noqa: E402
+from lib.fleet_level import write_fleet_levels  # noqa: E402
 from lib.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet_targets import TargetSpec, TargetsError, load_targets, resolve  # noqa: E402
 from lib.fleet_config import FleetConfig, FleetConfigError, config_sha256, parse_fleet_config, read_fleet_config  # noqa: E402
@@ -715,6 +719,8 @@ def main(argv: list[str] | None = None) -> int:
         fleet_config=fleet_config, platform=platform_ran,
     )
     write_stamp(out_dir, stamp)
+    write_fleet_levels(out_dir, rows, maturity_model, toolkit_commit=stamp["toolkit_commit"],
+                       plugin_version=stamp["plugin_version"])
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, rows, groups, row_signals(data)), earlier)

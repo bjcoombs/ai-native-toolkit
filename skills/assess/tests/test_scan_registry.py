@@ -343,3 +343,32 @@ def test_a_raising_doc_join_degrades_only_the_documentation_block(tmp_path, monk
     assert documentation["reason"] == "documentation scan failed: kaput"
     assert documentation["freshness_by_doc"] == {}
     assert ctx["doc_staleness"]["available"] is True
+
+
+def test_a_spread_key_is_readable_from_its_stage_on():
+    """The ``level`` entry (#744) reads ``structure`` and ``stats_summary``, spread keys."""
+    spread = ScanSpec("both", lambda: {"a": 1, "b": 2}, (), reg.STAGE_READ_SIDE, spread=("a", "b"))
+    reader = ScanSpec("sum", lambda a, b: a + b, ("a", "b"), reg.STAGE_POST_OFFERS)
+    reg.validate((spread, reader))
+    ctx: dict = {}
+    reg.run_scans(ctx, {}, specs=(spread, reader))
+    assert ctx == {"a": 1, "b": 2, "sum": 3}
+    early = ScanSpec("early", lambda a: a, ("a",), reg.STAGE_SETUP)
+    with pytest.raises(ScanRegistryError, match="later stage"):
+        reg.validate((spread, early))
+
+
+def test_the_level_entry_reads_the_default_models_blocks():
+    from lib.level_tally import DEFAULT_BLOCKS, default_model, model_blocks
+
+    spec = next(s for s in reg.SCANS if s.key == "level")
+    assert spec.reads == DEFAULT_BLOCKS == model_blocks(default_model())
+    assert spec.stage == reg.STAGE_POST_OFFERS and not spec.network
+
+
+def test_a_spread_key_its_entry_leaves_out_reads_none():
+    spread = ScanSpec("some", lambda: {"a": 1}, (), reg.STAGE_READ_SIDE, spread=("a", "b"))
+    reader = ScanSpec("pair", lambda a, b: [a, b], ("a", "b"), reg.STAGE_POST_OFFERS)
+    ctx: dict = {}
+    reg.run_scans(ctx, {}, specs=(spread, reader))
+    assert ctx == {"a": 1, "pair": [1, None]}
