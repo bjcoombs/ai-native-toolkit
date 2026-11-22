@@ -316,3 +316,7 @@ def test_heading_and_list_ordinals_are_stripped_before_numbers() -> None:
     assert thresholds("Coverage 2. Keep 90.\n") == {"coverage": {2.0, 90.0}}
     assert thresholds("## 90 percent coverage\n") == {"coverage": {90.0}}
     assert thresholds("# 100 line length\n") == {"line_length": {100.0}}
+    # A dotted heading number reads as a section number, never a threshold:
+    # `### 3.1 Coverage` is the common form, so a heading that opens with a
+    # decimal threshold (`## 85.5 coverage`) states none, by choice.
+    assert thresholds("## 85.5 coverage\n") == {}

@@ -68,7 +68,8 @@ _NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?!\w|\.\d)")
 # A heading or list ordinal (``## 2. Coverage``, ``### 3.1 Coverage``, ``1. ``,
 # ``2) ``) numbers the line, it states no threshold (issue #960). A heading
 # number needs a ``.``/``)`` or a dotted form, so ``## 90 percent coverage``
-# keeps its 90.
+# keeps its 90. A dotted heading number (``### 3.1``) is read as a section
+# number, so a heading opening with a decimal threshold (``## 85.5``) states none.
 _ORDINAL = re.compile(
     r"^\s*(?:#{1,6}[ \t]+(?:\d+(?:\.\d+)+[.)]?|\d+[.)])|\d+[.)])(?=\s|$)")
 _INLINE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
