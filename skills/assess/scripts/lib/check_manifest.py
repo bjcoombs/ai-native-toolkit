@@ -1,6 +1,7 @@
 """The check manifest: every collector, signal, condition and finding, declared once (#789).
 
-``skills/assess/checks/core.toml`` (owner ``core``) declares each check with its
+``skills/assess/checks/core.toml`` (owner ``core``, one fragment per collector under
+``checks/core/``, #982; see "the fragment layout" below) declares each check with its
 metadata: what a collector reads, its stage and degrade behaviour, whether it needs
 the network, how the headless runner reports its blocks, its counts-only privacy
 classes and its typed shapes; each maturity-model signal's path, type and evidence
@@ -319,13 +320,13 @@ def _keys(where: str, data: Mapping[str, Any], allowed: Mapping[str, Check],
         out.append(finding(f"{where}.{key}", "MISSING_KEY", f"required key {key!r} is missing"))
 
 
-def _entry_shape(i: int, raw: Any, owner: str, out: list[ValidationError]) -> bool:
+def _entry_shape(label: str, raw: Any, owner: str, out: list[ValidationError]) -> bool:
     """Check one entry's keys and id form; True when it is well-formed enough to cross-check."""
     if not isinstance(raw, dict):
-        out.append(finding(f"entries[{i}]", "WRONG_TYPE", "expected a table"))
+        out.append(finding(label, "WRONG_TYPE", "expected a table"))
         return False
     kind = raw.get("kind")
-    where = f"entries[{i}] ({raw.get('id', '?')})"
+    where = f"{label} ({raw.get('id', '?')})"
     if kind not in KINDS:
         out.append(finding(f"{where}.kind", "UNKNOWN_KIND", f"kind {kind!r} is not one of {KINDS}",
                            suggestion=closest(str(kind), KINDS), available=KINDS))
@@ -524,8 +525,12 @@ def _references(m: CheckManifest, where_of: Mapping[str, str], out: list[Validat
                                    suggestion=closest(read.split(".")[0], names)))
 
 
-def validate_manifest(data: Mapping[str, Any]) -> list[ValidationError]:
-    """Every structural and cross-reference finding for a parsed manifest document."""
+def validate_manifest(data: Mapping[str, Any],
+                      origins: Sequence[str] = ()) -> list[ValidationError]:
+    """Every structural and cross-reference finding for a parsed manifest document.
+
+    ``origins`` labels each entry by where it was read (``core/ci_checks.toml entries[0]``
+    for a fragment); an entry without one is ``entries[<index>]``."""
     out: list[ValidationError] = []
     _keys("manifest", data, _ROOT, frozenset({"manifest_version", "owner", "entries"}), out)
     if out:
@@ -534,11 +539,14 @@ def validate_manifest(data: Mapping[str, Any]) -> list[ValidationError]:
     where_of: dict[str, str] = {}
     cols: list[tuple[str, CollectorEntry]] = []
     for i, raw in enumerate(data["entries"]):
-        if not _entry_shape(i, raw, owner, out):
+        label = origins[i] if i < len(origins) else f"entries[{i}]"
+        if not _entry_shape(label, raw, owner, out):
             continue
-        where = f"entries[{i}] ({raw['id']})"
+        where = f"{label} ({raw['id']})"
         if raw["id"] in where_of:
-            out.append(finding(f"{where}.id", "DUPLICATE_ID", f"id {raw['id']!r} is declared twice"))
+            out.append(finding(f"{where}.id", "DUPLICATE_ID",
+                               f"id {raw['id']!r} is declared twice, first at {where_of[raw['id']]}"))
+            continue
         where_of[raw["id"]] = where
         if raw["kind"] == "collector":
             cols.append((where, cast(CollectorEntry, raw)))
@@ -550,21 +558,104 @@ def validate_manifest(data: Mapping[str, Any]) -> list[ValidationError]:
     return out
 
 
-def parse_manifest(data: Mapping[str, Any], source: str = "check manifest") -> CheckManifest:
+def parse_manifest(data: Mapping[str, Any], source: str = "check manifest",
+                   origins: Sequence[str] = ()) -> CheckManifest:
     """``data`` as a ``CheckManifest``; raises ``CheckManifestError`` on any error finding."""
-    errors = errors_only(validate_manifest(data))
+    errors = errors_only(validate_manifest(data, origins))
     if errors:
         raise CheckManifestError(source, errors)
     return cast(CheckManifest, data)
 
 
-def load_manifest(path: Path = CORE_MANIFEST) -> CheckManifest:
-    """Read and validate a manifest file (the core manifest by default)."""
+# --- the fragment layout (#982) ------------------------------------------------------
+# A root manifest may list ``fragments`` instead of declaring ``entries``: each name is
+# ``<root stem>/<name>.toml`` beside the root (``checks/core/ci_checks.toml``), a file of
+# ``[[entries]]`` holding exactly one collector, the one whose scan key is its name. The
+# loader merges them by kind (collectors, signals, conditions, findings) and, within a
+# kind, in the listed order, so the merged document is the one a single file declares.
+
+def _toml(path: Path, label: str) -> dict[str, Any]:
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        return tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as e:
-        raise CheckManifestError(path.as_posix(), [finding("manifest", "TOML_ERROR", str(e))]) from e
-    return parse_manifest(data, path.as_posix())
+        raise CheckManifestError(path.as_posix(), [finding(label, "TOML_ERROR", str(e))]) from e
+
+
+def fragment_names(path: Path) -> list[str]:
+    """The fragments a root manifest lists, in merge order (empty for a single file)."""
+    names = _toml(path, "manifest").get("fragments", [])
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+
+
+def _fragment(path: Path, label: str, name: str, owner: Any,
+              out: list[ValidationError]) -> list[Any]:
+    """One fragment's entries; layout problems go to ``out``."""
+    if not path.is_file():
+        out.append(finding(label, "MISSING_FRAGMENT", f"fragment {name!r} is listed but {label} "
+                           "does not exist"))
+        return []
+    data = _toml(path, label)
+    before = len(out)
+    _keys(label, data, {"entries": _ROOT["entries"]}, frozenset({"entries"}), out)
+    if len(out) > before:
+        return []
+    entries = cast("list[Any]", data["entries"])
+    ids = [e.get("id") for e in entries if isinstance(e, dict) and e.get("kind") == "collector"]
+    if ids != [f"{owner}.{name}"]:
+        out.append(finding(label, "FRAGMENT_COLLECTOR", f"a fragment holds one collector, "
+                           f"{owner}.{name}; {label} declares {ids or 'none'}"))
+    return entries
+
+
+def _read(path: Path) -> tuple[dict[str, Any], list[str]]:
+    """The parsed document, fragments merged, and each entry's origin label."""
+    data = _toml(path, "manifest")
+    if "fragments" not in data:
+        entries = data.get("entries")
+        return data, [f"entries[{i}]" for i in range(len(entries) if isinstance(entries, list) else 0)]
+    names = data.pop("fragments")
+    out: list[ValidationError] = []
+    if "entries" in data:
+        out.append(finding("manifest.entries", "FRAGMENTS_AND_ENTRIES",
+                           "a root manifest lists fragments or declares entries, not both"))
+    if not isinstance(names, list) or not all(isinstance(n, str) and _NAME_RE.match(n) for n in names):
+        out.append(finding("manifest.fragments", "WRONG_TYPE", "expected a list of scan keys"))
+        raise CheckManifestError(path.as_posix(), out)
+    folder = path.with_suffix("")
+    loaded: list[tuple[str, list[Any]]] = []
+    for name in dict.fromkeys(names):
+        if names.count(name) > 1:
+            out.append(finding("manifest.fragments", "DUPLICATE_FRAGMENT", f"{name!r} is listed twice"))
+        label = f"{folder.name}/{name}.toml"
+        loaded.append((label, _fragment(folder / f"{name}.toml", label, name, data.get("owner"), out)))
+    for extra in sorted({p.stem for p in folder.glob("*.toml")} - set(names)):
+        out.append(finding(f"{folder.name}/{extra}.toml", "UNLISTED_FRAGMENT",
+                           f"fragment {extra!r} is not in {path.name} fragments, so it would not load"))
+    if out:
+        raise CheckManifestError(path.as_posix(), out)
+    placed = [(_merge_kind(entry), f"{label} entries[{j}]", entry)
+              for label, entries in loaded for j, entry in enumerate(entries)]
+    placed.sort(key=lambda p: KINDS.index(p[0]))  # stable: listed order within a kind
+    data["entries"] = [entry for _, _, entry in placed]
+    return data, [origin for _, origin, _ in placed]
+
+
+def _merge_kind(entry: Any) -> Kind:
+    """The kind group an entry merges into; a malformed one goes first, for validation to name."""
+    kind = entry.get("kind") if isinstance(entry, dict) else None
+    return cast(Kind, kind) if kind in KINDS else "collector"
+
+
+def read_manifest(path: Path = CORE_MANIFEST) -> dict[str, Any]:
+    """The manifest document as parsed TOML, fragments merged, not validated."""
+    return _read(path)[0]
+
+
+def load_manifest(path: Path = CORE_MANIFEST) -> CheckManifest:
+    """Read and validate a manifest (the core manifest by default): a single file, or a root
+    that lists fragments."""
+    data, origins = _read(path)
+    return parse_manifest(data, path.as_posix(), origins)
 
 
 @functools.cache

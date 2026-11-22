@@ -1,0 +1,77 @@
+# Check manifest fragment: the agent_environment collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.agent_environment"
+kind = "collector"
+title = "Agent working environment"
+summary = "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs."
+issues = [514]
+callable = "lib.agent_environment:scan_agent_environment"
+offline_callable = "lib.agent_environment:scan_agent_environment"
+publishes = ["agent_environment"]
+reads = ["repo_root", "instruction_files", "agent_harness", "excludes"]
+stage = "post_offers"
+network = true
+headless = { agent_environment = "registered" }
+shapes = [
+  { path = "agent_environment", type = "lib.agent_environment:AgentEnvironmentBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "agent_environment.reason" = "drop"
+  "agent_environment.setup.sources.kind" = "token"
+  "agent_environment.setup.sources.detail" = "drop"
+  "agent_environment.check.entry_points.command" = "drop"
+  "agent_environment.check.entry_points.source" = "drop"
+  "agent_environment.check.named.command" = "drop"
+  "agent_environment.check.named.verdict" = "token"
+  "agent_environment.check.named.reason" = "drop"
+  "agent_environment.check.unresolved.command" = "drop"
+  "agent_environment.check.unresolved.verdict" = "token"
+  "agent_environment.check.unresolved.reason" = "drop"
+  "agent_environment.pinning.manifests.ecosystem" = "token"
+  "agent_environment.pinning.manifests.manifest" = "path"
+  "agent_environment.pinning.manifests.lockfile" = "path"
+  "agent_environment.ci_duration.reason" = "drop"
+  "agent_environment.ci_duration.branch" = "drop"
+  "agent_environment.ci_duration.workflows.workflow" = "drop"
+  "agent_environment.findings.kind" = "token"
+  "agent_environment.findings.detail" = "drop"
+  "agent_environment.findings.fix" = "drop"
+  "agent_environment.layer5_cap.ceiling" = "token"
+  "agent_environment.layer5_cap.unmet" = "token"
+  "agent_environment.layer5_cap.reason" = "drop"
+
+[[entries]]
+id = "core:agent_environment.check.named_total"
+kind = "signal"
+title = "Instruction files name a check command"
+collector = "core.agent_environment"
+path = "agent_environment.check.named_total"
+type = "number"
+evidence = "head_text"
+
+[[entries]]
+id = "core:agent_environment.pinning.unlocked_total"
+kind = "signal"
+title = "Dependency manifests without a committed lockfile"
+collector = "core.agent_environment"
+path = "agent_environment.pinning.unlocked_total"
+type = "number"
+evidence = "head_text"
+null_means = "no_manifests: no dependency manifest is read (pinning.manifests_total 0), so there is nothing to lock"
+
+[[entries]]
+id = "core.cond.layer-0-instructions.2.named_total"
+kind = "condition"
+title = "An instruction file names a check command"
+key = "layer-0-instructions.2:agent_environment.check.named_total"
+fix = "Name the command that checks a change (for example make check) in your instruction file."
+
+[[entries]]
+id = "core.cond.layer-5-ci.2.unlocked_total"
+kind = "condition"
+title = "Every dependency manifest has its lockfile"
+key = "layer-5-ci.2:agent_environment.pinning.unlocked_total"
+fix = "Commit the lockfile for each dependency manifest (or pin a requirements file with ==), so an agent installs what CI tests."

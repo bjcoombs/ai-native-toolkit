@@ -1,0 +1,53 @@
+# Check manifest fragment: the nested_instructions collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.nested_instructions"
+kind = "collector"
+title = "Nested instruction files"
+issues = [511]
+callable = "lib.instruction_files:nested_instruction_surface"
+publishes = ["nested_instructions"]
+reads = ["repo_root", "excludes"]
+stage = "post_offers"
+headless = { nested_instructions = "registered" }
+shapes = [
+  { path = "nested_instructions", type = "lib.run_context_types:NestedInstructionsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "nested_instructions.files.tool" = "token"
+  "nested_instructions.files.kind" = "token"
+  "nested_instructions.files.grade" = "token"
+  "nested_instructions.files.scope.directory" = "path"
+  "nested_instructions.files.scope.globs" = "path"
+  "nested_instructions.files.findings.kind" = "token"
+  "nested_instructions.files.findings.reference" = "drop"
+  "nested_instructions.files.findings.reason" = "drop"
+  "nested_instructions.findings.kind" = "token"
+  "nested_instructions.findings.detail" = "drop"
+  "nested_instructions.findings.pattern" = "path"
+  "nested_instructions.findings.parent" = "path"
+  "nested_instructions.budget.claude_code.files" = "path"
+  "nested_instructions.budget.claude_code.skipped_imports.source" = "path"
+  "nested_instructions.budget.claude_code.skipped_imports.target" = "path"
+  "nested_instructions.budget.claude_code.skipped_imports.reason" = "drop"
+  "nested_instructions.budget.codex.files" = "path"
+  "nested_instructions.budget.codex.deepest_chain.files" = "path"
+  "nested_instructions.budget.codex.deepest_chain.directory" = "path"
+
+[[entries]]
+id = "core:nested_instructions.budget.claude_code.lines"
+kind = "signal"
+title = "Always-loaded Claude Code instruction lines"
+collector = "core.nested_instructions"
+path = "nested_instructions.budget.claude_code.lines"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core.cond.layer-0-instructions.2.lines"
+kind = "condition"
+title = "Always-loaded instructions fit in 200 lines"
+key = "layer-0-instructions.2:nested_instructions.budget.claude_code.lines"
+fix = "Move detail that is needed only sometimes into files the instructions point to."

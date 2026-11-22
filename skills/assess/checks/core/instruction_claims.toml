@@ -1,0 +1,36 @@
+# Check manifest fragment: the instruction_claims collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.instruction_claims"
+kind = "collector"
+title = "Instruction claims"
+callable = "lib.instruction_claims:scan_instruction_claims"
+publishes = ["instruction_claims"]
+reads = ["repo_root", "instruction_files"]
+stage = "post_offers"
+headless = { instruction_claims = "registered" }
+shapes = [
+  { path = "instruction_claims", type = "lib.block_shapes:InstructionClaimsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "instruction_claims.failures.kind" = "token"
+  "instruction_claims.failures.version" = "drop"
+  "instruction_claims.failures.reason" = "drop"
+
+[[entries]]
+id = "core:instruction_claims.failed"
+kind = "signal"
+title = "Instruction claims that do not hold"
+collector = "core.instruction_claims"
+path = "instruction_claims.failed"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core.cond.layer-0-instructions.2.failed"
+kind = "condition"
+title = "Every checkable instruction claim holds"
+key = "layer-0-instructions.2:instruction_claims.failed"
+fix = "Update the instruction lines whose claims no longer match the repository."

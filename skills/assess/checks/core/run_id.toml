@@ -1,0 +1,15 @@
+# Check manifest fragment: the run_id collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.run_id"
+kind = "collector"
+title = "Run id"
+callable = "lib.run_setup:new_run_id"
+publishes = []
+reads = []
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

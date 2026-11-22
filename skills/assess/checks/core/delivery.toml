@@ -1,0 +1,22 @@
+# Check manifest fragment: the delivery collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.delivery"
+kind = "collector"
+title = "Delivery figures"
+issues = [715]
+callable = "lib.delivery:scan_delivery"
+publishes = ["delivery"]
+reads = ["merged_sample", "review_reality", "fleet_config", "gitlab_note_facts"]
+stage = "read_side"
+network = true
+platform_pass = true
+platform_only = true
+headless = { delivery = "registered" }
+shapes = [
+  { path = "delivery", type = "lib.delivery:DeliveryBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "delivery.reason" = "drop"

@@ -1,0 +1,22 @@
+# Check manifest fragment: the config_drift collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.config_drift"
+kind = "collector"
+title = "Configuration drift"
+callable = "lib.config_drift:scan_config_drift"
+publishes = ["config_drift"]
+reads = ["repo_root"]
+stage = "read_side"
+network = true
+headless = { config_drift = "registered" }
+revision = 1
+  [entries.privacy]
+  "config_drift.reason" = "drop"
+  "config_drift.entries.key" = "token"
+  "config_drift.entries.tracked" = "drop"
+  "config_drift.entries.live" = "drop"
+  "config_drift.snapshots.kind" = "token"
+  "config_drift.snapshots.doc" = "drop"
+  "config_drift.snapshots.branch" = "drop"
