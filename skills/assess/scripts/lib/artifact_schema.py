@@ -207,7 +207,11 @@ constant each.
 # go_rust_gate_form_not_read when no gate is found in a repository holding a
 # go.mod or Cargo.toml, which also makes threshold_meets_minimum null. Gates gain
 # the tools go-test-coverage, cargo-tarpaulin and cargo-llvm-cov. Additive.
-ARTIFACT_SCHEMA_VERSION = "1.33.0"
+# 1.34.0: run-context.json derived_findings rows gain an optional reviewed list of
+# {path, completed_sha, note} (issue #721): the paths a done review in the
+# committed .assess/actions.json clears. actions.json gains an optional completed
+# list for done entries that left the Top 3. Additive.
+ARTIFACT_SCHEMA_VERSION = "1.34.0"
 
 # The finding method version: which rules decide the findings a run produces.
 # Independent of plugin releases and of ARTIFACT_SCHEMA_VERSION (which versions
@@ -335,4 +339,9 @@ ARTIFACT_SCHEMA_VERSION = "1.33.0"
 #     --fail-under and cargo llvm-cov --fail-under-lines (issue #788), and a
 #     repository holding a go.mod or Cargo.toml with no gate found reads Layer 6
 #     level 1 as not measured (threshold_meets_minimum null) where it read 0.
-ASSESS_METHOD_VERSION = 29
+# 30: a self_referential_tests path whose done review is recorded in the committed
+#     .assess/actions.json (status done, completed_sha an ancestor of HEAD, the path
+#     in files) and untouched since that commit leaves the attention list,
+#     prescribed_actions and the keyhole summary (issue #721), so the Top 3 can move.
+#     It stays in derived_findings with a reviewed note; a later change re-flags it.
+ASSESS_METHOD_VERSION = 30
