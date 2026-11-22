@@ -22,8 +22,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from assess_core import build_and_publish_run
 from assess_report import render_report
 from golden import normalize_report
@@ -105,7 +103,6 @@ def test_orchestrator_is_thin():
     assert len(lines) < 500, f"orchestrator grew to {len(lines)} lines - re-check the seams"
 
 
-@pytest.mark.windows_followup
 def test_attention_low_signal_is_read_before_the_rule_that_uses_it():
     """The findings sub-skill's run-context read loads every key its Top 3 rule branches on."""
     body = (REPO_ROOT / "skills" / "assess-findings" / "SKILL.md").read_text(encoding="utf-8")

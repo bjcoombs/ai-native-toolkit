@@ -274,6 +274,13 @@ constant each.
 # - ci_checks.enforced_basis and ci_checks.lint_basis gain script_not_found
 #   (issue #937); coverage_gate.unmeasured_reason go_rust_gate_form_not_read now
 #   also carries a low gate beside an unread Go or Rust module.
+# - ci_checks basis, enforced_basis and lint_basis gain external_ci and
+#   external_ci_marker (issue #928): under --platform, more than half of the sampled
+#   merged pull requests carry a check of a known external CI system; offline, a root
+#   Prow OWNERS_ALIASES with no CI file. Either reads null in place of a false case.
+#   unread_ci_files counts more paths (LUCI .ci.yaml and infra/config/, every Azure
+#   Pipelines layout, Prow, Zuul, Drone, Woodpecker and others; lib/unread_ci.py).
+#   Additive: no existing key moves.
 ARTIFACT_SCHEMA_VERSION = "1.42.0"
 
 # The finding method version: which rules decide the findings a run produces.
