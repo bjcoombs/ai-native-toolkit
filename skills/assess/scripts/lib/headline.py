@@ -58,6 +58,7 @@ REASON_WORDS = {
     "type_mismatch": "value of another type",
     "no_remote": "no remote",
     "scan_failed": "scan did not complete",
+    "no_scored_files": "no files scored",
 }
 # Words an unlisted code is never shown with (lib/vocabulary.py, #743), and what reads instead.
 _SUPPORTIVE = (("failed", "did not complete"), ("missing", "not found"))

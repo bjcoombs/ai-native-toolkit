@@ -282,7 +282,8 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
 - `conditions[]`: `id`, `row`, `level`, `grade`, `counted`, `state` (`met`, `unmet`,
   `not_measured`; `not_applicable` and `declined` are reserved) and a `reason` code when
   not measured (`needs_full_run`, `needs_platform`, a block's own code, `block_absent`,
-  `no_value`, `type_mismatch`, `degenerate_history`, or `requires:<id>`);
+  `no_value`, `type_mismatch`, `degenerate_history`, `no_scored_files` (no file scored,
+  so the file-size percentile is not a measurement), or `requires:<id>`);
 - `tally`: `met` is the level, the count of counted conditions met (graded measured or
   verified); `measured` counts the counted conditions met or unmet; `not_measured` counts
   every condition not measured. An unknown never counts;
