@@ -263,3 +263,48 @@ def test_flake8_reads_the_hyphen_and_underscore_spellings(tmp_path: Path, key: s
     root = _write(tmp_path, {".flake8": f"[flake8]\n{key} = 11\n"})
     (gate,) = scan_guardrails(root, [], None)["gates"]
     assert (gate["tool"], gate["threshold"], gate["line"]) == ("flake8", 11, 2)
+
+
+def test_a_scoped_run_counts_only_the_gates_inside_the_scope(tmp_path: Path) -> None:
+    root = _write(tmp_path, {
+        "pyproject.toml": PYPROJECT + "\n[tool.mypy]\nstrict = true\n",
+        "setup.cfg": "[flake8]\nmax-complexity = 12\n",
+        ".pre-commit-config.yaml": PRE_COMMIT,
+        "pkg/pyproject.toml": "[tool.ruff.lint]\nselect = ['C901']\n\n"
+                              "[tool.coverage.report]\nfail_under = 85\n",
+        "pkg/a.py": "x = 1\n",
+    })
+    scoped = scan_guardrails(root, [], detect_coverage_gate(root, Path("pkg")), None,
+                             Path("pkg"))
+    assert [(g["kind"], g["file"]) for g in scoped["gates"]] == [
+        ("complexity_limit", "pkg/pyproject.toml"), ("coverage_floor", "pkg/pyproject.toml"),
+        ("pre_commit", ".pre-commit-config.yaml")]
+    assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 1
+    absolute = scan_guardrails(root, [], None, None, root / "pkg")
+    assert [(g["kind"], g["file"]) for g in absolute["gates"]] == [
+        ("complexity_limit", "pkg/pyproject.toml"), ("pre_commit", ".pre-commit-config.yaml")]
+    whole = scan_guardrails(root, [], detect_coverage_gate(root), None, root)
+    assert len(whole["gates"]) == 7
+
+
+@pytest.mark.parametrize(("select", "ignore", "on"), [
+    ("['C901']", "['C']", True), ("['C9']", "['C90']", False), ("['ALL']", "['C']", False),
+    ("['C901']", "['C901']", False), ("['C']", "['ALL']", True)])
+def test_ruff_select_and_ignore_resolve_by_the_longest_prefix(
+        tmp_path: Path, select: str, ignore: str, on: bool) -> None:
+    root = _write(tmp_path, {"ruff.toml": f"[lint]\nselect = {select}\nignore = {ignore}\n"})
+    gates = scan_guardrails(root, [], None)["gates"]
+    assert [g["kind"] for g in gates] == (["complexity_limit"] if on else [])
+
+
+@pytest.mark.parametrize(("line", "stated"), [
+    ("Run coverage in step 1.", False), ("Coverage must reach 100 percent.", True),
+    ("Coverage ratio 1.0 is enforced.", True), ("Coverage 1.5 is not it.", False)])
+def test_a_floor_of_100_needs_a_decimal_point_in_its_ratio_form(
+        tmp_path: Path, line: str, stated: bool) -> None:
+    coverage = {"available": True, "enforced": True, "gates": [
+        {"file": "pyproject.toml", "line": 3, "tool": "coverage.py", "form": "fail_under",
+         "threshold": 100.0, "unit": "percent", "threshold_percent": 100.0, "metric": "lines"}]}
+    root = _write(tmp_path, {"AGENTS.md": f"{line}\n"})
+    (gate,) = scan_guardrails(root, ["AGENTS.md"], coverage)["gates"]
+    assert gate["stated"] is stated
