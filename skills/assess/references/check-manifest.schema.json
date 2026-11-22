@@ -71,9 +71,10 @@
         "carried_in": {
           "enum": [
             "reason",
-            "basis"
+            "basis",
+            "unmeasured_reason"
           ],
-          "description": "reason: the block's available-false reason code; basis: a token on a null leaf"
+          "description": "reason: the block's available-false reason code; basis: a token on a null leaf; unmeasured_reason: the block's unmeasured_reason token beside a null signal"
         },
         "means": {
           "type": "string",

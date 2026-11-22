@@ -315,6 +315,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `coverage_gate.gates.form` | dropped |
 | `coverage_gate.gates.unit` | token |
 | `coverage_gate.gates.metric` | token |
+| `coverage_gate.unmeasured_reason` | token |
 | `coverage_gate.not_detected` | dropped |
 
 ## test_pressure

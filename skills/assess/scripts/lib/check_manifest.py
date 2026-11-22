@@ -59,7 +59,7 @@ EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
 HEADLESS = ("registered", "headless_variant", "unregistered")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
-CARRIED_IN = ("reason", "basis")
+CARRIED_IN = ("reason", "basis", "unmeasured_reason")
 
 _OWNER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
@@ -73,7 +73,7 @@ class UnknownReason(TypedDict):
     code: str
     means: str
     next_step: str
-    carried_in: NotRequired[Literal["reason", "basis"]]
+    carried_in: NotRequired[Literal["reason", "basis", "unmeasured_reason"]]
 
 
 class HeadlessVariant(TypedDict):

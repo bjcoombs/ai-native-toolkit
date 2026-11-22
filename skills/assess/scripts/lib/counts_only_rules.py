@@ -352,6 +352,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
         "coverage_gate.gates.form": DROP,
         "coverage_gate.gates.unit": TOKEN,
         "coverage_gate.gates.metric": TOKEN,
+        "coverage_gate.unmeasured_reason": TOKEN,
         "coverage_gate.not_detected": DROP,
     },
     "test_pressure": {
