@@ -200,6 +200,12 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.rows.status": TOKEN,
     "repos.rows.value": TOKEN,
     "repos.rows.reason": TOKEN,
+    # #746: the repositories an opportunity lifts, and the shared CI source id (kept
+    # readable in counts-only like shared_tooling ids, hashed with the keys under a salt)
+    "opportunities.biggest_lift.repos": PATH,
+    "opportunities.shared_templates.repos": PATH,
+    "opportunities.shared_templates.source": PATH,
+    "opportunities.shared_templates.kind": TOKEN,
 }
 
 
@@ -212,6 +218,12 @@ FLEET_DATA_KEPT: Final = frozenset({
     "run.levels_version", "run.scans", "run.fleet_config_sha256",
     "model.id", "model.title", "model.scope",
     "repos.rows.row", "repos.rows.signal", "views.units.levels.row",
+    # #746: maturity-model ids and the run's own wording (counts and model titles only)
+    "opportunities.in_place.row", "opportunities.biggest_lift.row", "opportunities.biggest_lift.signal",
+    "opportunities.biggest_lift.gate", "opportunities.biggest_lift.change",
+    "opportunities.biggest_lift.done_when", "opportunities.biggest_lift.text",
+    "opportunities.shared_templates.row", "opportunities.shared_templates.signal",
+    "opportunities.shared_templates.text",
 })
 
 

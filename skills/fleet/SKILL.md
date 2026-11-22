@@ -274,11 +274,12 @@ the run history beside the other files.
 
 | Key | Value |
 |-----|-------|
-| `fleet_data_version` | Document version (1). |
+| `fleet_data_version` | Document version (3: version 3 added `opportunities`; the achievements engine reads versions 1 to 3 alike). |
 | `run` | The run stamp's fields from `run.json`, copied one by one: every field but `fleet_stamp_version` and `fleet_config_entries` (`platform` reads `false` for a stamp written before it). A new stamp field fails a test until it is copied or excluded here, with a `fleet_data_version` bump. |
 | `model` | Each maturity model row: `id`, `title`, `scope`, `top_level`. |
 | `views` | One entry per view, `ownership` and `system`, each with its `units`. |
 | `repos` | One entry per repository row, sorted by `key`. |
+| `opportunities` | The [opportunities](#opportunities) this run's data shows: what is in place, the biggest lift and the shared-template leverage. `null` without `--levels`. |
 
 **Units.** A unit is an org, division, department, team or system. Each has a `key`
 (`<view>/<id>`), `view`, `parent` (the parent's key, `null` at a root), `kind`, `source`
@@ -350,6 +351,27 @@ join across runs only under one `--hash-salt`. The rules are `FLEET_DATA_RULES` 
 repository ids in clear, so under hashing a `fleet-data.json` repository cannot be joined
 to its `repos.jsonl` row. GitHub team slugs from a `ghreport` fragment's `teams` list
 appear only as unit keys, so they are hashed with them.
+
+### Opportunities
+
+`opportunities` (#746) turns the run into the changes that would lift the most
+repositories. It is computed from this run's rows and the maturity model alone, with no
+model call and no history, so the same run gives the same bytes. Every line is phrased as
+an opportunity, nothing ranks or numbers a team or repository (names are listed in key
+order), and no insight names a person.
+
+| Key | Value |
+|-----|-------|
+| `measured` | Repositories scanned `ok`. |
+| `in_place` | Per `team` row: `row`, `at_top` (measured repositories already at its top level) and `measured`. The report opens the section with it. |
+| `biggest_lift` | The single next-level criterion whose completion would lift the most repositories: `row`, `level` (the level they would reach), `signal`, `repo_count`, `repos` (sorted keys), `gate` and `step` (the Step gate this condition is, else `null`), `change` and `done_when` (the same wording as the team pages), and `text`. A repository counts only when its row level is known and that criterion is the one unmet criterion of its next level; an unknown never counts. Ties go to maturity-model row order, then level. `null` when no single change lifts a measured repository. |
+| `shared_templates` | One entry per shared CI source (a `shared_tooling.ci_source_ids` id at least 2 repositories include) and row level it would unlock: `source` (the id, such as `gitlab_project:grp/ci-templates`), `kind`, `includers`, `row`, `level`, `signal`, `repo_count`, `repos` and `text`. Its `repos` are the including repositories whose one unmet next-level criterion reads a `ci_checks.` signal: what the template would lift if it ran tests or another enforced check. Sorted by `source`, then row order. |
+
+Privacy follows the keys: `repos` and `source` are in clear in counts-only output (shared
+tooling ids stay readable) and hashed under `--hash-paths` or `--hash-salt`; `text` holds
+counts and maturity-model titles only. Recent progress, the units that reached a new level
+since the previous run, is not in this file: it comes from the run history, is display
+only and appears only in `report.md`. Logic: `lib/fleet_opportunities.py`.
 
 ## Output: `achievements.json`
 
@@ -906,7 +928,17 @@ in GitHub and GitLab Markdown previews). A diagram that cannot be drawn is skipp
 report says why in one line; stderr names it too. A diagram failure never changes the exit
 code, and the run history still keeps only its three files. `--no-diagrams` turns this off.
 The report opens with the [coverage line](#coverage---discovered), then "What changed and who
-earned it", before the diagrams (see [`achievements.json`](#output-achievementsjson)).
+earned it" (see [`achievements.json`](#output-achievementsjson)), then "Opportunities",
+before the diagrams.
+
+**Opportunities.** Rendered from `fleet-data.json`'s [`opportunities`](#opportunities), so
+the two always agree. It opens with what is already in place (per row, how many measured
+repositories hold its top level), then the biggest lift with its change and "done when",
+each shared template's lift, and **Recent progress**: the units that reached a new level
+since the previous comparable run, read from this run's `level_up` achievements. Recent
+progress is display only: it comes from the run history and never feeds a level or
+`fleet-data.json`; on the first run it says the run is the starting line. Without `--levels`
+the section is left out. Logic: `lib/fleet_opportunities_section.py`.
 
 **Maturity, one number.** The quadrant, the trend lines and the slope chart all plot the
 same mean: each `team` row's level as a share of the row's top level, averaged over the rows

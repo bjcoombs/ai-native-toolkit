@@ -81,7 +81,7 @@ def test_an_achievements_failure_keeps_exit_0_and_clears_a_stale_file(tmp_path, 
     def boom(*_args: object, **_kwargs: object) -> None:
         raise ValueError("engine bug")
     monkeypatch.setattr(fleet_cli, "build_achievements", boom)
-    assert fleet_cli._achievements(tmp_path, {}, {"scan_date": "2026-11-21"}, None, None, None, frozenset(), [], str) is None  # type: ignore[arg-type]
+    assert fleet_cli._achievements(tmp_path, {}, {"scan_date": "2026-11-21"}, None, None, None, frozenset(), [], str) == (None, None)  # type: ignore[arg-type]
     assert "fleet: achievements: not written (ValueError: engine bug)" in capsys.readouterr().err
     assert not (tmp_path / "achievements.json").exists()
 

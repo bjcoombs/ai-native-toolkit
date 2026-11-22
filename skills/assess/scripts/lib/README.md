@@ -1136,6 +1136,30 @@ repository: no `mean_share`, `weakest` or `overall`. `org` rows stay in `groups.
 names and owners and writes a non-token value as `set`; with a salt every unit and
 repository key is `counts_only.hash_value`d and no name, owner or web URL is written.
 `write_fleet_data` writes sorted, compact JSON through a temp file and `os.replace`.
+Version 3 (#746) adds `opportunities` (`fleet_opportunities.build_opportunities`, null
+without a model).
+
+**`fleet_opportunities.py`**
+The `opportunities` object of `fleet-data.json` (#746, parent #740), from one run's rows and
+the maturity model with no history. `in_place`: per team row, measured repositories at its
+top level. `_sole_unmet` re-evaluates each row (`levels.evaluate_row`) and keeps a
+repository only when its level is known and exactly one criterion, status `unmet`, stands
+before its next level (unknown never counts). `biggest_lift` is the (row, level, signal)
+holding the most such repositories (ties: row order, level, signal), worded by
+`next_step_guidance.guidance`, with its Step gate (`[[steps]]`) when it is one.
+`shared_templates`: per `shared_tooling.ci_source_ids` id with at least `MIN_INCLUDERS`
+includers, the includers whose sole unmet criterion reads a `ci_checks.` signal, by row and
+level. Repository keys and source ids go through the run's `Privacy.key`
+(`FLEET_DATA_RULES` classes them `path`); `text` holds counts and model titles only. No
+rank or position field. Tests: `tests/test_fleet_opportunities.py`.
+
+**`fleet_opportunities_section.py`**
+`opportunities_section` renders `report.md`'s "Opportunities" section from a built
+`FleetData` (so the report carries the JSON's privacy) and this run's `Achievements`:
+"Already in place" first, then the biggest lift, the shared templates and the display-only
+recent progress (this run's `level_up` achievements, from the history; a starting-line or
+nothing-new line otherwise). None when `opportunities` is null. Names are listed in key
+order, at most `PER_LIST` per line. Tests: `tests/test_fleet_opportunities.py`.
 
 **`fleet_data_schema.py`**
 Generates `skills/fleet/references/fleet-data.schema.json` from the `FleetData` TypedDict
@@ -1166,7 +1190,8 @@ Tests: `tests/test_fleet_achievements.py`, `tests/test_fleet_achievements_cli.py
 **`fleet_achievements_runs.py`**
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
 `fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
-`READABLE_FLEET_DATA_VERSIONS` (1 and 2: version 1's roll-up is not read, #772),
+`READABLE_FLEET_DATA_VERSIONS` (1, 2 and 3: version 1's roll-up is not read, #772;
+version 3 only adds `opportunities`, #746),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
@@ -1329,7 +1354,8 @@ the slope chart no `--compare`, runs not comparable, or no row known in both run
 is the trend's runs (`fleet_trends`), `None` when the run is not kept in the history;
 `comparison` is the result `_keep_and_compare` wrote. `report_markdown` opens with the
 `fleet_coverage.coverage_line` paragraph when given, then the
-`fleet_credit` section when given, then embeds each with a relative clickable image link or says
+`fleet_credit` section when given, then the `fleet_opportunities_section` section when
+given, then embeds each with a relative clickable image link or says
 why it is not drawn. `write_diagrams` first removes every file in `DIAGRAM_FILES` and the
 report (`clear_diagrams`, also `fleet.py --no-diagrams`), so a skipped diagram never leaves a
 stale picture. A new diagram (#676) adds its module, its `FILE` with its
