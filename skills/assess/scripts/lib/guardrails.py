@@ -15,17 +15,24 @@ Gate kinds read (one gate per configuring file):
   default 10 when unset. flake8's ``max-complexity`` in ``[flake8]`` of
   ``.flake8``, ``setup.cfg`` or ``tox.ini`` (setting it turns C901 on).
 - ``coverage_floor``: the ``coverage_gate`` block's gates that gate something (a
-  non-zero threshold, or a tool default), read once, never re-parsed. The
-  highest ``threshold_percent`` is the gate's threshold.
-Each ruff, flake8 and mypy config is read wherever it sits in the repository
-(a package's own ``pyproject.toml`` is a gate of its own), through the walk
-``coverage_gate`` uses, so a monorepo's package gates are counted beside its
-coverage floors.
-
+  non-zero threshold, or a tool default), read once, never re-parsed. One gate
+  per file that sets a floor; the highest ``threshold_percent`` in that file is
+  its threshold.
 - ``pre_commit``: a root ``.pre-commit-config.yaml`` (or ``.yml``) with at least
   one ``- id:`` hook. One gate per config, whatever its hook count.
 - ``type_strictness``: mypy ``strict = true`` in ``[tool.mypy]`` of
-  ``pyproject.toml`` or ``[mypy]`` of ``mypy.ini`` / ``setup.cfg``.
+  ``pyproject.toml`` or ``[mypy]`` of ``mypy.ini`` / ``.mypy.ini`` / ``setup.cfg``.
+
+Every kind counts one gate per configuring file. Ruff, flake8 and mypy configs
+are read wherever they sit in the repository (a package's own ``pyproject.toml``
+is a gate of its own), through the walk ``coverage_gate`` uses, so a monorepo's
+package gates are counted beside its coverage floors. Within one directory only
+the config the tool itself reads counts: the first, in the tool's own order, that
+configures the tool at all (ruff: ``.ruff.toml``, ``ruff.toml``, then a
+``pyproject.toml`` with ``[tool.ruff]``; flake8: the first of ``setup.cfg``,
+``tox.ini``, ``.flake8`` with a ``[flake8]`` section; mypy: ``mypy.ini``,
+``.mypy.ini``, then a ``pyproject.toml`` with ``[tool.mypy]``, then ``setup.cfg``
+with ``[mypy]``). A lower-precedence file the tool never applies is not a gate.
 
 Not read yet (named in ``not_read``): eslint ``complexity``, TypeScript
 ``strict``, file-size ratchets, architecture or import-boundary tests, required
@@ -54,7 +61,7 @@ from __future__ import annotations
 import configparser
 import re
 import tomllib
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -66,9 +73,10 @@ RUFF_DEFAULT_MAX_COMPLEXITY = 10
 _C901_SELECTORS = frozenset({"C901", "C90", "C9", "C", "ALL"})
 _C901_IGNORES = frozenset({"C901", "C90", "C9", "C"})
 _FAIL_UNDER_TOOLS = frozenset({"coverage.py", "pytest-cov"})
-_RUFF_FILES = ("pyproject.toml", "ruff.toml", ".ruff.toml")
-_FLAKE8_FILES = (".flake8", "setup.cfg", "tox.ini")
-_MYPY_FILES = ("mypy.ini", "setup.cfg")
+# Each tool's own discovery order within one directory.
+_RUFF_FILES = (".ruff.toml", "ruff.toml", "pyproject.toml")
+_FLAKE8_FILES = ("setup.cfg", "tox.ini", ".flake8")
+_MYPY_FILES = ("mypy.ini", ".mypy.ini", "pyproject.toml", "setup.cfg")
 _PRE_COMMIT_FILES = (".pre-commit-config.yaml", ".pre-commit-config.yml")
 _HOOK_RE = re.compile(r"^\s*-\s*id:\s*\S")
 
@@ -234,18 +242,23 @@ def _pre_commit_gate(root: Path) -> Guardrail | None:
     return None
 
 
-def _coverage_gate(block: Mapping[str, Any] | None) -> Guardrail | None:
-    """One gate from the ``coverage_gate`` block: its counted gate with the highest percent."""
+def _coverage_gates(block: Mapping[str, Any] | None) -> list[Guardrail]:
+    """One gate per file of the ``coverage_gate`` block: its counted gate with the highest
+    percent, so a floor counts per configuring file as every other kind does."""
     if not isinstance(block, Mapping) or block.get("available") is False:
-        return None
+        return []
     gates: list[CoverageGate] = list(block.get("gates") or [])
-    counted = [gate for gate in gates if gates_something(gate)]
-    if not counted:
-        return None
-    best = max(counted, key=lambda gate: gate["threshold_percent"] or -1.0)
-    rule = "fail_under" if best["tool"] in _FAIL_UNDER_TOOLS else "threshold"
-    return _gate("coverage_floor", best["tool"], rule, best["threshold_percent"],
-                 best["file"], best["line"])
+    by_file: dict[str, list[CoverageGate]] = {}
+    for gate in gates:
+        if gates_something(gate):
+            by_file.setdefault(gate["file"], []).append(gate)
+    found: list[Guardrail] = []
+    for file in sorted(by_file):
+        best = max(by_file[file], key=lambda gate: gate["threshold_percent"] or -1.0)
+        rule = "fail_under" if best["tool"] in _FAIL_UNDER_TOOLS else "threshold"
+        found.append(_gate("coverage_floor", best["tool"], rule, best["threshold_percent"],
+                           best["file"], best["line"]))
+    return found
 
 
 def _gate(kind: GateKind, tool: str, rule: str, threshold: float | None,
@@ -254,11 +267,69 @@ def _gate(kind: GateKind, tool: str, rule: str, threshold: float | None,
             "line": line, "stated": False, "stated_in": None, "snippet": None}
 
 
+def _toml(root: Path, rel: str) -> Mapping[str, Any] | None:
+    text = _read_text(root / rel)
+    if text is None:
+        return None
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+
+
+def _ini_sections(root: Path, rel: str) -> set[str]:
+    text = _read_text(root / rel)
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read_string(text or "")
+    except configparser.Error:
+        return set()
+    return set(parser.sections())
+
+
+def _configures_ruff(root: Path, rel: str) -> bool:
+    data = _toml(root, rel)
+    if data is None:
+        return False
+    return bool(_table(data, "tool.ruff")) if Path(rel).name == "pyproject.toml" else True
+
+
+def _configures_flake8(root: Path, rel: str) -> bool:
+    return "flake8" in _ini_sections(root, rel)
+
+
+def _configures_mypy(root: Path, rel: str) -> bool:
+    name = Path(rel).name
+    if name == "pyproject.toml":
+        data = _toml(root, rel)
+        return data is not None and bool(_table(data, "tool.mypy"))
+    if name == "setup.cfg":
+        return "mypy" in _ini_sections(root, rel)
+    return (root / rel).is_file()
+
+
+def _applied(root: Path, files: list[str], order: tuple[str, ...],
+             configures: Callable[[Path, str], bool]) -> list[str]:
+    """Per directory, the one config the tool reads: the first in ``order`` that configures it."""
+    by_dir: dict[str, dict[str, str]] = {}
+    for rel in files:
+        path = Path(rel)
+        by_dir.setdefault(path.parent.as_posix(), {})[path.name] = rel
+    chosen: list[str] = []
+    for directory in sorted(by_dir):
+        present = by_dir[directory]
+        pick = next((present[name] for name in order
+                    if name in present and configures(root, present[name])), None)
+        if pick is not None:
+            chosen.append(pick)
+    return chosen
+
+
 def config_files(root: Path, excludes: Excludes | None = None) -> list[str]:
     """Repo-relative POSIX paths of the ruff, flake8 and mypy config files anywhere
     under ``root`` (a package's own ``pyproject.toml`` included), the walk
     ``coverage_gate`` uses: bounded depth, built-in and user excludes."""
-    wanted = set(_RUFF_FILES) | set(_FLAKE8_FILES) | set(_MYPY_FILES) | {"pyproject.toml"}
+    wanted = set(_RUFF_FILES) | set(_FLAKE8_FILES) | set(_MYPY_FILES)
     return [rel.as_posix() for rel in walk_named(root, excludes or (set(), []), wanted)]
 
 
@@ -266,13 +337,13 @@ def find_gates(root: Path, coverage_gate: Mapping[str, Any] | None,
                excludes: Excludes | None = None) -> list[Guardrail]:
     """Every gate this module reads under ``root``, in kind order then file order."""
     files = config_files(root, excludes)
-    names = [(rel, Path(rel).name) for rel in files]
-    gates: list[Guardrail | None] = [_ruff_gate(root, rel) for rel, name in names
-                                     if name in _RUFF_FILES]
-    gates += [_flake8_gate(root, rel) for rel, name in names if name in _FLAKE8_FILES]
-    gates += [_coverage_gate(coverage_gate), _pre_commit_gate(root)]
-    gates += [_mypy_gate(root, rel) for rel, name in names
-              if name in _MYPY_FILES or name == "pyproject.toml"]
+    gates: list[Guardrail | None] = [
+        _ruff_gate(root, rel) for rel in _applied(root, files, _RUFF_FILES, _configures_ruff)]
+    gates += [_flake8_gate(root, rel)
+              for rel in _applied(root, files, _FLAKE8_FILES, _configures_flake8)]
+    gates += [*_coverage_gates(coverage_gate), _pre_commit_gate(root)]
+    gates += [_mypy_gate(root, rel)
+              for rel in _applied(root, files, _MYPY_FILES, _configures_mypy)]
     return [gate for gate in gates if gate is not None]
 
 

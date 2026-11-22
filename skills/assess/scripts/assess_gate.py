@@ -44,12 +44,13 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict, cast
 
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
-from lib.run_context_types import JsonDict, MethodChange
+from lib.reviewed_findings import open_findings
+from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
 
 class FindingHit(TypedDict):
@@ -79,12 +80,12 @@ class GateVerdict(TypedDict):
 
 
 def _findings_by_name(ctx: JsonDict) -> dict[str, JsonDict]:
-    """Index ``derived_findings`` by finding name for O(1) lookup."""
-    return {
-        f["name"]: f
-        for f in ctx.get("derived_findings", [])
-        if isinstance(f, dict) and "name" in f
-    }
+    """Index ``derived_findings`` by finding name, reviewed paths taken out (#721)."""
+    rows = [
+        f for f in ctx.get("derived_findings", [])
+        if isinstance(f, dict) and "name" in f and isinstance(f.get("paths"), list)
+    ]
+    return {f["name"]: cast(JsonDict, f) for f in open_findings(cast("list[DerivedFinding]", rows))}
 
 
 def check_finding_regressions(

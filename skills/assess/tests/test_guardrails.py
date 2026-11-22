@@ -217,3 +217,42 @@ def test_package_configs_are_gates_of_their_own(tmp_path: Path) -> None:
     assert (block["stated"], block["stated_pct"]) == (1, 33.3)
     excluded = scan_guardrails(root, [], detect_coverage_gate(root), ({"pkg"}, []))
     assert [g["kind"] for g in excluded["gates"]] == ["coverage_floor"]
+
+
+def test_only_the_config_the_tool_reads_in_a_directory_counts(tmp_path: Path) -> None:
+    root = _write(tmp_path, {
+        # ruff reads ruff.toml before pyproject.toml: its C901-free config wins.
+        "ruff.toml": "[lint]\nselect = ['E']\n",
+        # mypy reads mypy.ini before pyproject.toml: one strict gate, from mypy.ini.
+        "mypy.ini": "[mypy]\nstrict = True\n",
+        "pyproject.toml": PYPROJECT + "\n[tool.mypy]\nstrict = true\n",
+        # flake8 reads setup.cfg before .flake8.
+        "pkg/setup.cfg": "[flake8]\nmax-complexity = 8\n",
+        "pkg/.flake8": "[flake8]\nmax-complexity = 30\n",
+        "lib/.mypy.ini": "[mypy]\nstrict = true\n",
+    })
+    gates = scan_guardrails(root, [], None)["gates"]
+    assert [(g["kind"], g["tool"], g["file"], g["threshold"]) for g in gates] == [
+        ("complexity_limit", "flake8", "pkg/setup.cfg", 8),
+        ("type_strictness", "mypy", "mypy.ini", None),
+        ("type_strictness", "mypy", "lib/.mypy.ini", None),
+    ]
+
+
+def test_a_pyproject_without_tool_ruff_yields_to_nothing_else(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": "[project]\nname = 'x'\n",
+                             ".ruff.toml": "select = ['C901']\n"})
+    (gate,) = scan_guardrails(root, [], None)["gates"]
+    assert (gate["file"], gate["threshold"]) == (".ruff.toml", 10)
+
+
+def test_each_file_with_a_coverage_floor_is_one_gate(tmp_path: Path) -> None:
+    def cov(file: str, pct: float) -> dict[str, object]:
+        return {"file": file, "line": 1, "tool": "coverage.py", "form": "fail_under",
+                "threshold": pct, "unit": "percent", "threshold_percent": pct, "metric": "lines"}
+    block = {"available": True, "enforced": True,
+             "gates": [cov("a/pyproject.toml", 80), cov("a/pyproject.toml", 90),
+                       cov("b/pyproject.toml", 70)]}
+    gates = scan_guardrails(tmp_path, [], block)["gates"]
+    assert [(g["file"], g["threshold"]) for g in gates] == [
+        ("a/pyproject.toml", 90), ("b/pyproject.toml", 70)]

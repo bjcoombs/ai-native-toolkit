@@ -48,6 +48,7 @@ from lib.badge import maturity_band
 from lib.evidence_check import check_evidence, describe
 from lib.keyhole_signals import mode_for_finding
 from lib.mutation_cap import layer6_cap_violation
+from lib.reviewed_findings import action_entries, carried_completed, reopened_status
 from lib.run_context_types import ActionLifecycle, FinalizeInput, JsonDict
 from lib.wiki_writer import (
     find_log_entry,
@@ -333,9 +334,7 @@ def _read_prior_action_status(assess_dir: Path) -> dict[str, list[JsonDict]]:
     except (json.JSONDecodeError, OSError):
         return {}
     out: dict[str, list[JsonDict]] = {}
-    for a in prior.get("actions", []) if isinstance(prior, dict) else []:
-        if not isinstance(a, dict):
-            continue
+    for a in action_entries(prior, tag_completed=True):  # ``actions`` then ``completed``
         for key in (_action_identity_key(a), _action_text_key(a)):
             if key is not None:
                 out.setdefault(key, []).append(a)
@@ -436,22 +435,18 @@ def _write_actions_contract(
         valid.append(a)
     if not valid:
         return
-    entries = []
+    entries: list[JsonDict] = []
+    matched: list[JsonDict] = []
     for a in sorted(valid, key=lambda a: a["rank"]):
-        # Keep whatever the LLM supplied (rank/action/done_when/scope_fence plus
-        # any recommended files/first_step/layer/effort/finding), then stamp the
-        # v2 lifecycle + derived mode over it so those fields are authoritative.
-        entry = {
-            **a,
-            **_carry_status_fields(_match_prior_action(prior, a)),
-            "mode": mode_for_finding(a.get("finding")),
-        }
-        entries.append(entry)
-    payload = {
-        "schema": ACTIONS_SCHEMA_VERSION,
-        "run_id": run_id,
-        "actions": entries,
-    }
+        # Keep whatever the LLM supplied, then stamp the v2 lifecycle + derived
+        # mode over it. A done action back from ``completed`` reopens (#721).
+        matched.append(_match_prior_action(prior, a))
+        life = _carry_status_fields(matched[-1])
+        life["status"] = reopened_status(matched[-1], life["status"])
+        entries.append({**a, **life, "mode": mode_for_finding(a.get("finding"))})
+    completed = carried_completed(prior, matched)  # done entries that left the Top 3
+    payload = {"schema": ACTIONS_SCHEMA_VERSION, "run_id": run_id, "actions": entries,
+               **({"completed": completed} if completed else {})}
     (assess_dir / "actions.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 

@@ -45,8 +45,8 @@ AI_USAGE: JsonDict = {
     "description": (
         "Agent involvement in the commits of the run window (lib/ai_usage.py), counted from git "
         "history. An agent identity is matched by trailer (Co-Authored-By and similar) or by "
-        "author against the pinned agent rules plus any [[ai_usage.agent_identities]] rules of "
-        "--fleet-config. Counts are commits; shares are of total_commits. A lower bound: an "
+        "author against the accounts confirmed in [identities], the pinned agent rules and any "
+        "[[ai_usage.agent_identities]] rules of --fleet-config. Counts are commits; shares are of total_commits. A lower bound: an "
         "agent that leaves no trace is not counted."),
     "properties": {
         "available": {"type": "boolean"},
@@ -71,6 +71,12 @@ AI_USAGE: JsonDict = {
             {"type": "array", "items": _INT},
             "Commits each [[ai_usage.agent_identities]] rule matched, a positional list in rule "
             "order; the rule patterns themselves are never written."),
+        "identities_awaiting_confirmation": _field(
+            _INT, "Accounts in the window that look automated (a [bot] suffix, a GitLab "
+                  "token user, a bot or AI tool name) and are neither classified in the "
+                  "[identities] config section nor counted by an agent rule (#765). A next "
+                  "step for the human, never a score; the accounts are listed only by "
+                  "scripts/identity_candidates.py."),
         "lower_bound": {"type": "boolean"},
         "covered_agents": _STRINGS,
         "covered_author_agents": _STRINGS,

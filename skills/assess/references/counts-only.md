@@ -405,6 +405,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `derived_findings.name` | token |
 | `derived_findings.paths` | path (hashed when hashing is on) |
 | `derived_findings.action` | dropped |
+| `derived_findings.reviewed.path` | path (hashed when hashing is on) |
+| `derived_findings.reviewed.completed_sha` | dropped |
+| `derived_findings.reviewed.note` | dropped |
 | `attention.findings` | token |
 | `prescribed_actions.findings` | token |
 | `prescribed_actions.action` | dropped |
