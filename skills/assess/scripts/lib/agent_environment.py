@@ -78,9 +78,10 @@ the built-in and `.assess/config.toml` excludes. Findings are `copilot-setup-ste
 constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `setup_ready` is the
-setup half of that cap on its own (committed setup, or every manifest locked, or
-no manifest). `pinning.manifests_total` counts the manifests the lock check reads
-and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
+setup half of that cap on its own (committed setup, or every counted manifest
+locked, or no manifest). The pinning rows and totals come from `lib.pinning`.
+`pinning.manifests_total` counts the manifests the lock check reads (every row but
+a `skipped_library`) and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
 model reads `unlocked_total` `eq 0`, and reads not measured (`no_manifests`,
 `signal_grades.EMPTY_DENOMINATORS`, #927) when `manifests_total` is 0, so committed
 setup does not stand in for a lockfile and the named check is read once, by

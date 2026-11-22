@@ -53,6 +53,8 @@ the locks of central package management sit beside each project.
 
 The manifest text read to decide these (``type``, ``publish_to``, ``.library(``,
 ``builtin-baseline``) is never kept: a row holds paths, tokens and booleans.
+
+Tests: ``tests/test_pinning.py``, ``tests/test_agent_environment.py``.
 """
 from __future__ import annotations
 
