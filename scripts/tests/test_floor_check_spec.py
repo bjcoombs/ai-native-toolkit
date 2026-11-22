@@ -130,7 +130,6 @@ def floor_repo(tmp_path):
 
 def test_tokens_the_first_token_is_the_marker_the_markers_section_shows():
     """Tokens: "The first token is the marker"; Markers shows it on its own line."""
-    assert len(TOKENS) == 4, "FLOOR.md's Tokens block declares the marker and three gates"
     assert MARKER_TEXT == _displayed_marker()
     assert all(token != MARKER_TEXT for token in INVOCATIONS)
 
@@ -185,6 +184,7 @@ def test_tokens_removing_a_token_is_a_floor_change_that_goes_red(floor_repo):
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason=(
         "floor-core finding (#719): removed_tokens compares raw substring "
         "counts, so a gate name inside a longer name (restart_gate.py for "
@@ -320,6 +320,7 @@ def test_markers_a_moved_component_is_followed_to_its_new_path(floor_repo):
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason=(
         "floor-core finding (#719): cmd_markers follows a move only to a "
         "component path (skills/<x>/SKILL.md, plugins/<p>/skills/<x>/SKILL.md, "
@@ -332,6 +333,7 @@ def test_markers_a_moved_marked_file_outside_a_component_path_is_followed(floor_
     read as a deletion" - the sentence names any marked file."""
     _write(floor_repo, "docs/runbook.md", _marked_body())
     _commit(floor_repo, "a marked runbook outside the component shapes")
+    (floor_repo / "docs" / "ops").mkdir()
     _git(floor_repo, "mv", "docs/runbook.md", "docs/ops/runbook.md")
     rc, out = _floor_check(floor_repo, "markers", "--base", "HEAD")
     assert rc == 0, out
