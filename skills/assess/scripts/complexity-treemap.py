@@ -1449,6 +1449,8 @@ def main() -> int:
     )
     if not files:
         print(_no_files_message(scope, excluded_generated), file=sys.stderr)
+        if args.stats and shutil.which("scc"):  # scc reads every language: a measured empty set (#959)
+            write_stats([], aux_data, aux_label, root, args.stats, excluded_generated=excluded_generated)
         return 1
 
     _warn_if_dominated_by_one_file(files)
@@ -1480,10 +1482,8 @@ def main() -> int:
     if args.stats:
         write_stats(files, aux_data, aux_label, root, args.stats,
                     fn_ccn_by_path=fn_ccn_by_path, tokens_by_path=tokens,
-                    churn_degenerate=churn_degenerate,
-                    excluded_generated=excluded_generated,
-                    languages_by_path=scc_languages,
-                    fn_name_by_path=fn_names,
+                    churn_degenerate=churn_degenerate, excluded_generated=excluded_generated,
+                    languages_by_path=scc_languages, fn_name_by_path=fn_names,
                     fn_backend_by_path=fn_backends)
     return 0
 

@@ -455,15 +455,17 @@
                           "project",
                           "component",
                           "template",
-                          "remote"
-                        ]
+                          "remote",
+                          "unknown"
+                        ],
+                        "description": "local, project, component, template, remote, or unknown (an include entry this reader cannot parse; status unparsed)."
                       },
                       "id": {
                         "type": [
                           "string",
                           "null"
                         ],
-                        "description": "gitlab_project:<path> or gitlab_component:<path>; null for local, template and remote."
+                        "description": "gitlab_project:<path> or gitlab_component:<path>; null for the other kinds."
                       },
                       "status": {
                         "enum": [
