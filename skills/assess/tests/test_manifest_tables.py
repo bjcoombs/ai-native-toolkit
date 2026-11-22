@@ -34,17 +34,20 @@ def test_signal_inputs_are_the_manifest_evidence() -> None:
     assert SIGNAL_INPUTS == cm.signal_inputs(cm.core_manifest())
 
 
-def test_removing_a_signal_evidence_line_drops_its_grade() -> None:
+def test_removing_a_signal_evidence_line_fails_the_load() -> None:
+    """No class is no grade: the loader SIGNAL_INPUTS is built through rejects the manifest."""
     m = _raw()
-    assert _grade(cm.signal_inputs(m), SIGNAL) == "verified"
     del _entry(m, "signal", "path", SIGNAL)["evidence"]
-    assert _grade(cm.signal_inputs(m), SIGNAL) is None
+    with pytest.raises(cm.CheckManifestError) as err:
+        cm.parse_manifest(m)
+    assert any(e["code"] == "MISSING_KEY" and "evidence" in str(e) for e in err.value.errors)
 
 
 def test_editing_a_signal_evidence_line_changes_its_grade() -> None:
     m = _raw()
+    assert _grade(cm.signal_inputs(cm.parse_manifest(m)), SIGNAL) == "verified"
     _entry(m, "signal", "path", SIGNAL)["evidence"] = "head_text"
-    assert _grade(cm.signal_inputs(m), SIGNAL) == "declared"
+    assert _grade(cm.signal_inputs(cm.parse_manifest(m)), SIGNAL) == "declared"
 
 
 def test_every_scan_spec_is_built_from_its_collector_entry() -> None:
@@ -89,10 +92,30 @@ def test_evidence_vocabulary_is_the_input_classes() -> None:
     assert cm.EVIDENCE == get_args(InputClass)
 
 
+def _imported(source: str) -> set[str]:
+    """Every ``lib`` module a source imports: plain, ``from`` and package-relative imports."""
+    names: set[str] = set()
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Import):
+            names.update(a.name for a in n.names)
+        elif isinstance(n, ast.ImportFrom):
+            base = n.module or ""
+            if n.level:  # relative: lib/ is flat, so any level resolves inside lib
+                base = f"lib.{base}" if base else "lib"
+            names.update([base] if base != "lib" else [f"lib.{a.name}" for a in n.names])
+    return {name for name in names if name == "lib" or name.startswith("lib.")}
+
+
 def _lib_imports(module: str) -> set[str]:
-    tree = ast.parse((LIB / f"{module}.py").read_text(encoding="utf-8"))
-    return {n.module for n in ast.walk(tree)
-            if isinstance(n, ast.ImportFrom) and n.module and n.module.startswith("lib")}
+    return _imported((LIB / f"{module}.py").read_text(encoding="utf-8"))
+
+
+def test_the_import_guard_sees_every_import_form() -> None:
+    assert _imported("from lib.check_manifest import core_manifest") == {"lib.check_manifest"}
+    assert _imported("import lib.core_scans") == {"lib.core_scans"}
+    assert _imported("from lib import core_scans") == {"lib.core_scans"}
+    assert _imported("from . import core_scans") == {"lib.core_scans"}
+    assert _imported("from .core_scans import level") == {"lib.core_scans"}
 
 
 def test_signal_grades_reaches_only_the_manifest_loader() -> None:

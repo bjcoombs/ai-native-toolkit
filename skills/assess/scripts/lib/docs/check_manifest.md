@@ -120,7 +120,11 @@ validates the loaded manifest against the schema. `SIGNAL_INPUTS` and each ScanS
 from the manifest (`check_manifest.signal_inputs`, `scan_registry.spec_from_manifest`,
 #953; `tests/test_manifest_tables.py`): a signal's evidence or a scan's inputs change in
 the manifest only. Adding a scan still adds its table line (key, callable, spread keys,
-offline callable), and a criterion or typed root its manifest entry. A
+offline callable), and a criterion or typed root its manifest entry. A manifest edit
+keeps each callable's positional contract: a scan's `reads` are its arguments in order.
+`level` zips its arguments with `level_tally.LEVEL_READS`, so `scan_registry.pinned_reads`
+fails the import when `checks/core/level.toml` lists other reads or another order; change
+`LEVEL_READS` with it. A
 counts-only rule is added in the manifest only; a finding is added in the manifest plus
 its path derivation in `keyhole_signals._finding_path_inputs`
 (`test_every_finding_has_a_path_derivation` pins the two name sets). The generated tables are

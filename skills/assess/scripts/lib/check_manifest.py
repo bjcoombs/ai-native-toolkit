@@ -759,6 +759,6 @@ def reason_codes(manifest: CheckManifest, block: str) -> list[UnknownReason]:
 
 
 def signal_inputs(manifest: CheckManifest) -> dict[str, str]:
-    """Signal path -> its ``evidence`` class (``signal_grades.SIGNAL_INPUTS``, #953); a signal
-    with no ``evidence`` (an unvalidated document) has no class, so no grade."""
-    return {s["path"]: s["evidence"] for s in signals(manifest) if "evidence" in s}
+    """Signal path -> its ``evidence`` class (``signal_grades.SIGNAL_INPUTS``, #953). The loader
+    requires ``evidence`` on every signal, so a signal is classified on purpose (#783)."""
+    return {s["path"]: s["evidence"] for s in signals(manifest)}
