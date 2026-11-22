@@ -43,12 +43,12 @@ Verified practices: 9 of 12 measured · 4 not measured (needs a full run: 1, no 
 
 **Shipped** in https://github.com/bjcoombs/ai-native-toolkit/pull/888, as the `[[steps]]` table in `skills/assess/levels/default.toml`:
 
-| Step | Name | Gate added at this Step | Provisional threshold |
-|---|---|---|---|
-| 1 | Assisted: one supervised agent | none | 0 |
-| 2 | Supervised agent PRs | `instructions`: an instruction file an agent reads (`layer-0-instructions` level 1) | 1 |
-| 3 | Unattended agent PRs | `ci_runs_tests`: CI runs the tests, unmasked (`layer-5-ci` level 1, https://github.com/bjcoombs/ai-native-toolkit/issues/775) | 3 |
-| 4 | Autonomous loops | `coverage_gate`: an enforced coverage gate (`layer-6-coverage` level 1) | 5 |
+| Step | Name | What it supports | Gate added at this Step | Provisional threshold |
+|---|---|---|---|---|
+| 1 | `Assisted` | one supervised agent | none | 0 |
+| 2 | `Supervised agent PRs` | agent PRs a person reviews | `instructions`: an instruction file an agent reads (`layer-0-instructions` level 1) | 1 |
+| 3 | `Unattended agent PRs` | agent PRs without a person watching | `ci_runs_tests`: CI runs the tests, unmasked (`layer-5-ci` level 1, https://github.com/bjcoombs/ai-native-toolkit/issues/775) | 3 |
+| 4 | `Autonomous loops` | marathon-style autonomous loops | `coverage_gate`: an enforced coverage gate (`layer-6-coverage` level 1) | 5 |
 
 - Gates accumulate, so Step 4 needs all three.
 - A Step also needs its count threshold of met, counted conditions. The thresholds above are provisional. They will be calibrated on the 12-repository corpus and versioned with the model (decided, pending in https://github.com/bjcoombs/ai-native-toolkit/issues/842).
