@@ -753,3 +753,9 @@ def reason_codes(manifest: CheckManifest, block: str) -> list[UnknownReason]:
                 for r in c.get("unknown_reasons", [])]
     return [r for r in declared
             if r.get("carried_in", "reason") == "reason" and r.get("block", block) == block]
+
+
+def signal_inputs(manifest: CheckManifest) -> dict[str, str]:
+    """Signal path -> its ``evidence`` class (``signal_grades.SIGNAL_INPUTS``, #953); a signal
+    with no ``evidence`` (an unvalidated document) has no class, so no grade."""
+    return {s["path"]: s["evidence"] for s in signals(manifest) if "evidence" in s}

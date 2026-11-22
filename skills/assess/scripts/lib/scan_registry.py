@@ -76,6 +76,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
+from lib import check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib.agent_building import scan_agent_building
@@ -313,6 +314,38 @@ _BAD_SCOPE = "an invalid --scope is a usage error the CLI reports with exit code
 _SELF_DEGRADING = "degrades internally to an explicit unavailable result; a raise here is a bug"
 _SERIALISER = "copies fields out of an earlier result that already carries its own degrade"
 GATE_REASONS = frozenset({_SETUP, _BAD_SCOPE, _SELF_DEGRADING, _SERIALISER})
+# The manifest's ``gate_reason`` token -> the reason text (``check_manifest.GATE_REASONS``).
+GATE_REASON_TEXT = {"setup": _SETUP, "bad_scope": _BAD_SCOPE,
+                    "self_degrading": _SELF_DEGRADING, "serialiser": _SERIALISER}
+
+
+def spec_from_manifest(manifest: cm.CheckManifest, key: str, fn: Callable[..., Any], *,
+                       spread: tuple[str, ...] = (),
+                       offline_fn: Callable[..., Any] | None = None) -> ScanSpec:
+    """The ``ScanSpec`` for ``key``, its metadata read from the key's collector entry (#953).
+
+    ``reads``, ``stage``, ``degrade``, ``gate_reason``, ``label``, ``private`` and
+    ``network`` come from the manifest; the callables, the spread keys and the table order
+    stay in code. A key with no collector entry, or a spread that disagrees with the
+    entry's ``spread`` flag, raises ``ScanRegistryError``.
+    """
+    entry = next((c for c in cm.collectors(manifest) if cm.scan_key(c) == key), None)
+    if entry is None:
+        raise ScanRegistryError(f"scan {key!r} has no collector entry in the check manifest")
+    if bool(spread) != entry.get("spread", False):
+        raise ScanRegistryError(f"scan {key!r}: spread keys disagree with the manifest's spread flag")
+    gate = entry.get("gate_reason")
+    return ScanSpec(key, fn, tuple(entry["reads"]), entry["stage"],
+                    degrade=entry.get("degrade", True),
+                    gate_reason="" if gate is None else GATE_REASON_TEXT[gate],
+                    label=entry.get("label", ""), private=entry.get("private", False),
+                    spread=spread, network=entry.get("network", False), offline_fn=offline_fn)
+
+
+def _spec(key: str, fn: Callable[..., Any], *, spread: tuple[str, ...] = (),
+          offline_fn: Callable[..., Any] | None = None) -> ScanSpec:
+    """``spec_from_manifest`` over the core manifest: one table entry."""
+    return spec_from_manifest(cm.core_manifest(), key, fn, spread=spread, offline_fn=offline_fn)
 
 KEYHOLE_KEYS = (
     "structure", "behaviour", "documentation", "understanding", "runtime",
