@@ -52,8 +52,10 @@ from lib.instruction_files import grade_instruction_files
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 
-# Bumped when the document's envelope (stamp fields, top-level keys) changes.
-# Per-scan blocks carry their own shapes and are not versioned here.
+# Bumped when the document's envelope (stamp fields, top-level keys) changes,
+# or when a scanner change alters when an existing signal reads true or null
+# without a new signal name (the fleet comparison convention,
+# lib/fleet_scanner_diff.py). Per-scan block shapes are not versioned here.
 SIGNALS_SCHEMA_VERSION = 2
 
 # Run-context blocks ``assess_core`` assembles through its own table entries in
