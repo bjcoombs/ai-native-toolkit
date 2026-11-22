@@ -45,7 +45,9 @@ only), then the `gh auth status` probe (`open_github`), then `gh_api(path)` /
 `gh_not_installed`, `not_authenticated`, `no_access` (HTTP 403, in both forms `gh`
 prints it: REST `(HTTP 403)` and GraphQL `HTTP 403: ...`, as GitLab's 403 does; #779), `not_found`
 (HTTP 404), `rate_limited` (HTTP 429 or a rate-limit 403 after the backoff), `gh_timeout`, `gh_error`,
-`gh_bad_json`. `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
+`gh_bad_json`. A `gh_error` (and `gitlab_cli`'s `glab_error`) also carries
+`GhUnavailable.status`, the HTTP status the CLI printed (`"502"`), so a caller retries a
+server error without parsing the reason (`merged_sample`, #995). `gh` runs through `platform_cli.run_cli`. A scan must degrade on it,
 never report a clean result. Tests fake `gh` with a script first on `PATH`
 (`tests/test_config_drift.py`). `git_remote_url` (the remote both providers read)
 lives here and is shared with `gitlab_cli`.
@@ -80,11 +82,15 @@ _HTTP_STATUS_RE = re.compile(r"\bHTTP (\d{3})\b")
 
 
 class GhUnavailable(Exception):
-    """A GitHub read could not be made or was refused; ``reason`` says why."""
+    """A GitHub read could not be made or was refused; ``reason`` says why.
 
-    def __init__(self, reason: str) -> None:
+    ``status`` is the HTTP status the CLI printed (``"502"``), None when it printed
+    none; a caller that retries a server error reads it instead of the reason text."""
+
+    def __init__(self, reason: str, status: str | None = None) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.status = status
 
 
 @dataclass(frozen=True)
@@ -176,7 +182,7 @@ def _run_gh(args: list[str], timeout: int = GH_TIMEOUT_SECONDS, cache: bool = Tr
         raise GhUnavailable(f"no_access: `{shown}` was refused ({detail})")
     if status and status[-1] == "404":
         raise GhUnavailable(f"not_found: `{shown}` ({detail})")
-    raise GhUnavailable(f"gh_error: `{shown}` failed ({detail})")
+    raise GhUnavailable(f"gh_error: `{shown}` failed ({detail})", status[-1] if status else None)
 
 
 def open_github(repo_root: Path, timeout: int = GH_TIMEOUT_SECONDS) -> GithubRepo:

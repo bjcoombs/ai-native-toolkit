@@ -174,7 +174,7 @@ def test_a_pipe_in_a_criterion_value_keeps_the_table_columns() -> None:
     row_lines = [line for line in render_markdown(build_catalog(model=model)).splitlines()
                  if "x.y in" in line]
     assert len(row_lines) == 1
-    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == 6  # five columns
+    assert len(re.findall(r"(?<!\\)\|", row_lines[0])) == 7  # six columns
 
 
 def test_markdown_avoids_the_retired_vocabulary() -> None:

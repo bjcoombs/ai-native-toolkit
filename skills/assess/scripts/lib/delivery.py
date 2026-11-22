@@ -20,12 +20,15 @@ Block (``delivery``)::
      "ai_review_share": float | None,           # changes with an AI reviewer's review or comment
      "approved_share": float | None,            # copied from review_reality
      "self_merged_share": float | None,         # copied from review_reality
-     "agent_authored_share": float | None}      # changes an agent identity authored
+     "agent_authored_share": float | None,      # changes an agent identity authored
+     "sample_page_size": int | None}            # changes per heavy sample read (#995)
 
 Durations are hours, rounded to 0.01, over the sampled changes that have both
 timestamps; a percentile is the nearest-rank value (the ``ceil(p * n)``-th
 smallest), so it is always one observed duration. Every figure is None when
-nothing was sampled.
+nothing was sampled. ``sample_page_size`` is the sample's ``page_size``: the
+changes per heavy read it finished at (``merged_sample.PAGE_SIZE``, or half that
+after one retry on HTTP 502 or 504), None when no heavy read was made.
 
 First human comment (GitHub). The earliest comment (``createdAt``) or review
 (``submittedAt``) on the pull request by an account that is neither its author,
@@ -78,7 +81,8 @@ The `delivery` platform block (#715, part of #702), reads `merged_sample`,
 `review_reality`, `fleet_config` and `gitlab_note_facts`: `{available, merged_count,
 time_to_merge_hours_p50, time_to_merge_hours_p90, first_human_comment_hours_p50,
 first_human_comment_hours_p90, human_commented_share, ai_review_share,
-approved_share, self_merged_share, agent_authored_share}`. Hours rounded to 0.01; percentiles are
+approved_share, self_merged_share, agent_authored_share, sample_page_size}`
+(`sample_page_size`: the sample's `page_size`, a count, #995). Hours rounded to 0.01; percentiles are
 nearest-rank. `approved_share` and `self_merged_share` are copied from
 `review_reality` (null when it is unavailable). First human comment (GitHub): the
 earliest comment or review by an account that is not the author, not
@@ -156,6 +160,7 @@ class DeliveryBlock(TypedDict):
     approved_share: float | None
     self_merged_share: float | None
     agent_authored_share: float | None
+    sample_page_size: int | None
 
 
 def percentile(values: Sequence[float], p: float) -> float | None:
@@ -280,6 +285,7 @@ def _block(total: int, merge: list[float], comment: list[float] | None, commente
         "approved_share": _copied(review, "approved_share"),
         "self_merged_share": _copied(review, "self_merged_share"),
         "agent_authored_share": None,  # filled by scan_delivery from the same sample
+        "sample_page_size": None,  # filled by scan_delivery from the same sample
     }
 
 
@@ -324,4 +330,5 @@ def scan_delivery(sample: SampleOrReason, review_reality: Any,
         block = github_delivery(sample, review_reality, matcher)
     authored = sum(agent_authored(c, sample.provider, matcher) for c in sample.changes)
     block["agent_authored_share"] = _share(authored, len(sample.changes))
+    block["sample_page_size"] = sample.page_size
     return block

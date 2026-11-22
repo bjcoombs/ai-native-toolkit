@@ -160,7 +160,8 @@ def _biggest_lift(model: MaturityModel, team_rows: Sequence[Row], lifts: Mapping
     row_id, level, signal, index = best
     row = team_rows[order[row_id]]
     criterion = _criteria(row, level)[index]
-    words = guidance(signal, criterion["op"], criterion["value"])
+    # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
+    words = None if "eq_signal" in criterion else guidance(signal, criterion["op"], criterion["value"])
     gate, step = _gate(model, row_id, level)
     repos = lifts[best]
     unlock = f" It is the `{gate}` gate for Step {step}." if gate is not None else ""

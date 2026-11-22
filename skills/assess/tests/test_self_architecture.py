@@ -242,11 +242,15 @@ def test_core_does_not_import_orchestrators() -> None:
 # parenthesised issue reference) and no sentence ends before that.
 _ONE_SENTENCE = re.compile(r"^[^\s].*[.?!](?: \([^()]*\))?$")
 _SENTENCE_BREAK = re.compile(r"[.?!] +[A-Z]")
+# A module too long to hold its whole reference keeps a summary and points at
+# its own file under lib/docs/ (one file per module, so no shared hotspot).
+_POINTER = re.compile(r"Full reference: lib/docs/([\w.-]+\.md)")
 
 
-def _docstring_problem(path: Path) -> str | None:
+def _docstring_problem(path: Path, docs_dir: Path = LIB_DIR / "docs") -> str | None:
     """Why ``path`` fails the docstring rule, or None when it passes. An
-    ``__init__.py`` holding nothing but a docstring marks a package and is exempt."""
+    ``__init__.py`` holding nothing but a docstring marks a package and is exempt.
+    A ``Full reference: lib/docs/<name>.md`` pointer must name a file in ``docs_dir``."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     doc = ast.get_docstring(tree)
     if path.name == "__init__.py" and all(
@@ -260,6 +264,9 @@ def _docstring_problem(path: Path) -> str | None:
     first = doc.splitlines()[0]
     if not _ONE_SENTENCE.match(first) or _SENTENCE_BREAK.search(first[:-1]):
         return f"first line is not a single sentence: {first!r}"
+    missing = [name for name in _POINTER.findall(doc) if not (docs_dir / name).is_file()]
+    if missing:
+        return f"points at a missing reference: lib/docs/{missing[0]}"
     return None
 
 
@@ -275,6 +282,18 @@ def test_every_lib_module_has_a_docstring() -> None:
     problems = [f"{p.relative_to(LIB_DIR).as_posix()}: {why}" for p in modules
                 if (why := _docstring_problem(p)) is not None]
     assert not problems, "lib modules need a one-sentence docstring summary:\n  " + "\n  ".join(problems)
+
+
+def test_every_lib_docs_file_is_one_modules_reference() -> None:
+    """Each ``lib/docs/<name>.md`` is the full reference of exactly one module,
+    whose docstring points at it, so no file there is orphaned or shared."""
+    pointed: dict[str, list[str]] = {}
+    for module in _lib_modules():
+        for name in _POINTER.findall(ast.get_docstring(_parse(module)) or ""):
+            pointed.setdefault(name, []).append(module.relative_to(LIB_DIR).as_posix())
+    docs = sorted(p.name for p in (LIB_DIR / "docs").glob("*.md"))
+    assert docs, "expected the long module references under lib/docs/"
+    assert [d for d in docs if len(pointed.get(d, [])) != 1] == [], pointed
 
 
 def test_the_docstring_check_fails_on_a_missing_or_run_on_summary(tmp_path: Path) -> None:
@@ -296,6 +315,11 @@ def test_the_docstring_check_fails_on_a_missing_or_run_on_summary(tmp_path: Path
     for name, body in good.items():
         (tmp_path / name).write_text(body, encoding="utf-8")
         assert _docstring_problem(tmp_path / name) is None, name
+    pointer = tmp_path / "pointer.py"
+    pointer.write_text('"""Parse a report.\n\nFull reference: lib/docs/pointer.md."""\n', encoding="utf-8")
+    assert _docstring_problem(pointer, tmp_path) == "points at a missing reference: lib/docs/pointer.md"
+    (tmp_path / "pointer.md").write_text("# pointer\n", encoding="utf-8")
+    assert _docstring_problem(pointer, tmp_path) is None
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("", encoding="utf-8")

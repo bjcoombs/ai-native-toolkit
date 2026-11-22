@@ -102,6 +102,8 @@ ever cut, this note is where the intended boundary is written down.
 
 There is no per-module index here: each module documents itself in its own module docstring,
 a one-line summary followed by the details (`tests/test_self_architecture.py` enforces it).
+A module too long to hold its whole reference within its file-size limit keeps a summary
+and points at its own `docs/<module>.md`.
 
 Windows portability (#712, #752): every text-mode `subprocess.run` names
 `encoding="utf-8"` (with `errors="replace"`, or `surrogateescape` on every `git ls-files -z` listing, whose paths must

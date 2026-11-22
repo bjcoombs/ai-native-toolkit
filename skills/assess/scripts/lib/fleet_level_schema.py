@@ -48,6 +48,7 @@ def level_result_schema() -> JsonDict:
     condition["exclusion_kind"] = excluded["kind"] = {"enum": list(KINDS)}
     condition["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
     excluded["source"] = {"enum": [SOURCE_REPO]}
+    condition["polarity"] = {"enum": ["hazard"], "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"}
     blocker = next(b for b in props["next_step"]["anyOf"] if b.get("type") == "object")
     blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
     blocker_fields["kind"] = {"enum": ["gate", "threshold"]}

@@ -93,48 +93,19 @@ Two optional additions feed the verified tally and the Steps (``lib/level_tally.
   ``level`` are met. Step 1 has threshold 0 and no gates; each later Step keeps
   every gate of the one below (gates accumulate) and never lowers the threshold.
 
+Four condition fields come from ``lib/levels_fields.py`` (#843), which documents
+them: ``truth`` (required, multi-valued tags, with the legacy layer alias for a model
+that carries none) and the additive ``polarity``, ``guarded_by`` and ``eq_signal``.
+
 Loading raises ``LevelsError`` before any evaluation on a malformed maturity model: a
 missing version, an unset or invalid scope, a gap or duplicate in level
 numbering, an unknown operator or key, a team row with no aggregation rule,
 a ``requires`` naming a condition that does not exist (or itself, or a cycle),
-a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
+a missing, empty or unknown ``truth`` (``MixedTruthError`` when only some conditions
+carry it), a bad ``polarity``, ``guarded_by`` or ``eq_signal``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. ``dumps_result`` gives
 byte-identical JSON for identical inputs.
 
-Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
-from signals with no model in the path. A criterion over a signal in
-`signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
-the table's code as its `reason` (`no_scored_files`, #906), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
-once per group from the group settings; `team`: per repository from its
-`run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
-numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
-`not_in`) over dotted signal paths. A row reaches level N only when every criterion of
-N and of every lower level holds. A missing key, a null, a path through an
-`available: false` block or a type mismatch makes the criterion `unknown`. A row then
-carries `bounds` (`low`: the definitely-met climb; `high`: below the first definitely
-unmet level above it, else K) and is `unknown` only when they differ, so it is never a
-false 0 or a false pass. `missing_signals` names every signal whose criterion is
-unknown (unavailable or mistyped) even when the level is known. A criterion's `actual`
-is the resolved value only when it is a finite scalar, null otherwise, and
-`dumps_result` writes with `allow_nan=False`, so a result is always strict JSON (#602). Every level's unmet criteria are in the result for next-step guidance.
-A team roll-up applies the rule to the low and the high bounds and reports a level
-only when both agree; `unknown_repos` names the repositories whose level is open.
-`share_level` is that rule on a list of whole levels (`fleet_achievements` rolls units with it).
-`load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
-version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
-key, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
-rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
-rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
-parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).
-Tests: `tests/test_levels.py` with fixtures under `tests/fixtures/levels/`; the renamed
-flag in `tests/test_fleet_legacy.py`.
-An `unknown` result or evaluation whose low bound is at least 1 carries `floor` (#697); `floor_of(entry)` reads it, tolerating its absence.
-Two optional model keys feed `level_tally.py` and leave every row level unchanged (#744):
-`requires` on a level (condition ids, `<row id>.<level>` from `condition_id`, that must be
-met for this condition to count as met; an unknown id, a self-reference or a cycle fails
-the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`, and
-`gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
-later Step keeps every gate of the one below and never lowers the threshold, or the load
-fails. A model without them loads exactly as before.
+Full reference: lib/docs/levels.md.
 """
 from __future__ import annotations
 
@@ -146,6 +117,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, TypedDict
 
+from lib.levels_fields import LevelsError as LevelsError, MixedTruthError as MixedTruthError
+from lib.levels_fields import check_guards, check_truth, legacy_truth, parse_eq_signal, parse_guard
+from lib.levels_fields import parse_polarity, parse_truth
 from lib.signal_grades import EMPTY_DENOMINATORS
 
 Scope = Literal["org", "team"]
@@ -166,10 +140,10 @@ OPERATORS = _EQUALITY_OPS + _ORDER_OPS + _MEMBER_OPS
 
 _ROOT_KEYS = frozenset({"version", "rows", "steps"})
 _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"})
-_LEVEL_KEYS = frozenset({"level", "criteria", "requires"})
+_LEVEL_KEYS = frozenset({"level", "criteria", "requires", "truth", "polarity", "guarded_by"})
 _STEP_KEYS = frozenset({"step", "name", "threshold", "gates"})
 _GATE_KEYS = frozenset({"id", "row", "level"})
-_CRITERION_KEYS = frozenset({"signal", "op", "value"})
+_CRITERION_KEYS = frozenset({"signal", "op", "value", "eq_signal"})
 
 # The option that named the maturity-model file before 2.0.0 (#670). It is still
 # accepted by the parser so that using it fails loudly, never silently.
@@ -191,14 +165,12 @@ def add_renamed_flag(parser: argparse.ArgumentParser) -> None:
                         help=argparse.SUPPRESS)
 
 
-class LevelsError(ValueError):
-    """The maturity model cannot be loaded; the message names the row and the fault."""
-
-
 class Criterion(TypedDict):
     signal: str
     op: str
+    # the operand; for an ``eq_signal`` criterion, the second path (lib/levels_fields.py)
     value: Scalar | list[Scalar]
+    eq_signal: NotRequired[str]
 
 
 class Level(TypedDict):
@@ -206,6 +178,9 @@ class Level(TypedDict):
     criteria: list[Criterion]
     # condition ids (``<row id>.<level>``) this condition needs met (#744)
     requires: NotRequired[list[str]]
+    truth: list[str]  # declared, or resolved by the legacy layer alias (#843)
+    polarity: NotRequired[Literal["hazard"]]  # absent: positive, the default
+    guarded_by: NotRequired[str]  # one condition id whose state gates a verified grade
 
 
 class Aggregation(TypedDict):
@@ -318,11 +293,15 @@ def load_levels(path: Path, validator: PathValidator | None = None) -> MaturityM
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise LevelsError(f"cannot read maturity model {path.name}: {exc}") from exc
-    return parse_levels(data, validator)
+    return parse_levels(data, validator, source=str(path))
 
 
-def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None) -> MaturityModel:
-    """Validate an already-parsed maturity model table; raise ``LevelsError`` on any fault."""
+def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None, *,
+                 source: str = "<table>") -> MaturityModel:
+    """Validate an already-parsed maturity model table; raise ``LevelsError`` on any fault.
+
+    ``source`` names the model in a ``MixedTruthError`` (``load_levels`` passes the path).
+    """
     _check_keys(data, _ROOT_KEYS, "maturity model")
     version = data.get("version")
     if not isinstance(version, str) or not version.strip():
@@ -338,13 +317,29 @@ def parse_levels(data: Mapping[str, Any], validator: PathValidator | None = None
             raise LevelsError(f"row {row['id']!r}: duplicate row id")
         seen.add(row["id"])
         rows.append(row)
+    _resolve_truth(raw_rows, rows, source)
     _check_requires(rows)
+    check_guards({condition_id(r["id"], lv["level"]): lv["guarded_by"] for r in rows for lv in r["levels"]
+                  if "guarded_by" in lv},
+                 {condition_id(r["id"], lv["level"]): "polarity" in lv for r in rows for lv in r["levels"]})
     if validator is not None:
         _validate_paths(rows, validator)
     model: MaturityModel = {"version": version, "rows": rows}
     if "steps" in data:
         model["steps"] = _parse_steps(data["steps"], rows)
     return model
+
+
+def _resolve_truth(raw_rows: list[Any], rows: list[Row], source: str) -> None:
+    """Apply the legacy alias when no level declares ``truth``; reject a mixed model."""
+    declared = {(row["id"], entry.get("level")) for raw, row in zip(raw_rows, rows)
+                for entry in raw["levels"] if "truth" in entry}
+    untagged = [(row["id"], lv["level"]) for row in rows for lv in row["levels"]
+                if (row["id"], lv["level"]) not in declared]
+    if check_truth(untagged, sum(len(row["levels"]) for row in rows), source):
+        for row in rows:
+            for lv in row["levels"]:
+                lv["truth"] = legacy_truth(row["id"])
 
 
 def _check_keys(table: Mapping[str, Any], allowed: frozenset[str], where: str) -> None:
@@ -410,8 +405,14 @@ def _parse_levels(raw: Any, where: str) -> list[Level]:
         criteria = entry.get("criteria")
         if not isinstance(criteria, list) or not criteria:
             raise LevelsError(f"{where} level {number}: 'criteria' must be a non-empty array")
-        parsed = [_parse_criterion(c, f"{where} level {number}") for c in criteria]
-        level: Level = {"level": number, "criteria": parsed}
+        here = f"{where} level {number}"
+        parsed = [_parse_criterion(c, here) for c in criteria]
+        level: Level = {"level": number, "criteria": parsed,
+                        "truth": parse_truth(entry["truth"], here) if "truth" in entry else []}
+        if "polarity" in entry and parse_polarity(entry["polarity"], here) == "hazard":
+            level["polarity"] = "hazard"
+        if "guarded_by" in entry:
+            level["guarded_by"] = parse_guard(entry["guarded_by"], here)
         if "requires" in entry:
             requires = entry["requires"]
             if (not isinstance(requires, list) or not requires
@@ -439,6 +440,9 @@ def _parse_criterion(raw: Any, where: str) -> Criterion:
     op = raw.get("op")
     if op not in OPERATORS:
         raise LevelsError(f"{where}: unknown operator {op!r} (one of {', '.join(OPERATORS)})")
+    if "eq_signal" in raw:
+        other = parse_eq_signal(raw, op, f"{where} {signal}")
+        return {"signal": signal, "op": op, "value": other, "eq_signal": other}
     value: Any = raw.get("value")
     _check_operand(op, value, f"{where} {signal}")
     return {"signal": signal, "op": op, "value": value}
@@ -542,11 +546,12 @@ def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
 def _validate_paths(rows: list[Row], validator: PathValidator) -> None:
     bad = sorted(
         {
-            f"{row['scope']}:{c['signal']} (row {row['id']!r})"
+            f"{row['scope']}:{signal} (row {row['id']!r})"
             for row in rows
             for level in row["levels"]
             for c in level["criteria"]
-            if not validator(row["scope"], c["signal"])
+            for signal in (c["signal"], *([c["eq_signal"]] if "eq_signal" in c else []))
+            if not validator(row["scope"], signal)
         }
     )
     if bad:
@@ -618,6 +623,15 @@ def _empty_set(data: JsonDict | None, signal: str) -> str | None:
     return None
 
 
+def unavailable_signal(criterion: Criterion, data: Any) -> str:
+    """The path to name for an unknown criterion: its ``eq_signal`` when that is the side
+    unavailable and ``signal`` is not, else ``signal``."""
+    if ("eq_signal" in criterion and resolve_signal(data, criterion["signal"]) is not _UNAVAILABLE
+            and resolve_signal(data, criterion["eq_signal"]) is _UNAVAILABLE):
+        return criterion["eq_signal"]
+    return criterion["signal"]
+
+
 def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> CriterionOutcome:
     op, value = criterion["op"], criterion["value"]
     actual = resolve_signal(data, criterion["signal"])
@@ -630,6 +644,8 @@ def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> Criterio
         "reason": "unavailable",
     }
     empty = _empty_set(data, criterion["signal"])
+    if empty is None and "eq_signal" in criterion:  # either side may be a statistic over nothing
+        empty = _empty_set(data, criterion["eq_signal"])
     if empty is not None:  # before availability: a full run leaves loc {} with no file scored
         outcome["reason"] = empty
         return outcome
@@ -640,8 +656,16 @@ def _evaluate_criterion(criterion: Criterion, data: JsonDict | None) -> Criterio
     # or list may hold a NaN that json.loads accepted and dumps_result must
     # never write (issue #602).
     outcome["actual"] = None if kind is None else actual
-    expected = _kind(value[0]) if isinstance(value, list) else _kind(value)
-    if kind != expected:
+    if "eq_signal" in criterion:  # compare two measured signals (lib/levels_fields.py)
+        other = resolve_signal(data, criterion["eq_signal"])
+        if other is _UNAVAILABLE:
+            return outcome
+        value, expected = other, _kind(other)
+        if kind is None or expected is None:
+            kind = None
+    else:
+        expected = _kind(value[0]) if isinstance(value, list) else _kind(value)
+    if kind != expected or kind is None:
         outcome["reason"] = "type_mismatch"
         return outcome
     outcome["reason"] = None
@@ -657,9 +681,9 @@ def evaluate_row(row: Row, data: JsonDict | None) -> Evaluation:
     high = len(row["levels"])
     climbing = True
     for level in row["levels"]:
-        results = [_evaluate_criterion(c, data) for c in level["criteria"]]
-        unmet = [r for r in results if r["status"] != "met"]
-        missing.update(r["signal"] for r in unmet if r["status"] == "unknown")
+        results = [(c, _evaluate_criterion(c, data)) for c in level["criteria"]]
+        unmet = [r for _, r in results if r["status"] != "met"]
+        missing.update(unavailable_signal(c, data) for c, r in results if r["status"] == "unknown")
         met: bool | None
         if any(r["status"] == "unmet" for r in unmet):
             met = False

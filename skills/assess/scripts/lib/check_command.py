@@ -30,13 +30,14 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
 on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
 program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
-`nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+`nox` (elsewhere `-V` can run the work: `mvn -B -V verify`, `./gradlew -V test`); `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
 cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
 script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
 `--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
-read through the #920 wrappers (`_info_program`: `bundle exec rspec -h`, `docker compose
-run app pytest --co`), and `ci_checks` drops an info invocation from `may_check` too (elsewhere `-V` can run the work: `mvn -B -V verify`,
-`./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
+read through every wrapper `check_command` knows (`_info_program`: `uv run`, `npx`, `python
+-m`, the #920 wrappers and `hatch run`, so `bundle exec rspec -h`, `docker compose run app
+pytest --co` and `hatch run pytest -V` are info calls, #936), and `ci_checks` drops such a
+command from every CI line test, `may_check` included, so
 `pytest --version` is no Layer 5 check and a version-only step makes
 `test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
@@ -277,7 +278,7 @@ def _info_program(words: list[str]) -> list[str]:
             return []
         inner = _program(words)
         if inner == words:
-            inner = _wrapped(words) or words
+            inner = _wrapped(words) or _hatch_run(words) or words
         if inner == words:
             return words
         words = inner
