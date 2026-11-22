@@ -44,6 +44,8 @@ def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_comm
         "levels_version": model["version"],
         "toolkit_commit": toolkit_commit,
         "plugin_version": plugin_version,
+        # No owner exclusions here yet: the fleet side waits on the method stamp (#952, #910),
+        # so a repo with [checks] exclude reads its exclusions in /assess only.
         "repos": {row["repo"]: level_result(model, row.get("scans") or {}) for row in scanned},
         "commits": {row["repo"]: {"head_sha": row.get("head_sha"), "dirty": row.get("dirty")}
                     for row in scanned},

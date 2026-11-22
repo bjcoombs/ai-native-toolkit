@@ -79,6 +79,7 @@ fragments = [
   "structure_drift_block",
   "plugin_version",
   "decline",
+  "owner_exclusions",
   "offers_block",
   "uninstall_instructions_path",
   "anomalies",

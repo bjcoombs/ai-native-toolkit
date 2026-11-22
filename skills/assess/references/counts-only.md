@@ -459,6 +459,21 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `decline_markers.reason` | dropped |
 | `decline_disclosures` | dropped |
 
+## owner_exclusions
+
+| Field | Kept as |
+|---|---|
+| `owner_exclusions.exclusions.id` | token |
+| `owner_exclusions.exclusions.kind` | token |
+| `owner_exclusions.exclusions.reason` | dropped |
+| `owner_exclusions.exclusions.source` | token |
+| `owner_exclusions.exclusions.excluded_by` | dropped |
+| `owner_exclusions.exclusions.excluded_at` | token |
+| `owner_exclusions.exclusions.version` | token |
+| `owner_exclusions.skipped.id` | dropped |
+| `owner_exclusions.skipped.problem` | token |
+| `owner_exclusions.disclosures` | dropped |
+
 ## offers_block
 
 | Field | Kept as |
@@ -733,6 +748,13 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.next_step.blockers.condition` | token |
 | `level.next_step.blockers.state` | token |
 | `level.next_step.blockers.reason` | token |
+| `level.conditions.disposition` | token |
+| `level.conditions.exclusion_kind` | token |
+| `level.next_step.blockers.disposition` | token |
+| `level.next_step.blockers.exclusion_kind` | token |
+| `level.excluded.id` | token |
+| `level.excluded.kind` | token |
+| `level.excluded.source` | token |
 
 ## headline
 
