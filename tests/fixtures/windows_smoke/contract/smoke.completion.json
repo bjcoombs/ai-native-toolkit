@@ -1,0 +1,17 @@
+{
+  "run_id": "smoke",
+  "contract_hash": "sha256:5e1f0c0a",
+  "freeze_evidence": {
+    "contract_hash": "sha256:5e1f0c0a",
+    "frozen_before_decomposition": true,
+    "kill_test": {"null_artifact_all_fail": true, "sabotage_rejected": true}
+  },
+  "readiness_verdict": {"verdict": "ready", "source": "human"},
+  "criteria_results": [
+    {"id": "c1", "tier": 1, "result": "pass", "observation": "exit 0"}
+  ],
+  "couldnt_drive": [],
+  "abort_events": [],
+  "tier3_escalations": [],
+  "verifier_provenance": {"token": "tok-windows-smoke", "run_id": "smoke", "spawned_by": "chokepoint"}
+}
