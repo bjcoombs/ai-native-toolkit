@@ -50,7 +50,8 @@ ghsync root or a list, one JSONL row per repository. `discover_root` walks
 checkout is reported rather than skipped), never descending into a found repository,
 `worktree/` or a hidden directory. `targets_from_list` takes a checkout, its repository
 directory, a plain checkout or a root-relative path (an entry whose `~user` cannot be
-expanded is a `ValueError`, a usage error); `layout_id` gives both inputs the
+expanded is a `ValueError`, a usage error, and so is one whose expanded home directory
+does not exist, since Windows expands `~name` without checking the account, #965); `layout_id` gives both inputs the
 same `repo` id (the path under the root, prefixed with the root's name when one
 segment), a listed path outside the root falling back to `remote_path` (the `origin`
 URL's path) and then to its last two directory names. `scan_target` checks
@@ -286,10 +287,14 @@ def _under(path: Path, root: Path) -> bool:
 
 def _locate(entry: str, root: Path | None, base: Path) -> tuple[Path, Path]:
     """``(repo_dir, checkout)`` for one list entry."""
+    head = entry.replace("\\", "/").split("/", 1)[0]
     try:
         path = Path(entry).expanduser()
+        # POSIX raises for an unknown user; Windows builds <users dir>\<name> unchecked
+        if head.startswith("~") and head != "~" and not Path(head).expanduser().is_dir():
+            raise RuntimeError(f"no home directory at {Path(head).expanduser()}")
     except RuntimeError as e:  # ~nosuchuser/repo: no such user's home
-        raise ValueError(f"list entry {entry!r}: cannot expand {entry.split('/', 1)[0]!r} ({e})") from e
+        raise ValueError(f"list entry {entry!r}: cannot expand {head!r} ({e})") from e
     if not path.is_absolute():
         # With a root, a relative entry is a root path (ghsync --porcelain)
         # unless it exists only from the working directory; an uncloned one
