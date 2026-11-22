@@ -58,8 +58,8 @@ def _parse(text: str) -> fcfg.FleetConfig:
 
 
 def test_the_known_sections_are_defined_and_empty_allowed():
-    assert set(fcfg.SECTION_KEYS) == {"ai_usage", "review", "platform"}
-    assert fcfg.parse_fleet_config("[ai_usage]\n[review]\n[platform]\n") == fcfg.empty_config()
+    assert set(fcfg.SECTION_KEYS) == {"ai_usage", "review", "platform", "identities"}
+    assert fcfg.parse_fleet_config("[ai_usage]\n[review]\n[platform]\n[identities]\n") == fcfg.empty_config()
     assert fcfg.parse_fleet_config("") == fcfg.empty_config()
 
 
@@ -72,13 +72,13 @@ def test_a_valid_file_loads_with_every_section_and_typed_accessors(tmp_path):
         "rules": [{"pattern": "^x"}, {"pattern": "^y", "field": "name"}]}
     assert fcfg.review_section(config) == {"components": ["gitlab.example/ai-review"], "enabled": True}
     assert fcfg.platform_section(config) == {"sample": 25}
-    assert fcfg.section_entries(config) == {"ai_usage": 4, "review": 2, "platform": 1}
+    assert fcfg.section_entries(config) == {"ai_usage": 4, "review": 2, "platform": 1, "identities": 0}
 
 
 def test_a_section_left_out_is_empty():
     config = _parse("[review]\ncomponents = []\n")
     assert config["ai_usage"] == {} and config["platform"] == {}
-    assert fcfg.section_entries(config) == {"ai_usage": 0, "review": 0, "platform": 0}
+    assert fcfg.section_entries(config) == {"ai_usage": 0, "review": 0, "platform": 0, "identities": 0}
 
 
 @pytest.mark.parametrize(("text", "named"), [
@@ -231,7 +231,7 @@ def test_the_stamp_records_the_hash_and_entry_counts_never_a_value():
     config = _parse(FULL)
     stamp = _stamp(config)
     assert stamp["fleet_config_sha256"] == fcfg.config_sha256(config)
-    assert stamp["fleet_config_entries"] == {"ai_usage": 4, "review": 2, "platform": 1}
+    assert stamp["fleet_config_entries"] == {"ai_usage": 4, "review": 2, "platform": 1, "identities": 0}
     assert SENTINEL not in json.dumps(stamp) and "ai-review" not in json.dumps(stamp)
     assert _stamp(None)["fleet_config_sha256"] is None and _stamp(None)["fleet_config_entries"] is None
 
@@ -334,7 +334,7 @@ def test_fleet_gives_every_scan_the_same_copy_and_stamps_the_hash(tmp_path, monk
     assert not copy.exists()  # removed once the scans are done
     stamp = json.loads((out / "run.json").read_text(encoding="utf-8"))
     assert stamp["fleet_config_sha256"] == fcfg.config_sha256(fcfg.empty_config())
-    assert stamp["fleet_config_entries"] == {"ai_usage": 0, "review": 0, "platform": 0}
+    assert stamp["fleet_config_entries"] == {"ai_usage": 0, "review": 0, "platform": 0, "identities": 0}
     rows = [json.loads(line) for line in (out / "repos.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["status"] for r in rows] == ["ok", "ok"]
     for path in out.rglob("*"):

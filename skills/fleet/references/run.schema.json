@@ -112,10 +112,14 @@
             },
             "platform": {
               "type": "integer"
+            },
+            "identities": {
+              "type": "integer"
             }
           },
           "required": [
             "ai_usage",
+            "identities",
             "platform",
             "review"
           ],

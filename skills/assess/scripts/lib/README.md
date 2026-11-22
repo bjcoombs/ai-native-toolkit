@@ -1402,7 +1402,7 @@ writes atomically with sorted keys.
 
 **`fleet_config.py`**
 The fleet settings file, `--fleet-config FILE` (issue #706), with the known sections
-`[ai_usage]`, `[review]` and `[platform]` (empty allowed; their keys are added by #695,
+`[ai_usage]`, `[review]`, `[platform]` and `[identities]` (empty allowed; their keys are added by #695,
 #696 and #714; `[review]` has `ai_review_components`, a string list read by
 `review_automation`; `[platform]` has `jobs` and `timeout`, the defaults of `fleet.py
 --platform-jobs` and `--platform-timeout`). API:
@@ -1426,7 +1426,9 @@ Keys so far: `[ai_usage]` `agent_identities` (`table_list` of `pattern` (`regex`
 required) and `field` (`one_of("email", "username", "name")`)) and
 `token_users_as_agents` (`boolean`), read by `ai_usage` (#695) and the GitLab note
 classifier (`gitlab_notes`, #716); `[review]` `ai_review_markers` (`string_list`), read by
-`gitlab_notes` (#716).
+`gitlab_notes` (#716); `[identities]` `agents`, `bots` and `people` (`string_list`
+of literal accounts, #765), read through `identities_section` by `ai_usage.matcher_from_config`
+(so also `delivery` and `gitlab_notes`) and counted in `section_entries`.
 Adding a key: one line in the section's `SECTION_KEYS` table naming a validator
 (`string_list`, `table_list(fields, required)`, `string`, `boolean`, `positive_int`,
 `regex` (compiles; the error never quotes the pattern), `one_of(*choices)`, or
@@ -3487,8 +3489,33 @@ pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
 token's owner-chosen name), which is `agent` under `token_users_as_agents` and
 `token_user` otherwise. Strings are cut to `MAX_MATCH_LENGTH` before matching (input size only; the fleet
 `--timeout` bounds a pathological repository pattern).
+Confirmed identities (#765): `AuthorMatcher(..., confirmed=ConfirmedIdentities)` holds the
+`[identities]` section as lower-case literal sets (`ConfirmedIdentities.from_section`;
+entries are exact accounts, never patterns). Right after the dependency-bot check, an
+identity whose `identity_keys(email, name, username)` (the e-mail, the noreply login and
+a `[bot]` display name) is a confirmed person or bot is `other`, and a confirmed agent is
+`agent` (rule_index None), ahead of every config rule and pinned default; a person or
+bot entry wins over an agent entry for the same account.
 Tests: `tests/test_ai_usage.py`, `tests/test_ai_usage_authors.py`,
-`tests/test_change_coupling.py`.
+`tests/test_identity_candidates.py`, `tests/test_change_coupling.py`.
+
+**`account_discovery.py`**
+Bot and agent account discovery (issue #765): suggestions for the human to confirm in
+`[identities]`. `discover(commits, matcher)` is pure: over `HistoryCommit(author_email,
+author_name, subject, coauthors)` rows (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
+returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
+commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
+`STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
+`agent_name_hint` from `AI_TOOL_NAMES`, `automation_name_hint`) makes a candidate, while
+`co_author_trailer`, `noreply_address` and `uniform_subjects` (at least
+`UNIFORM_MIN_COMMITS` commits, one folded subject shape covering `UNIFORM_SHARE`) only
+annotate one. An account the matcher already puts in `agent`, or one classified in
+`[identities]`, is never a candidate. A candidate holds an identity: `ai_usage` emits only
+`len(discover(...))` as `identities_awaiting_confirmation`, and the rows reach only the
+terminal through `scripts/identity_candidates.py` (list one repository or a fleet list
+aggregated by account; `--confirm CLASS=ACCOUNT` rewrites the `[identities]` section of
+`--config` or the repository's `.assess/config.toml`). Tests:
+`tests/test_identity_candidates.py`.
 
 **`ai_usage.py`**
 AI-assisted change share (issue #547), a lower bound on agent use.
@@ -3496,7 +3523,8 @@ AI-assisted change share (issue #547), a lower bound on agent use.
 `--scope` subtree (or the whole run root) in the window and emits `ai_usage: {available, window, since, merge_rule,
 total_commits, agent_trailer_commits, agent_trailer_share, agent_authored_commits,
 agent_authored_share, agent_either_commits, agent_either_share, dependency_bot_commits,
-token_user_commits, agent_identity_rule_commits[], lower_bound, covered_agents[],
+token_user_commits, agent_identity_rule_commits[], identities_awaiting_confirmation,
+lower_bound, covered_agents[],
 covered_author_agents[], limits[]}`. A commit is a trailer commit when any `Co-authored-by` trailer names an
 AI assistant per `agent_identity.coauthors_have_ai_assistant` (automation bots excluded),
 and an authored commit when `agent_identity.AuthorMatcher` (built by
@@ -3504,6 +3532,9 @@ and an authored commit when `agent_identity.AuthorMatcher` (built by
 input) puts its author (`%ae`, `%an`) in the `agent` bucket; `agent_either_*` counts a
 commit with both once. `agent_identity_rule_commits[i]` counts the commits credited to
 config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
+`identities_awaiting_confirmation` counts the window's accounts `account_discovery.discover`
+lists (#765), a number only. `window_commits(repo_root, scope, window)` is the shared
+windowed read (`WindowCommits(commits, since)` or a fixed reason string).
 Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
