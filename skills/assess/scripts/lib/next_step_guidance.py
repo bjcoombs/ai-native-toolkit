@@ -453,7 +453,10 @@ _MEASURE_HINTS = {
                  "source at all. An import graph with no edges leaves "
                  "`modularity_q` null (`modularity_reason: no_import_edges`): modules "
                  "that never import each other have no community structure to measure.",
-    "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)"),
+    "stats_summary": _NEEDS.format("stats_summary", "lizard is not installed (`no_lizard`)")
+                     + " With no file scored (`files_scored` 0, a docs-only repository) "
+                     "the file size is not measured (`no_scored_files`): a percentile of "
+                     "no files says nothing.",
     "promissory_markers": _NEEDS.format("promissory_markers", "`rg` is not on `PATH` "
                                         "(`no_rg`)") + " A repository with no lint "
                           "suppressions has no `suppression` family, so it reads unknown there too.",
@@ -481,6 +484,10 @@ _MEASURE_HINTS = {
                  "(`enforced_basis: unknown_trigger`: no `on:` key, a `workflow_call` nobody "
                  "calls, a GitLab `rules: if:` on a custom variable): say when the workflow "
                  "runs, by adding `push` or `pull_request` triggers (or a merge request rule). "
+                 "It is unknown when the only CI line runs a target whose recipe the scan "
+                 "does not read (`enforced_basis: check_target`: `make foo`, `npm run foo`, "
+                 "`./scripts/foo.sh`, `docker run img`): call the test command in its "
+                 "own CI step (`make test`, `pytest`) to measure it. "
                  "It is unknown too when no GitHub Actions or GitLab CI line runs a check but "
                  "the repository commits a Jenkins, CircleCI, Azure Pipelines, Bitbucket "
                  "Pipelines, Travis CI or Buildkite file (`basis: unread_ci_system`, "

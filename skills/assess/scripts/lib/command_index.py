@@ -360,11 +360,16 @@ def _nox(root: Path, files: frozenset[str]) -> TargetSet | None:
 
 
 def ci_config_files(files: Iterable[str]) -> list[str]:
-    """The CI configuration files among ``files`` (GitHub Actions workflows, GitLab CI)."""
+    """The CI configuration files among ``files`` (GitHub Actions workflows, GitLab CI).
+
+    A workflow is a file directly under ``.github/workflows/``: GitHub does not run one
+    in a subfolder (``.github/workflows/sub/ci.yml``, #919), so it is not a CI file.
+    """
     return sorted(
         f for f in files
         if f in CI_CONFIG_FILES
-        or (f.startswith(CI_CONFIG_PREFIXES) and f.endswith((".yml", ".yaml")))
+        or (f.endswith((".yml", ".yaml"))
+            and any(f.startswith(p) and "/" not in f[len(p):] for p in CI_CONFIG_PREFIXES))
     )
 
 

@@ -38,6 +38,11 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
   the value that means "could not be measured" (``mutation_run`` false:
   ``needs_full_run``, never unmet, #740; ``aging_reliable`` false:
   ``degenerate_history``). Any other unmet criterion makes the condition unmet;
+- a ``level_signals.EMPTY_DENOMINATORS`` code, when a criterion's signal is a
+  statistic over a set whose count is 0 (``stats_summary.loc.p95`` with
+  ``files_scored`` 0: ``no_scored_files``, #906). ``lib.levels`` reads that
+  criterion as unknown, so the row level and the condition agree, and a real
+  unmet sibling criterion still makes the condition unmet;
 - ``needs_full_run``: the block is ``not_registered`` in a headless run;
 - ``needs_platform``: the block needs GitHub or GitLab (``network``);
 - the block's own reason code (``lib.counts_only.reason_code``, or the code a
@@ -63,7 +68,7 @@ from lib.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, LevelResult, NextStep
 from lib.levels import CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef, condition_id, evaluate_row
 from lib.levels import load_levels
-from lib.signal_grades import DEFAULT_LEVELS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
+from lib.signal_grades import DEFAULT_LEVELS, EMPTY_DENOMINATORS, INPUT_GRADES, SIGNAL_INPUTS, UNMEASURED_VALUES
 
 # Bumped when the result's shape or a state rule changes.
 LEVEL_RESULT_VERSION = 1
@@ -75,6 +80,8 @@ NEEDS_FULL_RUN = "needs_full_run"
 NEEDS_PLATFORM = "needs_platform"
 # Block reason codes that a different kind of run would measure (lib.signals).
 _RUN_KIND_REASONS = {"not_registered": NEEDS_FULL_RUN, "network": NEEDS_PLATFORM}
+# The codes lib.levels gives a criterion whose signal is a statistic over an empty set.
+EMPTY_SET_CODES = frozenset(code for _, code in EMPTY_DENOMINATORS.values())
 
 
 def _block_reason(data: Mapping[str, Any] | None, signal: str) -> str:
@@ -122,8 +129,8 @@ def _own_state(outcome: LevelOutcome, data: Mapping[str, Any] | None) -> tuple[s
     code = _unmeasured(first)
     if code is not None:
         return "not_measured", code
-    if first["reason"] == "type_mismatch":
-        return "not_measured", "type_mismatch"
+    if first["reason"] in EMPTY_SET_CODES or first["reason"] == "type_mismatch":
+        return "not_measured", first["reason"]
     return "not_measured", _block_reason(data, first["signal"])
 
 

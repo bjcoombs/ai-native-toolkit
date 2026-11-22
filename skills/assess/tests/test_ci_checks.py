@@ -356,7 +356,8 @@ _MATRIX_MYPY = {".github/workflows/ci.yml": (
     "          - mypy\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ matrix.tool }}\n")}
 
 
-# The issue #782 fixture table: (files, lint_runs, lint_basis, test_or_lint_configured as before #782).
+# The issue #782 fixture table: (files, lint_runs, lint_basis, test_or_lint_configured as before #782,
+# apart from the #919 version-only row).
 LINT_STATES = [
     pytest.param(_gha("ruff check ."), True, "lint_command", True, id="ruff-check"),
     pytest.param({**_gha("ruff check ."), "app.py": "import os  # noqa: F401\n"},
@@ -365,7 +366,8 @@ LINT_STATES = [
     pytest.param(_gha("make check"), None, "check_target", True, id="make-check"),
     pytest.param(_gha("pre-commit run --all-files"), None, "check_target", False, id="pre-commit"),
     pytest.param(_gha("pytest"), False, "no_lint_command", True, id="pytest"),
-    pytest.param(_gha("ruff --version"), False, "no_lint_command", True, id="ruff-version"),
+    # A version-only step runs no check at all (#919).
+    pytest.param(_gha("ruff --version"), False, "no_lint_command", False, id="ruff-version"),
     pytest.param(_MATRIX_MYPY, False, "no_lint_command", False, id="matrix-mypy"),
     pytest.param({".gitlab-ci.yml": "include:\n  - component: gl.test/grp/comp/test@1.0\n"},
                  None, "included_jobs", None, id="gitlab-include-only"),
@@ -378,7 +380,7 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     block = scan_ci_checks(_write(tmp_path, files))
     assert block["lint_runs"] is lint
     assert block["lint_basis"] == basis
-    assert block["test_or_lint_configured"] is test_or_lint   # unchanged by #782
+    assert block["test_or_lint_configured"] is test_or_lint
 
 
 @pytest.mark.parametrize(("run", "lint"), [

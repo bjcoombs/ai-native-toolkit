@@ -831,9 +831,12 @@ worst first, capped at `MAX_ACCRETION_FILES` (12); `accretion_lookup` gives the 
 pages a per-path view of the same scan. `excluded_generated` and `generated_exclusion`
 read the stats file's generated-file exclusions. `attach_structure_drift` runs the Tier
 0 ownership check (`structure_drift.detect_path_existence_drift`) and joins it with the
-Tier 1 counts `keyhole_signals` computed, omitting the block when no ownership map
-exists; `structure_drift_tier_0` builds the same block with Tier 1 unavailable, or
-None with no map, for the headless runner (`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
+Tier 1 counts `keyhole_signals` computed. With no ownership map the block is
+`no_ownership_map()`, the bare marker the headless runner writes too (reason
+`NO_OWNERSHIP_MAP_REASON`, #908), so `/assess` and fleet give the level the same
+reason; a raising scan still omits the block. `structure_drift_tier_0` builds the
+same block with Tier 1 unavailable, or None with no map, for the headless runner
+(`headless_layers.py`). `build_stale_hubs` joins doc-graph PageRank with doc staleness (low-confidence
 baseline entries rank at half weight). `attach_liveness_blocks`,
 `coverage_report_block`, `attach_keyhole_blocks` and `attach_exclusion_disclosures`
 copy the liveness, coverage, keyhole and exclusion-disclosure blocks into the context.
@@ -932,7 +935,9 @@ inputs `build_inputs` assembles itself (`repo_root`, `instruction_files` from
 completes. A name the runner provides is never recomputed from the table. A
 `network` scan runs its `offline_fn` or is reported
 `{"available": false, "reason": NETWORK_REASON}` (code `network`; the sentence names
-both providers), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
+both providers; defined in `gh_cli.py`, re-exported here). Offline, `merged_sample`
+runs `offline_merged_sample` and `review_reality` passes that value through, so a
+repository with no remote reads `no_remote` as `/assess` and `--platform` do (#908), except a `PLATFORM_ONLY_SCANS` block (`delivery`, #779), which is left
 out of the document offline: absent, never a placeholder. `platform_only_error` makes
 `assess_signals.py` and `fleet.py` exit 2 on a `--scans` naming one without `--platform`, and
 `offline_scans` strips those names from the `--scans` of a fleet run's offline child
@@ -976,9 +981,9 @@ rows read (#667), outside `CORE_MODULES`: `structure` (the core's private
 scc languages, no hotspot lists). Every unavailable block is the bare marker with a
 `code: sentence` reason (`no_grimp`, `no_networkx`, `grimp_failed`, `no_python_packages`, `no_import_graph_<language>`, `no_source_files`, `no_rg`,
 `not_git_root`, `no_ownership_map`, `no_lizard`), so counts-only output keeps the code
-and a maturity model row reads `unknown`. It diverges from the full run in two places: no ownership
-map reads `no_ownership_map` (the full run omits the block), and `stats_summary` covers
-lizard's languages only. Tests:
+and a maturity model row reads `unknown`. No ownership map reads `no_ownership_map`,
+the same marker the full run writes (`context_blocks.no_ownership_map`, #908). It
+diverges from the full run in one place: `stats_summary` covers lizard's languages only. Tests:
 `tests/test_headless_layers.py`.
 
 **`headless_static.py`**
@@ -1064,7 +1069,16 @@ its schema version - no stamp field, path or timing - so reruns are byte-identic
 stderr tail is not written, since free text can name the checkout (#909). `run_fleet`'s optional `after`
 hook (`AfterFn`) runs in the worker on each row as soon as it is in hand
 (`fleet_cleanup.CloneDeleter`). Row version 2 adds `active` (`ScanOptions.active_since`,
-`fleet_activity.is_active`); `null` when failed or not asked. The row shape is the `FleetRow`
+`fleet_activity.is_active`); `null` when failed or not asked. `head_sha` and `dirty` (#907,
+no version bump: readers use `.get`) come from `commit_state` (`git rev-parse HEAD` and
+`git_churn`'s two `/assess` dirty pathspecs, read with optional locks off), both `null`
+when failed (`dirty` is also `null` on an ok row with no commit or a failed `git status`).
+`_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
+`--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when clean, else a
+`git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
+(no hooks, `GIT_LFS_SKIP_SMUDGE=1`, `origin` set to the checkout's), removed afterwards; a
+copy that cannot be made is the `committed_tree_error` row. The platform pass goes through
+`run_signals` too, so it reads the same tree. The row shape is the `FleetRow`
 TypedDict here (kept beside its builder; group roll-up #568, run stamp #569 and later
 readers consume it). Subprocess, not import, keeps it off the orchestrator layer.
 
@@ -1183,7 +1197,7 @@ read gives no URL and no owners.
 
 **`fleet_hashed.py`**
 Hashed repository ids in every fleet output file under `--hash-paths` or `--hash-salt`
-(#909). `public_rows` hashes each row's `repo` and `group` with `counts_only.hash_value`
+(#909). `public_rows` hashes each row's `repo`, `group` and `head_sha` (#907: a sha finds its repository) with `counts_only.hash_value`
 under the run's salt and re-sorts by the new id; `public_groups` hashes `group`,
 `settings_scope` and each team row's `unknown_repos`; `public_freshness` hashes `docs_repo` and `repo`; `public_ids` is the
 hashed id set the history entry is chosen and compared by. The ids equal the
@@ -2201,7 +2215,7 @@ one set of flags. `counts_only_scans` applies the filter to the `scans` map of a
 `assess_signals.py --counts-only` document and keeps each unavailable block listed with
 its `reason_code` (`no_remote`, `not_registered`, or `unavailable`). `reason_token`
 reduces a `REASON` field (`structure.reason`) to its code: the leading code when the fixed
-allow-list `import_graph.STRUCTURE_REASON_CODES` names it (so a path or a name never leaks), the code of
+allow-list `import_graph.STRUCTURE_REASON_CODES` or `reason_codes.BLOCK_REASON_CODES` (`no_ownership_map`, the `structure_drift.reason` marker, #908) names it (so a path or a name never leaks), the code of
 a known sentence (`REASON_SENTENCE_CODES`), or `unavailable`, and drops an empty reason,
 so a full run keeps `no_import_graph_rust` or `no_grimp` as a signals run does (#764).
 Tests: `tests/test_counts_only_reason.py`. `render_doc`
@@ -2414,7 +2428,9 @@ a helper extraction.
 
 **`levels.py`**
 Loads a caller-supplied maturity model (TOML via stdlib `tomllib`) and evaluates it
-from signals with no model in the path. Rows carry an id, a title, a scope (`org`:
+from signals with no model in the path. A criterion over a signal in
+`signal_grades.EMPTY_DENOMINATORS` whose set's count reads exactly 0 is `unknown`, with
+the table's code as its `reason` (`no_scored_files`, #906), so row levels and the tally agree. Rows carry an id, a title, a scope (`org`:
 once per group from the group settings; `team`: per repository from its
 `run-context.json`, rolled up by the declared `min` or `share` rule) and whole levels
 numbered 1..K, each a list of criteria (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`,
@@ -2468,7 +2484,9 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
   condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
 
-Reason codes: an `UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
+Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
+is 0, such as `stats_summary.loc.p95` with `files_scored` 0: `no_scored_files`, #906); an
+`UNMEASURED_VALUES` code; `needs_full_run` for a `not_registered` block;
 `needs_platform` for a `network` one; another unavailable block's own code (or the code its
 known reason sentence maps to); `block_absent`, `no_value`, `type_mismatch`; and
 `requires:<id>`. Every string is an id, a state, a grade or a code, so the block survives
@@ -2481,14 +2499,14 @@ fixtures through `/fleet` and `/assess` on the same commit.
 
 **`signal_grades.py`**
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
-`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES` and the `DEFAULT_LEVELS`
-path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
+`INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
+to its set's count and the code when that count is 0, read by `levels.py`) and the `DEFAULT_LEVELS` path, with no `lib` import, so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`.
 
 **`reason_codes.py`**
 `reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
-(a known structure code or the code a known sentence maps to), moved out of `counts_only.py`,
+(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map`, or the code a known sentence maps to), moved out of `counts_only.py`,
 which re-exports both, so the tally reads the same codes as counts-only output (#744).
 Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 
@@ -2500,7 +2518,8 @@ import cycle. Tests: `tests/test_level_tally.py`.
 **`fleet_level.py`**
 `OUT/level.json` of a `fleet --levels` run: `fleet_levels` runs `level_tally.level_result`
 over each scanned row's `scans` (a failed row has no entry), keyed by repository id, in an
-envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`;
+envelope of `level_result_version`, `levels_version`, `toolkit_commit` and `plugin_version`,
+plus `commits` (`RepoCommit`, the row's `head_sha` and `dirty`, #907) under the same ids;
 nothing in it changes between reruns of the same commits. `write_fleet_levels` removes a
 stale file when the run has no model. Tests: `tests/test_level_tally.py`.
 
@@ -3114,7 +3133,15 @@ alongside any change to discovery or the diff.
 The shared sample of merged changes (#715), registered as the private
 `network=True` spec `merged_sample` with reads `repo_root`, `history_window` and
 `run_date`; `review_reality` and `delivery` read it, so one listing serves both
-blocks and they describe the same changes. Up to `SAMPLE_CAP` (30) changes merged
+blocks and they describe the same changes. Both reads classify the remote with
+`remote_kind` (#908), from the URL alone: `none` (no remote, a URL neither
+`gh_cli.parse_github_remote` nor `gitlab_cli.parse_remote` reads, or a
+`gitlab_cli.GITHUB_HOSTS` host whose path the GitHub parser rejects), `github`, or
+`platform` (any other host). Its `offline_fn`, `offline_merged_sample` (a headless run
+without `--platform`), gives `NO_REMOTE_REASON` (`no_remote`) for `none` and
+`NETWORK_REASON` otherwise. The full read gives `no_remote` for `none` too, and
+`UNREACHED_HOST_REASON` (code `network`) for a `platform` host that glab does not reach,
+so one remote reads one reason in `/assess`, fleet and `fleet --platform`. Up to `SAMPLE_CAP` (30) changes merged
 on or after `fleet_activity.window_start(history_window, run_date)`, newest
 `merged_at` first; `history_window` None (interactive `/assess` with no churn
 window) means no cutoff. GitHub, two reads: `gh pr list --repo <slug> --state merged
@@ -3541,7 +3568,18 @@ reads: `is_lint_command` without a `--version` / `--help` / `-V` call (`ruff
 --version` runs no lint) and without the package-manager test aliases
 `is_lint_command` credits (`npm test`, `npx jest`), plus a go-task lint target
 (`task lint`), `hatch fmt --check` and `hatch run` of a linter program (`hatch run
-ruff check .`). Type checkers count as linters there, in a vocabulary local to
+ruff check .`). `is_info_invocation(text)` (issue #919) is that version and usage test
+on its own: `--version` or `--help` anywhere, `rspec --init`, and flags read only for the
+program they belong to: `-V` when the program is a linter, type checker, `pytest`, `tox` or
+`nox`; `-h` for those and the known runners (`_H_RUNNERS`: dart, flutter, dotnet, go,
+cargo, ctest, rspec, make, just, bazel, jest, vitest, mocha, swift, deno, phpunit), never a
+script (`./scripts/test.sh -h db` names a host); `--collect-only` / `--co` for pytest,
+`--list-tests` for dotnet, phpunit and swift, `-N` / `--show-only` for ctest. The program is
+read through the #920 wrappers (`_info_program`: `bundle exec rspec -h`, `docker compose
+run app pytest --co`), and `ci_checks` drops an info invocation from `may_check` too (elsewhere `-V` can run the work: `mvn -B -V verify`,
+`./gradlew -V test`); `ci_checks` drops such a command from every CI line test, so
+`pytest --version` is no Layer 5 check and a version-only step makes
+`test_or_lint_configured` false. Type checkers count as linters there, in a vocabulary local to
 `is_lint_run` (`pyright`, `basedpyright`, `tsc`, `vue-tsc`, and `typecheck` /
 `type-check` targets such as `npm run typecheck` or `make type-check`), so
 `is_lint_command` and Layer 5 are unchanged. A package-manager runner form (`npx`, `bunx`, `bun x`,
@@ -3553,9 +3591,36 @@ show: a check target of a runner or script (`make check`, `npm test`, `tox`,
 `./scripts/test.sh`, `task check`), `pre-commit run`, or a `hatch run` script
 (`hatch run lint`, `hatch run test:cov`; like `tox -e`, its recipe is not read), never a direct test-program
 call (`pytest`, `uv run pytest`, `python -m pytest`, `go test`, `cargo test`, `npx
-jest`). `is_lint_command` keeps its meaning. Tests: `tests/test_check_command.py`,
-`tests/test_agent_environment.py` (`test_is_check_command`), `tests/test_ci_checks.py`
-(`test_lint_runs_per_command`).
+jest`). `is_lint_command` keeps its meaning.
+Test runners and wrappers beyond `RUNNERS` (issue #920): `check_verdict(text)` is
+`is_check_command` as three states. True for a test program (`TEST_PROGRAMS`: `ctest`,
+`phpunit`, `pest`, `rspec` and the JS test runners, matched by basename so
+`vendor/bin/phpunit` counts), the `test` subcommand of a toolchain (`TEST_SUBCOMMANDS`:
+`dotnet`, `swift`, `mix`, `deno`, `bazel`, `bazelisk`, `hatch`, `flutter`, `rails`, `dart`), `php artisan test`, a
+Gradle test task (`./gradlew testDebugUnitTest`, `connectedAndroidTest`), the
+`test` action of `xcodebuild` or a check-named target of
+a target runner (`TARGET_RUNNERS`: `make`, `just`, `task`, `rake`, `turbo`, `nx`, with
+`nx affected -t test` and `nx run app:test` read). A wrapper is read by the program it
+runs (`docker compose run|exec <service>`, `bundle exec`, `uv run`, `poetry run`,
+`npx`, `pnpm exec`, `hatch run`), in `is_lint_command`, `is_lint_run` and `may_lint`
+too. None (`may_check(text)`) for a target whose recipe is not read: any other target
+of a target runner, its default target (a bare `make`), a `hatch run` script that is not
+check-named, a package script (`npm run foo`, `pnpm foo`, `yarn foo`), a committed script
+(`./scripts/foo.sh`, `bash ci/foo.sh`, `bin/foo`; only a `./` or `bin/` head, a `.sh`
+file or a path passed to `bash`/`sh`/`zsh`, read by file name so `./ci/deploy.sh` is
+false), and a container's default command or an unknown
+program behind any wrapper (`docker compose run app`, `docker run img some-tool`, `uv run foo`,
+`poetry run foo`, `pipx run foo`, `uvx foo`, `npx foo`, `pnpm exec foo`, `yarn dlx foo`).
+Names whose first word is in `SETUP_TARGETS` (`install`, `deps`, `build`, `deploy`,
+`format`, `release`, `docs`, `configure`, ...) stay false, as do installs, `bash -c`,
+absolute paths and a container running a plain program (`echo`) or a modelled runner.
+A target runner asked for `--version` or its list (`task --list`, `rake -T`) is false.
+`may_lint` reads the direct runners (`dotnet test`, `mix test`, `hatch test`, `ctest`,
+`bundle exec rspec`) as tests only; `bazel test`, `turbo`, `nx` and `task` targets may
+lint. `BARE_RUN_PROGRAMS` is the set a lone bare YAML item is a value for
+(`ci_checks._lone_check`). Tests: `tests/test_check_command.py`,
+`tests/test_check_runners.py` (#920), `tests/test_agent_environment.py`
+(`test_is_check_command`), `tests/test_ci_checks.py` (`test_lint_runs_per_command`).
 
 **`ci_checks.py`**
 Does CI run a test or lint command (issue #698), can it fail the job (#775), and does
@@ -3563,7 +3628,8 @@ it run a linter (#782)?
 Layer 5 level 1 of the default maturity model reads it, so the CI row measures CI, not
 the instruction file; Layer 3 level 1 reads `lint_runs`.
 `scan_ci_checks(repo_root, ghsync_root, merged_ci)` reads the files `command_index.ci_config_files`
-selects (GitHub Actions workflows, `.gitlab-ci.yml`) plus the GitLab include files
+selects (GitHub Actions workflows directly under `.github/workflows/`, never a subfolder,
+which GitHub does not run (#919); `.gitlab-ci.yml`) plus the GitLab include files
 `ci_includes.resolve_includes` read (#766), and writes `{available,
 ci_files, check_commands, included_files, included_check_commands, resolved_includes,
 unresolved_includes, includes[], test_or_lint_configured, basis, enforced_check_runs,
@@ -3612,9 +3678,12 @@ in the merged configuration when those hold none)
 whose workflow or job runs on ordinary changes (`ci_triggers`; the unmasked lines
 off those triggers are `off_trigger_check_commands`, and an unsettled trigger reads
 null with `enforced_basis: unknown_trigger`), else null under the
-same `included_jobs` rule, else false. Layer 5 level 1 reads
+same `included_jobs` rule, else null with `enforced_basis: check_target` when an
+unmasked line on ordinary changes runs a target whose recipe is not read
+(`_line_may_check`: `check_command.may_check`, issue #920), else false. Layer 5 level 1 reads
 `enforced_check_runs`; a stored scan without the key reads unknown there. `basis`
-still describes `test_or_lint_configured`, which keeps its meaning.
+still describes `test_or_lint_configured`, which keeps its meaning apart from #919's
+version-only and subfolder cases, which count nowhere.
 `lint_runs` (issue #782) is the enforced test for lint lines alone: the same masking
 and trigger rules, the same own, included and merged files, with
 `count_check_lines(..., test=)` and `_trigger_tally(text, workflow, tests)` taking a
@@ -3669,13 +3738,27 @@ true` (literal, a trailing comment ignored) masks the mapping that holds it and
 everything under it (a step or a job); `set +e` masks the rest of its script body
 (a block scalar, or one `script:` list) until `set -e`, unless a later statement
 exits or returns a non-zero literal, a variable or `$?` (`exit $?`, `rc=$?; exit $rc`,
-`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). `\` continuations are
-joined first.
+`[ $? -eq 0 ] || exit 1`; `echo "code $?"` alone re-raises nothing). Issue #919 adds
+three: a segment with an exit-zero flag (`--exit-zero`, `--issues-exit-code=0` or `0` as
+the next word) is masked on its own; in a GitHub `run:` body with errexit off (`set +e`,
+`shell: pwsh` / `powershell` / `cmd` / `python`, named or as a custom command's first
+word, a custom `bash` / `sh` / `dash` / `zsh` command without `-e` such as `bash {0}`, or
+a Windows `runs-on` with no `shell:`; `run_errexit(tree, body)` reads the
+step's `shell:`, then the job's and workflow's `defaults.run.shell`), a top-level `exit 0`
+statement (outside `if`, loops, `case`, `{ }`, `( )`, heredocs and multi-line quotes, with bash
+grammar read only in a bash or sh body and only `{ }` / `( )` nesting in a pwsh,
+powershell, cmd or python body; `_depths`, `_not_code`) masks the statements
+before it, unless one of them or a statement between
+re-raises a status. The default `bash -e` stops at the failing check first, so
+`pytest; exit 0` there is enforced, and GitLab, which checks each `script:` item, has no
+`exit 0` rule; a literal `if: false`,
+`if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
+`\` continuations are joined first.
 Known limits (module docstring): `|| echo`, pipes without `pipefail`, `if`
 wrappers, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
-shared with `ci_triggers.py`.
+shared with `ci_triggers.py`. Tests for the #919 rules: `tests/test_ci_false_credit.py`.
 
 **`ci_triggers.py`**
 Does a CI line run on ordinary changes (issue #775)? It makes

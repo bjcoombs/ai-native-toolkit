@@ -37,7 +37,7 @@ keys come from the file tree, so a key like `docs/My Notes.md` is kept
 `file_a`, `file_b`, `test_file` or `source_file` is a path in every block,
 and a field named `reason` is dropped in every block without its own rule.
 A field kept as a reason code keeps only the code of a `code: sentence`
-reason when it is a known structure code (`no_import_graph_rust`),
+reason when it is a known structure code (`no_import_graph_rust`) or `no_ownership_map`,
 or the code a known sentence maps to (`no_grimp`), else `unavailable`,
 so a path or name before the colon is never kept; an empty reason is dropped.
 
@@ -443,6 +443,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 
 | Field | Kept as |
 |---|---|
+| `structure_drift.reason` | reason code |
 | `structure_drift.tier_0.empty_ownership_patterns.pattern` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.declared_in` | dropped |
 | `structure_drift.tier_0.empty_ownership_patterns.owners` | dropped |

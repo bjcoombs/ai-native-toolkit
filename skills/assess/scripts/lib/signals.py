@@ -43,6 +43,7 @@ from typing import Any
 from lib.assess_config import load_excludes
 from lib.counts_only import reason_code
 from lib.fleet_config import FleetConfig, repo_fleet_config
+from lib.gh_cli import NETWORK_REASON as NETWORK_REASON  # re-exported: defined beside the platform reads
 from lib.git_churn import git_commit_info
 from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
@@ -117,8 +118,6 @@ def signal_scans(
 
 
 SIGNAL_SCANS = signal_scans()
-NETWORK_REASON = ("network: reads GitHub or GitLab through gh or glab; the headless runner makes no "
-                  "network calls without --platform")
 
 # The reason codes of the blocks only a full /assess run measures (#697): the code
 # ``lib.counts_only.reason_code`` keeps of each reason the runner writes for a block it

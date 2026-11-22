@@ -250,6 +250,16 @@ constant each.
 #   test_or_lint_configured and coverage_gate.enforced is configured. Values and
 #   meaning are unchanged; the fleet re-score reads a stored scan's old path under the
 #   new name (lib/fleet_rescore.SIGNAL_ALIASES). complexity-stats.json is unchanged.
+# - ci_checks.enforced_basis gains check_target (issue #920): no CI line runs a
+#   check, but one runs a target whose recipe is not read (make foo, npm run foo,
+#   ./scripts/foo.sh, docker run img), so enforced_check_runs reads null, never false. Common test
+#   runners (dotnet test, swift test, mix test, bundle exec rspec, deno test,
+#   phpunit, ctest, bazel test, turbo, nx, task) and wrappers (docker compose run,
+#   pnpm exec, hatch run, bundle exec) now count as checks.
+# - run-context.json structure_drift is the unavailable marker
+#   {"available": false, "reason": "no_ownership_map: ..."} when the repository
+#   commits no ownership or boundary map, where it was omitted (issue #908), so the
+#   level block reads the same reason as fleet. A scan failure still omits it.
 ARTIFACT_SCHEMA_VERSION = "1.41.0"
 
 # The finding method version: which rules decide the findings a run produces.
@@ -410,4 +420,17 @@ ARTIFACT_SCHEMA_VERSION = "1.41.0"
 #     #768): the default maturity model gains the agent-consistency row (no
 #     conflict is level 1, every system linked to the canonical file level 2,
 #     fewer than two systems unknown). Existing rows are unchanged.
+# Unreleased (the 2.2.0 release PR assigns the number):
+# - the empty-set rule and two requires (issue #906): a file-size condition
+#   reads not measured (no_scored_files) when no file is scored, layer-2-design.2
+#   requires layer-2-design.1 and layer-4-architecture.2 requires
+#   layer-4-architecture.1. Fewer conditions count on docs-only repositories
+#   and tangled import graphs; no shape changes. The default maturity model's
+#   version moves with it.
+# - ci_checks closes five false-credit holes (issue #919). A version or usage
+#   query (`ruff --version`) runs no check; an exit-zero flag (`--exit-zero`,
+#   `--issues-exit-code=0`), a later top-level `exit 0` in a GitHub run: body
+#   without errexit (pwsh, a Windows runner, set +e) and a literal `if: false`
+#   step or job are masked; a workflow in a subfolder of .github/workflows/ is
+#   not a CI file. Layer 3 level 1 and Layer 5 level 1 can move from met to unmet.
 ASSESS_METHOD_VERSION = 36

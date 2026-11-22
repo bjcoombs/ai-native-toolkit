@@ -7,7 +7,9 @@ repository id of ``repos.jsonl``; a failed scan has no signals and no entry.
 The envelope carries the method identity (the model version, the toolkit commit
 and the plugin version) and nothing that changes between two runs of the same
 commits, so a rerun writes identical bytes. Without ``--levels`` the file is
-removed, never left from an earlier run. Schema:
+removed, never left from an earlier run. ``commits`` holds, under the same ids, the
+commit each result measured and whether the checkout was dirty (#907; a dirty one is
+scored from its committed tree, ``lib/fleet.py`` ``committed_tree``). Schema:
 ``skills/fleet/references/level.schema.json`` (``lib/fleet_level_schema.py``).
 """
 from __future__ import annotations
@@ -16,7 +18,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TypedDict
 
-from lib.fleet import STATUS_OK, FleetRow
+from lib.fleet import STATUS_OK, FleetRow, RepoCommit
 from lib.levels import MaturityModel
 from lib.level_result_types import LevelResult
 from lib.level_tally import LEVEL_RESULT_VERSION, dumps_level, level_result
@@ -30,6 +32,7 @@ class FleetLevels(TypedDict):
     toolkit_commit: str | None
     plugin_version: str
     repos: dict[str, LevelResult]
+    commits: dict[str, RepoCommit]  # the same ids: the commit each result measured (#907)
 
 
 def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_commit: str | None,
@@ -42,6 +45,8 @@ def fleet_levels(rows: Iterable[FleetRow], model: MaturityModel, *, toolkit_comm
         "toolkit_commit": toolkit_commit,
         "plugin_version": plugin_version,
         "repos": {row["repo"]: level_result(model, row.get("scans") or {}) for row in scanned},
+        "commits": {row["repo"]: {"head_sha": row.get("head_sha"), "dirty": row.get("dirty")}
+                    for row in scanned},
     }
 
 
