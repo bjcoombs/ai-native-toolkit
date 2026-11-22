@@ -1,0 +1,15 @@
+# Check manifest fragment: the scope collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.scope"
+kind = "collector"
+title = "Scope root"
+callable = "lib.run_setup:scope_root"
+publishes = []
+reads = ["run_scope"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

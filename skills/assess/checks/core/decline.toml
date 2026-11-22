@@ -1,0 +1,22 @@
+# Check manifest fragment: the decline collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.decline"
+kind = "collector"
+title = "Declined optional tools"
+callable = "lib.core_scans:decline_blocks"
+publishes = ["decline_markers", "reoffer_mutation", "decline_disclosures"]
+reads = ["assess_dir", "plugin_version"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "serialiser"
+revision = 1
+  [entries.privacy]
+  "decline_markers.tool" = "token"
+  "decline_markers.declined_by" = "drop"
+  "decline_markers.declined_at" = "token"
+  "decline_markers.version" = "token"
+  "decline_markers.reason" = "drop"
+  decline_disclosures = "drop"

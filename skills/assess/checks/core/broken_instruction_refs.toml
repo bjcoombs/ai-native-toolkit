@@ -1,0 +1,14 @@
+# Check manifest fragment: the broken_instruction_refs collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.broken_instruction_refs"
+kind = "collector"
+title = "Broken instruction references"
+callable = "lib.core_scans:instruction_refs"
+publishes = ["broken_instruction_refs"]
+reads = ["doc_graph", "instruction_grading"]
+stage = "read_side"
+revision = 1
+  [entries.privacy]
+  broken_instruction_refs = "path"

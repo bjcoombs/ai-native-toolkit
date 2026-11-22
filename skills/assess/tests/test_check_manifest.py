@@ -18,7 +18,6 @@ import copy
 import importlib
 import json
 import re
-import tomllib
 import types
 from collections.abc import Iterable
 from functools import partial
@@ -54,7 +53,7 @@ def manifest() -> cm.CheckManifest:
 def raw() -> cm.CheckManifest:
     """The manifest as parsed TOML, unvalidated: the registry comparison still names a scan
     whose entry is missing when a dangling reference stops the strict loader."""
-    return cast(cm.CheckManifest, tomllib.loads(cm.CORE_MANIFEST.read_text(encoding="utf-8")))
+    return cast(cm.CheckManifest, cm.read_manifest())
 
 
 def _clean(problems: Iterable[str]) -> None:
@@ -122,11 +121,13 @@ def test_callables_resolve_to_the_registered_functions(manifest: cm.CheckManifes
     for f in cm.findings(manifest):
         if "derive" in f:
             assert callable(_resolve(f["derive"])), f["name"]
-    # Every "lib.x:attr" string in the file, in any table, names the module that
-    # holds attr: a #917 alias shim (another __name__) or a package __getattr__
-    # forward (attr not in the module's namespace) still resolves, so a stale
-    # path would otherwise pass.
-    refs = re.findall(r"""["'](lib(?:\.\w+)+):(\w+)["']""", cm.CORE_MANIFEST.read_text(encoding="utf-8"))
+    # Every "lib.x:attr" string in core.toml or a checks/core/ fragment, in any
+    # table, names the module that holds attr: a #917 alias shim (another
+    # __name__) or a package __getattr__ forward (attr not in the module's
+    # namespace) still resolves, so a stale path would otherwise pass.
+    files = [cm.CORE_MANIFEST, *sorted(cm.CORE_MANIFEST.with_suffix("").glob("*.toml"))]
+    refs = [ref for path in files
+            for ref in re.findall(r"""["'](lib(?:\.\w+)+):(\w+)["']""", path.read_text(encoding="utf-8"))]
     assert len(refs) >= 90, refs
     for module_name, attr in refs:
         module = importlib.import_module(module_name)

@@ -1,0 +1,17 @@
+# Check manifest fragment: the keyhole collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.keyhole"
+kind = "collector"
+title = "Keyhole integration"
+callable = "lib.core_scans:keyhole"
+publishes = []
+reads = ["repo_root", "current", "doc_staleness", "liveness_blocks", "structure_scan", "test_pressure", "promissory", "accretion_ratchet", "archetype", "excludes", "scope", "rename_map", "doc_join"]
+stage = "read_side"
+private = true
+degrade = false
+gate_reason = "self_degrading"
+revision = 1
+  [entries.privacy]
+  archived_finding_paths = "path"

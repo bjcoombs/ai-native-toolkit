@@ -1,0 +1,48 @@
+# Check manifest fragment: the structure_drift_block collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.structure_drift_block"
+kind = "collector"
+title = "Structure drift"
+callable = "lib.core_scans:structure_drift"
+publishes = ["structure_drift"]
+reads = ["repo_root", "keyhole"]
+stage = "read_side"
+spread = true
+degrade = false
+gate_reason = "self_degrading"
+headless = { structure_drift = "headless_variant" }
+headless_variants = [
+  { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
+]
+shapes = [
+  { path = "structure_drift", type = "lib.block_shapes:StructureDriftBlock" },
+]
+revision = 2
+unknown_reasons = [
+  { code = "no_ownership_map", means = "The repository commits no ownership or boundary map (CODEOWNERS, an ARCHITECTURE module list) for the drift check to read.", next_step = "Nothing to change if no one owns paths; a committed CODEOWNERS or boundary map lets the scan read it." },
+]
+  [entries.privacy]
+  "structure_drift.reason" = "reason"
+  "structure_drift.tier_0.empty_ownership_patterns.pattern" = "drop"
+  "structure_drift.tier_0.empty_ownership_patterns.declared_in" = "drop"
+  "structure_drift.tier_0.empty_ownership_patterns.owners" = "drop"
+  "structure_drift.tier_1.static_lens_reason" = "token"
+
+[[entries]]
+id = "core:structure_drift.tier_0.boundary_patterns"
+kind = "signal"
+title = "Ownership-map patterns naming a module path"
+collector = "core.structure_drift_block"
+path = "structure_drift.tier_0.boundary_patterns"
+type = "number"
+evidence = "config_text"
+null_means = "the block is omitted with no ownership map"
+
+[[entries]]
+id = "core.cond.layer-4-architecture.1.boundary_patterns"
+kind = "condition"
+title = "A boundary or ownership map names a module path"
+key = "layer-4-architecture.1:structure_drift.tier_0.boundary_patterns"
+fix = "Commit a CODEOWNERS line per module path, or an ARCHITECTURE.md that names module paths."

@@ -1,0 +1,14 @@
+# Check manifest fragment: the doc_join collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.doc_join"
+kind = "collector"
+title = "Doc and complexity join"
+callable = "lib.core_scans:doc_join"
+publishes = []
+reads = ["current", "doc_staleness", "repo_root"]
+stage = "read_side"
+private = true
+label = "documentation"
+revision = 1

@@ -1,0 +1,15 @@
+# Check manifest fragment: the excluded_as_generated collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.excluded_as_generated"
+kind = "collector"
+title = "Generated-file paths"
+callable = "lib.run_setup:generated_paths"
+publishes = []
+reads = ["current"]
+stage = "setup"
+private = true
+degrade = false
+gate_reason = "setup"
+revision = 1

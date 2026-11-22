@@ -1,0 +1,34 @@
+# Check manifest fragment: the doc_graph collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.doc_graph"
+kind = "collector"
+title = "Doc graph"
+callable = "lib.core_scans:doc_graph"
+publishes = ["doc_graph"]
+reads = ["repo_root", "excludes", "scope", "working_notes"]
+stage = "setup"
+headless = { doc_graph = "headless_variant" }
+headless_variants = [
+  { block = "doc_graph", callable = "lib.headless_static:doc_graph", reads = ["repo_root", "excludes"], stage = "setup" },
+]
+shapes = [
+  { path = "doc_graph", type = "lib.run_context_types:DocGraphBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "doc_graph.reason" = "drop"
+  "doc_graph.orphans" = "path"
+  "doc_graph.entry_points" = "path"
+  "doc_graph.unreachable" = "path"
+  "doc_graph.moc_named_but_not_wired" = "path"
+  "doc_graph.doc_to_code_edges.doc" = "path"
+  "doc_graph.doc_to_code_edges.code" = "path"
+  "doc_graph.broken_links.from" = "path"
+  "doc_graph.broken_links.target" = "path"
+  "doc_graph.broken_links.kind" = "token"
+  "doc_graph.missing_xrefs.from" = "path"
+  "doc_graph.missing_xrefs.to" = "path"
+  "doc_graph.link_parents.link_parent" = "path"
+  "doc_graph.link_parents.link_entry" = "path"

@@ -1,0 +1,90 @@
+# Check manifest fragment: the run_header collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.run_header"
+kind = "collector"
+title = "Run header"
+callable = "lib.run_setup:run_header"
+publishes = ["run_id", "artifact_schema_version", "assess_method_version", "run_date", "scope", "scope_slug", "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files", "instructions_grade", "diff", "diff_reliable", "diff_version_note", "diff_trend_reset", "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions", "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots", "dropped_first_flagged", "provisional_first_flagged", "log_integrity", "prior_findings_snapshot"]
+reads = ["run_id", "run_date", "run_scope", "measured_commit", "current", "prior", "instruction_grading", "diff", "unfinalized"]
+stage = "setup"
+spread = true
+degrade = false
+gate_reason = "setup"
+headless = { stats_summary = "headless_variant", diff = "unregistered" }
+headless_variants = [
+  { block = "stats_summary", callable = "lib.headless_layers:stats_summary", reads = ["repo_root", "excludes", "scope"], stage = "read_side" },
+]
+shapes = [
+  { path = "stats_summary.fn_ccn", type = "lib.run_context_types:FnCcnBlock" },
+  { path = "stats_summary.top_hotspots", type = "lib.run_context_types:HotspotRow" },
+  { path = "stats_summary.top_complex", type = "lib.run_context_types:HotspotRow" },
+  { path = "stats_summary.top_large", type = "lib.run_context_types:HotspotRow" },
+  { path = "stats_summary.complexity_unreliable", type = "lib.scc_coverage:UnreliableCcnRow" },
+  { path = "prior_findings_snapshot", type = "lib.run_context_types:FindingsSnapshot" },
+  { path = "stats_summary.loc", type = "lib.run_context_types:SizeBlock" },
+  { path = "stats_summary.est_tokens", type = "lib.run_context_types:SizeBlock" },
+  { path = "stats_summary.est_tokens.budget", type = "lib.run_context_types:KeyholeBudget" },
+]
+revision = 1
+  [entries.privacy]
+  run_id = "token"
+  artifact_schema_version = "token"
+  schema_version = "token"
+  prior_schema_version = "token"
+  prior_plugin_version = "token"
+  run_date = "token"
+  scope = "path"
+  scope_slug = "path"
+  "tool_versions.*" = "token"
+  "prior_tool_versions.*" = "token"
+  diff_version_note = "drop"
+  "measured_commit.committed_date" = "token"
+  "measured_commit.head_sha" = "drop"
+  "measured_commit.head_short" = "drop"
+  "measured_commit.subject" = "drop"
+  "measured_commit.upstream" = "drop"
+  "stats_summary.ccn.basis" = "token"
+  "stats_summary.fn_ccn.basis" = "token"
+  "stats_summary.fn_ccn.source.name" = "token"
+  "stats_summary.fn_ccn.backend_by_language.*" = "token"
+  "stats_summary.est_tokens.budget.budget_basis" = "drop"
+  "stats_summary.top_hotspots.ccn_basis" = "token"
+  "stats_summary.top_hotspots.source" = "token"
+  "stats_summary.top_hotspots.max_fn_name" = "drop"
+  "stats_summary.top_complex.ccn_basis" = "token"
+  "stats_summary.top_complex.source" = "token"
+  "stats_summary.top_complex.max_fn_name" = "drop"
+  "stats_summary.top_large.ccn_basis" = "token"
+  "stats_summary.top_large.source" = "token"
+  "stats_summary.top_large.max_fn_name" = "drop"
+  "stats_summary.complexity_unreliable.path" = "path"
+  "stats_summary.complexity_unreliable.language" = "token"
+  pruned_hotspots = "path"
+  retired_excluded_hotspots = "path"
+  dropped_first_flagged = "path"
+  provisional_first_flagged = "path"
+  instructions_grade = "token"
+  "instruction_files.{}.grade" = "token"
+  "instruction_files.{}.findings.kind" = "token"
+  "instruction_files.{}.findings.reference" = "drop"
+  "instruction_files.{}.findings.reason" = "drop"
+  "prior_findings_snapshot.findings.name" = "token"
+  "prior_findings_snapshot.findings.paths" = "path"
+
+[[entries]]
+id = "core:stats_summary.loc.p95"
+kind = "signal"
+title = "File size at the 95th percentile"
+collector = "core.run_header"
+path = "stats_summary.loc.p95"
+type = "number"
+evidence = "head_structure"
+
+[[entries]]
+id = "core.cond.layer-4-architecture.2.p95"
+kind = "condition"
+title = "95% of files are 500 lines or fewer"
+key = "layer-4-architecture.2:stats_summary.loc.p95"
+fix = "Split the largest files along their natural seams."
