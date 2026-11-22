@@ -124,7 +124,8 @@ class A<T> extends B<T> {
 @pytest.mark.no_cover
 @pytest.mark.parametrize("text", [
     "void f() {" + "{" * 200_000,
-    "void f() {" * 100_000,
+    # 1.5 s of CPU on a Windows runner, fastest of 3; linear, just slower there (#762).
+    pytest.param("void f() {" * 100_000, marks=pytest.mark.windows_followup),
     "void f() {" * 50_000 + "}" * 50_000,
     "void f() { var s = '" + "if (x) " * 50_000,
     "void f() { var s = '''" + "${" * 50_000,
