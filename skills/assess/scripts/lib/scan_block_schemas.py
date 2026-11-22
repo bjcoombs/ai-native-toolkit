@@ -190,15 +190,16 @@ CI_CHECKS: JsonDict = {
         "enforced_check_runs": _field(
             {"type": ["boolean", "null"]},
             "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
-            "changes, null when none does but included jobs, unsettled triggers, a target whose "
-            "recipe is not read, a CI system the scan does not parse or an external CI system "
-            "may hold one, else false."),
+            "changes, null when none does but included jobs, unsettled triggers, a committed "
+            "script the tree does not hold, a target whose recipe is not read, a CI system the "
+            "scan does not parse or an external CI system may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_target",
-                      "unread_ci_system", "external_ci", "external_ci_marker", "not_enforced",
-                      "no_check_command", "no_ci"]},
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "script_not_found",
+                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
+                      "not_enforced", "no_check_command", "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
-            "unknown_trigger, check_target or unread_ci_system (null), external_ci (null: an "
+            "unknown_trigger, script_not_found, check_target or unread_ci_system (null), "
+            "external_ci (null: an "
             "external check context on merged changes under --platform; more than half of the "
             "sampled merged pull requests carry a check run or commit status of a known "
             "external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with "
@@ -217,17 +218,19 @@ CI_CHECKS: JsonDict = {
             "on ordinary changes (not --version or --help), or a step uses a known lint action "
             "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
             "null when none does but included "
-            "jobs, unsettled triggers or a check target or script that may lint inside it could "
+            "jobs, unsettled triggers, a lint script the tree does not hold or a check target or "
+            "script that may lint inside it could "
             "hold one, or when the only static gate is a compiler run with warnings as errors or "
             "a .NET build's analysers (issue #926), else false. A formatter that rewrites files "
             "counts only when a later line of its job runs git diff --exit-code."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
-                      "analysers_in_build", "compiler_gate_only", "not_enforced",
+                      "script_not_found", "check_target", "unread_ci_system", "external_ci",
+                      "external_ci_marker", "analysers_in_build", "compiler_gate_only", "not_enforced",
                       "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger, check_target, unread_ci_system, external_ci or external_ci_marker "
+            "unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or "
+            "external_ci_marker "
             "(null; as enforced_basis), analysers_in_build (null: "
             "a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns "
             "on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in "
@@ -276,14 +279,17 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
-            "read, or when no gate is found in a repository holding a go.mod or Cargo.toml "
-            "(see unmeasured_reason); false otherwise. Gates counted are those enforced "
+            "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
+            "language and none of at least 50 for another (see unmeasured_reason); false "
+            "otherwise. Gates counted are those enforced "
             "counts."),
         "unmeasured_reason": _field(
             {"type": ["string", "null"]},
-            "Why threshold_meets_minimum is null with no gate found: "
-            "go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml "
-            "and its gate may be a script this scan does not read; null otherwise."),
+            "Why threshold_meets_minimum is null when no gate of the repository's Go or Rust "
+            "module is found: go_rust_gate_form_not_read when the repository holds a go.mod "
+            "or Cargo.toml with no gate read for it and none of at least 50 percent for "
+            "another language (issue #937), so its gate may be a script this scan does not "
+            "read; null otherwise."),
         "enforced_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "

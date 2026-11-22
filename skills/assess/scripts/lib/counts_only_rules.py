@@ -225,6 +225,10 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "opportunities.shared_templates.repos": PATH,
     "opportunities.shared_templates.source": PATH,
     "opportunities.shared_templates.kind": TOKEN,
+    # #944: the owner's exclusions (.assess/config.toml); the reason is the owner's own words
+    "repos.exclusions.kind": TOKEN,
+    "repos.exclusions.source": TOKEN,
+    "repos.exclusions.reason": DROP,
 }
 
 
@@ -243,6 +247,12 @@ FLEET_DATA_KEPT: Final = frozenset({
     "opportunities.biggest_lift.done_when", "opportunities.biggest_lift.text",
     "opportunities.shared_templates.row", "opportunities.shared_templates.signal",
     "opportunities.shared_templates.text",
+    # #944: the level result's ids, states and reason codes (lib/level_tally.py), copied as
+    # level.json writes them, and the model's Step gates
+    "repos.next_step.blockers.kind", "repos.next_step.blockers.gate", "repos.next_step.blockers.condition",
+    "repos.next_step.blockers.state", "repos.next_step.blockers.reason",
+    "repos.next_step.blockers.disposition", "repos.next_step.blockers.exclusion_kind",
+    "repos.exclusions.id", "views.units.step.next_step.gates.gate", "views.units.step.next_step.gates.row",
 })
 
 

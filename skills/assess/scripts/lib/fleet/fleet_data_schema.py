@@ -25,6 +25,8 @@ if __package__ in (None, ""):  # run as a script: make ``lib`` importable
 from lib.fleet.fleet_data import FLEET_DATA_VERSION, FleetData  # noqa: E402
 from lib.fleet.fleet_group_schema import type_schema  # noqa: E402
 from lib.fleet.fleet_units import KINDS, VIEWS  # noqa: E402
+from lib.level_tally import EXCLUDED_BY_OWNER, STATES  # noqa: E402
+from lib.owner_exclusions import KINDS as EXCLUSION_KINDS, SOURCE_REPO  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
 SCHEMA_PATH = Path(__file__).resolve().parents[4] / "fleet" / "references" / "fleet-data.schema.json"
@@ -45,6 +47,16 @@ def build_schema() -> JsonDict:
     repo = props["repos"]["items"]["properties"]
     repo["units"]["items"]["properties"]["view"] = {"enum": list(VIEWS)}
     repo["rows"]["items"]["properties"]["status"] = {"enum": ["level", "unknown"]}
+    # #944: the Step fields, as level.json's level_result gives them
+    blocker = next(b for b in repo["next_step"]["anyOf"] if b.get("type") == "object")
+    blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
+    blocker_fields["kind"] = {"enum": ["gate", "threshold"]}
+    blocker_fields["state"] = {"enum": list(STATES)}
+    blocker_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
+    blocker_fields["exclusion_kind"] = {"enum": list(EXCLUSION_KINDS)}
+    exclusion = repo["exclusions"]["items"]["properties"]
+    exclusion["kind"] = {"enum": list(EXCLUSION_KINDS)}
+    exclusion["source"] = {"enum": [SOURCE_REPO]}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": SCHEMA_ID,
@@ -52,7 +64,8 @@ def build_schema() -> JsonDict:
         "description": (
             "fleet-data.json written by skills/fleet/scripts/fleet.py: the run stamp, the maturity "
             "model rows, the ownership and system unit trees with rolled-up levels, and per "
-            "repository its units, web URL and per-row level, value and reason. Generated from "
+            "repository its units, web URL, per-row level, value and reason, and its Step, next Step, "
+            "tally and owner exclusions as level.json gives them, with each unit's Step roll-up. Generated from "
             "lib/fleet/fleet_data.py by lib/fleet/fleet_data_schema.py."
         ),
         **schema,

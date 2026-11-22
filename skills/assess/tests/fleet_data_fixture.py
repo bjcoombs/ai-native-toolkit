@@ -59,6 +59,25 @@ aggregation = "min"
   [[rows.levels]]
   level = 1
   criteria = [{ signal = "ci.required", op = "eq", value = true }]
+
+# #944: fixture signals have no producer class, so their conditions are listed, never
+# counted: the tally's met stays 0, and the gates (which read state) decide each Step.
+[[steps]]
+step = 1
+name = "Assisted"
+threshold = 0
+
+[[steps]]
+step = 2
+name = "Docs"
+threshold = 0
+gates = [{ id = "docs", row = "docs", level = 1 }]
+
+[[steps]]
+step = 3
+name = "Docs and CI"
+threshold = 0
+gates = [{ id = "docs", row = "docs", level = 1 }, { id = "ci", row = "ci", level = 1 }]
 """
 
 UNITS = """\
@@ -88,9 +107,14 @@ def _row(repo: str, scans: JsonDict | None, reason: str = "scan_timeout") -> Fle
 
 
 ROWS: list[FleetRow] = [
-    # level 2 docs, level 1 ci
+    # level 2 docs, level 1 ci; the owner excluded ci.1, so Step 3 stays unreached (#944)
     _row("grp/sub/proj1", {"docs": {"available": True, "lines": 40, "grade": "A"},
-                           "ci": {"available": True, "required": True}}),
+                           "ci": {"available": True, "required": True},
+                           "owner_exclusions": {"exclusions": [
+                               {"id": "ci.1", "kind": "measured_elsewhere", "source": "repo",
+                                "reason": "CI runs in the release pipeline repository.",
+                                "excluded_by": "maintainer", "excluded_at": "2026-11-22", "version": "2.2.0"}],
+                               "skipped": [], "disclosures": []}}),
     # level 1 docs (grade C holds it back), level 0 ci
     _row("grp/sub/proj2", {"docs": {"available": True, "lines": 12, "grade": "C"},
                            "ci": {"available": True, "required": False}}),
