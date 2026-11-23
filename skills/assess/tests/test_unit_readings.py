@@ -14,9 +14,11 @@ import pytest
 
 from lib import check_manifest as cm
 from lib import core_scans as cs
+from lib import run_setup as rs
 from lib import unit_readings as ur
 from lib.counts_only import counts_only
 from lib.instruction_files import nested_instruction_surface
+from lib.layer_grades import scan_layer_grades
 from lib.levels import resolve_signal
 from lib.scan_registry import SCANS, STAGE_READ_SIDE, ScanSpec
 from lib.signals import HEADLESS_SCANS
@@ -144,12 +146,35 @@ def test_a_root_only_instruction_file_is_the_root_units_own(tmp_path: Path) -> N
 
 
 def test_the_root_unit_is_not_credited_with_a_members_nested_file(tmp_path: Path) -> None:
-    nested = {"available": True, "files": [{"path": "svc/a/CLAUDE.md"}]}
-    absent = {"available": True, "instruction_file_present": False}
-    block = cs.unit_readings({"unit_count": 1, "units": [{"path": "."}]}, nested,
-                             *[{"layer_grades": absent}.get(b) for b in ur.REPO_BLOCKS],
-                             NO_EXCLUDES, tmp_path, None)
-    assert block["units"][0]["blocks"]["layer_grades"]["instruction_file_present"] is False
+    repo = _write(tmp_path / "repo", {
+        "pyproject.toml": "[project]\nname = 'root'\n",
+        "root_pkg/__init__.py": "x = 1\n",
+        "svc/a/pyproject.toml": "[project]\nname = 'a'\n",
+        "svc/a/a/__init__.py": "y = 1\n",
+        "svc/a/CLAUDE.md": "# A\n\nRun `pytest`.\n",
+    })
+    nested = nested_instruction_surface(repo, NO_EXCLUDES)
+    grades = scan_layer_grades(rs.instruction_grading(repo), nested)
+    assert grades["instruction_presence"] == "nested_only"
+    blocks = {"layer_grades": grades}
+    units = {"unit_count": 2, "units": [{"path": "."}, {"path": "svc/a"}]}
+    block = cs.unit_readings(units, nested, *[blocks.get(b) for b in ur.REPO_BLOCKS],
+                             NO_EXCLUDES, repo, None)
+    root, member = block["units"]
+    assert "layer_grades" not in root["blocks"]
+    assert _origins(root)["layer-0-instructions.1"] == "inherited"
+    assert _origins(member)["layer-0-instructions.1"] == "unit"
+
+
+def test_no_model_condition_mixes_unit_and_repo_wide_blocks() -> None:
+    # An origin is "unit" when any criterion reads an own block (#864 relies on a level
+    # reading one kind only); a level mixing both would need a finer rule.
+    from lib.level_tally import default_model
+    own = set(ur.unit_blocks(cm.core_manifest()))
+    for row in default_model()["rows"]:
+        for level in row["levels"]:
+            reads = {c["signal"].split(".")[0] for c in level["criteria"]}
+            assert reads <= own or not reads & own, (row["id"], level["level"], sorted(reads))
 
 
 def test_the_registry_entry_reads_what_the_unit_pass_needs() -> None:

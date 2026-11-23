@@ -39,7 +39,9 @@ they read ``scope``, directly or through another dependency; every other read
 once (``UNIT_EXTERNAL_READS``, the registry entry's last reads, after ``OWN_READS``). A producer that does not read the scope is a misclassified
 collector and raises ``ValueError``. The root unit (``.``) runs no pass: it reads the
 repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as its own,
-override blocks included (the root instruction file and the root gates are the root's own). Where member
+override blocks included (the root instruction file and the root gates are the root's own),
+except a ``layer_grades`` reading that rests on nested files alone (``nested_only``): those
+files are their units', so the root inherits it. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
@@ -312,6 +314,14 @@ def _conditions(model: MaturityModel, own: Mapping[str, Any]) -> list[UnitCondit
     return result
 
 
+def _root_owns(block: str, result: Any) -> bool:
+    """False for a ``layer_grades`` reading that rests on nested files only (``nested_only``,
+    #821): those files are their units', so the root inherits rather than owns it."""
+    if block != "layer_grades" or not isinstance(result, Mapping):
+        return True
+    return result.get("instruction_presence") == "root" or result.get("available") is False
+
+
 def split_reads(values: Sequence[Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
     """The registry entry's reads after ``units`` and ``nested_instructions``, split into the
     ``REPO_BLOCKS`` mapping and the ``UNIT_EXTERNAL_READS`` values."""
@@ -367,7 +377,7 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
             if root:
                 # The repository-wide reading is the root's own, root instruction file and
                 # gates included; a member unit's nested file is that unit's, not the root's.
-                if result is None:
+                if result is None or not _root_owns(block, result):
                     continue
             elif scopes[block] == "override":
                 result = OVERRIDES[block](rel, result, repo)
