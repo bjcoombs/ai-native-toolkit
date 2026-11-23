@@ -116,7 +116,7 @@ SKILLS: dict[str, dict[str, Any]] = {
                 "from `run-context.json` and its remaining verified entries, not from "
                 "the earlier prose. Delete both files once read. Assembling "
                 "`.assess/assess-report.md` - the scorecard, the snapshots, the verbatim "
-                "cross-layer findings, the lying signals, and the mandatory Top 3 "
+                "cross-practice findings, the lying signals, and the mandatory Top 3 "
                 "Actions - is a reusable, mostly-deterministic procedure."
             ),
             "uv-emit-workflow": 'uv run scripts/assess_emit_workflow.py "$REPO_ROOT"',
