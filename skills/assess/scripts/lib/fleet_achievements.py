@@ -26,6 +26,13 @@ both and the measured set is identical (``lib/fleet_compare.py``'s ``cause: leve
 Anything else (a repository going unknown, failing its scan, joining or leaving the
 unit, keys hashed under another salt) is neutral: it neither earns nor loses
 anything. This is how an unknown level never earns or loses anything at unit level.
+Each run is compared with the latest earlier run measuring the same repositories
+(``same_set``, #1041), not only the run before it, so a member's failed scan on the run
+before a move delays the credit to the run it returns instead of losing it; the
+achievement's ``previous_run`` names the run compared with. One move is credited once: a
+``level_up`` credited after that run raises the level a move must pass (``Evidence``
+``from_level`` is that level), so a member returning after the others moved does not
+credit the move again, while a real drop and recovery is a new move.
 
 **Re-scored entries (#771).** An earlier run kept under another maturity-model version
 replays re-scored under this run's model (``lib/fleet_achievements_runs.py``,
@@ -87,7 +94,8 @@ The deterministic achievements engine (#704, `ACHIEVEMENTS_VERSION`; #705 and #7
 on its evidence model). `build_achievements` replays comparable runs' `fleet-data.json`
 oldest first: `subjects` gives every unit and repository its level per team row, the row's
 roll-up rule (`levels.share_level`) over measured members, with the measured set;
-`clean` is the one gate on a move (known both sides, same measured set), and
+`same_set` is the one gate on a move (the latest earlier run measuring the same repositories
+with a known state, #1041), and
 `known_level` the one place a cell's level is read (the hook for #697's floor). `_Replay`
 emits `level_up`, `first` (only with `firsts=True`, `fleet.py --first-achievements`; off
 by default since #772), `target_hit` (a Step target reached by the subject's lowest Step,
@@ -108,11 +116,11 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import NamedTuple, TypedDict
+from typing import NamedTuple, TypedDict, TypeVar
 
 from lib.fleet_data import FLEET_DATA_VERSION, NOT_SCANNED, Cell, FleetData
 from lib.fleet_data_steps import RepoSteps
@@ -302,11 +310,6 @@ def run_cells(data: FleetData) -> dict[str, dict[str, Cell]]:
 # --- moves -------------------------------------------------------------------
 
 
-def clean(then: RowState | None, now: RowState | None) -> bool:
-    return (then is not None and now is not None and then.level is not None and now.level is not None
-            and bool(now.measured) and then.measured == now.measured)
-
-
 def moves_up(row: str, state: RowState, then_cells: Mapping[str, Mapping[str, Cell]],
              now_cells: Mapping[str, Mapping[str, Cell]]) -> list[Move]:
     """The measured members that moved up on ``row`` (both levels known), with the criterion met."""
@@ -388,13 +391,20 @@ class _Replay:
         self.steps: dict[SubjectKey, list[tuple[str, StepState]]] = {}  # each run's Step state, oldest first
         self.order: dict[str, int] = {}  # run id -> position in the replay
         self.hit_at: dict[tuple[SubjectKey, Target], str] = {}  # the run each target was last credited
+        self.rows: dict[tuple[SubjectKey, str], list[tuple[str, RowState]]] = {}  # each run's row state
+        self.cells: dict[str, Mapping[str, Mapping[str, Cell]]] = {}  # each run's cells, by run id
+        self.up_at: dict[tuple[SubjectKey, str], tuple[str, int]] = {}  # last level_up: (run, level reached)
         self.out: list[Achievement] = []
 
-    def see(self, run: str, subs: Mapping[SubjectKey, Subject]) -> None:
-        """Record a run's known levels as held (any run, clean or not) and its Step states."""
+    def see(self, run: str, subs: Mapping[SubjectKey, Subject], cells: Mapping[str, Mapping[str, Cell]]) -> None:
+        """Record a run's known levels as held (any run, clean or not), its row and Step states
+        and its cells, which a later run compares with (``same_set``)."""
         self.order.setdefault(run, len(self.order))
+        self.cells[run] = cells
         for key, sub in subs.items():
             self.steps.setdefault(key, []).append((run, sub.step))
+            for row, state in sub.rows.items():
+                self.rows.setdefault((key, row), []).append((run, state))
         for sub in subs.values():
             for row, state in sub.rows.items():
                 if state.level is not None:
@@ -418,40 +428,47 @@ class _Replay:
         for key in sorted(now):
             sub, old = now[key], then.get(key)
             self._targets(run, key, sub)
-            if old is None:  # new to the fleet (or keys under another salt): nothing to compare with
-                continue
-            clean_rows = [row for row in sorted(sub.rows) if clean(old.rows.get(row), sub.rows[row])]
+            # each row against the latest earlier run measuring the same repositories (#1041)
+            compared = {row: found for row in sorted(sub.rows)
+                        if (found := same_set(self.rows.get((key, row), []), sub.rows[row].measured,
+                                              sub.rows[row].level is not None, _row_known)) is not None}
             slipped = False
-            for row in clean_rows:
-                then_row, now_row = old.rows[row], sub.rows[row]
+            for row, (prev_run, then_row) in compared.items():
+                now_row = sub.rows[row]
                 lv_then, lv_now = then_row.level, now_row.level
-                assert lv_then is not None and lv_now is not None  # clean() guarantees both
+                assert lv_then is not None and lv_now is not None  # same_set guarantees both
                 if lv_now < lv_then:
                     slipped = True
-                moves = moves_up(row, now_row, then_cells, now_cells)
-                if lv_now > lv_then:
-                    self._earn(LEVEL_UP, sub, run, previous, _evidence(row, lv_then, lv_now, moves))
+                credited = self.up_at.get((key, row))
+                base = lv_then
+                if credited is not None and self.order[credited[0]] > self.order[prev_run]:
+                    base = max(base, credited[1])  # already credited after that run: one move, one level_up
+                if lv_now > base:
+                    moves = moves_up(row, now_row, self.cells[prev_run], now_cells)
+                    self.up_at[(key, row)] = (run, lv_now)
+                    self._earn(LEVEL_UP, sub, run, prev_run, _evidence(row, base, lv_now, moves))
                     held = reached_before.get((sub.view, sub.kind, row))
                     if self.firsts and (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
-                        self._earn(FIRST, sub, run, previous, _evidence(row, lv_then, lv_now, moves, level=lv_now))
+                        self._earn(FIRST, sub, run, prev_run, _evidence(row, base, lv_now, moves, level=lv_now))
             moved_unknown = [unknown_move(then_cells, now_cells, sub.key, row, rescored)
-                             for row in sorted(sub.rows) if row not in clean_rows] \
-                if rescored is not None and sub.kind == REPO_VIEW else []
+                             for row in sorted(sub.rows) if row not in compared] \
+                if rescored is not None and sub.kind == REPO_VIEW and old is not None else []
             slipped = slipped or LAPSE in moved_unknown
             if slipped:
                 self.streak[key] = 1
-            elif clean_rows or GAIN in moved_unknown:
+            elif compared or GAIN in moved_unknown:
                 self.streak[key] = self.streak.get(key, 1) + 1
                 if self.streak[key] in STREAK_MILESTONES:
                     self._earn(STREAK, sub, run, previous, _evidence(runs=self.streak[key]))
-        self.see(run, now)
+        self.see(run, now, now_cells)
 
     def _targets(self, run: str, key: SubjectKey, sub: Subject) -> None:
         """``target_hit`` against the latest earlier run with the same measured set (``same_set``),
         so a member's failed scan on the run before the crossing never loses the hit. A target
         already credited after that run is not credited again: one crossing, one hit."""
         mine = [t for t in sorted(self.targets, key=target_order) if (t.view, t.unit) == (sub.view, sub.key)]
-        earlier = same_set(self.steps.get(key, []), sub.step) if mine else None
+        earlier = (same_set(self.steps.get(key, []), sub.step.measured, sub.step.lowest is not None, _step_known)
+                   if mine else None)
         if earlier is None:
             return
         previous, then = earlier
@@ -465,12 +482,26 @@ class _Replay:
                     from_step=then.lowest, to_step=sub.step.lowest, target_step=target.step))
 
 
-def same_set(history: Sequence[tuple[str, StepState]], now: StepState) -> tuple[str, StepState] | None:
-    """The latest earlier ``(run, state)`` measuring exactly ``now``'s repositories; None when none does."""
-    if now.lowest is None:
+State = TypeVar("State", RowState, StepState)
+
+
+def same_set(history: Sequence[tuple[str, State]], measured: frozenset[str], known: bool,
+             is_known: Callable[[State], bool]) -> tuple[str, State] | None:
+    """The latest earlier ``(run, state)`` measuring exactly ``measured`` with a known state; None
+    when none does, when this run's state is not ``known``, or when nothing is measured. The one
+    walk behind ``level_up``, streaks and ``target_hit`` (#945, #1041)."""
+    if not known or not measured:
         return None
     return next(((run, state) for run, state in reversed(history)
-                 if state.lowest is not None and state.measured == now.measured), None)
+                 if is_known(state) and state.measured == measured), None)
+
+
+def _row_known(state: RowState) -> bool:
+    return state.level is not None
+
+
+def _step_known(state: StepState) -> bool:
+    return state.lowest is not None
 
 
 LAPSE, GAIN = "lapse", "gain"
@@ -568,7 +599,7 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     replay = _Replay(titles, tops, targets, firsts)
     states = [(run.run_id, subjects(run.data, rules), run_cells(run.data)) for run in runs]
     caused = [rule_unknowns(run.stored, run.data) if run.stored is not None else None for run in runs]
-    replay.see(states[0][0], states[0][1])
+    replay.see(states[0][0], states[0][1], states[0][2])
     for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
         then_caused = caused[i]
         # both runs re-scored from one earlier version: the step keeps its native-model credit
