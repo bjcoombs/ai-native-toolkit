@@ -75,7 +75,7 @@ language's low gate does not settle another's. A gate of at least 50 percent kee
 a null from another gate (a templated threshold) keeps its own reason, and a gate read
 for every Go and Rust manifest present, even one gating nothing, keeps the normal
 reading, with `unmeasured_reason` null. The collector's manifest `revision` moved to 2 for the
-#788 change of meaning and to 4 in the 3.0.0 release for the #937 widening and #954.
+#788 change of meaning, and to 4 in the 3.0.0 release for the #937 widening.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to

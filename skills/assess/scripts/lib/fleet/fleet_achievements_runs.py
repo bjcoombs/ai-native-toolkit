@@ -34,8 +34,9 @@ bytes. An unreadable entry is passed over, never an error. An earlier
 
 `earlier_runs` reads the history entries the engine replays: `run.json` passing
 `fleet_compare.comparability` against this run and a `fleet-data.json` at a version in
-`READABLE_FLEET_DATA_VERSIONS` (1, 2 and 3: version 1's roll-up is not read, #772;
-version 3 only adds `opportunities`, #746),
+`READABLE_FLEET_DATA_VERSIONS` (1 to 4: version 1's roll-up is not read, #772;
+version 3 only adds `opportunities`, #746; version 4 only adds the per-repository Step
+fields, #944, #945),
 one per date before this run's (`fleet_history.one_per_date`). An entry is dated by its
 `run.json` `scan_date`, not the stamp copy in `fleet-data.json`, which is read only when
 the entry has no `run.json` (#780). Unreadable entries are passed over. With the run's
@@ -66,8 +67,10 @@ from lib.levels import MaturityModel
 _TOP_KEYS = ("run", "model", "views", "repos")
 # The fleet-data.json versions whose cells and units the engine reads alike: 1 (#703) carried
 # the mean-share roll-up #772 removed, which the engine no longer reads; 3 (#746) only adds
-# ``opportunities``, which the engine does not read.
-READABLE_FLEET_DATA_VERSIONS = frozenset({1, 2, FLEET_DATA_VERSION})
+# ``opportunities``, which the engine does not read; 4 (#944, #945) only adds the repository
+# ``step``, ``next_step``, ``tally``, ``exclusions`` and ``gate_blockers`` and the unit ``step``.
+# List every version: a FLEET_DATA_VERSION bump must not drop the one before it.
+READABLE_FLEET_DATA_VERSIONS = frozenset({1, 2, 3, FLEET_DATA_VERSION})
 
 
 def _stamp(entry: Path, data: Mapping[str, Any]) -> Any:

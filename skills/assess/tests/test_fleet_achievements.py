@@ -386,3 +386,11 @@ def test_a_malformed_history_entry_is_passed_over(tmp_path: Path, break_it: obje
     runs = earlier_runs(org, current, frozenset(BASE))
     assert [r.run_id for r in runs] == ["2026-11-01"]
     fa.build_achievements(fa.HistoryRun("2026-11-15", _data("2026-11-15", BASE)), runs, MODEL)
+
+
+def test_every_fleet_data_version_up_to_the_current_one_stays_readable() -> None:
+    """A FLEET_DATA_VERSION bump must not silently drop the version before it (3.0.0 release)."""
+    from lib.fleet.fleet_achievements_runs import READABLE_FLEET_DATA_VERSIONS
+    from lib.fleet.fleet_data import FLEET_DATA_VERSION
+
+    assert READABLE_FLEET_DATA_VERSIONS == frozenset(range(1, FLEET_DATA_VERSION + 1))
