@@ -9,7 +9,9 @@ one page per group, with no rescan:
   numbered step per criterion, so a team can take or leave each on its own.
   Each step leads with the change and a "done when" in the repository's own
   terms (``lib/next_step_guidance.py``); the signal expression follows as the
-  optional re-run check. A team row names the repositories holding the group
+  optional re-run check. Between the two, a "Why:" line gives the check manifest's why
+  for that criterion at its level (``lib.level_tally.criterion_why``, #1128); a criterion
+  with no manifest entry (a caller's own model) gets no Why line, never an empty one. A team row names the repositories holding the group
   back, each with its current value; an org row names the settings scope it
   applies to;
 - for an ``unknown`` row, the signals that could not be measured and why: a
@@ -81,6 +83,7 @@ from lib.counts_only.counts_only_rules import TOKEN_RE
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import (GroupRow, full_run_only_signals, platform_signals, repo_signals, settings_for,
                               settings_signals)
+from lib.level_tally import criterion_why
 from lib.next_step_guidance import guidance, measure_hint
 from lib.next_step_guidance import parts as unmet_parts_of
 from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
@@ -202,14 +205,15 @@ def _needed(result: RowResult, total: int) -> int:
     return max(1, math.ceil(share * total))
 
 
-def _criteria_upto(row: Row, target: int) -> list[Criterion]:
+def _criteria_upto(row: Row, target: int) -> list[tuple[int, Criterion]]:
+    """Each criterion of levels 1..target once, with the level it first appears at."""
     seen: set[tuple[str, str, str]] = set()
-    out: list[Criterion] = []
+    out: list[tuple[int, Criterion]] = []
     for level in row["levels"][:target]:
         for criterion in level["criteria"]:
             if _key(criterion) not in seen:
                 seen.add(_key(criterion))
-                out.append(criterion)
+                out.append((level["level"], criterion))
     return out
 
 
@@ -222,16 +226,19 @@ def _outcomes(evaluation: Evaluation | RowResult, target: int) -> dict[tuple[str
 
 
 def _step(number: int, criterion: Criterion, where: Sequence[str],
-          unmet_parts: Sequence[str] = ()) -> list[str]:
+          unmet_parts: Sequence[str] = (), why: str | None = None) -> list[str]:
     # an eq_signal criterion's value is a second path, not an operand to set (lib/levels_fields.py)
     words = None if "eq_signal" in criterion else guidance(
         criterion["signal"], criterion["op"], criterion["value"], unmet_parts)
+    because = [f"   - Why: {text(why)}"] if why else []  # no manifest why: no line (#1128)
     if words is None:
         return [f"{number}. **Meet {expression(criterion)}.** No repository-native wording exists "
                 "for this signal.",
+                *because,
                 f"   - Done when: the next fleet run reads {expression(criterion)}.",
                 *where]
     return [f"{number}. **{words['change']}**",
+            *because,
             f"   - Done when: {words['done_when']}",
             f"   - Re-run check (optional): the next fleet run reads {expression(criterion)}.",
             *where]
@@ -245,7 +252,7 @@ def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, s
     lines: list[str] = []
     number = 0
     blocking: set[str] = set()
-    for criterion in _criteria_upto(row, target):
+    for level, criterion in _criteria_upto(row, target):
         hits = [(name, per_repo[name][_key(criterion)]) for name in below
                 if _key(criterion) in per_repo[name] and per_repo[name][_key(criterion)]["status"] == "unmet"]
         if not hits:
@@ -258,7 +265,8 @@ def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, s
             + (f"; unmet: {', '.join(code(p) for p in found[name])})" if found[name] else ")")
             for name, o in hits)
         union = sorted({p for found_parts in found.values() for p in found_parts})
-        lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}."], union)
+        lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}."], union,
+                       criterion_why(row["id"], level, criterion["signal"]))
     unmeasured = [name for name in below if name not in blocking]
     if unmeasured and report_unmeasured:
         parts = []
@@ -278,12 +286,13 @@ def _org_steps(row: Row, result: RowResult, target: int, scope: str | None, repo
     where = f"   - Applies to: group settings {code(scope or '')}, covering {_repos(repos)}."
     lines: list[str] = []
     number = 0
-    for criterion in _criteria_upto(row, target):
+    for level, criterion in _criteria_upto(row, target):
         outcome = outcomes.get(_key(criterion))
         if outcome is None or outcome["status"] != "unmet":
             continue
         number += 1
-        lines += _step(number, criterion, [f"   - Now: {scalar(outcome['actual'])}.", where])
+        lines += _step(number, criterion, [f"   - Now: {scalar(outcome['actual'])}.", where],
+                       why=criterion_why(row["id"], level, criterion["signal"]))
     return lines
 
 

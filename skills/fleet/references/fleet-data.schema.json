@@ -508,6 +508,12 @@
                     "string",
                     "null"
                   ]
+                },
+                "why": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -517,7 +523,8 @@
                 "signal",
                 "status",
                 "top_level",
-                "value"
+                "value",
+                "why"
               ],
               "additionalProperties": false
             }
@@ -966,6 +973,12 @@
                         "null"
                       ]
                     },
+                    "why": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "text": {
                       "type": "string"
                     }
@@ -980,7 +993,8 @@
                     "row",
                     "signal",
                     "step",
-                    "text"
+                    "text",
+                    "why"
                   ],
                   "additionalProperties": false
                 },

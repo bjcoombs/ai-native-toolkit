@@ -96,7 +96,8 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   `disposition: "excluded_by_owner"` and `exclusion_kind`. `why` (#939) is the static text of
   the check manifest's whys for the condition's criteria, in criterion order, each once, joined
   by one space (`condition_why`); it is absent when no criterion has one (a caller's own model),
-  and identical in `/assess` and `/fleet`. A
+  and identical in `/assess` and `/fleet`. `criterion_why(row, level, signal)` is one
+  criterion's manifest why (null when none), which the fleet outputs carry per step (#1128). A
   `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
   `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
 - Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
@@ -138,6 +139,7 @@ fixtures through `/fleet` and `/assess` on the same commit.
 """
 from __future__ import annotations
 
+import functools
 import json
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
@@ -293,11 +295,24 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
     return " ".join(dict.fromkeys(w for w in found if w))
 
 
+@functools.cache
+def _core_whys() -> Mapping[str, str]:
+    """``manifest_whys.condition_whys`` of the core manifest, built once per process."""
+    from lib.manifest.check_manifest import core_manifest  # lazy: the manifest loads once
+    from lib.manifest.manifest_whys import condition_whys
+    return condition_whys(core_manifest())
+
+
+def criterion_why(row_id: str, level: int, signal: str) -> str | None:
+    """One criterion's manifest why (#1128): ``condition_why`` over that criterion alone, from
+    the same core manifest; None when it has none (a caller's own model), never invented."""
+    from lib.manifest.check_manifest import condition_key
+    return _core_whys().get(condition_key(row_id, level, signal)) or None
+
+
 def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
     """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
-    from lib.manifest.check_manifest import core_manifest
-    from lib.manifest.manifest_whys import condition_whys
-    whys = condition_whys(core_manifest())
+    whys = _core_whys()
     by_id = {c["id"]: c for c in conditions}
     for row in model["rows"]:
         for level in row["levels"]:
