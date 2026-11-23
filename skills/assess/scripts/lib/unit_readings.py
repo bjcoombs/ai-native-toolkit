@@ -40,8 +40,9 @@ once (``UNIT_EXTERNAL_READS``, the registry entry's last reads, after ``OWN_READ
 collector and raises ``ValueError``. The root unit (``.``) runs no pass: it reads the
 repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as its own,
 override blocks included (the root instruction file and the root gates are the root's own),
-except a ``layer_grades`` reading that rests on nested files alone (``nested_only``): those
-files are their units', so the root inherits it. Where member
+except evidence that sits in member units: a ``layer_grades`` reading that rests on nested
+files alone (``nested_only``), or a ``coverage_gate`` whose every gate is under a member.
+Those are their units', so the root inherits them. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
@@ -314,12 +315,23 @@ def _conditions(model: MaturityModel, own: Mapping[str, Any]) -> list[UnitCondit
     return result
 
 
-def _root_owns(block: str, result: Any) -> bool:
-    """False for a ``layer_grades`` reading that rests on nested files only (``nested_only``,
-    #821): those files are their units', so the root inherits rather than owns it."""
-    if block != "layer_grades" or not isinstance(result, Mapping):
+def _root_owns(block: str, result: Any, members: Sequence[str]) -> bool:
+    """Whether the root unit owns a repository-wide override reading, given the member units.
+
+    ``layer_grades`` resting on nested files alone (``nested_only``, #821) is not the root's:
+    those files are their units'. ``coverage_gate`` is the root's only when one of its gates
+    sits under no member unit.
+    """
+    if not isinstance(result, Mapping) or result.get("available") is False:
         return True
-    return result.get("instruction_presence") == "root" or result.get("available") is False
+    if block == "layer_grades":
+        return result.get("instruction_presence") == "root"
+    if block == "coverage_gate":
+        gates = result.get("gates")
+        return isinstance(gates, list) and any(
+            isinstance(g, Mapping) and isinstance(g.get("file"), str)
+            and not any(_under(g["file"], m) for m in members) for g in gates)
+    return True
 
 
 def split_reads(values: Sequence[Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
@@ -360,6 +372,8 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
     repo = {**values, "nested_instructions": nested_instructions}
     paths = _paths(model)
     readings: list[UnitReading] = []
+    listed = [u for u in units.get("units") or [] if isinstance(u, Mapping)]
+    members = [str(u.get("path")) for u in listed if u.get("path") not in (None, "", ".")]
     for unit in units.get("units") or []:
         rel = str(unit.get("path", "")) if isinstance(unit, Mapping) else ""
         if not rel:
@@ -377,7 +391,7 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
             if root:
                 # The repository-wide reading is the root's own, root instruction file and
                 # gates included; a member unit's nested file is that unit's, not the root's.
-                if result is None or not _root_owns(block, result):
+                if result is None or not _root_owns(block, result, members):
                     continue
             elif scopes[block] == "override":
                 result = OVERRIDES[block](rel, result, repo)

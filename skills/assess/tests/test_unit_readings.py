@@ -166,6 +166,20 @@ def test_the_root_unit_is_not_credited_with_a_members_nested_file(tmp_path: Path
     assert _origins(member)["layer-0-instructions.1"] == "unit"
 
 
+def test_the_root_unit_does_not_own_a_members_coverage_gate(tmp_path: Path) -> None:
+    member_gate = {"available": True, "gates": [{"file": "svc/a/pyproject.toml"}],
+                   "enforced_meets_minimum": True}
+    root_gate = {**member_gate, "gates": [{"file": "pyproject.toml"}]}
+    units = {"unit_count": 2, "units": [{"path": "."}, {"path": "svc/a"}]}
+    for gate, owned in ((member_gate, False), (root_gate, True)):
+        blocks = {"coverage_gate": gate}
+        block = cs.unit_readings(units, None, *[blocks.get(b) for b in ur.REPO_BLOCKS],
+                                 NO_EXCLUDES, tmp_path, None)
+        root = block["units"][0]
+        assert ("coverage_gate" in root["blocks"]) is owned
+        assert _origins(root)["layer-6-coverage.1"] == ("unit" if owned else "inherited")
+
+
 def test_no_model_condition_mixes_unit_and_repo_wide_blocks() -> None:
     # An origin is "unit" when any criterion reads an own block (#864 relies on a level
     # reading one kind only); a level mixing both would need a finer rule.
