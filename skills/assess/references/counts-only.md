@@ -823,6 +823,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_levels.units.conditions.state` | token |
 | `unit_levels.units.conditions.origin` | token |
 | `unit_levels.units.conditions.reason` | token |
+| `unit_levels.units.conditions.why` | dropped |
 | `unit_levels.units.next_step.blockers.kind` | token |
 | `unit_levels.units.next_step.blockers.gate` | token |
 | `unit_levels.units.next_step.blockers.condition` | token |

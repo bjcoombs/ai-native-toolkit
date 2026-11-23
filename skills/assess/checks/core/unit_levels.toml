@@ -24,6 +24,7 @@ revision = 1
   "unit_levels.units.conditions.state" = "token"
   "unit_levels.units.conditions.origin" = "token"
   "unit_levels.units.conditions.reason" = "token"
+  "unit_levels.units.conditions.why" = "drop"
   "unit_levels.units.next_step.blockers.kind" = "token"
   "unit_levels.units.next_step.blockers.gate" = "token"
   "unit_levels.units.next_step.blockers.condition" = "token"

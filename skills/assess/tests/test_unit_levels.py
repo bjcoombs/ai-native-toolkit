@@ -175,7 +175,9 @@ def test_counts_only_drops_unit_paths_and_keeps_the_numbers(run: dict[str, Any])
         assert kept["step"] == unit["step"]
         assert kept["tally"] == unit["tally"]
         assert kept["inherited"] == unit["inherited"]
-        assert kept["conditions"] == unit["conditions"]
+        # the why is prose: counts-only drops it and keeps every token
+        assert kept["conditions"] == [{k: v for k, v in c.items() if k != "why"}
+                                      for c in unit["conditions"]]
         assert kept["next_step"] == unit["next_step"]
 
 
@@ -232,3 +234,11 @@ def test_the_root_unit_does_not_inherit_a_members_instruction_file(
         assert _origin(unit, "layer-0-instructions.1") == "unit"
         assert _state(unit, "layer-0-instructions.1") == "unmet"
         assert unit["step"] == 1
+
+
+def test_each_unit_condition_carries_the_level_blocks_why(run: dict[str, Any]) -> None:
+    whys = {c["id"]: c["why"] for c in run["level"]["conditions"] if "why" in c}
+    assert whys
+    for unit in run["unit_levels"]["units"]:
+        for c in unit["conditions"]:
+            assert c.get("why") == whys.get(c["id"])

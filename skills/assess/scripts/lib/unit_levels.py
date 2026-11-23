@@ -25,8 +25,8 @@ as #800 decision 2 says, and is labelled ``inherited`` on the unit's condition.
     (``headline.verified_count``, the headline's V);
   - ``conditions``: every model condition with its ``state``, ``counted``, ``origin``
     (``unit`` or ``inherited``, from ``unit_readings``; a condition ``unit_readings`` did
-    not tag reads ``inherited``, the repository-wide reading) and its ``reason`` when it
-    has one;
+    not tag reads ``inherited``, the repository-wide reading), its ``reason`` when it has
+    one, and its ``why`` as the ``level`` block carries it (#939);
   - ``inherited``: the ids of the conditions met on an inherited reading, which the
     report labels "inherited from root". It lists listed (uncounted) conditions too, such
     as the declared instruction file, since they hold Step gates; ``counted`` on the
@@ -72,6 +72,7 @@ class UnitConditionLevel(TypedDict):
     counted: bool
     origin: Origin
     reason: NotRequired[str]
+    why: NotRequired[str]  # the level block's why (#939), for the report
 
 
 class UnitLevel(TypedDict):
@@ -110,6 +111,8 @@ def unit_level(path: str, reading: Mapping[str, Any], repo: Mapping[str, Any],
                                      "origin": "unit" if origins.get(c["id"]) == "unit" else "inherited"}
         if "reason" in c:
             entry["reason"] = c["reason"]
+        if "why" in c:
+            entry["why"] = c["why"]
         conditions.append(entry)
     verified = verified_count(result["conditions"])
     return {"path": path, "step": result["step"], "next_step": result["next_step"],
