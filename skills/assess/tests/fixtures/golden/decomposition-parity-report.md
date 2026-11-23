@@ -2,6 +2,14 @@
 
 _Generated <<normalized>>._
 
+Step 2 of 4: an agent opens pull requests, a person reviews each one.
+
+Next: make CI run the tests. Then you reach Step 3: agents open pull requests nobody has to watch.
+
+First run.
+
+**Start here:** [Make CI run the tests](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates).
+
 ## Since Last Run
 
 - This is the first run, so there is no earlier run to compare with.
@@ -77,9 +85,9 @@ Not drawn: not measured here: no remote.
 
 No structural concerns, 0 safe zones.
 
-## Cross-Layer Findings (Keyhole Readiness)
+## Cross-Practice Findings (Keyhole Readiness)
 
-_No cross-layer findings surfaced - no path crossed an axis boundary._
+_No cross-practice findings surfaced - no path crossed an axis boundary._
 
 ## Changes Since Last Run
 
@@ -87,7 +95,7 @@ _No prior run to compare against - this is the first recorded snapshot._
 
 ---
 
-_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-layer findings. The per-layer assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
+_Deterministic portion of the assessment: headline, metrics, hotspots, and cross-practice findings. The per-practice assessments and prose, and the Top 3 Actions priority narrative require LLM judgement and are written separately._
 
 ## How this was measured
 

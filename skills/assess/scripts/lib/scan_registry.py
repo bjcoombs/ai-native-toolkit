@@ -601,9 +601,6 @@ SCANS: tuple[ScanSpec, ...] = (
     # the three-way instruction presence (root, nested_only, none; issue #821)
     # read from the root grading and the nested block.
     _spec("layer_grades", scan_layer_grades),
-    # Top 3 candidates read from measured gaps. Post-offers since #821: the
-    # root-instructions gap reads layer_grades.
-    _spec("gap_actions", cs.gap_actions),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and
@@ -611,6 +608,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # scores instruction files on the same split (#560). Reads
     # nested_instructions for the nested files.
     _spec("instruction_placement", scan_instruction_placement),
+    # Top 3 candidates read from measured gaps. Post-offers since #821: the
+    # root-instructions gap reads layer_grades; the removal proposal (#1084)
+    # reads instruction_placement, so it runs after it.
+    _spec("gap_actions", cs.gap_actions),
     # Cross-agent instruction consistency (issue #768): whether the root
     # instruction files of every agent system present (Claude Code, AGENTS.md,
     # Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
@@ -648,14 +649,15 @@ SCANS: tuple[ScanSpec, ...] = (
 # core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
 # exactly those reads in that order: checked here, at import, on every run.
 SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
-# The deterministic headline (lib/headline.py, #747, #844, #1083): the Step, the gate that blocks the next one,
-# "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
-# pastes it verbatim and the badge and log entry carry its summary.
-SCANS = (*SCANS, _spec("headline", cs.headline))
 # What changed since the previous run (lib/since_last_run.py, #1083): actions closed with their
 # commits, gates gained or lost, the next blocker. Reads the run-context the previous run left,
 # so it runs before the publish step overwrites it; the report and the log.md entry open with it.
 SCANS = (*SCANS, _spec("since_last_run", cs.since_last_run))
+# The deterministic headline (lib/headline.py, #747, #844, #1083): the Step, the gate that blocks the next one,
+# "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
+# pastes it verbatim and the badge and log entry carry its summary. It reads since_last_run for the
+# executive summary that opens the report (lib/exec_summary.py, #1102), so it runs after that block.
+SCANS = (*SCANS, _spec("headline", cs.headline))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
 # for each unit of the units block, every condition tagged unit or inherited. The headless
 # runner reports it under --units (signals.UNIT_SCANS, #866).

@@ -1,13 +1,13 @@
 # Counts-only output: fields kept per block
 
 Generated from each collector's `privacy` table in `checks/core.toml` and
-the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)
-by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file
+the global rules in `scripts/lib/counts_only/counts_only_rules.py` (in the assess skill)
+by `lib.counts_only.content_free.render_doc`; `test_counts_only.py` fails when this file
 and the table disagree. Each section below is one collector. Regenerate with:
 
 ```bash
 # from the assess skill directory
-uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; print(render_doc(), end='')" > references/counts-only.md
+uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only.content_free import render_doc; print(render_doc(), end='')" > references/counts-only.md
 ```
 
 `assess_core.py --counts-only` writes `run-context.counts-only.json` beside
@@ -140,6 +140,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `prior_level.tags.countable_not_measured.id` | token |
 | `prior_level.tags.countable_not_measured.reason` | token |
 | `prior_level.reason` | token |
+| `prior_level.baseline.run_id` | token |
+| `prior_level.baseline.head_sha` | token |
+| `prior_level.baseline.held_gates` | token |
 
 ## doc_graph
 
@@ -167,6 +170,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `doc_staleness.churn_window` | dropped |
 | `doc_staleness.docs.subject_method` | token |
 | `doc_staleness.docs.subject_roots` | path (hashed when hashing is on) |
+| `doc_staleness.docs.subject_match` | token |
 | `doc_staleness.docs.subject_paths` | path (hashed when hashing is on) |
 | `doc_staleness.docs.base_doc_dir` | path (hashed when hashing is on) |
 | `doc_staleness.docs.confidence` | token |
@@ -190,6 +194,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `stale_hubs.subject_method` | token |
 | `stale_hubs.subject_roots` | path (hashed when hashing is on) |
+| `stale_hubs.subject_match` | token |
 | `stale_hubs.subject_paths` | path (hashed when hashing is on) |
 | `stale_hubs.base_doc_dir` | path (hashed when hashing is on) |
 | `stale_hubs.confidence` | token |
@@ -690,15 +695,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `layer_grades.instructions_grade` | token |
 | `layer_grades.instruction_presence` | token |
 
-## gap_actions
-
-| Field | Kept as |
-|---|---|
-| `gap_actions.signal` | token |
-| `gap_actions.action` | dropped |
-| `gap_actions.why` | dropped |
-| `gap_actions.paths` | path (hashed when hashing is on) |
-
 ## instruction_placement
 
 | Field | Kept as |
@@ -714,6 +710,19 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_placement.loaded_in_full.relocatable.signals` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.kind` | token |
 | `instruction_placement.loaded_in_full.relocatable.home.target` | path (hashed when hashing is on) |
+
+## gap_actions
+
+| Field | Kept as |
+|---|---|
+| `gap_actions.signal` | token |
+| `gap_actions.action` | dropped |
+| `gap_actions.why` | dropped |
+| `gap_actions.paths` | path (hashed when hashing is on) |
+| `gap_actions.finding` | token |
+| `gap_actions.mode` | token |
+| `gap_actions.cost.metric` | token |
+| `gap_actions.cost.path` | path (hashed when hashing is on) |
 
 ## agent_consistency
 
@@ -816,18 +825,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.tags.countable_not_measured.id` | token |
 | `level.tags.countable_not_measured.reason` | token |
 
-## headline
-
-| Field | Kept as |
-|---|---|
-| `headline.levels_version` | token |
-| `headline.lines` | dropped |
-| `headline.markdown` | dropped |
-| `headline.summary` | dropped |
-| `headline.next_why` | dropped |
-| `headline.reason` | token |
-| `headline.tags.tag` | token |
-
 ## since_last_run
 
 | Field | Kept as |
@@ -845,6 +842,21 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `since_last_run.markdown` | dropped |
 | `since_last_run.reason` | token |
 | `since_last_run.closed_reason` | token |
+
+## headline
+
+| Field | Kept as |
+|---|---|
+| `headline.levels_version` | token |
+| `headline.lines` | dropped |
+| `headline.markdown` | dropped |
+| `headline.summary` | dropped |
+| `headline.next_why` | dropped |
+| `headline.summary_lines` | dropped |
+| `headline.call_to_action` | dropped |
+| `headline.summary_markdown` | dropped |
+| `headline.reason` | token |
+| `headline.tags.tag` | token |
 
 ## unit_readings
 

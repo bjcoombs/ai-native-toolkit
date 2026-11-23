@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.testing.coverage_gate import detect_coverage_gate
 from lib.guardrails import scan_guardrails
 from lib.level_signals import load_default_levels

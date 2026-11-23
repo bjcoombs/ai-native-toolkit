@@ -1,6 +1,6 @@
 """The shape of one level result (``lib/level_tally.py``, #744).
 
-Kept apart from the engine so ``lib.counts_only_schema`` can walk it without an
+Kept apart from the engine so ``lib.counts_only.counts_only_schema`` can walk it without an
 import cycle (the engine reads ``lib.level_signals``, which reads the counts-only
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
@@ -152,4 +152,7 @@ class Headline(TypedDict):
     verified: int | None  # counted conditions met and graded verified (#844); None: not measured
     tags: list[TagCell]  # the per-tag strip, in TRUTH_TAGS order; empty when not measured
     next_why: str  # the whys of the conditions the Next line's gates wait on (#939); "" for none
+    summary_lines: list[str]  # the executive summary (lib/exec_summary.py, #1102); [] when not filled
+    call_to_action: str  # the first blocking gate as a linked task; "" at the top Step or not filled
+    summary_markdown: str  # the summary lines and the call to action, pasted at the top of the report
     reason: NotRequired[str]  # why the headline is unavailable

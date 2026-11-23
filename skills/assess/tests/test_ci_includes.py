@@ -11,7 +11,7 @@ import assess_signals
 from lib import ci_includes
 from lib.ci_checks import scan_ci_checks
 from lib.ci_includes import IncludeItem, include_items, resolve_includes
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.review_automation import scan_review_automation
 
 

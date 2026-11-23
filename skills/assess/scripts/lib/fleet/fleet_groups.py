@@ -85,10 +85,10 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
-from lib.counts_only_rules import TOKEN_RE
+from lib.counts_only.counts_only_rules import TOKEN_RE
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_agent_building import AgentBuildingCounts, group_counts
-from lib.counts_only import reason_code
+from lib.counts_only.content_free import reason_code
 from lib.levels import Aggregation, Evaluation, MaturityModel, RowResult, evaluate
 from lib.run_context_types import JsonDict
 from lib.shared_tooling import distinct_ids

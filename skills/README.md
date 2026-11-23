@@ -8,7 +8,7 @@ Work in any Claude Code session, and are also distributed as standalone ZIPs for
 
 | Skill | Base doc | Description |
 |-------|----------|-------------|
-| `/assess` | [`assess/SKILL.md`](./assess/SKILL.md) | Layered AI-readiness assessment (0-8 contract model) plus a complexity hotspot SVG and a doc-navigability graph SVG |
+| `/assess` | [`assess/SKILL.md`](./assess/SKILL.md) | AI-readiness assessment (autonomy Steps held by named gates, a scorecard by practice) plus a complexity hotspot SVG and a doc-navigability graph SVG |
 | `/huddle` | [`huddle/SKILL.md`](./huddle/SKILL.md) | Multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing |
 | `/deslop` | [`deslop/SKILL.md`](./deslop/SKILL.md) | Detect and remove the telltale signs of AI writing; ships a [`references/full-checklist.md`](./deslop/references/full-checklist.md) |
 | `/skill-forge` | [`skill-forge/SKILL.md`](./skill-forge/SKILL.md) | Harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process |

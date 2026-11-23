@@ -4,8 +4,11 @@ The report and the ``log.md`` entry open with this section, so the credit a team
 the work it closed, not a count of catalogue entries. It reads three things, all before
 this run's publish step overwrites any of them:
 
-- **the previous run**: ``run-context.json`` in the run's ``.assess/`` directory as the
-  previous run left it. None there, and no earlier run in ``log.md``, means this is the
+- **the previous run**: first the committed baseline in ``prior-level.json``
+  (``prior_level.load_baseline``, #1122: the run id, its measured commit and the gates it
+  held, written by ``baseline_record`` at publish), so a fresh clone or a CI checkout has
+  one; else ``run-context.json`` in the run's ``.assess/`` directory as the previous run left
+  it (gitignored, so often only on the machine that ran it). None there, and no earlier run in ``log.md``, means this is the
   first run, and the section says so; a log with earlier runs but no context (it is often
   gitignored, so a fresh clone or CI has none) is unknown, ``previous_state_missing``.
   A file that cannot be read gives unknowns (``None``, ``previous_unreadable``), never a
@@ -54,6 +57,7 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
+from lib.prior_level import Baseline, load_baseline
 from lib.reviewed_findings import action_entries
 from lib.run_context_types_since import ClosedAction, SinceLastRun
 
@@ -70,6 +74,7 @@ UNKNOWN_CLOSED = {
     "previous_unreadable": "the previous run-context.json could not be read",
     "previous_state_missing": "log.md records an earlier run, but its run-context.json is not here",
     "shallow_clone": "this is a shallow clone, so commit ancestry cannot be checked",
+    "previous_not_ancestor": "the previous run measured a commit that is not in this branch's history",
     "ancestry_unknown": "git could not check a commit's ancestry",
 }
 
@@ -98,6 +103,18 @@ def _held(steps: Sequence[StepDef], level: Any) -> list[str] | None:
         return None
     blocked = {b.get("gate") for b in gate_blockers(steps, level["conditions"])}
     return [g for g in _gate_ids(steps) if g not in blocked]
+
+
+def baseline_record(ctx: Mapping[str, Any]) -> Baseline | None:
+    """This run's committed baseline for ``prior-level.json`` (#1122): its id, the commit it
+    measured and the gates it held; None with no measured commit or no level result."""
+    commit = ctx.get("measured_commit")
+    sha = commit.get("head_sha") if isinstance(commit, Mapping) else None
+    held = _held(default_model().get("steps", []), ctx.get("level"))
+    if not isinstance(sha, str) or not sha or held is None:
+        return None
+    run_id = ctx.get("run_id")
+    return {"run_id": run_id if isinstance(run_id, str) else None, "head_sha": sha, "held_gates": held}
 
 
 def gate_changes(steps: Sequence[StepDef], level: Any,
@@ -238,6 +255,13 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
                                                          Mapping[str, Any] | None]:
     """``(first_run, why the previous state is unknown, previous context, inherited block)``.
 
+    Read order: the superseded run's own block (below), then the committed baseline in
+    ``prior-level.json`` (#1122, returned as ``{run_id, head_sha, held_gates}``), then
+    ``run-context.json``, then ``log.md``. Inheriting a superseded run's block needs that run's
+    ``run-context.json``; without it a same-day re-run on the same commit reads the committed
+    baseline, whose commit is HEAD, and so credits nothing new: the superseded run's own entry
+    in ``log.md`` stays as the record of what it credited.
+
     No ``run-context.json`` is a first run only when ``log.md`` records no earlier run either:
     the context is often gitignored, so a fresh clone or a CI checkout has the log and not the
     context, and that is an unknown previous state (``previous_state_missing``), never a first
@@ -250,6 +274,10 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
             return bool(inherited.get("first_run")), None, None, inherited
+    committed = load_baseline(assess_dir)  # the committed baseline first (#1122)
+    if committed is not None:
+        return False, None, {"run_id": committed.get("run_id"), "head_sha": committed["head_sha"],
+                             "held_gates": committed["held_gates"]}, None
     path = assess_dir / "run-context.json"
     if not path.is_file():
         return ((False, "previous_state_missing", None, None) if (assess_dir / "log.md").is_file()
@@ -268,6 +296,12 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")
         gained, lost = inherited.get("gates_gained"), inherited.get("gates_lost")
+    elif prev is not None and "held_gates" in prev:  # the committed baseline (#1122)
+        previous_commit, run_id = prev.get("head_sha"), prev.get("run_id")
+        now = _held(steps, level)
+        then = [g for g in prev["held_gates"] if isinstance(g, str)]
+        gained, lost = ((None, None) if now is None
+                        else ([g for g in now if g not in then], [g for g in then if g not in now]))
     else:
         commit = (prev or {}).get("measured_commit")
         previous_commit = commit.get("head_sha") if isinstance(commit, Mapping) else None
@@ -287,6 +321,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         reason = "previous_commit_absent"  # a rewritten history or a shallow clone: not zero
     elif _shallow(repo_root):
         reason = "shallow_clone"  # ancestry stops at the boundary, so "not an ancestor" can lie
+    elif _ancestor(repo_root, previous_commit, "HEAD") != 0:
+        reason = "previous_not_ancestor"  # another branch's run: its commits are not this history's past
     elif isinstance(found := closed_actions(repo_root, previous_commit), str):
         reason = found
     else:

@@ -45,7 +45,7 @@ fixed token reason. A missing git, a timeout, a non-repository and a shallow
 clone (a truncated history hides the reverting commit) each make the block
 ``{"available": False, "reason": "<code>: <sentence>"}`` with a code from
 ``REASON_CODES`` (declared as ``unknown_reasons`` in ``checks/core/agent_outcome.toml``),
-which counts-only output keeps (``lib.reason_codes``).
+which counts-only output keeps (``lib.counts_only.reason_codes``).
 
 Scope: the agent commits are those touching the ``--scope`` subtree, as in
 ``ai_usage``, and rework reads only the lines they added inside it; the reverting and restoring commits are looked for across the

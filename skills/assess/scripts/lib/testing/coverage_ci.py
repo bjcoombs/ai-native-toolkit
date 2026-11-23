@@ -49,7 +49,10 @@ test`` with no other test task, which leaves the verification no execution data;
 ``-x check`` stops a wired ``check`` crediting it; a project path such as ``-x
 :app:jacocoTestCoverageVerification`` leaves other projects running and reads null),
 and a dry run (``-m``, in a short
-cluster such as ``-qm`` too, ``--dry-run``, ``--task-graph``) runs nothing. ``pytest -c
+cluster such as ``-qm`` too, ``--dry-run``, ``--task-graph``) runs nothing; Gradle's and
+pdm's arguments are read by ``lib.runner_args``, shared with the CI-line reader (#1046). A
+``[tool.pdm.scripts]`` entry that shadows the program (``pdm run pytest`` with a ``pytest``
+script) reads ``indirect_run``, and a bare ``pdm pytest`` with no such script runs nothing. ``pytest -c
 FILE`` / ``--config-file FILE`` reads FILE's ``addopts`` as the run's own (null when
 FILE was not read), and ``--rootdir`` with no ``--cov`` reads null. Coverage switched on in config (pytest ``addopts``,
 Jest ``collectCoverage: true``) is keyed by the config's directory
@@ -148,7 +151,7 @@ from pathlib import Path
 from typing import Literal, TypeVar
 
 from lib.check_command import (
-    _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation)
+    _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, _program, is_info_invocation)
 from lib.ci_masking import mask_lines
 from lib.testing.coverage_activation import Activation, below, covers
 from lib.testing.coverage_codecov import is_patch
@@ -157,6 +160,9 @@ from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, wo
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.unread_ci import unread_ci_paths
 from lib.command_resolver import command_words, extract_commands
+from lib.runner_args import (
+    GRADLE, SCRIPT, gradle_dry_run, gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts,
+    pdm_scripts_set, script_run)
 from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
@@ -208,6 +214,7 @@ class CiRuns:
     ci_files: frozenset[str]
     elsewhere: bool
     unread: bool
+    pdm_scripts: frozenset[str] | None = None   # runner_args.pdm_scripts (#1046)
 
 
 # Nothing read: the CI is not read when no threshold of at least 50 percent is set.
@@ -318,7 +325,7 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
         for span, line_text in _command_groups(lines, unmasked, unsure, 1):
             runs.extend(Run(rel, span, words, command, triggers[span[0]], True)
                         for words, command in _word_lists(line_text) if words)
-    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread)
+    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread, pdm_scripts(root))
 
 
 def _size(path: Path) -> int:
@@ -343,14 +350,13 @@ def program(words: tuple[str, ...]) -> tuple[str, list[str]]:
     ``check_command`` reads (``_exec_program``, then ``_info_program``: ``uv run``,
     ``poetry run``, ``uvx``, ``npx``, ``python -m``, ``bundle exec``, ``docker compose
     run``, ``pnpm exec``, ``yarn dlx``) and ``yarn jest`` / ``pnpm vitest``. The name is the
-    basename (``./mvnw`` is ``mvnw``). ``pdm run`` is read through too (#954: ``pdm run
-    pytest --cov`` runs pytest; ``pdm run cov`` names the script ``cov``, a program no
-    gate family matches). ``pip install pytest`` names ``pip``, and ``echo pytest --cov``
+    basename (``./mvnw`` is ``mvnw``). ``pdm [run]`` and ``poe`` are read through too
+    (#954, #1046: ``pdm run pytest --cov`` runs pytest; ``pdm run cov`` names the script
+    ``cov``, a program no gate family matches, and a script that shadows ``pytest`` is
+    ``runner_args.SCRIPT``). ``pip install pytest`` names ``pip``, and ``echo pytest --cov``
     names ``echo``: a tool named as an argument is not run."""
     rest = _unwrapped(words)
-    if len(rest) > 2 and rest[0].rsplit("/", 1)[-1] == "pdm" and rest[1] == "run":
-        rest = _unwrapped(tuple(rest[2:]))
-    if not rest:
+    if not rest or script_run(rest) == ([], True):   # pdm pytest with no such script: exit 2
         return "", []
     return rest[0].rsplit("/", 1)[-1], rest[1:]
 
@@ -398,65 +404,14 @@ def cov_disabled(args: Iterable[str]) -> bool:
     return "--no-cov" in args
 
 
-_GRADLE_DRY_RUN = frozenset({"--dry-run", "--task-graph"})
-# Gradle short options that take a value: the rest of a cluster after one is that value.
-_GRADLE_VALUE_SHORTS = frozenset("bcDgIPpx")
-_GRADLE_EXCLUDE = ("-x", "--exclude-task")
 _VERIFY = "jacocoTestCoverageVerification"
-
-
-def gradle_tasks(args: Sequence[str]) -> tuple[list[str], set[str]]:
-    """``(tasks run, tasks excluded)`` of a Gradle command. A run task is named by its last
-    path part (``:app:check`` is ``check``). A word after ``-x`` / ``--exclude-task`` (or
-    its ``=`` form) is excluded, not run: an unqualified or root name (``test``,
-    ``:test``) excludes it in every project and is kept bare, while a project path
-    (``:app:test``) excludes it in that project only and is kept whole."""
-    tasks: list[str] = []
-    excluded: set[str] = set()
-    skip = False
-    for word in args:
-        if skip:
-            excluded.add(_excluded_name(word))
-            skip = False
-        elif word in _GRADLE_EXCLUDE:
-            skip = True
-        elif word.startswith("--exclude-task="):
-            excluded.add(_excluded_name(word.partition("=")[2]))
-        elif not word.startswith("-"):
-            tasks.append(word.rsplit(":", 1)[-1])
-    return tasks, excluded
-
-
-def _excluded_name(task: str) -> str:
-    """``test`` and ``:test`` are ``test``; ``:app:test`` stays ``:app:test``."""
-    bare = task.removeprefix(":")
-    return bare if ":" not in bare else task
-
-
-def _partly_excluded(excluded: set[str], task: str) -> bool:
-    """``task`` excluded in one project only (``-x :app:test``): another may still run it."""
-    return any(e.endswith(":" + task) for e in excluded)
 
 
 def gradle_runs_nothing(words: tuple[str, ...]) -> bool:
     """A Gradle dry run (``-m``, in a short cluster too: ``-qm``; ``--dry-run``,
-    ``--task-graph``) executes no task."""
+    ``--task-graph``) executes no task (``lib.runner_args.gradle_dry_run``)."""
     name, args = program(words)
-    return name in ("gradle", "gradlew") and any(
-        w in _GRADLE_DRY_RUN or _short_cluster_has_m(w) for w in args)
-
-
-def _short_cluster_has_m(word: str) -> bool:
-    """``-m`` inside a short-option cluster (``-qm``), up to an option that takes a value
-    (``-Dmode=x`` is a property, not a dry run)."""
-    if not word.startswith("-") or word.startswith("--"):
-        return False
-    for char in word[1:]:
-        if char == "m":
-            return True
-        if char in _GRADLE_VALUE_SHORTS or not char.isalpha():
-            return False
-    return False
+    return name in GRADLE and gradle_dry_run(args)
 
 
 def gradle_skips_verification(words: tuple[str, ...]) -> bool:
@@ -468,7 +423,7 @@ def gradle_skips_verification(words: tuple[str, ...]) -> bool:
     project-path exclusion (``-x :app:jacocoTestCoverageVerification``) leaves the other
     projects' verification running, so it does not count here."""
     name, args = program(words)
-    if name not in ("gradle", "gradlew"):
+    if name not in GRADLE:
         return False
     tasks, excluded = gradle_tasks(args)
     no_tests = "test" in excluded and not any("test" in t.lower() for t in tasks
@@ -568,11 +523,11 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     if family == "maven-jacoco":
         return name in ("mvn", "mvnw") and bool(_MAVEN_PHASES & set(args))
     if family == "gradle-jacoco":
-        if name not in ("gradle", "gradlew") or gradle_skips_verification(words):
+        if name not in GRADLE or gradle_skips_verification(words):
             return False   # #954: a dry run, or -x jacocoTestCoverageVerification
         tasks, excluded = gradle_tasks(args)
         # A project-path exclusion may or may not be the gate's project: unsure, never false.
-        partly = any(_partly_excluded(excluded, t) for t in (_VERIFY, "test", "check"))
+        partly = any(partly_excluded(excluded, t) for t in (_VERIFY, "test", "check"))
         if _VERIFY in tasks:
             return None if partly else True
         if gradle_check and {"build", "check"} & set(tasks) and "check" not in excluded:
@@ -686,6 +641,8 @@ def _activates(gate: Gate, words: tuple[str, ...], on: bool, off: bool,
     (``pytest_on``); through a wrapper (``hatch run cov --``) the script may set it, so
     the flag is taken as given. None: unsure."""
     name, args = program(words)
+    if name == SCRIPT:   # pdm run pytest with a pytest script: the script runs (#1046)
+        return None
     if gate["tool"] != "pytest-cov" or name not in ("pytest", "py.test"):
         return True
     return pytest_on(args, on, off, activation)
@@ -717,30 +674,22 @@ def _indirect(ci: CiRuns, family: str | None = None) -> bool | str:
 
 
 _TARGET_RUNNERS = frozenset({"make", "gmake", "just", "task", "rake", "invoke", "nox", "tox"})
-# Python task runners whose any script may run the gate, as ``may_lint`` reads ``hatch run``.
-_PY_SCRIPT_RUNNERS = frozenset({"pdm", "poe"})
-# pdm's own commands; any other first word is a script (``pdm cov`` runs ``pdm run cov``).
-_PDM_COMMANDS = frozenset({
-    "add", "build", "cache", "completion", "config", "export", "fix", "import", "info",
-    "init", "install", "list", "lock", "new", "outdated", "publish", "py", "python",
-    "remove", "search", "self", "show", "sync", "update", "use", "venv"})
 _SCRIPT_RUNNERS = frozenset({"npm", "yarn", "pnpm", "bun"})
 
 
 def coverage_target(words: tuple[str, ...]) -> bool:
     """A runner target or package script named for coverage (``make coverage``, ``make
-    cov``, ``npm run coverage``, ``just coverage``), or any ``pdm run`` script or ``poe``
+    cov``, ``npm run coverage``, ``just coverage``), or any ``pdm [run]`` script or ``poe``
     task (#954, as ``may_lint`` reads a ``hatch run`` script): it may run the gate. A
-    test or lint program run through ``pdm run`` (``pdm run pytest``) is no script."""
-    rest = _unwrapped(words)   # uv run poe cov, poetry run poe cov: the runner is poe
+    test or lint program run through ``pdm run`` (``pdm run pytest``) is no script, unless
+    a ``[tool.pdm.scripts]`` entry of that name shadows it (#1046)."""
+    rest = _program(list(words)) if words else []   # uv run poe cov: the runner is poe
+    run = script_run(rest) if rest and rest[0].rsplit("/", 1)[-1] in ("pdm", "poe") else None
+    if run is not None:   # pdm [run] <script>, poe <task>: the recipe is not read
+        return bool(run[0]) and (run[1] or run[0][0] not in _DIRECT_TESTS | LINT_PROGRAMS)
+    rest = _unwrapped(words)
     name = rest[0].rsplit("/", 1)[-1] if rest else ""
     positionals = [w for w in rest[1:] if not w.startswith("-")]
-    if name in _PY_SCRIPT_RUNNERS:   # pdm [run] <script>, poe <task>: the recipe is not read
-        if name == "pdm" and positionals[:1] == ["run"]:
-            positionals = positionals[1:]
-        elif name == "pdm" and positionals[:1] and positionals[0] in _PDM_COMMANDS:
-            return False
-        return bool(positionals) and positionals[0] not in _DIRECT_TESTS | LINT_PROGRAMS
     if name in _SCRIPT_RUNNERS and positionals[:1] == ["run"]:
         positionals = positionals[1:]
     elif name not in _TARGET_RUNNERS | _SCRIPT_RUNNERS:
@@ -767,7 +716,8 @@ def enforced_meets_minimum(
         unfloored = is_patch(gate) or (gate["tool"] == "codecov" and percent is None)
         if not counted(gate) or unfloored or (isinstance(percent, (int, float)) and percent < minimum):
             continue
-        state = gate_run(gate, ci, line_gates, activation)
+        with pdm_scripts_set(ci.pdm_scripts):   # a pytest script shadows pytest (#1046)
+            state = gate_run(gate, ci, line_gates, activation)
         if state is True and percent is not None:
             return True, "ci_run"
         if isinstance(state, str):

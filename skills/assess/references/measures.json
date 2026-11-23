@@ -44,7 +44,7 @@
   "rows": [
     {
       "id": "layer-0-instructions",
-      "title": "Layer 0: agent instructions",
+      "title": "Agent instructions",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -161,7 +161,7 @@
     },
     {
       "id": "layer-1-liveness",
-      "title": "Layer 1: runtime legibility",
+      "title": "Runtime legibility",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -237,7 +237,7 @@
     },
     {
       "id": "layer-2-design",
-      "title": "Layer 2: code design (module structure)",
+      "title": "Code design (module structure)",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -334,7 +334,7 @@
     },
     {
       "id": "layer-3-linters",
-      "title": "Layer 3: linters run in CI, suppression cap",
+      "title": "Linters run in CI, suppression cap",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -431,7 +431,7 @@
     },
     {
       "id": "layer-4-architecture",
-      "title": "Layer 4: architecture boundaries and size",
+      "title": "Architecture boundaries and size",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -509,7 +509,7 @@
     },
     {
       "id": "layer-5-ci",
-      "title": "Layer 5: CI and the agent's local check",
+      "title": "CI and the agent's local check",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -588,7 +588,7 @@
     },
     {
       "id": "layer-6-coverage",
-      "title": "Layer 6: coverage gates and truth pressure",
+      "title": "Coverage gates and truth pressure",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -668,7 +668,7 @@
     },
     {
       "id": "layer-7-review",
-      "title": "Layer 7: review on merged pull requests",
+      "title": "Review on merged pull requests",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -763,7 +763,7 @@
     },
     {
       "id": "layer-8-agent-ops",
-      "title": "Layer 8: AI project management",
+      "title": "AI project management",
       "scope": "team",
       "aggregation": "min",
       "levels": [
@@ -1660,19 +1660,19 @@
         {
           "code": "codecov_target_not_read",
           "means": "The only coverage gate that could reach 50 percent is a Codecov project status whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare.",
-          "next_step": "To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.",
+          "next_step": "To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.",
           "carried_in": "unmeasured_reason"
         },
         {
           "code": "codecov_patch_only",
           "means": "The only coverage gate that could reach 50 percent is a Codecov patch status. It bounds coverage of the changed lines only, and removing a test changes none, so it says nothing about the floor on total coverage.",
-          "next_step": "To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs), or add a numeric target to a Codecov project status.",
+          "next_step": "To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs), or add a numeric target to a Codecov project status.",
           "carried_in": "unmeasured_reason"
         },
         {
           "code": "status_check_unconfirmed",
           "means": "The coverage gate of at least 50 percent is a Codecov status target, which no CI line runs: Codecov posts it as a commit status, and it holds a merge only when branch protection requires it, which this scan does not read.",
-          "next_step": "Nothing to change if the Codecov status is a required check. To have Layer 6 measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).",
+          "next_step": "Nothing to change if the Codecov status is a required check. To have the coverage gate measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).",
           "carried_in": "enforced_basis"
         },
         {
@@ -1920,7 +1920,7 @@
     {
       "name": "agent_environment",
       "title": "Agent working environment",
-      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).",
+      "summary": "Committed agent setup, the check command an instruction file names, lockfiles per manifest and the CI cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).",
       "collector": "core.agent_environment",
       "reads": [
         "repo_root",
@@ -3018,6 +3018,7 @@
           "doc_staleness.docs.provenance.generated_by": "drop",
           "doc_staleness.docs.provenance.method": "token",
           "doc_staleness.docs.provenance.sources": "path",
+          "doc_staleness.docs.subject_match": "token",
           "doc_staleness.docs.subject_method": "token",
           "doc_staleness.docs.subject_paths": "path",
           "doc_staleness.docs.subject_roots": "path",
@@ -3884,7 +3885,8 @@
         "current",
         "archetype",
         "layer_grades",
-        "nested_instructions"
+        "nested_instructions",
+        "instruction_placement"
       ],
       "network": false,
       "platform": false,
@@ -3893,6 +3895,10 @@
         "written": true,
         "strings_kept": {
           "gap_actions.action": "drop",
+          "gap_actions.cost.metric": "token",
+          "gap_actions.cost.path": "path",
+          "gap_actions.finding": "token",
+          "gap_actions.mode": "token",
           "gap_actions.paths": "path",
           "gap_actions.signal": "token",
           "gap_actions.why": "drop"
@@ -4953,23 +4959,6 @@
       "private": false
     },
     {
-      "name": "gap_actions",
-      "title": "Gap actions",
-      "publishes": [
-        "gap_actions"
-      ],
-      "reads": [
-        "coverage_report",
-        "doc_graph",
-        "current",
-        "archetype",
-        "layer_grades",
-        "nested_instructions"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
       "name": "instruction_placement",
       "title": "Instruction placement",
       "publishes": [
@@ -4981,6 +4970,24 @@
         "nested_instructions",
         "scope",
         "excludes"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "gap_actions",
+      "title": "Gap actions",
+      "publishes": [
+        "gap_actions"
+      ],
+      "reads": [
+        "coverage_report",
+        "doc_graph",
+        "current",
+        "archetype",
+        "layer_grades",
+        "nested_instructions",
+        "instruction_placement"
       ],
       "network": false,
       "private": false
@@ -5090,18 +5097,6 @@
       "private": false
     },
     {
-      "name": "headline",
-      "title": "Deterministic headline",
-      "publishes": [
-        "headline"
-      ],
-      "reads": [
-        "level"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
       "name": "since_last_run",
       "title": "Since last run",
       "publishes": [
@@ -5112,6 +5107,19 @@
         "assess_dir",
         "repo_root",
         "superseded"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "headline",
+      "title": "Deterministic headline",
+      "publishes": [
+        "headline"
+      ],
+      "reads": [
+        "level",
+        "since_last_run"
       ],
       "network": false,
       "private": false

@@ -30,7 +30,7 @@ def test_render_findings_markdown_includes_paths_and_actions() -> None:
     findings = _sample_findings()
     attention = ks.build_attention_list(findings)
     md = ks.render_findings_markdown(findings, attention)
-    assert md.startswith("## Cross-Layer Findings (Keyhole Readiness)")
+    assert md.startswith("## Cross-Practice Findings (Keyhole Readiness)")
     # Only findings with paths render a heading.
     assert "### hidden_coupling" in md
     assert "### lying_map" in md
@@ -48,8 +48,8 @@ def test_render_findings_markdown_includes_paths_and_actions() -> None:
 def test_render_findings_markdown_empty_is_minimal_but_valid() -> None:
     findings = ks.assemble_findings({})  # all six/eight empty
     md = ks.render_findings_markdown(findings, [])
-    assert md.startswith("## Cross-Layer Findings (Keyhole Readiness)")
-    assert "No cross-layer findings surfaced" in md
+    assert md.startswith("## Cross-Practice Findings (Keyhole Readiness)")
+    assert "No cross-practice findings surfaced" in md
     # No finding headings when nothing has paths.
     assert "###" not in md
 

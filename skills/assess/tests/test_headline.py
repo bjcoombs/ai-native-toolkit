@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, headline, run_context_headline
+from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
 from lib.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -208,7 +208,11 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     badge1 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
     second = _run(ci2, "2026-11-22")
     badge2 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
-    assert first["headline"] == second["headline"]
+    # the executive summary's last line reads the since-last-run block, which differs by run (#1102)
+    commit_only = ("summary_lines", "summary_markdown")
+    assert ({k: v for k, v in first["headline"].items() if k not in commit_only}
+            == {k: v for k, v in second["headline"].items() if k not in commit_only})
+    assert first["headline"]["summary_lines"][:2] == second["headline"]["summary_lines"][:2]
     assert badge1["message"] == badge2["message"]
     level, head = second["level"], second["headline"]
     assert badge2["message"] == head["summary"]
@@ -282,13 +286,14 @@ def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
 
 def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
     """#770's lesson: fail when a numeric headline field is dropped from counts-only output."""
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     head = headline(_level(), default_model())
     kept = counts_only({"headline": head})["headline"]
     # a dropped string list is kept as its length, a dropped string goes
-    assert kept == {**{k: v for k, v in head.items() if k not in ("markdown", "summary", "next_why")},
-                    "lines": len(head["lines"])}
+    dropped = ("markdown", "summary", "next_why", "call_to_action", "summary_markdown")
+    assert kept == {**{k: v for k, v in head.items() if k not in dropped},
+                    "lines": len(head["lines"]), "summary_lines": len(head["summary_lines"])}
 
 
 def test_next_why_holds_the_whys_of_the_unmet_gate_conditions_only() -> None:
@@ -375,7 +380,7 @@ def test_no_tagged_condition_gives_no_strip_line():
 
 
 def test_counts_only_keeps_the_strip_numbers_and_tag_tokens():
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     head = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
     kept = counts_only({"headline": head})["headline"]
@@ -395,3 +400,10 @@ def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
     assert head["lines"][3].startswith("By tag: ") and head["tags"]
     for cell in head["tags"]:
         assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][3]
+
+
+def test_gate_change_is_public_and_words_a_gate_like_the_next_line():
+    """The Step ladder imports it (#1104, #1099): the caption and the Next line agree."""
+    blocker = {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"}
+    assert gate_change(blocker) == "a coverage gate is enforced"
+    assert headline(_level(), default_model())["lines"][1].endswith(gate_change(blocker))

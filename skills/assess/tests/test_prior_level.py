@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from lib.level_tally import default_model, level_result
+from lib.since_last_run import baseline_record
 from lib.prior_level import (
     PRIOR_LEVEL_FILE,
     PRIOR_LEVEL_VERSION,
@@ -88,7 +89,7 @@ def test_as_prior_level_keeps_a_valid_value_only() -> None:
 
 
 def test_counts_only_keeps_every_count_and_token() -> None:
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     prior = build_prior_level(_level())
     assert counts_only({"prior_level": prior})["prior_level"] == prior  # fails if a field is dropped
@@ -167,7 +168,7 @@ def test_the_mutation_recount_rewrites_the_file_and_keeps_the_earlier_run(
     assert assess_core.run_opt_in_mutation(repo) == 0
     after = json.loads(ctx_path.read_text(encoding="utf-8"))
     assert after["prior_level"] == earlier
-    assert load_prior_level(repo / ".assess") == build_prior_level(after["level"])
+    assert load_prior_level(repo / ".assess") == build_prior_level(after["level"], baseline_record(after))
     strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
     assert "Hollow dots: the earlier run" in strip
 
@@ -181,7 +182,7 @@ def test_a_run_over_an_unreadable_earlier_file_says_so_and_replaces_it(repo: Pat
     assert ctx["prior_level"] == {"available": False, "reason": "unreadable"}
     strip = (repo / ".assess" / "tag-profile.svg").read_text(encoding="utf-8")
     assert "record could not be read" in strip and 'data-mark="prior"' not in strip
-    assert load_prior_level(repo / ".assess") == build_prior_level(ctx["level"])
+    assert load_prior_level(repo / ".assess") == build_prior_level(ctx["level"], baseline_record(ctx))
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
@@ -202,3 +203,20 @@ def test_a_file_that_cannot_be_written_is_named_and_skipped(
     missing = tmp_path / "no-such-dir"
     assert write_prior_level(missing, _level()) is None
     assert f"{PRIOR_LEVEL_FILE} not written" in capsys.readouterr().err
+
+
+def test_version_2_adds_the_committed_baseline_and_version_1_still_reads(tmp_path: Path) -> None:
+    """#1122: the baseline sits beside the tags; a version-1 file still loads, without one."""
+    from lib.prior_level import Baseline, load_baseline
+    level = _level()
+    baseline: Baseline = {"run_id": "r1", "head_sha": "a" * 40, "held_gates": ["instructions"]}
+    write_prior_level(tmp_path, level, baseline)
+    assert load_baseline(tmp_path) == baseline
+    (tmp_path / PRIOR_LEVEL_FILE).write_text(json.dumps(
+        {"prior_level_version": 1, "levels_version": level["levels_version"], "tags": level["tags"]}), encoding="utf-8")
+    assert load_prior_level(tmp_path) is not None and load_baseline(tmp_path) is None
+    (tmp_path / PRIOR_LEVEL_FILE).write_text(json.dumps(
+        {"prior_level_version": 2, "levels_version": "m", "tags": [], "baseline": {"head_sha": 7}}), encoding="utf-8")
+    # a malformed baseline is dropped alone; the tags still read
+    assert load_prior_level(tmp_path) == {"prior_level_version": 2, "levels_version": "m", "tags": []}
+    assert load_baseline(tmp_path) is None

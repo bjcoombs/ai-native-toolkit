@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from lib.counts_only import reason_code
+from lib.counts_only.content_free import reason_code
 from lib.signals import PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
 from lib.vocabulary import IN_PLACE
 

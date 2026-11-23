@@ -132,7 +132,7 @@ def test_contracts_has_no_condition_in_the_shipped_model() -> None:
 
 
 def test_rows_are_byte_identical_on_rerun_and_survive_counts_only() -> None:
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     model = default_model()
     a, b = level_result(model, {}), level_result(model, {})

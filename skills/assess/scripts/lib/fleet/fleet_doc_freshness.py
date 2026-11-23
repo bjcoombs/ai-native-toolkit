@@ -317,7 +317,7 @@ def measure(docs: Checkout, mapping: DescribesMapping, service: Checkout | None,
 
 
 def _hashed(row: FreshnessRow, salt: str) -> FreshnessRow:
-    from lib.counts_only import hash_path
+    from lib.counts_only.content_free import hash_path
 
     path = hash_path(row["path"], salt) if row["path"] is not None else None
     return {**row, "path": path,

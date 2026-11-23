@@ -33,8 +33,8 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet.py" --from-list repos.txt --out fleet-
 
 `uv run fleet.py ...` installs the script's three dependencies (networkx,
 grimp, lizard), which the per-repository scans need for the default maturity
-model's layer 2 and 4 blocks (the import graph and file size); the layer 3
-block (lint suppressions) needs ripgrep (`rg`) instead. lizard scores every
+model's code design and architecture blocks (the import graph and file size); the
+linters block (lint suppressions) needs ripgrep (`rg`) instead. lizard scores every
 tracked source file, so a very large repository can need a longer `--timeout`. `python3 fleet.py ...` without them still runs; those blocks then
 read unavailable with a named reason (`no_grimp`, `no_lizard`, `no_rg`) and
 their rows `unknown`, and the run prints the install line for whatever is missing.
@@ -58,7 +58,7 @@ else `rg` on `PATH`, else (on Windows) the last `rg.exe` in sorted order under
 
 The observability rung, the doc graph, doc staleness and the archetype are
 read from committed files and git history, so a fleet run measures them
-(Layer 1 and the doc-freshness row get a level). Some blocks are measured
+(the runtime legibility and doc-freshness rows get a level). Some blocks are measured
 only by a full `/assess` run of one repository and always read unavailable
 here, with the reason code `not_registered`: `dead_code`, `runtime` and
 `understanding` (the costly scans, opt-in to a full run), plus the blocks a full
@@ -67,9 +67,9 @@ run assembles from its own state (`diff`, `behaviour`, `documentation`,
 `accretion_ratchet`, `gap_actions`, `ancestor_instruction_files`). Blocks that
 read GitHub or GitLab (`config_drift`, `review_reality`, `gate_cost_estimate`) read
 unavailable with the code `network`: a fleet run makes no network call without
-`--platform`. Layer 7 level 1 reads `review_evidence`, which an AI review step
+`--platform`. Review on merged pull requests, level 1, reads `review_evidence`, which an AI review step
 committed to CI (`review_automation`) sets offline, so such a repository reads
-"at least 1" on Layer 7 without `--platform`. Doc
+"at least 1" on that row without `--platform`. Doc
 staleness reads unavailable (`not_git_root`) outside a git work tree, and its
 stale share is null on a shallow clone, so the doc-freshness row is `unknown`
 there. The guardrails-stated row reads `guardrails.stated_pct`, the share of the
@@ -95,7 +95,7 @@ two agent systems it is `unknown`.
 | `--platform-timeout S` | Seconds one repository's platform read may take before its platform blocks are unavailable (default: `[platform] timeout`, else 300). Needs `--platform`. |
 | `--jobs N` | Repositories scanned in parallel (default: CPU count). |
 | `--window W` | History window passed to `assess_signals.py` (`6mo`, `90d`, `12w`, `1y`). |
-| `--scans a,b` | Only these scans (default: all), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the Layer 7 level 1 signal. |
+| `--scans a,b` | Only these scans (default: all), plus what they read. `review_reality` also brings `review_automation` and `review_evidence`, the review-on-merged-pull-requests level 1 signal. |
 | `--timeout S` | Seconds one repository may take before its row is marked failed (default 600). |
 | `--full` | Keep the full signal blocks, free text included. Default is counts-only. |
 | `--monorepo-units` | Scan each repository by monorepo unit too (`assess_signals.py --units`): each repository in `fleet-data.json` gains `unit_rows`, one Step, next blocking gate and per-tag tally per unit. Needs `--levels` (exit 2 without it). A unit is named only by its folder's hash under `--hash-paths` or `--hash-salt`; in plain counts-only output a unit row's `key` is `null`, so it cannot be matched to a folder or to the next run (use `--hash-salt` to join runs, or `--full`). One scoped pass per unit, so it adds scan time on a large monorepo. See [Unit rows](references/fleet-data.md#unit-rows). |
