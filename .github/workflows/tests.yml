@@ -78,7 +78,10 @@ jobs:
         run: uv run --locked python scripts/assess_tour.py report --out "$RUNNER_TEMP/tour-sample-report.md"
         working-directory: skills/assess
 
+      # continue-on-error: an artifact outage, or a 409 on a re-run, is not a test result
+      # and must not turn this required job red. A missing report still errors in the log.
       - name: Upload the tour's sample report
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: tour-sample-report

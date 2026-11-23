@@ -125,6 +125,13 @@ def test_the_first_screen_holds_no_jargon(
         assert not [p.pattern for p in INTERNAL if p.search(text)], line
 
 
+@pytest.mark.parametrize("label", ["sample", "fixed"])
+def test_the_first_screen_points_to_the_glossary(
+        reports: dict[str, tuple[assess_tour.TourResult, str]], label: str) -> None:
+    pointers = [line for line in first_screen(reports[label][1]) if line.startswith("_New to these words?")]
+    assert len(pointers) == 1 and f"]({GLOSSARY_URL})" in pointers[0]
+
+
 def test_the_cold_reader_rejects_a_screen_that_does_not_answer() -> None:
     with pytest.raises(AssertionError, match="where we are"):
         cold_read(["Catalogue coverage: 1 of 5 measured"])
