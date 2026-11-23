@@ -7,9 +7,13 @@ with a plain and a `requires:` reason.
 
 - `expected-evidence-waffle.svg` - the evidence waffle
 - `expected-section.md` - the report section that links it
+- `expected-doc-drift.svg`, `expected-review-strip.svg` and `expected-review-section.md` -
+  the doc-drift map, the review strip and their report sections (#943), drawn from the
+  blocks in `tests/assess_diagrams_review_fixture.py`
 
 Regenerate from `skills/assess`, then review the diff:
 
 ```bash
 uv run --locked python tests/assess_diagrams_fixture.py
+uv run --locked python tests/assess_diagrams_review_fixture.py
 ```
