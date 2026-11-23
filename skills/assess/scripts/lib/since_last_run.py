@@ -230,7 +230,7 @@ def _next_blocker(level: Mapping[str, Any]) -> str | None:
     return next((b["gate"] for b in blockers if b.get("kind") == "gate" and b.get("gate")), None)
 
 
-def _words(block: SinceLastRun, has_steps: bool, level_known: bool) -> list[str]:
+def _words(block: SinceLastRun, has_steps: bool, level_known: bool, kept_run_id: str | None = None) -> list[str]:
     """The section's lines; a closed action is an indented line under its count."""
     if block["first_run"]:
         lines = [FIRST_RUN]
@@ -250,10 +250,11 @@ def _words(block: SinceLastRun, has_steps: bool, level_known: bool) -> list[str]
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
     else:
-        if not level_known and block["previous_run_id"]:
-            # #1158: this run writes no prior-level.json, so the next run compares with that run
+        if not level_known and kept_run_id:
+            # #1158: this run leaves prior-level.json as it was, so the next run compares with the
+            # run that wrote it: name that run, not whichever run this one compared with
             lines.append(f"Baseline kept: this run's level result is unavailable, so the baseline stays "
-                         f"the previous good run, `{block['previous_run_id']}`")
+                         f"the previous good run, `{kept_run_id}`")
         lines.append("Next blocker: not known (the level result is unavailable for this run)"
                      if not level_known else "Next blocker: none, every gate is held" if has_steps
                      else "Next blocker: none, the model defines no Steps")
@@ -398,6 +399,6 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         "next_blocker": _next_blocker(current), "pruned": pruned, "pruning": pruning,
         "lines": [], "markdown": ""}
     known = isinstance(level, Mapping) and isinstance(level.get("conditions"), list)
-    block["lines"] = _words(block, bool(steps), known)
+    block["lines"] = _words(block, bool(steps), known, stored.get("run_id") if stored is not None else None)
     block["markdown"] = _markdown(block["lines"])
     return block
