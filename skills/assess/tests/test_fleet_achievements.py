@@ -1,8 +1,7 @@
-"""Tests for the achievements engine, its history reader, targets and report section (issue #704)."""
+"""Tests for the achievements engine, its history reader and report section (issue #704); Step targets: test_fleet_step_targets.py."""
 from __future__ import annotations
 
 import json
-import re
 import tomllib
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from lib.fleet_credit import TITLE, credit_section
 from lib.fleet_data import FLEET_DATA_FILE, FleetData, Privacy, build_fleet_data, dumps_fleet_data
 from lib.fleet_diagrams import report_markdown
 from lib.fleet_stamp import FleetStamp, RUN_FILE
-from lib.fleet_targets import TargetSpec, TargetsError, parse_targets, resolve
+from lib.fleet_targets import TargetSpec, resolve
 from lib.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
 
@@ -159,83 +158,6 @@ def test_an_unscanned_run_is_neutral_for_the_streak() -> None:
     assert mine == ["2026-11-29"]  # the gap neither broke the streak nor counted toward it
 
 
-def test_a_targets_file_produces_target_hit_and_distances() -> None:
-    specs = parse_targets(tomllib.loads(
-        '[[target]]\nunit = "grp/sub"\nrow = "docs"\nlevel = 2\n'
-        '[[target]]\nview = "repo"\nunit = "grp/c"\nrow = "docs"\nlevel = 2\n'), MODEL)
-    doc = _build(targets=resolve(specs, Privacy().key))
-    assert _earned(doc, fa.TARGET_HIT) == [("2026-11-22", "target_hit", "ownership/grp/sub", "docs")]
-    assert doc["targets"] == [
-        {"view": "ownership", "unit": "ownership/grp/sub", "row": "docs", "target": 2, "share_target": None,
-         "level": 2, "share": 1.0, "distance": 0, "share_distance": None},
-        {"view": "repo", "unit": "grp/c", "row": "docs", "target": 2, "share_target": None,
-         "level": 0, "share": 0.0, "distance": 2, "share_distance": None},
-    ]
-
-
-def test_a_share_target_is_hit_on_its_mean_share_while_a_min_level_stays_put() -> None:
-    # the org's docs level stays 0 (min: c is at 0) while its mean share goes 3/8, 4/8, 4/8, 5/8
-    specs = parse_targets(tomllib.loads(
-        '[[target]]\nunit = "grp"\nrow = "docs"\nshare = 0.5\n'
-        '[[target]]\nunit = "grp"\nrow = "docs"\nshare = 0.75\n'), MODEL)
-    assert [(s.level, s.share) for s in specs] == [(None, 0.5), (None, 0.75)]
-    doc = _build(targets=resolve(specs, Privacy().key))
-    assert _earned(doc, fa.TARGET_HIT) == [("2026-11-08", "target_hit", "ownership/grp", "docs")]
-    (hit,) = [a for a in doc["achievements"] if a["kind"] == fa.TARGET_HIT]
-    ev = hit["evidence"]
-    assert (ev["from_level"], ev["to_level"], ev["level"]) == (0, 0, None)
-    assert (ev["share_from"], ev["share_to"], ev["target_share"]) == (0.375, 0.5, 0.5)
-    assert [m["repo"] for m in ev["moves"]] == ["grp/sub/a"]
-    assert hit["credit"] == ("`ownership/grp` hit its target of 50% of top level on Instruction docs: "
-                             "mean share 38% to 50%.")
-    assert doc["targets"] == [
-        {"view": "ownership", "unit": "ownership/grp", "row": "docs", "target": None, "share_target": 0.5,
-         "level": 0, "share": 0.625, "distance": None, "share_distance": 0.0},
-        {"view": "ownership", "unit": "ownership/grp", "row": "docs", "target": None, "share_target": 0.75,
-         "level": 0, "share": 0.625, "distance": None, "share_distance": 0.125},
-    ]
-    section = credit_section(doc, MODEL)
-    assert "- `ownership/grp`, mean share 50% of top level on Instruction docs: met (62%)." in section
-    assert "- `ownership/grp`, mean share 75% of top level on Instruction docs: at 62%, 12% to go." in section
-    jsonschema.validate(json.loads(fa.dumps_achievements(doc)), json.loads(render()))
-
-
-def test_level_and_share_targets_on_one_row_sort_and_both_count() -> None:
-    targets = resolve([TargetSpec("ownership", "grp", "docs", None, 0.5),
-                       TargetSpec("ownership", "grp", "docs", 1)], Privacy().key)
-    doc = _build(targets=targets)
-    assert [(t["target"], t["share_target"]) for t in doc["targets"]] == [(None, 0.5), (1, None)]
-    assert len(_earned(doc, fa.TARGET_HIT)) == 1  # the level target is never reached (c stays at 0)
-
-
-@pytest.mark.parametrize(("text", "message"), [
-    ('[[target]]\nunit = "x"\nrow = "nope"\nlevel = 1\n', "'row' must name a team row"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nlevel = 3\n', "'level' must be a whole number from 1 to 2"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\nwho = "me"\n', "unknown key(s): who"),
-    ('[[target]]\nview = "people"\nunit = "x"\nrow = "docs"\nlevel = 1\n', "view must be one of"),
-    ('[[target]]\nrow = "docs"\nlevel = 1\n', "'unit' must be a non-empty string"),
-    ('[[target]]\nunit = "x"\nrow = "org2fa"\nlevel = 1\n', "'row' must name a team row"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\n[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\n',
-     "duplicate target"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\n', "set exactly one of 'level' and 'share'"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nlevel = 1\nshare = 0.5\n', "set exactly one of 'level' and 'share'"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = 0\n', "'share' must be a number above 0 and at most 1"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = 1.5\n', "'share' must be a number above 0 and at most 1"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = "half"\n', "'share' must be a number above 0 and at most 1"),
-    ('[[target]]\nunit = "x"\nrow = "docs"\nshare = true\n', "'share' must be a number above 0 and at most 1"),
-    ('goal = 1\n', "unknown top-level key"),
-])
-def test_bad_targets_are_named(text: str, message: str) -> None:
-    with pytest.raises(TargetsError, match=re.escape(message)):
-        parse_targets(tomllib.loads(text), MODEL)
-
-
-def test_resolve_hashes_unit_keys_under_the_salt() -> None:
-    salted = Privacy(salt="s")
-    (t,) = resolve([TargetSpec("ownership", "grp/sub", "docs", 2)], salted.key)
-    assert t.unit == salted.key("ownership/grp/sub") and t.unit != "ownership/grp/sub"
-
-
 def test_running_twice_gives_identical_bytes_and_matches_the_schema() -> None:
     first, second = fa.dumps_achievements(_build()), fa.dumps_achievements(_build())
     assert first == second
@@ -298,7 +220,7 @@ def test_known_level_is_the_single_floor_hook() -> None:
 
 
 def test_report_section_renders_first_with_credit_and_next_steps() -> None:
-    doc = _build(targets=resolve([TargetSpec("repo", "grp/c", "docs", 1)], Privacy().key), firsts=True)
+    doc = _build(targets=resolve([TargetSpec("repo", "grp/c", 2)], Privacy().key), firsts=True)
     section = credit_section(doc, MODEL)
     report = report_markdown([], section)
     assert report.index(f"## {TITLE}") < len(report) and report.startswith("# Fleet diagrams")
@@ -306,7 +228,7 @@ def test_report_section_renders_first_with_credit_and_next_steps() -> None:
     assert "**Firsts**" not in credit_section(_build(), MODEL)  # off by default (#772)
     assert "### Next level-ups" in section and "- Next for `ownership/grp/sub`" not in section  # grp/sub is at the top
     assert "- Next for `ownership/grp`:" in section
-    assert "- `grp/c`, level 1 on Instruction docs: at level 0, 1 level to go." in section
+    assert "- `grp/c`, Step 2: at Step 1 (1 of 1 measured); gates to go: `docs` holds back 1." in section
     assert "Since `2026-11-15`, over 4 comparable runs" in section
 
 

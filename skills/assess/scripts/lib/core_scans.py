@@ -316,7 +316,7 @@ def generated_exclusions(current: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def structure_drift(repo_root: Path, integration: KeyholeIntegration) -> dict[str, Any]:
-    """The structure_drift block, absent when there is no ownership map."""
+    """The structure_drift block, the ``no_ownership_map`` marker with no map, absent on a scan failure."""
     blocks: dict[str, Any] = {}
     attach_structure_drift(blocks, repo_root, integration["structure_drift_tier1"])
     return blocks
