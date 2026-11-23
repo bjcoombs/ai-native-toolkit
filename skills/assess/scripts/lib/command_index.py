@@ -15,11 +15,13 @@ repository, without running anything:
   whether pytest is configured; tox environments and nox sessions;
 - the lines of the CI configuration (GitHub Actions workflows, GitLab CI), so a
   command a CI step runs verbatim resolves even when its runner is unknown.
+  ``ci_line_text`` closes up each GitHub ``${{ ... }}`` expression into one word, so
+  ``-Dset=${{ matrix.set }}`` stays one flag (#799).
 
 Files come from ``git ls-files`` when the root is a git repository (tracked
 files only - an untracked Makefile is not part of what the repo ships; a
 tracked symlink is listed under its own path), else from a walk that skips
-``lib.doc_graph.EXCLUDE_DIRS``.
+``lib.docs.doc_graph.EXCLUDE_DIRS``.
 
 The per-repo index `command_resolver.py` resolves against, read once from the files at
 HEAD (`git ls-files`, tracked symlinks as themselves; a walk outside git): package.json
@@ -42,7 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 
 MAKEFILE_NAMES = frozenset({"Makefile", "makefile", "GNUmakefile"})
 JUSTFILE_NAMES = frozenset({"justfile", "Justfile", ".justfile", "JUSTFILE"})
@@ -381,9 +383,15 @@ def ci_config_files(files: Iterable[str]) -> list[str]:
     )
 
 
+# A GitHub Actions expression (``${{ matrix.module }}``): one opaque word, never three (#799).
+_EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
+
+
 def ci_line_text(line: str) -> str:
-    """One CI configuration line with its ``- ``, ``run:`` / ``script:`` lead and extra spaces dropped."""
+    """One CI configuration line with its ``- ``, ``run:`` / ``script:`` lead and extra spaces
+    dropped, and each ``${{ ... }}`` expression closed up into one word (#799)."""
     text = re.sub(r"^\s*(?:-\s+)?(?:run:|script:)?\s*", "", line)
+    text = _EXPRESSION.sub(lambda m: "".join(m.group(0).split()), text)
     return " ".join(text.split())
 
 

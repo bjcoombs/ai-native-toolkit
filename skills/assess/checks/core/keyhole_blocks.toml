@@ -27,11 +27,11 @@ headless_variants = [
 shapes = [
   { path = "behaviour", type = "lib.run_context_types:BehaviourBlock" },
   { path = "documentation", type = "lib.run_context_types:DocumentationBlock" },
-  { path = "documentation.stale_doc_on_complexity", type = "lib.doc_complexity_join:DocUnit" },
-  { path = "documentation.unexplained_complexity", type = "lib.doc_complexity_join:DocUnit" },
-  { path = "documentation.good_contracts", type = "lib.doc_complexity_join:DocUnit" },
+  { path = "documentation.stale_doc_on_complexity", type = "lib.docs.doc_complexity_join:DocUnit" },
+  { path = "documentation.unexplained_complexity", type = "lib.docs.doc_complexity_join:DocUnit" },
+  { path = "documentation.good_contracts", type = "lib.docs.doc_complexity_join:DocUnit" },
   { path = "understanding", type = "lib.run_context_types:UnderstandingBlock" },
-  { path = "understanding.modules", type = "lib.understanding_analysis:UnderstandingModule" },
+  { path = "understanding.modules", type = "lib.keyhole.understanding_analysis:UnderstandingModule" },
   { path = "runtime", type = "lib.run_context_types:RuntimeBlock" },
   { path = "derived_findings", type = "lib.run_context_types:DerivedFinding" },
   { path = "attention", type = "lib.run_context_types:AttentionRow" },
@@ -177,7 +177,7 @@ action = "investigate the seam"
 mode = "characterize_first"
 concern = true
 inputs = ["behaviour.hidden_coupling_findings", "structure_drift.tier_1"]
-derive = "lib.coupling_analysis:detect_hidden_coupling"
+derive = "lib.keyhole.coupling_analysis:detect_hidden_coupling"
 suppressed_when = "doc_staleness.churn_degenerate == true"
 prune_missing_paths = true
 headless = "unregistered"

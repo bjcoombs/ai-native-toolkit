@@ -1,4 +1,4 @@
-"""Contract tests for ``lib/sibling_tests``: the one sibling-test resolver.
+"""Contract tests for ``lib/testing/sibling_tests``: the one sibling-test resolver.
 
 The hotspot page (``run_wiki._has_sibling_test``), the E2 test-to-code map
 (``keyhole_signals._find_sibling_test``), and the focus signal
@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 from lib import run_wiki
-from lib import sibling_tests as tc
-from lib.test_focus import compute_test_focus, mutation_scope
+import lib.testing.sibling_tests as tc
+from lib.testing.test_focus import compute_test_focus, mutation_scope
 
 # Co-located fixtures: source -> test file beside it or in an adjacent dir.
 COLOCATED = {
@@ -222,7 +222,7 @@ def test_parallel_tree_basename_index_is_built_only_when_a_probe_reads_it(
 ) -> None:
     """A coverage report that records every hot file never reaches the test-file
     probe, so the repository index is not built; a caller's index is reused."""
-    from lib import test_focus as tf
+    import lib.testing.test_focus as tf
 
     for rel in ("app/functions/foo.js", "app/unit-tests/functions/foo.test.js"):
         _touch(tmp_path, rel)

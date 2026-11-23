@@ -23,7 +23,7 @@ from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catal
                          grade_of, render_json)
 from lib.catalog_md import CONDITION_COLUMNS, render_markdown
 from lib.levels_fields import TRUTH_TAG_TITLES, TRUTH_TAGS
-from lib.keyhole_signals import FINDING_ORDER
+from lib.keyhole.keyhole_signals import FINDING_ORDER
 from lib.level_signals import SIGNAL_INPUTS, counts_toward_level, load_default_levels
 from lib.scan_registry import SCANS
 from lib.signals import known_scans
@@ -299,7 +299,7 @@ def test_markdown_has_one_section_per_tag_and_each_criterion_once() -> None:
     assert "equals `structure.front_door_ratio`" in _section(text, "### Docs")
     assert "| hazard |" in _section(text, "### Governance")
     assert "`layer-6-coverage.2` is guarded by `layer-5-ci.1`." in text
-    assert "| 3 | Unattended agent PRs | 3 | `ci_runs_tests` | `layer-5-ci.1` |" in text
+    assert "| 3 | Unattended agent PRs | `ci_runs_tests` | `layer-5-ci.1` |" in text
     claims = [line for line in table_rows if line.startswith("| `layer-0-instructions.2` ")]
     assert len(claims) == 3 and all("| `declared` | no, listed |" in line for line in claims)  # the condition's
     headers = [line for line in text.splitlines() if line.startswith("| Condition |")]

@@ -5,8 +5,8 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
-- the headline (``lib/headline.py``, #747, #844): the Step, its next unlock,
-  "Practices in place: N of M measured, V verified" and the per-tag strip,
+- the headline (``lib/headline.py``, #747, #844, #1083): the Step, the gate that
+  blocks the next one, "Catalogue coverage: N of M measured" and the per-tag strip,
   pasted from the run context's ``headline`` block,
 - the diagram sections (``lib/assess_diagrams.py``, #942, and
   ``lib/assess_diagrams_review.py``, #943): the evidence waffle, the doc-drift map and

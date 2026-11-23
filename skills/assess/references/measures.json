@@ -1258,14 +1258,12 @@
     {
       "step": 1,
       "name": "Assisted",
-      "threshold": 0,
       "gates": [],
       "added_gates": []
     },
     {
       "step": 2,
       "name": "Supervised agent PRs",
-      "threshold": 1,
       "gates": [
         {
           "id": "instructions",
@@ -1286,7 +1284,6 @@
     {
       "step": 3,
       "name": "Unattended agent PRs",
-      "threshold": 3,
       "gates": [
         {
           "id": "instructions",
@@ -1318,7 +1315,6 @@
     {
       "step": 4,
       "name": "Autonomous loops",
-      "threshold": 5,
       "gates": [
         {
           "id": "instructions",

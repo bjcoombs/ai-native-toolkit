@@ -30,7 +30,7 @@ import pytest
 from assess_core import build_and_publish_run
 from assess_finalize import _write_actions_contract
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
-from lib.keyhole_signals import FINDING_MODE_VALUES, mode_for_finding
+from lib.keyhole.keyhole_signals import FINDING_MODE_VALUES, mode_for_finding
 from lib.wiki_writer import (
     hotspot_page_source_path,
     hotspot_page_status,

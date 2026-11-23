@@ -16,7 +16,7 @@ The auto-discovered skills, each with its own `SKILL.md` base doc. See [`skills/
 
 Portable (work in any Claude Code session, also shipped as standalone ZIPs):
 
-- [`/assess`](../skills/assess/SKILL.md) - measure a codebase's readiness for AI agent contributors: a headline Step and "Practices in place: N of M measured, V verified" over the maturity model's conditions, with a complexity hotspot SVG, a doc-navigability graph SVG, an evidence waffle, a package map, a doc-drift map and a review strip.
+- [`/assess`](../skills/assess/SKILL.md) - measure a codebase's readiness for AI agent contributors: a headline Step held by named gates, the gate that blocks the next one, and "Catalogue coverage: N of M measured, V verified" over the maturity model's conditions, with a complexity hotspot SVG, a doc-navigability graph SVG, an evidence waffle, a package map, a doc-drift map and a review strip.
 - [`/huddle`](../skills/huddle/SKILL.md) - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing.
 - [`/deslop`](../skills/deslop/SKILL.md) - detect and remove the telltale signs of AI writing. Ships an exhaustive [reference checklist](../skills/deslop/references/full-checklist.md).
 - [`/skill-forge`](../skills/skill-forge/SKILL.md) - harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process. Composes the `ab-equivalence` runner for its behavioural equivalence gate.
@@ -43,7 +43,7 @@ Team-orchestration library skills (invoked by the workflow skills, not standalon
 
 The deterministic core's per-module reference is each module's docstring under `skills/assess/scripts/lib/`, and its seam map is [`skills/assess/scripts/lib/README.md`](../skills/assess/scripts/lib/README.md); its test suites are mapped to the modules they pin in [`skills/assess/tests/README.md`](../skills/assess/tests/README.md).
 
-The [scoring model](../skills/assess/references/scoring-model.md) is the current, decided state of how `/assess` and `/fleet` score a repository, marking what has shipped and what is decided but pending: truth tags, Steps and their gates, and the "N of M measured" headline. It is the page to read before changing the maturity model.
+The [scoring model](../skills/assess/references/scoring-model.md) is the current, decided state of how `/assess` and `/fleet` score a repository, marking what has shipped and what is decided but pending: truth tags, Steps by gates only, and the headline with its catalogue coverage line. It is the page to read before changing the maturity model.
 
 The hotspot score's formula, and why a co-change breadth term was tested and left out, is recorded in the [co-change experiment note](../skills/assess/references/hotspot-cochange-experiment.md).
 
@@ -104,4 +104,4 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
 - [How to build a narrated skill explainer](./huddle-explainer/README.md) - the repeatable Claude Code + Claude Design + ElevenLabs pipeline, worked through end to end on `/huddle`.
 
-The rendered example SVGs used in the README (the doc-navigability graph and the complexity heatmap before and after the action sweep, the calibration heatmaps, and the evidence waffle, package map, doc-drift map and review strip from a llama.cpp run) live alongside this file in `docs/`.
+The rendered example SVGs used in the README (the doc-navigability graph and the complexity heatmap before and after the action sweep, the calibration heatmaps, and the Step ladder, evidence waffle, package map, doc-drift map and review strip from a llama.cpp run) live alongside this file in `docs/`.

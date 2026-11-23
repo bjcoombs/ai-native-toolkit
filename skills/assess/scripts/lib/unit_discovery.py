@@ -112,7 +112,7 @@ from typing import Any, Literal, NamedTuple, TypedDict
 
 from lib.assess_config import _clean_rel, is_user_excluded, load_config
 from lib.command_index import repo_files
-from lib.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
+from lib.docs.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
 from lib.path_classes import is_production
 from lib.unit_components import SKILL_FILE, Kind, discover_components
 

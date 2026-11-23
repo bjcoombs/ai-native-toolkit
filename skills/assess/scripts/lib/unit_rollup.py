@@ -27,7 +27,7 @@ untouched, so a single-unit repository reads exactly as before.
   (``changes`` is the number of units). ``held`` counts the units the gate holds back and
   ``lifted`` those for which it is the last blocker: their only blocking gate, every condition
   of it not yet met reads ``unmet`` (one not measured or excluded still blocks the gate after
-  the change), and the threshold is reached once its counted conditions are met. ``lift_per_change`` is the most
+  the change); a Step reads its gates only (#1083), so nothing else holds the unit. ``lift_per_change`` is the most
   units one change of the entry lifts (``lifted`` for ``repo_wide``, at most 1 for
   ``unit``). The ranking is by ``lift_per_change``, then repository-wide first, then
   ``held``, then model gate order, so a repository-wide change that lifts many units leads;
@@ -99,7 +99,6 @@ def _unit_unlocks(unit: Mapping[str, Any], steps: Mapping[int, StepDef]) -> list
     step = steps.get(number) if isinstance(number, int) else None
     blockers = [b for b in nxt.get("blockers") or [] if isinstance(b, Mapping)]
     gates = [b for b in blockers if b.get("kind") == "gate"]
-    threshold = next((b for b in blockers if b.get("kind") == "threshold"), None)
     by_id = {c.get("id"): c for c in unit.get("conditions") or [] if isinstance(c, Mapping)}
     out: list[tuple[str, Scope, bool]] = []
     for b in gates:
@@ -111,12 +110,10 @@ def _unit_unlocks(unit: Mapping[str, Any], steps: Mapping[int, StepDef]) -> list
         # no condition read behind the gate: never claim a change at the root
         scope: Scope = "repo_wide" if waiting and all(c.get("origin") == "inherited" for c in waiting) \
             else "unit"
-        gain = sum(1 for c in waiting if c.get("counted"))
-        short = (threshold.get("threshold", 0) - threshold.get("met", 0) - gain) if threshold else 0
         # the gate holds after the change only when every waiting condition is one to make:
         # a not-measured or excluded one (a gate above level 1) still blocks it
         makeable = bool(waiting) and all(c.get("state") == "unmet" for c in waiting)
-        out.append((gate, scope, makeable and len(gates) == 1 and short <= 0))
+        out.append((gate, scope, makeable and len(gates) == 1))
     return out
 
 

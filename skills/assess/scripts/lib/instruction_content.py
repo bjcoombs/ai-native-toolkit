@@ -14,7 +14,7 @@ here:
   stale reference is a finding to read, never a score penalty. False
   positives are kept down by what is not checked: URLs, globs, placeholders
   (``<name>``, ``{id}``, ``$VAR``), absolute and home paths, paths under the
-  trees every scan excludes (``lib.doc_graph.is_excluded_path``), gitignored
+  trees every scan excludes (``lib.docs.doc_graph.is_excluded_path``), gitignored
   paths (generated artefacts such as ``coverage.xml``), a slash path with no
   extension whose first segment is not in the repo (``owner/repo``,
   ``feat/branch``), ALL_CAPS names (environment variables are often external),
@@ -48,7 +48,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NamedTuple, TypedDict
 
 from lib.command_index import RepoIndex, build_index, git_env
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 
 GIT_TIMEOUT_SECONDS = 30
 README_NAMES = ("README.md", "README.rst", "README.txt", "README", "readme.md")

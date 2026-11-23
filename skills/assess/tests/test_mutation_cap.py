@@ -1,4 +1,4 @@
-"""Tests for lib/mutation_cap.py: the run-context test_pressure block shape and
+"""Tests for lib/testing/mutation_cap.py: the run-context test_pressure block shape and
 the Layer 6 mutation-not-run cap.
 
 Moved out of test_assess_core.py when assess_core's helpers split into
@@ -97,7 +97,7 @@ def test_mutation_not_run_cap_applies_on_default_scan(tmp_path: Path) -> None:
 def test_mutation_run_requires_parsed_mutants_for_cap_lift() -> None:
     """mutation_not_run_cap trusts mutation_run only when per_file carries a real
     mutant record (#317). An empty per_file keeps the cap; a record lifts it."""
-    from lib.mutation_cap import mutation_not_run_cap
+    from lib.testing.mutation_cap import mutation_not_run_cap
 
     empty = mutation_not_run_cap(
         {"mutation_run": True, "mutation_scope": ["src/a.ts"], "per_file": []})

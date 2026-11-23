@@ -153,9 +153,12 @@ moved yet. A moved module keeps its filename.
 
 Each old path `lib/<stem>.py` is a shim until 4.0.0: it sets `sys.modules[__name__]` to the
 moved module, so the old and new dotted paths name one module object, and a module that runs
-as a script gets a `runpy` `__main__` branch. A shim cannot be run by path, because a script
-run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the moved file
-(`python scripts/lib/<pkg>/<stem>.py`) instead. New code imports the new path.
+as a script gets a `runpy` `__main__` branch. Run as `python scripts/lib/<stem>.py`, Python
+puts `lib/` first on `sys.path`, not `scripts/`, so such a shim first inserts `scripts/`
+(`Path(__file__).resolve().parents[1]`) and the old path keeps running. Running a shim as
+`__main__` imports the moved module before `runpy` runs it, so Python prints a
+`RuntimeWarning`; the moved file (`python scripts/lib/<pkg>/<stem>.py`) runs without it.
+New code imports the new path.
 
 - **`agents/`**: what a repository builds with agents and how an agent runs in it, the
   Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
@@ -167,6 +170,14 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`,
   `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`,
   `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
+- **`docs/`**: the doc graph and the Layer 0 doc signals: links, claims, ownership,
+  provenance, staleness and its generator directives, the doc-to-complexity join and the
+  vault queries. `doc_graph` imports `ownership_parser` inside a function, because
+  `ownership_parser` imports `doc_graph`. The folder holds two kinds of file: the doc-scan
+  modules (`.py`) and every group's long module references (`.md`, one per module, #981).
+  Files: `__init__.py`, `doc_claims.py`, `doc_complexity_join.py`, `doc_directives.py`,
+  `doc_graph.py`, `doc_graph_layout.py`, `doc_links.py`, `doc_ownership.py`,
+  `doc_provenance.py`, `doc_staleness.py`, `ownership_parser.py`, `vault_queries.py`.
 - **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 4.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
@@ -186,11 +197,26 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   #917 module map and stay at the root. Files: `__init__.py`, `config_drift.py`, `delivery.py`,
   `gh_cli.py`, `gitlab_ci_lint.py`, `gitlab_cli.py`, `gitlab_notes.py`, `merged_sample.py`,
   `platform_cli.py`, `review_reality.py`.
+- **`keyhole/`**: the keyhole-readiness signals and findings, and the Layer 1 liveness
+  inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
+  archetype and the Dart and JVM capability entries. `promissory_markers` and
+  `accretion_ratchet` also run as scripts: run the moved file,
+  `python scripts/lib/keyhole/<stem>.py`. Files: `__init__.py`,
+  `accretion_ratchet.py`, `archetype.py`, `coupling_analysis.py`, `dart_capabilities.py`,
+  `jvm_capabilities.py`, `keyhole_signals.py`, `liveness_scan.py`, `promissory_markers.py`,
+  `python_regions.py`, `structure_drift.py`, `understanding_analysis.py`.
 - **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
   structured validation errors, and the `why` rules the loader applies to every entry
   (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
+- **`testing/`**: the Layer 6 test signals outside `test_pressure/`: the coverage gate and
+  the readings it combines (coverage activation, CI coverage runs, the root coverage.py
+  config), the coverage report, test focus, sibling tests, import credit, the mutation cap
+  and refresh, and untrusted hotspots. Files: `__init__.py`, `coverage_activation.py`,
+  `coverage_ci.py`, `coverage_gate.py`, `coverage_report.py`, `coverage_root_config.py`,
+  `import_credit.py`, `mutation_cap.py`, `mutation_refresh.py`, `sibling_tests.py`,
+  `test_focus.py`, `untrusted_hotspot.py`.
 
 ## Module reference
 

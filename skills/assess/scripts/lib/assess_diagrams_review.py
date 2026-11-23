@@ -52,8 +52,8 @@ from typing import Any
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import DIAGRAM_FILES, build_diagrams, wrap, write_diagrams
 from lib.assess_diagrams_packages import PACKAGE_COUNTS_ONLY_FILE, PACKAGE_FILE, package_diagrams
-from lib.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
-from lib.doc_ownership import REPO_BASELINE
+from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
+from lib.docs.doc_ownership import REPO_BASELINE
 from lib.headline import reason_word
 from lib.reason_codes import reason_code
 from lib.hosting.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED

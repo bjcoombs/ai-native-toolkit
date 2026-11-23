@@ -94,7 +94,7 @@ from lib.agents.agent_building_vocab import (
     lookup,
 )
 from lib.agents.agent_manifests import reader_for
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 from lib.git_churn import tracked_files
 from lib.instruction_files import INSTRUCTION_FILE_PATHS
 

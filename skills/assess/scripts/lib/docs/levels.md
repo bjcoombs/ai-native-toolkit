@@ -34,10 +34,11 @@ An `unknown` result or evaluation whose low bound is at least 1 carries `floor` 
 Two optional model keys feed `level_tally.py` and leave every row level unchanged (#744):
 `requires` on a level (condition ids, `<row id>.<level>` from `condition_id`, that must be
 met for this condition to count as met; an unknown id, a self-reference or a cycle fails
-the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name`, `threshold`, and
-`gates`, each a `StepGate` `{id, row, level}`). Step 1 has threshold 0 and no gates; a
-later Step keeps every gate of the one below and never lowers the threshold, or the load
-fails. A model without them loads exactly as before.
+the load) and `[[steps]]` (`StepDef`: `step` numbered 1..K, `name` and `gates`, each a `StepGate`
+`{id, row, level}`). Step 1 has no gates and a later Step keeps every gate of the one
+below and adds at least one, or the load fails. A Step needs its gates and nothing else (#1083): a `threshold`
+key, the count of met conditions earlier models carried, fails the load with a message
+naming its removal. A model without them loads exactly as before.
 Each level also carries `truth` (#843), and three additive fields ride along, all defined in
 `levels_fields.py`. `load_levels` passes the file path to `parse_levels` (`source=`) so a
 `MixedTruthError` names the model file. `LevelsError` and `MixedTruthError` are defined in

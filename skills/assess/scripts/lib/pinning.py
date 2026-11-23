@@ -70,7 +70,7 @@ from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.command_index import RepoIndex
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 
 PinNote = Literal["skipped_library", "direct_pins_only"]
 

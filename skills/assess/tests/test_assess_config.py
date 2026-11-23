@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lib.assess_config import load_working_notes_config
-from lib.doc_graph import build_doc_graph
+from lib.docs.doc_graph import build_doc_graph
 
 
 def _write(root: Path, rel: str, text: str) -> None:

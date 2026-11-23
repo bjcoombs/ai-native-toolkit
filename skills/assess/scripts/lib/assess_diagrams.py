@@ -18,8 +18,11 @@ report (``assess_report.py``) both call ``build_diagrams`` on the same context; 
 artifact directory, the section says ``Not drawn:`` for a drawn diagram whose file is not
 there (the write was skipped, or the context predates the diagram) instead of linking it.
 
-Diagrams:
+Diagrams, in report order:
 
+- **Step ladder** (``step-ladder.svg``, #1102): the model's Steps as rungs, the gate
+  between each pair, "You are here" on the run's Step and the next gate highlighted;
+  drawn by ``lib/assess_diagrams_ladder.py``, which documents it.
 - **Evidence waffle** (``evidence-waffle.svg``): one square per condition of the run's
   ``level`` block (``lib/level_tally.py``), grouped by maturity-model row in model
   order, coloured by state and grade (``CATEGORIES``). Met conditions read verified,
@@ -28,7 +31,9 @@ Diagrams:
   follow. The verified and measured squares together are ``tally.met``. A hazard
   condition (``polarity: "hazard"``, #843) is never counted: met draws as ``hazard``
   (the warn colour), unmet as ``hazard_absent`` (a warn outline); the key lists the two
-  only when a square uses them.
+  only when a square uses them. A "Level N" header heads each column, and the square at
+  each Step gate's level (``assess_diagrams_ladder.gate_conditions``) is outlined, with a
+  "Outlined: a Step gate" key entry when any is drawn.
 
 A new diagram adds its ``FILE`` and heading to ``HEADINGS``, a builder returning an
 ``AssessDiagram``, and an entry in ``build_diagrams``; it draws its cells, legend and
@@ -53,16 +58,20 @@ from pathlib import Path
 from typing import Any, cast
 
 import lib.fleet.fleet_svg as svg
+from lib.assess_diagrams_ladder import (LADDER_FILE, LADDER_TITLE, gate_conditions, ladder_caption,
+                                        ladder_in_place, render_ladder)
 from lib.headline import reason_word
 from lib.level_result_types import ConditionResult, LevelResult
 from lib.level_tally import default_model
+from lib.levels import StepDef
 from lib.run_context_types_diagrams import AssessDiagram, WaffleSquare
 from lib.vocabulary import IN_PLACE
 
 WAFFLE_FILE = "evidence-waffle.svg"
 # Each diagram's report heading, by file: one source for a drawn, skipped or raised diagram.
 HEADINGS: dict[str, str] = {
-    WAFFLE_FILE: "Evidence behind the level",
+    LADDER_FILE: LADDER_TITLE,
+    WAFFLE_FILE: "Evidence behind the Step",
 }
 DIAGRAM_FILES = tuple(HEADINGS)
 
@@ -99,6 +108,8 @@ SQ = 16.0
 GAP = 4.0
 ROW_H = 24.0
 LINE_H = 20.0
+HEADER_H = 18.0  # the "Level N" column headers above the squares
+COL_W = svg.text_width("Level 9", 11) + 10  # one column per level, wide enough for its header
 MIN_W = 680.0
 MAX_LABEL = 36
 _LAYER_PREFIX = re.compile(r"^Layer \d+:\s*")
@@ -205,8 +216,16 @@ def _counts(squares: Sequence[WaffleSquare]) -> Counter[str]:
     return Counter(s["category"] for s in squares)
 
 
-def render_waffle(level: LevelResult, titles: Mapping[str, str]) -> str:
-    """The evidence waffle SVG for one level result; ``titles`` maps row ids to labels."""
+def _gate_outline(x: float, y: float, gate: str | None = None, size: float = SQ) -> str:
+    """The Step-gate outline drawn around a square (``gate``: the condition id it marks)."""
+    data = f' data-gate="{gate}"' if gate is not None else ""
+    return (f'<rect x="{x - 3:.1f}" y="{y - 3:.1f}" width="{size + 6:.1f}" height="{size + 6:.1f}" '
+            f'rx="3" fill="none" class="s-fg" stroke-width="2"{data}/>')
+
+
+def render_waffle(level: LevelResult, titles: Mapping[str, str], gates: Sequence[str] = ()) -> str:
+    """The evidence waffle SVG for one level result; ``titles`` maps row ids to labels and
+    ``gates`` names the Step-gate condition ids to outline."""
     squares = waffle_squares(level)
     rows: dict[str, list[WaffleSquare]] = {}
     for square in squares:
@@ -215,12 +234,17 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str]) -> str:
     label_w = max(svg.text_width(label) for label in labels.values()) + 12
     widest = max(len(row) for row in rows.values())
     grid_x = PAD + label_w
-    width = max(MIN_W, grid_x + widest * (SQ + GAP) + PAD)
+    width = max(MIN_W, grid_x + widest * COL_W + PAD)
     counts = _counts(squares)
     body = [svg.text(PAD, 28, HEADINGS[WAFFLE_FILE], size=15, weight="600", cls="fg"),
-            svg.text(PAD, 48, f"{len(squares)} conditions, one square each, by maturity-model row",
-                     size=12, cls="muted")]
-    y = 64.0
+            svg.text(PAD, 48, f"{len(squares)} conditions: each row is a practice, each square "
+                     "one of its levels", size=12, cls="muted")]
+    for index in range(widest):
+        body.append(svg.text(grid_x + index * COL_W + SQ / 2, 64 + HEADER_H - 6, f"Level {index + 1}",
+                             size=11, anchor="middle", cls="muted"))
+    y = 64.0 + HEADER_H
+    outlined = set(gates)
+    drawn_gates = 0
     for row, members in rows.items():
         cut = labels[row] != titles.get(row, row)
         body.append(svg.text(grid_x - 12, y + SQ - 3, labels[row], anchor="end", cls="fg",
@@ -229,7 +253,10 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str]) -> str:
             tip = f"{titles.get(row, row)} level {square['level']}: {LABELS[square['category']]}"
             if square["reason"] is not None:
                 tip += f" ({_reason_text(square['reason'], titles)})"
-            body.append(cell(grid_x + index * (SQ + GAP), y, square["category"], tooltip=tip))
+            body.append(cell(grid_x + index * COL_W, y, square["category"], tooltip=tip))
+            if square["id"] in outlined:
+                body.append(_gate_outline(grid_x + index * COL_W, y, square["id"]))
+                drawn_gates += 1
         y += ROW_H
     reasons = Counter(s["reason"] for s in squares if s["reason"] is not None)
     notes = {"not_measured": [f"{_reason_text(code, titles)}: {n}" for code, n in sorted(reasons.items())]}
@@ -237,6 +264,12 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str]) -> str:
                if key not in OPTIONAL or counts[key]]
     key_parts, key_h = legend(PAD, y + 12, entries)
     body += key_parts
+    if drawn_gates:
+        swatch_y = y + 12 + key_h
+        body += [cell(PAD, swatch_y + 2, "unmet", size=14, tagged=False),
+                 _gate_outline(PAD, swatch_y + 2, size=14),
+                 svg.text(PAD + 22, swatch_y + 13, "Outlined: a Step gate", size=12, cls="fg")]
+        key_h += LINE_H
     caption = waffle_caption()
     y += 12 + key_h
     for line in wrap(caption, int((width - 2 * PAD) / svg.CHAR_W)):
@@ -268,7 +301,23 @@ def _entry(file: str) -> AssessDiagram:
             "caption": "", "svg": None, "skipped": None}
 
 
-def _waffle(ctx: Mapping[str, Any], model_rows: Sequence[Mapping[str, Any]] | None) -> AssessDiagram:
+def _ladder(ctx: Mapping[str, Any], steps: Sequence[StepDef]) -> AssessDiagram:
+    entry = _entry(LADDER_FILE)
+    level = ctx.get("level")
+    if not isinstance(level, dict) or not isinstance(level.get("conditions"), list):
+        entry["skipped"] = "the run has no level result, so there is no Step to place."
+    elif not steps or level.get("step") is None:
+        entry["skipped"] = "the maturity model defines no Steps."
+    else:
+        result = cast(LevelResult, level)
+        entry["in_place"] = ladder_in_place(result, steps)
+        entry["caption"] = ladder_caption(result, steps)
+        entry["svg"] = render_ladder(result, steps)
+    return entry
+
+
+def _waffle(ctx: Mapping[str, Any], model_rows: Sequence[Mapping[str, Any]] | None,
+            steps: Sequence[StepDef] = ()) -> AssessDiagram:
     entry = _entry(WAFFLE_FILE)
     level = ctx.get("level")
     if not isinstance(level, dict) or not isinstance(level.get("conditions"), list):
@@ -279,7 +328,7 @@ def _waffle(ctx: Mapping[str, Any], model_rows: Sequence[Mapping[str, Any]] | No
         result = cast(LevelResult, level)
         entry["in_place"] = waffle_in_place(result)
         entry["caption"] = waffle_caption()
-        entry["svg"] = render_waffle(result, _titles(model_rows))
+        entry["svg"] = render_waffle(result, _titles(model_rows), gate_conditions(steps))
     return entry
 
 
@@ -295,15 +344,21 @@ def _guarded(build: Callable[[], AssessDiagram], file: str) -> AssessDiagram:
 
 
 def build_diagrams(ctx: Mapping[str, Any],
-                   model_rows: Sequence[Mapping[str, Any]] | None = None) -> list[AssessDiagram]:
+                   model_rows: Sequence[Mapping[str, Any]] | None = None,
+                   steps: Sequence[StepDef] | None = None) -> list[AssessDiagram]:
     """Every /assess diagram for one run context, in report order; never raises.
 
-    ``model_rows`` are the maturity model's rows (for row titles); None reads the shipped
-    model, the one the run context's ``level`` block is computed with.
+    ``model_rows`` are the maturity model's rows (for row titles) and ``steps`` its Steps
+    (the ladder and the outlined gate squares); None reads the shipped model, the one the
+    run context's ``level`` block is computed with.
     """
     if model_rows is None:
         model_rows = default_model()["rows"]
-    return [_guarded(lambda: _waffle(ctx, model_rows), WAFFLE_FILE)]
+    if steps is None:
+        steps = default_model().get("steps", [])
+    model_steps = steps
+    return [_guarded(lambda: _ladder(ctx, model_steps), LADDER_FILE),
+            _guarded(lambda: _waffle(ctx, model_rows, model_steps), WAFFLE_FILE)]
 
 
 NOT_ON_DISK = ("the file is not in the artifact directory (the write was skipped, or the "

@@ -25,7 +25,7 @@ action = "strengthen tests to pin observable behaviour (not internal state)"
 mode = "characterize_first"
 concern = true
 inputs = ["current", "test_pressure"]
-derive = "lib.untrusted_hotspot:untrusted_hotspot_paths"
+derive = "lib.testing.untrusted_hotspot:untrusted_hotspot_paths"
 headless = "unregistered"
 
 [[entries]]
@@ -39,5 +39,5 @@ action = "request human review - tests verify internal consistency, not truth"
 mode = "verify_then_retire"
 concern = true
 inputs = ["current"]
-derive = "lib.keyhole_signals:_self_referential_test_paths"
+derive = "lib.keyhole.keyhole_signals:_self_referential_test_paths"
 headless = "unregistered"

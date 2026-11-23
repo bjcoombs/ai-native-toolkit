@@ -19,14 +19,6 @@ from lib.levels import MaturityModel, parse_levels
 from test_fleet_achievements import Spec, _data
 
 MODEL: MaturityModel = parse_levels(tomllib.loads(LEVELS))  # Step 2: docs gate; Step 3: docs and ci gates
-# a Step 4 whose threshold the fixture never meets: its signals are listed, never counted
-MODEL4: MaturityModel = parse_levels(tomllib.loads(LEVELS + """
-[[steps]]
-step = 4
-name = "Counted"
-threshold = 1
-gates = [{ id = "docs", row = "docs", level = 1 }, { id = "ci", row = "ci", level = 1 }]
-"""))
 
 # docs 0 holds the docs gate, ci False the ci gate: a and d reach Step 3, b Step 2 (ci), and c
 # Step 1, two Steps below Step 3 with both its gates missing (only docs is its next Step's)
@@ -63,7 +55,7 @@ def test_a_step_3_target_is_hit_on_the_run_the_lowest_step_reaches_3_and_no_othe
     assert hit["previous_run"] == "2026-11-08"
     (progress,) = doc["targets"]
     assert progress == {"view": "ownership", "unit": TEAM[1], "step": 3, "lowest_step": 3, "measured": 2,
-                        "repos": 2, "distance": 0, "threshold": 0, "held": 0, "below_threshold": 0,
+                        "repos": 2, "distance": 0, "held": 0,
                         "missing_gates": []}
     jsonschema.validate(json.loads(fa.dumps_achievements(doc)), json.loads(render()))
 
@@ -71,7 +63,7 @@ def test_a_step_3_target_is_hit_on_the_run_the_lowest_step_reaches_3_and_no_othe
 def test_before_the_hit_progress_lists_exactly_the_missing_gates_of_the_target_step() -> None:
     (progress,) = _build(HISTORY[:2])["targets"]
     assert progress == {"view": "ownership", "unit": TEAM[1], "step": 3, "lowest_step": 2, "measured": 2,
-                        "repos": 2, "distance": 1, "threshold": 0, "held": 1, "below_threshold": 0,
+                        "repos": 2, "distance": 1, "held": 1,
                         "missing_gates": [{"gate": "ci", "row": "ci", "level": 1, "held": 1,
                                            "not_measured": 0, "excluded": 0}]}
     assert not _hits(_build(HISTORY[:2]))
@@ -87,12 +79,6 @@ def test_a_repository_two_steps_below_the_target_shows_every_missing_gate() -> N
     assert [(g["gate"], g["held"]) for g in org["missing_gates"]] == [("docs", 1), ("ci", 1)]
     assert [(g["gate"], g["held"]) for g in repo["missing_gates"]] == [("docs", 1), ("ci", 1)]
     assert not _hits(doc)  # c holds the org at Step 1 throughout
-
-
-def test_the_below_threshold_count_reads_the_met_tally() -> None:
-    (progress,) = _build(model=MODEL4, specs=[TargetSpec("ownership", "grp/sub", 4)])["targets"]
-    assert (progress["threshold"], progress["held"], progress["below_threshold"]) == (1, 2, 2)
-    assert progress["missing_gates"] == []  # both a and b hold the docs and ci gates now
 
 
 def test_the_engines_lowest_step_is_the_bundles_and_the_next_step_hold_matches_the_roll_up() -> None:
@@ -111,7 +97,7 @@ def test_the_engines_lowest_step_is_the_bundles_and_the_next_step_hold_matches_t
             runs = [fa.HistoryRun("2026-11-08", data)]
             (progress,) = fa.build_achievements(runs[0], [], MODEL, targets=resolve([spec], Privacy().key))["targets"]
             assert progress["missing_gates"] == [g for g in nxt["gates"] if g["held"]]
-            assert (progress["held"], progress["below_threshold"]) == (nxt["held"], nxt["below_threshold"])
+            assert progress["held"] == nxt["held"]
 
 
 @pytest.mark.parametrize("history", [
@@ -176,12 +162,11 @@ def test_progress_without_a_measured_member_reads_unknown() -> None:
         _build([("2026-11-01", {"grp/sub/a": (-1, True)})]), MODEL)
 
 
-def test_the_report_names_the_missing_gates_and_the_threshold() -> None:
+def test_the_report_names_the_missing_gates_and_no_count() -> None:
     assert "- `ownership/grp/sub`, Step 3: at Step 2 (2 of 2 measured); gates to go: `ci` holds back 1." \
         in credit_section(_build(HISTORY[:2]), MODEL)
     assert "- `ownership/grp/sub`, Step 3: met (Step 3, 2 of 2 measured)." in credit_section(_build(), MODEL)
-    four = _build(model=MODEL4, specs=[TargetSpec("ownership", "grp/sub", 4)])
-    assert "2 below the threshold of 1 practice in place" in credit_section(four, MODEL4)
+    assert "threshold" not in credit_section(_build(HISTORY[:2]), MODEL)
 
 
 def test_two_runs_give_identical_bytes() -> None:

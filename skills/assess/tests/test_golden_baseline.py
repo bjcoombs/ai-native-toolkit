@@ -10,7 +10,7 @@ decomposition work depends on it.
 from __future__ import annotations
 
 import golden
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 
 # Blocks the report's prose sections read from run-context.json. The test
 # strategy for task 1 names these explicitly: a golden missing any of them would

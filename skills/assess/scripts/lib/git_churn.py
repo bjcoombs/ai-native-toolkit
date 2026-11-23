@@ -307,11 +307,11 @@ def file_last_commit_epoch(path: Path) -> int | None:
     rebased/cherry-picked - a rebase must not certify stale docs as fresh. A doc
     authored 90 days ago and rebased yesterday should still read 90 days stale;
     ``%ct`` would reset the clock and hide the decay. This matches the author-time
-    (``%at``) axis `lib.accretion_ratchet` and `lib.promissory_markers` already use.
+    (``%at``) axis `lib.keyhole.accretion_ratchet` and `lib.keyhole.promissory_markers` already use.
 
     The raw commit time, before any days-ago conversion. Provenance-aware staleness needs the absolute timestamp so it can
     compare a generated doc against its declared source on the same axis (epoch
-    seconds), independent of "now" - see `lib.doc_provenance`.
+    seconds), independent of "now" - see `lib.docs.doc_provenance`.
     """
     try:
         out = subprocess.run(

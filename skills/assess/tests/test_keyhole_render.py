@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 
 
 # --- Task 2: render_findings_markdown ----------------------------------------

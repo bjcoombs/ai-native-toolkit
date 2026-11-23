@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.vault_queries import (
+from lib.docs.vault_queries import (
     TAGS_KEY,
     parse_base_queries,
     parse_dataview_queries,

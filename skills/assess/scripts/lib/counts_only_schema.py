@@ -51,15 +51,15 @@ from lib.block_shapes import (
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
 from lib.hosting.delivery import DeliveryBlock
-from lib.doc_claims import DocClaimsBlock
+from lib.docs.doc_claims import DocClaimsBlock
 from lib.agent_consistency import AgentConsistencyBlock
-from lib.doc_complexity_join import DocUnit
-from lib.doc_staleness import DocStalenessBlock, DocStalenessRow
+from lib.docs.doc_complexity_join import DocUnit
+from lib.docs.doc_staleness import DocStalenessBlock, DocStalenessRow
 from lib.gap_actions import GapAction
 from lib.guardrails import GuardrailsBlock
 from lib.instruction_placement import InstructionPlacementBlock
-from lib.liveness_scan import ObservabilityBlock
-from lib.mutation_cap import MutationNotRunCap
+from lib.keyhole.liveness_scan import ObservabilityBlock
+from lib.testing.mutation_cap import MutationNotRunCap
 from lib.run_context_types_size import LocByClass
 from lib.run_context_types import (
     AttentionRow,
@@ -94,7 +94,7 @@ from lib.unit_levels import UnitLevelsBlock
 from lib.unit_rollup import UnitRollUpBlock
 from lib.unit_readings import UnitReadingsBlock
 from lib.graph.structure_graph import StructureBlock
-from lib.understanding_analysis import UnderstandingModule
+from lib.keyhole.understanding_analysis import UnderstandingModule
 
 # Where each typed shape sits in run-context.json, as a field pattern. A list
 # shape is rooted at the list's pattern (list levels add no segment).

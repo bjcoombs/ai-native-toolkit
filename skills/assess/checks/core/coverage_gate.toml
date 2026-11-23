@@ -7,7 +7,7 @@ kind = "collector"
 title = "Coverage gate"
 summary = "Finds coverage thresholds written in CI, task-runner and tool config, each with its file, line and threshold."
 issues = [488]
-callable = "lib.coverage_gate:detect_coverage_gate"
+callable = "lib.testing.coverage_gate:detect_coverage_gate"
 publishes = ["coverage_gate"]
 reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
@@ -15,7 +15,7 @@ unit_scope = "override"
 headless = { coverage_gate = "registered" }
 whys.coverage_gate = "It finds the coverage threshold the repository sets and whether CI enforces it, which is the line that keeps tests from thinning out under a run of changes."
 shapes = [
-  { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
+  { path = "coverage_gate", type = "lib.testing.coverage_gate:CoverageGateBlock" },
 ]
 revision = 5
 unknown_reasons = [

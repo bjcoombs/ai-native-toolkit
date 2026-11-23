@@ -149,11 +149,11 @@ enable_error_code = ["ignore-without-code"]
 source_paths = ["src"]
 only_mutate = [
     "src/lib/complexity/stats_diff.py",
-    "src/lib/promissory_markers.py",
-    "src/lib/python_regions.py",
-    "src/lib/doc_staleness.py",
-    "src/lib/doc_graph.py",
-    "src/lib/keyhole_signals.py",
+    "src/lib/keyhole/promissory_markers.py",
+    "src/lib/keyhole/python_regions.py",
+    "src/lib/docs/doc_staleness.py",
+    "src/lib/docs/doc_graph.py",
+    "src/lib/keyhole/keyhole_signals.py",
 ]
 # Each mutant runs only the tests mutmut's coverage pass maps to it; this list
 # bounds that pass to the suites that own the modules in scope. (tests_dir is

@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from lib.keyhole_signals import is_archive_path
+from lib.keyhole.keyhole_signals import is_archive_path
 from lib.run_context_types import JsonDict
 
 
