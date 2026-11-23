@@ -21,7 +21,9 @@ _TAIL = r"[^\s'\"()\[\]<>,;]*"
 _SEP = r"(?:/|\\{1,2})"
 # The directory's own last segment has ended: a character that could carry it on
 # (``/home/u`` inside ``/home/u2``, ``/home/u.bak`` or ``/home/u-old``) does not follow.
-_SEGMENT_END = r"(?![\w.~-])"
+# A ``.`` carries it on only when a segment character follows, so the full stop
+# that ends a sentence (``No such file: /home/u.``) is still a boundary.
+_SEGMENT_END = r"(?![\w~-]|\.[\w.~-])"
 
 
 def _case_insensitive() -> bool:

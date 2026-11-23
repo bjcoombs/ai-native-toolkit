@@ -290,6 +290,8 @@ def test_labels_stop_at_a_separator_and_skip_a_root_home(tmp_path: Path) -> None
     ("'/home/bob'", "'~'"),                             # a quote follows
     ("(/home/bob)", "(~)"),                             # a bracket follows
     ("in /home/bob: no such file", "in ~: no such file"),
+    ("No such file: /home/bob.", "No such file: ~."),   # a sentence's full stop follows
+    ("cwd /home/bob. Retrying", "cwd ~. Retrying"),
     ("/home/bob/a.py", "~/a.py"),                       # a separator follows
 ])
 def test_a_label_cuts_a_bare_directory_at_any_boundary(line: str, scrubbed: str) -> None:
