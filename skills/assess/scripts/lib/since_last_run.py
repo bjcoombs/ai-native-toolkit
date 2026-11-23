@@ -13,6 +13,8 @@ this run's publish step overwrites any of them:
   the previous run measured (``measured_commit.head_sha``). An action closed before the
   previous run is not credited again, and a branch commit squashed or rebased away is never
   credited. A sha this clone does not hold is left out and counted in ``unresolved``.
+  Action text is folded onto one line, so it cannot inject a log heading or chain marker.
+  A committed ``actions.json`` that cannot be parsed gives ``None`` (``actions_unreadable``).
   Reading HEAD, not the working tree, keeps the block a function of the commit. With no
   previous commit, or one this clone does not hold (a rewritten history, a shallow clone),
   the list is ``None`` (unknown, ``closed_reason`` says why), never empty;
@@ -52,6 +54,7 @@ FIRST_RUN = "This is the first run, so there is no earlier run to compare with."
 UNKNOWN_CLOSED = {
     "no_previous_commit": "the previous run recorded no commit",
     "previous_commit_absent": "the previous run's commit is not in this clone",
+    "actions_unreadable": "the committed actions.json could not be read",
 }
 
 
@@ -90,19 +93,28 @@ def gate_changes(steps: Sequence[StepDef], level: Any,
     return [g for g in now if g not in then], [g for g in then if g not in now]
 
 
-def _committed_actions(repo_root: Path, assess_dir: Path) -> list[dict[str, Any]]:
-    """The action entries of ``actions.json`` as committed at HEAD; none when absent."""
+def _committed_actions(repo_root: Path, assess_dir: Path) -> list[dict[str, Any]] | None:
+    """The action entries of ``actions.json`` as committed at HEAD: none when it is absent,
+    ``None`` when it is committed but cannot be read (unknown, never zero)."""
     try:
         rel = assess_dir.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         return []
     shown = _git(repo_root, "show", f"HEAD:./{rel}/actions.json")
-    if shown is None or shown.returncode != 0:
+    if shown is None:
+        return None
+    if shown.returncode != 0:
         return []
     try:
-        return action_entries(json.loads(shown.stdout))
+        payload = json.loads(shown.stdout)
     except json.JSONDecodeError:
-        return []
+        return None
+    return action_entries(payload) if isinstance(payload, Mapping) else None
+
+
+def _one_line(text: str) -> str:
+    """Action text on one line, so it can never start a log heading or a chain marker."""
+    return " ".join(text.split())
 
 
 def is_commit(repo_root: Path, sha: str) -> bool:
@@ -117,20 +129,24 @@ def _ancestor(repo_root: Path, sha: str, of: str) -> int | None:
     return None if done is None else done.returncode
 
 
-def closed_actions(repo_root: Path, assess_dir: Path, previous: str) -> tuple[list[ClosedAction], int]:
+def closed_actions(repo_root: Path, assess_dir: Path, previous: str) -> tuple[list[ClosedAction], int] | None:
     """The done actions at HEAD whose ``completed_sha`` landed after ``previous``, in file order,
     and how many done entries name a commit this clone does not hold (left unchecked).
 
     A sha counts only when it is on HEAD's history and not on ``previous``'s, so a branch
-    commit that was squashed or rebased away is never credited, once or again."""
+    commit that was squashed or rebased away is never credited, once or again. ``None`` when
+    the committed ``actions.json`` cannot be read."""
+    entries = _committed_actions(repo_root, assess_dir)
+    if entries is None:
+        return None
     out: list[ClosedAction] = []
     seen: set[tuple[str, str]] = set()
     unresolved = 0
-    for entry in _committed_actions(repo_root, assess_dir):
+    for entry in entries:
         sha, action = entry.get("completed_sha"), entry.get("action")
         if entry.get("status") != "done" or not isinstance(sha, str) or not _SHA.fullmatch(sha):
             continue
-        text = action if isinstance(action, str) else ""
+        text = _one_line(action) if isinstance(action, str) else ""
         if (text, sha) in seen:
             continue
         if not is_commit(repo_root, sha):
@@ -217,8 +233,10 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path) -> SinceLastRu
         reason = "no_previous_commit"
     elif not is_commit(repo_root, previous_commit):
         reason = "previous_commit_absent"  # a rewritten history or a shallow clone: not zero
+    elif (found := closed_actions(repo_root, assess_dir, previous_commit)) is None:
+        reason = "actions_unreadable"
     else:
-        closed, unresolved = closed_actions(repo_root, assess_dir, previous_commit)
+        closed, unresolved = found
     gained, lost = gate_changes(steps, level, (prev or {}).get("level")) if not first else (None, None)
     current = level if isinstance(level, Mapping) else {}
     block: SinceLastRun = {

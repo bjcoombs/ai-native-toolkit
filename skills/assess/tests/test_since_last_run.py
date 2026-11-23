@@ -192,3 +192,22 @@ def test_an_older_models_level_leaves_the_gates_unknown_and_keeps_the_credit(rep
     block = since_last_run(_level("met", "met"), repo / ".assess", repo)
     assert block["available"] is True and block["closed_count"] == 1
     assert (block["gates_gained"], block["gates_lost"]) == (None, None)
+
+
+def test_unreadable_actions_json_reads_not_known_and_action_text_stays_on_one_line(repo: Path) -> None:
+    """Review of #1097: a bad file is unknown, never 0; a newline cannot reach log.md structure."""
+    before = _git(repo, "rev-parse", "HEAD")
+    _previous(repo, _level("met", "met"), before)
+    (repo / ".assess" / "actions.json").write_text("{not json", encoding="utf-8")
+    _commit(repo, "2026-11-02T10:00:00Z", "bad")
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert (block["closed"], block["closed_reason"]) == (None, "actions_unreadable")
+    (repo / "b.txt").write_text("2\n", encoding="utf-8")
+    _commit(repo, "2026-11-03T10:00:00Z", "fix")
+    sha = _git(repo, "rev-parse", "HEAD")
+    _actions(repo, {"action": "Fix\n## 2026-01-01\n<!-- chain:x -->", "status": "done", "completed_sha": sha})
+    _commit(repo, "2026-11-04T10:00:00Z", "record")
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert block["closed"] is not None and block["closed"][0]["action"] == "Fix ## 2026-01-01 <!-- chain:x -->"
+    assert all("\n" not in line for line in block["lines"])
+    assert not any(line.startswith(("## ", "<!--")) for line in block["markdown"].splitlines())
