@@ -17,7 +17,9 @@ value}``) and a ``completed_sha`` on HEAD's history. ``update_ledger`` keeps one
 - a re-run on the commit the previous run measured adds nothing, so superseding a run never
   counts twice;
 - a pending entry whose removal is no longer a done action on HEAD's history (squashed away,
-  reopened, deleted) is dropped; a credited one stays as the record;
+  reopened, deleted) is dropped; a credited one stays as the record. When the done removals
+  cannot be read (``actions.json`` not committed or not readable, a shallow clone, git failing)
+  the ledger is left exactly as it was: no drop and no hold;
 - at ``HOLD_RUNS`` holds the entry is credited once, with ``saved`` the measured drop: the
   always-on lines at the proposal less the lines now (all of them when the file is gone
   from disk), and ``credited_at``, the commit; a re-run on that commit shows the credit again.
@@ -66,7 +68,7 @@ def _placement_now(placement: Any, path: str, repo_root: Path) -> tuple[bool, in
     return None if (repo_root / path).exists() else (False, 0)
 
 
-def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[PruningEntry], placement: Any, *,
+def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[PruningEntry] | None, placement: Any, *,
                   held_now: list[str] | None, held_before: list[str] | None, head_sha: str | None,
                   new_commit: bool, repo_root: Path) -> tuple[list[PruningEntry], list[PruningEntry]]:
     """``(every entry, the entries credited at this commit)`` (see the module docstring).
@@ -74,6 +76,9 @@ def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[Pruning
     ``held_now`` and ``held_before`` are the Step gates held now and at the previous run (None
     when unknown). An entry records the gates it must keep when it is first seen: the gates
     held before the removal landed, else those held now."""
+    if done_removals is None:  # the done removals are unknown: leave the ledger as it was
+        kept = [cast(PruningEntry, dict(e)) for e in prior]
+        return kept, [e for e in kept if e["credited"] and head_sha and e["credited_at"] == head_sha]
     done = {(e["path"], e["completed_sha"]): e for e in done_removals}
     # a pending entry counts only while its removal is still done on HEAD's history: one
     # squashed away, reopened or deleted is dropped, so it never counts beside a fresh entry

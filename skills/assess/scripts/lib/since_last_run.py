@@ -298,14 +298,22 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapp
     return (False, None, data, None) if isinstance(data, Mapping) else (False, "previous_unreadable", None, None)
 
 
-def _done_removals(repo_root: Path) -> list[PruningEntry]:
-    """The done removal actions in the committed ``actions.json`` whose commit is on HEAD's history."""
+def _done_removals(repo_root: Path) -> list[PruningEntry] | None:
+    """The done removal actions in the committed ``actions.json`` whose commit is on HEAD's
+    history; None (unknown) when ``actions.json`` is not committed or not readable, the clone is
+    shallow, or git cannot answer, so the ledger is left as it was rather than read as emptied."""
     entries, _ = _committed_actions(repo_root)
+    if entries is None or _shallow(repo_root):
+        return None
     out: list[PruningEntry] = []
-    for e in entries or []:
+    for e in entries:
         found = removal(e)
-        if found is not None and is_commit(repo_root, found["completed_sha"]) \
-                and _ancestor(repo_root, found["completed_sha"], "HEAD") == 0:
+        if found is None:
+            continue
+        on_head = _ancestor(repo_root, found["completed_sha"], "HEAD") if is_commit(repo_root, found["completed_sha"]) else 1
+        if on_head not in (0, 1):
+            return None
+        if on_head == 0:
             out.append(found)
     return out
 

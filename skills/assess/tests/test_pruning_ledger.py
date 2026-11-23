@@ -124,3 +124,13 @@ def test_a_pending_removal_no_longer_done_on_head_is_dropped_and_a_credited_one_
     kept, _ = update_ledger(credited, [], _placement(False, 180), held_now=GATES, held_before=GATES,  # type: ignore[arg-type]
                             head_sha="c3", new_commit=True, repo_root=ROOT)
     assert kept == credited
+
+
+def test_unknown_done_removals_leave_the_ledger_as_it_was() -> None:
+    """Review of #1134: an uncommitted actions.json or a shallow clone is not "every removal undone"."""
+    pending, _ = _run([], _placement(False, 180), head="c1")
+    after, credited = update_ledger(pending, None, _placement(False, 180), held_now=GATES, held_before=GATES,
+                                    head_sha="c2", new_commit=True, repo_root=ROOT)
+    assert (after, credited) == (pending, [])
+    later, credited = _run(after, _placement(False, 170), head="c3")
+    assert credited and later[0]["credited"]
