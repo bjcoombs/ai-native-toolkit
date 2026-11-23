@@ -18,8 +18,8 @@ CLI (standalone use)::
 Ages each marker by survived touches (commits to its file since the marker
 landed), separates tracked and justified markers from bare ones, drops marker
 text that is data, and sets aside fixture files (`lib.path_classes`, #824),
-reporting their count as `fixture_files_excluded`. Full reference:
-`lib/docs/promissory_markers.md`. New ecosystem marker syntaxes need a
+reporting their count as `fixture_files_excluded`.
+Full reference: lib/docs/promissory_markers.md. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 """
 
