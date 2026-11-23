@@ -53,7 +53,7 @@ one-part name that is a standard-library module (``import json`` from
 module that lives inside a test directory (``tests/``, ``test/``, ``spec/``,
 ``__tests__/``) is test support, never credited by this tier. Resolution
 indexes test modules too, so ``from lib import test_focus`` names the source
-``lib/testing/test_focus.py`` (a test by name, so never credited) rather than falling
+``lib/test_focus.py`` (a test by name, so never credited) rather than falling
 back to ``lib/__init__.py``.
 
 Cost: one ``ast.parse`` (or one regex pass) per qualifying test file, at most
@@ -390,7 +390,7 @@ class ImportCredits:
 
     def _scan(self) -> frozenset[str]:
         # Every Python module, tests included: ``from lib import test_focus``
-        # names the module ``lib/testing/test_focus.py`` even though its name reads as
+        # names the module ``lib/test_focus.py`` even though its name reads as
         # a test, so it must not fall back to crediting ``lib/__init__.py``.
         # A hit on a test or support module resolves the import to no credit.
         by_stem: dict[str, list[tuple[Module, str]]] = {}
