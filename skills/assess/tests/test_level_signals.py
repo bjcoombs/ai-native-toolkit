@@ -285,6 +285,9 @@ def test_scans_score_sizes_after_an_earlier_file_left_a_lizard_stub(
     (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
     assert _scans(_commit(tmp_path))["stats_summary"]["loc_by_class"]["source"]["p95"] == 1.0
     assert sys.modules["lizard"] is stub   # the stub other files rely on is put back
+    monkeypatch.delitem(sys.modules, "lizard")
+    _scans(tmp_path)
+    assert "lizard" not in sys.modules     # and no entry stays no entry
 
 
 def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict[str, Any]]) -> None:

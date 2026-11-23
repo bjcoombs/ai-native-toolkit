@@ -249,7 +249,10 @@ def pin_fleet_run_date(monkeypatch: pytest.MonkeyPatch, cli: object) -> _dt.date
 
 
 def use_real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Swap the empty ``lizard`` stub for the installed lizard until ``monkeypatch`` undoes it.
+    """Put the installed lizard in ``sys.modules`` until ``monkeypatch`` undoes it.
+
+    The undo restores what stood there before: the empty stub, or no entry at all. An
+    installed lizard already in place is left alone.
 
     The treemap loaders (``test_complexity_treemap._load_treemap``, ``test_scope``) leave
     an empty ``lizard`` module in ``sys.modules`` for the rest of the worker process, and
@@ -259,8 +262,10 @@ def use_real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
     timing, which made #1117 look load-dependent.
     """
     module = sys.modules.get("lizard")
-    if module is not None and not hasattr(module, "analyze_file"):
-        monkeypatch.delitem(sys.modules, "lizard")
+    if module is not None and hasattr(module, "analyze_file"):
+        return
+    monkeypatch.setitem(sys.modules, "lizard", module)  # records the stub, or no entry
+    del sys.modules["lizard"]
     importlib.import_module("lizard")
 
 
