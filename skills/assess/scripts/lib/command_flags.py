@@ -12,7 +12,11 @@ or backtick substitution, or a string that cannot be split,
 which ``check_command`` reads as a command it does not read (null), never false.
 ``make_args(args)`` drops make's option values: ``-o``, ``-W``, ``-E`` and their long forms
 always take one, and ``-j`` / ``-l`` take the next word only when it is a number (``make -j 4
-build`` runs ``build``; ``make -j build`` also runs ``build``, with unlimited jobs). Each rule
+build`` runs ``build``; ``make -j build`` also runs ``build``, with unlimited jobs).
+``make_runs_no_recipe(words)`` is a make run whose recipes cannot fail it: a dry run (``-n``,
+``--dry-run``, ``--just-print``, ``--recon``, ``-t`` / ``--touch``, ``-q`` / ``--question``,
+alone or in a cluster such as ``-kn``) or ``-i`` / ``--ignore-errors``; ``-k`` still exits 2,
+so it is not one. Each rule
 was checked against bash 3.2 and 5.3, dash and GNU make. Tests: ``tests/test_check_command.py``.
 """
 from __future__ import annotations
@@ -68,6 +72,24 @@ def shell_string(words: list[str]) -> list[str]:
 _MAKE_VALUED = frozenset({"-o", "-W", "--old-file", "--assume-old", "--what-if", "--new-file",
                           "--assume-new", "-E", "--eval"})
 _MAKE_OPTIONAL_NUMBER = frozenset({"-j", "--jobs", "-l", "--load-average", "--max-load"})
+
+
+# make options under which no recipe's failure fails the run: a dry run prints or touches
+# instead of running (``-n``, ``-t``, ``-q``), ``-i`` ignores every error. ``-k`` keeps going
+# but still exits 2, so it is not one.
+_MAKE_NO_RECIPE = frozenset({"--dry-run", "--just-print", "--recon", "--touch", "--question",
+                             "--ignore-errors"})
+_MAKE_NO_RECIPE_SHORT = frozenset("ntqi")
+
+
+def make_runs_no_recipe(words: list[str]) -> bool:
+    """``make -n test``, ``make --dry-run test``, ``make -kn test``, ``make -i test``: real make
+    exits 0 with a failing recipe (or, for ``-q``, without running one), so no check gates."""
+    if words[:1] not in (["make"], ["gmake"]):
+        return False
+    return any(w in _MAKE_NO_RECIPE or (w[:1] == "-" and w[1:2] != "-" and w[1:].isalpha()
+                                        and bool(set(w[1:]) & _MAKE_NO_RECIPE_SHORT))
+               for w in make_args(words[1:]))
 
 
 def make_args(args: list[str]) -> list[str]:

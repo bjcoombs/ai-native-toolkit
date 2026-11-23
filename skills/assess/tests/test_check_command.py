@@ -218,3 +218,29 @@ def test_other_hatch_scripts_are_not_lint_runs(text: str) -> None:
 ])
 def test_a_shell_string_is_read_for_lint_too(text: str, expected: bool) -> None:
     assert is_lint_run(text) is expected
+
+
+@pytest.mark.parametrize("text", ["make -j 4 lint", "make -l 2 lint", "make -o x lint", "make -j4 lint",
+                                  "make -W x lint"])
+def test_make_option_values_are_dropped_on_the_lint_path_too(text: str) -> None:
+    """``make -j 4 lint`` runs ``lint`` (real make exits 2 on a failing recipe)."""
+    assert is_lint_command(text) and is_lint_run(text)
+
+
+@pytest.mark.parametrize("text", [
+    "make -n test", "make --dry-run test", "make --just-print test", "make --recon test", "make -kn test",
+    "make -nk test", "make -i test", "make --ignore-errors test", "make -ik test", "make -in test",
+    "make -t test", "make --touch test", "make -q test", "gmake -n check",
+])
+def test_a_make_run_whose_recipe_cannot_fail_runs_no_check(text: str) -> None:
+    """Real GNU make exits 0 for each with a failing ``test`` recipe, so nothing gates (#955)."""
+    lint = text.replace("test", "lint").replace("check", "lint")
+    assert check_verdict(text) is False and not may_lint(text)
+    assert not is_lint_command(lint) and not is_lint_run(lint)
+
+
+@pytest.mark.parametrize("text", ["make -k test", "make -s test", "make -B test", "make -j 4 test",
+                                  "make -C sub test", "make -f n.mk test"])
+def test_other_make_options_still_run_the_target(text: str) -> None:
+    """``make -k test`` keeps going but still exits 2 with a failing recipe."""
+    assert check_verdict(text) is True

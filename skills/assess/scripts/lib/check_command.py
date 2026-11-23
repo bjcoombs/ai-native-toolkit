@@ -18,7 +18,7 @@ import shlex
 from contextvars import ContextVar
 from pathlib import PurePosixPath
 
-from lib.command_flags import SHELLS, make_args, shell_args, shell_string
+from lib.command_flags import SHELLS, make_args, make_runs_no_recipe, shell_args, shell_string
 from lib.command_resolver import RUNNERS, command_words
 from lib.lint_vocabulary import (
     ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
@@ -100,7 +100,8 @@ def _js_check(head: str, pos: list[str], names: frozenset[str] | None) -> bool:
 def _check_target(words: list[str], names: frozenset[str] | None = None,
                   programs: frozenset[str] = ALWAYS_CHECK) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
-    head, pos = words[0], _positionals(words[1:])
+    head = words[0]
+    pos = _positionals(make_args(words[1:]) if head in ("make", "gmake") else words[1:])   # -j 4 (#955)
     if head in programs:
         return True
     if head in ("uv", "poetry", "uvx"):
@@ -154,7 +155,7 @@ def is_lint_command(text: str) -> bool:
 def _lint_words(words: list[str]) -> bool:
     """``is_lint_command`` on words, reading a wrapper by the program it runs (#920)."""
     head = words[0]
-    if _no_analysis(words):   # swiftlint --fix, phpcs --config-set: no lint run (#926)
+    if _no_analysis(words) or make_runs_no_recipe(words):   # swiftlint --fix, make -n lint (#926, #955)
         return False
     if (head in RUNNERS or head.startswith("./") or head in LINT_PROGRAMS) and _check_target(
             words, LINT_WORDS, LINT_PROGRAMS) or _task_target(words, LINT_WORDS) or ecosystem_lint(words):
@@ -341,7 +342,7 @@ def is_lint_run(text: str) -> bool:
         return is_lint_run(shlex.join(outer))
     # ``type-check`` / ``type_check`` is one word here, not a ``check`` target.
     words = [_TYPE_CHECK.sub("typecheck", w) for w in command_words(text)]
-    if not words or is_info_invocation(text):
+    if not words or is_info_invocation(text) or make_runs_no_recipe(words):
         return False
     if _no_analysis(words):   # swiftlint --fix rewrites, phpstan --generate-baseline (#926)
         return False
@@ -659,6 +660,8 @@ def _toolchain_test(words: list[str]) -> bool | None:
 def _check_verdict(words: list[str]) -> bool | None:
     """Whether a command runs a check: True, False, or None for a target whose recipe is not read."""
     head = words[0]
+    if make_runs_no_recipe(words):   # make -n test, make -i test: exits 0 whatever the recipe does
+        return False
     if (head in RUNNERS or head.startswith("./")) and _check_target(words):
         return True
     if PurePosixPath(head).name in TEST_PROGRAMS:
