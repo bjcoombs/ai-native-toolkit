@@ -146,43 +146,42 @@ body { margin: 0; }
 
   <section>
     <h2>What the report says first</h2>
-    <p>Three lines. If you read nothing else, you know where you are, what it means and what to do.</p>
-    <div class="card summary" aria-label="Example report summary">
-      <div><b>Step 2 of 4:</b> an agent can open pull requests, but a person must review each one.</div>
-      <div><b>Next:</b> make CI run your tests. Then agents can open pull requests nobody has to watch.</div>
-      <div><b>Since last run:</b> 2 actions closed, nothing lost.</div>
+    <p>The report opens with three lines. Read those and you know where you are and what to do next.</p>
+    <div class="card summary" aria-label="Example report headline">
+      <div><b>Step 2</b> · Supervised agent PRs · contracts in place</div>
+      <div><b>Next:</b> Step 3 · Unattended agent PRs unlocks when CI runs the tests</div>
+      <div><b>Practices in place:</b> 4 of 9 measured, 2 verified</div>
     </div>
-    <p class="note">Example wording, for a repository at Step 2.</p>
+    <p class="note">Example for a repository at Step 2. In plain words: an agent can open pull requests, a person reviews each one, and making CI run the tests is the next step up.</p>
   </section>
 
   <section>
     <h2>The one thing to do</h2>
     <div class="card cta">
-      <p><strong>Close the next gate.</strong> The report names exactly one change, with the file and line it found, and why it matters. Everything else in the report is detail you can read later.</p>
+      <p><strong>Close the next gate.</strong> The report names exactly one change, with the evidence it found and why it matters. Everything else in the report is detail you can read later.</p>
     </div>
   </section>
 
   <section>
     <h2>Why gates, not a score</h2>
-    <p>A score rewards collecting practices, and more is not always safer. A gate is the one guarantee that makes the next level of trust safe, so only a gate moves the Step.</p>
+    <p>A score rewards collecting practices, and more is not always safer. A Step needs its gates and enough practices in place, and the gates come first: collecting more practices never lets you skip one.</p>
   </section>
 
   <section>
     <h2>Behind the Step: the evidence</h2>
     <div class="waffle">
       <svg width="120" height="96" viewBox="0 0 120 96" aria-hidden="true">
-        <g>
-          <rect x="0" y="0" width="20" height="20" rx="3" fill="var(--teal)" stroke="var(--amber)" stroke-width="2.5"/>
-          <rect x="26" y="0" width="20" height="20" rx="3" fill="var(--teal-soft)"/>
-          <rect x="0" y="26" width="20" height="20" rx="3" fill="var(--teal)" stroke="var(--amber)" stroke-width="2.5"/>
-          <rect x="26" y="26" width="20" height="20" rx="3" fill="var(--line)"/>
-          <rect x="0" y="52" width="20" height="20" rx="3" fill="var(--line)" stroke="var(--amber)" stroke-width="2.5"/>
-          <rect x="26" y="52" width="20" height="20" rx="3" fill="var(--line)"/>
-          <text x="10" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L1</text>
-          <text x="36" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L2</text>
-        </g>
+        <defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--surface)"/><line x1="0" y1="0" x2="0" y2="5" stroke="var(--muted)" stroke-width="2"/></pattern></defs>
+        <rect x="0" y="0" width="20" height="20" rx="3" fill="var(--teal)"/>
+        <rect x="26" y="0" width="20" height="20" rx="3" fill="var(--teal-soft)"/>
+        <rect x="0" y="26" width="20" height="20" rx="3" fill="var(--teal)" opacity=".6"/>
+        <rect x="26" y="26" width="20" height="20" rx="3" fill="var(--line)"/>
+        <rect x="0" y="52" width="20" height="20" rx="3" fill="var(--line)"/>
+        <rect x="26" y="52" width="20" height="20" rx="3" fill="url(#hatch)" stroke="var(--line)"/>
+        <text x="10" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L1</text>
+        <text x="36" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L2</text>
       </svg>
-      <p>Each row is a practice, such as agent instructions, CI or code review. Each practice has two levels: <b>level 1</b> means it is in place, <b>level 2</b> means it meets the stronger bar. Dark squares are met and proven, pale are met but only declared, grey are not met yet. The <span style="color:var(--amber);font-weight:600">outlined</span> squares are the gates: they decide your Step.</p>
+      <p>One square per condition, one row per practice, such as agent instructions, CI or code review. A practice has two levels, so its row has two squares: <b>level 1</b> means it is in place, <b>level 2</b> means it meets the stronger bar. Dark teal is met and verified by a run, mid teal met and measured from the code, pale teal met but only declared, grey not met yet, hatched not measured.</p>
     </div>
   </section>
 
