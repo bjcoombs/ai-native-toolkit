@@ -60,7 +60,8 @@ so a failing scan degrades to its unavailable marker for that unit alone.
 (the model blocks a unit can read as its own), and per unit its ``path``, ``blocks`` (each
 own reading, projected to the model's signal paths plus the ``available`` and ``reason``
 along them and the ``EMPTY_DENOMINATORS`` counts, so ``lib.levels.resolve_signal`` and the
-tally's reason codes read it as they read the full block) and ``conditions``: every model
+tally's reason codes read it as they read the full block), its ``kind`` from the
+``units`` entry (``package``, ``skill``, ``agents``, ``commands``, #1098) and ``conditions``: every model
 condition id with its ``origin``, ``unit`` when a criterion reads a block in the unit's
 ``blocks``, else ``inherited``. A unit with an override block lacking its own evidence has
 no entry for it. A degraded or absent ``units`` block yields ``available: false``.
@@ -83,6 +84,7 @@ from lib.level_tally import DEFAULT_BLOCKS, default_model
 from lib.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
 from lib.signal_grades import EMPTY_DENOMINATORS
+from lib.unit_components import KINDS, Kind
 
 
 
@@ -119,9 +121,10 @@ class UnitCondition(TypedDict):
 
 
 class UnitReading(TypedDict):
-    """One unit: its own block readings and the origin of each condition."""
+    """One unit: its kind, its own block readings and the origin of each condition."""
 
     path: str
+    kind: Kind  # the units entry's kind (#1098): package, skill, agents or commands
     blocks: dict[str, JsonDict]
     conditions: list[UnitCondition]
 
@@ -523,7 +526,9 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
                 if result is None:
                     continue
             own[block] = project(result, paths.get(block, []))
-        readings.append({"path": rel, "blocks": own, "conditions": _conditions(model, own)})
+        kind = unit.get("kind") if isinstance(unit, Mapping) else None
+        readings.append({"path": rel, "kind": kind if kind in KINDS else "package",
+                         "blocks": own, "conditions": _conditions(model, own)})
     return {"available": True, "unit_count": units.get("unit_count"),
             "unit_count_reason": units.get("unit_count_reason"),
             "unit_blocks": own_blocks, "units": readings}

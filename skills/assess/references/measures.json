@@ -3131,6 +3131,7 @@
           "unit_readings.unit_count_reason": "token",
           "unit_readings.units.conditions.id": "token",
           "unit_readings.units.conditions.origin": "token",
+          "unit_readings.units.kind": "token",
           "unit_readings.units.path": "hashed_path"
         }
       },
