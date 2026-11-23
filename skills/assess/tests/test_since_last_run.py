@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.level_tally import default_model
 from lib.since_last_run import FIRST_RUN, gate_changes, since_last_run
 from test_headline import _commit, _run, ci2  # noqa: F401  (ci2 is a fixture)
