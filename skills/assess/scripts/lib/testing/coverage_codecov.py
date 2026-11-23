@@ -22,8 +22,9 @@ How a status counts toward Layer 6 level 1 (maintainer-approved, #882):
 - The status is server-side: it gates a merge only when branch protection requires it,
   which this read does not see. So a Codecov gate never reads as run by CI:
   ``lib.testing.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
-  (``STATUS_UNCONFIRMED``); a patch status is skipped there too, so it never turns a
-  known false (an unrun ``fail_under``) into null. Codecov statuses alone therefore
+  (``STATUS_UNCONFIRMED``); a patch status and an ``auto`` target are skipped there,
+  since neither holds a floor of 50, so neither turns a known false (an unrun
+  ``fail_under``) into null. Codecov statuses alone therefore
   never make Layer 6 level 1 true or false: a numeric project target reads
   ``status_check_unconfirmed``, an ``auto`` one ``threshold_not_read``, and patch
   statuses alone ``threshold_not_read`` (with ``codecov_patch_only``).

@@ -107,7 +107,8 @@ never false, and `max_threshold_percent` leaves them out (`meets_percent`). When
 null and every counted gate with an unknown percentage is a Codecov one,
 `unmeasured_reason` is `codecov_target_not_read` (one is a project status) or
 `codecov_patch_only` (all are patch; `coverage_codecov.codecov_reason`). A counted Codecov project gate is never run by CI: `coverage_ci.gate_run`
-reads it `status_check_unconfirmed` (null), since the status gates a merge only when
+reads it `status_check_unconfirmed` (null; a patch or `auto` status is skipped in the
+CI-run loop, holding no floor of 50), since the status gates a merge only when
 branch protection requires it. A config with no `coverage.status` section is not read as a
 gate. The manifest `revision` moved to 6.
 Adding a gate form: build the gate with `_gate` and the right

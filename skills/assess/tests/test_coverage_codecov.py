@@ -319,3 +319,18 @@ def test_a_project_status_beside_a_patch_status_and_an_unrun_floor_reads_unconfi
         "codecov.yml": _project("80%") + PATCH_95})
     block = detect_coverage_gate(root)
     assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, STATUS_UNCONFIRMED)
+
+
+def test_an_auto_target_never_nulls_an_unrun_floor(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": UNRUN_FLOOR, "codecov.yml": _project("auto"),
+                             CI: WORKFLOW.replace("pytest --cov --cov-fail-under={n}", "echo hi")})
+    block = detect_coverage_gate(root)
+    assert block["threshold_meets_minimum"] is True
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (False, "not_run_in_ci")
+
+
+def test_a_numeric_project_target_beside_an_unrun_floor_reads_unconfirmed(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": UNRUN_FLOOR, "codecov.yml": _project("80%"),
+                             CI: WORKFLOW.replace("pytest --cov --cov-fail-under={n}", "echo hi")})
+    block = detect_coverage_gate(root)
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, STATUS_UNCONFIRMED)
