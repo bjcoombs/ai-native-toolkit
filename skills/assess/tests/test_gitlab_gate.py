@@ -370,3 +370,56 @@ def test_no_merge_base_is_a_notice_not_an_edit_warning(tmp_path):
     assert out.returncode == 0
     assert "could not compare this change with other (no merge base" in out.stdout
     assert "this change edits" not in out.stdout
+
+
+@needs_bash
+def test_config_only_opt_in_still_reads_the_target_baseline(tmp_path):
+    """The swap does not hang on the input: a config.toml opt-in with the input off
+    still compares with the target, so deleting the baseline cannot pass."""
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    (repo / ".assess").mkdir(exist_ok=True)
+    (repo / ".assess" / "config.toml").write_text("[gate]\nfail_on_gate_loss = true\n", encoding="utf-8")
+    assert _run(repo, tmp_path / "a").returncode == 0
+    _commit_all(repo, "assess baseline")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / ".gitlab-ci.yml").write_text(INCLUDE + CI_NO_TESTS, encoding="utf-8")
+    (repo / ".assess" / "prior-level.json").unlink()
+    _commit_all(repo, "drop the test job and the baseline")
+    out = _run(repo, tmp_path / "b", ASSESS_FAIL_ON_GATE_LOSS="false",
+               CI_MERGE_REQUEST_TARGET_BRANCH_NAME="main")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "FAIL gate lost: ci_runs_tests" in out.stdout
+
+
+@needs_bash
+def test_the_host_base_commit_wins_over_a_fork_controlled_branch(tmp_path):
+    """On a fork's merge request origin/<target> is the author's branch; the base
+    SHA GitLab fixed is read instead."""
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    assert _run(repo, tmp_path / "a").returncode == 0
+    _commit_all(repo, "assess baseline")
+    base = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True,
+                          encoding="utf-8", errors="replace", check=True).stdout.strip()
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / ".gitlab-ci.yml").write_text(INCLUDE + CI_NO_TESTS, encoding="utf-8")
+    (repo / ".assess" / "prior-level.json").unlink()
+    _commit_all(repo, "drop the test job and the baseline")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "feature")  # the fork's own "main"
+    out = _run(repo, tmp_path / "b", CI_MERGE_REQUEST_TARGET_BRANCH_NAME="main",
+               CI_MERGE_REQUEST_DIFF_BASE_SHA=base)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert f"comparing with the gate baseline committed on the target's base commit {base[:12]}" in out.stdout
+    assert "FAIL gate lost: ci_runs_tests" in out.stdout
+
+
+@needs_bash
+@pytest.mark.parametrize("sha", ["not-a-sha", "0" * 40])
+def test_an_unusable_base_sha_falls_back_to_the_branch(tmp_path, sha):
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    _git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    out = subprocess.run(["bash", str(ASSESS / "scripts" / "base_baseline.sh"), str(repo), "main", sha],
+                         capture_output=True, encoding="utf-8", errors="replace")
+    assert out.returncode == 0
+    assert "base commit could not be read, so the gate falls back to the target branch" in out.stdout
+    assert "main has no committed .assess/prior-level.json" in out.stdout

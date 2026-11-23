@@ -98,16 +98,19 @@ runs:
         fi
 
     - name: Compare with the base branch's gate baseline
-      # With fail_on_gate_loss on, a pull request is measured against the
-      # .assess/prior-level.json its base branch committed, never its own copy,
-      # so deleting or re-freezing the baseline cannot switch the check off.
-      # Always exits 0: an unreadable base is a notice, never a red check.
-      if: steps.ensure-uv.outputs.ok == 'true' && inputs.fail_on_gate_loss == 'true' && github.base_ref != ''
+      # A pull request is measured against the .assess/prior-level.json at its
+      # base commit, never its own copy, so deleting or re-freezing the baseline
+      # cannot switch the gate-loss check off. It runs whenever a base is known,
+      # since config.toml can opt in as well as the input; without the opt-in
+      # the baseline only words the summary. Always exits 0: an unreadable base
+      # is a notice, never a red check.
+      if: steps.ensure-uv.outputs.ok == 'true' && github.base_ref != ''
       shell: bash
       env:
         BASE_REF: ${{ github.base_ref }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
       run: |
-        bash "${GITHUB_ACTION_PATH}/skills/assess/scripts/base_baseline.sh" "${GITHUB_WORKSPACE}" "$BASE_REF"
+        bash "${GITHUB_ACTION_PATH}/skills/assess/scripts/base_baseline.sh" "${GITHUB_WORKSPACE}" "$BASE_REF" "$BASE_SHA"
 
     - name: Render the deterministic snapshot
       id: render

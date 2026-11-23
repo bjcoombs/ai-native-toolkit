@@ -149,9 +149,12 @@ def test_fail_on_gate_loss_input_defaults_off_and_reaches_the_gate():
 def test_base_baseline_step_runs_only_with_the_gate_loss_check():
     """A PR is measured against its base branch's committed baseline (#1152)."""
     step = next(s for s in _steps() if "base_baseline.sh" in s.get("run", ""))
-    assert "inputs.fail_on_gate_loss == 'true'" in step["if"]
+    # Not gated on the input: config.toml can opt in too.
+    assert "fail_on_gate_loss" not in step["if"]
     assert "github.base_ref != ''" in step["if"]
     assert step["env"]["BASE_REF"] == "${{ github.base_ref }}"
+    assert step["env"]["BASE_SHA"] == "${{ github.event.pull_request.base.sha }}"
+    assert '"$BASE_REF" "$BASE_SHA"' in step["run"]
     names = [s["name"] for s in _steps()]
     assert names.index(step["name"]) < names.index("Render the deterministic snapshot")
 

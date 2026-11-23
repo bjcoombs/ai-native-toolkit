@@ -23,8 +23,9 @@
 #   ASSESS_GATE_TOKEN         optional token with api scope for the note (PRIVATE-TOKEN);
 #                             without it the note is tried with CI_JOB_TOKEN
 #   CI_API_V4_URL, CI_PROJECT_ID, CI_MERGE_REQUEST_IID, CI_JOB_TOKEN,
-#   CI_MERGE_REQUEST_TARGET_BRANCH_NAME: set by GitLab. With the gate-loss check on,
-#   base_baseline.sh swaps in the target branch's .assess/prior-level.json first.
+#   CI_MERGE_REQUEST_TARGET_BRANCH_NAME, CI_MERGE_REQUEST_DIFF_BASE_SHA: set by GitLab.
+#   In a merge request pipeline, base_baseline.sh first swaps in the target's
+#   .assess/prior-level.json, read at the base commit GitLab fixed.
 #
 # Tests: skills/assess/tests/test_gitlab_gate.py runs this script against a
 # fixture project with stubbed curl.
@@ -115,9 +116,11 @@ main() {
         notice "uv unavailable - skipping the assessment this run (warn-only contract; it runs again on the next push)."
         return 0
     fi
-    if [ "${ASSESS_FAIL_ON_GATE_LOSS:-true}" = "true" ]; then
-        # Measure the change against its target branch's baseline, never its own.
-        bash "$TOOLKIT_ASSESS/scripts/base_baseline.sh" "$PROJECT" "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}"
+    # Measure the change against its target's baseline, never its own, whether the
+    # gate-loss check is on through this input or through config.toml.
+    if [ -n "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+        bash "$TOOLKIT_ASSESS/scripts/base_baseline.sh" "$PROJECT" \
+            "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}" "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}"
     fi
     if ! render; then
         notice "skipped: infrastructure failure rendering the snapshot - not a finding. The gate runs again on the next push."
