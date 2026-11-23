@@ -86,7 +86,7 @@ body { margin: 0; }
   <section>
     <h2>The ladder</h2>
     <p>Every repository sits on one of four Steps. Each Step is a level of trust you can give an agent. Between Steps is a gate: one concrete thing your repository must enforce before the next level of trust is safe.</p>
-    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent PRs, gate: CI turns red on a broken test. Step 3 Unattended agent PRs, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI turns red on a broken test.">
+    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent PRs, gate: CI turns red when a check breaks. Step 3 Unattended agent PRs, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI turns red when a check breaks.">
       <svg viewBox="0 0 640 430" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, system-ui, sans-serif">
         <style>
           .rung { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
@@ -121,7 +121,7 @@ body { margin: 0; }
         <text class="desc" x="100" y="175">Agents open pull requests nobody has to watch.</text>
         <!-- gate 2 to 3, the next one -->
         <path class="arrow-next" d="M120 232 v-30 m-7 9 l7 -9 l7 9"/>
-        <text class="gate-next" x="140" y="223">next gate: CI turns red on a broken test</text>
+        <text class="gate-next" x="140" y="223">next gate: CI turns red when a check breaks</text>
 
         <!-- Step 2, you are here -->
         <rect class="here" x="40" y="238" width="560" height="66" rx="8"/>
@@ -149,7 +149,7 @@ body { margin: 0; }
     <p>Three plain lines, before anything else. Read those and you know where you are and what to do next.</p>
     <div class="card summary" aria-label="Example report summary">
       <div>Step 2 of 4: an agent opens pull requests, a person reviews each one.</div>
-      <div>Next: make CI turn red when a test breaks. Then you reach Step 3: agents open pull requests nobody has to watch.</div>
+      <div>Next: make CI turn red when a check breaks. Then you reach Step 3: agents open pull requests nobody has to watch.</div>
       <div>Since last run: 1 action closed; nothing gained or lost.</div>
     </div>
     <p class="note">Example for a repository at Step 2 that closed one action since its last run. Under these lines the report links the one change to make, then shows what changed since the last run in full and the headline with its catalogue coverage.</p>

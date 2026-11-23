@@ -4,11 +4,11 @@ _Generated <<normalized>>._
 
 [Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step) 2 of 4: an agent opens pull requests, a person reviews each one.
 
-Next: make CI turn red when a test breaks. Then you reach Step 3: agents open pull requests nobody has to watch.
+Next: make CI turn red when a check breaks. Then you reach Step 3: agents open pull requests nobody has to watch.
 
 First run.
 
-**Start here:** [Make CI turn red when a test breaks](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates).
+**Start here:** [Make CI turn red when a check breaks](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates).
 
 _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md) explains [Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step), [gate](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#gate), [practice](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#practice), [level](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#level), [evidence grade](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) and [truth tag](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#truth-tag) in a sentence or two each._
 
@@ -21,7 +21,7 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 **Step 2 · Supervised agent PRs · contracts in place**
 
-Next: Step 3 · Unattended agent PRs unlocks when CI turns red on a broken test
+Next: Step 3 · Unattended agent PRs unlocks when CI turns red when a check breaks
 
 Catalogue coverage: 0 of 3 [measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
@@ -33,7 +33,7 @@ In place: Step 2 of 4, Supervised agent PRs: an agent opens pull requests, a per
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 
-Step 3, Unattended agent PRs, opens when CI turns red on a broken test.
+Step 3, Unattended agent PRs, opens when CI turns red when a check breaks.
 
 ## Evidence behind the Step
 

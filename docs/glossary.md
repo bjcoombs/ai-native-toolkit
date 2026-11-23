@@ -8,7 +8,7 @@ How much an AI agent can safely do in your repository on its own, from Step 1, w
 
 ### Gate
 
-A single check that a Step needs: an instruction file agents read, CI that turns red when a test breaks, or a minimum test coverage that CI enforces. A Step is reached when all of its gates are met, and a gate the run could not check does not count as met yet.
+A single check that a Step needs: an instruction file agents read, CI that turns red when a check breaks, or a minimum test coverage that CI enforces. A Step is reached when all of its gates are met, and a gate the run could not check does not count as met yet.
 
 ### Practice
 

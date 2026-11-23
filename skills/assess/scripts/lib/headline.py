@@ -85,7 +85,7 @@ GLOSSARY_URL = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glo
 # table does not know (a caller's own model) reads "the <id> gate holds".
 GATE_CHANGE = {
     "instructions": "an instruction file an agent reads is committed",
-    "ci_runs_tests": "CI turns red on a broken test",
+    "ci_runs_tests": "CI turns red when a check breaks",
     "coverage_gate": "a coverage gate is enforced",
 }
 
