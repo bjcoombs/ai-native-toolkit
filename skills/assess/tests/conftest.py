@@ -15,6 +15,7 @@ identity, so commits resolve an author/committer with no global config.
 from __future__ import annotations
 
 import datetime as _dt
+import importlib
 import os
 import shutil
 import subprocess
@@ -245,6 +246,22 @@ def pin_fleet_run_date(monkeypatch: pytest.MonkeyPatch, cli: object) -> _dt.date
     day: _dt.date = cli.utc_today()  # type: ignore[attr-defined]
     monkeypatch.setattr(cli, "utc_today", lambda: day)
     return day
+
+
+def use_real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Swap the empty ``lizard`` stub for the installed lizard until ``monkeypatch`` undoes it.
+
+    The treemap loaders (``test_complexity_treemap._load_treemap``, ``test_scope``) leave
+    an empty ``lizard`` module in ``sys.modules`` for the rest of the worker process, and
+    other files depend on that stub persisting. ``lib.headless_layers.lizard_analyzer``
+    reads a stub as "lizard not installed", so a headless ``stats_summary`` built after
+    one of those files reads ``no_lizard``. Which files share an xdist worker depends on
+    timing, which made #1117 look load-dependent.
+    """
+    module = sys.modules.get("lizard")
+    if module is not None and not hasattr(module, "analyze_file"):
+        monkeypatch.delitem(sys.modules, "lizard")
+    importlib.import_module("lizard")
 
 
 @pytest.fixture(autouse=True)
