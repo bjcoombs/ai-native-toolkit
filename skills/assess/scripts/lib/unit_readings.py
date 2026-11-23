@@ -388,7 +388,8 @@ def _root_without(block: str, result: Any, members: Sequence[str],
     if block == "coverage_gate" and isinstance(result.get("gates"), list) and result["gates"]:
         meets = None if result.get("unmeasured_reason") else False
         return {**result, "configured": False, "gates": [], "max_threshold_percent": None,
-                "threshold_meets_minimum": meets, "enforced_meets_minimum": meets}
+                "threshold_meets_minimum": meets, "enforced_meets_minimum": meets,
+                "enforced_basis": "no_gate"}
     return None
 
 

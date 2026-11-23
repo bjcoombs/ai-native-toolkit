@@ -194,6 +194,9 @@ def test_the_root_unit_does_not_own_a_members_coverage_gate(tmp_path: Path) -> N
                   "enforced_meets_minimum": None}
     assert ur._root_without("coverage_gate", unmeasured, ["svc/a"], None)[
         "enforced_meets_minimum"] is None
+    no_gate = ur._root_without("coverage_gate", {**member_gate, "enforced_basis": "ci_run"},
+                               ["svc/a"], None)
+    assert no_gate is not None and no_gate["enforced_basis"] == "no_gate"
     assert ur._root_without("coverage_gate", {**member_gate, "gates": []}, ["svc/a"], None) is None
 
 
