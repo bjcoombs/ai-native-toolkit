@@ -85,7 +85,7 @@ two agent systems it is `unknown`.
 |------|---------|
 | `ROOT` | A ghsync root: `<root>/<path>/<repo>-main` with a sibling `worktree/`, where `<path>` is the repo name (GitHub) or the `path_with_namespace` at any depth (GitLab). |
 | `--from-list FILE` | Scan the repositories listed in FILE instead of discovering them. One entry per line: a `<repo>-main` checkout, its repository directory, a plain git checkout, or (with `ROOT`) a path relative to the root such as `ghsync --porcelain` output. Blank lines and `#` comments are ignored. |
-| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json`, with `--levels` `DIR/level.json`, and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
+| `--out DIR` | Output directory (required). The run writes `DIR/repos.jsonl`, `DIR/groups.jsonl`, `DIR/agent_clusters.json`, `DIR/run.json`, `DIR/fleet-data.json`, `DIR/achievements.json`, with `--levels` `DIR/level.json` and `DIR/condition_effect.json`, and the diagrams (`DIR/report.md`); a `DIR` inside any target is refused. |
 | `--levels FILE` | A maturity model in the `lib/levels.py` TOML format (an invalid maturity model exits 2); its `version` is stamped in `run.json`. Each group row carries every maturity model row's whole level, or `unknown`, and the aggregation rule used. Signal paths: see [group roll-up](references/groups.md#output-groupsjsonl). |
 | `--settings PATH` | Group settings from `ghreport`: a JSON file holding one settings fragment or an array of them, or a directory of fragment files (a `ghreport --render-dir`, whose `settings/` subdirectory is read). Each fragment is `{scope, provider, two_factor, push_rules, default_branch_protection, rulesets}` with every setting `{value, reason}`. A GitHub fragment may also carry an optional `teams` list, `[{slug, parent, repos}]` (`parent` a team slug or null, `repos` repository names), which places repositories in the [units tree](references/fleet-data.md#output-fleet-datajson); `ghreport` writes it on a GitHub org fragment. Unreadable input exits 2. |
 | `--units FILE` | Org units mapping (TOML): declared units and repository placements for the ownership and system views of [`fleet-data.json`](references/fleet-data.md#output-fleet-datajson). It always overrides the inferred tree. An invalid file, or one naming a parent or unit that does not exist, exits 2 before any scan. |
@@ -161,6 +161,7 @@ list file, and pass it with `--from-list`.
 - [`level.json`](references/level.md): per-repository maturity-model levels.
 - [`fleet-data.json`](references/fleet-data.md): units, roll-ups, repositories and opportunities.
 - [`achievements.json`](references/achievements.md): achievements, next steps and the targets file.
+- [`condition_effect.json`](references/condition-effect.md): each condition's estimated effect on agent outcomes.
 - [Database projection](references/publish.md): the artifact database writes, access rules and size guard.
 - [`agent_clusters.json`](references/agent-clusters.md): agent clusters.
 - [`run.json`](references/run.md): the run stamp.

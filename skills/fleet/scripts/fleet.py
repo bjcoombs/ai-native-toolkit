@@ -25,6 +25,9 @@ replays the comparable runs in the history and credits each unit's level-ups, st
 and ``--targets`` hit (firsts only with ``--first-achievements``), with each unit's
 nearest level-up; the
 report opens with them ("What changed and who earned it", ``lib/fleet/fleet_credit.py``).
+With ``--levels``, ``<out>/condition_effect.json`` (``lib/fleet/condition_effect.py``, #1086)
+estimates each condition's effect on the agent-outcome shares across this run and the
+comparable history, with its interval and sample size; informational, it moves nothing.
 
 Target repositories are never written to. With ``--delete-after`` a scanned
 clone is removed once its row is in hand, only when nothing in it would be
@@ -184,6 +187,13 @@ from lib.fleet.fleet_achievements_runs import earlier_runs  # noqa: E402
 from lib.fleet.fleet_credit import credit_section  # noqa: E402
 from lib.fleet.fleet_opportunities_section import opportunities_section  # noqa: E402
 from lib.fleet.fleet_level import write_fleet_levels  # noqa: E402
+from lib.fleet.condition_effect import (  # noqa: E402
+    CONDITION_EFFECT_FILE,
+    HistoryRun as EffectRun,
+    build_condition_effect,
+    history_runs as effect_history,
+    write_condition_effect,
+)
 from lib.measured_appendix import measured_section  # noqa: E402
 from lib.fleet.fleet_data import FLEET_DATA_FILE, FleetData, build_fleet_data, privacy_for, write_fleet_data  # noqa: E402
 from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, load_targets, resolve  # noqa: E402
@@ -507,6 +517,25 @@ def _keep_and_compare(out_dir: Path, entry: Path | None, later: FleetRun,
     return comparison
 
 
+def _condition_effect(out_dir: Path, maturity_model: MaturityModel | None, stamp: FleetStamp,
+                      rows: list[FleetRow], org_dir: Path | None, entry: Path | None) -> None:
+    """``OUT/condition_effect.json`` (lib/fleet/condition_effect.py, #1086): each condition's
+    outcome effect over the comparable history and this run. Only with ``--levels``; a stale
+    copy is removed without it. Never raises: the estimate never fails a completed run."""
+    path = out_dir / CONDITION_EFFECT_FILE
+    try:
+        if maturity_model is None:
+            path.unlink(missing_ok=True)
+            return
+        repos = frozenset(row["repo"] for row in rows)
+        earlier = [] if org_dir is None or entry is None else effect_history(org_dir, stamp, repos)
+        write_condition_effect(out_dir, build_condition_effect(
+            maturity_model, [*earlier, EffectRun(stamp["scan_date"], rows)]))
+    except Exception as e:  # noqa: BLE001 - informational, never fails a completed run
+        path.unlink(missing_ok=True)  # never leave an earlier run's estimate beside this run's results
+        print(f"fleet: {CONDITION_EFFECT_FILE} not written ({type(e).__name__})", file=sys.stderr)
+
+
 def _trend_history(org_dir: Path | None, entry: Path | None, stamp: FleetStamp,
                    groups: list[GroupRow], rows: list[FleetRow],
                    maturity_model: MaturityModel | None = None) -> list[TrendRun] | None:
@@ -779,6 +808,7 @@ def main(argv: list[str] | None = None) -> int:
     write_stamp(out_dir, stamp)
     write_fleet_levels(out_dir, public, maturity_model, toolkit_commit=stamp["toolkit_commit"],
                        plugin_version=stamp["plugin_version"])
+    _condition_effect(out_dir, maturity_model, stamp, public, org_dir, entry)
     data = _write_fleet_data(out_dir, stamp, rows, maturity_model, trees, args.full, hash_salt, units, codeowners,
                              {repo: f.web_url for repo, f in facts.items()})
     comparison = _keep_and_compare(out_dir, entry, FleetRun(stamp, public, groups, row_signals(data)), earlier)
