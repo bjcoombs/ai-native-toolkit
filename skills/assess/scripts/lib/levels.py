@@ -94,7 +94,8 @@ Two optional additions feed the verified tally and the Steps (``lib/level_tally.
 - ``[[steps]]``: the autonomy Steps, numbered 1..K. Each has a ``name`` and
   ``gates``, each ``{ id, row, level }``: the gate holds when that row's
   conditions up to ``level`` are met. Step 1 has no gates; each later Step keeps
-  every gate of the one below (gates accumulate). A Step needs its gates and
+  every gate of the one below (gates accumulate) and adds at least one, since gates
+  are all that tell two Steps apart. A Step needs its gates and
   nothing else, so adding a condition to the model never moves a Step (#1083).
   The ``threshold`` key of earlier models (a count of met conditions) is refused at
   load with a message naming its removal, never silently ignored.
@@ -544,6 +545,9 @@ def _parse_steps(raw: Any, rows: list[Row]) -> list[StepDef]:
             missing = [g["id"] for g in below["gates"] if g not in step["gates"]]
             if missing:
                 raise LevelsError(f"{where}: gates accumulate; missing {', '.join(missing)} from step {number - 1}")
+            if len(step["gates"]) == len(below["gates"]):
+                raise LevelsError(f"{where}: step {number} adds no gate over step {number - 1}, "
+                                  "so it is always held with it (Steps read gates only, #1083)")
         ids = [g["id"] for g in step["gates"]]
         if len(set(ids)) != len(ids):
             raise LevelsError(f"{where}: duplicate gate id")
