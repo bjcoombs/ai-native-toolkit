@@ -1,4 +1,4 @@
-"""Tests for lib/agent_environment.py: the agent working-environment block (#514).
+"""Tests for lib/agents/agent_environment.py: the agent working-environment block (#514).
 
 Fixture repositories are built in tmp_path and committed, because the scan reads
 the files at HEAD. GitHub is faked with a `gh` shell script first on PATH (the
@@ -20,7 +20,7 @@ from conftest import skip_without_posix_shell
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.agent_environment import (  # noqa: E402
+from lib.agents.agent_environment import (  # noqa: E402
     COPILOT_PATH,
     check_copilot_setup,
     ci_duration,

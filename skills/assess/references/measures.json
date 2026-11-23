@@ -4927,6 +4927,37 @@
       ],
       "network": false,
       "private": false
+    },
+    {
+      "name": "unit_levels",
+      "title": "Monorepo unit Steps",
+      "publishes": [
+        "unit_levels"
+      ],
+      "reads": [
+        "unit_readings",
+        "agent_consistency",
+        "agent_environment",
+        "agent_ops",
+        "ci_checks",
+        "coverage_gate",
+        "doc_staleness",
+        "guardrails",
+        "instruction_claims",
+        "layer_grades",
+        "nested_instructions",
+        "observability",
+        "promissory_markers",
+        "review_evidence",
+        "review_reality",
+        "stats_summary",
+        "structure",
+        "structure_drift",
+        "test_pressure",
+        "owner_exclusions"
+      ],
+      "network": false,
+      "private": false
     }
   ],
   "signals": [

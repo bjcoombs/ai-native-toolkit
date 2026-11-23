@@ -87,11 +87,11 @@ from typing import Any
 import lib.manifest.check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
-from lib.agent_building import scan_agent_building
+from lib.agents.agent_building import scan_agent_building
 from lib.agent_consistency import scan_agent_consistency
-from lib.agent_environment import scan_agent_environment
-from lib.agent_harness import scan_agent_harness
-from lib.agent_ops import scan_agent_ops
+from lib.agents.agent_environment import scan_agent_environment
+from lib.agents.agent_harness import scan_agent_harness
+from lib.agents.agent_ops import scan_agent_ops
 from lib.ai_usage import scan_ai_usage
 from lib.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config
@@ -116,6 +116,7 @@ from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 from lib.manifest.check_manifest import core_manifest
+from lib.unit_levels import READS as UNIT_LEVEL_READS
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
 from lib.unit_readings import bind as bind_unit_pass
@@ -650,6 +651,9 @@ SCANS = (*SCANS, _spec("headline", cs.headline))
 # core_scans.unit_readings splits its arguments by position, so the manifest reads are pinned.
 SCANS = (*SCANS, pinned_reads(_spec("unit_readings", cs.unit_readings),
                               (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS)))
+# Each unit's Step and tally (lib/unit_levels.py, #864): the level engine over the run
+# context with each unit's own readings in place. Core-only; reads pinned by position.
+SCANS = (*SCANS, pinned_reads(_spec("unit_levels", cs.unit_levels), UNIT_LEVEL_READS))
 
 validate(SCANS)
 

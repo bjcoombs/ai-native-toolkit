@@ -7,15 +7,15 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from lib import agent_manifests as m
-from lib.agent_building import (
+import lib.agents.agent_manifests as m
+from lib.agents.agent_building import (
     CLASSES,
     AgentBuildingBlock,
     classify,
     is_test_path,
     scan_agent_building,
 )
-from lib.agent_building_vocab import (
+from lib.agents.agent_building_vocab import (
     CHANGE_API_PATTERNS,
     CI_AGENT_PATTERNS,
     ENDPOINT_PATTERNS,
@@ -271,7 +271,7 @@ def test_same_host_calls_in_test_files_are_not_the_pairing(tmp_path: Path) -> No
 
 
 def test_the_docstring_lists_every_excluded_test_directory() -> None:
-    import lib.agent_building as ab
+    import lib.agents.agent_building as ab
     doc = ab.__doc__ or ""
     assert [d for d in sorted(ab._TEST_DIRS) if f"``{d}``" not in doc] == []
 
@@ -311,7 +311,7 @@ def test_test_files_vendored_and_untracked_files_are_not_evidence(tmp_path: Path
 
 
 def test_source_file_cap_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lib.agent_building.MAX_SOURCE_FILES", 1)
+    monkeypatch.setattr("lib.agents.agent_building.MAX_SOURCE_FILES", 1)
     block = scan_agent_building(_repo(tmp_path, "cap", {"a.py": "x=1\n", "b.py": "y=2\n"}))
     assert block["source_files_read"] == 1
     assert block["source_files_capped"] is True
@@ -333,7 +333,9 @@ def test_symlinked_config_is_not_credited(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("module", [
-    "agent_building.py", "agent_building_vocab.py", "agent_manifests.py",
+    pytest.param("agents/agent_building.py", id="agent_building.py"),
+    pytest.param("agents/agent_building_vocab.py", id="agent_building_vocab.py"),
+    pytest.param("agents/agent_manifests.py", id="agent_manifests.py"),
     pytest.param("fleet/fleet_agent_building.py", id="fleet_agent_building.py")])
 def test_the_scan_never_matches_its_own_source(module: str) -> None:
     text = (Path(__file__).resolve().parents[1] / "scripts" / "lib" / module).read_text(encoding="utf-8")

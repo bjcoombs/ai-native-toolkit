@@ -21,7 +21,7 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 import pytest
 
 from lib import block_shapes as bs
-from lib.agent_ops import scan_agent_ops
+from lib.agents.agent_ops import scan_agent_ops
 from lib.context_blocks import _structure_drift_block
 from lib.counts_only_schema import ROOTS
 from lib.counts_only import HASH_PREFIX, counts_only

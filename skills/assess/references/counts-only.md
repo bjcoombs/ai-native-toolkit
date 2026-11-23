@@ -811,6 +811,27 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_readings.units.conditions.id` | token |
 | `unit_readings.units.conditions.origin` | token |
 
+## unit_levels
+
+| Field | Kept as |
+|---|---|
+| `unit_levels.unit_count_reason` | token |
+| `unit_levels.levels_version` | token |
+| `unit_levels.units.path` | dropped |
+| `unit_levels.units.inherited` | token |
+| `unit_levels.units.conditions.id` | token |
+| `unit_levels.units.conditions.state` | token |
+| `unit_levels.units.conditions.origin` | token |
+| `unit_levels.units.conditions.reason` | token |
+| `unit_levels.units.conditions.why` | dropped |
+| `unit_levels.units.next_step.blockers.kind` | token |
+| `unit_levels.units.next_step.blockers.gate` | token |
+| `unit_levels.units.next_step.blockers.condition` | token |
+| `unit_levels.units.next_step.blockers.state` | token |
+| `unit_levels.units.next_step.blockers.reason` | token |
+| `unit_levels.units.next_step.blockers.disposition` | token |
+| `unit_levels.units.next_step.blockers.exclusion_kind` | token |
+
 ## fleet-data.json (the fleet skill)
 
 Patterns from the top of `fleet-data.json`, not of a run-context. A

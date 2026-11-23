@@ -157,6 +157,11 @@ as a script gets a `runpy` `__main__` branch. A shim cannot be run by path, beca
 run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the moved file
 (`python scripts/lib/<pkg>/<stem>.py`) instead. New code imports the new path.
 
+- **`agents/`**: what a repository builds with agents and how an agent runs in it, the
+  Layer 8 inputs. `agent_identity` is shared core, and `agent_consistency`, `agent_systems`
+  and `agent_instructions_grader` wait for the `instructions` group, so all four stay at the
+  root. Files: `__init__.py`, `agent_building.py`, `agent_building_vocab.py`,
+  `agent_environment.py`, `agent_harness.py`, `agent_manifests.py`, `agent_ops.py`.
 - **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
   diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
   name; until 4.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
