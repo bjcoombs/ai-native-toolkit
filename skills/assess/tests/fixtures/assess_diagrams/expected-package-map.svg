@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 478" width="680" height="478" role="img">
 <title>Packages and their imports</title>
-<desc>In place: an import graph of 6 packages with 102 cross-package imports, 89 of them through a front door. Each row imports from the columns it shades, darker for more imports; a dashed outline marks imports that reach past the target package&#x27;s front door.</desc>
+<desc>In place: an import graph of 6 packages with 102 cross-package imports, 89 of them through a front door. Each row imports from the columns it shades, darker for more imports; a corner mark flags imports that reach past the target package&#x27;s front door.</desc>
 <style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }.t-bg,.f-bg{fill:#ffffff}.s-bg{stroke:#ffffff}.t-fg,.f-fg{fill:#1d2321}.s-fg{stroke:#1d2321}.t-muted,.f-muted{fill:#5d6763}.s-muted{stroke:#5d6763}.t-rule,.f-rule{fill:#d9dedb}.s-rule{stroke:#d9dedb}.t-accent,.f-accent{fill:#1f6f6b}.s-accent{stroke:#1f6f6b}.t-bad,.f-bad{fill:#b33a2e}.s-bad{stroke:#b33a2e}.t-warn,.f-warn{fill:#b7791f}.s-warn{stroke:#b7791f}.t-unk,.f-unk{fill:#9aa39f}.s-unk{stroke:#9aa39f}@media (prefers-color-scheme: dark){.t-bg,.f-bg{fill:#1a201e}.s-bg{stroke:#1a201e}.t-fg,.f-fg{fill:#e6ebe8}.s-fg{stroke:#e6ebe8}.t-muted,.f-muted{fill:#9aa5a0}.s-muted{stroke:#9aa5a0}.t-rule,.f-rule{fill:#2c3532}.s-rule{stroke:#2c3532}.t-accent,.f-accent{fill:#5fb8b1}.s-accent{stroke:#5fb8b1}.t-bad,.f-bad{fill:#ec7a6c}.s-bad{stroke:#ec7a6c}.t-warn,.f-warn{fill:#e0a84a}.s-warn{stroke:#e0a84a}.t-unk,.f-unk{fill:#5f6a66}.s-unk{stroke:#5f6a66}}</style>
 <defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
 <rect x="0" y="0" width="680" height="478" class="f-bg"/>
@@ -19,7 +19,7 @@
 <rect x="313.0" y="92.0" width="18.0" height="18.0" class="f-rule" data-cell="self"><title>app: imports inside one package are not drawn</title></rect>
 <rect x="333.0" y="92.0" width="18.0" height="18.0" fill="#41ab5d" class="s-rule" stroke-width="1" data-cell="imports" data-imports="12" data-bypass="0"><title>app to services/billing/internal/ledger&lt;&amp;&gt;core: 12 imports</title></rect>
 <rect x="353.0" y="92.0" width="18.0" height="18.0" fill="#004529" class="s-rule" stroke-width="1" data-cell="imports" data-imports="70" data-bypass="3"><title>app to lib: 70 imports, 3 past the front door</title></rect>
-<rect x="354.5" y="93.5" width="15.0" height="15.0" fill="none" class="s-warn" stroke-width="2" stroke-dasharray="3 2" data-mark="bypass"/>
+<polygon points="363.0,92.0 371.0,92.0 371.0,100.0" class="f-fg s-bg" stroke-width="1.5" data-mark="bypass"/>
 <rect x="373.0" y="92.0" width="18.0" height="18.0" class="f-bg s-rule" stroke-width="1" data-cell="none"><title>app to web: no imports</title></rect>
 <rect x="393.0" y="92.0" width="18.0" height="18.0" class="f-bg s-rule" stroke-width="1" data-cell="none"><title>app to cli: no imports</title></rect>
 <rect x="413.0" y="92.0" width="18.0" height="18.0" class="f-bg s-rule" stroke-width="1" data-cell="none"><title>app to tools: no imports</title></rect>
@@ -42,10 +42,10 @@
 <text x="235.0" y="165.0" font-size="11.5" text-anchor="end" class="t-fg"> 4 web</text>
 <rect x="245.0" y="156.0" width="12.0" height="10.0" class="f-accent" data-loc="900"><title>web: 900 lines of code</title></rect>
 <rect x="313.0" y="152.0" width="18.0" height="18.0" fill="#41ab5d" class="s-rule" stroke-width="1" data-cell="imports" data-imports="9" data-bypass="9"><title>web to app: 9 imports, 9 past the front door</title></rect>
-<rect x="314.5" y="153.5" width="15.0" height="15.0" fill="none" class="s-warn" stroke-width="2" stroke-dasharray="3 2" data-mark="bypass"/>
+<polygon points="323.0,152.0 331.0,152.0 331.0,160.0" class="f-fg s-bg" stroke-width="1.5" data-mark="bypass"/>
 <rect x="333.0" y="152.0" width="18.0" height="18.0" class="f-bg s-rule" stroke-width="1" data-cell="none"><title>web to services/billing/internal/ledger&lt;&amp;&gt;core: no imports</title></rect>
 <rect x="353.0" y="152.0" width="18.0" height="18.0" fill="#addd8e" class="s-rule" stroke-width="1" data-cell="imports" data-imports="3" data-bypass="1"><title>web to lib: 3 imports, 1 past the front door</title></rect>
-<rect x="354.5" y="153.5" width="15.0" height="15.0" fill="none" class="s-warn" stroke-width="2" stroke-dasharray="3 2" data-mark="bypass"/>
+<polygon points="363.0,152.0 371.0,152.0 371.0,160.0" class="f-fg s-bg" stroke-width="1.5" data-mark="bypass"/>
 <rect x="373.0" y="152.0" width="18.0" height="18.0" class="f-rule" data-cell="self"><title>web: imports inside one package are not drawn</title></rect>
 <rect x="393.0" y="152.0" width="18.0" height="18.0" class="f-bg s-rule" stroke-width="1" data-cell="none"><title>web to cli: no imports</title></rect>
 <rect x="413.0" y="152.0" width="18.0" height="18.0" class="f-bg s-rule" stroke-width="1" data-cell="none"><title>web to tools: no imports</title></rect>
@@ -77,11 +77,12 @@
 <text x="38.0" y="319.0" font-size="12" text-anchor="start" class="t-fg">64 or more imports</text>
 <rect x="16.0" y="328.0" width="14.0" height="14.0" class="f-bg s-rule" stroke-width="1"/>
 <text x="38.0" y="339.0" font-size="12" text-anchor="start" class="t-fg">No imports</text>
-<rect x="16.0" y="348.0" width="14.0" height="14.0" fill="none" class="s-warn" stroke-width="2" stroke-dasharray="3 2"/>
-<text x="38.0" y="359.0" font-size="12" text-anchor="start" class="t-fg">Some imports bypass the front door</text>
+<rect x="16.0" y="348.0" width="14.0" height="14.0" fill="#41ab5d" class="s-rule" stroke-width="1"/>
+<polygon points="22.0,348.0 30.0,348.0 30.0,356.0" class="f-fg s-bg" stroke-width="1.5"/>
+<text x="38.0" y="359.0" font-size="12" text-anchor="start" class="t-fg">Corner mark: some imports bypass the front door</text>
 <text x="16.0" y="388.0" font-size="11.5" text-anchor="start" class="t-muted">Drawn: the 6 packages with the most lines of code. 102 of 102 cross-package imports are</text>
 <text x="16.0" y="404.0" font-size="11.5" text-anchor="start" class="t-muted">between them.</text>
 <text x="16.0" y="420.0" font-size="11.5" text-anchor="start" class="t-muted">Front-door bypasses: 13 of 13 are between the drawn packages.</text>
-<text x="16.0" y="444.0" font-size="12" text-anchor="start" class="t-fg">Each row imports from the columns it shades, darker for more imports; a dashed outline marks</text>
+<text x="16.0" y="444.0" font-size="12" text-anchor="start" class="t-fg">Each row imports from the columns it shades, darker for more imports; a corner mark flags</text>
 <text x="16.0" y="462.0" font-size="12" text-anchor="start" class="t-fg">imports that reach past the target package's front door.</text>
 </svg>

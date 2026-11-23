@@ -4,15 +4,18 @@
 (``lib/run_context_types_diagrams.py``): ``package-map.svg``, or the one-line reason it was
 not drawn; it never raises. ``lib/assess_diagrams_review.py`` puts it in ``build_all`` (after
 the evidence waffle), ``ALL_FILES`` and, as ``package-map.counts-only.svg``, in
-``counts_only_diagrams``, so a counts-only run draws it from the hashed document with hashed
-labels.
+``counts_only_diagrams``, so a counts-only run draws it from the counts-only document. Its
+labels are hashed only under ``--hash-paths`` or ``--hash-salt``; under ``--counts-only``
+alone package ids are path class and stay in clear, as in ``run-context.counts-only.json``.
 
 The map is an adjacency matrix of the first ``TOP`` packages of ``structure.packages`` (the
 block's order: most lines of code first). Row ``i`` imports from column ``j``; a cell's shade
 is the number of import edges from the row's package into the column's (``shade_step``: one
-ramp step per power of two, never the near-white first step), and a dashed warn-coloured
-outline marks a cell whose imports include a front-door bypass (``bypass``). Hatch means
-unknown here as in every diagram, so the bypass mark is an outline, never a hatch. Each row
+ramp step per power of two, never the near-white first step), and a corner notch marks a
+cell whose imports include a front-door bypass (``notch``). The ramp fills are fixed colours,
+so the notch is drawn in the themed foreground with a themed background edge and reads on
+every step in both colour schemes. Hatch means unknown here as in every diagram, so the
+bypass mark is never a hatch. Each row
 carries a bar of its package's lines of code. A cell between two drawn packages with no
 recorded pair is empty (no imports), unless ``structure.package_edges`` was capped
 (``package_edge_count`` above the list's length): the pair may then be one the block did not
@@ -56,6 +59,7 @@ LABEL_CHARS = 28
 BAR_W = 56.0
 MIN_W = 680.0
 HEAD_H = 92.0
+NOTCH = 8.0
 
 
 def _plural(n: int, one: str, many: str | None = None) -> str:
@@ -135,8 +139,8 @@ def notes(view: PackageView) -> list[str]:
 
 def package_caption() -> str:
     """The one-line caption: what to take from the package map."""
-    return ("Each row imports from the columns it shades, darker for more imports; a dashed "
-            "outline marks imports that reach past the target package's front door.")
+    return ("Each row imports from the columns it shades, darker for more imports; a corner "
+            "mark flags imports that reach past the target package's front door.")
 
 
 def package_in_place(view: PackageView) -> str:
@@ -161,10 +165,17 @@ def _cell(x: float, y: float, row: str, col: str, view: PackageView, tip: str) -
     parts = [f'<rect {box} fill="{svg.LEVEL_RAMP[step]}" class="s-rule" stroke-width="1" '
              f'data-cell="imports" data-imports="{imports}" data-bypass="{bypass}">{hover}</rect>']
     if bypass:
-        parts.append(f'<rect x="{x + 1.5:.1f}" y="{y + 1.5:.1f}" width="{CELL - 3:.1f}" '
-                     f'height="{CELL - 3:.1f}" fill="none" class="s-warn" stroke-width="2" '
-                     'stroke-dasharray="3 2" data-mark="bypass"/>')
+        parts.append(notch(x + CELL, y, mark=True))
     return parts
+
+
+def notch(right: float, top: float, mark: bool = False) -> str:
+    """The bypass mark: a corner triangle in the themed foreground with a themed background
+    edge, so it reads on every ramp step in both colour schemes (the fill is not themed)."""
+    size = NOTCH
+    tag = ' data-mark="bypass"' if mark else ""
+    return (f'<polygon points="{right - size:.1f},{top:.1f} {right:.1f},{top:.1f} '
+            f'{right:.1f},{top + size:.1f}" class="f-fg s-bg" stroke-width="1.5"{tag}/>')
 
 
 def _tip(row: str, col: str, view: PackageView) -> str:
@@ -180,22 +191,28 @@ def _tip(row: str, col: str, view: PackageView) -> str:
 
 
 def _key(x: float, y: float, steps: Sequence[int], unknown: bool) -> tuple[list[str], float]:
-    swatch = 'x="{x:.1f}" y="{y:.1f}" width="14.0" height="14.0"'
-    entries: list[tuple[str, str]] = [
-        (f'<rect {swatch} fill="{svg.LEVEL_RAMP[s]}" class="s-rule" stroke-width="1"/>',
-         f"{_bucket(s)} {'import' if _bucket(s) == '1' else 'imports'}") for s in steps]
+    """Swatches with labels, one per line; each swatch is a function of its top edge."""
+    def box(at: float, paint: str) -> str:
+        return f'<rect x="{x:.1f}" y="{at:.1f}" width="14.0" height="14.0" {paint}/>'
+
+    entries: list[tuple[list[str], str]] = []
+    for s in steps:
+        entries.append(([f'fill="{svg.LEVEL_RAMP[s]}" class="s-rule" stroke-width="1"'],
+                        f"{_bucket(s)} {'import' if _bucket(s) == '1' else 'imports'}"))
     if not unknown:  # with the pair cap applied no empty cell is drawn
-        entries.append((f'<rect {swatch} class="f-bg s-rule" stroke-width="1"/>', "No imports"))
-    entries.append((f'<rect {swatch} fill="none" class="s-warn" stroke-width="2" '
-                    'stroke-dasharray="3 2"/>', "Some imports bypass the front door"))
+        entries.append((['class="f-bg s-rule" stroke-width="1"'], "No imports"))
+    entries.append(([f'fill="{svg.LEVEL_RAMP[5]}" class="s-rule" stroke-width="1"', "notch"],
+                    "Corner mark: some imports bypass the front door"))
     if unknown:
-        entries.append((f'<rect {swatch} fill="{svg.HATCH_FILL}" class="s-rule" stroke-width="1"/>',
+        entries.append(([f'fill="{svg.HATCH_FILL}" class="s-rule" stroke-width="1"'],
                         "Not recorded: the busiest-pairs limit applied"))
     parts: list[str] = []
-    for index, (paint, label) in enumerate(entries):
-        at = y + index * LINE_H
-        parts.append(paint.format(x=x, y=at + 2))
-        parts.append(svg.text(x + 22, at + 13, label, size=12, cls="fg"))
+    for index, (paints, label) in enumerate(entries):
+        at = y + index * LINE_H + 2
+        parts.append(box(at, paints[0]))
+        if "notch" in paints:
+            parts.append(notch(x + 14, at))
+        parts.append(svg.text(x + 22, at + 11, label, size=12, cls="fg"))
     return parts, len(entries) * LINE_H
 
 

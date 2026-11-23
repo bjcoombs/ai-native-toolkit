@@ -10,8 +10,9 @@ removed. ``run_publish.publish_run``, ``assess_core.run_opt_in_mutation`` and
 two and the package map from the counts-only document (``counts_only_diagrams``) as
 ``package-map.counts-only.svg``, ``doc-drift.counts-only.svg`` and
 ``review-strip.counts-only.svg`` (``COUNTS_ONLY_FILES``) beside
-``run-context.counts-only.json``, so a hashed run has pictures with hashed labels while the
-full-text ones beside the report stay as they are.
+``run-context.counts-only.json``, so a hashed run (``--hash-paths`` or ``--hash-salt``) has
+pictures with hashed labels while the full-text ones beside the report stay as they are;
+under ``--counts-only`` alone their path-class labels stay in clear, as in the JSON.
 The report section is ``assess_diagrams.diagrams_section``, one ``## `` section per diagram.
 
 Diagrams:

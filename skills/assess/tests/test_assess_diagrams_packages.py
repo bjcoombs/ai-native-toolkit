@@ -18,6 +18,7 @@ import pytest
 
 from assess_diagrams_packages_fixture import FIXTURES, LARGE, SMALL, goldens
 from lib import assess_diagrams_packages as pm
+from lib import fleet_svg as svg
 from lib.assess_diagrams import diagrams_section
 from lib.counts_only import HASH_PREFIX, counts_only
 from lib.structure_graph import analyze_structure
@@ -32,6 +33,11 @@ GOLDEN_REPO = Path(__file__).resolve().parent / "fixtures" / "structure_golden" 
 def _rects(content: str, attr: str) -> list[ET.Element]:
     root = ET.fromstring(content.encode("utf-8"))
     return [r for r in root.iter(f"{SVG_NS}rect") if attr in r.attrib]
+
+
+def _marks(content: str) -> list[ET.Element]:
+    root = ET.fromstring(content.encode("utf-8"))
+    return [e for e in root.iter() if e.attrib.get("data-mark") == "bypass"]
 
 
 def _cells(content: str, kind: str) -> list[ET.Element]:
@@ -69,7 +75,7 @@ def test_shaded_cells_and_bypass_marks_equal_the_recorded_pairs(block: dict[str,
     assert len(shaded) == len(expected)
     assert sum(int(c.attrib["data-imports"]) for c in shaded) == view["drawn_imports"]
     bypassing = [c for c in shaded if int(c.attrib["data-bypass"]) > 0]
-    assert len(_rects(content, "data-mark")) == len(bypassing) == sum(1 for v in expected.values() if v[1])
+    assert len(_marks(content)) == len(bypassing) == sum(1 for v in expected.values() if v[1])
     assert sum(int(c.attrib["data-bypass"]) for c in shaded) == view["drawn_bypass"]
 
 
@@ -159,7 +165,7 @@ def test_hashed_labels_join_and_the_matrix_is_unchanged() -> None:
     plain, counted = pm.render_package_map(SMALL), pm.render_package_map(hashed)
     assert [c.attrib["data-imports"] for c in _cells(counted, "imports")] == \
         [c.attrib["data-imports"] for c in _cells(plain, "imports")]
-    assert len(_rects(counted, "data-mark")) == len(_rects(plain, "data-mark"))
+    assert len(_marks(counted)) == len(_marks(plain))
     assert HASH_PREFIX in counted
     for package in SMALL["packages"]:
         for part in package["id"].split("/"):
@@ -178,3 +184,27 @@ def test_a_counts_only_run_writes_a_hashed_package_map(tmp_path: Path) -> None:
     assert names and all(name in full for name in names)
     assert not any(re.search(rf"\b{re.escape(name)}\b", _prose(hashed)) for name in names)
     assert len(_cells(hashed, "imports")) == len(_cells(full, "imports"))
+
+
+def _luminance(colour: str) -> float:
+    channels = [int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(a: str, b: str) -> float:
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_the_bypass_mark_is_themed_and_reads_on_every_ramp_step_in_both_schemes() -> None:
+    """The ramp fills are fixed colours, so the mark is drawn in the themed foreground with a
+    themed background edge: on every step one of the two clears the 3:1 non-text minimum."""
+    marks = _marks(pm.render_package_map(SMALL))
+    assert marks and all(m.tag == f"{SVG_NS}polygon" and m.attrib["class"] == "f-fg s-bg" for m in marks)
+    assert all("fill" not in m.attrib for m in marks)
+    for scheme in (0, 1):
+        fg, bg = svg.THEME["fg"][scheme], svg.THEME["bg"][scheme]
+        for step in range(2, svg.TOP_STEP + 1):
+            fill = svg.LEVEL_RAMP[step]
+            assert max(_contrast(fg, fill), _contrast(bg, fill)) >= 3.0, (scheme, step)
