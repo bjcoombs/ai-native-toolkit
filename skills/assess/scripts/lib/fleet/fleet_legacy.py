@@ -17,7 +17,8 @@ The old names below are the only place the fleet readers still accept them.
 A stamp key added later with a default that is not None goes in
 ``STAMP_DEFAULTS``: ``stamp_value`` reads it so for a stamp written before
 it, so an earlier run still matches and compares. ``platform`` (#714) reads as
-``False`` in a stamp written before ``--platform`` existed (a key that defaults
+``False`` in a stamp written before ``--platform`` existed, and ``managed_settings`` (#1153)
+before ``--managed-settings`` did (a key that defaults
 to None, such as ``fleet_config_sha256``, needs no entry: ``.get`` gives None).
 
 Reads fleet output written before the 2.0.0 maturity-model rename (issue #670). `upgrade`
@@ -29,7 +30,7 @@ entries) call it. A pre-rename run then loads, matches as a same-day or baseline
 entry, and counts in the trend history; `--compare` judges it by the usual rules, so a run
 from another plugin major (every 1.x run seen from 2.x) is refused for that reason alone,
 never as a malformed stamp. `stamp_value(stamp, key)` reads a stamp key added later with a
-non-null default (`STAMP_DEFAULTS`: `platform` is false before #714); every comparability
+non-null default (`STAMP_DEFAULTS`: `platform` is false before #714, `managed_settings` before #1153); every comparability
 check (`fleet_compare.comparability`, `fleet_history.entry_conflict`, `fleet_trends`)
 reads its keys through it on both sides. `FLEET_STAMP_VERSION` and `FLEET_GROUP_VERSION`
 stay at 1 for this reason: their readers reject any other version. Tests:
@@ -60,7 +61,7 @@ def upgrade(data: dict[str, Any]) -> dict[str, Any]:
 
 
 # Stamp key -> the value a stamp written before the key existed means.
-STAMP_DEFAULTS: Mapping[str, Any] = {"platform": False}
+STAMP_DEFAULTS: Mapping[str, Any] = {"platform": False, "managed_settings": False}
 
 
 def stamp_value(stamp: Mapping[str, Any], key: str) -> Any:

@@ -46,6 +46,15 @@ def test_a_source_that_cannot_be_read_reads_unreadable(tmp_path, monkeypatch, te
     assert ms.managed_permissions(block) is False
 
 
+def test_a_directory_named_like_json_in_the_drop_in_is_skipped(tmp_path, monkeypatch) -> None:
+    directory = _point(monkeypatch, tmp_path)
+    (directory / "managed-settings.json").write_text(json.dumps(DENY), encoding="utf-8")
+    (directory / "managed-settings.d" / "old.json").mkdir(parents=True)
+    block = ms.read_managed_settings()
+    assert block["state"] == "found"
+    assert [s["kind"] for s in block["sources"]] == ["file"]
+
+
 def test_an_unreadable_source_beside_a_rule_still_credits(tmp_path, monkeypatch) -> None:
     directory = _point(monkeypatch, tmp_path)
     (directory / "managed-settings.json").write_text(json.dumps(DENY), encoding="utf-8")

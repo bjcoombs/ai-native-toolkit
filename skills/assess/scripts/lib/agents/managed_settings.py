@@ -114,7 +114,8 @@ def _file_sources(directory: Path) -> list[ManagedSource]:
         out.append(_source("file", None if data is _UNREAD else data))
     drop_in = directory / _DROP_IN
     try:
-        names = sorted(p for p in drop_in.iterdir() if p.suffix == ".json") if drop_in.is_dir() else []
+        names = (sorted(p for p in drop_in.iterdir() if p.suffix == ".json" and p.is_file())
+                 if drop_in.is_dir() else [])
     except OSError:
         return [*out, _source("drop_in", None)]
     for path in names:
