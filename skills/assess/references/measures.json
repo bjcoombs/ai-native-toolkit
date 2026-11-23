@@ -1684,7 +1684,7 @@
     {
       "name": "units",
       "title": "Monorepo units",
-      "summary": "The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.",
+      "summary": "The repository's units: each skill folder (a SKILL.md) and a plugin's agents/ and commands/, then the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.",
       "collector": "core.units",
       "reads": [
         "repo_root",
@@ -1703,6 +1703,7 @@
           "units.source": "token",
           "units.unit_count_reason": "token",
           "units.units.ecosystem": "token",
+          "units.units.kind": "token",
           "units.units.name": "drop",
           "units.units.origin": "token",
           "units.units.path": "hashed_path",
