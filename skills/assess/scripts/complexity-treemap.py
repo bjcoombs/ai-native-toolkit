@@ -95,6 +95,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from lib.assess_config import resolve_excludes
 from lib.class_sizes import loc_by_class
+from lib.plugin_version import read_version
 from lib.complexity.dart_complexity import BACKEND_NAME as DART_BACKEND, dart_function_scores
 from lib.complexity.generated_files import GENERATED_NAME_PATTERNS, generated_reason
 from lib.git_churn import churn_is_degenerate, git_churn_scores, pick_churn_window, rename_paths
@@ -769,14 +770,11 @@ def _read_plugin_version() -> str:
         scripts/complexity-treemap.py -> scripts/ -> skills/assess/ -> skills/ -> repo root
     Stamped into the stats sidecar so a later run can detect when its prior
     snapshot came from a differently-filtered plugin and suppress a misleading
-    diff (filter-mismatched "graduated" ghosts). Returns "unknown" if absent.
+    diff (filter-mismatched "graduated" ghosts). The standalone skill has no
+    plugin.json and reads its build's version file instead (lib.plugin_version,
+    #1166). Returns "unknown" if neither holds one.
     """
-    plugin_json = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"
-    try:
-        data = json.loads(plugin_json.read_text(encoding="utf-8"))
-        return str(data.get("version", "unknown"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return "unknown"
+    return read_version(Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")
 
 
 # Version of the complexity-stats.json layout the diff compares. A cross-run

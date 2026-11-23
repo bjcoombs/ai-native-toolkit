@@ -84,7 +84,6 @@ the network.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 from collections.abc import Iterable, Iterator, Sequence
@@ -103,6 +102,7 @@ from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
 from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
 from lib.instruction_files import grade_instruction_files
+from lib.plugin_version import read_version
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 
@@ -420,12 +420,9 @@ def collect(
 
 
 def read_plugin_version(toolkit_root: Path = TOOLKIT_ROOT) -> str:
-    """``.claude-plugin/plugin.json`` ``version``, or ``unknown``."""
-    try:
-        data = json.loads((toolkit_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-        return str(data.get("version", "unknown"))
-    except (OSError, ValueError, AttributeError):
-        return "unknown"
+    """``.claude-plugin/plugin.json`` ``version``, else the standalone skill's version file
+    (``lib.plugin_version``, #1166), or ``unknown``."""
+    return read_version(toolkit_root / ".claude-plugin" / "plugin.json")
 
 
 def _git(root: Path, *args: str) -> str | None:

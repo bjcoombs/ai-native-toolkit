@@ -135,6 +135,7 @@ def _standalone_zip(dest: Path) -> Path:
         standalone_name=cfg["standalone_name"], standalone_description=cfg["standalone_description"],
         replacements=cfg["replacements"], exclude_dirs=frozenset(cfg["exclude_dirs"]),
         bundle_files={k: REPO_ROOT / v for k, v in cfg.get("bundle_files", {}).items()},
+        generated_files=cfg.get("generated_files"),
     )
     assert issues == []
     return out
@@ -170,3 +171,7 @@ def test_the_tour_runs_from_the_unpacked_standalone_zip(tmp_path: Path) -> None:
     assert _tour(script, work, "fix", str(repo))["fix"] == "applied"
     after = _tour(script, work, "run", str(repo))
     assert (after["step"], after["next_gates"]) == (3, ["coverage_gate"])
+    # The report names the version the build wrote, never "vunknown" (#1166).
+    version = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+    header = Path(after["report"]).read_text(encoding="utf-8").splitlines()[2]
+    assert f"by `/assess` v{version}." in header and "vunknown" not in header
