@@ -321,13 +321,15 @@ COVERAGE_GATE: JsonDict = {
         "max_threshold_percent": _field(
             _NUM_OR_NULL, "The highest non-null threshold_percent across the gates; null "
                               "when no gate has one. An unresolved root gate on a scoped run (issue #1032) "
-                              "is left out."),
+                              "and a Codecov patch target (issue #882) are left out."),
         "threshold_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
             "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
-            "language and none of at least 50 for another, or when a scoped run cannot tell "
+            "language and none of at least 50 for another, or when a Codecov project status "
+            "target is auto or missing, or the only Codecov status is a patch status, and no "
+            "other gate decides it (issue #882), or when a scoped run cannot tell "
             "whether the root coverage.py floor governs the scope and that floor would change "
             "the reading (see unmeasured_reason); false "
             "otherwise. Gates counted are those enforced "
@@ -340,7 +342,10 @@ COVERAGE_GATE: JsonDict = {
             "another language (issue #937), so its gate may be a script this scan does not "
             "read; root_coverage_config_unresolved on a scoped run when the repository "
             "root's coverage.py floor would change the reading but where CI runs coverage "
-            "is not resolved (issue #1032); null otherwise."),
+            "is not resolved (issue #1032); codecov_target_not_read when the only gate that "
+            "could reach 50 percent is a Codecov project status with an auto, missing or "
+            "non-numeric target, codecov_patch_only when it is a Codecov patch status, which "
+            "bounds changed lines only (issue #882); null otherwise."),
         "enforced_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "
@@ -351,12 +356,14 @@ COVERAGE_GATE: JsonDict = {
         "enforced_basis": _field(
             {"enum": ["ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read",
                       "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs",
-                      "unread_ci_system", "not_run_in_ci", "no_ci"]},
+                      "unread_ci_system", "status_check_unconfirmed", "not_run_in_ci", "no_ci"]},
             "The reason for enforced_meets_minimum: ci_run (true); no_gate, "
             "threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, "
             "unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest "
             "--cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run "
-            "it), included_jobs and unread_ci_system (null)."),
+            "it), included_jobs, unread_ci_system and status_check_unconfirmed (a Codecov "
+            "status target, which no CI line runs and which gates a merge only when branch "
+            "protection requires it; issue #882) (null)."),
         "not_detected": _STRINGS,
     },
 }

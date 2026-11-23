@@ -71,7 +71,9 @@ gate itself is written in such a file or in a composite action.
 ``enforced_basis`` tokens: ``ci_run`` (true); ``no_gate`` and
 ``threshold_below_minimum`` (false, as ``threshold_meets_minimum``);
 ``threshold_not_read`` (null: ``threshold_meets_minimum`` is null); the null
-reasons above; ``not_run_in_ci`` (false: CI is read and runs none of the
+reasons above; ``status_check_unconfirmed`` (null: a Codecov status target, #882,
+which no CI line runs and which gates a merge only when branch protection requires it);
+``not_run_in_ci`` (false: CI is read and runs none of the
 gates); ``no_ci`` (false: no CI file at all).
 
 Inward-only imports: stdlib and ``lib`` CI readers; never an orchestrator.
@@ -133,8 +135,8 @@ flag) still credits. On a scoped run,
 any enforced run of the tool anywhere in the repository credits the scope's config gate
 (`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
 runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
-`lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.testing.coverage_activation`
-and `lib.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
+`lib.command_index`, `lib.command_resolver`, `lib.check_command`, `lib.testing.coverage_activation`,
+`lib.testing.coverage_codecov` (a Codecov patch or ``auto`` status is skipped, #882) and `lib.shared_tooling`; never `lib.testing.coverage_gate` (which calls it) or an orchestrator.
 Tests: `tests/test_coverage_ci.py`, `tests/test_coverage_ci_edges.py` (#954).
 """
 from __future__ import annotations
@@ -149,6 +151,7 @@ from lib.check_command import (
     _DIRECT_TESTS, LINT_PROGRAMS, _exec_program, _info_program, is_info_invocation)
 from lib.ci_masking import mask_lines
 from lib.testing.coverage_activation import Activation, below, covers
+from lib.testing.coverage_codecov import is_patch
 from lib.named_check import may_lint_named
 from lib.ci_triggers import Trigger, gitlab_line_triggers, resolve_workflows, workflow_trigger
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
@@ -158,7 +161,8 @@ from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
     "ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read", "unknown_trigger",
-    "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system", "not_run_in_ci", "no_ci"]
+    "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system", "status_check_unconfirmed",
+    "not_run_in_ci", "no_ci"]
 
 # A gate as ``coverage_gate`` reports it; read by key so this module does not import it.
 Gate = Mapping[str, object]
@@ -180,7 +184,8 @@ _TASK_FILES = frozenset({
     "pyproject.toml", "setup.cfg"})
 # The null reasons, most specific first.
 _NULL_ORDER: tuple[EnforcedBasis, ...] = (
-    "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system")
+    "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs", "unread_ci_system",
+    "status_check_unconfirmed")
 
 
 @dataclass(frozen=True)
@@ -618,6 +623,8 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
     """True when an enforced CI line runs ``gate``; a null reason token when that cannot be
     told; False when CI is read and does not. ``activation`` switches coverage on for a
     config gate only from the gate's directory or one above it (#954)."""
+    if gate["tool"] == "codecov":   # #882: a server-side status; whether it is required is not read
+        return "status_check_unconfirmed"
     file = str(gate["file"])
     family = gate_family(gate, activation.pytest_lines)
     if file in ci.ci_files:
@@ -756,7 +763,9 @@ def enforced_meets_minimum(
     reasons: list[str] = []
     for gate in gates:
         percent = gate["threshold_percent"]
-        if not counted(gate) or (isinstance(percent, (int, float)) and percent < minimum):
+        # #882: a Codecov patch or ``auto`` status holds no floor of 50, so it never nulls a known false
+        unfloored = is_patch(gate) or (gate["tool"] == "codecov" and percent is None)
+        if not counted(gate) or unfloored or (isinstance(percent, (int, float)) and percent < minimum):
             continue
         state = gate_run(gate, ci, line_gates, activation)
         if state is True and percent is not None:
