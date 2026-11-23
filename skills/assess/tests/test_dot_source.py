@@ -73,6 +73,13 @@ def test_sourcing_an_environment_runs_no_check(tmp_path: Path, run: str, files: 
     assert _scan(tmp_path, run, files) == (False, "no_check_command", False, "no_lint_command")
 
 
+@pytest.mark.parametrize("run", ["make env", "npm run env", "make activate",
+                                 "npx env-cmd -f .env.test jest"])
+def test_the_env_rule_is_only_for_a_sourced_file(tmp_path: Path, run: str) -> None:
+    """A make target or package script named ``env`` is unread, as on main: null, not false."""
+    assert _scan(tmp_path, run)[:2] == (None, "check_target")
+
+
 @pytest.mark.parametrize(("run", "files"), [
     ("make deploy-ci", {}), ("npm run build:ci", {}), ("make ci-deploy", {}), ("npm run ci:build", {}),
     ("./scripts/deploy-ci.sh", {"scripts/deploy-ci.sh": "echo deploy\n"}),
