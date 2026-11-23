@@ -41,6 +41,10 @@ beside the baseline (``pruning_record``), and ``pruned`` lists the removals this
 ("Pruned: ..."), counted once per measured commit against the commit that wrote the stored
 ledger, so a superseding run never adds a second hold.
 
+When this run's level result cannot be recorded (``prior_level.build_prior_level`` returns None,
+so ``prior-level.json`` is left as it was, #1158), the section adds "Baseline kept: ..." naming
+the run whose stored baseline the next run will compare with.
+
 ``next_blocker`` is the first gate blocking this run's next Step (``None`` at the top Step,
 or when this run's level result is unavailable, which the line says rather than claiming
 every gate is held). A shallow clone, or a git that cannot answer an ancestry check, reads

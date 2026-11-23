@@ -206,11 +206,12 @@ def load_prior_level(assess_dir: Path) -> PriorLevel | PriorLevelUnread | None:
 
 def write_prior_level(assess_dir: Path, level: Any, baseline: Baseline | None = None,
                       pruning: list[PruningEntry] | None = None) -> Path | None:
-    """Write this run's ``prior-level.json`` (sorted keys, LF). A run whose level block has no
-    tags (a degraded level) leaves the existing file untouched (#1158): it holds the previous good
-    run's baseline and pruning ledger, which the next good run compares with. A symlink in the
-    file's place is removed, never written through,
-    and a file that cannot be written (``OSError``) is named on stderr and skipped, as
+    """Write this run's ``prior-level.json`` (sorted keys, LF).
+
+    A run whose level block has no tags (a degraded level) leaves the existing file untouched
+    (#1158): it holds the previous good run's baseline and pruning ledger, which the next good
+    run compares with. A symlink in the file's place is removed, never written through. A file
+    that cannot be written (``OSError``) is named on stderr and skipped, as
     ``assess_diagrams.write_diagrams`` does: the record never stops a run. Returns the path
     written, or None."""
     path = assess_dir / PRIOR_LEVEL_FILE
