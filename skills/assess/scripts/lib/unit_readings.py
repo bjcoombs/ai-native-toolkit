@@ -28,7 +28,7 @@ leaves every other block to the single repository-wide run.
   evidence alone, which is not a parent's to inherit (#864): a coverage gate whose every
   gate sits under member units leaves the unit its own scoped reading (no gate of its
   own), and a ``nested_only`` repository whose nested files govern no folder holding the
-  unit reads ``instruction_file_present`` false, origin ``unit``. ``OVERRIDES`` holds the
+  unit (a path-scoped rule only when a glob can reach the unit) reads ``instruction_file_present`` false, origin ``unit``. ``OVERRIDES`` holds the
   evidence rule of each; a test pins it to the manifest.
 - Repo-wide (no ``unit_scope``): run once; every unit inherits the block. This includes
   ``ci_checks``: unit-local CI detection is not built yet, so a unit's CI conditions read
@@ -165,11 +165,32 @@ def _coverage_own(unit: str, scoped: Any, ctx: Mapping[str, Any]) -> JsonDict | 
     return None
 
 
+_WILDCARDS = frozenset("*?[{")
+
+
+def _glob_reaches(pattern: str, unit: str) -> bool:
+    """Whether a repo-relative glob can match a file under ``unit``: its literal folder
+    prefix (the segments before the first wildcard) holds the unit or sits inside it."""
+    literal: list[str] = []
+    for part in pattern.strip("/").split("/")[:-1]:
+        if set(part) & _WILDCARDS:
+            break
+        literal.append(part)
+    prefix = "/".join(literal)
+    return not prefix or _under(unit, prefix) or _under(prefix, unit)
+
+
 def _covers(entry: Any, unit: str) -> bool:
-    """Whether a nested instruction file governs a folder that holds the ``unit``."""
+    """Whether a nested instruction file governs a folder that holds the ``unit``; a
+    path-scoped rule (``scope.globs``) only when one of its globs can reach the unit."""
     scope = entry.get("scope") if isinstance(entry, Mapping) else None
     folder = scope.get("directory") if isinstance(scope, Mapping) else None
-    return isinstance(folder, str) and _under(unit, folder or ".")
+    if not isinstance(folder, str) or not _under(unit, folder or "."):
+        return False
+    globs = scope.get("globs") if isinstance(scope, Mapping) else None
+    if isinstance(globs, list) and any(isinstance(g, str) for g in globs):
+        return any(isinstance(g, str) and _glob_reaches(g, unit) for g in globs)
+    return True
 
 
 def _instructions_own(unit: str, _scoped: Any, ctx: Mapping[str, Any]) -> JsonDict | None:

@@ -253,6 +253,21 @@ def test_a_sibling_units_nested_file_is_not_inherited() -> None:
     assert ur._instructions_own("svc/b", None, {**ctx, "layer_grades": unmeasured}) is None
 
 
+def test_a_path_scoped_rule_covers_only_the_units_its_globs_reach() -> None:
+    nested_only = {"available": True, "instruction_file_present": True,
+                   "instruction_presence": "nested_only"}
+    rule = {"available": True, "files": [{"path": ".claude/rules/a.md", "scope": {
+        "directory": ".", "globs": ["packages/a/**"], "always_loaded": False}}]}
+    ctx = {"layer_grades": nested_only, "nested_instructions": rule}
+    assert ur._instructions_own("packages/a", None, ctx) is None  # inherits the rule
+    assert ur._instructions_own("packages/b", None, ctx) == {
+        "available": True, "instruction_file_present": False}
+    assert ur._glob_reaches("**/*.py", "packages/b") is True
+    assert ur._glob_reaches("packages/*/src/**", "packages/b") is True
+    assert ur._glob_reaches("packages/a/src/x.py", "packages/a") is True
+    assert ur._glob_reaches("docs/**", "packages/a") is False
+
+
 def test_a_sibling_nested_file_through_the_unit_pass(tmp_path: Path) -> None:
     repo = _write(tmp_path / "repo", {
         "svc/a/pyproject.toml": "[project]\nname = 'a'\n",
