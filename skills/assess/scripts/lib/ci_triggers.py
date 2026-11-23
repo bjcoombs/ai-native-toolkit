@@ -82,7 +82,8 @@ outside a job are `ordinary`. `keep(lines, triggers, wanted)` blanks the other l
 so `count_check_lines` counts each class. Same-file `extends:` is resolved before
 `rules:`, `when:`, `only:` and `except:` are read (#1021). Known limits: `default:`,
 anchors, `extends:` across `include:` and `workflow: rules:` across files are not
-resolved; branch and path filters are not read. Tests: `tests/test_ci_triggers.py`.
+resolved; branch and path filters are not read. Tests: `tests/test_ci_triggers.py`, and
+`tests/test_gitlab_extends.py` for `extends:` and `except:`.
 """
 from __future__ import annotations
 
@@ -217,7 +218,7 @@ def _only_outcomes(tree: IndentTree, key: int, refs_only: bool = False) -> _Outc
     else:
         children = tree.children(key)
         refs = [k for k in children if tree.lines[k].key == "refs"]
-        if refs_only and len(refs) != len(children):
+        if refs_only and refs and len(refs) != len(children):
             return unknown
         if refs:
             ref = tree.lines[refs[0]]

@@ -83,8 +83,13 @@ def test_extends_is_resolved(text: str, trigger: str) -> None:
     ("  except:\n    refs:\n      - branches\n", "not_ordinary"),
     ("  except:\n    variables:\n      - $SKIP\n", "unknown"),
     ("  only: [tags]\n  except:\n    variables:\n      - $SKIP\n", "not_ordinary"),
+    # Block lists, the common spelling.
+    ("  except:\n    - branches\n", "not_ordinary"),
+    ("  except:\n    - tags\n", "ordinary"),
+    ("  only:\n    - branches\n  except:\n    - tags\n", "ordinary"),
 ], ids=["branches", "drops_merge_requests", "drops_all", "one_branch", "two_branch_limits",
-        "tags", "refs_map", "variables", "only_tags_with_unread_except"])
+        "tags", "refs_map", "variables", "only_tags_with_unread_except", "block_branches",
+        "block_tags", "block_only_and_except"])
 def test_except_reads_with_only_semantics(keys: str, trigger: str) -> None:
     assert _trigger("test:\n" + keys + "  script: pytest\n") == trigger
 
