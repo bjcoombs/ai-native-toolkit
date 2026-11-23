@@ -30,6 +30,11 @@ like it. ``ParallelIndex`` indexes the discovered code once per run and
    ``pkg/models/cohere.py`` and only ``cohere`` with
    ``pkg/providers/cohere.py``). A file's suffix compares its stem.
 
+A module file that shares only its stem with the doc (suffix 1) is a weak
+match: when the doc links to code explicitly, ``doc_ownership.subject_spec``
+uses those links instead (``docs/security.md`` linking ``auth/guard.py`` is not
+remapped to an unrelated ``src/security.py``). With no links it still maps.
+
 The match records which key and which tie-break decided it as one token,
 ``<key>:<rule>``: key ``stem`` or ``parent-name``, rule ``only-match``,
 ``longest-suffix``, ``shallowest`` or ``path-order``. It rides on the
@@ -66,15 +71,22 @@ PATH_ORDER = "path-order"
 
 
 class ParallelMatch(NamedTuple):
-    """The matched root (repo-relative POSIX) and its ``<key>:<rule>`` token."""
+    """The matched root (repo-relative POSIX) and its ``<key>:<rule>`` token.
+
+    ``weak`` marks a module file matched on its stem alone (a shared path
+    suffix of 1, ``docs/security.md`` -> ``src/security.py``): the doc's own
+    explicit code links outrank it (``lib.docs.doc_ownership.subject_spec``).
+    """
 
     root: str
     match: str
+    weak: bool = False
 
 
 class _Candidate(NamedTuple):
     rel: str
     parts: tuple[str, ...]  # lowercased; a file's last part is its stem
+    is_file: bool = False
 
 
 def _non_subject(rel: str, parts: tuple[str, ...]) -> bool:
@@ -104,7 +116,7 @@ class ParallelIndex:
             if _non_subject(rel, parts):
                 continue
             stem = path.stem.lower()
-            self._files.setdefault(stem, []).append(_Candidate(rel, (*parts[:-1], stem)))
+            self._files.setdefault(stem, []).append(_Candidate(rel, (*parts[:-1], stem), True))
             parent = path.parent.as_posix()
             if parent != "." and parent not in seen_dirs:
                 seen_dirs.add(parent)
@@ -145,7 +157,8 @@ class ParallelIndex:
                 rule = SHALLOWEST
             else:
                 rule = PATH_ORDER
-        return ParallelMatch(best.rel, f"{key}:{rule}")
+        weak = best.is_file and _suffix_len(doc_parts, best.parts) < 2
+        return ParallelMatch(best.rel, f"{key}:{rule}", weak)
 
 
 def parallel_index(code_files: Iterable[Path], repo_root: Path) -> ParallelIndex:

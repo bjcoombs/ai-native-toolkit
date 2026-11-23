@@ -205,7 +205,8 @@ def subject_spec(
         return {"method": NEAREST_ANCESTOR, "roots": [rel_posix(d.parent, repo_root)],
                 "base_dir": base_dir}
     par = parallel.match(doc_rel)
-    if par is not None:
+    # A stem-only file match yields to the doc's own explicit links (#817).
+    if par is not None and not (par.weak and explicit.get(doc_rel)):
         return {"method": PARALLEL_DOCS_TREE, "roots": [par.root], "base_dir": base_dir,
                 "match": par.match}
     if explicit.get(doc_rel):

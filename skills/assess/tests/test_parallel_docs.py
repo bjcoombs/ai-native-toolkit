@@ -140,3 +140,36 @@ def test_generated_or_vendored_file_under_a_test_tree_is_not_a_candidate() -> No
         "src/pkg/models", "parent-name:only-match")
     index = ParallelIndex(["tests/models/client.generated.ts"])
     assert index.match("docs/api/models/cohere.md") is None
+
+
+def test_explicit_links_beat_a_stem_only_file_match(tmp_path: Path) -> None:
+    """A page that links the code it describes keeps its links over a module
+    file elsewhere that shares only its stem; a deeper shared suffix, or no
+    links at all, still maps to the file."""
+    _write(tmp_path, "docs/security.md", "see [guard](../auth/guard.py)")
+    _write(tmp_path, "auth/guard.py")
+    _write(tmp_path, "src/security.py")
+    _write(tmp_path, "docs/models.md", "models")
+    _write(tmp_path, "src/app/models.py")
+    _write(tmp_path, "docs/payments/refunds.md", "see [x](../../src/other/x.py)")
+    _write(tmp_path, "src/payments/refunds.py")
+    _write(tmp_path, "src/other/x.py")
+    staleness = analyze_doc_staleness(tmp_path, doc_to_code_edges=[
+        {"doc": "docs/security.md", "code": "auth/guard.py"},
+        {"doc": "docs/payments/refunds.md", "code": "src/other/x.py"},
+    ])
+    rows = {d["path"]: d for d in staleness["docs"]}
+    assert rows["docs/security.md"]["subject_method"] == "explicit-links"
+    assert rows["docs/security.md"]["subject_paths"] == ["auth/guard.py"]
+    assert rows["docs/models.md"]["subject_roots"] == ["src/app/models.py"]
+    assert rows["docs/models.md"]["subject_method"] == "parallel-docs-tree"
+    assert rows["docs/payments/refunds.md"]["subject_roots"] == ["src/payments/refunds.py"]
+
+
+def test_weak_marks_only_a_stem_only_file_match() -> None:
+    index = ParallelIndex(["src/security.py", "src/payments/refunds.py", "src/auth/a.py"])
+    assert index.match("docs/security.md") == ParallelMatch(
+        "src/security.py", "stem:only-match", True)
+    assert index.match("docs/payments/refunds.md") == ParallelMatch(
+        "src/payments/refunds.py", "stem:only-match", False)
+    assert index.match("docs/auth.md") == ParallelMatch("src/auth", "stem:only-match", False)
