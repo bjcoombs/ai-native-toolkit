@@ -62,9 +62,10 @@ from lib.instruction_files import (
 )
 from lib.interactivity import build_offers_block
 from lib.keyhole.keyhole_signals import integrate
+from lib.exec_summary import summarised
 from lib.headline import Headline, run_context_headline
 from lib.level_result_types import LevelResult, OwnerExclusionsBlock
-from lib.level_tally import LEVEL_READS, run_context_level
+from lib.level_tally import LEVEL_READS, default_model, run_context_level
 from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
 from lib.unit_discovery import UnitsBlock, scan_units
@@ -395,10 +396,11 @@ def level(*blocks: Any) -> LevelResult:
     return run_context_level(dict(zip(LEVEL_READS, blocks)))
 
 
-def headline(level_block: Any) -> Headline:
+def headline(level_block: Any, since_block: Any) -> Headline:
     """The run context's ``headline`` block (#747): the Step, its next unlock and the
-    verified tally, worded from the ``level`` block under the default model."""
-    return run_context_headline(level_block)
+    verified tally, worded from the ``level`` block under the default model, with the
+    executive summary (#1102) that also reads the ``since_last_run`` block."""
+    return summarised(run_context_headline(level_block), level_block, since_block, default_model())
 
 
 def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, superseded: Any) -> SinceLastRun:

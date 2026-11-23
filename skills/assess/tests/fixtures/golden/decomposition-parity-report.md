@@ -2,6 +2,14 @@
 
 _Generated <<normalized>>._
 
+Step 2 of 4: an agent opens pull requests, a person reviews each one.
+
+Next: make CI run the tests. Then you reach Step 3: agents open pull requests nobody has to watch.
+
+First run.
+
+**Start here:** [Make CI run the tests](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates).
+
 ## Since Last Run
 
 - This is the first run, so there is no earlier run to compare with.
