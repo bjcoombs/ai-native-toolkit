@@ -70,7 +70,16 @@ from collections.abc import Iterator, Mapping
 from typing import Final, NamedTuple, TypedDict
 
 from lib.counts_only import is_hashed
-from lib.counts_only_rules import DROP, FLEET_DATA_KEPT, FLEET_DATA_RULES, ID, PATH, TOKEN, TOKEN_RE
+from lib.counts_only_rules import (
+    DROP,
+    FLEET_DATA_KEPT,
+    FLEET_DATA_RULES,
+    HASHED_PATH,
+    ID,
+    PATH,
+    TOKEN,
+    TOKEN_RE,
+)
 from lib.fleet.fleet_data import FleetData
 
 RUNS, UNITS, REPOS, TARGETS = "runs", "units", "repos", "targets"
@@ -242,6 +251,8 @@ def _violation(pattern: str, value: str, hashed: bool) -> str | None:
         return f"{pattern}: not written under --hash-paths"
     if cls == PATH and hashed and not is_hashed(value):
         return f"{pattern}: not hashed under --hash-paths"
+    if cls == HASHED_PATH and not (hashed and is_hashed(value)):
+        return f"{pattern}: written only hashed, under --hash-paths"
     return None
 
 

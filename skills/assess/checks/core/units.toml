@@ -11,6 +11,8 @@ callable = "lib.core_scans:units"
 publishes = ["units"]
 reads = ["repo_root", "excludes"]
 stage = "read_side"
+headless = { units = "registered" }
+whys.units = "One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices."
 shapes = [
   { path = "units", type = "lib.unit_discovery:UnitsBlock" },
 ]
@@ -18,7 +20,7 @@ revision = 1
   [entries.privacy]
   "units.source" = "token"
   "units.unit_count_reason" = "token"
-  "units.units.path" = "drop"
+  "units.units.path" = "hashed_path"
   "units.units.origin" = "token"
   "units.units.ecosystem" = "token"
   "units.units.workspace" = "drop"

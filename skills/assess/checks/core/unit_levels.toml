@@ -18,7 +18,7 @@ revision = 1
   [entries.privacy]
   "unit_levels.unit_count_reason" = "token"
   "unit_levels.levels_version" = "token"
-  "unit_levels.units.path" = "drop"
+  "unit_levels.units.path" = "hashed_path"
   "unit_levels.units.inherited" = "token"
   "unit_levels.units.conditions.id" = "token"
   "unit_levels.units.conditions.state" = "token"

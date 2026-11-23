@@ -37,11 +37,18 @@
             "boolean",
             "null"
           ]
+        },
+        "scope": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
         "plugin_version",
         "scan_date",
+        "scope",
         "target_dirty",
         "target_head",
         "toolkit_commit",
@@ -121,7 +128,9 @@
           "structure_drift",
           "test_focus",
           "test_pressure",
-          "understanding"
+          "understanding",
+          "unit_readings",
+          "units"
         ]
       },
       "properties": {
