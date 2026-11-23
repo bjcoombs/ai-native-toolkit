@@ -28,25 +28,23 @@ at HEAD (``lib.command_index.repo_files``):
   count (``AGENT_LOADED``), not a review-bot prompt. ``named`` lists the ones that resolve. A check
   is classified by the target it runs (``make test``, ``npm run ci``, the
   program after ``uv run``), so an install command such as ``npm ci`` or
-  ``uv sync --extra test`` is never a check.
-- ``pinning``: one row per dependency manifest (a ``package.json`` or
-  ``pyproject.toml`` that declares dependencies, ``Pipfile``,
-  ``requirements*.txt``, ``go.mod``, ``Cargo.toml``, ``Gemfile``,
-  ``composer.json``) outside the built-in and ``.assess/config.toml`` excludes,
-  and the lockfile beside it or in a parent directory. A
-  ``requirements*.txt`` counts as its own lock when every requirement is
-  pinned with ``==``. ``manifests_total`` counts the manifests the lock check
-  reads (every row); ``unlocked_total`` counts those with no lock. Layer 5
-  level 2 reads ``unlocked_total`` (#786), and reads not measured
-  (``no_manifests``, ``signal_grades.EMPTY_DENOMINATORS``) when
+  ``uv sync --extra test`` is never a check. Instruction files are read with
+  ``lib.named_check`` (#951), so a named ``make ci`` counts here though a CI line
+  running it reads null at Layer 5.
+- ``pinning``: one row per dependency manifest and the lockfile found for it,
+  built by ``lib.pinning`` (the manifest table, the ``skipped_library`` and
+  ``direct_pins_only`` notes). ``manifests_total`` counts the manifests the lock
+  check reads (every row but a ``skipped_library``); ``unlocked_total`` counts
+  those with no lock. Layer 5 level 2 reads ``unlocked_total`` (#786), and reads
+  not measured (``no_manifests``, ``signal_grades.EMPTY_DENOMINATORS``) when
   ``manifests_total`` is 0, since there is nothing to lock (#927).
 - ``findings``: a ``copilot-setup-steps.yml`` that breaks GitHub's documented
   constraints: one job named ``copilot-setup-steps``, only ``steps``,
   ``permissions``, ``runs-on``, ``services``, ``snapshot`` and
   ``timeout-minutes`` set on it (others are ignored), ``timeout-minutes`` at most
   59; and a file saved as ``.yaml``, which Copilot never reads.
-- ``setup_ready``: committed setup, or every dependency manifest locked (or no
-  manifest to install). It is the setup half of ``layer5_cap`` on its own,
+- ``setup_ready``: committed setup, or every counted dependency manifest locked
+  (or no manifest to install). It is the setup half of ``layer5_cap`` on its own,
   without the named check, which Layer 0 level 2 reads (#786).
 - ``layer5_cap``: Present needs a check command an instruction file names, plus
   committed setup or a lockfile-backed bootstrap (every manifest locked, or no
@@ -82,9 +80,10 @@ the built-in and `.assess/config.toml` excludes. Findings are `copilot-setup-ste
 constraints (one `copilot-setup-steps` job, allowed keys, `timeout-minutes` at
 most 59, the `.yml` path). `layer5_cap` is Partial unless a named check resolves
 and committed setup or a lockfile per manifest exists. `setup_ready` is the
-setup half of that cap on its own (committed setup, or every manifest locked, or
-no manifest). `pinning.manifests_total` counts the manifests the lock check reads
-and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
+setup half of that cap on its own (committed setup, or every counted manifest
+locked, or no manifest). The pinning rows and totals come from `lib.pinning`.
+`pinning.manifests_total` counts the manifests the lock check reads (every row but
+a `skipped_library`) and `pinning.unlocked_total` those with no lock; Layer 5 level 2 of the maturity
 model reads `unlocked_total` `eq 0`, and reads not measured (`no_manifests`,
 `signal_grades.EMPTY_DENOMINATORS`, #927) when `manifests_total` is 0, so committed
 setup does not stand in for a lockfile and the named check is read once, by
@@ -100,17 +99,15 @@ from __future__ import annotations
 import json
 import re
 import statistics
-import tomllib
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, NotRequired, TypedDict
 
-from lib.assess_config import is_user_excluded
-from lib.check_command import is_check_command, is_check_name
+from lib.named_check import is_named_check, is_named_check_name
 from lib.command_index import RepoIndex, build_index
 from lib.command_resolver import extract_commands, resolve
-from lib.doc_graph import is_excluded_path
 from lib.gh_cli import GhUnavailable, gh_json, open_github
+from lib.pinning import PinningBlock, PinRow, counted, pin_rows, pinning_block
 
 SetupKind = Literal[
     "copilot_setup_steps", "devcontainer", "cursor_environment",
@@ -141,19 +138,6 @@ CI_RUN_LIMIT = 50
 CI_TIMEOUT_SECONDS = 10
 MAX_NAMED = 10
 
-_NODE_LOCKS = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml",
-               "bun.lock", "bun.lockb")
-_PY_LOCKS = ("uv.lock", "poetry.lock", "pdm.lock", "pylock.toml")
-_LOCKS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "package.json": ("node", _NODE_LOCKS),
-    "pyproject.toml": ("python", _PY_LOCKS),
-    "Pipfile": ("python", ("Pipfile.lock",)),
-    "go.mod": ("go", ("go.sum",)),
-    "Cargo.toml": ("rust", ("Cargo.lock",)),
-    "Gemfile": ("ruby", ("Gemfile.lock",)),
-    "composer.json": ("php", ("composer.lock",)),
-}
-_REQUIREMENTS = re.compile(r"^requirements[\w.-]*\.txt$")
 _KEY = re.compile(r"""^(?P<indent> *)(?P<key>[A-Za-z0-9_.-]+|"[^"]+"|'[^']+')\s*:(?:\s+(?P<value>.*))?$""")
 _COMMENT = re.compile(r"(?:^|\s+)#.*$")
 
@@ -175,13 +159,6 @@ class NamedCheck(TypedDict):
     command: str
     verdict: str
     reason: str
-
-
-class PinRow(TypedDict):
-    ecosystem: str
-    manifest: str
-    locked: bool
-    lockfile: str | None
 
 
 class WorkflowDuration(TypedDict):
@@ -215,13 +192,6 @@ class CheckBlock(TypedDict):
     named: list[NamedCheck]
     named_total: int
     unresolved: list[NamedCheck]
-
-
-class PinningBlock(TypedDict):
-    manifests: list[PinRow]
-    all_locked: bool | None
-    unlocked_total: int
-    manifests_total: int
 
 
 class CiDuration(TypedDict):
@@ -446,7 +416,7 @@ def _entry_points(index: RepoIndex) -> list[CheckEntry]:
                 (index.tox_envs, "tox -e", "tox"),
                 (index.nox_sessions, "nox -s", "noxfile.py"))
     for family, runner, source in families:
-        for name in sorted(n for n in (family.names if family else frozenset()) if is_check_name(n)):
+        for name in sorted(n for n in (family.names if family else frozenset()) if is_named_check_name(n)):
             out.append({"command": f"{runner} {name}", "source": source})
     if index.tox_envs is not None:
         out.append({"command": "tox", "source": "tox"})
@@ -467,95 +437,11 @@ def _named(index: RepoIndex, instruction_files: Any) -> list[NamedCheck]:
     files = sorted(instruction_files) if isinstance(instruction_files, dict) else []
     for rel in (f for f in files if f in AGENT_LOADED):
         for cmd in extract_commands(_read(index.root, rel)):
-            if not is_check_command(cmd.text):
+            if not is_named_check(cmd.text):
                 continue
             res = resolve(cmd, index=index)
             rows.append({"file": rel, "line": cmd.line, "command": cmd.text,
                          "verdict": res.verdict, "reason": res.reason})
-    return rows
-
-
-# --- pinning -------------------------------------------------------------------
-
-
-def _declares_deps(root: Path, rel: str) -> bool:
-    """A ``package.json`` or ``pyproject.toml`` that declares installable dependencies.
-
-    A manifest that only holds scripts or tool configuration has nothing to lock;
-    one that does not parse is skipped. Other manifests always count.
-    """
-    name = PurePosixPath(rel).name
-    if name == "package.json":
-        try:
-            pkg = json.loads(_read(root, rel) or "{}")
-        except json.JSONDecodeError:
-            return False
-        return isinstance(pkg, dict) and any(
-            pkg.get(k) for k in ("dependencies", "devDependencies", "optionalDependencies",
-                                 "peerDependencies"))
-    if name == "go.mod":
-        # Go writes no go.sum for a module that requires nothing.
-        return re.search(r"^\s*require\b", _read(root, rel), re.MULTILINE) is not None
-    if name != "pyproject.toml":
-        return True
-    try:
-        data = tomllib.loads(_read(root, rel))
-    except tomllib.TOMLDecodeError:
-        return False
-    project = data.get("project")
-    project = project if isinstance(project, dict) else {}
-    tool = data.get("tool")
-    poetry = tool.get("poetry") if isinstance(tool, dict) else None
-    return bool(project.get("dependencies") or project.get("optional-dependencies")
-                or data.get("dependency-groups")
-                or (isinstance(poetry, dict) and poetry.get("dependencies")))
-
-
-def _requirement_lines(text: str) -> list[str]:
-    """Direct requirements, without comments, options and ``-r`` / ``-c`` includes."""
-    reqs = [ln.split("#")[0].strip() for ln in text.splitlines()]
-    return [r for r in reqs if r and not r.startswith("-")]
-
-
-def _requirements_pinned(text: str) -> bool:
-    reqs = _requirement_lines(text)
-    return bool(reqs) and all("==" in r for r in reqs)
-
-
-def _lock_near(index: RepoIndex, rel: str, locks: tuple[str, ...]) -> str | None:
-    """The first lockfile in the manifest's directory or a parent (a workspace root)."""
-    parent = PurePosixPath(rel).parent
-    while True:
-        for name in locks:
-            cand = str(parent / name) if str(parent) != "." else name
-            if cand in index.files:
-                return cand
-        if str(parent) in (".", ""):
-            return None
-        parent = parent.parent
-
-
-def _pinning(index: RepoIndex, excludes: tuple[set[str], list[str]] | None) -> list[PinRow]:
-    dirs, pats = excludes if excludes else (set(), [])
-    rows: list[PinRow] = []
-    for rel in sorted(index.files):
-        p = PurePosixPath(rel)
-        if is_excluded_path(Path(rel)) or is_user_excluded(Path(rel), dirs, pats):
-            continue
-        if p.name in _LOCKS:
-            if not _declares_deps(index.root, rel):
-                continue
-            ecosystem, locks = _LOCKS[p.name]
-            lock = _lock_near(index, rel, locks)
-            rows.append({"ecosystem": ecosystem, "manifest": rel, "locked": lock is not None,
-                         "lockfile": lock})
-        elif _REQUIREMENTS.match(p.name):
-            text = _read(index.root, rel)
-            if not _requirement_lines(text):
-                continue  # only `-r` / `-c` includes or options: nothing to pin here
-            pinned = _requirements_pinned(text)
-            rows.append({"ecosystem": "python", "manifest": rel, "locked": pinned,
-                         "lockfile": rel if pinned else None})
     return rows
 
 
@@ -612,8 +498,8 @@ def ci_duration(repo_root: Path) -> CiDuration:
 
 
 def setup_ready(setup: list[SetupSource], pins: list[PinRow]) -> bool:
-    """Setup is committed, or every manifest is locked (no manifest counts as locked)."""
-    return bool(setup) or all(p["locked"] for p in pins)
+    """Setup is committed, or every counted manifest is locked (no manifest counts as locked)."""
+    return bool(setup) or all(p["locked"] for p in counted(pins))
 
 
 def layer5_cap(named: list[NamedCheck], setup: list[SetupSource], pins: list[PinRow]) -> Layer5Cap:
@@ -629,11 +515,11 @@ def layer5_cap(named: list[NamedCheck], setup: list[SetupSource], pins: list[Pin
         parts.append("no instruction file names a check command that resolves"
                      + (f" ({len(named)} named, none resolved)" if named else ""))
     if "setup_or_lockfile" in unmet:
-        unlocked = [p["manifest"] for p in pins if not p["locked"]]
+        unlocked = [p["manifest"] for p in counted(pins) if not p["locked"]]
         parts.append("no committed setup and no lockfile for " + ", ".join(f"`{m}`" for m in unlocked))
     if not unmet:
         how = (f"setup: {', '.join(s['path'] for s in setup)}" if setup
-               else "every manifest locked" if pins else "no dependency manifest to install")
+               else "every manifest locked" if counted(pins) else "no dependency manifest to install")
         reason = f"`{resolved[0]['command']}` named in {resolved[0]['file']}:{resolved[0]['line']}; {how}"
     else:
         reason = "; ".join(parts)
@@ -649,7 +535,7 @@ def scan_agent_environment(
     index = build_index(repo_root)
     setup, findings = _setup(index, agent_harness)
     named = _named(index, instruction_files)
-    pins = _pinning(index, excludes)
+    pins = pin_rows(index, excludes)
     resolved = [n for n in named if n["verdict"] == "resolved"]
     return {
         "available": True,
@@ -657,9 +543,7 @@ def scan_agent_environment(
         "check": {"entry_points": _entry_points(index), "named": resolved[:MAX_NAMED],
                   "named_total": len(resolved),
                   "unresolved": [n for n in named if n["verdict"] != "resolved"][:MAX_NAMED]},
-        "pinning": {"manifests": pins, "all_locked": all(p["locked"] for p in pins) if pins else None,
-                    "unlocked_total": sum(1 for p in pins if not p["locked"]),
-                    "manifests_total": len(pins)},
+        "pinning": pinning_block(pins),
         "ci_duration": ci_duration(repo_root) if probe_ci else {
             "available": False, "reason": "not_probed: the CI-duration probe was turned off"},
         "findings": findings,

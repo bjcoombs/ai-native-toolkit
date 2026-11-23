@@ -353,3 +353,20 @@ def test_a_scope_without_mypy_or_flake8_config_is_gated_by_the_root_ones(tmp_pat
     own = _write(tmp_path, {"svc/.mypy.ini": "[mypy]\nstrict = false\n"})
     assert [g["kind"] for g in scan_guardrails(own, [], None, None, Path("svc"))["gates"]] == [
         "complexity_limit"]
+
+
+def test_the_registry_passes_the_scope_in_parameter_order(tmp_path: Path) -> None:
+    """The ScanSpec generated from checks/core/guardrails.toml calls the scan positionally
+    (#1049): its reads follow the parameters, and a scoped run reports the root ruff gate."""
+    import inspect
+
+    from lib.scan_registry import SCANS
+
+    (spec,) = [spec for spec in SCANS if spec.key == "guardrails"]
+    assert spec.reads == tuple(inspect.signature(scan_guardrails).parameters)
+    root = _write(tmp_path, {"pyproject.toml": ROOT_RUFF, "svc/m.py": "x = 1\n"})
+    values: dict[str, Any] = {"repo_root": root, "instruction_files": {}, "coverage_gate": None,
+                              "excludes": (set(), []), "scope": root / "svc"}
+    block = spec.fn(*[values[name] for name in spec.reads])
+    assert [(g["file"], g["threshold"]) for g in block["gates"]] == [("pyproject.toml", 5.0)]
+    assert block["not_read"][-1].startswith("pre-commit hook")

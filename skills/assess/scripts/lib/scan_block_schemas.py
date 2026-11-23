@@ -5,7 +5,7 @@ blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
-``delivery`` (#715), ``guardrails`` (#767), ``agent_consistency`` (#768) and
+``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768) and
 ``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
@@ -19,7 +19,7 @@ a field of the block's TypedDict, and that real documents validate.
 
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
-`delivery` (#779), `guardrails` (#767) and `agent_consistency` (#768), read
+`delivery` (#779), `review_reality` (#943), `guardrails` (#767) and `agent_consistency` (#768), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -29,7 +29,7 @@ from `skills/assess`.
 """
 from __future__ import annotations
 
-from lib.ci_includes import STATUSES
+from lib.ci_includes import KINDS, STATUSES
 from lib.merged_ci import MERGED_STATUSES
 from lib.run_context_types import JsonDict
 
@@ -142,10 +142,12 @@ CI_CHECKS: JsonDict = {
         "unresolved_includes": _field(_INT, "Include items not read (status other than resolved)."),
         "includes": _field(
             {"type": ["array", "integer"], "items": {"type": "object", "properties": {
-                "kind": {"enum": ["local", "project", "component", "template", "remote"]},
+                "kind": _field({"enum": list(KINDS)},
+                               "local, project, component, template, remote, or unknown (an "
+                               "include entry this reader cannot parse; status unparsed)."),
                 "id": _field({"type": ["string", "null"]},
-                             "gitlab_project:<path> or gitlab_component:<path>; null for local, "
-                             "template and remote."),
+                             "gitlab_project:<path> or gitlab_component:<path>; null for the "
+                             "other kinds."),
                 "status": _field({"enum": list(STATUSES)},
                                  "resolved, or why not: no_root, not_cloned, file_missing, "
                                  "not_offline (template, remote), glob, bad_path, depth_limit, "
@@ -188,15 +190,16 @@ CI_CHECKS: JsonDict = {
         "enforced_check_runs": _field(
             {"type": ["boolean", "null"]},
             "Layer 5 level 1: true when a CI line runs a check that can fail its job on ordinary "
-            "changes, null when none does but included jobs, unsettled triggers, a target whose "
-            "recipe is not read, a CI system the scan does not parse or an external CI system "
-            "may hold one, else false."),
+            "changes, null when none does but included jobs, unsettled triggers, a committed "
+            "script the tree does not hold, a target whose recipe is not read, a CI system the "
+            "scan does not parse or an external CI system may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_target",
-                      "unread_ci_system", "external_ci", "external_ci_marker", "not_enforced",
-                      "no_check_command", "no_ci"]},
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "script_not_found",
+                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
+                      "not_enforced", "no_check_command", "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
-            "unknown_trigger, check_target or unread_ci_system (null), external_ci (null: an "
+            "unknown_trigger, script_not_found, check_target or unread_ci_system (null), "
+            "external_ci (null: an "
             "external check context on merged changes under --platform; more than half of the "
             "sampled merged pull requests carry a check run or commit status of a known "
             "external CI system such as Buildkite, LUCI, Prow tide or Azure Pipelines, read with "
@@ -215,17 +218,19 @@ CI_CHECKS: JsonDict = {
             "on ordinary changes (not --version or --help), or a step uses a known lint action "
             "(golangci-lint-action, ruff-action, super-linter, reviewdog), "
             "null when none does but included "
-            "jobs, unsettled triggers or a check target or script that may lint inside it could "
+            "jobs, unsettled triggers, a lint script the tree does not hold or a check target or "
+            "script that may lint inside it could "
             "hold one, or when the only static gate is a compiler run with warnings as errors or "
             "a .NET build's analysers (issue #926), else false. A formatter that rewrites files "
             "counts only when a later line of its job runs git diff --exit-code."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
-                      "analysers_in_build", "compiler_gate_only", "not_enforced",
+                      "script_not_found", "check_target", "unread_ci_system", "external_ci",
+                      "external_ci_marker", "analysers_in_build", "compiler_gate_only", "not_enforced",
                       "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger, check_target, unread_ci_system, external_ci or external_ci_marker "
+            "unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or "
+            "external_ci_marker "
             "(null; as enforced_basis), analysers_in_build (null: "
             "a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns "
             "on with EnforceCodeStyleInBuild or AnalysisLevel; their severities live in "
@@ -274,14 +279,17 @@ COVERAGE_GATE: JsonDict = {
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
-            "read, or when no gate is found in a repository holding a go.mod or Cargo.toml "
-            "(see unmeasured_reason); false otherwise. Gates counted are those enforced "
+            "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
+            "language and none of at least 50 for another (see unmeasured_reason); false "
+            "otherwise. Gates counted are those enforced "
             "counts."),
         "unmeasured_reason": _field(
             {"type": ["string", "null"]},
-            "Why threshold_meets_minimum is null with no gate found: "
-            "go_rust_gate_form_not_read when the repository holds a go.mod or Cargo.toml "
-            "and its gate may be a script this scan does not read; null otherwise."),
+            "Why threshold_meets_minimum is null when no gate of the repository's Go or Rust "
+            "module is found: go_rust_gate_form_not_read when the repository holds a go.mod "
+            "or Cargo.toml with no gate read for it and none of at least 50 percent for "
+            "another language (issue #937), so its gate may be a script this scan does not "
+            "read; null otherwise."),
         "enforced_meets_minimum": _field(
             {"type": ["boolean", "null"]},
             "The Layer 6 level 1 signal (issue #921): threshold_meets_minimum with a CI run "
@@ -331,6 +339,46 @@ DELIVERY: JsonDict = {
             {"type": ["integer", "null"]},
             "Changes per heavy read of the sample (lib/merged_sample.py PAGE_SIZE, or half "
             "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
+    },
+}
+
+_TOKENS: JsonDict = {"type": "array", "items": {"type": "string"}}
+
+REVIEW_REALITY: JsonDict = {
+    "description": (
+        "Whether merged changes were reviewed (lib/review_reality.py), from the shared sample "
+        "of up to 30 changes merged inside the run window. A platform block: a refused read is "
+        "available false with a reason (no_access on HTTP 403), never zeros. Shares are of "
+        "merged_count; no title, number, login or name is written."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "reason": _field({"type": "string"}, "Why the block is unavailable."),
+        "merged_count": _field(_INT, "Merged changes in the sample (at most 30)."),
+        "oldest_merged_days_ago": _field({"type": ["integer", "null"]},
+                                         "Age in days of the oldest sampled merge; null when no "
+                                         "merge time was read."),
+        "reviewed_share": _share("changes with a review by an account other than the author "
+                                 "(on GitLab also an approval, a human comment or AI review); "
+                                 "null also when a GitLab merge request's notes decide nothing"),
+        "approved_share": _share("changes approved by an account other than the author"),
+        "bot_review_share": _share("changes with review-bot output (a GitHub comment by a bot "
+                                   "other than github-actions, a GitLab AI-review note)"),
+        "self_merged_share": _share("changes merged by their author"),
+        "review_required": _field({"type": ["boolean", "null"]},
+                                  "Whether the default branch requires an approving review; "
+                                  "null when the rules could not be read."),
+        "hollow_required_review": _field(
+            {"type": ["boolean", "null"]},
+            "review_required and reviewed_share under 0.2; null when either is unknown or "
+            "fewer than 5 changes were sampled."),
+        "required_approval_bypassed": _field(
+            {"type": ["boolean", "null"]},
+            "review_required and approved_share under 0.2; null as for hollow_required_review."),
+        "sequence": _field(_TOKENS, "One token per sampled change, oldest merge first: approved, "
+                                    "reviewed, unreviewed or unknown, read with the predicates "
+                                    "behind approved_share and reviewed_share (#943)."),
+        "bot_sequence": _field(_TOKENS, "One token per sampled change, in the order of sequence: "
+                                        "bot, none or unknown (review-bot output, #943)."),
     },
 }
 
@@ -465,5 +513,6 @@ BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "coverage_gate": COVERAGE_GATE,
     "delivery": DELIVERY,
     "guardrails": GUARDRAILS,
+    "review_reality": REVIEW_REALITY,
     "layer_grades": LAYER_GRADES,
 }

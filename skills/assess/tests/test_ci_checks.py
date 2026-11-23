@@ -389,7 +389,7 @@ def test_lint_runs_states(tmp_path: Path, files: dict[str, str], lint: bool | No
     ("make lint", True),
     ("npm run lint", True),
     ("task lint", True),
-    ("./scripts/lint.sh", True),
+    ("./scripts/lint.sh", None),               # not committed here: script_not_found (#937)
     ("go vet ./...", True),
     ("uv run mypy --version", False),
     ("eslint --help", False),
@@ -577,3 +577,72 @@ def test_lint_runs_on_an_unread_ci_system_is_not_measured(
     """Issue #787: Layer 3 level 1 reads unknown, never false, beside an unread CI system."""
     block = scan_ci_checks(_write(tmp_path, files))
     assert (block["lint_runs"], block["lint_basis"]) == lint
+
+
+# --- #937: a committed-script step whose file is not in the tree ------------------------
+
+@pytest.mark.parametrize(("files", "expected"), [
+    pytest.param(_gha("./ci.sh"), (None, "script_not_found"), id="missing-ci-sh"),
+    # #951: the old credit came from the name ci, not the body (lib.named_check): null.
+    pytest.param({**_gha("./ci.sh"), "ci.sh": "pytest\n"}, (None, "check_target"),
+                 id="committed-ci-sh"),
+    pytest.param({**_gha("./ci.sh"), "ci.sh": "echo deploy\n"}, (None, "check_target"),
+                 id="committed-ci-sh-runs-no-check"),
+    pytest.param(_gha("bash scripts/test.sh"), (None, "script_not_found"), id="missing-bash-script"),
+    pytest.param(_gha("bash scripts/test.sh --ci"), (None, "script_not_found"),
+                 id="missing-bash-script-with-flag"),
+    pytest.param({**_gha("bash scripts/test.sh"), "scripts/test.sh": "pytest\n"},
+                 (True, "enforced_check"), id="committed-bash-script"),
+    # #951: a committed ci.sh is an unread target (lib.named_check), so null, not credit.
+    pytest.param({**_gha("cd svc && ./ci.sh"), "svc/ci.sh": "pytest\n"}, (None, "check_target"),
+                 id="script-under-a-subdirectory"),
+    pytest.param({".github/workflows/ci.yml": _gha("./ci.sh")[".github/workflows/ci.yml"]
+                  + "      - run: pytest\n"}, (True, "enforced_check"), id="beside-a-real-check"),
+    pytest.param(_gha("./ci.sh || true"), (False, "not_enforced"), id="masked-missing-script"),
+    pytest.param(_gha("./gradlew test"), (True, "enforced_check"), id="modelled-runner"),
+    pytest.param(_gha("./vendor/bin/phpunit"), (True, "enforced_check"), id="installed-tool"),
+    pytest.param(_gha("./bin/phpunit"), (True, "enforced_check"), id="tool-installed-into-bin"),
+    pytest.param(_gha("./build/test.sh"), (True, "enforced_check"), id="excluded-build-tree"),
+])
+def test_a_missing_check_script_is_not_credited(tmp_path: Path, files: dict[str, str],
+                                                expected: tuple[bool | None, str]) -> None:
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == expected
+
+
+def test_an_installed_linter_binary_is_still_a_lint_run(tmp_path: Path) -> None:
+    """``install.sh -b ./bin`` then ``./bin/golangci-lint run``: a tool, not a committed script."""
+    block = scan_ci_checks(_write(tmp_path, _gha("./bin/golangci-lint run")))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def test_a_missing_lint_script_is_not_credited(tmp_path: Path) -> None:
+    files = _gha("./scripts/lint.sh")
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == (None, "script_not_found")
+    files["scripts/lint.sh"] = "ruff check .\n"
+    block = scan_ci_checks(_write(tmp_path, files))
+    assert (block["lint_runs"], block["lint_basis"]) == (True, "lint_command")
+
+
+def test_a_missing_script_in_a_git_checkout_reads_the_tracked_files(tmp_path: Path) -> None:
+    """In a git checkout the tracked files decide: an untracked ``ci.sh`` is not committed."""
+    _write(tmp_path, _gha("./ci.sh"))
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    _write(tmp_path, {"ci.sh": "pytest\n"})
+    block = scan_ci_checks(tmp_path)
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "script_not_found")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "ci.sh"], check=True)
+    block = scan_ci_checks(tmp_path)
+    # #951: once tracked, ci.sh is an unread target (lib.named_check), not a credited check.
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (None, "check_target")
+
+
+def test_a_gitignored_script_is_not_missing(tmp_path: Path) -> None:
+    """A gitignored script is built or fetched by a step, so it is not read as missing."""
+    _write(tmp_path, {**_gha("./gen/check.sh"), ".gitignore": "gen/\n"})
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True)
+    block = scan_ci_checks(tmp_path)
+    assert (block["enforced_check_runs"], block["enforced_basis"]) == (True, "enforced_check")

@@ -44,7 +44,8 @@ so a path or name before the colon is never kept; an empty reason is dropped.
 Not filtered: the wiki pages, hotspot pages, badge and report the run
 also writes stay in the target repository's `.assess/` directory and
 carry full text. Only `run-context.counts-only.json` (and an
-`assess_signals.py --counts-only` document) is content-free.
+`assess_signals.py --counts-only` document) is content-free, with the
+`doc-drift.counts-only.svg` and `review-strip.counts-only.svg` drawn from it.
 
 ## Path-keyed maps
 
@@ -317,6 +318,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | Field | Kept as |
 |---|---|
 | `review_reality.reason` | dropped |
+| `review_reality.sequence` | token |
+| `review_reality.bot_sequence` | token |
 
 ## delivery
 
@@ -474,6 +477,23 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `owner_exclusions.skipped.problem` | token |
 | `owner_exclusions.disclosures` | dropped |
 
+## units
+
+| Field | Kept as |
+|---|---|
+| `units.source` | token |
+| `units.unit_count_reason` | token |
+| `units.units.path` | dropped |
+| `units.units.origin` | token |
+| `units.units.ecosystem` | token |
+| `units.units.workspace` | dropped |
+| `units.units.name` | dropped |
+| `units.aggregators.path` | dropped |
+| `units.aggregators.ecosystem` | token |
+| `units.skipped.path` | dropped |
+| `units.skipped.problem` | token |
+| `units.unreadable_manifests` | dropped |
+
 ## offers_block
 
 | Field | Kept as |
@@ -572,6 +592,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `agent_environment.pinning.manifests.ecosystem` | token |
 | `agent_environment.pinning.manifests.manifest` | path (hashed when hashing is on) |
 | `agent_environment.pinning.manifests.lockfile` | path (hashed when hashing is on) |
+| `agent_environment.pinning.manifests.note` | token |
 | `agent_environment.ci_duration.reason` | dropped |
 | `agent_environment.ci_duration.branch` | dropped |
 | `agent_environment.ci_duration.workflows.workflow` | dropped |
@@ -801,3 +822,6 @@ kept as written. A string
 | `opportunities.shared_templates.repos` | path (hashed when hashing is on) |
 | `opportunities.shared_templates.source` | path (hashed when hashing is on) |
 | `opportunities.shared_templates.kind` | token |
+| `repos.exclusions.kind` | token |
+| `repos.exclusions.source` | token |
+| `repos.exclusions.reason` | dropped |
