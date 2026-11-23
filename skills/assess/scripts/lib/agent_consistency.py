@@ -23,7 +23,7 @@ Claude Code to run ``make test`` while ``.windsurfrules`` still says ``npm test`
    for divergence like the rest.
 4. **Divergence**, over each system's effective text (its files plus the
    canonical text for a file that imports or points to it):
-   ``command``: a test or lint command (``check_command.is_check_command`` /
+   ``command``: a test or lint command (``named_check.is_named_check``, #951 /
    ``is_lint_command``, including a bare inline ```pytest```) one system names
    and another does not; ``threshold``: two systems whose numbers on lines
    naming ``coverage``, ``complexity`` or ``line length`` share none (a
@@ -59,7 +59,7 @@ A system is linked when one of its files links (its other always-loaded files ar
 supplementary rules, still compared for divergence). Each
 `Divergence` is `{kind, value, named_in, missing_from, stated}` over each system's
 effective text (its files, plus the canonical text where a file imports or points to
-it): `command`, a test or lint command (`check_command.is_check_command` or
+it): `command`, a test or lint command (`named_check.is_named_check` or
 `is_lint_command`, plus a one-word inline `pytest`, `tox`, `nox` or linter) named by
 some systems and not others; `threshold`, two systems whose numbers on lines naming
 `coverage`, `complexity` or `line length` share none (a stray second number is no conflict;
@@ -93,7 +93,8 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, TypedDict
 
 from lib.agent_systems import AIDER_CONFIG, SYSTEM_BY_ID, SYSTEM_ORDER
-from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_check_command, is_lint_command
+from lib.check_command import ALWAYS_CHECK, LINT_PROGRAMS, is_lint_command
+from lib.named_check import is_named_check
 from lib.command_resolver import command_words, extract_commands
 from lib.doc_graph import is_repo_file
 from lib.git_churn import tracked_files
@@ -183,7 +184,7 @@ class AgentConsistencyBlock(TypedDict):
 def check_commands(text: str) -> set[str]:
     """The test and lint commands a text names, word-normalised."""
     found = {" ".join(command_words(c.text)) for c in extract_commands(text)
-             if is_check_command(c.text) or is_lint_command(c.text)}
+             if is_named_check(c.text) or is_lint_command(c.text)}
     in_fence = False
     for line in text.splitlines():
         if _FENCE.match(line):
