@@ -6,8 +6,9 @@ name and one plain sentence of what an agent can do there (``STEP_MEANING``, the
 table of those sentences; a Step it does not know reads its model name only). Between
 two rungs sits the gate that lifts you to the upper one: the gates the upper Step adds
 over the one below, worded by ``headline.GATE_CHANGE`` ("CI runs the tests"), each marked
-"in place" or "not yet" from the level result's conditions (a gate holds when its row's
-conditions 1..level are met). The run's Step (``level["step"]``) carries the "You are
+"in place", "not yet", "not measured" or "excluded by owner" from the level result's
+conditions (``gate_state``; a gate holds when its row's conditions 1..level are met, and
+missing evidence never reads "not yet"). The run's Step (``level["step"]``) carries the "You are
 here" marker; the gate below ``level["next_step"]`` is drawn in the warn colour as the
 next one. Nothing is hard-coded about the number of Steps or their gates.
 
@@ -24,7 +25,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import lib.fleet.fleet_svg as svg
-from lib.headline import GATE_CHANGE, _gate_gain
+from lib.headline import GATE_CHANGE, _gate_change, _gate_gain
 from lib.level_result_types import LevelResult
 from lib.levels import MaturityModel, StepDef, StepGate
 from lib.vocabulary import IN_PLACE
@@ -60,10 +61,20 @@ def new_gates(steps: Sequence[StepDef], step: int) -> list[StepGate]:
     return [g for g in by_step[step].get("gates", []) if g["id"] not in below]
 
 
-def gate_holds(level: LevelResult, gate: StepGate) -> bool:
-    """True when the gate row's conditions 1..level are all met."""
-    met = {c["id"] for c in level["conditions"] if c["state"] == "met"}
-    return all(f"{gate['row']}.{n}" in met for n in range(1, gate["level"] + 1))
+def gate_state(level: LevelResult, gate: StepGate) -> str:
+    """What the run read for a gate, from its row's conditions 1..level: ``in place`` when
+    all are met; ``not yet`` when one is unmet or declined (or absent from the result);
+    otherwise ``not measured`` when one was not measured, and ``excluded by owner`` when
+    one is not applicable. Missing evidence never reads as "not yet"."""
+    by_id = {c["id"]: c["state"] for c in level["conditions"]}
+    states = [by_id.get(f"{gate['row']}.{n}", "unmet") for n in range(1, gate["level"] + 1)]
+    if all(state == "met" for state in states):
+        return "in place"
+    if any(state in ("unmet", "declined") for state in states):
+        return "not yet"
+    if "not_measured" in states:
+        return "not measured"
+    return "excluded by owner"
 
 
 def _gate_words(gate: StepGate) -> str:
@@ -92,7 +103,7 @@ def _gate_band(x: float, y: float, gates: Sequence[StepGate], to: int, level: Le
     parts = [f'<path d="M{mid:.1f} {y + GATE_H - 4:.1f} L{mid:.1f} {y + 8:.1f} M{mid - 6:.1f} {y + 14:.1f} '
              f'L{mid:.1f} {y + 8:.1f} L{mid + 6:.1f} {y + 14:.1f}" fill="none" class="s-{cls}" '
              f'stroke-width="{2.5 if is_next else 1.5}" data-gate-to="{to}"{extra}/>']
-    words = "; ".join(f"{_gate_words(g)} ({'in place' if gate_holds(level, g) else 'not yet'})"
+    words = "; ".join(f"{_gate_words(g)} ({gate_state(level, g)})"
                       for g in gates) or "no new gate"
     label = f"{'Next gate' if is_next else 'Gate'}: {words}"
     parts.append(svg.text(mid + 18, y + GATE_H / 2 + 4, label, size=12,
@@ -143,14 +154,15 @@ def ladder_caption(level: LevelResult, steps: Sequence[StepDef]) -> str:
     """The caption: what opens the next Step, read from ``next_step.blockers`` as the
     headline's Next line reads them, or that the top Step is held.
 
-    Each blocking gate is worded by ``GATE_CHANGE``; a count shortfall left once the gates
+    Each blocking gate is worded by ``headline._gate_change`` (``GATE_CHANGE``, plus why a
+    not-measured or owner-excluded gate is open); a count shortfall left once the gates
     hold (``headline._gate_gain``: a counted gate condition adds to the tally) adds "more
     practices are in place", so the caption and the headline name the same unlock."""
     nxt = level["next_step"]
     if nxt is None:
         return "This is the top Step; it holds while its gates hold."
     gates = [b for b in nxt["blockers"] if b["kind"] == "gate"]
-    changes = [GATE_CHANGE.get(b.get("gate", ""), f"the {b.get('gate', '')} gate holds") for b in gates]
+    changes = [_gate_change(b) for b in gates]
     model: MaturityModel = {"version": level["levels_version"], "rows": [], "steps": list(steps)}
     gain, _ = _gate_gain(level, model, nxt["step"], gates)
     if any(b.get("threshold", 0) - b.get("met", 0) - gain > 0
@@ -167,6 +179,6 @@ def gate_conditions(steps: Sequence[StepDef]) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
-__all__ = ["LADDER_FILE", "LADDER_TITLE", "STEP_MEANING", "gate_conditions", "gate_holds",
+__all__ = ["LADDER_FILE", "LADDER_TITLE", "STEP_MEANING", "gate_conditions", "gate_state",
            "ladder_caption", "ladder_in_place", "meaning", "new_gates", "render_ladder"]
 

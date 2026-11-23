@@ -114,6 +114,27 @@ def test_a_count_shortfall_after_the_gates_joins_the_caption_like_the_headline()
     assert ladder.ladder_caption(level, STEPS) == "Step 4, Autonomous loops, opens when its gates hold."
 
 
+@pytest.mark.parametrize("state, read", [
+    ("not_measured", "not measured"), ("not_applicable", "excluded by owner"),
+    ("declined", "not yet"), ("unmet", "not yet"), ("met", "in place"),
+])
+def test_a_gate_the_run_could_not_read_never_reads_not_yet(state: str, read: str) -> None:
+    level = _at(2)
+    ci = next(c for c in level["conditions"] if c["id"] == "layer-5-ci.1")
+    ci["state"] = state
+    assert ladder.gate_state(level, ladder.new_gates(STEPS, 3)[0]) == read
+    assert f"CI runs the tests ({read})" in ladder.render_ladder(level, STEPS)
+
+
+def test_the_caption_says_why_a_next_gate_is_open_as_the_headline_does() -> None:
+    level = _at(2)
+    assert level["next_step"] is not None
+    level["next_step"]["blockers"] = [{"kind": "gate", "gate": "ci_runs_tests", "state": "not_measured",
+                                       "reason": "needs_platform"}]
+    assert ladder.ladder_caption(level, STEPS) == ("Step 3, Unattended agent PRs, opens when CI runs the tests "
+                                                   "(not measured here: needs GitHub or GitLab access).")
+
+
 def test_new_gates_are_the_ones_a_step_adds() -> None:
     assert [g["id"] for g in ladder.new_gates(STEPS, 2)] == ["instructions"]
     assert [g["id"] for g in ladder.new_gates(STEPS, 3)] == ["ci_runs_tests"]
