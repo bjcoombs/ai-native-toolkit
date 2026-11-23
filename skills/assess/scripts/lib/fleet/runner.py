@@ -45,9 +45,11 @@ then names why (#932, ``DIRTY_UNKNOWN_REASONS``): no commit (scanned in place, t
 is no sha to check out), ``git status`` or ``git ls-files`` failing, or index entries
 ``git status`` never compares (a sparse checkout, skip-worktree or assume-unchanged
 entries). Unknown is never read as clean: with a ``HEAD`` such a checkout is scanned
-from its committed tree too. A modified submodule's own content never marks the
-checkout dirty (``--ignore-submodules=dirty``): the copy's submodule directory is
-empty either way, so a moved submodule commit still does.
+from its committed tree too. A submodule's own modified content never marks the
+checkout dirty (``--ignore-submodules=dirty``), so a checkout whose only edit is
+inside a submodule is clean and scanned in place, edit included; its row says so
+with ``dirty_reason`` ``submodule_dirty`` (#1017), so a run's history can tell that
+local edit from a committed change. A moved submodule commit still marks it dirty.
 
 Read only: every git call here and in the scan runs with
 ``GIT_OPTIONAL_LOCKS=0``, scans run with the scratch directory as their working
@@ -90,6 +92,9 @@ clean status, index entries `git status` never compares (`_hidden_entries` reads
 `sparse_checkout`, `skip_worktree`, `assume_unchanged`). `commit_state` returns `CommitState`
 (`RepoCommit` plus `dirty_reason`). Status runs with `--ignore-submodules=dirty`, so a submodule's
 own edits never mark the checkout dirty (unlike `/assess`); a moved submodule commit still does.
+A clean checkout whose submodules hold modified tracked content (a second status with
+`--ignore-submodules=untracked`) keeps `dirty: false`, is scanned in place, and carries
+`dirty_reason: submodule_dirty` (#1017, `SUBMODULE_DIRTY`), the one reason on a non-null `dirty`.
 `_read_only_env` drops the repository-local `GIT_*` variables (`REPO_LOCAL_GIT_ENV`, git's
 `--local-env-vars`), so a run from a hook or CI step reads each target. `run_signals` scans `committed_tree`: the checkout itself when known clean or without a commit, else (dirty or unknown) a
 `git clone --shared --no-checkout` into the scratch directory checked out at `head_sha`
@@ -159,6 +164,10 @@ SKIP_WORKTREE = "skip_worktree"  # skip-worktree entries without a sparse checko
 ASSUME_UNCHANGED = "assume_unchanged"  # entries marked assume-unchanged
 DIRTY_UNKNOWN_REASONS = (NO_COMMIT, STATUS_ERROR, INDEX_READ_ERROR, SPARSE_CHECKOUT, SKIP_WORKTREE,
                          ASSUME_UNCHANGED)
+# On a clean row (#1017): the only uncommitted edit is a submodule's own tracked content,
+# which ``dirty`` never counts, so the checkout was scanned in place with that edit.
+SUBMODULE_DIRTY = "submodule_dirty"
+DIRTY_REASONS = (*DIRTY_UNKNOWN_REASONS, SUBMODULE_DIRTY)
 
 _SKIP_DIRS = frozenset({"worktree"})
 _HOSTLESS_URL = re.compile(r"^[a-z][a-z0-9+.-]*://(?:/|$)", re.IGNORECASE)
@@ -176,7 +185,7 @@ class FleetRow(TypedDict):
     active: bool | None  # HEAD committed inside the window; None when failed or not checked
     head_sha: str | None  # the commit measured (#907); None when failed or no commit
     dirty: bool | None  # tracked files differed from HEAD, so HEAD's tree was scanned; None when unknown
-    dirty_reason: str | None  # why ``dirty`` is None on an ok row (DIRTY_UNKNOWN_REASONS); else None
+    dirty_reason: str | None  # why ``dirty`` is None (DIRTY_UNKNOWN_REASONS), or submodule_dirty; else None
 
 
 class RepoCommit(TypedDict):
@@ -187,7 +196,8 @@ class RepoCommit(TypedDict):
 
 
 class CommitState(RepoCommit):
-    """``RepoCommit`` plus ``dirty_reason``, the token for a None ``dirty`` (#932)."""
+    """``RepoCommit`` plus ``dirty_reason``: the token for a None ``dirty`` (#932), or
+    ``submodule_dirty`` on a clean one (#1017)."""
 
     dirty_reason: str | None
 
@@ -438,22 +448,36 @@ def commit_state(checkout: Path) -> CommitState:
     ``/assess``, a submodule's own modified content is left out too
     (``--ignore-submodules=dirty``, #932). Read with optional locks off, so ``git
     status`` never rewrites the target's index. A clean status with entries git never
-    compares (``_hidden_entries``) reads as unknown: None, with a ``dirty_reason``.
+    compares (``_hidden_entries``) reads as unknown: None, with a ``dirty_reason``. A
+    clean one whose submodules hold modified tracked content stays False, with
+    ``submodule_dirty`` (#1017); untracked files inside a submodule never count.
     """
     head = _git(checkout, "rev-parse", "--verify", "--quiet", "HEAD")
     if head is None:
         return _commit(None, None, NO_COMMIT)
-    states = [_git_output(checkout, "status", "--porcelain", "--untracked-files=no",
-                          "--ignore-submodules=dirty", "--", spec)
-              for spec in (ASSESS_EXCLUDE_PATHSPEC, ASSESS_CONFIG_PATHSPEC)]
-    if None in states:
+    states = _status(checkout, "dirty")
+    if states is None:
         return _commit(head, None, STATUS_ERROR)
     if any(states):
         return _commit(head, True)
     hidden = _hidden_entries(checkout)
     if hidden is None:
         return _commit(head, None, INDEX_READ_ERROR)
-    return _commit(head, None, hidden) if hidden else _commit(head, False)
+    if hidden:
+        return _commit(head, None, hidden)
+    with_submodules = _status(checkout, "untracked")
+    if with_submodules is None:
+        return _commit(head, None, STATUS_ERROR)
+    return _commit(head, False, SUBMODULE_DIRTY if any(with_submodules) else None)
+
+
+def _status(checkout: Path, ignore_submodules: str) -> list[str] | None:
+    """``git status --porcelain`` of tracked files under both ``/assess`` dirty pathspecs,
+    one output each, or None when either call failed."""
+    states = [_git_output(checkout, "status", "--porcelain", "--untracked-files=no",
+                          f"--ignore-submodules={ignore_submodules}", "--", spec)
+              for spec in (ASSESS_EXCLUDE_PATHSPEC, ASSESS_CONFIG_PATHSPEC)]
+    return None if None in states else [state for state in states if state is not None]
 
 
 def _clone_at(checkout: Path, copy: Path, sha: str, timeout: int) -> bool:
