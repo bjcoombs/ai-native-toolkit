@@ -141,14 +141,14 @@ def test_privacy_for_full_ignores_any_salt() -> None:
 def _string_fields(tp: object, prefix: str = "") -> set[str]:
     """Dotted patterns of every field of ``tp`` (a TypedDict) that can hold a string."""
     import types
-    from typing import Union, get_args, get_origin, get_type_hints, is_typeddict
+    from typing import Literal, Union, get_args, get_origin, get_type_hints, is_typeddict
     found: set[str] = set()
     for name, hint in get_type_hints(tp).items():
         pattern = f"{prefix}{name}"
         stack = [hint]
         while stack:
             current = stack.pop()
-            if current is str:
+            if current is str or get_origin(current) is Literal:  # a Literal token is a string too
                 found.add(pattern)
             elif is_typeddict(current):
                 found |= _string_fields(current, pattern + ".")
