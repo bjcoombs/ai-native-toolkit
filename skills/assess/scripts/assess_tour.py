@@ -44,7 +44,7 @@ import sys
 import tempfile
 import tomllib
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 # Make sibling lib package and orchestrators importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -74,7 +74,7 @@ class TourHistory(TypedDict):
 
 
 class TourResult(TypedDict):
-    repo: str
+    repo: NotRequired[str]
     step: int | None
     next_step: int | None
     next_gates: list[str]
@@ -159,6 +159,41 @@ def patched_paths(patch: str) -> list[str]:
     return [line[len("+++ b/"):].strip() for line in patch.splitlines() if line.startswith("+++ b/")]
 
 
+def _code_lines(text: str) -> list[str]:
+    """A YAML file's lines without comments, trailing space or blank lines."""
+    lines = []
+    for line in text.replace("\r\n", "\n").splitlines():
+        code = "" if line.lstrip().startswith("#") else line.split(" #", 1)[0]
+        if code.strip():
+            lines.append(code.rstrip())
+    return lines
+
+
+def _edit_is_the_fix(repo: Path, env: dict[str, str], patch: str, paths: list[str]) -> bool:
+    """Whether the working tree's copy of each patched file is the fixed file.
+
+    The fixed file is HEAD's copy with ``fix.patch`` applied, in a scratch directory; the
+    two are compared by ``_code_lines``, so a newcomer who deletes ``|| true`` and keeps the
+    comment above it has made the fix.
+    """
+    with tempfile.TemporaryDirectory(prefix="assess-tour-fix-") as tmp:
+        for rel in paths:
+            target = Path(tmp) / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(_git(repo, env, "show", f"HEAD:{rel}").encode("utf-8"))
+        done = subprocess.run(
+            ["git", "apply", "-"], cwd=tmp, input=patch, check=False,
+            capture_output=True, encoding="utf-8", errors="replace", env=env,
+        )
+        if done.returncode != 0:
+            return False
+        return all(
+            _code_lines((repo / rel).read_text(encoding="utf-8"))
+            == _code_lines((Path(tmp) / rel).read_text(encoding="utf-8"))
+            for rel in paths
+        )
+
+
 def _apply(repo: Path, env: dict[str, str], patch: str, *flags: str) -> bool:
     done = subprocess.run(
         ["git", "-C", str(repo), "apply", *flags, "-"], input=patch, check=False,
@@ -171,7 +206,9 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     """Commit the tour's one fix in the sample at ``repo`` and say how it got there.
 
     ``applied``: ``fix.patch`` applied to a clean tree and was committed. ``edited``: the
-    tree already held an edit (the newcomer made the fix by hand), committed as it is.
+    newcomer made the fix by hand, and their edit, which matches the fixed file once
+    comments and blank lines are set aside, was committed as it is. Any other edit to a file
+    the patch names raises ``ValueError`` with its diff; edits to other files stay out.
     ``already_fixed``: HEAD already has the fix, so nothing was committed. The commit takes
     the fixed date and message from ``history.toml`` either way, and holds only the files
     ``fix.patch`` names. ``repo`` must be a tour sample (``require_sample``).
@@ -182,6 +219,10 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     patch = (sample / "fix.patch").read_text(encoding="utf-8").replace("\r\n", "\n")
     paths = patched_paths(patch)
     if _git(repo, env, "status", "--porcelain", "--untracked-files=no", "--", *paths).strip():
+        if not _edit_is_the_fix(repo, env, patch, paths):
+            diff = _git(repo, env, "diff", "--", *paths)
+            raise ValueError(f"the edit to {', '.join(paths)} is not the tour's fix "
+                             f"(delete `|| true` from the pytest line):\n{diff}")
         how = "edited"
     elif _apply(repo, env, patch, "--check"):
         _apply(repo, env, patch)
@@ -222,7 +263,7 @@ def report(out: Path, *, fixed: bool = False) -> TourResult:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(result["report"], out)
     result["report"] = out.resolve().as_posix()
-    result["repo"] = ""
+    del result["repo"]  # the temporary sample is gone
     return result
 
 

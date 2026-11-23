@@ -148,3 +148,29 @@ def test_a_fix_commits_only_the_patched_file(tmp_path: Path) -> None:
     changed = assess_tour._git(repo, env, "show", "--name-only", "--format=", "HEAD").split()
     assert changed == [".github/workflows/ci.yml"]
     assert "README.md" in assess_tour._git(repo, env, "status", "--porcelain")
+
+
+def test_a_wrong_hand_edit_is_refused_with_its_diff(tmp_path: Path) -> None:
+    repo = assess_tour.build(tmp_path / "tally")
+    ci = repo / ".github" / "workflows" / "ci.yml"
+    ci.write_bytes(ci.read_bytes().replace(b"pytest || true", b"pytest || echo failed"))
+    with pytest.raises(ValueError, match="not the tour's fix") as caught:
+        assess_tour.fix(repo)
+    assert "+      - run: pytest || echo failed" in str(caught.value)
+    env = assess_tour._git_env("A <a@example.com>", "2026-10-01T00:00:00+00:00")
+    assert assess_tour._git(repo, env, "rev-list", "--count", "HEAD").strip() == "4"
+
+
+def test_a_hand_edit_matching_the_patch_exactly_is_committed(tmp_path: Path) -> None:
+    repo = assess_tour.build(tmp_path / "tally")
+    ci = repo / ".github" / "workflows" / "ci.yml"
+    text = ci.read_text(encoding="utf-8")
+    ci.write_bytes(text.replace("      # Keeps the build green while the report test is flaky.\n", "")
+                   .replace("pytest || true", "pytest").encode("utf-8"))
+    assert assess_tour.fix(repo) == "edited"
+
+
+def test_report_prints_no_repo_path(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert assess_tour.main(["report", "--out", str(tmp_path / "r.md")]) == 0
+    printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert "repo" not in printed and printed["step"] == 2
