@@ -51,9 +51,17 @@ minus the doc graph's ``EXCLUDE_DIRS`` and the ``.assess/config.toml`` excludes:
    manifest-only aggregator (a BOM, a parent POM) and is skipped as
    ``manifest_only``.
 
-A workspace manifest that cannot be parsed is named in ``unreadable_manifests``;
-its folder is an aggregator with ``member_count`` null, and ``unit_count`` reads
-null with ``unit_count_reason`` ``unreadable_manifest``: its members are unknown.
+**Unparseable manifests (#1030).** A manifest that cannot be parsed nulls the count
+only when it could change the unit set: it sits at the repository root, at a
+workspace member, or beside a declaration that parsed as a workspace, or it is named
+as a workspace manifest (``WORKSPACE_ONLY``: ``pnpm-workspace.yaml``, ``go.work``,
+``settings.gradle``, ``settings.gradle.kts``). Such a file is named in
+``unreadable_manifests``; its folder is an aggregator with ``member_count`` null,
+and ``unit_count`` reads null with ``unit_count_reason`` ``unreadable_manifest``:
+its members are unknown. Any other unparseable manifest is a leaf, such as a broken
+test fixture outside the member globs: it is skipped as ``unparseable_leaf`` (the
+manifest's path) and its folder is a candidate by its other manifests, as if the
+broken file declared no workspace. The count stays known.
 A repository with no build manifest has no units (``unit_count`` 0).
 
 **Declared units.** ``[[units]]`` in ``.assess/config.toml`` replaces discovery::
@@ -109,11 +117,13 @@ MANIFEST_NAMES = frozenset(name for name, _ in MANIFESTS)
 
 SECTION = "units"
 UNREADABLE_REASON = "unreadable_manifest"
+# Files that exist only to declare a workspace: unparseable, they always null the count.
+WORKSPACE_ONLY = frozenset({"pnpm-workspace.yaml", "go.work", "settings.gradle", "settings.gradle.kts"})
 SOURCES = ("discovered", "config")
 # Why a unit candidate or a [[units]] entry was skipped, as SkippedUnit.problem holds it.
 PROBLEMS = (
-    "manifest_only", "missing", "no_match", "outside_repo", "claimed", "tooling_only", "not_a_list", "not_a_table",
-    "no_path", "duplicate",
+    "manifest_only", "missing", "no_match", "outside_repo", "claimed", "tooling_only", "unparseable_leaf",
+    "not_a_list", "not_a_table", "no_path", "duplicate",
 )
 _GLOB_CHARS = frozenset("*?[")
 
@@ -147,7 +157,7 @@ class UnitsBlock(TypedDict):
     """The run context's ``units`` block (#862)."""
 
     source: Literal["discovered", "config"]
-    unit_count: int | None  # None, with unit_count_reason, when a workspace manifest is unreadable
+    unit_count: int | None  # None, with unit_count_reason, when a manifest that could change the units is unreadable
     unit_count_reason: str | None
     units: list[UnitEntry]
     aggregators: list[AggregatorEntry]
@@ -164,7 +174,7 @@ class _Workspace(NamedTuple):
 
 
 class _Unreadable(Exception):
-    """A workspace manifest that exists but cannot be parsed."""
+    """A build manifest that exists but cannot be parsed."""
 
 
 # -- workspace declarations ---------------------------------------------------
@@ -318,20 +328,21 @@ _DECLARATIONS = (
 )
 
 
-def _workspaces(root: Path, folder: str, names: frozenset[str]) -> list[_Workspace]:
+def _workspaces(root: Path, folder: str, names: frozenset[str]) -> tuple[list[_Workspace], list[str]]:
     """Every workspace ``folder`` declares (a Cargo workspace with npm bindings declares
-    two); ``_Unreadable`` names the manifest by its repo-relative path when one cannot be
-    parsed."""
+    two), and the repo-relative paths of the manifests there that cannot be parsed."""
     found: list[_Workspace] = []
+    broken: list[str] = []
     for name, parse in _DECLARATIONS:
         if name in names:
             try:
                 ws = parse(root / folder / name)
-            except _Unreadable as e:
-                raise _Unreadable(posixpath.normpath(posixpath.join(folder, name))) from e
+            except _Unreadable:
+                broken.append(posixpath.normpath(posixpath.join(folder, name)))
+                continue
             if ws is not None and all(w.ecosystem != ws.ecosystem for w in found):
                 found.append(ws)
-    return found
+    return found, broken
 
 
 # What makes a manifest a package rather than tooling. A monorepo root package.json
@@ -504,15 +515,17 @@ class _Walk:
         Maven ``<modules>`` are not expanded."""
         self.visited.add(folder)
         names = self.manifest_dirs.get(folder, frozenset())
-        try:
-            declared = _workspaces(self.root, folder, names)
-        except _Unreadable as e:
+        declared, broken = _workspaces(self.root, folder, names)
+        if broken and (folder == "." or origin == "workspace_member" or declared
+                       or any(posixpath.basename(b) in WORKSPACE_ONLY for b in broken)):
             # the members are unknown: an aggregator of unknown size, claimed whole
-            self.found.unreadable.append(str(e))
+            self.found.unreadable.extend(broken)
             self.found.aggregators.append({"path": folder, "member_count": None,
-                                           "ecosystem": dict(MANIFESTS)[posixpath.basename(str(e))]})
+                                           "ecosystem": dict(MANIFESTS)[posixpath.basename(broken[0])]})
             self.claimed.append(folder)
             return
+        for path in broken:  # a leaf (a broken fixture): it cannot change the unit set
+            self._skip(path, "unparseable_leaf")
         if member_eco is not None:
             declared = [ws for ws in declared if ws.ecosystem != "maven"]
         expanded = [(ws, *_expand(folder, ws, self.dirs, self.manifest_dirs)) for ws in declared]
@@ -602,7 +615,7 @@ def scan_units(repo_root: Path, excludes: tuple[set[str], list[str]] | None = No
                 "units": declared, "aggregators": [], "aggregator_count": 0, "skipped": declared_skips,
                 "unreadable_manifests": []}
     found = discover_units(repo_root, files)
-    # an unreadable workspace manifest leaves its members unknown, so the count is too
+    # an unreadable manifest that could declare a workspace leaves its members unknown
     known = not found.unreadable
     return {"source": "discovered", "unit_count": len(found.units) if known else None,
             "unit_count_reason": None if known else UNREADABLE_REASON, "units": found.units,

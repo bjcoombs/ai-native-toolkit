@@ -290,9 +290,50 @@ def test_an_unparseable_workspace_manifest_makes_the_count_unknown(tmp_path: Pat
     assert _paths(block) == []
 
 
-def test_a_plain_unparseable_manifest_folder_is_still_unknown(tmp_path: Path):
+def test_a_plain_unparseable_leaf_manifest_is_skipped_and_the_count_stays_known(tmp_path: Path):
     block = scan_units(_write(tmp_path, {"web/package.json": "{not json", "web/i.js": ""}))
-    assert block["unit_count"] is None and block["unreadable_manifests"] == ["web/package.json"]
+    assert block["unit_count"] == 1 and block["unreadable_manifests"] == []
+    assert _paths(block) == ["web"]
+    assert _skipped(block) == {"web/package.json": "unparseable_leaf"}
+
+
+PNPM_WITH_BROKEN_FIXTURE = {
+    "package.json": '{"name": "mono", "private": true}',
+    "pnpm-workspace.yaml": "packages:\n  - 'packages/*'\n",
+    "packages/a/package.json": '{"name": "a"}', "packages/a/i.ts": "",
+    "packages/b/package.json": '{"name": "b"}', "packages/b/i.ts": "",
+    # a deliberately malformed fixture outside the member globs
+    "tools/fx/package.json": "{not json", "tools/fx/case.js": "",
+}
+
+
+def test_a_broken_fixture_outside_the_member_globs_leaves_the_count_known(tmp_path: Path):
+    block = scan_units(_write(tmp_path, PNPM_WITH_BROKEN_FIXTURE))
+    assert block["unit_count"] == 3 and block["unit_count_reason"] is None
+    assert block["unreadable_manifests"] == []
+    assert _paths(block) == ["packages/a", "packages/b", "tools/fx"]
+    assert _skipped(block)["tools/fx/package.json"] == "unparseable_leaf"
+
+
+@pytest.mark.parametrize("files, unreadable", [
+    # a broken root Cargo.toml workspace
+    ({"Cargo.toml": '[workspace\nmembers = ["a"]', "a/Cargo.toml": "", "a/src/lib.rs": ""},
+     ["Cargo.toml"]),
+    # a broken package.json at a workspace member
+    ({"pnpm-workspace.yaml": "packages: ['packages/*']\n",
+      "packages/a/package.json": "{not json", "packages/a/i.ts": ""}, ["packages/a/package.json"]),
+    # a broken package.json beside a readable workspace declaration
+    ({"sub/Cargo.toml": '[workspace]\nmembers = ["c"]', "sub/package.json": "{not json",
+      "sub/c/Cargo.toml": "", "sub/c/src/lib.rs": ""}, ["sub/package.json"]),
+    # a file named as a workspace manifest, away from the root
+    ({"sub/pnpm-workspace.yaml": "packages: nope\n", "sub/i.ts": ""}, ["sub/pnpm-workspace.yaml"]),
+])
+def test_an_unparseable_manifest_that_could_change_the_units_nulls_the_count(
+        tmp_path: Path, files: dict[str, str], unreadable: list[str]):
+    block = scan_units(_write(tmp_path, files))
+    assert block["unit_count"] is None and block["unit_count_reason"] == "unreadable_manifest"
+    assert block["unreadable_manifests"] == unreadable
+    assert "unparseable_leaf" not in _skipped(block).values()
 
 
 def test_a_glob_matching_nothing_is_skipped_and_an_empty_workspace_is_a_plain_unit(tmp_path: Path):
@@ -465,11 +506,20 @@ def test_counts_only_never_carries_a_unit_path_or_name(tmp_path: Path):
 
 
 def test_counts_only_keeps_the_unknown_count_reason(tmp_path: Path):
-    block = scan_units(_write(tmp_path, {"web/package.json": "{not json", "web/i.js": ""}))
+    block = scan_units(_write(tmp_path, {"package.json": "{not json", "i.js": ""}))
     out = counts_only({"units": block})["units"]
     assert out["unit_count"] is None and out["unit_count_reason"] == "unreadable_manifest"
     assert out["aggregators"] == [{"ecosystem": "npm", "member_count": None}]
     assert out["unreadable_manifests"] == 1
+
+
+def test_counts_only_carries_the_leaf_skip_code_and_no_path(tmp_path: Path):
+    block = scan_units(_write(tmp_path, PNPM_WITH_BROKEN_FIXTURE))
+    for salted in (False, True):
+        out = counts_only({"units": block}, hash_paths=salted, salt="s")["units"]
+        assert {"problem": "unparseable_leaf"} in out["skipped"]
+        assert out["unit_count"] == 3 and out["unreadable_manifests"] == 0
+        assert "tools" not in json.dumps(out) and "fx" not in json.dumps(out)
 
 
 def test_codes_are_tokens():
