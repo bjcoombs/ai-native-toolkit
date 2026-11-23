@@ -649,14 +649,15 @@ SCANS: tuple[ScanSpec, ...] = (
 # core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
 # exactly those reads in that order: checked here, at import, on every run.
 SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
-# The deterministic headline (lib/headline.py, #747, #844, #1083): the Step, the gate that blocks the next one,
-# "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
-# pastes it verbatim and the badge and log entry carry its summary.
-SCANS = (*SCANS, _spec("headline", cs.headline))
 # What changed since the previous run (lib/since_last_run.py, #1083): actions closed with their
 # commits, gates gained or lost, the next blocker. Reads the run-context the previous run left,
 # so it runs before the publish step overwrites it; the report and the log.md entry open with it.
 SCANS = (*SCANS, _spec("since_last_run", cs.since_last_run))
+# The deterministic headline (lib/headline.py, #747, #844, #1083): the Step, the gate that blocks the next one,
+# "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
+# pastes it verbatim and the badge and log entry carry its summary. It reads since_last_run for the
+# executive summary that opens the report (lib/exec_summary.py, #1102), so it runs after that block.
+SCANS = (*SCANS, _spec("headline", cs.headline))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
 # for each unit of the units block, every condition tagged unit or inherited. The headless
 # runner reports it under --units (signals.UNIT_SCANS, #866).

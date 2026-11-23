@@ -5,7 +5,10 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
-- the "Since Last Run" section first (``lib/since_last_run.py``, #1083): actions closed
+- the executive summary first (``lib/exec_summary.py``, #1102): the Step and what an
+  agent can do there, the next gate as a task, what changed since the last run, and one
+  linked call to action, pasted from the ``headline`` block's ``summary_markdown``,
+- the "Since Last Run" section (``lib/since_last_run.py``, #1083): actions closed
   since the previous run with their commits, gates gained or lost and the next blocker,
 - the headline (``lib/headline.py``, #747, #844, #1083): the Step, the gate that
   blocks the next one, "Catalogue coverage: N of M measured" and the per-tag strip,
@@ -104,7 +107,7 @@ REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
 
-${since_section}## Headline
+${summary_section}${since_section}## Headline
 
 $headline
 
@@ -585,6 +588,13 @@ def render_since_section(ctx: dict[str, Any]) -> str:
     return f"## Since Last Run\n\n{block['markdown']}\n\n"
 
 
+def render_summary_section(ctx: dict[str, Any]) -> str:
+    """The executive summary and its call to action (#1102), ending in a blank line; empty
+    when the headline has none (unavailable, no Steps, or a context written before it)."""
+    markdown = as_headline(ctx.get("headline"))["summary_markdown"]
+    return f"{markdown}\n\n" if markdown else ""
+
+
 def _headline_markdown(ctx: dict[str, Any]) -> str:
     """The headline, then the monorepo unit roll-up (#865) when the run scored two or more
     units. A run with fewer units renders the headline alone, byte for byte."""
@@ -625,6 +635,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         run_date=ctx.get("run_date", "unknown"),
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
+        summary_section=render_summary_section(ctx),
         since_section=render_since_section(ctx),
         headline=_headline_markdown(ctx),
         diagrams_section=diagrams_section(build_all(ctx), assess_dir),

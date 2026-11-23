@@ -5,21 +5,24 @@
 id = "core.headline"
 kind = "collector"
 title = "Deterministic headline"
-summary = "The Step with the gate that blocks the next one, 'Catalogue coverage: N of M measured, V verified' and the per-tag strip, worded from the level block; the report pastes it and the badge and log entry carry its summary, which names the next gate and no count."
-issues = [747, 844, 1083]
+summary = "The Step with the gate that blocks the next one, 'Catalogue coverage: N of M measured, V verified' and the per-tag strip, worded from the level block, and the three-line executive summary with one call to action (Step and what it means, the next gate as a task, what changed since the last run); the report pastes it and the badge and log entry carry its summary, which names the next gate and no count."
+issues = [747, 844, 1083, 1102]
 callable = "lib.core_scans:headline"
 publishes = ["headline"]
-reads = ["level"]
+reads = ["level", "since_last_run"]
 stage = "post_offers"
 shapes = [
   { path = "headline", type = "lib.level_result_types:Headline" },
 ]
-revision = 2
+revision = 3
   [entries.privacy]
   "headline.levels_version" = "token"
   "headline.lines" = "drop"
   "headline.markdown" = "drop"
   "headline.summary" = "drop"
   "headline.next_why" = "drop"
+  "headline.summary_lines" = "drop"
+  "headline.call_to_action" = "drop"
+  "headline.summary_markdown" = "drop"
   "headline.reason" = "token"
   "headline.tags.tag" = "token"

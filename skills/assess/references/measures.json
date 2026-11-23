@@ -5097,18 +5097,6 @@
       "private": false
     },
     {
-      "name": "headline",
-      "title": "Deterministic headline",
-      "publishes": [
-        "headline"
-      ],
-      "reads": [
-        "level"
-      ],
-      "network": false,
-      "private": false
-    },
-    {
       "name": "since_last_run",
       "title": "Since last run",
       "publishes": [
@@ -5119,6 +5107,19 @@
         "assess_dir",
         "repo_root",
         "superseded"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "headline",
+      "title": "Deterministic headline",
+      "publishes": [
+        "headline"
+      ],
+      "reads": [
+        "level",
+        "since_last_run"
       ],
       "network": false,
       "private": false

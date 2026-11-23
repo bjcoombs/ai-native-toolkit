@@ -42,12 +42,13 @@ from lib.prior_level import write_prior_level
 from lib.since_last_run import baseline_record
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
+from lib.exec_summary import summarised
 from lib.headline import as_headline, run_context_headline
 from lib.counts_only.content_free import COUNTS_ONLY_FILE
 from lib.counts_only.content_free import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
-from lib.level_tally import run_context_level
+from lib.level_tally import default_model, run_context_level
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
@@ -179,7 +180,8 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     # The headline and the badge carry the tally, so they are rewritten with it (#747).
     if "level" in ctx:
         ctx["level"] = run_context_level(ctx)
-        ctx["headline"] = run_context_headline(ctx["level"])
+        ctx["headline"] = summarised(run_context_headline(ctx["level"]), ctx["level"],
+                                     ctx.get("since_last_run"), default_model())
         write_headline_badge(
             assess_dir, as_headline(ctx["headline"]), run_id=ctx.get("run_id"),
             scope=ctx.get("scope"),

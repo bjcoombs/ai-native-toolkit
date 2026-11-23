@@ -208,7 +208,11 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     badge1 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
     second = _run(ci2, "2026-11-22")
     badge2 = json.loads((ci2 / ".assess" / "badge.json").read_text(encoding="utf-8"))
-    assert first["headline"] == second["headline"]
+    # the executive summary's last line reads the since-last-run block, which differs by run (#1102)
+    commit_only = ("summary_lines", "summary_markdown")
+    assert ({k: v for k, v in first["headline"].items() if k not in commit_only}
+            == {k: v for k, v in second["headline"].items() if k not in commit_only})
+    assert first["headline"]["summary_lines"][:2] == second["headline"]["summary_lines"][:2]
     assert badge1["message"] == badge2["message"]
     level, head = second["level"], second["headline"]
     assert badge2["message"] == head["summary"]
@@ -287,8 +291,9 @@ def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
     head = headline(_level(), default_model())
     kept = counts_only({"headline": head})["headline"]
     # a dropped string list is kept as its length, a dropped string goes
-    assert kept == {**{k: v for k, v in head.items() if k not in ("markdown", "summary", "next_why")},
-                    "lines": len(head["lines"])}
+    dropped = ("markdown", "summary", "next_why", "call_to_action", "summary_markdown")
+    assert kept == {**{k: v for k, v in head.items() if k not in dropped},
+                    "lines": len(head["lines"]), "summary_lines": len(head["summary_lines"])}
 
 
 def test_next_why_holds_the_whys_of_the_unmet_gate_conditions_only() -> None:
