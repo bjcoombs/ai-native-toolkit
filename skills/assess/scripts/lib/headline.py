@@ -79,9 +79,10 @@ from lib.level_tally import default_model
 from lib.levels import MaturityModel
 from lib.levels_fields import TRUTH_TAGS
 
-# Held at 1 during the version freeze (skills/assess/changes/README.md): #844 adds
-# `verified` and `tags`, so the release PR moves it to 2; it has no changes/ counter.
-HEADLINE_VERSION = 1
+# Bumped when the headline block's shape changes. It has no changes/ counter, so a
+# release PR moves it by hand during a version freeze.
+# 2 (3.0.0 release): the block gains `verified` and `tags` (#844).
+HEADLINE_VERSION = 2
 
 __all__ = ["Headline", "as_headline", "headline", "run_context_headline"]
 

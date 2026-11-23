@@ -18,7 +18,7 @@ whys.agent_environment = "It reads what an agent needs to work like CI does: the
 shapes = [
   { path = "agent_environment", type = "lib.agents.agent_environment:AgentEnvironmentBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "agent_environment.reason" = "drop"
   "agent_environment.setup.sources.kind" = "token"
