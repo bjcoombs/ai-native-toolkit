@@ -11,8 +11,7 @@ same way, here:
 - **Row set.** ``team`` rows only (``SCOPE``). A team row is evaluated on a
   repository's own scans, so it is the one set the per-repository quadrant can
   measure; an ``org`` row reads the group's settings, which no single repository
-  has. The group charts use the same set so the three read on one scale, and the
-  layer bars (``lib/fleet/fleet_layer_bars.py``) draw team rows too.
+  has. The group charts use the same set so the three read on one scale.
 
 - **Lower bound (#697).** ``floor_mean`` is the floor-inclusive figure shown beside
   the known-only mean, never in its place: an unknown row with a confirmed floor

@@ -148,7 +148,7 @@ enable_error_code = ["ignore-without-code"]
 #   rm -rf mutants
 source_paths = ["src"]
 only_mutate = [
-    "src/lib/stats_diff.py",
+    "src/lib/complexity/stats_diff.py",
     "src/lib/promissory_markers.py",
     "src/lib/python_regions.py",
     "src/lib/doc_staleness.py",

@@ -32,11 +32,11 @@ from lib.assess_config import load_excludes
 from lib.fleet_config import FleetConfig, repo_fleet_config
 from lib.change_coupling import RenameMap, build_rename_map
 from lib.context_blocks import generated_exclusion
-from lib.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
+from lib.complexity.diff_reliability import compute_diff_reliability, prior_stamps, stats_tool_versions
 from lib.git_churn import git_commit_info, window_from_churn_label
 from lib.instruction_files import grade_instruction_files
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
-from lib.stats_diff import StatsDiff, diff_stats, load_stats
+from lib.complexity.stats_diff import StatsDiff, diff_stats, load_stats
 from lib.wiki_state import (
     excluded_after_unfinalized_run,
     load_first_flagged,
@@ -236,6 +236,10 @@ by the same step just before it rewrites findings.json.
                if current.get("available") is False else {}),
             "files_scored": None if current.get("available") is False else current.get("files_scored", 0),
             "loc": current.get("loc", {}),
+            # Lines per path class (#820). A sidecar from before it reads unavailable, never 0;
+            # with no sidecar at all the outer marker already names the cause.
+            **({} if current.get("available") is False else {"loc_by_class": current.get("loc_by_class") or {
+                "available": False, "reason": "no_class_split: the stats sidecar predates loc_by_class"}}),
             "est_tokens": current.get("est_tokens", {}),
             "ccn": current.get("ccn", {}),
             "top_hotspots": current.get("top_hotspots", []),

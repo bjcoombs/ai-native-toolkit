@@ -17,7 +17,7 @@ same inputs. This module holds what they share, so no diagram copies it:
   5 times a power of ten.
 - **Level ramp.** ``LEVEL_RAMP`` (the YlGn growth palette, pale to dark), ``ramp_step`` (a level's step by
   its share of the row's top level) and ``STEP_TEXT`` (the text colour that
-  reads on each step): the heat map and the layer bars colour a level alike.
+  reads on each step): the heat map colours a level with it.
 - **Hatching.** ``hatch_pattern`` is the diagonal hatch that marks unknown,
   never zero. The heat map keeps its literal white-and-grey pattern; the
   themed diagrams use ``THEMED_HATCH``, coloured by class.
@@ -40,7 +40,7 @@ same inputs. This module holds what they share, so no diagram copies it:
 Stdlib only; numbers are formatted with fixed precision; nothing iterates a set.
 
 Shared SVG helpers for every fleet diagram (#674; the heat map, the quadrant, the
-shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The API:
+shared-tooling map, and the slope and trend charts of #675/#676). The API:
 
 | Helper | Use |
 |---|---|
@@ -49,7 +49,7 @@ shared-tooling map, and the slope, layer-bar and trend charts of #675/#676). The
 | `text_width(s, size)`, `text_box(x, y, s, size, anchor)`, `truncate(s, limit, keep_tail)` | Sizing by character count (`CHAR_W` at 12px), no font metrics. |
 | `LinearScale(lo, hi, start, end)`, `.ticks(n)`, `nice_ceiling(v)`, `tick_label(v)` | Axes: a linear map (y runs `end` < `start`), even ticks, a 1/2/5 x 10^k axis top. |
 | `hatch_pattern(id, background, stroke, width, classes)`, `THEMED_HATCH`, `HATCH_FILL` | The diagonal hatch for unknown, never zero; themed diagrams put `THEMED_HATCH` in the defs and fill with `HATCH_FILL`. |
-| `LEVEL_RAMP`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map and the layer bars colour a level alike. |
+| `LEVEL_RAMP`, `ramp_step(level, top)`, `STEP_TEXT` | The level ramp (#675 moved it here from the heat map): pale to dark by a level's share of its row's top level, and the fixed text colour that reads on each step. The heat map colours a level with it. |
 | `hatched_note(x, y, lines)` | The "unknown" key: a hatched swatch with wrapped lines naming what is unknown. |
 | `place_labels(points, bounds, *, size, radius, obstacles)` -> `PlacedLabel \\| None` per point | Greedy collision nudging: the first `LABEL_OFFSETS` candidate inside `bounds` that hits no disc, obstacle box or earlier label; `None` means "name it elsewhere". Renderer and overlap test read the same boxes. |
 | `spread_vertical(ys, min_gap)` | End labels (trend, slope) pushed apart to `min_gap`, order kept. |
@@ -82,7 +82,7 @@ THEME: dict[str, tuple[str, str]] = {
 }
 THEMED_HATCH_ID = "fleet-hatch"
 
-# The level ramp (heat map and layer bars): a growth palette, ColorBrewer YlGn, 9 classes
+# The level ramp (the heat map): a growth palette, ColorBrewer YlGn, 9 classes
 # (colorbrewer2.org, colour-blind safe), pale yellow to deep green, so a higher level reads
 # as growth rather than danger (#743); fixed colours that read on both backgrounds.
 LEVEL_RAMP = ("#ffffe5", "#f7fcb9", "#d9f0a3", "#addd8e", "#78c679",

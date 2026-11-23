@@ -61,7 +61,7 @@ def render_lib(treemap):
     dir is on sys.path and numpy is stubbed before import."""
     import importlib
 
-    return importlib.import_module("lib.treemap_render")
+    return importlib.import_module("lib.complexity.treemap_render")
 
 
 @pytest.mark.parametrize("name", [
@@ -210,7 +210,8 @@ def test_main_with_no_files_writes_a_zero_file_sidecar(treemap, monkeypatch, tmp
     signals = {"stats_summary": stats, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
     result = level_tally.level_result(level_tally.default_model(), signals)
     reasons = {c["id"]: c.get("reason") for c in result["conditions"]}
-    assert reasons["layer-4-architecture.2"] == "no_scored_files"
+    # no file scored is no production source file scored (#820)
+    assert reasons["layer-4-architecture.2"] == "no_source_files"
 
 
 @pytest.mark.parametrize("scope, out_name, title_suffix", [

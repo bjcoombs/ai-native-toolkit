@@ -15,10 +15,10 @@ from test_complexity_treemap import _load_treemap
 
 @pytest.fixture(scope="module")
 def render_lib():
-    """lib.treemap_render, imported with numpy stubbed the way
+    """lib.complexity.treemap_render, imported with numpy stubbed the way
     test_complexity_treemap stubs it, so the two modules share one stub."""
     _load_treemap()
-    return importlib.import_module("lib.treemap_render")
+    return importlib.import_module("lib.complexity.treemap_render")
 
 
 def test_write_svg_stylesheet_never_overrides_text_attributes(render_lib, tmp_path):

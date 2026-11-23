@@ -91,7 +91,7 @@ def detect_anomalies(context: JsonDict) -> list[Anomaly]:
 
     unreliable = stats.get("complexity_unreliable") or []
     if unreliable:
-        # scc under-counted these files (lib.scc_coverage, issue #590). Counts
+        # scc under-counted these files (lib.complexity.scc_coverage, issue #590). Counts
         # only: the paths stay in stats_summary.complexity_unreliable.
         languages = {row.get("language") for row in unreliable}
         found.append(Anomaly(

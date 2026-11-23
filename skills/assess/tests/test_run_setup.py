@@ -11,7 +11,7 @@ from assess_core_helpers import _minimal_repo
 from lib import core_scans, run_setup
 from lib.run_publish import publish_run
 from lib.scan_registry import STAGE_SETUP, run_scans
-from lib.stats_diff import StatsDiff
+from lib.complexity.stats_diff import StatsDiff
 
 
 def _setup(repo: Path, scope: Path | None = None) -> tuple[dict, dict]:
@@ -78,6 +78,26 @@ def test_a_missing_stats_sidecar_reads_unavailable_not_zero(tmp_path: Path) -> N
     # a written sidecar with no file scored is still the measured empty set
     scored = _header_for({"files_scored": 0, "loc": {}})["stats_summary"]
     assert "available" not in scored and scored["files_scored"] == 0
+
+
+def test_a_sidecar_before_the_class_split_reads_no_class_split() -> None:
+    """#820: a stored sidecar without loc_by_class is not a measured 0, so L4.2 reads
+    not measured with its code; a missing sidecar carries no class-split marker."""
+    from lib import level_tally
+    from lib.class_sizes import loc_by_class
+    from lib.run_scope import load_current_stats
+
+    older = {"schema_version": 7, "files_scored": 3, "loc": {"p95": 40.0}}
+    stats = _header_for(older)["stats_summary"]
+    assert stats["loc_by_class"]["available"] is False
+    assert stats["loc_by_class"]["reason"].startswith("no_class_split:")
+    signals = {"stats_summary": stats, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    reasons = {c["id"]: (c["state"], c.get("reason")) for c in
+               level_tally.level_result(level_tally.default_model(), signals)["conditions"]}
+    assert reasons["layer-4-architecture.2"] == ("not_measured", "no_class_split")
+    current = {**older, "loc_by_class": loc_by_class([("src/a.py", 40)])}
+    assert _header_for(current)["stats_summary"]["loc_by_class"]["source"]["p95"] == 40.0
+    assert "loc_by_class" not in _header_for(load_current_stats(Path("no-such-dir")))["stats_summary"]
 
 
 def test_run_header_copies_complexity_unreliable() -> None:

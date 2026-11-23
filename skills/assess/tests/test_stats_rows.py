@@ -1,4 +1,4 @@
-"""Tests for lib/stats_rows.py and the ``files`` key it gives complexity-stats.json.
+"""Tests for lib/complexity/stats_rows.py and the ``files`` key it gives complexity-stats.json.
 
 The ``files`` list carries every scored file's aggregate CCN, so the
 doc-complexity join sees a complex file that made none of the top-10 lists
@@ -10,10 +10,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from lib.diff_reliability import compute_diff_reliability
+from lib.complexity.diff_reliability import compute_diff_reliability
 from lib.doc_complexity_join import _extract_file_ccn, analyze_doc_complexity_join
 from lib.run_context_types import ScoredHotspotRow
-from lib.stats_rows import file_ccn_rows, strip_score, top_lists
+from lib.complexity.stats_rows import file_ccn_rows, strip_score, top_lists
 from test_complexity_treemap import _load_treemap
 
 
@@ -66,7 +66,7 @@ def _write_repo_stats(tmp_path: Path) -> dict:
 
 def test_write_stats_files_key_reaches_the_join(tmp_path: Path) -> None:
     stats = _write_repo_stats(tmp_path)
-    assert stats["schema_version"] == _load_treemap().STATS_SCHEMA_VERSION == 7
+    assert stats["schema_version"] == _load_treemap().STATS_SCHEMA_VERSION == 8
     assert len(stats["files"]) == stats["files_scored"] == 313
     top_paths = {r["path"] for k in ("top_complex", "top_large", "top_hotspots")
                  for r in stats[k]}

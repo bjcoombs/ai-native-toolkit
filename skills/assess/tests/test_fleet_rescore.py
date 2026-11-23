@@ -371,6 +371,7 @@ aggregation = "min"
 
   [[rows.levels]]
   level = 1
+  truth = ["structure"]
   criteria = [{ signal = "lint.present", op = "eq", value = true }]
 """)
     stored = _data(DATES[0], BASE, V1)

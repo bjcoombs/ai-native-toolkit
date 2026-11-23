@@ -311,7 +311,7 @@ def test_skipped_diagrams_say_why_in_the_report():
     empty = fd.build_diagrams(_levels(), [], WINDOW)
     by_file = {d["file"]: d["skipped"] for d in empty}
     assert by_file["quadrant.svg"] == by_file["shared-tooling.svg"] == "skipped: no repositories in the run."
-    assert by_file["layer-bars.svg"] == "skipped: no repositories in the run."
+    assert "layer-bars.svg" not in by_file  # retired with the layer framing (#1073)
     assert by_file["slope.svg"] == (
         "skipped: no earlier run compared (no --compare, or no history entry matched this run).")
     report = fd.report_markdown(no_levels)
@@ -328,6 +328,14 @@ def test_write_diagrams_replaces_stale_files_and_clear_removes_them(tmp_path):
     assert not (tmp_path / fq.FILE).exists()  # skipped this run: the old picture is gone
     fd.clear_diagrams(tmp_path)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["groups.jsonl"]
+
+
+def test_a_retired_layer_bars_file_from_an_earlier_run_is_removed(tmp_path):
+    """#1073: the fleet no longer draws per-layer bars; an earlier run's picture never stays."""
+    (tmp_path / "layer-bars.svg").write_text("stale", encoding="utf-8")
+    fd.write_diagrams(tmp_path, fd.build_diagrams(None, list(ROWS), WINDOW))
+    assert not (tmp_path / "layer-bars.svg").exists()
+    assert "layer-bars.svg" not in fd.DIAGRAM_FILES and fd.RETIRED_FILES == ("layer-bars.svg",)
 
 
 # --- shared helpers -----------------------------------------------------------

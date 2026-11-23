@@ -143,6 +143,8 @@ EXTRA_FIELD_NAMES: Final = frozenset({
     "graduated", "new", "persistent", "regressed", "restructured", "ccn_delta",
     "commits_delta", "loc_delta", "max_fn_ccn_delta", "files_scored", "behind",
     "dirty", "valid", "broken_at_entry", "priority",
+    # stats_summary: the size split by path class (#820; its fields are lib.run_context_types_size)
+    "loc_by_class",
     # excludes and pruned paths
     "affected_finding_paths", "dirs", "patterns", "rename_map_complete",
     # promissory markers
@@ -235,6 +237,9 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.gate_blockers.gate": TOKEN,
     "repos.gate_blockers.state": TOKEN,
     "repos.gate_blockers.disposition": TOKEN,
+    # #1073: the per-tag tally names a tag from the fixed truth-tag list; every other field is a count
+    "repos.tags.tag": TOKEN,
+    "views.units.tags.cells.tag": TOKEN,
 }
 
 
