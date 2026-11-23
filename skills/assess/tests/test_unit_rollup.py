@@ -15,6 +15,7 @@ from assess_report import render_report
 from lib import core_scans as cs
 from lib import unit_rollup as ur
 from lib.counts_only import counts_only
+from lib.level_tally import default_model
 from lib.scan_registry import SCANS
 from test_unit_readings import MONOREPO, _write
 
@@ -148,6 +149,21 @@ def test_the_gate_condition_counts_toward_the_threshold_it_closes() -> None:
     assert block["unlocks"][0]["lifted"] == 2
 
 
+@pytest.mark.parametrize("second", ["not_measured", "not_applicable"])
+def test_a_gate_above_level_1_with_an_unmeasured_condition_lifts_no_unit(second: str) -> None:
+    import copy
+    model = copy.deepcopy(default_model())
+    for step in model["steps"]:
+        for gate in step["gates"]:
+            if gate["id"] == "instructions":
+                gate["level"] = 2
+    unit = _unit("a", 1, [_gate("instructions", INSTR)],
+                 {INSTR: ("unmet", "inherited"), "layer-0-instructions.2": (second, "inherited")})
+    block = ur.unit_rollup(_block(unit, unit | {"path": "b"}), model)
+    assert [(e["held"], e["lifted"]) for e in block["unlocks"]] == [(2, 0)]
+    assert len(block["lines"]) == 1
+
+
 @pytest.mark.parametrize("blocker", [
     _gate("instructions", INSTR, state="not_measured", reason="no_value"),
     _gate("instructions", INSTR, disposition="excluded_by_owner", exclusion_kind="other"),
@@ -160,7 +176,12 @@ def test_an_unmeasured_or_excluded_gate_is_no_change_to_rank(blocker: dict[str, 
 def test_a_gate_with_no_condition_read_is_never_claimed_at_the_root() -> None:
     bare = _unit("a", 1, [_gate("instructions", INSTR)], {})
     block = ur.unit_rollup(_block(bare, bare | {"path": "b"}))
-    assert [e["scope"] for e in block["unlocks"]] == ["unit"]
+    assert [(e["scope"], e["lifted"]) for e in block["unlocks"]] == [("unit", 0)]
+    assert len(block["lines"]) == 1  # no evidence the unit lifts: no next-unlock line
+
+
+def test_a_unit_local_change_lifts_one_unit_to_its_next_step() -> None:
+    block = ur.unit_rollup(_block(_no_instructions("a", origin="unit"), _unit("b", 2)))
     assert block["lines"][1].endswith(", in one unit, moves 1 unit to its next Step")
 
 
