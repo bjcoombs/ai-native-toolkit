@@ -85,11 +85,11 @@ def test_under_two_a_side_has_no_interval(met: list[float], unmet: list[float]) 
     assert effect["reason"] == ce.TOO_FEW and effect["low_confidence"] is True
 
 
-def test_no_spread_gives_a_point_interval() -> None:
-    same = ce.welch("m", [0.1, 0.1], [0.1, 0.1])
-    apart = ce.welch("m", [0.0, 0.0], [0.2, 0.2])
-    assert same["interval"] == [0.0, 0.0] and same["includes_zero"] is True
-    assert apart["interval"] == [-0.2, -0.2] and apart["includes_zero"] is False
+@pytest.mark.parametrize(("met", "unmet", "diff"), [([0.0] * 12, [0.0] * 12, 0.0), ([0.0] * 12, [0.2] * 12, -0.2)])
+def test_no_spread_has_no_interval(met: list[float], unmet: list[float], diff: float) -> None:
+    effect = ce.welch("m", met, unmet)
+    assert effect["effect"] == diff and effect["interval"] is None and effect["includes_zero"] is None
+    assert effect["reason"] == ce.NO_SPREAD and effect["low_confidence"] is False
 
 
 # --- the observations ------------------------------------------------------------------
@@ -139,7 +139,7 @@ def test_the_document_carries_counts_and_no_repository_id(tmp_path: Path) -> Non
     assert (cond["id"], cond["predicted"], cond["review"]) == ("r.1", "lower_revert", "2027-05-23")
     revert, rework = cond["effects"]
     assert revert["includes_zero"] is True and revert["low_confidence"] is False
-    assert rework["interval"] == [0.0, 0.0]
+    assert rework["interval"] is None and rework["reason"] == ce.NO_SPREAD
     path = ce.write_condition_effect(tmp_path, doc)
     text = path.read_text(encoding="utf-8")
     assert '"m0"' not in text and '"u0"' not in text

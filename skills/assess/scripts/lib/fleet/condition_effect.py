@@ -27,7 +27,9 @@ commits reverted or reworked. ``interval`` is Welch's two-sample interval at
 quantile from the regularized incomplete beta function, so no statistics package is
 needed). ``includes_zero`` says whether the interval spans 0: no effect detected. With
 fewer than two observations on a side there is no variance and no interval
-(``reason: "too_few_repositories"``). ``low_confidence`` is true whenever either side
+(``reason: "too_few_repositories"``); with every share equal on both sides there is no
+interval either (``reason: "no_spread"``), since a point would read as certainty, and an
+all-zero fleet says nothing about an effect. ``low_confidence`` is true whenever either side
 holds fewer than ``MIN_PER_SIDE`` repositories. The exit rule reads only results with
 ``low_confidence`` false.
 
@@ -53,7 +55,7 @@ passing over a hashed entry under another salt (`_same_salt`);
 share per condition and measure (`MEASURES`: `revert_share`, `rework_share`); `welch(met,
 unmet)` gives the mean difference and its Welch interval at `CONFIDENCE` (0.95), with
 `t_quantile` from the regularized incomplete beta; `low_confidence` under `MIN_PER_SIDE`
-(10) a side, `too_few_repositories` and no interval under 2. `build_condition_effect` writes
+(10) a side, `too_few_repositories` and no interval under 2, `no_spread` and no interval when no share varies. `build_condition_effect` writes
 the document; `write_condition_effect` saves `condition_effect.json`.
 Tests: `tests/test_condition_effect.py`.
 """
@@ -85,6 +87,8 @@ MIN_PER_SIDE = 10
 # The interval's coverage: the conventional 95% two-sided level (alpha = 0.05).
 CONFIDENCE = 0.95
 TOO_FEW = "too_few_repositories"
+# Every share on both sides is equal: no variance, so no interval and no detected effect either way.
+NO_SPREAD = "no_spread"
 DIGITS = 6
 _SCORED = {"met": True, "unmet": False}
 
@@ -204,12 +208,12 @@ def welch(measure: str, met: Sequence[float], unmet: Sequence[float]) -> Measure
     (m1, v1), (m2, v2) = _mean_var(met), _mean_var(unmet)
     diff = m1 - m2
     s1, s2 = v1 / len(met), v2 / len(unmet)
+    if len(set(met)) == 1 and len(set(unmet)) == 1:  # a point "interval" would read as certainty
+        effect["effect"], effect["reason"] = _round(diff), NO_SPREAD
+        return effect
     se = math.sqrt(s1 + s2)
-    if se == 0.0:
-        half = 0.0
-    else:
-        df = (s1 + s2) ** 2 / (s1 ** 2 / (len(met) - 1) + s2 ** 2 / (len(unmet) - 1))
-        half = t_quantile(1.0 - (1.0 - CONFIDENCE) / 2.0, df) * se
+    df = (s1 + s2) ** 2 / (s1 ** 2 / (len(met) - 1) + s2 ** 2 / (len(unmet) - 1))
+    half = t_quantile(1.0 - (1.0 - CONFIDENCE) / 2.0, df) * se
     low, high = _round(diff - half), _round(diff + half)
     effect["effect"], effect["interval"], effect["includes_zero"] = _round(diff), [low, high], low <= 0.0 <= high
     return effect
