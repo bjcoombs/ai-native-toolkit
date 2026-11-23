@@ -71,6 +71,9 @@ def test_an_unresolvable_parent_reads_null(tmp_path: Path) -> None:
      "test:\n  extends: .t\n  script: pytest\n", "unknown"),
     (".base: &b\n  rules:\n    - if: $CI_PIPELINE_SOURCE == 'schedule'\n.t:\n  <<: *b\n"
      "test:\n  extends: .t\n  script: pytest\n", "unknown"),
+    # A template that also defines an anchor is read through its block keys.
+    (".tpl: &tpl\n  rules:\n    - if: $CI_PIPELINE_SOURCE == \"schedule\"\n"
+     "test:\n  extends: .tpl\n  script: pytest\n", "not_ordinary"),
     # A diamond reaching one only: map twice reads it once.
     (".base:\n  only:\n    refs:\n      - tags\n.a:\n  extends: .base\n.b:\n  extends: .base\n"
      "test:\n  extends: [.a, .b]\n  script: pytest\n", "not_ordinary"),
@@ -82,7 +85,7 @@ def test_an_unresolvable_parent_reads_null(tmp_path: Path) -> None:
 ], ids=["two_level", "middle_overrides", "own_rules_override", "flow_list_last_wins",
         "block_list_last_wins", "inherited_when", "inherited_default_when", "inherited_only",
         "no_read_keys", "unresolvable_grandparent", "cycle", "anchor",
-        "inline_parent", "alias_parent", "merge_key_parent", "diamond_one_map", "two_maps", "rules_and_only"])
+        "inline_parent", "alias_parent", "merge_key_parent", "anchored_template", "diamond_one_map", "two_maps", "rules_and_only"])
 def test_extends_is_resolved(text: str, trigger: str) -> None:
     assert _trigger(text) == trigger
 
@@ -106,9 +109,9 @@ def test_extends_is_resolved(text: str, trigger: str) -> None:
     ("  except:\n    - tags\n", "ordinary"),
     ("  only:\n    - branches\n  except:\n    - tags\n", "ordinary"),
 ], ids=["branches", "drops_merge_requests", "drops_all", "one_branch", "two_branch_limits",
-        "tags", "refs_map", "variables", "only_tags_with_unread_except", "block_branches",
-        "block_tags", "block_only_and_except", "flow_variables", "flow_refs",
-        "only_flow_refs"])
+        "tags", "refs_map", "variables", "only_tags_with_unread_except",
+        "flow_variables", "flow_refs", "only_flow_refs", "block_branches", "block_tags",
+        "block_only_and_except"])
 def test_except_reads_with_only_semantics(keys: str, trigger: str) -> None:
     assert _trigger("test:\n" + keys + "  script: pytest\n") == trigger
 

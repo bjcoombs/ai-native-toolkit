@@ -48,8 +48,10 @@ runs in either, ``not_ordinary`` when it runs in neither and ``unknown`` otherwi
   winning, then the job's own keys. ``rules:`` and ``when:`` overwrite, so a job's own
   ``rules:`` replace a template's whole; two ``only:`` or ``except:`` maps would be
   deep-merged and read ``unknown``. A target not in the file (one from ``include:``), a
-  cycle, an anchor or tag value, a parent given inline or through ``<<:``, and a merged job holding ``rules:`` beside ``only:`` or
-  ``except:`` (GitLab rejects it) read ``unknown``, never as a job without rules.
+  cycle, an anchor or tag as the ``extends:`` value, a parent given inline (``.t: *b``) or
+  through ``<<:``, and a merged job holding ``rules:`` beside ``only:`` or ``except:``
+  (GitLab rejects it) read ``unknown``, never as a job without rules. A template that also
+  defines an anchor (``.tpl: &tpl`` over block keys) is read through its keys.
 - No such key: branch pushes, and merge requests too when ``workflow: rules:`` exists.
 - A top-level ``workflow: rules:`` decides which of the two pipelines GitLab creates,
   with the same reader; a job runs only in a pipeline that is created.
@@ -262,6 +264,8 @@ def _rules_outcomes(tree: IndentTree, key: int, default_when: str = "on_success"
     return {c: outcome(rules, c, default_when) for c in CONTEXTS}
 
 
+# A top-level key's value that leaves its block keys readable: none, or a bare anchor.
+_ANCHOR_ONLY = re.compile(r"(?:&[\w.-]+)?")
 # The job keys this reader takes through ``extends:``.
 _READ_KEYS = ("rules", "when", "only", "except")
 # Each read key's defining lines, nearest the job last; None when ``extends:`` is unresolved.
@@ -301,8 +305,9 @@ def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[i
             parent = top.get(name)
             # An inline value (``.t: *b``, ``.t: {rules: ...}``) or a keyless line (a ``<<: *b``
             # merge, which the line reader leaves without a key) is not read.
-            readable = parent is not None and parent not in seen and not tree.lines[parent].value and all(
-                tree.lines[k].key for k in tree.children(parent))
+            # A bare anchor (``.tpl: &tpl`` over block keys) is read: the keys below it are the template.
+            readable = parent is not None and parent not in seen and _ANCHOR_ONLY.fullmatch(
+                tree.lines[parent].value) is not None and all(tree.lines[k].key for k in tree.children(parent))
             inherited = _job_keys(tree, parent, top, seen | {job}, cache) if readable and parent is not None else None
             if inherited is None:
                 cache[job] = None
