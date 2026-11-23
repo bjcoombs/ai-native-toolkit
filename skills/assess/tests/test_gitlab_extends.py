@@ -77,7 +77,7 @@ def test_an_unresolvable_parent_reads_null(tmp_path: Path) -> None:
 ], ids=["two_level", "middle_overrides", "own_rules_override", "flow_list_last_wins",
         "block_list_last_wins", "inherited_when", "inherited_default_when", "inherited_only",
         "no_read_keys", "unresolvable_grandparent", "cycle", "anchor",
-        "rules_and_only", "inline_parent", "diamond_one_map", "two_maps"])
+        "inline_parent", "diamond_one_map", "two_maps", "rules_and_only"])
 def test_extends_is_resolved(text: str, trigger: str) -> None:
     assert _trigger(text) == trigger
 
