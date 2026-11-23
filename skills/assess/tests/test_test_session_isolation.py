@@ -7,7 +7,9 @@
 - #831: a stand-in for numpy, lizard or matplotlib left in ``sys.modules``
   changes every later test in the worker. ``stub_heavy_deps`` scopes them to a
   ``MonkeyPatch``, and the conftest guard built on ``leaked_stand_ins`` fails
-  a module that leaves one behind.
+  a module that leaves one behind. That guard snapshots ``sys.modules`` when a
+  module's tests start, after collection has imported every test module, so a
+  write at import time is out of its reach: a lint bans those instead.
 """
 from __future__ import annotations
 
@@ -29,6 +31,14 @@ REPO = Path(__file__).resolve().parents[3]
 TEST_TREES = (REPO / "skills" / "assess" / "tests", REPO / "scripts" / "tests", REPO / "tests")
 
 
+def _test_sources() -> list[Path]:
+    """Every Python file in the test trees, nested packages included, minus data."""
+    return sorted(
+        path for root in TEST_TREES for path in root.rglob("*.py")
+        if not {"fixtures", "__pycache__"} & set(path.relative_to(root).parts)
+    )
+
+
 def _conftest_imports(tree: ast.Module) -> list[int]:
     lines = []
     for node in ast.walk(tree):
@@ -48,8 +58,64 @@ def test_no_test_imports_from_the_bare_conftest_name() -> None:
     """#1056: import shared helpers from ``assess_test_support`` instead."""
     found = [
         f"{path.relative_to(REPO).as_posix()}:{line}"
-        for root in TEST_TREES for path in sorted(root.glob("*.py"))
+        for path in _test_sources()
         for line in _conftest_imports(ast.parse(path.read_text(encoding="utf-8")))
+    ]
+    assert found == []
+
+
+def _is_sys_modules(node: ast.expr) -> bool:
+    return ast.unparse(node) == "sys.modules"
+
+
+def _import_time_sys_modules_writes(tree: ast.Module) -> list[int]:
+    """Lines that write ``sys.modules`` while the module is imported.
+
+    Function bodies run later, under a fixture or a test, so they are skipped;
+    class bodies run at import, so they are not.
+    """
+    lines: list[int] = []
+    pending: list[ast.AST] = list(tree.body)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        targets = (node.targets if isinstance(node, ast.Assign)
+                   else [node.target] if isinstance(node, (ast.AugAssign, ast.AnnAssign)) else [])
+        if any(isinstance(t, ast.Subscript) and _is_sys_modules(t.value) for t in targets):
+            lines.append(node.lineno)  # type: ignore[attr-defined]
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("setdefault", "update") and _is_sys_modules(node.func.value)):
+            lines.append(node.lineno)
+        pending.extend(ast.iter_child_nodes(node))
+    return sorted(lines)
+
+
+def test_the_import_time_check_sees_each_write_form() -> None:
+    source = (
+        "import sys\n"
+        "sys.modules['a'] = object()\n"
+        "sys.modules.setdefault('b', object())\n"
+        "sys.modules.update({'c': object()})\n"
+        "if True:\n"
+        "    sys.modules['d'] = object()\n"
+        "class K:\n"
+        "    sys.modules['e'] = object()\n"
+        "def f(mp):\n"
+        "    sys.modules['f'] = object()\n"
+        "    mp.setitem(sys.modules, 'g', object())\n"
+    )
+    assert _import_time_sys_modules_writes(ast.parse(source)) == [2, 3, 4, 6, 8]
+
+
+def test_no_test_module_writes_sys_modules_at_import_time() -> None:
+    """#831: a stand-in installed while a module is collected is already in the
+    guard's "before" snapshot, so the guard cannot see it leak. Install stand-ins
+    inside a fixture with ``stub_heavy_deps(monkeypatch)`` instead."""
+    found = [
+        f"{path.relative_to(REPO).as_posix()}:{line}"
+        for path in _test_sources()
+        for line in _import_time_sys_modules_writes(ast.parse(path.read_text(encoding="utf-8")))
     ]
     assert found == []
 

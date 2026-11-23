@@ -17,6 +17,11 @@ worker: ``pytest.approx`` calls ``numpy.isscalar``, and
 missing", which empties the ``stats_summary`` block (#1108). The conftest
 guard uses ``stand_in_snapshot`` and ``leaked_stand_ins`` to fail any test
 module that leaves one behind.
+
+A module imported while the stand-ins are in place, such as
+``lib.complexity.treemap_render``, stays cached in ``sys.modules`` with its
+``np`` still bound to the stub after the scope ends. That is harmless: the tests
+that call into it hold the stand-ins while they do.
 """
 from __future__ import annotations
 

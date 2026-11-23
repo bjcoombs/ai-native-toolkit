@@ -64,7 +64,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_keyhole_override_contradicts.py` | `lib/keyhole/keyhole_signals.py` - override_contradicts_signals finding |
 | `test_keyhole_suppression.py` | `lib/keyhole/keyhole_signals.py` - degenerate churn, config excludes, archive paths, pruning of renamed or deleted paths |
 | `assess_test_support.py` | helpers tests import by name instead of `from conftest import` (#1056): the Windows skip markers, `skip_without_posix_shell`, `pin_fleet_run_date`, `use_real_lizard` (#1117), and `stub_heavy_deps` with the leak check behind the conftest stand-in guard (#831) (not a test module) |
-| `test_test_session_isolation.py` | `assess_test_support.py` - no test imports the bare `conftest` name, test-tree module names stay unique, and the stand-in leak check (#831, #1056) |
+| `test_test_session_isolation.py` | `assess_test_support.py` - no test imports the bare `conftest` name or writes `sys.modules` at import time, test-tree module names stay unique, and the stand-in leak check (#831, #1056) |
 | `keyhole_helpers.py` | shared `integrate()` fixtures for the `test_keyhole_*.py` files (not a test module) |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/keyhole/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
