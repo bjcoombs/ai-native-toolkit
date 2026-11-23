@@ -263,3 +263,111 @@ def test_flake8_reads_the_hyphen_and_underscore_spellings(tmp_path: Path, key: s
     root = _write(tmp_path, {".flake8": f"[flake8]\n{key} = 11\n"})
     (gate,) = scan_guardrails(root, [], None)["gates"]
     assert (gate["tool"], gate["threshold"], gate["line"]) == ("flake8", 11, 2)
+
+
+def test_a_scoped_run_counts_only_the_gates_inside_the_scope(tmp_path: Path) -> None:
+    root = _write(tmp_path, {
+        "pyproject.toml": PYPROJECT + "\n[tool.mypy]\nstrict = true\n",
+        "setup.cfg": "[flake8]\nmax-complexity = 12\n",
+        ".pre-commit-config.yaml": PRE_COMMIT,
+        "pkg/pyproject.toml": "[tool.ruff.lint]\nselect = ['C901']\n\n"
+                              "[tool.coverage.report]\nfail_under = 85\n",
+        "pkg/a.py": "x = 1\n",
+    })
+    scoped = scan_guardrails(root, [], detect_coverage_gate(root, Path("pkg")), None,
+                             Path("pkg"))
+    # pkg has its own ruff config; flake8 and mypy find the root ones by walking up.
+    assert [(g["kind"], g["file"]) for g in scoped["gates"]] == [
+        ("complexity_limit", "pkg/pyproject.toml"), ("complexity_limit", "setup.cfg"),
+        ("coverage_floor", "pkg/pyproject.toml"), ("pre_commit", ".pre-commit-config.yaml"),
+        ("type_strictness", "pyproject.toml")]
+    assert len(scoped["not_read"]) == len(scan_guardrails(root, [], None)["not_read"]) + 1
+    absolute = scan_guardrails(root, [], None, None, root / "pkg")
+    assert [(g["kind"], g["file"]) for g in absolute["gates"]] == [
+        ("complexity_limit", "pkg/pyproject.toml"), ("complexity_limit", "setup.cfg"),
+        ("pre_commit", ".pre-commit-config.yaml"), ("type_strictness", "pyproject.toml")]
+    whole = scan_guardrails(root, [], detect_coverage_gate(root), None, root)
+    assert len(whole["gates"]) == 7
+
+
+@pytest.mark.parametrize(("select", "ignore", "on"), [
+    ("['C901']", "['C']", True), ("['C9']", "['C90']", False), ("['ALL']", "['C']", False),
+    ("['C901']", "['C901']", False), ("['C']", "['ALL']", True),
+    ("['C90']", "['C9']", False), ("['C9']", "['C901']", False)])
+def test_ruff_select_and_ignore_resolve_by_the_longest_prefix(
+        tmp_path: Path, select: str, ignore: str, on: bool) -> None:
+    root = _write(tmp_path, {"ruff.toml": f"[lint]\nselect = {select}\nignore = {ignore}\n"})
+    gates = scan_guardrails(root, [], None)["gates"]
+    assert [g["kind"] for g in gates] == (["complexity_limit"] if on else [])
+
+
+@pytest.mark.parametrize(("line", "stated"), [
+    ("Run coverage in step 1.", False), ("Coverage must reach 100 percent.", True),
+    ("Coverage ratio 1.0 is enforced.", True), ("Coverage 1.5 is not it.", False),
+    ("See the coverage v1.0 docs.", False), ("Coverage max100 applies.", False),
+    ("Coverage 100th run.", False), ("Coverage stays at 100.", True)])
+def test_a_floor_of_100_needs_a_decimal_point_in_its_ratio_form(
+        tmp_path: Path, line: str, stated: bool) -> None:
+    coverage = {"available": True, "enforced": True, "gates": [
+        {"file": "pyproject.toml", "line": 3, "tool": "coverage.py", "form": "fail_under",
+         "threshold": 100.0, "unit": "percent", "threshold_percent": 100.0, "metric": "lines"}]}
+    root = _write(tmp_path, {"AGENTS.md": f"{line}\n"})
+    (gate,) = scan_guardrails(root, ["AGENTS.md"], coverage)["gates"]
+    assert gate["stated"] is stated
+
+
+ROOT_RUFF = "[tool.ruff.lint]\nselect = ['C901']\n\n[tool.ruff.lint.mccabe]\nmax-complexity = 5\n"
+
+
+@pytest.mark.parametrize(("files", "scope", "expected"), [
+    ({"pyproject.toml": ROOT_RUFF, "svc/m.py": "x = 1\n"}, "svc", ("pyproject.toml", 5.0)),
+    ({"pyproject.toml": ROOT_RUFF, "svc/pyproject.toml": "[project]\nname = 'svc'\n"}, "svc",
+     ("pyproject.toml", 5.0)),
+    ({"pyproject.toml": ROOT_RUFF,
+      "svc/ruff.toml": "[lint]\nselect = ['C90']\n\n[lint.mccabe]\nmax-complexity = 8\n",
+      "svc/sub/m.py": "x = 1\n"}, "svc/sub", ("svc/ruff.toml", 8.0)),
+])
+def test_a_scope_without_a_ruff_config_is_gated_by_the_nearest_one_above(
+        tmp_path: Path, files: dict[str, str], scope: str, expected: tuple[str, float]) -> None:
+    root = _write(tmp_path, files)
+    block = scan_guardrails(root, [], None, None, Path(scope))
+    assert [(g["file"], g["threshold"]) for g in block["gates"]
+            if g["kind"] == "complexity_limit"] == [expected]
+    assert not any("ruff" in line for line in block["not_read"])
+
+
+def test_a_scope_with_its_own_ruff_config_does_not_add_the_root_one(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"pyproject.toml": ROOT_RUFF,
+                             "svc/.ruff.toml": "[lint]\nselect = ['C901']\n"})
+    block = scan_guardrails(root, [], None, None, Path("svc"))
+    assert [g["file"] for g in block["gates"]] == ["svc/.ruff.toml"]
+
+
+def test_a_scope_without_mypy_or_flake8_config_is_gated_by_the_root_ones(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"mypy.ini": "[mypy]\nstrict = true\n",
+                             "tox.ini": "[flake8]\nmax-complexity = 9\n",
+                             "svc/setup.cfg": "[metadata]\nname = svc\n",
+                             "other/mypy.ini": "[mypy]\nstrict = true\n"})
+    block = scan_guardrails(root, [], None, None, Path("svc"))
+    assert [(g["kind"], g["file"]) for g in block["gates"]] == [
+        ("complexity_limit", "tox.ini"), ("type_strictness", "mypy.ini")]
+    own = _write(tmp_path, {"svc/.mypy.ini": "[mypy]\nstrict = false\n"})
+    assert [g["kind"] for g in scan_guardrails(own, [], None, None, Path("svc"))["gates"]] == [
+        "complexity_limit"]
+
+
+def test_the_registry_passes_the_scope_in_parameter_order(tmp_path: Path) -> None:
+    """The ScanSpec generated from checks/core/guardrails.toml calls the scan positionally
+    (#1049): its reads follow the parameters, and a scoped run reports the root ruff gate."""
+    import inspect
+
+    from lib.scan_registry import SCANS
+
+    (spec,) = [spec for spec in SCANS if spec.key == "guardrails"]
+    assert spec.reads == tuple(inspect.signature(scan_guardrails).parameters)
+    root = _write(tmp_path, {"pyproject.toml": ROOT_RUFF, "svc/m.py": "x = 1\n"})
+    values: dict[str, Any] = {"repo_root": root, "instruction_files": {}, "coverage_gate": None,
+                              "excludes": (set(), []), "scope": root / "svc"}
+    block = spec.fn(*[values[name] for name in spec.reads])
+    assert [(g["file"], g["threshold"]) for g in block["gates"]] == [("pyproject.toml", 5.0)]
+    assert block["not_read"][-1].startswith("pre-commit hook")

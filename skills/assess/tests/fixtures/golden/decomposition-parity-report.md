@@ -20,6 +20,12 @@ In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from co
 
 Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 
+## Packages and their imports
+
+In place: this run's scans, gathered with no model call.
+
+Not drawn: not measured here: no source files.
+
 ## Docs behind their code
 
 In place: this run's scans, gathered with no model call.

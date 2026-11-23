@@ -545,7 +545,7 @@ It lists the gates the repository configures and whether an instruction file sta
 
 Lists the gates the repository configures (a ruff or flake8 complexity limit, the coverage floor, pre-commit hooks, mypy strict) and whether a graded instruction file states each one's rule and threshold; an unstated gate carries a ready one-line snippet.
 
-- Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`.
+- Collector: `core.guardrails`, reading `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
 - Counts-only: numbers, booleans and nulls kept; strings by field: `guardrails.gates.kind` token, `guardrails.gates.rule` token, `guardrails.gates.snippet` drop, `guardrails.gates.stated_in` path, `guardrails.gates.tool` token, `guardrails.not_read` drop.
@@ -1025,7 +1025,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
-| `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes` | `guardrails` | no |
+| `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `headline` | Deterministic headline | `level` | `headline` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |

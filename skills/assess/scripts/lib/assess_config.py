@@ -93,7 +93,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, NamedTuple, TypedDict
 
-from lib.check_manifest import core_manifest, finding_tables
+from lib.manifest.check_manifest import core_manifest, finding_tables
 
 # A parsed ``.assess/config.toml`` (or one of its sections): whatever TOML the
 # user wrote, validated key by key by the loaders below.

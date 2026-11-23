@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 import assess_diagrams_fixture
+import assess_diagrams_packages_fixture
 import assess_diagrams_review_fixture
 import fleet_diagrams_fixture
 import fleet_trends_fixture
@@ -61,6 +62,8 @@ def outputs(fleet_out: Path, tmp_path_factory: pytest.TempPathFactory) -> dict[s
         rendered[f"fleet run: {path.name}"] = _svg_prose(path.read_text(encoding="utf-8"))
     for name, content in fleet_diagrams_fixture.goldens(fleet_diagrams_fixture.FIXTURES).items():
         rendered[f"diagrams fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
+    for name, content in assess_diagrams_packages_fixture.goldens().items():
+        rendered[f"package map fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
     for name, content in assess_diagrams_fixture.goldens().items():
         rendered[f"assess diagrams fixture: {name}"] = _svg_prose(content) if name.endswith(".svg") else content
     for name, content in assess_diagrams_review_fixture.goldens().items():

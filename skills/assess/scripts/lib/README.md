@@ -93,6 +93,11 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
   `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
+- **`account_discovery.py` <-> `agent_identity.py`.** The `dependency_bot_hint` evidence
+  token reads `agent_identity.is_dependency_bot`, the same test `AuthorMatcher` buckets a
+  `dependency_bot` with, so widening `DEPENDENCY_BOT_RULES` moves both the `ai_usage`
+  counts and the identities awaiting confirmation. `account_discovery` imports only
+  public names from `agent_identity` (#1031).
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
 ever cut, this note is where the intended boundary is written down.
@@ -102,7 +107,7 @@ ever cut, this note is where the intended boundary is written down.
 ## Check manifest whys (#939)
 
 Every check manifest entry says why it matters to an agent. The loader is
-`check_manifest.load_manifest`; the why rules and accessors are in `manifest_whys.py`.
+`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest_whys.py`.
 
 | Entry | Where its why lives | Accessor |
 |---|---|---|
@@ -158,6 +163,9 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
   to `lib.fleet.runner` on first use, without importing it eagerly. `fleet_config` and
   `fleet_activity` keep their prefix but are not fleet modules: `fleet_config` is shared core,
   and `fleet_activity` waits for the `history` group. Files: `__init__.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_labels.py`, `fleet_layer_bars.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_quadrant.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_targets.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `runner.py`.
+- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments) and its
+  structured validation errors. `manifest_whys` (#939), which the loader calls, postdates the #917 module map,
+  so it has no group and stays at the root. Files: `__init__.py`, `check_manifest.py`, `check_validation.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 

@@ -48,6 +48,7 @@ CREDITED = [
     "pytest",
     "pytest; echo next",
     "pytest && echo ok",
+    "ruff check . && pytest",
     "cd sub && pytest; echo done",
     "if pytest; then echo ok; else exit 1; fi",
     "if ! pytest; then exit 1; fi",

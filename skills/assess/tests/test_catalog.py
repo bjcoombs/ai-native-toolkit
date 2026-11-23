@@ -18,7 +18,7 @@ from typing import Any
 import gen_catalog
 import pytest
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib.catalog import (CATALOG_VERSION, GRADE_ORDER, UNCLASSIFIED, build_catalog, counts, criterion_text,
                          grade_of, render_json)
 from lib.catalog_md import CONDITION_COLUMNS, render_markdown

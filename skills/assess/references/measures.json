@@ -2102,7 +2102,7 @@
           "code": "included_jobs",
           "means": "A CI file pulls its jobs from a file this checkout does not hold, so the check may live there.",
           "next_step": "Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "merged_config_partial",
@@ -2114,43 +2114,43 @@
           "code": "unknown_trigger",
           "means": "In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable).",
           "next_step": "Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "check_may_pass",
           "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way.",
           "next_step": "Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "script_not_found",
           "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
           "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "check_target",
           "means": "No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check.",
           "next_step": "Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "unread_ci_system",
           "means": "No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; the lib/unread_ci.py docstring lists the paths); unread_ci_files counts them.",
           "next_step": "Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "external_ci",
           "means": "Under --platform only: no readable CI line settles the signal, and over half of the sampled merged pull requests carry a check run or status of a known external CI system (Buildkite, LUCI, Prow tide, Azure Pipelines). A check ran; that earns no credit.",
           "next_step": "Nothing to change: the checks run on a CI system configured outside the repository, so they read as not measured rather than absent.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "external_ci_marker",
           "means": "The tree tracks no CI file of any kind and the root holds a Prow OWNERS_ALIASES file, so presubmits likely run on Prow, configured in another repository. An OWNERS file alone is not a marker.",
           "next_step": "Nothing to change: run with --platform to read the checks on merged pull requests instead.",
-          "carried_in": "basis"
+          "carried_in": "enforced_basis"
         },
         {
           "code": "analysers_in_build",
@@ -2454,7 +2454,8 @@
         "repo_root",
         "instruction_files",
         "coverage_gate",
-        "excludes"
+        "excludes",
+        "scope"
       ],
       "network": false,
       "platform": false,
@@ -4857,7 +4858,8 @@
         "repo_root",
         "instruction_files",
         "coverage_gate",
-        "excludes"
+        "excludes",
+        "scope"
       ],
       "network": false,
       "private": false
@@ -5151,7 +5153,7 @@
       "collector": "core.guardrails",
       "input_class": "head_structure",
       "grade": "measured",
-      "null_means": "no gate found: nothing to state"
+      "null_means": "no gate found in the run (the scope, on a scoped run): nothing to state"
     },
     {
       "path": "agent_consistency.conflicts",

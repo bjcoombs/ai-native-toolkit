@@ -70,7 +70,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol, TypedDict
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib.level_tally import DEFAULT_BLOCKS, default_model
 from lib.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict

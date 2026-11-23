@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/assess/references/check-manifest.schema.json",
   "title": "Check manifest",
-  "description": "One owner's check manifest (#789): collectors, signals, conditions and findings. This schema describes one merged manifest document. The core manifest is skills/assess/checks/core.toml, which lists one fragment per collector under skills/assess/checks/core/ (#982); the runtime loader is lib/check_manifest.py, which applies the same rules plus cross-references (reads graph, signal collectors, condition signals, finding inputs).",
+  "description": "One owner's check manifest (#789): collectors, signals, conditions and findings. This schema describes one merged manifest document. The core manifest is skills/assess/checks/core.toml, which lists one fragment per collector under skills/assess/checks/core/ (#982); the runtime loader is lib/manifest/check_manifest.py, which applies the same rules plus cross-references (reads graph, signal collectors, condition signals, finding inputs).",
   "type": "object",
   "required": [
     "manifest_version",
@@ -101,9 +101,10 @@
           "enum": [
             "reason",
             "basis",
+            "enforced_basis",
             "unmeasured_reason"
           ],
-          "description": "reason: the block's available-false reason code; basis: a token on a null leaf; unmeasured_reason: the block's unmeasured_reason token beside a null signal"
+          "description": "reason: the block's available-false reason code; basis: a token on a null leaf; enforced_basis: a token in the block's enforced_basis field (ci_checks), the reason for a null or false enforced check; unmeasured_reason: the block's unmeasured_reason token beside a null signal"
         },
         "block": {
           "type": "string",

@@ -27,7 +27,7 @@ from typing import Any, Union, cast, get_args, get_origin, get_type_hints, is_ty
 import jsonschema
 import pytest
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import scan_registry as sr
 from lib import signals as sg
 from lib import coupling_analysis as ca
@@ -40,6 +40,7 @@ from lib.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_M
 from lib.level_signals import InputClass, load_default_levels
 
 SCHEMA = Path(__file__).resolve().parents[1] / "references" / "check-manifest.schema.json"
+SIGNALS_SCHEMA = SCHEMA.with_name("signals.schema.json")
 GATE_TOKENS = {sr._SETUP: "setup", sr._BAD_SCOPE: "bad_scope",
                sr._SELF_DEGRADING: "self_degrading", sr._SERIALISER: "serialiser"}
 
@@ -343,7 +344,21 @@ def test_structure_reason_codes_match_import_graph(manifest: cm.CheckManifest) -
            + [f"{f}<...>: a family no code belongs to" for f in families
               if not any(c.startswith(f) for c in STRUCTURE_REASON_CODES - exact)])
     assert cm.reason_codes(manifest, "behaviour") == []
-    assert cm.reason_codes(manifest, "ci_checks") == []  # included_jobs is carried in basis
+    assert cm.reason_codes(manifest, "ci_checks") == []  # included_jobs is carried in enforced_basis
+
+
+def test_enforced_basis_codes_are_carried_in_enforced_basis(manifest: cm.CheckManifest) -> None:
+    """A ci_checks code enforced_basis can hold is declared ``carried_in = "enforced_basis"``,
+    and a code declared there is one enforced_basis holds (#957 item 3, #1031)."""
+    block = json.loads(SIGNALS_SCHEMA.read_text(encoding="utf-8"))["properties"]["scans"]["properties"]["ci_checks"]
+    held = set(block["properties"]["enforced_basis"]["enum"])
+    declared = {r["code"]: r.get("carried_in", "reason")
+                for r in _entry(manifest, "core.ci_checks").get("unknown_reasons", [])}
+    _clean([f"{c}: enforced_basis holds it, carried in {where}"
+            for c, where in sorted(declared.items()) if c in held and where != "enforced_basis"]
+           + [f"{c}: carried in enforced_basis, which never holds it"
+              for c, where in sorted(declared.items())
+              if where == "enforced_basis" and c not in held])
 
 
 def test_a_reason_for_an_unpublished_block_is_rejected(manifest: cm.CheckManifest) -> None:
@@ -375,3 +390,6 @@ def test_schema_and_loader_declare_the_same_fields() -> None:
     assert defs["privacy"]["enum"] == list(cm.PRIVACY_CLASSES)
     assert defs["finding"]["properties"]["mode"]["enum"] == list(cm.FINDING_MODES)
     assert defs["collector"]["properties"]["gate_reason"]["enum"] == list(cm.GATE_REASONS)
+    carried = defs["unknown_reason"]["properties"]
+    assert carried["carried_in"]["enum"] == list(cm.CARRIED_IN)
+    assert get_args(cm.CarriedIn) == cm.CARRIED_IN
