@@ -344,8 +344,8 @@ def _reaches_gh(module: str) -> bool:
 
 
 def test_reaches_gh_counts_both_platform_clients():
-    assert _reaches_gh("gitlab_cli")
-    assert _reaches_gh("gh_cli")
+    assert _reaches_gh("hosting.gitlab_cli")
+    assert _reaches_gh("hosting.gh_cli")
     # A dotted import names the module, not its package (#917 moves the clients
     # into lib/hosting/): an attribute path is cut back to the module on disk.
     assert _lib_module("lib.hosting.gh_cli._run_gh") == "hosting.gh_cli"
