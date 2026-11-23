@@ -173,6 +173,9 @@ class ReviewRealityBlock(TypedDict):
     review_required: bool | None
     hollow_required_review: bool | None
     required_approval_bypassed: bool | None
+    # Per-change tokens, oldest merge first (#943); absent in blocks written before it.
+    sequence: NotRequired[list[str]]
+    bot_sequence: NotRequired[list[str]]
 
 
 # -- structure_drift -------------------------------------------------------------

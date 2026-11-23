@@ -23,7 +23,11 @@ path.
 ``committed(text, present)`` is false only when ``text`` runs a script that ``present``
 says the tree does not hold; with no predicate every script reads present. A CI check or
 lint step that runs such a script reads ``enforced_basis`` / ``lint_basis``
-``script_not_found`` (null) in ``lib.ci_checks``, never true. Tests:
+``script_not_found`` (null) in ``lib.ci_checks``, never true. ``runs_missing(test)`` turns a
+``lib.ci_checks`` line test into the one that flags such a line: ``test`` holds with every
+script read as present and fails with ``present``. ``lib.ci_checks`` builds its missing-check
+test under ``named_check.instruction_words``, so a missing ``./ci.sh`` stays
+``script_not_found`` after #951. Tests:
 ``tests/test_check_command.py`` (``script_path``) and ``tests/test_ci_checks.py``.
 
 Inward-only imports: ``lib.check_command``, ``lib.command_index``,
@@ -73,6 +77,15 @@ def script_path(text: str) -> str | None:
         return None
     norm = str(PurePosixPath(path.removeprefix("./")))
     return None if norm.split("/")[0] == ".." else norm
+
+
+def runs_missing(test: Callable[..., bool]) -> Callable[..., bool]:
+    """The line test that holds where ``test`` runs a check or linter only through a script
+    the tree does not hold (#937): true with no ``present`` predicate, false with it."""
+    def missing(line: str, *, script_item: bool = True, present: Present | None = None) -> bool:
+        return (test(line, script_item=script_item)
+                and not test(line, script_item=script_item, present=present))
+    return missing
 
 
 def committed(text: str, present: Present | None) -> bool:

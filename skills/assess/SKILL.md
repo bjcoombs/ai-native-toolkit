@@ -78,6 +78,7 @@ Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-stats.json`
 - `$REPO_ROOT/.assess/doc-graph.svg`
 - `$REPO_ROOT/.assess/evidence-waffle.svg` (written by the deterministic core from the level result: one square per maturity-model condition, coloured by state and evidence grade)
+- `$REPO_ROOT/.assess/doc-drift.svg` and `$REPO_ROOT/.assess/review-strip.svg` (written by the deterministic core when their data is available: the docs furthest behind their code, and the review state of each sampled merged change)
 - `$REPO_ROOT/.assess/assess-report.md`
 
 > **Write-protected repo root?** `/assess` writes `.assess/` into `$REPO_ROOT`, and the treemap/core run as `uv` subprocesses that write there too. If your workflow keeps the repo root pristine and read-only (e.g. a `<repo>-main` clone that teammates branch from, with a hook blocking direct edits), a guard on *your* writes won't stop the subprocess - it just makes the run write into the directory you meant to protect. **Create a worktree first and run `/assess` from there.**
@@ -478,7 +479,7 @@ This replaces:
 - Every key in `hotspot_actions` must be a real top hotspot from `stats_summary.top_hotspots` - a fabricated path is rejected, naming the path.
 - `layer_scores` maps each layer id to its band (Missing 0.0 / Partial 0.5 / Present 1.0). Layer 6 must not exceed **0.5** when `mutation_not_run_cap.applies` or `mutation_not_run_cap.partial` is true (see Step 3). Include it so the cap is enforced; a legacy input omitting it skips only the Layer 6 check. Set `evidence` to the verified list the pre-report `evidence_check` run kept (flat `{layer, kind, path[, needle]}` entries), never the scorer's raw list; finalize re-checks it against the repository: a layer whose entries are all rejected is refused, naming each entry by kind, path and needle; a layer with at least one verified entry finalises, and each rejected entry prints a `finalize: warning:` line on stderr, which you relay to the user. An input without `evidence` skips the check.
 
-The live README badge (`.assess/badge.json`, shields.io endpoint schema) is deterministic: `assess_core.py` writes the headline summary on every run (`headline.summary`: the Step and the verified tally, e.g. `Step 3 · 4 of 4 measured`) and links it to `assess-report.md`. Finalize never rewrites it, so the badge only ever claims what a deterministic run can reproduce. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
+The live README badge (`.assess/badge.json`, shields.io endpoint schema) is deterministic: `assess_core.py` writes the headline summary on every run (`headline.summary`: the Step and the tally, e.g. `Step 3 · 4 in place of 4 measured`) and links it to `assess-report.md`. Finalize never rewrites it, so the badge only ever claims what a deterministic run can reproduce. When offering the PR (assess-pr), include the embed snippet if the repo's README has no badge yet:
 
 ```markdown
 ![AI-readiness](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F<owner>%2F<repo>%2F<default-branch>%2F.assess%2Fbadge.json)
