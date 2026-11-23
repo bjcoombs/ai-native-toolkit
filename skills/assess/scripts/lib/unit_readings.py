@@ -46,7 +46,9 @@ repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as 
 override blocks included (the root instruction file and the root gates are the root's own),
 except evidence that sits in member units: a ``layer_grades`` reading that rests on nested
 files alone (``nested_only``), or a ``coverage_gate`` whose every gate is under a member.
-Those are their units', so the root inherits them. Where member
+Those are their units', so the root reads its own without them (#864, ``_root_without``):
+``instruction_file_present`` true only for a nested file under no member, and a
+coverage reading with no gate. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
@@ -361,6 +363,33 @@ def _root_owns(block: str, result: Any, members: Sequence[str]) -> bool:
     return True
 
 
+def _root_without(block: str, result: Any, members: Sequence[str],
+                  nested: Any) -> JsonDict | None:
+    """The root unit's own reading of an override block it does not own (``_root_owns``
+    false), or None to inherit the repository-wide one (#864).
+
+    The members' evidence is theirs, so it is left out, as for a member unit
+    (``_coverage_own``, ``_instructions_own``): a ``nested_only`` repository reads
+    ``instruction_file_present`` true only when a nested file sits under no member, and a
+    coverage reading whose every gate is under members is a no-gate reading (false, or
+    null with its ``unmeasured_reason`` when the repository-wide value was not measured).
+    """
+    if not isinstance(result, Mapping):
+        return None
+    if block == "layer_grades" and result.get("instruction_presence") == "nested_only":
+        files = nested.get("files") if isinstance(nested, Mapping) else None
+        if not isinstance(files, list):
+            return None
+        own = any(isinstance(f, Mapping) and isinstance(f.get("path"), str)
+                  and not any(_under(f["path"], m) for m in members) for f in files)
+        return {"available": True, "instruction_file_present": own}
+    if block == "coverage_gate" and isinstance(result.get("gates"), list) and result["gates"]:
+        meets = None if result.get("unmeasured_reason") else False
+        return {**result, "configured": False, "gates": [], "max_threshold_percent": None,
+                "threshold_meets_minimum": meets, "enforced_meets_minimum": meets}
+    return None
+
+
 def split_reads(values: Sequence[Any]) -> tuple[dict[str, Any], tuple[Any, ...]]:
     """The registry entry's reads after ``units`` and ``nested_instructions``, split into the
     ``REPO_BLOCKS`` mapping and the ``UNIT_EXTERNAL_READS`` values."""
@@ -418,9 +447,14 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
             result = ctx.get(block, inputs.get(block))
             if root:
                 # The repository-wide reading is the root's own, root instruction file and
-                # gates included; a member unit's nested file is that unit's, not the root's.
-                if result is None or not _root_owns(block, result, members):
+                # gates included; a member unit's nested file or gate is that unit's, not
+                # the root's, so without its own evidence the root reads none (#864).
+                if result is None:
                     continue
+                if not _root_owns(block, result, members):
+                    result = _root_without(block, result, members, nested_instructions)
+                    if result is None:
+                        continue
             elif scopes[block] == "override":
                 result = OVERRIDES[block](rel, result, repo)
                 if result is None:

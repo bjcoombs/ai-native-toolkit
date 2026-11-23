@@ -186,7 +186,7 @@ def _next_line(level: LevelResult, model: MaturityModel, names: Mapping[int, str
     return f"Next: Step {nxt['step']} · {names.get(nxt['step'], '')} unlocks when {unlock}"
 
 
-def _verified(conditions: list[ConditionResult]) -> int:
+def verified_count(conditions: list[ConditionResult]) -> int:
     """Counted conditions met and graded ``verified``: the verified share of N."""
     return sum(1 for c in conditions if c["counted"] and c["state"] == "met" and c["grade"] == "verified")
 
@@ -194,7 +194,7 @@ def _verified(conditions: list[ConditionResult]) -> int:
 def _tally_line(level: LevelResult) -> str:
     tally = level["tally"]
     line = (f"Practices in place: {tally['met']} of {tally['measured']} measured, "
-            f"{_verified(level['conditions'])} verified")
+            f"{verified_count(level['conditions'])} verified")
     reasons = Counter(entry["reason"] for entry in level["not_measured"])
     detail = ", ".join(f"{reason_word(code)}: {n}" for code, n in sorted(reasons.items()))
     line += f" · {tally['not_measured']} not measured" + (f" ({detail})" if detail else "")
@@ -273,7 +273,7 @@ def headline(value: Any, model: MaturityModel) -> Headline:
             "levels_version": level["levels_version"], "step": step,
             "next_step": nxt["step"] if nxt else None, "lines": lines,
             "markdown": markdown, "summary": summary,
-            "verified": _verified(level["conditions"]), "tags": cells}
+            "verified": verified_count(level["conditions"]), "tags": cells}
 
 
 def run_context_headline(level: Any) -> Headline:

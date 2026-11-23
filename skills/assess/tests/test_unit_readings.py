@@ -161,9 +161,20 @@ def test_the_root_unit_is_not_credited_with_a_members_nested_file(tmp_path: Path
     block = cs.unit_readings(units, nested, *[blocks.get(b) for b in ur.REPO_BLOCKS],
                              NO_EXCLUDES, repo, None)
     root, member = block["units"]
-    assert "layer_grades" not in root["blocks"]
-    assert _origins(root)["layer-0-instructions.1"] == "inherited"
+    # #864: the member's file is not the root's, so the root reads none of its own
+    assert root["blocks"]["layer_grades"] == {"available": True, "instruction_file_present": False}
+    assert _origins(root)["layer-0-instructions.1"] == "unit"
     assert _origins(member)["layer-0-instructions.1"] == "unit"
+
+
+def test_a_root_nested_file_outside_every_member_is_the_roots() -> None:
+    grades = {"available": True, "instruction_file_present": True,
+              "instruction_presence": "nested_only"}
+    nested = {"available": True, "files": [{"path": "svc/a/CLAUDE.md"}, {"path": "tools/AGENTS.md"}]}
+    assert ur._root_without("layer_grades", grades, ["svc/a"], nested) == {
+        "available": True, "instruction_file_present": True}
+    assert ur._root_without("layer_grades", {**grades, "instruction_presence": "none"},
+                            ["svc/a"], nested) is None
 
 
 def test_the_root_unit_does_not_own_a_members_coverage_gate(tmp_path: Path) -> None:
@@ -176,8 +187,14 @@ def test_the_root_unit_does_not_own_a_members_coverage_gate(tmp_path: Path) -> N
         block = cs.unit_readings(units, None, *[blocks.get(b) for b in ur.REPO_BLOCKS],
                                  NO_EXCLUDES, tmp_path, None)
         root = block["units"][0]
-        assert ("coverage_gate" in root["blocks"]) is owned
-        assert _origins(root)["layer-6-coverage.1"] == ("unit" if owned else "inherited")
+        # #864: without a gate of its own the root reads a no-gate reading, never the member's
+        assert root["blocks"]["coverage_gate"]["enforced_meets_minimum"] is owned
+        assert _origins(root)["layer-6-coverage.1"] == "unit"
+    unmeasured = {**member_gate, "unmeasured_reason": "go_rust_gate_form_not_read",
+                  "enforced_meets_minimum": None}
+    assert ur._root_without("coverage_gate", unmeasured, ["svc/a"], None)[
+        "enforced_meets_minimum"] is None
+    assert ur._root_without("coverage_gate", {**member_gate, "gates": []}, ["svc/a"], None) is None
 
 
 def test_a_parent_build_gate_is_inherited_beside_a_members_gate(tmp_path: Path) -> None:

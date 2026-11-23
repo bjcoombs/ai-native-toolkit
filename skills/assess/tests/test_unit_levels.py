@@ -187,3 +187,48 @@ def test_the_root_unit_reads_the_repository_level(tmp_path: Path) -> None:
     unit = _levels({"available": True, "unit_count": 1, "units": [root]}, repo)["units"][0]
     assert unit["path"] == "."
     assert unit["step"] == run_context_level(repo)["step"]
+
+
+# --- a root unit beside members (review of #1062) ----------------------------------------
+
+WORKSPACE = {
+    "pyproject.toml": "[project]\nname = 'root'\n\n[tool.uv.workspace]\nmembers = ['packages/a', 'packages/b']\n",
+    "root/__init__.py": "r = 0\n",
+    ".github/workflows/ci.yml": "on: [pull_request]\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: pytest --cov\n",
+    "packages/a/pyproject.toml": "[project]\nname = 'a'\n\n[tool.coverage.report]\nfail_under = 90\n",
+    "packages/a/a/__init__.py": "x = 1\n",
+    "packages/a/CLAUDE.md": "# A\n\nRun `pytest`.\n",
+    "packages/b/pyproject.toml": "[project]\nname = 'b'\n",
+    "packages/b/b/__init__.py": "y = 1\n",
+}
+
+
+@pytest.fixture(scope="module")
+def workspace(tmp_path_factory: pytest.TempPathFactory) -> dict[str, ul.UnitLevel]:
+    from assess_core import build_run_context
+    repo = _write(tmp_path_factory.mktemp("ws") / "repo", WORKSPACE)
+    ctx = build_run_context(repo_root=repo, run_date="2026-11-22", non_interactive=True)
+    return {u["path"]: u for u in ctx["unit_levels"]["units"]}
+
+
+def _state(unit: ul.UnitLevel, cid: str) -> str:
+    return next(c["state"] for c in unit["conditions"] if c["id"] == cid)
+
+
+def test_the_root_unit_does_not_inherit_a_members_coverage_gate(
+        workspace: dict[str, ul.UnitLevel]) -> None:
+    assert set(workspace) == {".", "packages/a", "packages/b"}
+    root = workspace["."]
+    assert "layer-6-coverage.1" not in root["inherited"]
+    assert _origin(root, "layer-6-coverage.1") == "unit"
+    assert _state(root, "layer-6-coverage.1") != "met"
+
+
+def test_the_root_unit_does_not_inherit_a_members_instruction_file(
+        workspace: dict[str, ul.UnitLevel]) -> None:
+    root, a, b = workspace["."], workspace["packages/a"], workspace["packages/b"]
+    assert _state(a, "layer-0-instructions.1") == "met"
+    for unit in (root, b):
+        assert _origin(unit, "layer-0-instructions.1") == "unit"
+        assert _state(unit, "layer-0-instructions.1") == "unmet"
+        assert unit["step"] == 1

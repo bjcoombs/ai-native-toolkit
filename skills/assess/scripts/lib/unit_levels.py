@@ -21,13 +21,16 @@ as #800 decision 2 says, and is labelled ``inherited`` on the unit's condition.
   - ``path``: the unit's folder (``.`` for the root unit);
   - ``step`` and ``next_step``: as in the ``level`` block (``LevelResult``);
   - ``tally``: ``met``, ``measured`` and ``not_measured`` as in the ``level`` block, plus
-    ``verified``, the met counted conditions graded ``verified`` (the headline's V);
+    ``verified``, the met counted conditions graded ``verified``
+    (``headline.verified_count``, the headline's V);
   - ``conditions``: every model condition with its ``state``, ``counted``, ``origin``
     (``unit`` or ``inherited``, from ``unit_readings``; a condition ``unit_readings`` did
     not tag reads ``inherited``, the repository-wide reading) and its ``reason`` when it
     has one;
   - ``inherited``: the ids of the conditions met on an inherited reading, which the
-    report labels "inherited from root".
+    report labels "inherited from root". It lists listed (uncounted) conditions too, such
+    as the declared instruction file, since they hold Step gates; ``counted`` on the
+    condition says which of them count toward ``tally.met``.
 
 Unknown stays unknown: a unit's own reading that is unavailable reads ``not_measured``
 with its reason code, as in the ``level`` block, never unmet. Per-unit CI is not read
@@ -42,6 +45,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, NotRequired, TypedDict
 
+from lib.headline import verified_count
 from lib.level_result_types import NextStep
 from lib.level_tally import LEVEL_READS, default_model, level_result, run_exclusions
 from lib.levels import MaturityModel
@@ -107,8 +111,7 @@ def unit_level(path: str, reading: Mapping[str, Any], repo: Mapping[str, Any],
         if "reason" in c:
             entry["reason"] = c["reason"]
         conditions.append(entry)
-    verified = sum(1 for c in result["conditions"]
-                   if c["counted"] and c["state"] == "met" and c["grade"] == "verified")
+    verified = verified_count(result["conditions"])
     return {"path": path, "step": result["step"], "next_step": result["next_step"],
             "tally": {**result["tally"], "verified": verified},
             "conditions": conditions,
