@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from lib.gap_actions import REMOVAL_FINDING, REMOVE_MODE
 from lib.instruction_placement import ALWAYS_ON_FLAG_LINES
@@ -59,3 +60,32 @@ def test_an_oversized_always_on_instruction_file_gets_a_remove_action(tmp_path: 
 def test_a_file_within_the_flag_gets_no_remove_action(tmp_path: Path) -> None:
     ctx = _run(_repo(tmp_path, ALWAYS_ON_FLAG_LINES - 50), "2026-11-21")
     assert not [g for g in ctx["gap_actions"] if g.get("mode") == REMOVE_MODE]
+
+
+def test_a_shrinking_removal_keeps_its_lifecycle_by_finding_and_files(tmp_path: Path) -> None:
+    """Review of #1129: the directive embeds the live line count, so identity is finding + files."""
+    repo = _repo(tmp_path, ALWAYS_ON_FLAG_LINES + 60)
+    ctx = _run(repo, "2026-11-21")
+    (gap,) = [g for g in ctx["gap_actions"] if g.get("mode") == REMOVE_MODE]
+
+    def finalize(action_text: str, run_id: str) -> dict[str, Any]:
+        cache = repo / ".assess" / ".cache"
+        cache.mkdir(exist_ok=True)
+        (cache / "finalize-input.json").write_text(json.dumps({
+            "run_id": run_id, "top_action": action_text,
+            "actions": [{"rank": 1, "action": action_text, "done_when": "always_on_lines <= 200",
+                         "scope_fence": "CLAUDE.md only", "finding": gap["finding"], "files": gap["paths"],
+                         "cost": gap["cost"]}]}), encoding="utf-8")
+        done = subprocess.run([sys.executable, str(SCRIPTS / "assess_finalize.py"), str(repo)],
+                              capture_output=True, encoding="utf-8", errors="replace")
+        assert done.returncode == 0, done.stderr
+        entry: dict[str, Any] = json.loads((repo / ".assess" / "actions.json").read_text(encoding="utf-8"))["actions"][0]
+        return entry
+
+    finalize(gap["action"], ctx["run_id"])
+    contract = json.loads((repo / ".assess" / "actions.json").read_text(encoding="utf-8"))
+    contract["actions"][0].update({"status": "done", "completed_sha": "a" * 40})
+    (repo / ".assess" / "actions.json").write_text(json.dumps(contract), encoding="utf-8")
+    again = _run(repo, "2026-11-22")
+    kept = finalize(gap["action"].replace(str(gap["cost"]["value"]), "999"), again["run_id"])
+    assert (kept["status"], kept["completed_sha"], kept["mode"]) == ("done", "a" * 40, REMOVE_MODE)
