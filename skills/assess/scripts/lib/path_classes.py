@@ -30,7 +30,7 @@ The first rule that matches wins, in this order:
 Directory segments compare case-insensitively; the file name itself is never
 read as a directory. A fixture under a test tree (``tests/fixtures/a.py``)
 is a fixture, since rule 3 runs before rule 4. Tests:
-``tests/test_path_classes.py``.
+``tests/test_class_sizes.py``.
 """
 from __future__ import annotations
 
