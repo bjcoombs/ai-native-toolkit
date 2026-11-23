@@ -482,7 +482,7 @@ def test_gate_loss_unread_never_fails(tmp_path):
                        load_gate_config(tmp_path))
     assert verdict["failed"] is False
     assert verdict["gates_unread_warning"] == ["ci_runs_tests"]
-    assert "warn gate not measured: ci_runs_tests" in format_verdict(verdict)
+    assert "warn no longer measured: ci_runs_tests" in format_verdict(verdict)
 
 
 def test_gate_loss_nothing_on_first_run_or_unknown(tmp_path):
@@ -531,3 +531,25 @@ def test_main_summary_absent_headline_prints_verdict_only(tmp_path, capsys):
     (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(_ctx([])), encoding="utf-8")
     assert main([str(tmp_path), "--summary"]) == 0
     assert capsys.readouterr().out.startswith("/assess gate")
+
+
+def test_gate_loss_names_the_step_lost(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(["ci_runs_tests"], {"ci_runs_tests": "unmet"})
+    ctx["prior_level"] = {"baseline": {"run_id": "r", "head_sha": "a" * 40,
+                                       "held_gates": ["instructions", "ci_runs_tests"]}}
+    verdict = evaluate(ctx, load_gate_config(tmp_path))
+    assert ("FAIL gate lost: ci_runs_tests held at the committed baseline and no longer holds "
+            "(Step 3 -> Step 2)") in format_verdict(verdict)
+    assert verdict["threshold_breaches"][0]["step_from"] == 3
+
+
+def test_no_baseline_yet_is_reported_and_passes(tmp_path):
+    _write_config(tmp_path, "[gate]\nfail_on_gate_loss = true\n")
+    ctx = _loss_ctx(None)
+    ctx["since_last_run"]["first_run"] = True
+    verdict = evaluate(ctx, load_gate_config(tmp_path))
+    assert verdict["failed"] is False and verdict["no_baseline"] is True
+    assert "no baseline yet" in format_verdict(verdict)
+    # Off by default: the Action's log is unchanged.
+    assert "no_baseline" not in evaluate(ctx, load_gate_config(Path("/nonexistent")))

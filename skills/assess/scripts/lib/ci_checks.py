@@ -78,7 +78,9 @@ GitLab includes are resolved offline where the included file is on disk
 ROOT). Each resolved file's lines are classified the same way and counted in
 ``included_check_commands``. ``includes`` lists one record per include item
 (kind, id, status, ref_basis, depth; never a file name or text), with the
-``resolved_includes`` / ``unresolved_includes`` counts.
+``resolved_includes`` / ``unresolved_includes`` counts. The toolkit's own regression gate
+template (status ``toolkit_gate``, ``ci_includes.SETTLED``, #1152) counts as resolved: its
+one job runs no project tests.
 
 Under ``--platform`` (and in a full ``/assess`` run) a repository whose
 includes did not all resolve offline also gets GitLab's merged configuration
@@ -341,7 +343,7 @@ from typing import Literal, NotRequired, TypedDict
 
 from lib.ci_action_inputs import Inputs, ReadLocal, read_inputs
 from lib.ci_continuations import join_continued
-from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
+from lib.ci_includes import SETTLED, IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated
 from lib.ci_lines import (
     LINT_ACTIONS as LINT_ACTIONS, MAY_LINT_ACTIONS as MAY_LINT_ACTIONS, LineTest,
@@ -615,8 +617,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             lint_basis = "not_enforced"   # a masked or off-trigger compiler gate
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,
-            "resolved_includes": sum(r["status"] == "resolved" for r in records),
-            "unresolved_includes": sum(r["status"] != "resolved" for r in records),
+            "resolved_includes": sum(r["status"] in SETTLED for r in records),
+            "unresolved_includes": sum(r["status"] not in SETTLED for r in records),
             "includes": records, "merged_config": merged.status,
             "merged_config_reason": merged.reason, "merged_check_commands": merged_checks,
             "test_or_lint_configured": runs, "basis": basis,

@@ -39,6 +39,15 @@ inputs:
       malformed config degrades to warn-only defaults.
     required: false
     default: '.assess/config.toml'
+  fail_on_gate_loss:
+    description: >-
+      'true' fails the PR when a Step gate the committed baseline
+      (.assess/prior-level.json) held now reads unmet, as
+      `fail_on_gate_loss = true` in the config does. Default 'false' keeps the
+      action warn-only; the GitLab template (templates/assess-gate.yml)
+      defaults it to true.
+    required: false
+    default: 'false'
 
 outputs:
   rendered:
@@ -124,6 +133,10 @@ runs:
       working-directory: ${{ github.action_path }}/skills/assess
       # The single step whose exit code can fail the consumer's PR - and only
       # per their own config.toml opt-ins.
+      env:
+        FAIL_ON_GATE_LOSS: ${{ inputs.fail_on_gate_loss }}
       run: |
+        extra=()
+        if [ "$FAIL_ON_GATE_LOSS" = "true" ]; then extra+=(--fail-on-gate-loss); fi
         uv run scripts/assess_gate.py "${GITHUB_WORKSPACE}" \
-          --config "${GITHUB_WORKSPACE}/${{ inputs.config }}"
+          --config "${GITHUB_WORKSPACE}/${{ inputs.config }}" "${extra[@]}"

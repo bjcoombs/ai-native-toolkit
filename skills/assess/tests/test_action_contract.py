@@ -134,6 +134,17 @@ def test_config_input_default():
     assert _action()["inputs"]["config"]["default"] == ".assess/config.toml"
 
 
+def test_fail_on_gate_loss_input_defaults_off_and_reaches_the_gate():
+    """Parity with the GitLab template's input (#1152), off by default so the
+    action stays warn-only; the value travels through env, never inline."""
+    assert _action()["inputs"]["fail_on_gate_loss"]["default"] == "false"
+    gate_step = next(s for s in _steps() if "assess_gate.py" in s.get("run", ""))
+    assert gate_step["env"]["FAIL_ON_GATE_LOSS"] == "${{ inputs.fail_on_gate_loss }}"
+    assert '"$FAIL_ON_GATE_LOSS" = "true"' in gate_step["run"]
+    assert "--fail-on-gate-loss" in gate_step["run"]
+    assert "inputs.fail_on_gate_loss" not in gate_step["run"]
+
+
 def test_own_workflow_self_tests_the_action():
     """This repo's own gate must run `uses: ./` so every PR exercises the
     action from the branch under review, not a stale released tag."""

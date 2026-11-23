@@ -406,3 +406,63 @@ def test_a_directory_or_symlink_in_a_template_is_not_read(tmp_path: Path, file: 
     block = scan_ci_checks(app, root)
     assert [r["status"] for r in block["includes"]] == ["file_missing"]
     assert block["test_or_lint_configured"] is None
+
+
+# --- the toolkit's own regression gate template (#1152) --------------------
+
+GATE_REMOTE = "https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.0.0/templates/assess-gate.yml"
+
+
+@pytest.mark.parametrize(("kind", "source", "expected"), [
+    ("remote", GATE_REMOTE, True),
+    ("remote", f"'{GATE_REMOTE}'", True),
+    ("remote", GATE_REMOTE.replace("v3.0.0", "main"), True),
+    ("component", "gitlab.example.com/tools/ai-native-toolkit/assess-gate@3.0.0", True),
+    ("component", "$CI_SERVER_FQDN/grp/sub/ai-native-toolkit/assess-gate@~latest", True),
+    # Every other include stays as it was.
+    ("remote", GATE_REMOTE.replace("bjcoombs", "someone"), False),
+    ("remote", GATE_REMOTE.replace("assess-gate.yml", "other.yml"), False),
+    ("remote", GATE_REMOTE.replace("v3.0.0", "v3.0.0/.."), False),
+    ("remote", GATE_REMOTE + "?x=1", False),
+    ("remote", GATE_REMOTE.replace("https://", "http://"), False),
+    ("component", "gitlab.example.com/tools/other-toolkit/assess-gate@3.0.0", False),
+    ("component", "gitlab.example.com/tools/ai-native-toolkit/unit@3.0.0", False),
+    ("project", "bjcoombs/ai-native-toolkit", False),
+    ("local", "templates/assess-gate.yml", False),
+])
+def test_is_toolkit_gate_matches_only_the_gate_template(kind: str, source: str, expected: bool) -> None:
+    assert ci_includes.is_toolkit_gate(kind, source) is expected
+
+
+def test_the_gate_include_runs_no_project_tests(tmp_path: Path) -> None:
+    """With only the gate included and no test job, the test signal reads false, not unknown."""
+    app = tmp_path / "app"
+    _commit(app, {".gitlab-ci.yml": f"include:\n  - remote: {GATE_REMOTE}\n"
+                                    "build:\n  script:\n    - make build\n"})
+    block = scan_ci_checks(app, None)
+    assert block["includes"] == [{"kind": "remote", "id": None, "status": "toolkit_gate",
+                                  "ref_basis": None, "depth": 1}]
+    assert block["unresolved_includes"] == 0 and block["resolved_includes"] == 1
+    assert block["test_or_lint_configured"] is False
+    assert resolve_includes(app, None).unresolved == 0
+
+
+def test_another_remote_include_still_leaves_tests_unknown(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _commit(app, {".gitlab-ci.yml": f"include:\n  - remote: {GATE_REMOTE}\n"
+                                    "  - remote: https://x.test/a.yml\n"
+                                    "build:\n  script:\n    - make build\n"})
+    block = scan_ci_checks(app, None)
+    assert [r["status"] for r in block["includes"]] == ["toolkit_gate", "not_offline"]
+    assert block["unresolved_includes"] == 1
+    assert block["test_or_lint_configured"] is None
+
+
+def test_a_gate_component_needs_no_root(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _commit(app, {".gitlab-ci.yml": "include:\n  - component: gl.test/grp/ai-native-toolkit/assess-gate@3.0.0\n"
+                                    "test:\n  script:\n    - pytest\n"})
+    block = scan_ci_checks(app, None)
+    assert block["includes"][0]["status"] == "toolkit_gate"
+    assert block["includes"][0]["id"] == "gitlab_component:grp/ai-native-toolkit/assess-gate"
+    assert block["test_or_lint_configured"] is True

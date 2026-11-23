@@ -173,11 +173,9 @@ def _run(project: Path, tmp_path: Path, status: str = "201", **env: str) -> subp
                           errors="replace", env=base, timeout=600)
 
 
-@pytest.fixture(scope="module")
-def project(tmp_path_factory) -> Path:
-    """A small Python project at Step 3 (instructions, CI running pytest) with its
-    committed .assess baseline, as a project that adopted the gate has."""
-    repo = tmp_path_factory.mktemp("gitlab-project")
+def _make_project(repo: Path, include: str) -> Path:
+    """A small Python project at Step 3: instructions, and CI running pytest."""
+    repo.mkdir(parents=True, exist_ok=True)
     _git(repo, "init", "-q", "-b", "main")
     (repo / "AGENTS.md").write_text("Run `pytest` before committing.\n", encoding="utf-8")
     (repo / "src").mkdir()
@@ -188,9 +186,14 @@ def project(tmp_path_factory) -> Path:
     (repo / "pyproject.toml").write_text('[project]\nname = "fx"\nversion = "0.1.0"\n', encoding="utf-8")
     (repo / ".gitignore").write_text(".assess/run-context*.json\n.assess/complexity-stats.prior.json\n"
                                      ".assess/.cache/\n", encoding="utf-8")
-    (repo / ".gitlab-ci.yml").write_text(INCLUDE + CI_TESTS, encoding="utf-8")
+    (repo / ".gitlab-ci.yml").write_text(include + CI_TESTS, encoding="utf-8")
     _commit_all(repo, "init")
     return repo
+
+
+@pytest.fixture(scope="module")
+def project(tmp_path_factory) -> Path:
+    return _make_project(tmp_path_factory.mktemp("gitlab-project"), INCLUDE)
 
 
 @needs_bash
@@ -215,6 +218,7 @@ def test_fixture_passes_on_the_baseline_and_fails_when_ci_stops_running_tests(pr
     lost = _run(project, tmp_path / "c")
     assert lost.returncode == 1, lost.stdout + lost.stderr
     assert "FAIL gate lost: ci_runs_tests" in lost.stdout
+    assert "(Step 3 -> Step 2)" in lost.stdout
     assert "RESULT: FAIL" in lost.stdout
 
     # The same loss with the input turned off is a warn line and a pass.
@@ -265,3 +269,27 @@ def test_render_failure_is_a_skip_notice(tmp_path):
     out = _run(not_a_dir, tmp_path, ASSESS_FAIL_ON_GATE_LOSS="true")
     assert out.returncode == 0, out.stdout + out.stderr
     assert "infrastructure failure rendering the snapshot" in out.stdout
+
+
+@needs_bash
+def test_another_unreadable_include_reads_not_measured_and_only_warns(tmp_path):
+    """The gate's own include is known to run no tests; any other remote include could
+    hold them, so removing the local test job reads not measured: a warn, never a fail."""
+    other = INCLUDE + "  - remote: https://ci.example.com/shared/jobs.yml\n"
+    repo = _make_project(tmp_path / "project", other)
+    assert _run(repo, tmp_path / "a").returncode == 0
+    _commit_all(repo, "assess baseline")
+    (repo / ".gitlab-ci.yml").write_text(other + CI_NO_TESTS, encoding="utf-8")
+    _commit_all(repo, "drop the test job")
+    out = _run(repo, tmp_path / "b")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "warn no longer measured: ci_runs_tests" in out.stdout
+    assert "RESULT: PASS" in out.stdout
+
+
+@needs_bash
+def test_first_run_reports_no_baseline_yet(tmp_path):
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    out = _run(repo, tmp_path / "a")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "no baseline yet" in out.stdout

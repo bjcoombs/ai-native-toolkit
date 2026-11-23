@@ -218,7 +218,9 @@ include:
     inputs: { config: .assess/config.toml }
 ```
 
-The job runs the same headless gate as the GitHub Action, on merge request pipelines only, and writes the summary that opens the report to the job log. It also fails the merge request when a Step gate your committed baseline held no longer holds, such as CI no longer running the tests. The baseline is `.assess/prior-level.json`, written by every `/assess` run, so commit your `.assess/` directory first. Set the `fail_on_gate_loss: false` input to report a lost gate without failing. A gate the job could not read is reported, never counted as lost.
+The job runs the same headless gate as the GitHub Action, on merge request pipelines only, and writes the summary that opens the report to the job log. It also fails the merge request when a Step gate your committed baseline held now reads unmet, such as CI no longer running the tests, and names the Step it costs. The baseline is `.assess/prior-level.json`, written by every `/assess` run, so commit your `.assess/` directory first; until there is one, the log says "no baseline yet" and the job passes. A gate the job could not read is reported, never counted as lost.
+
+One difference from the Action: `fail_on_gate_loss` is on by default here and off in the Action. The Action takes the same input (`fail_on_gate_loss: 'true'`), or set `fail_on_gate_loss = true` under `[gate]` in `.assess/config.toml` for both. Set the `fail_on_gate_loss: false` input to report a lost gate on GitLab without failing.
 
 To post the summary as a merge request note too, add a project access token with `api` scope as a masked CI/CD variable named `ASSESS_GATE_TOKEN`. Without it the job tries `CI_JOB_TOKEN`, which most GitLab versions don't allow to post notes, so the summary stays in the job log and the job carries on.
 
