@@ -83,6 +83,9 @@ def test_a_folded_block_scalar_is_unfolded_before_it_is_counted(tmp_path: Path) 
     ("name: demo\ndescription: 'short'", "short"),
     ("name: demo\ndescription: |\n  one\n  two", "one\ntwo"),
     ("description: plain\nname: demo", "plain"),
+    ("name: demo\ndescription: foo # note", "foo"),
+    ("name: demo\ndescription: foo # note\n  bar # more", "foo bar"),
+    ('name: demo\ndescription: "a\n  b" # note', "a b"),
 ])
 def test_a_wrapped_or_quoted_description_is_read_whole(tmp_path: Path, frontmatter: str, expected: str) -> None:
     _skill(tmp_path, "body\n", frontmatter=frontmatter)
@@ -199,11 +202,9 @@ def test_a_plugin_skill_folder_scope_reads_that_skill() -> None:
     assert [f["path"] for f in scoped["files"]] == ["skills/ghreport/SKILL.md"]
 
 
-def test_this_repository_reads_the_breaks_the_issue_names() -> None:
-    # #1045: ghreport (1,226) and fleet (1,112) are past the description limit, and
-    # assess-findings (about 20k tokens) past the token budget.
-    files = {f["path"]: f for f in sd.scan_skill_disclosure(REPO_ROOT)["files"]}
-    assert files["skills/ghreport/SKILL.md"]["description_chars"] == 1226
-    assert "description_long" in files["skills/fleet/SKILL.md"]["breaks"]
-    assert "tokens" in files["skills/assess-findings/SKILL.md"]["breaks"]
-    assert not [p for p, f in files.items() if "reference_missing" in f["breaks"]]
+def test_this_repository_has_no_missing_reference_and_every_file_has_a_description() -> None:
+    # Invariants only: the size and description rules are pinned with fixtures above, so
+    # shortening a description here (the fix the signal recommends) never needs a test edit.
+    files = sd.scan_skill_disclosure(REPO_ROOT)["files"]
+    assert files and not [f["path"] for f in files if "reference_missing" in f["breaks"]]
+    assert not [f["path"] for f in files if f["kind"] == "skill" and not f["description_present"]]

@@ -104,6 +104,7 @@ _TICKED = re.compile(r"`(\$\{CLAUDE_SKILL_DIR\}/|\./)?(references/[^`\s]+)`")
 _TOC_HEADING = re.compile(r"^#{1,6}\s+(?:table of\s+)?contents\b", re.IGNORECASE)
 _ANCHOR = re.compile(r"\]\(#[^)]+\)")
 _BLOCK_SCALAR = re.compile(r"^[>|][+-]?$")
+_COMMENT = re.compile(r"\s+#.*$")  # a plain scalar's trailing comment, as YAML drops it
 
 
 class SkillReference(TypedDict):
@@ -162,8 +163,8 @@ def description_text(text: str) -> str | None:
 
     ``parse_frontmatter`` keeps only a key's first line, so the indented lines after it are
     gathered here: a block scalar (``>`` folds them with spaces, ``|`` keeps the line breaks)
-    or a plain or quoted value that wraps (YAML folds it with spaces). Matching outer quotes
-    are dropped."""
+    or a plain or quoted value that wraps (YAML folds it with spaces). Outer quotes and a
+    plain value's trailing ``# comment`` are dropped, as the parser drops them on one line."""
     fm = parse_frontmatter(text)
     entry = next((e for e in fm.entries if e.key == "description"), None) if fm else None
     if entry is None:
@@ -178,10 +179,14 @@ def description_text(text: str) -> str | None:
         more.append(line.strip())
     if _BLOCK_SCALAR.match(raw):
         joined = (" " if raw.startswith(">") else "\n").join(more).strip()
-    else:
+    elif not any(more):
+        return entry.value  # one line: the parser's own reading (quotes and a comment dropped)
+    elif raw[:1] in "\"'":
         joined = " ".join(part for part in [raw, *more] if part)
-        if len(joined) >= 2 and joined[0] == joined[-1] and joined[0] in "\"'":
-            joined = joined[1:-1]
+        quote = joined.rfind(raw[0])
+        joined = joined[1:quote] if quote > 0 else joined[1:]  # a comment may follow the close
+    else:
+        joined = " ".join(_COMMENT.sub("", part) for part in [raw, *more] if part)
     return joined or None
 
 
