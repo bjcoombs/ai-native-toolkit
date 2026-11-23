@@ -1,5 +1,8 @@
 """Fleet's unknown dirty state (#932): a null ``dirty`` carries a reason and is never read as clean.
 
+A clean checkout whose only edit is inside a submodule keeps ``dirty: false``, is
+scanned in place, and carries ``submodule_dirty`` (#1017).
+
 Sparse, skip-worktree and assume-unchanged entries are ones ``git status`` never
 compares, so a clean status there is not a clean checkout. With a ``HEAD`` such a
 checkout is scanned from its committed tree, like a dirty one.
@@ -150,7 +153,50 @@ def test_a_submodule_s_own_edit_never_marks_the_checkout_dirty(tmp_path):
     repo, sub = _with_submodule(tmp_path)
     (sub / "lib.py").write_text("y = 2\n", encoding="utf-8")
     assert _git(repo, "status", "--porcelain", "--untracked-files=no").strip() != ""  # git alone says modified
+    assert fleet.commit_state(repo) == {"head_sha": _head(repo), "dirty": False,
+                                        "dirty_reason": fleet.SUBMODULE_DIRTY}
+
+
+# The fake scan reports the submodule file's content in the tree it was given.
+_READS_SUBMODULE = (
+    "import os\npath = os.path.join(sys.argv[1], 'vendor', 'lib', 'lib.py')\n"
+    "seen = open(path, encoding='utf-8').read() if os.path.exists(path) else None\n"
+    "doc = {'signals_schema_version': 1, 'stamp': {}, 'scans': {'probe': {'lib': seen}}}\n"
+    "open(out, 'w').write(json.dumps(doc))\n")
+
+
+def test_a_submodule_only_edit_is_scanned_in_place_and_stamped(tmp_path, monkeypatch):
+    """#1017: the edit is still scanned (in place), and the row says it came from a local edit."""
+    _fake_signals(tmp_path, monkeypatch, _READS_SUBMODULE)
+    repo, sub = _with_submodule(tmp_path)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    clean = fleet.scan_target(Target("g/r", repo), scratch, ScanOptions())
+    (sub / "lib.py").write_text("y = 2\n", encoding="utf-8")
+    edited = fleet.scan_target(Target("g/r", repo), scratch, ScanOptions())
+    assert (clean["dirty"], clean["dirty_reason"]) == (False, None)
+    assert clean["scans"] == {"probe": {"lib": "y = 1\n"}}
+    assert (edited["head_sha"], edited["dirty"], edited["dirty_reason"]) == (
+        _head(repo), False, fleet.SUBMODULE_DIRTY)
+    assert edited["scans"] == {"probe": {"lib": "y = 2\n"}}  # the working tree, edit included
+    jsonschema.validate(edited, build_schema())
+
+
+def test_an_untracked_file_inside_a_submodule_never_stamps_the_row(tmp_path):
+    repo, sub = _with_submodule(tmp_path)
+    (sub / "notes.txt").write_text("scratch\n", encoding="utf-8")
     assert fleet.commit_state(repo) == {"head_sha": _head(repo), "dirty": False, "dirty_reason": None}
+
+
+def test_a_failed_submodule_status_is_unknown(tmp_path, monkeypatch):
+    repo, _sub = _with_submodule(tmp_path)
+    real = fleet._git_output
+
+    def git_output(path: Path, *args: str) -> str | None:
+        return None if "--ignore-submodules=untracked" in args else real(path, *args)
+    monkeypatch.setattr(fleet, "_git_output", git_output)
+    assert fleet.commit_state(repo) == {"head_sha": _head(repo), "dirty": None,
+                                        "dirty_reason": fleet.STATUS_ERROR}
 
 
 def test_a_moved_submodule_commit_still_marks_the_checkout_dirty(tmp_path):

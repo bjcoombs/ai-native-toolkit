@@ -37,7 +37,7 @@ from typing import get_type_hints
 if __package__ in (None, ""):  # run as a script: make ``lib`` importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lib.fleet.runner import DIRTY_UNKNOWN_REASONS, FAILURE_REASONS, STATUS_FAILED, STATUS_OK, FleetRow  # noqa: E402
+from lib.fleet.runner import DIRTY_REASONS, FAILURE_REASONS, STATUS_FAILED, STATUS_OK, FleetRow  # noqa: E402
 from lib.fleet.fleet_doc_freshness import (  # noqa: E402
     METHOD,
     REASONS,
@@ -70,7 +70,7 @@ def build_schema() -> JsonDict:
     props = schema["properties"]
     props["status"] = {"enum": [STATUS_OK, STATUS_FAILED]}
     props["reason"] = {"anyOf": [{"type": "string", "pattern": REASON_PATTERN}, {"type": "null"}]}
-    props["dirty_reason"] = {"anyOf": [{"enum": list(DIRTY_UNKNOWN_REASONS)}, {"type": "null"}]}
+    props["dirty_reason"] = {"anyOf": [{"enum": list(DIRTY_REASONS)}, {"type": "null"}]}
     # The repository's "AI review in CI: yes / no" (#696), described where a reader looks first.
     scans = next(branch for branch in props["scans"]["anyOf"] if branch.get("type") == "object")
     scans["properties"] = {"review_automation": {
@@ -95,7 +95,9 @@ def build_schema() -> JsonDict:
             "count). dirty is null on an ok row only when the state is unknown, and dirty_reason then says why: "
             "no_commit (scanned in place), status_error, index_read_error, sparse_checkout, skip_worktree or "
             "assume_unchanged (git status never compares those entries); with a HEAD, an unknown state is "
-            "scanned from the committed tree like a dirty one. Generated from "
+            "scanned from the committed tree like a dirty one. A clean row's dirty_reason is submodule_dirty "
+            "when a submodule held uncommitted tracked edits: the checkout was scanned in place, those edits "
+            "included. Generated from "
             "lib/fleet/runner.py by lib/fleet/fleet_schema.py."
         ),
         **schema,

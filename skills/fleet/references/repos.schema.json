@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/repos.schema.json",
   "title": "fleet repository row",
-  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans, active, head_sha, dirty and dirty_reason. An ok row's active says whether its HEAD was committed inside the run's window; head_sha is the HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's committed tree was scanned (untracked files, .assess/ outputs and a submodule's own edits never count). dirty is null on an ok row only when the state is unknown, and dirty_reason then says why: no_commit (scanned in place), status_error, index_read_error, sparse_checkout, skip_worktree or assume_unchanged (git status never compares those entries); with a HEAD, an unknown state is scanned from the committed tree like a dirty one. Generated from lib/fleet/runner.py by lib/fleet/fleet_schema.py.",
+  "description": "One line of repos.jsonl written by skills/fleet/scripts/fleet.py. A failed row has a reason token and null signals_schema_version, scans, active, head_sha, dirty and dirty_reason. An ok row's active says whether its HEAD was committed inside the run's window; head_sha is the HEAD it measured and dirty says whether tracked files differed from it, in which case HEAD's committed tree was scanned (untracked files, .assess/ outputs and a submodule's own edits never count). dirty is null on an ok row only when the state is unknown, and dirty_reason then says why: no_commit (scanned in place), status_error, index_read_error, sparse_checkout, skip_worktree or assume_unchanged (git status never compares those entries); with a HEAD, an unknown state is scanned from the committed tree like a dirty one. A clean row's dirty_reason is submodule_dirty when a submodule held uncommitted tracked edits: the checkout was scanned in place, those edits included. Generated from lib/fleet/runner.py by lib/fleet/fleet_schema.py.",
   "type": "object",
   "properties": {
     "fleet_row_version": {
@@ -1234,7 +1234,8 @@
             "index_read_error",
             "sparse_checkout",
             "skip_worktree",
-            "assume_unchanged"
+            "assume_unchanged",
+            "submodule_dirty"
           ]
         },
         {
