@@ -4,6 +4,8 @@
 
 **`/assess` tells you how much an AI agent can safely do in your repository on its own, and the one change that would let it do more.**
 
+First time? Run `/assess --tour`. It assesses a small sample repository, walks you through its report a section at a time, and has you make the one fix that moves it up a Step.
+
 A Claude Code plugin - and a set of standalone skills for **any AI assistant**: skills and agents for AI-native development. In Claude Code it runs locally against your own codebase using whichever model you already pay for. Several of the skills also ship as standalone [Agent Skills](https://www.anthropic.com/news/skills) ZIPs you can upload to claude.ai, Claude Desktop, Cowork, or any assistant that supports the skills format - no Claude Code required.
 
 > **Want the skills without Claude Code?** Download the ZIPs from the **[latest release](https://github.com/bjcoombs/ai-native-toolkit/releases/latest)** - the release notes link straight to that version's standalone skill bundle - and upload them in your assistant's Skills UI. Full walkthrough: [Standalone skill ZIPs](#standalone-skill-zips-any-ai-assistant). Currently standalone: `/assess`, `/huddle`, `/deslop`, `/skill-forge`, `/semantic-compress`.

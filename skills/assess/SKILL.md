@@ -55,6 +55,8 @@ This is intentionally **one** archetype (knowledge base), structured as an exten
 
 <!-- chat-skip:start -->
 **$ARGUMENTS**
+
+**`--tour` (the guided first run).** When the arguments contain `--tour`, skip every step below. Do not assess the current repository. Follow `references/tour.md` (relative to this skill dir) instead: it builds a small sample repository in a temporary directory, walks the report one section at a time, has the newcomer make one fix and re-runs so they see the Step move.
 <!-- chat-skip:end -->
 
 ## Step 1: Determine Repo Root and Output Directory
