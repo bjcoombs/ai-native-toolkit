@@ -103,7 +103,9 @@ ever cut, this note is where the intended boundary is written down.
 
 Issue #917 moves `lib/` modules into subpackages, one group per pull request. A package
 `__init__.py` holds only its docstring, so importing a package imports none of its modules;
-`tests/test_self_architecture.py` enforces it. The shared core (`run_context_types`,
+`tests/test_self_architecture.py` enforces it. Two exceptions: `fleet/__init__.py` also holds
+the lazy runner forward until 4.0.0, and `test_pressure/__init__.py`, which predates the rule,
+is a facade that re-exports its package's names. The shared core (`run_context_types`,
 `assess_config`, `artifact_schema`, `tool_lookup`, `vocabulary`, `agent_identity` and
 `fleet_config`) stays at the root of `lib/`, and so does every module whose group has not
 moved yet. A moved module keeps its filename.
