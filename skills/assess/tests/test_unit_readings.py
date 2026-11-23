@@ -268,6 +268,15 @@ def test_a_path_scoped_rule_covers_only_the_units_its_globs_reach() -> None:
     assert ur._glob_reaches("docs/**", "packages/a") is False
 
 
+def test_a_nested_rules_glob_reads_relative_to_its_folder_too() -> None:
+    nested = {"path": "svc/.claude/rules/x.md",
+              "scope": {"directory": "svc", "globs": ["b/**"], "always_loaded": False}}
+    assert ur._covers(nested, "svc/b") is True
+    assert ur._covers(nested, "svc/c") is False
+    # the rule's folder-relative reading reaches only the member svc/b: not the root's
+    assert ur._root_file(nested, ["svc/b"]) is False
+
+
 def test_a_root_rule_scoped_to_a_member_is_not_the_roots() -> None:
     grades = {"available": True, "instruction_file_present": True,
               "instruction_presence": "nested_only"}

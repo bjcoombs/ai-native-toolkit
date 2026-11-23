@@ -178,25 +178,36 @@ def _glob_prefix(pattern: str) -> str:
     return "/".join(literal)
 
 
-def _glob_reaches(pattern: str, unit: str) -> bool:
-    """Whether a repo-relative glob can match a file under ``unit``: its literal folder
-    prefix holds the unit or sits inside it."""
-    prefix = _glob_prefix(pattern)
-    return not prefix or _under(unit, prefix) or _under(prefix, unit)
+def _readings(pattern: str, folder: str) -> tuple[str, ...]:
+    """A rule's glob as repo-relative and, for a rule in a nested folder, relative to that
+    folder: either reading counts, as ``instruction_discovery._pattern_live`` reads it."""
+    return (pattern,) if folder in ("", ".") else (pattern, f"{folder}/{pattern}")
+
+
+def _glob_reaches(pattern: str, unit: str, folder: str = ".") -> bool:
+    """Whether a glob can match a file under ``unit``: the literal folder prefix of either
+    reading holds the unit or sits inside it."""
+    return any(not (prefix := _glob_prefix(g)) or _under(unit, prefix) or _under(prefix, unit)
+               for g in _readings(pattern, folder))
 
 
 def _root_file(entry: Any, members: Sequence[str]) -> bool:
     """Whether a nested instruction file is the root unit's: it sits under no member and,
-    when path-scoped, one of its globs reaches outside every member."""
+    when path-scoped, one of its globs reaches outside every member on both readings
+    (``_readings``)."""
     if not isinstance(entry, Mapping) or not isinstance(entry.get("path"), str):
         return False
     if any(_under(entry["path"], m) for m in members):
         return False
     scope = entry.get("scope")
     globs = scope.get("globs") if isinstance(scope, Mapping) else None
+    folder = scope.get("directory") if isinstance(scope, Mapping) else None
+    folder = folder if isinstance(folder, str) else "."
     patterns = [g for g in globs if isinstance(g, str)] if isinstance(globs, list) else []
-    return not patterns or any(not (prefix := _glob_prefix(g)) or not any(
-        _under(prefix, m) for m in members) for g in patterns)
+    # every reading of one glob must reach outside the members: a reading that may govern
+    # only a member is that member's, so the root is never credited with it
+    return not patterns or any(all(not (prefix := _glob_prefix(r)) or not any(
+        _under(prefix, m) for m in members) for r in _readings(g, folder)) for g in patterns)
 
 
 def _covers(entry: Any, unit: str) -> bool:
@@ -208,7 +219,7 @@ def _covers(entry: Any, unit: str) -> bool:
         return False
     globs = scope.get("globs") if isinstance(scope, Mapping) else None
     if isinstance(globs, list) and any(isinstance(g, str) for g in globs):
-        return any(isinstance(g, str) and _glob_reaches(g, unit) for g in globs)
+        return any(isinstance(g, str) and _glob_reaches(g, unit, folder) for g in globs)
     return True
 
 
