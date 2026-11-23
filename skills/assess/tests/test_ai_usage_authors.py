@@ -31,7 +31,7 @@ from lib.agent_identity import (  # noqa: E402
     username_from_email,
 )
 from lib.ai_usage import AiUsageBlock, scan_ai_usage  # noqa: E402
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.fleet_config import (  # noqa: E402
     FleetConfig,
     FleetConfigError,

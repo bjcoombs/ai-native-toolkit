@@ -432,7 +432,7 @@ def test_manifest_named_as_scope_counts_its_own_changes(tmp_path):
 
 def test_counts_only_rules_keep_declared_mapping_fields():
     from lib.assess_config import DeclaredMapping
-    from lib.counts_only import counts_only
+    from lib.counts_only.content_free import counts_only
 
     declared: list[DeclaredMapping] = [
         {"path": "services/billing.md", "repo": "grp/billing", "scope": ["api"],

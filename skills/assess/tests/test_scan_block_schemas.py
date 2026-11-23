@@ -15,9 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from lib.agent_consistency import AgentConsistencyBlock  # noqa: E402
 from lib.agent_outcome import AgentOutcomeBlock  # noqa: E402
 from lib.ai_usage import AiUsageBlock  # noqa: E402
-from lib.block_shapes import ReviewRealityBlock  # noqa: E402
+from lib.counts_only.block_shapes import ReviewRealityBlock  # noqa: E402
 from lib.ci_checks import CiChecksBlock  # noqa: E402
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.testing.coverage_gate import CoverageGateBlock  # noqa: E402
 from lib.hosting.delivery import DeliveryBlock  # noqa: E402
 from lib.guardrails import GuardrailsBlock  # noqa: E402

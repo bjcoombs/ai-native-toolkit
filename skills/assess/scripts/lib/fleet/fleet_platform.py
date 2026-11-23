@@ -56,7 +56,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
-from lib.counts_only import reason_code
+from lib.counts_only.content_free import reason_code
 from lib.fleet.runner import (
     INVALID_OUTPUT,
     SCAN_ERROR,

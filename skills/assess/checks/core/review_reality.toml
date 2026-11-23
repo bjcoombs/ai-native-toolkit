@@ -16,7 +16,7 @@ platform_pass = true
 headless = { review_reality = "registered" }
 whys.review_reality = "It shows how many recently merged changes had a review and an approval, which is how far a second reader reaches into what agents and people merge."
 shapes = [
-  { path = "review_reality", type = "lib.block_shapes:ReviewRealityBlock" },
+  { path = "review_reality", type = "lib.counts_only.block_shapes:ReviewRealityBlock" },
 ]
 revision = 2
 unknown_reasons = [

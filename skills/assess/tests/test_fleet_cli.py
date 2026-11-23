@@ -15,7 +15,7 @@ import jsonschema
 import pytest
 
 from conftest import pin_fleet_run_date
-from lib.counts_only import classify
+from lib.counts_only.content_free import classify
 from lib.fleet.fleet_cleanup import _rmtree
 from lib.fleet.fleet_schema import build_schema
 from test_fleet import make_repo

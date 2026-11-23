@@ -16,7 +16,7 @@ import pytest
 import assess_signals
 import lib.fleet.fleet_data as fd
 from fleet_data_fixture import ROWS, SALT, VARIANTS, build, model
-from lib.counts_only import HASH_PREFIX, hash_value
+from lib.counts_only.content_free import HASH_PREFIX, hash_value
 from lib.fleet.fleet_data_units import next_blocker, unit_rows
 from lib.fleet.fleet_publish import check_strings
 from lib.fleet.runner import ScanOptions, signals_command

@@ -41,9 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
 from lib.headline import as_headline, run_context_headline
-from lib.counts_only import COUNTS_ONLY_FILE
-from lib.counts_only import add_cli_arguments as add_counts_only_arguments
-from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
+from lib.counts_only.content_free import COUNTS_ONLY_FILE
+from lib.counts_only.content_free import add_cli_arguments as add_counts_only_arguments
+from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_tally import run_context_level
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure

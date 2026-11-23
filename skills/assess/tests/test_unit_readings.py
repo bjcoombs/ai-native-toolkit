@@ -16,7 +16,7 @@ import lib.manifest.check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib import unit_readings as ur
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.instruction_files import nested_instruction_surface
 from lib.layer_grades import scan_layer_grades
 from lib.levels import resolve_signal

@@ -112,7 +112,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TypedDict
 
-from lib.counts_only_rules import REASON_SENTENCE_CODES
+from lib.counts_only.counts_only_rules import REASON_SENTENCE_CODES
 
 # Directories never worth walking for source. Mirrors doc_graph's EXCLUDE_DIRS
 # (kept local so this module pulls in no heavy deps): build artefacts, vendor

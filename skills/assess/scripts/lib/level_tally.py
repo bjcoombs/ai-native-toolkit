@@ -69,7 +69,7 @@ Reason codes of a ``not_measured`` condition (the first unknown criterion's):
 - ``needs_platform``: the block needs GitHub or GitLab (``network``). A remote
   on a host no platform read supports (Bitbucket, GitHub Enterprise) is the
   block's own ``unsupported_host`` instead, since ``--platform`` cannot read it (#959);
-- the block's own reason code (``lib.counts_only.reason_code``, or the code a
+- the block's own reason code (``lib.counts_only.content_free.reason_code``, or the code a
   known reason sentence maps to, ``reason_token``), when a block on
   the path reports ``available: false``;
 - ``block_absent`` (the run has no such block, or it is null), ``no_value`` (the signal is
@@ -137,7 +137,7 @@ import json
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
-from lib.reason_codes import reason_code, reason_token
+from lib.counts_only.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, ExcludedCondition, LevelResult, NextStep
 from lib.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
 from lib.levels import condition_id, evaluate_row, unavailable_signal

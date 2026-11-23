@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from lib.ci_checks import scan_ci_checks
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.keyhole.promissory_markers import scan_promissory_markers
 from lib.graph.structure_graph import analyze_structure
 from lib.levels import Group, LevelsError, LevelsResult, dumps_result, evaluate, load_levels, resolve_signal

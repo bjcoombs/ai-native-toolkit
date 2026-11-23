@@ -144,9 +144,10 @@ them from `measures.json` by id.
 
 Issue #917 moves `lib/` modules into subpackages, one group per pull request. A package
 `__init__.py` holds only its docstring, so importing a package imports none of its modules;
-`tests/test_self_architecture.py` enforces it. Two exceptions: `fleet/__init__.py` also holds
-the lazy runner forward until 4.0.0, and `test_pressure/__init__.py`, which predates the rule,
-is a facade that re-exports its package's names. The shared core (`run_context_types`,
+`tests/test_self_architecture.py` enforces it. Three exceptions: `fleet/__init__.py` and
+`counts_only/__init__.py` also hold a lazy forward until 4.0.0 (to `fleet.runner` and
+`counts_only.content_free`), and `test_pressure/__init__.py`, which predates the rule, is a
+facade that re-exports its package's names. The shared core (`run_context_types`,
 `assess_config`, `artifact_schema`, `tool_lookup`, `vocabulary`, `agent_identity` and
 `fleet_config`) stays at the root of `lib/`, and so does every module whose group has not
 moved yet. A moved module keeps its filename.
@@ -170,6 +171,13 @@ New code imports the new path.
   raw-source exclusions they apply. Files: `__init__.py`, `dart_complexity.py`,
   `diff_reliability.py`, `generated_files.py`, `raw_source.py`, `scc_coverage.py`,
   `stats_diff.py`, `stats_rows.py`, `treemap_render.py`.
+- **`counts_only/`**: the content-free copy of a run-context and its allow-list: the engine,
+  the field rules and their schema, the reason codes it keeps and the typed block shapes a
+  default criterion reads. `lib/counts_only.py` became `counts_only/content_free.py`, because
+  the package now holds that name; until 4.0.0 the package `__init__.py` forwards each old
+  name (`lib.counts_only.render_doc`) to `lib.counts_only.content_free` on first use, without
+  importing it eagerly. Files: `__init__.py`, `block_shapes.py`, `content_free.py`,
+  `counts_only_rules.py`, `counts_only_schema.py`, `reason_codes.py`.
 - **`docs/`**: the doc graph and the Layer 0 doc signals: links, claims, ownership,
   provenance, staleness and its generator directives, the doc-to-complexity join and the
   vault queries. `doc_graph` imports `ownership_parser` inside a function, because

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.scan_registry import SCANS
 from lib.unit_discovery import PROBLEMS, SOURCES, scan_units
 
