@@ -27,6 +27,8 @@ missing block, such as `structure_drift` with no ownership map, is listed under 
 measured). Its first line starts `In place:`
 (`vocabulary.IN_PLACE`) and says how many scans were measured everywhere, ran but were not
 measured everywhere, or were skipped. It links `docs/what-we-measure.md` by absolute URL. The fleet `report.md` ends with it; the deterministic `/assess` report too.
+The `agent_ops` line adds "permissions set centrally (managed settings on this machine) in k
+of n" where a run read them under `--managed-settings` and they credited the practice (#1153).
 Tests: `tests/test_measured_appendix.py`.
 """
 from __future__ import annotations
@@ -57,6 +59,20 @@ def _skip_reason(name: str, codes: set[str], absent: str) -> str:
 
 def _scans(n: int) -> str:
     return "scan was" if n == 1 else "scans were"
+
+
+# The evidence line for a permission rule read from this machine's managed settings (#1153).
+CENTRAL = "set centrally (managed settings on this machine)"
+
+
+def _central(name: str, documents: Sequence[Mapping[str, object]]) -> int:
+    """How many documents credit ``agent_ops`` permissions from managed settings."""
+    if name != "agent_ops":
+        return 0
+    return sum(1 for doc in documents
+               if isinstance(block := doc.get(name), Mapping)
+               and isinstance(summary := block.get("summary"), Mapping)
+               and summary.get("permissions_source") == "managed")
 
 
 def _state(block: object) -> str | None:
@@ -100,6 +116,8 @@ def measured_section(documents: Sequence[Mapping[str, object]],
             line += f"{';' if missing else ':'} skipped in {total - len(run)} of {total}"
         if missing or len(run) < total:
             unread += 1
+        if central := _central(name, documents):
+            line += f"{';' if ':' in line else ':'} permissions {CENTRAL} in {central} of {total}"
         ran.append(line)
     scope = "1 repository" if total == 1 else f"{total} repositories"
     measured = len(ran) - unread

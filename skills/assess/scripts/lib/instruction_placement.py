@@ -22,7 +22,8 @@ nothing clearly is ``unclassified`` and counted as always-on.
 Two lists. ``files`` covers the repository instruction files (the root
 locations and the nested and path-scoped files ``nested_instructions``
 grades). ``loaded_in_full`` covers agent definitions and ``SKILL.md`` files
-over ``LOADED_IN_FULL_MIN_LINES``, which load whole when invoked; it is
+over ``LOADED_IN_FULL_MIN_LINES`` or ``LOADED_IN_FULL_MIN_TOKENS`` (#1045), ranked by
+``est_tokens``, which load whole when invoked; it is
 informational and reported separately. A ``.md`` file under the root ``agents/`` shaped as
 an agent definition counts even without a plugin manifest (#662).
 
@@ -65,15 +66,15 @@ path, the map the scan and the grader's callers both compare sections against.
 `scan_instruction_placement(repo_root, instruction_files, nested_instructions,
 scope, excludes)` runs from the `scan_registry` table. The block:
 `{available, thresholds {always_on_lines, always_on_share,
-loaded_in_full_min_lines}, files[], flagged[], loaded_in_full[],
+loaded_in_full_min_lines, loaded_in_full_min_tokens}, files[], flagged[], loaded_in_full[],
 loaded_in_full_considered}`. Each file record (`files`: the root instruction files
 that are present and not aliases, plus `nested_instructions.files`, each real file
 once; `loaded_in_full`: agent and `SKILL.md` files from
 `claude_config.loaded_config_files`, plus root `agents/**/*.md` files shaped as agents
 when there is no `.claude-plugin/plugin.json` (#662: `name` or `description`
 frontmatter, or no frontmatter and not a `claude_config.DOC_STEMS` name such as
-`README`; frontmatter without either key marks a document), over 200 lines, largest first) is `{path, kind
-(instruction | agent | skill), total_lines, always_on_lines, always_on_share,
+`README`; frontmatter without either key marks a document), over 200 lines or 5000 estimated tokens, most tokens first) is `{path, kind
+(instruction | agent | skill), total_lines, est_tokens, always_on_lines, always_on_share,
 always_on_words, fetch_on_need_lines, unclassified_lines, sections_total, flagged,
 relocatable[],
 relocatable_total}`, where `flagged` (instruction files only; always `false` in `loaded_in_full`) is always-on lines over 200 and share over
@@ -84,6 +85,7 @@ Tests: `tests/test_instruction_placement.py`.
 """
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping
@@ -93,6 +95,7 @@ from typing import Any, Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.claude_config import DOC_STEMS, loaded_config_files, parse_frontmatter
+from lib.instruction_budget import CHARS_PER_TOKEN
 from lib.instruction_content import path_references, readme_overlap_pct
 from lib.run_context_types import JsonDict
 
@@ -104,8 +107,13 @@ from lib.run_context_types import JsonDict
 ALWAYS_ON_FLAG_LINES = 200
 ALWAYS_ON_FLAG_SHARE = 0.5
 # Agent and skill files are reported only past this size; below it there is
-# little to gain from moving a section out.
+# little to gain from moving a section out. Lines alone let a long-line file slip
+# under (#1045: a 449-line SKILL.md of about 20k tokens), so a file over
+# LOADED_IN_FULL_MIN_TOKENS is reported too: the Agent Skills overview puts the
+# instructions a skill loads when it triggers (level 2, the SKILL.md body) under
+# 5k tokens (https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview).
 LOADED_IN_FULL_MIN_LINES = 200
+LOADED_IN_FULL_MIN_TOKENS = 5000
 
 # --- fetch-on-need signals -------------------------------------------------------
 
@@ -214,6 +222,7 @@ class PlacementFile(TypedDict):
     path: str
     kind: str
     total_lines: int
+    est_tokens: int  # whole-file estimate, CHARS_PER_TOKEN (lib/instruction_budget.py, #1045)
     always_on_lines: int
     always_on_share: float
     always_on_words: int
@@ -229,6 +238,7 @@ class PlacementThresholds(TypedDict):
     always_on_lines: int
     always_on_share: float
     loaded_in_full_min_lines: int
+    loaded_in_full_min_tokens: int
 
 
 class InstructionPlacementBlock(TypedDict):
@@ -494,7 +504,7 @@ def analyse_file(
     ]
     moves.sort(key=lambda m: -m["lines"])
     return {
-        "path": rel, "kind": kind, "total_lines": total,
+        "path": rel, "kind": kind, "total_lines": total, "est_tokens": est_tokens(text),
         "always_on_lines": always_on, "always_on_share": share,
         "always_on_words": len(text.split()) - fetch_words,
         "fetch_on_need_lines": lines_by["fetch_on_need"],
@@ -598,6 +608,19 @@ def _config_files(
             and not is_user_excluded(p.relative_to(repo), dirs, pats)]
 
 
+def est_tokens(text: str) -> int:
+    """The estimated tokens of ``text``: the always-on grading's ``CHARS_PER_TOKEN`` estimate."""
+    return math.ceil(len(text) / CHARS_PER_TOKEN)
+
+
+def skill_and_agent_files(
+    repo: Path, scope: Path | None = None, excludes: tuple[set[str], list[str]] | None = None,
+) -> list[tuple[Path, str]]:
+    """The skill and agent files the scan reads (``loaded_config_files`` plus manifest-less
+    agents), under ``scope`` and outside the excludes; shared with ``lib.skill_disclosure``."""
+    return _config_files(repo.resolve(), scope, excludes)
+
+
 def _skill_map(repo: Path, config: list[tuple[Path, str]]) -> tuple[dict[str, str], str]:
     skill_info = detect_skills_dir(repo)
     skills: dict[str, str] = {}
@@ -650,18 +673,20 @@ def scan_instruction_placement(
     loaded: list[PlacementFile] = []
     for path, kind in config:
         text = _read(path)
-        if text is None or len(text.splitlines()) <= LOADED_IN_FULL_MIN_LINES:
+        if text is None or (len(text.splitlines()) <= LOADED_IN_FULL_MIN_LINES
+                            and est_tokens(text) <= LOADED_IN_FULL_MIN_TOKENS):
             continue
         file_kind: FileKind = "skill" if kind == "skill" else "agent"
         loaded.append(analyse_file(text, path.relative_to(repo).as_posix(), file_kind,
                                    skills, skills_dir))
-    loaded.sort(key=lambda f: (-f["total_lines"], f["path"]))
+    loaded.sort(key=lambda f: (-f["est_tokens"], f["path"]))
     return {
         "available": True,
         "thresholds": {
             "always_on_lines": ALWAYS_ON_FLAG_LINES,
             "always_on_share": ALWAYS_ON_FLAG_SHARE,
             "loaded_in_full_min_lines": LOADED_IN_FULL_MIN_LINES,
+            "loaded_in_full_min_tokens": LOADED_IN_FULL_MIN_TOKENS,
         },
         "files": files,
         "flagged": [f["path"] for f in files if f["flagged"]],

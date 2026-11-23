@@ -60,6 +60,9 @@
         "platform": {
           "type": "boolean"
         },
+        "managed_settings": {
+          "type": "boolean"
+        },
         "repositories": {
           "type": "object",
           "properties": {
@@ -89,6 +92,7 @@
         "counts_only",
         "fleet_config_sha256",
         "levels_version",
+        "managed_settings",
         "paths_hashed",
         "platform",
         "plugin_version",

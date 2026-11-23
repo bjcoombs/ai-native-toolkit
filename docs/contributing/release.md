@@ -42,6 +42,13 @@ make fold RELEASE=3.0.0
 
 For each counter with notes, the fold writes one history entry directly above the counter, `# <new> (<release> release): <n> changes since <old>.` followed by the notes in issue order, sets the counter to `<new>` and deletes the notes. `<new>` is the next minor version for `ARTIFACT_SCHEMA_VERSION`, the next integer for an integer counter, and `default-<date>` for the default maturity model (`--date`, default today). Pass `--set artifact_schema=2.0.0` (one `--set` per counter) to pick a different value. `fleet_row` has no default: with a `fleet_row` note present the fold stops until `--set fleet_row=<n>` is given, because the fleet history readers accept only the current row version. Setting the current value records the notes without a bump. A `--set` for a counter with no notes, or with a value the counter cannot take (`assess_method=abc`), stops the fold before it writes anything. `make regen` rewrites the generated files and goldens; the hand-written copies and pins do not move with it: `complexity-treemap.py`, the tests that name a counter's value, and `.claude-plugin/plugin.json` still move by hand in the same PR.
 
+When `.claude-plugin/plugin.json` moves, move the GitLab gate pin with it in the same PR:
+
+- [ ] `templates/assess-gate.yml`: the `toolkit_ref` input default (`v<version>`) and the include line in its header comment.
+- [ ] `README.md` ("Use in GitLab CI"): the `include: remote:` line.
+
+`skills/assess/tests/test_gitlab_gate.py::test_toolkit_pin_follows_the_plugin_version` fails until all three match `plugin.json`.
+
 ## Marketplace listing (manual, web-only)
 
 The repo also publishes the [AI-Readiness Assess Gate action](https://github.com/marketplace/actions/ai-readiness-assess-gate). The listing's "latest version" does **not** advance with `gh release create`, and no API exists for the Marketplace flag. To refresh it: edit the release in the web UI, tick "Publish this Action to the GitHub Marketplace", update. Do this on marathon releases. Consumers are unaffected either way: their `uses:` pins and Dependabot bumps read git tags, not the listing.

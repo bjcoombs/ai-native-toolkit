@@ -68,6 +68,16 @@ evidence is static, read from the files at HEAD:
   whose committed ``action.yml`` runs ``${{ inputs.<name> }}``, or a listed runner.
   ``actions/github-script`` is not read; any other action's input counts in
   ``test_or_lint_configured`` and reads ``check_target`` (null) for the enforced signals.
+- A step ``uses:`` of a local composite action (#923, ``lib.ci_composite``) has the
+  action's ``run:`` steps copied in after it, one level and repo-local only, with the
+  caller's ``continue-on-error`` and ``if:`` on each copy and its literal ``with:`` values
+  substituted for ``${{ inputs.<name> }}`` (a nested local action, or an input left in
+  command position, reads unknown as below); a step whose command is a
+  ``${{ matrix.<key> }}`` expression is copied once per literal matrix value
+  (``lib.ci_matrix``, ``include`` / ``exclude`` applied), and a block-list axis it
+  consumes is not read again. A matrix command that cannot be expanded reads as a
+  command it cannot settle: ``check_target`` (null) on all three signals when nothing
+  else settles them, never false unless masked.
 - Triggers are not read: a check in a workflow that runs only on push counts
   the same as one on pull requests.
 
@@ -78,7 +88,9 @@ GitLab includes are resolved offline where the included file is on disk
 ROOT). Each resolved file's lines are classified the same way and counted in
 ``included_check_commands``. ``includes`` lists one record per include item
 (kind, id, status, ref_basis, depth; never a file name or text), with the
-``resolved_includes`` / ``unresolved_includes`` counts.
+``resolved_includes`` / ``unresolved_includes`` counts. The toolkit's own regression gate
+template (status ``toolkit_gate``, ``ci_includes.SETTLED``, #1152) counts as resolved: its
+one job runs no project tests.
 
 Under ``--platform`` (and in a full ``/assess`` run) a repository whose
 includes did not all resolve offline also gets GitLab's merged configuration
@@ -340,8 +352,10 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from lib.ci_action_inputs import Inputs, ReadLocal, read_inputs
+from lib.ci_composite import inline_composites
+from lib.ci_matrix import expand_matrix
 from lib.ci_continuations import join_continued
-from lib.ci_includes import IncludeRecord, Resolution, resolve_includes
+from lib.ci_includes import SETTLED, IncludeRecord, Resolution, resolve_includes
 from lib.ci_lint_gates import line_compiler_gate, line_dotnet_build, lint_gate, rewrite_gated
 from lib.ci_lines import (
     LINT_ACTIONS as LINT_ACTIONS, MAY_LINT_ACTIONS as MAY_LINT_ACTIONS, LineTest,
@@ -453,13 +467,16 @@ def _declared_check(line: str, *, script_item: bool = True) -> bool:
 
 def _trigger_tally(text: str, workflow: Trigger | None,
                    tests: Sequence[LineTest] = (_line_runs_check,),
-                   declared: frozenset[int] = frozenset()) -> list[Tally]:
+                   declared: frozenset[int] = frozenset(),
+                   unknown: frozenset[int] = frozenset()) -> list[Tally]:
     """Per line test: ``(ordinary, unknown trigger, off trigger, masked, may pass)`` lines of one CI file.
 
     ``workflow`` is a GitHub workflow's settled trigger; None reads GitLab job triggers.
     The lint test also counts the rewrite lines a ``git diff`` gate makes lint runs (#926).
     A ``declared`` line (an unread action's ``with:`` input, ``lib.ci_action_inputs``) counts
     for no test but ``_line_may_check``, which counts it when it runs or may run a check (#799).
+    An ``unknown`` line (a matrix command not expanded, ``lib.ci_matrix``, #923) counts for
+    ``_line_may_check`` whatever it holds, unless masked.
     """
     text = join_continued(text)
     lines = text.splitlines()
@@ -474,10 +491,10 @@ def _trigger_tally(text: str, workflow: Trigger | None,
     held_kept = [keep(held, triggers, t) for t in ("ordinary", "unknown", "not_ordinary")]
     out: list[Tally] = []
     for test in tests:
-        extra = gated if _is_lint_test(test) else frozenset()
+        extra = gated if _is_lint_test(test) else unknown if test is _line_may_check else frozenset()
         counts = [count_check_lines(k, context=lines, test=test, extra=extra) for k in kept]
         if test is _line_may_check and declared:
-            counts = [c + count_check_lines(h, context=lines, test=_declared_check)
+            counts = [c + count_check_lines(h, context=lines, test=_declared_check, extra=unknown)
                       for c, h in zip(counts, held_kept, strict=True)]
         may_pass = sum(count_check_lines(k, context=lines, test=test) for k in may)
         total = count_check_lines(_drop(lines, declared), context=lines, test=test, extra=extra)
@@ -542,9 +559,14 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     elsewhere = 0  # files whose pulled jobs this run cannot read
     partial_merge = False  # the merged configuration may lack jobs (a rules: include, a child pipeline)
     resolution = resolve_includes(root, ghsync_root) if any(f in CI_CONFIG_FILES for f in files) else None
+    reader = _local_reader(root, tracked)
+    followed = {rel: expand_matrix(*inline_composites(join_continued(read_config(root, rel)), reader))
+                for rel in files if rel not in CI_CONFIG_FILES}   # #923
     inputs = {rel: (Inputs(read_config(root, rel), frozenset()) if rel in CI_CONFIG_FILES
-                    else read_inputs(join_continued(read_config(root, rel)), _local_reader(root, tracked)))
-              for rel in files}
+                    else read_inputs(followed[rel].text, reader)) for rel in files}
+    # An unknown line read_inputs blanked (a github-script script:) is not shell: drop it.
+    unexpanded = {rel: frozenset(i for i in f.unknown if inputs[rel].text.splitlines()[i].strip())
+                  for rel, f in followed.items()}
     texts = {rel: inputs[rel].text for rel in files}
     for rel in files:
         text = texts[rel]
@@ -571,7 +593,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
                                               instruction_words(runs_missing(_line_runs_check)),
                                               runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
-    tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests, inputs[rel].declared) for rel in files]
+    tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests, inputs[rel].declared,
+                              unexpanded.get(rel, frozenset())) for rel in files]
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []
     check_t, lint_t, miss_t, lint_miss_t, may_t, may_check_t, gate_t, dotnet_t = (
         _sum(t[i] for t in tallies) for i in range(len(tests)))
@@ -594,7 +617,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     found = bool(checks or included_checks or any(check_t))   # a read script body (#1033)
     runs, basis = _basis(found, bool(merged_checks), elsewhere=bool(elsewhere), partial=partial_merge,
                          unread=bool(unread), files=bool(files), external=external,
-                         skipped=any(count_check_lines(join_continued(t).splitlines(), test=_skipped_check)
+                         skipped=any(unexpanded.values()) or any(count_check_lines(join_continued(t).splitlines(), test=_skipped_check)
                                      for t in (*texts.values(), *(f.text for f in (resolution.files if resolution else ())))))
     enforced_runs, enforced_basis = _enforced_state(
         ordinary, unknown, may_check_t, elsewhere=bool(elsewhere), unread=bool(unread),
@@ -615,8 +638,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
             lint_basis = "not_enforced"   # a masked or off-trigger compiler gate
     return {"available": True, "ci_files": len(files), "check_commands": checks,
             "included_files": included, "included_check_commands": included_checks,
-            "resolved_includes": sum(r["status"] == "resolved" for r in records),
-            "unresolved_includes": sum(r["status"] != "resolved" for r in records),
+            "resolved_includes": sum(r["status"] in SETTLED for r in records),
+            "unresolved_includes": sum(r["status"] not in SETTLED for r in records),
             "includes": records, "merged_config": merged.status,
             "merged_config_reason": merged.reason, "merged_check_commands": merged_checks,
             "test_or_lint_configured": runs, "basis": basis,

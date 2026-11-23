@@ -589,6 +589,7 @@
                       "status": {
                         "enum": [
                           "resolved",
+                          "toolkit_gate",
                           "no_root",
                           "not_cloned",
                           "file_missing",
@@ -600,7 +601,7 @@
                           "unparsed",
                           "ref_missing"
                         ],
-                        "description": "resolved, or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
+                        "description": "resolved; toolkit_gate (the toolkit's own regression gate template, known to run no project tests); or why not: no_root, not_cloned, file_missing, not_offline (template, remote), glob, bad_path, depth_limit, file_limit, unparsed, ref_missing (a pin the clone does not hold)."
                       },
                       "ref_basis": {
                         "enum": [

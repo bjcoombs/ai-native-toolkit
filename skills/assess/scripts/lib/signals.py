@@ -84,7 +84,6 @@ the network.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 from collections.abc import Iterable, Iterator, Sequence
@@ -103,6 +102,7 @@ from lib.history_window import split_window
 from lib.headless_layers import HEADLESS_SCANS as LAYER_SCANS
 from lib.headless_static import HEADLESS_SCANS as STATIC_SCANS
 from lib.instruction_files import grade_instruction_files
+from lib.plugin_version import read_version
 from lib.run_context_types import JsonDict, SignalsDocument, SignalsStamp
 from lib.scan_registry import SCANS, STAGES, ScanSpec, run_scans
 
@@ -329,7 +329,8 @@ def parse_window(window: str) -> str:
 
 def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
                  fleet_config: FleetConfig | None = None,
-                 ghsync_root: Path | None = None, scope: Path | None = None) -> dict[str, Any]:
+                 ghsync_root: Path | None = None, scope: Path | None = None,
+                 managed_settings: bool = False) -> dict[str, Any]:
     """The registry's ``PROVIDED_INPUTS``, built the way ``assess_core`` builds them.
 
     ``scope`` is ``--scope`` resolved to an absolute folder under ``repo_root``
@@ -341,6 +342,8 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
     with the target's ``.assess/config.toml`` sections (``lib/fleet_config.py``, #706).
     ``ghsync_root`` is ``--ghsync-root``, the root GitLab includes resolve against (#766).
     ``maturity_model`` is None: no headless scan evaluates a maturity model (#1150).
+    ``managed_settings`` is ``--managed-settings`` (#1153): ``agent_ops`` reads this machine's
+    Claude Code managed settings. Never read from the target's ``.assess/config.toml``.
     Besides the ``build_run_context`` arguments, it supplies the setup values
     ``instruction_files``, ``scope``, ``excludes``, ``history_window``,
     ``fleet_config`` and ``ghsync_root`` itself; the table never recomputes a name the runner provides.
@@ -352,6 +355,7 @@ def build_inputs(repo_root: Path, window: str = DEFAULT_WINDOW,
         "run_date": datetime.now(timezone.utc).date().isoformat(),
         "non_interactive": True,
         "maturity_model": None,  # the headless runner reports no level (/fleet --levels scores the rows)
+        "managed_settings": managed_settings,
         "instruction_files": instruction_files,
         "scope": scope,
         "excludes": load_excludes(repo_root),
@@ -388,7 +392,7 @@ def _unavailable(reason: str) -> JsonDict:
 def collect(
     repo_root: Path, selected: Sequence[str], specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     window: str = DEFAULT_WINDOW, fleet_config: FleetConfig | None = None, platform: bool = False,
-    ghsync_root: Path | None = None, scope: Path | None = None,
+    ghsync_root: Path | None = None, scope: Path | None = None, managed_settings: bool = False,
 ) -> dict[str, JsonDict]:
     """Run the selected scans (and what they read); one block per name.
 
@@ -396,7 +400,7 @@ def collect(
     a listed scan reads, runs its network ``fn``. Offline, a ``PLATFORM_ONLY_SCANS``
     name gets no block at all.
     """
-    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope)
+    inputs = build_inputs(repo_root, window, fleet_config, ghsync_root, scope, managed_settings)
     needed = _with_dependencies(selected, specs, inputs)
     online = _with_dependencies(PLATFORM_SCANS, specs, inputs) if platform else set()
     ctx: dict[str, Any] = {}
@@ -418,12 +422,9 @@ def collect(
 
 
 def read_plugin_version(toolkit_root: Path = TOOLKIT_ROOT) -> str:
-    """``.claude-plugin/plugin.json`` ``version``, or ``unknown``."""
-    try:
-        data = json.loads((toolkit_root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-        return str(data.get("version", "unknown"))
-    except (OSError, ValueError, AttributeError):
-        return "unknown"
+    """``.claude-plugin/plugin.json`` ``version``, else the standalone skill's version file
+    (``lib.plugin_version``, #1166), or ``unknown``."""
+    return read_version(toolkit_root / ".claude-plugin" / "plugin.json")
 
 
 def _git(root: Path, *args: str) -> str | None:
@@ -457,9 +458,10 @@ def toolkit_commit(toolkit_root: Path = TOOLKIT_ROOT) -> str | None:
 
 
 def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
-                scope: Path | None = None) -> SignalsStamp:
-    """Toolkit commit, plugin version, scan date, window, the target's HEAD and the scope
-    (repository-relative, posix; None for the whole checkout)."""
+                scope: Path | None = None, managed_settings: bool = False) -> SignalsStamp:
+    """Toolkit commit, plugin version, scan date, window, the target's HEAD, the scope
+    (repository-relative, posix; None for the whole checkout) and whether this machine's
+    managed settings were read (``--managed-settings``, #1153)."""
     head = git_commit_info(repo_root) if is_repo_root(repo_root) else {}
     available = bool(head.get("available"))
     return {
@@ -470,6 +472,7 @@ def build_stamp(repo_root: Path, window: str, toolkit_root: Path = TOOLKIT_ROOT,
         "target_head": head.get("head_sha") if available else None,
         "target_dirty": bool(head.get("dirty")) if available else None,
         "scope": scope.relative_to(repo_root).as_posix() if scope is not None else None,
+        "managed_settings": managed_settings,
     }
 
 
@@ -498,6 +501,7 @@ def build_document(
     toolkit_root: Path = TOOLKIT_ROOT, specs: Sequence[ScanSpec] = SIGNAL_SCANS,
     fleet_config: FleetConfig | None = None, platform: bool = False,
     ghsync_root: Path | None = None, scope: Path | None = None, units: bool = False,
+    managed_settings: bool = False,
 ) -> SignalsDocument:
     """The whole signals document. Raises ``UnknownScanError`` or ``ValueError`` on bad arguments.
 
@@ -511,7 +515,7 @@ def build_document(
     with read_only_git():
         return {
             "signals_schema_version": SIGNALS_SCHEMA_VERSION,
-            "stamp": build_stamp(repo_root, window, toolkit_root, scope),
+            "stamp": build_stamp(repo_root, window, toolkit_root, scope, managed_settings),
             "scans": collect(repo_root, selected, specs, window, fleet_config, platform,
-                             ghsync_root, scope),
+                             ghsync_root, scope, managed_settings),
         }
