@@ -9,6 +9,7 @@ callable = "lib.core_scans:doc_graph"
 publishes = ["doc_graph"]
 reads = ["repo_root", "excludes", "scope", "working_notes"]
 stage = "setup"
+unit_scope = "scoped"
 headless = { doc_graph = "headless_variant" }
 headless_variants = [
   { block = "doc_graph", callable = "lib.headless_static:doc_graph", reads = ["repo_root", "excludes"], stage = "setup" },

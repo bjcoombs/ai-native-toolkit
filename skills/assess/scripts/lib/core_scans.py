@@ -66,6 +66,7 @@ from lib.level_tally import LEVEL_READS, run_context_level
 from lib.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
 from lib.unit_discovery import UnitsBlock, scan_units
+from lib.unit_readings import UnitReadingsBlock, read_units, split_reads
 from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
 from lib.run_context_types import DocGraphBlock, KeyholeIntegration
@@ -341,6 +342,14 @@ def owner_exclusions(repo_root: Path) -> OwnerExclusionsBlock:
 def units(repo_root: Path, excludes: tuple[set[str], list[str]]) -> UnitsBlock:
     """The monorepo units (#862). Core-only: the headless runner and /fleet scope in #866."""
     return scan_units(repo_root, excludes)
+
+
+def unit_readings(units_block: Any, nested: Any, *repo_wide: Any) -> UnitReadingsBlock:
+    """Each unit's own readings of the scope-sensitive scans, conditions tagged by origin (#863).
+    ``repo_wide`` are ``unit_readings.REPO_BLOCKS`` then ``UNIT_EXTERNAL_READS``, in order.
+    Core-only, like ``units``."""
+    blocks, external = split_reads(repo_wide)
+    return read_units(units_block, nested, *external, repo_blocks=blocks)
 
 
 def offers_blocks(non_interactive: bool) -> dict[str, Any]:

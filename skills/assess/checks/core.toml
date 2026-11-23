@@ -105,4 +105,5 @@ fragments = [
   "guardrails",
   "level",
   "headline",
+  "unit_readings",
 ]

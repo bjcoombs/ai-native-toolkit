@@ -46,7 +46,10 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `reads`, `stage`, `degrade`, `gate_reason` (a token for one of
   `scan_registry.GATE_REASONS`: `setup`, `bad_scope`, `self_degrading`, `serialiser`),
   `label`, `network`, `platform_pass` (`signals.PLATFORM_SCANS`), `platform_only`
-  (`signals.PLATFORM_ONLY_SCANS`), `headless` (published block to `registered`,
+  (`signals.PLATFORM_ONLY_SCANS`), `unit_scope` (`scoped`: a monorepo unit's reading is
+  this scan run again on the unit; `override`: the repository-wide reading, replaced when
+  the unit holds its own evidence; absent: repo-wide, inherited by every unit;
+  `lib/unit_readings.py`, #863), `headless` (published block to `registered`,
   `headless_variant` or `unregistered`; an unlisted block is not reported headless),
   `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
   `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots

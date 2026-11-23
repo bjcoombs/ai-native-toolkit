@@ -66,7 +66,10 @@ sidecar's churn window via `git_churn.window_from_churn_label`, or None) and
 `lib/fleet_config.py`) are setup specs. `build_run_context` makes one `run_scans` call with no stage, which runs the
 stages (`setup`, `read_side`, `post_offers`, `final`) in that order and each in table
 order (#558). Only `anomalies` relies on its stage, staying the last scan key while
-later entries append to the table.
+later entries append to the table. The `unit_readings` entry (#863) runs the collectors
+the manifest marks `unit_scope` again for each monorepo unit; the module binds that pass
+(`unit_readings.bind`) with a lazy table loader and `run_scans`, so the scan module never
+imports the registry.
 """
 from __future__ import annotations
 
@@ -106,6 +109,10 @@ from lib.guardrails import scan_guardrails
 from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
+from lib.check_manifest import core_manifest
+from lib.unit_readings import OWN_READS as UNIT_OWN_READS
+from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
+from lib.unit_readings import bind as bind_unit_pass
 
 # Names the core passes to ``run_scans``: the arguments of
 # ``build_run_context``. A spec may read these, or the key of any spec declared
@@ -702,5 +709,20 @@ SCANS = (*SCANS, ScanSpec("level", cs.level, LEVEL_READS, STAGE_POST_OFFERS))
 # "Verified practices: N of M measured", worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
 SCANS = (*SCANS, ScanSpec("headline", cs.headline, ("level",), STAGE_POST_OFFERS))
+# Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
+# for each unit of the units block, every condition tagged unit or inherited. Core-only.
+SCANS = (*SCANS, ScanSpec("unit_readings", cs.unit_readings,
+                          (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS), STAGE_POST_OFFERS))
 
 validate(SCANS)
+
+# The unit pass (lib/unit_readings.py, #863), bound here so that scan module never imports
+# the registry. The table is built on first use: the headless variants it reads import
+# this module, so they cannot be imported while it loads.
+def _unit_table() -> UnitTable:
+    from lib.headless_layers import HEADLESS_SCANS as layer_scans
+    from lib.headless_static import HEADLESS_SCANS as static_scans
+    return unit_table(core_manifest(), SCANS, (*layer_scans, *static_scans))
+
+
+bind_unit_pass(_unit_table, run_scans)

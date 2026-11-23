@@ -11,6 +11,7 @@ callable = "lib.coverage_gate:detect_coverage_gate"
 publishes = ["coverage_gate"]
 reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
+unit_scope = "override"
 headless = { coverage_gate = "registered" }
 shapes = [
   { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },

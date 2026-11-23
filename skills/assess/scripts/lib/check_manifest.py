@@ -68,6 +68,8 @@ PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop")
 EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
             "git_history", "execution_artifact", "platform")
 HEADLESS = ("registered", "headless_variant", "unregistered")
+# How a monorepo unit reads a collector's blocks (``lib.unit_readings``, #863); absent: repo-wide.
+UNIT_SCOPES = ("scoped", "override")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
 CARRIED_IN = ("reason", "basis", "unmeasured_reason")
@@ -132,6 +134,7 @@ class CollectorEntry(_EntryBase):
     network: NotRequired[bool]
     platform_pass: NotRequired[bool]
     platform_only: NotRequired[bool]
+    unit_scope: NotRequired[Literal["scoped", "override"]]
     headless: NotRequired[dict[str, str]]
     headless_variants: NotRequired[list[HeadlessVariant]]
     evidence: NotRequired[str]
@@ -269,7 +272,8 @@ _FIELDS: dict[str, dict[str, Check]] = {
         "publishes": _STRS, "reads": _STRS, "stage": _enum(STAGES), "revision": _int(1),
         "private": _bool, "spread": _bool, "degrade": _bool, "gate_reason": _enum(GATE_REASONS),
         "label": _str(_NAME_RE), "network": _bool, "platform_pass": _bool,
-        "platform_only": _bool, "headless": _table(_enum(HEADLESS)),
+        "platform_only": _bool, "unit_scope": _enum(UNIT_SCOPES),
+        "headless": _table(_enum(HEADLESS)),
         "headless_variants": _records(
             {"block": _str(_NAME_RE), "callable": _str(_CALLABLE_RE), "reads": _STRS,
              "stage": _enum(STAGES)}, frozenset({"block", "callable", "reads", "stage"})),
