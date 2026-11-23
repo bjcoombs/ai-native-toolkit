@@ -106,7 +106,7 @@ def test_gap_actions_root_and_none_presence_add_no_root_file_entry() -> None:
 def test_each_gap_action_carries_its_scans_manifest_why() -> None:
     """#939: an entry's why is the why of the scan its signal names, static text."""
     from lib.manifest.check_manifest import core_manifest
-    from lib.manifest_whys import scan_whys
+    from lib.manifest.manifest_whys import scan_whys
 
     grades = {"instruction_presence": "nested_only", "instruction_file_present": True,
               "instructions_grade": "C"}

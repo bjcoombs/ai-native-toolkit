@@ -19,7 +19,7 @@ and `condition_key(row, level, signal)`.
 
 **Whys (#939).** `MANIFEST_VERSIONS` is `(1, 2)`. Version 1 loads with no whys and rejects
 any `why`, `why_source`, `whys`, `why_sources` or root `tags`; version 2 requires each, as
-`lib/manifest_whys.py` and the "Check manifest whys" section of `lib/README.md` describe.
+`lib/manifest/manifest_whys.py` and the "Check manifest whys" section of `lib/README.md` describe.
 The why findings run after the cross-references, so they appear only on an otherwise valid
 manifest.
 
