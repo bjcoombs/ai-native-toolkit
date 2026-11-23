@@ -427,7 +427,7 @@ bounded by CI capacity, not by the lead. What stays with the lead:
   queue reports the merge, not after the enqueue call.
 
 **Without a merge queue**, on a solo-maintainer repo (0 required approvals) merge with
-`gh pr merge $PR --squash --delete-branch --admin` once the *required* checks are green — a plain merge
+`gh pr merge $PR --squash --delete-branch --admin` once the *required* checks are green: a plain merge
 gets bounced when a non-required check (CodeRabbit, an advisory AI review, a regression gate that re-runs
 on base advance) is mid-run at the merge instant.
 After a merge, close the unit via the adapter's **close on merge** operation, then proceed to

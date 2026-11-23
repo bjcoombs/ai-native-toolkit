@@ -200,7 +200,7 @@ gh pr view $PR --json mergeStateStatus,mergedAt,reviews \
 
 **UNKNOWN handling:** GitHub sometimes returns `mergeStateStatus: "UNKNOWN"` even when all checks pass. If UNKNOWN but CI all green and 0 unresolved threads, retry up to 3 times with 30s backoff. If still UNKNOWN after retries, treat as CLEAN and proceed (log the override).
 
-**The merge command when the base branch has a merge queue — enqueue, never merge directly.** Check once per run whether a ruleset puts a merge queue on `$BASE_BRANCH`:
+**The merge command with a merge queue: enqueue, never merge directly.** Check once per run whether a ruleset puts a merge queue on `$BASE_BRANCH`:
 ```bash
 gh api repos/<owner>/<repo>/rules/branches/$BASE_BRANCH | jq '[.[] | select(.type == "merge_queue")] | length'
 ```
@@ -215,7 +215,7 @@ gh pr merge $PR --match-head-commit "$HEAD_SHA"   # no strategy flag: the queue'
 - **The merge is asynchronous.** The command returns once the PR is queued. Confirm the outcome later with `gh pr view $PR --json state,mergedAt` (or the `pull_request` closed event). A group that fails removes the PR from the queue with a timeline event naming the failing check; read it, fix on the PR branch, and enqueue again once the required checks are green. A push to a queued PR removes it from the queue too.
 - **Merge order** (below) becomes queue order: enqueue in the order you would have merged, since each PR is tested on top of the ones ahead of it.
 
-**The merge command without a queue — use `--admin` on solo-maintainer repos.** When `$REQUIRED_APPROVALS` is 0 and only the named required checks gate, a plain `gh pr merge --squash` can be **refused** ("base branch policy prohibits the merge") whenever a *non-required* check (CodeRabbit, an advisory AI review, a regression gate that re-runs on base advance) is PENDING or re-running at the exact merge instant — even though `mergeStateStatus` reported CLEAN/UNSTABLE a moment earlier. Once the named required checks are all SUCCESS, merge with admin override so a mid-run non-required check can't bounce you:
+**The merge command without a queue: use `--admin` on solo-maintainer repos.** When `$REQUIRED_APPROVALS` is 0 and only the named required checks gate, a plain `gh pr merge --squash` can be **refused** ("base branch policy prohibits the merge") whenever a *non-required* check (CodeRabbit, an advisory AI review, a regression gate that re-runs on base advance) is PENDING or re-running at the exact merge instant, even though `mergeStateStatus` reported CLEAN/UNSTABLE a moment earlier. Once the named required checks are all SUCCESS, merge with admin override so a mid-run non-required check can't bounce you:
 ```bash
 gh pr merge $PR --squash --delete-branch --admin
 ```
@@ -227,7 +227,7 @@ gh pr view $PR --json state,mergedAt,mergeStateStatus | jq '{state, mergedAt, me
 ```
 Trust the API, not the message.
 
-**After merge — gate cleanup on a VERIFIED merge.** A merge call can be rejected (see the `--admin` note above) while a chained one-liner blindly runs cleanup anyway, deleting the worktree and branch of a PR that never merged. **Never chain cleanup unconditionally after the merge command.** Confirm `state == "MERGED"` (or `mergedAt != null`) first (with a merge queue, after the queue reports the merge, not after the enqueue call), then close the unit via the consumer's **close on merge** adapter operation and remove its worktree + branch:
+**After merge: gate cleanup on a VERIFIED merge.** A merge call can be rejected (see the `--admin` note above) while a chained one-liner blindly runs cleanup anyway, deleting the worktree and branch of a PR that never merged. **Never chain cleanup unconditionally after the merge command.** Confirm `state == "MERGED"` (or `mergedAt != null`) first (with a merge queue, after the queue reports the merge, not after the enqueue call), then close the unit via the consumer's **close on merge** adapter operation and remove its worktree + branch:
 
 ```bash
 MERGED=$(gh pr view $PR --json state --jq '.state')
@@ -261,4 +261,4 @@ Report the merge to the user. Any wave/next-task orchestration after a merge is 
    ```
 2. **Sort by hot-file impact**: Fewer hot files first. Hot-file PRs merge LAST.
 3. **Merge sequentially**: One at a time. 10-20s between for conflict detection. With a merge queue, enqueue in this order instead and let the queue serialise the merges.
-4. **Re-check merge state** after each — CLEAN can flip to DIRTY from cascade. With a merge queue, watch for PRs the queue removed instead.
+4. **Re-check merge state** after each: CLEAN can flip to DIRTY from cascade. With a merge queue, watch for PRs the queue removed instead.

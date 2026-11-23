@@ -70,20 +70,44 @@ def test_required_job_is_not_skipped_on_merge_groups(context: str) -> None:
     assert job.get("if") in (None, "${{ !cancelled() }}", "always()"), context
 
 
+# A job keyed on the floor path filter's floor-core answer never runs in a
+# merge group: the filter answers false there (FLOOR.md, "The merge queue").
+NOT_IN_A_GROUP = "needs.canary-changes.outputs.floor_core_changed == 'true'"
+
+
+def _reads_base_ref(step: dict[str, Any]) -> bool:
+    """The step fetches the base ref, written inline or through its env."""
+    env = " ".join(str(value) for value in (step.get("env") or {}).values())
+    return "git fetch" in step.get("run", "") and (
+        "github.base_ref" in step.get("run", "") or "github.base_ref" in env
+    )
+
+
 def test_steps_that_read_the_pull_request_base_skip_merge_groups() -> None:
     # A merge group has no base ref, so `git fetch origin ""` would fail the
-    # job. Every step that fetches `github.base_ref` runs on pull requests only.
+    # job. Every step that fetches `github.base_ref`, inline or through env,
+    # runs on pull requests only, or sits in a job that cannot run in a group.
+    seen = 0
     for path in sorted(WORKFLOWS.glob("*.yml")):
         doc = _load(path)
         if "merge_group" not in (doc["on"] or {}):
             continue
         for job_id, job in doc["jobs"].items():
             for step in job.get("steps", []):
-                run = step.get("run", "")
-                if "git fetch" in run and "github.base_ref" in run:
-                    assert step.get("if") == "github.event_name == 'pull_request'", (
-                        f"{path.name}:{job_id}:{step.get('name')}"
-                    )
+                if not _reads_base_ref(step):
+                    continue
+                seen += 1
+                where = f"{path.name}:{job_id}:{step.get('name')}"
+                if job.get("if") == NOT_IN_A_GROUP:
+                    continue
+                assert step.get("if") == "github.event_name == 'pull_request'", where
+    assert seen >= 5  # tests.yml, windows.yml and three in floor.yml
+
+
+def test_the_base_ref_scan_sees_an_env_indirected_fetch() -> None:
+    step = {"env": {"BASE_REF": "${{ github.base_ref }}"},
+            "run": 'git fetch --no-tags origin "${BASE_REF}"'}
+    assert _reads_base_ref(step)
 
 
 def test_title_lint_passes_merge_groups_without_a_title() -> None:
