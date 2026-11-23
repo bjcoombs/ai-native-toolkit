@@ -224,6 +224,7 @@ def test_a_mutation_refresh_needs_the_runs_model() -> None:
     assert _model_differs(profile_level, None)
     assert not _model_differs(profile_level, handover)
     assert not _model_differs({"levels_version": default_model()["version"]}, None)
+    assert not _model_differs({"levels_version": "default-2026.11.10"}, None)  # an older default
     assert not _model_differs({"available": False}, handover)
 
 
@@ -275,3 +276,17 @@ def test_assess_and_fleet_give_one_step_for_one_model(flags: list[str], ci2: Pat
     assert ctx["level"]["step"] == repo_result["step"]
     assert {c["id"]: c["state"] for c in ctx["level"]["conditions"]} == \
         {c["id"]: c["state"] for c in repo_result["conditions"]}
+
+
+def test_a_mutation_refresh_under_another_model_stops_before_mutating(tmp_path: Path,
+                                                                       capsys: pytest.CaptureFixture[str]) -> None:
+    import json
+
+    from assess_core import run_opt_in_mutation
+
+    (tmp_path / ".assess").mkdir()
+    ctx = {"level": {"levels_version": resolve("handover", None).model["version"]},
+           "test_focus": {"targets": [{"path": "a.py", "tests": ["test_a.py"]}]}}
+    (tmp_path / ".assess" / "run-context.json").write_text(json.dumps(ctx), encoding="utf-8")
+    assert run_opt_in_mutation(tmp_path) == 2
+    assert "needs the --profile or --levels the run used" in capsys.readouterr().err

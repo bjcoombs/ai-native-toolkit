@@ -49,6 +49,7 @@ from lib.counts_only.content_free import add_cli_arguments as add_counts_only_ar
 from lib.counts_only.content_free import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
 from lib.testing.coverage_report import load_coverage_data
 from lib.level_signals import signal_path_validator
+from lib.model_change import model_name
 from lib.profiles import ModelChoice, ProfileError, add_model_arguments, chosen_model, run_level
 from lib.profiles import single_repo_choice
 from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
@@ -124,10 +125,11 @@ def _scan(
 
 
 def _model_differs(level_block: Any, model: ModelChoice | None) -> bool:
-    """True when the run's ``level`` block names a model version ``model`` does not have."""
+    """True when the run's ``level`` block names a model other than ``model``; every
+    ``default-<date>`` version is the default model (``model_change.model_name``)."""
     recorded = level_block.get("levels_version") if isinstance(level_block, dict) else None
     version = chosen_model(model)["version"]
-    return isinstance(recorded, str) and recorded != version
+    return isinstance(recorded, str) and model_name(recorded) != model_name(version)
 
 
 def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
@@ -153,8 +155,9 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     passing every focus path is safe.
 
     ``model`` is the run's ``--profile`` / ``--levels`` choice (None for the default
-    model), which the recount uses; a model whose version is not the ``level`` block's
-    returns 2, so a refresh never recounts a profile run under another model (#1150).
+    model), which the recount uses; a model other than the one the ``level`` block names
+    returns 2 before any mutation runs, so a refresh never recounts a profile run under
+    another model (#1150).
 
     The treemap overlay (regenerated separately by the orchestrator) then reads
     the refreshed ``test_pressure.per_file`` so covered-but-unpinned files get
@@ -176,6 +179,10 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     except (OSError, json.JSONDecodeError) as e:
         print(f"could not read run-context.json: {e}", file=sys.stderr)
         return 1
+    # Before any mutation runs: the recount must use the model the run used (#1150).
+    if _model_differs(ctx.get("level"), model):
+        print("--opt-in-mutation needs the --profile or --levels the run used", file=sys.stderr)
+        return 2
 
     # Only focus entries with test evidence: mutating a file with no test yields
     # all survivors and would flag it for strengthening tests that do not exist.
@@ -198,9 +205,6 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None,
     # The tally reads mutation_run (Layer 6 level 2, #744): recount it in place.
     # The headline and the badge carry the tally, so they are rewritten with it (#747).
     if "level" in ctx:
-        if _model_differs(ctx["level"], model):
-            print("--opt-in-mutation needs the --profile or --levels the run used", file=sys.stderr)
-            return 2
         ctx["level"] = run_level(ctx, model)
         ctx["headline"] = run_headline(ctx["level"], ctx.get("since_last_run"), model)
         write_headline_badge(
