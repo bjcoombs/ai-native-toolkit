@@ -86,6 +86,9 @@ def test_a_model_without_steps_or_requires_loads_as_before():
     # #1083: a count threshold is refused by name, never silently ignored
     ([{**STEPS[0], "threshold": 0}, STEPS[1]], "'threshold' was removed .*gates only"),
     ([STEPS[0], {**STEPS[1], "threshold": 3}], "'threshold' was removed"),
+    # gates are all that tell two Steps apart, so a Step must add one
+    ([STEPS[0], {**STEPS[1], "gates": []}], "adds no gate over step 1"),
+    ([*STEPS, {**STEPS[1], "step": 3}], "adds no gate over step 2"),
 ])
 def test_a_malformed_step_fails_at_load(steps, message):
     with pytest.raises(LevelsError, match=message):
