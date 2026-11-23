@@ -10,6 +10,7 @@ import pytest
 from lib.instruction_placement import (
     ALWAYS_ON_FLAG_LINES,
     LOADED_IN_FULL_MIN_LINES,
+    LOADED_IN_FULL_MIN_TOKENS,
     Section,
     always_on_signals,
     analyse_file,
@@ -212,7 +213,36 @@ def test_scorer_agent_appears_in_the_loaded_in_full_report_on_this_repo() -> Non
     scorer = entries["agents/assess-layer-scorer.md"]
     assert scorer["kind"] == "agent"
     assert 0.0 < scorer["always_on_share"] <= 1.0
-    assert all(f["total_lines"] > LOADED_IN_FULL_MIN_LINES for f in block["loaded_in_full"])
+    assert all(f["total_lines"] > LOADED_IN_FULL_MIN_LINES or f["est_tokens"] > LOADED_IN_FULL_MIN_TOKENS
+               for f in block["loaded_in_full"])
+    tokens = [f["est_tokens"] for f in block["loaded_in_full"]]
+    assert tokens == sorted(tokens, reverse=True)  # most tokens first (#1045)
+
+
+def _skill(tmp_path: Path, lines: int, width: int) -> Path:
+    skill = tmp_path / ".claude" / "skills" / "big" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: big\ndescription: d\n---\n" + ("x" * width + "\n") * lines, encoding="utf-8")
+    return skill
+
+
+def test_a_long_line_skill_under_the_line_threshold_is_reported_by_tokens(tmp_path: Path) -> None:
+    _skill(tmp_path, 150, 200)  # 150 lines, about 7.6k tokens
+    (entry,) = scan_instruction_placement(tmp_path, {}, None)["loaded_in_full"]
+    assert entry["total_lines"] < LOADED_IN_FULL_MIN_LINES < LOADED_IN_FULL_MIN_TOKENS < entry["est_tokens"]
+
+
+def test_a_short_skill_under_both_thresholds_is_not_reported(tmp_path: Path) -> None:
+    _skill(tmp_path, 150, 20)
+    block = scan_instruction_placement(tmp_path, {}, None)
+    assert block["loaded_in_full"] == [] and block["thresholds"]["loaded_in_full_min_tokens"] == 5000
+
+
+def test_est_tokens_is_the_always_on_grading_estimate() -> None:
+    from lib.instruction_budget import CHARS_PER_TOKEN
+    from lib.instruction_placement import est_tokens
+
+    assert CHARS_PER_TOKEN == 4 and est_tokens("x" * 9) == 3 and est_tokens("") == 0
 
 
 # --- signals and homes --------------------------------------------------------------
