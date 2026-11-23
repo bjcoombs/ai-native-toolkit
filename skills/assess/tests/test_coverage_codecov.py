@@ -3,8 +3,8 @@
 A project ``target: 80%`` is a gate at 80, but Codecov posts its status server-side, so
 whether it gates a merge (branch protection requiring it) is not read: Layer 6 level 1
 reads null, never true and never false. ``target: auto`` (or no target) reads unknown
-with ``codecov_target_not_read``. A patch status bounds changed lines only and is not
-counted. A malformed config never raises.
+with ``codecov_target_not_read``. Project and patch statuses both count (#788 names
+both). A malformed config never raises.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import pytest
 
 from lib.coverage_codecov import (CODECOV_UNMEASURED, STATUS_UNCONFIRMED, codecov_statuses,
                                   config_path, target_percent)
+from lib import unit_readings as ur
 from lib.coverage_gate import GO_RUST_UNMEASURED, detect_coverage_gate
 
 CI = ".github/workflows/ci.yml"
@@ -92,21 +93,26 @@ def test_another_unread_gate_keeps_the_reason_unnamed(tmp_path: Path) -> None:
     assert block["unmeasured_reason"] is None
 
 
-def test_go_rust_reason_is_unchanged_by_a_patch_only_config(tmp_path: Path) -> None:
-    patch = "coverage:\n  status:\n    patch:\n      default:\n        target: 90%\n"
-    root = _write(tmp_path, {"codecov.yml": patch, "go.mod": "module x\n"})
+def test_go_rust_reason_keeps_its_precedence_over_a_low_codecov_target(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"codecov.yml": _project("20"), "go.mod": "module x\n"})
     block = detect_coverage_gate(root)
     assert block["threshold_meets_minimum"] is None
     assert block["unmeasured_reason"] == GO_RUST_UNMEASURED
 
 
-def test_a_patch_status_is_listed_but_not_counted(tmp_path: Path) -> None:
-    patch = "coverage:\n  status:\n    patch:\n      default:\n        target: 100%\n"
+@pytest.mark.parametrize(("target", "meets", "reason", "basis"), [
+    ("100%", True, None, STATUS_UNCONFIRMED),
+    ("auto", None, CODECOV_UNMEASURED, "threshold_not_read"),
+])
+def test_a_patch_status_counts_and_never_reads_unmet(
+        tmp_path: Path, target: str, meets: bool | None, reason: str | None, basis: str) -> None:
+    patch = f"coverage:\n  status:\n    patch:\n      default:\n        target: {target}\n"
     block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": patch}))
-    assert [(g["metric"], g["threshold"]) for g in block["gates"]] == [("patch", 100.0)]
-    assert block["configured"] is False
-    assert block["threshold_meets_minimum"] is False
-    assert block["enforced_basis"] == "no_gate"
+    assert [g["metric"] for g in block["gates"]] == ["patch"]
+    assert block["configured"] is True
+    assert block["threshold_meets_minimum"] is meets
+    assert block["unmeasured_reason"] == reason
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, basis)
 
 
 def test_no_codecov_config_leaves_the_reading_unchanged(tmp_path: Path) -> None:
@@ -162,6 +168,16 @@ def test_non_gates(tmp_path: Path, text: str) -> None:
     assert _statuses(tmp_path, text) == []
 
 
+def test_an_anchored_status_reads_its_block(tmp_path: Path) -> None:
+    text = "coverage:\n  status:\n    project:\n      default: &base\n        target: 85%\n"
+    assert _statuses(tmp_path, text) == [("project", "default", 85.0)]
+
+
+def test_a_byte_order_mark_is_skipped(tmp_path: Path) -> None:
+    (tmp_path / "codecov.yml").write_bytes(b"\xef\xbb\xbf" + _project("80").encode())
+    assert [s.target for s in codecov_statuses(tmp_path)] == [80.0]
+
+
 def test_project_on_is_a_default_auto_status(tmp_path: Path) -> None:
     assert _statuses(tmp_path, "coverage:\n  status:\n    project: yes\n") == [
         ("project", "default", None)]
@@ -201,3 +217,16 @@ def test_the_first_config_codecov_reads_wins(tmp_path: Path) -> None:
 def test_an_excluded_config_is_not_read(tmp_path: Path) -> None:
     _write(tmp_path, {".github/codecov.yml": _project("90")})
     assert config_path(tmp_path, ({".github"}, [])) is None
+
+
+def test_monorepo_units_inherit_the_repository_codecov_reading(tmp_path: Path) -> None:
+    root = _write(tmp_path, {"codecov.yml": _project("auto"), "svc/a/x.py": "x = 1\n",
+                             "svc/b/y.py": "y = 1\n"})
+    repo = detect_coverage_gate(root)
+    members = ["svc/a", "svc/b"]
+    scoped = detect_coverage_gate(root, Path("svc/b"))
+    # the config is the repository's: no member owns it, so units inherit the unknown
+    assert ur._root_owns("coverage_gate", repo, members) is True
+    assert ur._coverage_own("svc/b", scoped, {"coverage_gate": repo, "members": members}) is None
+    assert scoped["threshold_meets_minimum"] is None
+    assert scoped["unmeasured_reason"] == CODECOV_UNMEASURED

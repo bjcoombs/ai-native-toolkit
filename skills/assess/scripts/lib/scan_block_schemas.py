@@ -327,7 +327,7 @@ COVERAGE_GATE: JsonDict = {
             "The Layer 6 level 1 signal: true when a counted gate's threshold_percent is at "
             "least 50; null (unknown) when none is but a counted gate's percentage was not "
             "read, or when a repository holding a go.mod or Cargo.toml has no gate of that "
-            "language and none of at least 50 for another, or when a Codecov project status "
+            "language and none of at least 50 for another, or when a Codecov status "
             "target is auto or missing and no other gate decides it (issue #882), or when a scoped run cannot tell "
             "whether the root coverage.py floor governs the scope and that floor would change "
             "the reading (see unmeasured_reason); false "
@@ -342,7 +342,7 @@ COVERAGE_GATE: JsonDict = {
             "read; root_coverage_config_unresolved on a scoped run when the repository "
             "root's coverage.py floor would change the reading but where CI runs coverage "
             "is not resolved (issue #1032); codecov_target_not_read when the only gate that "
-            "could reach 50 percent is a Codecov project status with an auto, missing or "
+            "could reach 50 percent is a Codecov status with an auto, missing or "
             "non-numeric target (issue #882); null otherwise."),
         "enforced_meets_minimum": _field(
             {"type": ["boolean", "null"]},

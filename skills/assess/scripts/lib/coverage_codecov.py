@@ -7,21 +7,21 @@ and the target as written (``80%`` and ``80`` are 80); ``target: auto``, a statu
 no ``target`` (Codecov's default is ``auto``: the base commit's coverage) and a target
 that is not a number read ``threshold: null``.
 
-How a status counts toward Layer 6 level 1:
+How a status counts toward Layer 6 level 1 (project and patch alike, as #788 names both):
 
-- A project status is a floor on total coverage, so it counts like any other gate:
-  ``target: 80%`` makes ``threshold_meets_minimum`` true, and an ``auto`` target makes
-  it null with ``unmeasured_reason`` ``codecov_target_not_read`` (``CODECOV_UNMEASURED``)
-  when no other gate decides it, never false.
-- A patch status bounds only the changed lines (removing a test changes none), so it is
-  listed but not counted (``counted_status``).
+- It counts like any other gate: ``target: 80%`` makes ``threshold_meets_minimum``
+  true, and an ``auto`` target makes it null with ``unmeasured_reason``
+  ``codecov_target_not_read`` (``CODECOV_UNMEASURED``) when no other gate decides it,
+  never false.
 - The status is server-side: it gates a merge only when branch protection requires it,
-  which this read does not see. So a counted project gate never reads as run by CI:
+  which this read does not see. So a Codecov gate never reads as run by CI:
   ``lib.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
-  (``STATUS_UNCONFIRMED``).
+  (``STATUS_UNCONFIRMED``). A Codecov status alone therefore never makes Layer 6 level 1
+  true or false: it reads not measured.
 
 Not gates: ``informational: true`` (the status never fails), ``off`` / ``false`` on the
-status, on ``project`` / ``patch`` or on ``coverage.status``. The first file found is read,
+status, on ``project`` / ``patch`` or on ``coverage.status``. A YAML anchor on a status
+key (``default: &base``) is read as the block below it; a byte-order mark is skipped. The first file found is read,
 as Codecov does: ``codecov.yml``, ``.codecov.yml``, ``codecov.yaml``, ``.codecov.yaml``,
 at the repository root, then in ``.github/``, then in ``dev/`` (on a scoped run too: the
 config is the repository's). A config with no ``coverage.status`` section posts Codecov's
@@ -97,11 +97,12 @@ def _entries(lines: Sequence[str]) -> list[tuple[int, tuple[str, ...], str]]:
         match = _KEY_RE.match(_COMMENT_RE.sub("", raw.expandtabs(2)).rstrip())
         if match is None:
             continue
+        value = (match.group(3) or "").strip()
         indent = len(match.group(1))
         while stack and stack[-1][0] >= indent:
             stack.pop()
         stack.append((indent, match.group(2).strip("\"'")))
-        out.append((idx, tuple(key for _, key in stack), (match.group(3) or "").strip()))
+        out.append((idx, tuple(key for _, key in stack), "" if value.startswith("&") else value))
     return out
 
 
@@ -168,15 +169,10 @@ def codecov_statuses(root: Path, excludes: Excludes = (set(), [])) -> list[Statu
     try:
         if (root / rel).stat().st_size > _MAX_BYTES:
             return []
-        text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        text = (root / rel).read_text(encoding="utf-8-sig", errors="replace")
     except (OSError, ValueError):
         return []
     return _statuses(rel, text.splitlines())
-
-
-def counted_status(gate: Mapping[str, object]) -> bool:
-    """False for a Codecov patch status, which bounds changed lines, not total coverage."""
-    return not (gate["tool"] == TOOL and gate["metric"] == "patch")
 
 
 def codecov_unread(gates: Sequence[G], counted: Callable[[G], bool]) -> bool:

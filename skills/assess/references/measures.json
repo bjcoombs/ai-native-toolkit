@@ -1663,8 +1663,8 @@
         },
         {
           "code": "codecov_target_not_read",
-          "means": "The only coverage gate that could reach 50 percent is a Codecov project status whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare.",
-          "next_step": "Nothing to change if the status is a required check. To have it measured, set a numeric target (target: 80%) on the project status, or add a fail_under (or your tool's threshold) of at least 50 percent run in CI.",
+          "means": "The only coverage gate that could reach 50 percent is a Codecov status (project or patch) whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare.",
+          "next_step": "To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.",
           "carried_in": "unmeasured_reason"
         },
         {

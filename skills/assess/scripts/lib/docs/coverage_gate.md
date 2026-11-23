@@ -97,9 +97,10 @@ reads (`codecov.yml`, `.codecov.yml`, `codecov.yaml`, `.codecov.yaml` at the roo
 or `.patch` status, tool `codecov`, `metric` `project` or `patch`, `form`
 `coverage.status.<kind>.<name>.target`, unit `percent`, threshold as written (`80%` is 80)
 or null for `auto`, no target or a non-number. `informational: true` and `off` / `false`
-statuses are not gates. A project gate counts (`codecov` is in `_NULL_THRESHOLD_GATES`, so
-an `auto` target counts with a null percentage); a patch gate is listed but not counted,
-since it bounds changed lines only. When `threshold_meets_minimum` is null and every
+statuses are not gates; an anchor on a status key (`default: &base`) reads as its block,
+and a byte-order mark is skipped. Project and patch gates both count, as #788 names both
+(`codecov` is in `_NULL_THRESHOLD_GATES`, so an `auto` target counts with a null
+percentage). When `threshold_meets_minimum` is null and every
 counted gate with a null percentage is a Codecov one, `unmeasured_reason` is
 `codecov_target_not_read`. A counted Codecov gate is never run by CI: `coverage_ci.gate_run`
 reads it `status_check_unconfirmed` (null), since the status gates a merge only when

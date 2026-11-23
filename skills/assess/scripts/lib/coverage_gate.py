@@ -49,8 +49,8 @@ reads counts when CI runs coverage from the root, and reads unknown when where C
 it is not resolved (#1032, ``lib.coverage_root_config``).
 
 Codecov status targets in ``codecov.yml`` (#882, ``lib.coverage_codecov``): a project
-``target: 80%`` is a gate at 80 that CI does not run (``status_check_unconfirmed``); an
-``auto`` target reads unknown (``codecov_target_not_read``); a patch status is not counted.
+``target: 80%`` (project or patch) is a gate at 80 that CI does not run
+(``status_check_unconfirmed``); an ``auto`` target reads unknown (``codecov_target_not_read``).
 
 What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
 ``collectCoverage``), read per config directory, is ``lib.coverage_activation``'s.
@@ -71,7 +71,7 @@ from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
 from lib.coverage_activation import read_activation
-from lib.coverage_codecov import CODECOV_UNMEASURED, codecov_statuses, codecov_unread, counted_status
+from lib.coverage_codecov import CODECOV_UNMEASURED, codecov_statuses, codecov_unread
 from lib.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
 from lib.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.doc_graph import is_excluded_path
@@ -679,8 +679,8 @@ def _read_lines(path: Path) -> list[str] | None:
 def gates_something(gate: CoverageGate) -> bool:
     """A gate `configured` counts: a non-zero threshold, a null one from nyc/c8, or any
     bound on what is missed (a JaCoCo ``MISSEDCOUNT`` maximum of 0 misses nothing)."""
-    if gate["unit"] in _MISSED_UNITS or not counted_status(gate):
-        return counted_status(gate)
+    if gate["unit"] in _MISSED_UNITS:
+        return True
     if gate["threshold"] is None:
         return gate["tool"] in _NULL_THRESHOLD_GATES
     return gate["threshold"] != 0
