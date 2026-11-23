@@ -17,6 +17,9 @@ value}``) and a ``completed_sha`` on HEAD's history. ``update_ledger`` keeps one
   not known) leaves it as it was, never counted;
 - a re-run on the commit the previous run measured adds nothing, so superseding a run never
   counts twice;
+- several pending removals of one file (a file trimmed in rounds) fold into one entry measured
+  from the first round's starting size (``_merge_rounds``, #1168), so one continuous drop is
+  credited once;
 - a pending entry whose removal is no longer a done action on HEAD's history (squashed away,
   reopened, deleted) is dropped; a credited one stays as the record. When the done removals
   cannot be read (``actions.json`` not committed or not readable, a shallow clone, git failing)
@@ -69,6 +72,28 @@ def _placement_now(placement: Any, path: str, repo_root: Path) -> tuple[bool, in
     return None if (repo_root / path).exists() else (False, 0)
 
 
+def _merge_rounds(entries: dict[tuple[str, str], PruningEntry]) -> None:
+    """Fold several pending removals of one file into one entry (#1168), so one continuous drop
+    is credited once. The entry keeps the newest removal (the smallest ``cost_before``: the file
+    shrinks round by round) with its commit and hold count, takes the earliest round's starting
+    size and gates, and lists the folded commits in ``merged`` so they are never added again."""
+    by_path: dict[str, list[tuple[str, str]]] = {}
+    for key, e in entries.items():
+        if not e["credited"]:
+            by_path.setdefault(e["path"], []).append(key)
+    for keys in by_path.values():
+        if len(keys) < 2:
+            continue
+        rounds = sorted((entries[k] for k in keys), key=lambda e: (-e["cost_before"], e["completed_sha"]))
+        first, newest = rounds[0], rounds[-1]
+        folded = sorted({sha for e in rounds[:-1] for sha in (e["completed_sha"], *e.get("merged", []))}
+                        | set(newest.get("merged", [])))
+        newest["cost_before"], newest["gates"] = first["cost_before"], first["gates"]
+        newest["merged"] = folded
+        for e in rounds[:-1]:
+            del entries[(e["path"], e["completed_sha"])]
+
+
 def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[PruningEntry] | None, placement: Any, *,
                   held_now: list[str] | None, held_before: list[str] | None, head_sha: str | None,
                   new_commit: bool, repo_root: Path) -> tuple[list[PruningEntry], list[PruningEntry]]:
@@ -85,8 +110,11 @@ def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[Pruning
     # squashed away, reopened or deleted is dropped, so it never counts beside a fresh entry
     entries = {(e["path"], e["completed_sha"]): cast(PruningEntry, dict(e)) for e in prior
                if e["credited"] or (e["path"], e["completed_sha"]) in done}
+    absorbed = {(e["path"], sha) for e in entries.values() for sha in e.get("merged", [])}
     for key, e in done.items():
-        entries.setdefault(key, cast(PruningEntry, dict(e)))
+        if key not in absorbed:
+            entries.setdefault(key, cast(PruningEntry, dict(e)))
+    _merge_rounds(entries)
     for e in entries.values():
         if e["credited"] or not new_commit:
             continue

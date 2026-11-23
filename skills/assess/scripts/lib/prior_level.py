@@ -74,6 +74,7 @@ class PruningEntry(TypedDict):
     saved: int | None  # the measured drop in always-on lines, set when credited
     gates: list[str] | None  # the Step gates the removal must keep, set when first seen
     credited_at: str | None  # the commit the credit was given at
+    merged: NotRequired[list[str]]  # earlier removals of the same file folded into this one (#1168)
 
 
 class PriorLevel(TypedDict):
@@ -128,6 +129,7 @@ def _valid_pruning(value: Any) -> bool:
         and isinstance(e.get("credited"), bool) and (e.get("saved") is None or type(e.get("saved")) is int)
         and (e.get("gates") is None or (isinstance(e.get("gates"), list) and all(isinstance(g, str) for g in e["gates"])))
         and (e.get("credited_at") is None or isinstance(e.get("credited_at"), str))
+        and (isinstance(e.get("merged", []), list) and all(isinstance(m, str) for m in e.get("merged", [])))
         for e in value)
 
 

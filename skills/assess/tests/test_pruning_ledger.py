@@ -141,3 +141,27 @@ def test_unflagged_by_share_alone_saves_nothing_and_is_not_held() -> None:
     entries, _ = _run([], _placement(False, 312), head="c1")
     entries, credited = _run(entries, _placement(False, 312), head="c2")
     assert (entries[0]["runs_held"], credited) == (0, [])
+
+
+def test_a_file_trimmed_in_two_rounds_is_credited_once_for_the_whole_drop() -> None:
+    """#1168: 261 -> 150 (still flagged) -> 60 credits one removal of 201 lines, not 201 + 90."""
+    def done(sha: str, value: int) -> PruningEntry:
+        found = removal({**_done(value), "completed_sha": sha})
+        assert found is not None
+        return found
+    first, second = done("1" * 40, 261), done("2" * 40, 150)
+
+    def step(prior: list[PruningEntry], removals: list[PruningEntry], placement: Any,
+             head: str) -> tuple[list[PruningEntry], list[PruningEntry]]:
+        return update_ledger(prior, removals, placement, held_now=GATES, held_before=GATES, head_sha=head,
+                             new_commit=True, repo_root=ROOT)
+    entries, _ = step([], [first], _placement(True, 150), "c1")  # round one: still flagged
+    assert entries[0]["runs_held"] == 0
+    entries, _ = step(entries, [first, second], _placement(False, 60), "c2")  # round two lands
+    assert len(entries) == 1 and entries[0]["cost_before"] == 261 and entries[0]["merged"] == ["1" * 40]
+    entries, credited = step(entries, [first, second], _placement(False, 60), "c3")
+    assert [(e["saved"], e["completed_sha"]) for e in credited] == [(201, "2" * 40)]
+    assert ledger_lines(entries, credited) == ["Pruned: always-on text in `CLAUDE.md`, saved 201 always-on lines"]
+    # the folded round is never added again
+    later, credited = step(entries, [first, second], _placement(False, 60), "c4")
+    assert (later, credited) == (entries, [])
