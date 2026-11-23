@@ -276,3 +276,40 @@ def test_counts_only_keeps_the_note_token(tmp_path: Path) -> None:
     [row] = kept["pinning"]["manifests"]
     assert row["note"] == "direct_pins_only"
     assert kept["pinning"]["manifests_total"] == 1
+
+
+def test_a_swift_library_with_a_plugin_executable_target_is_a_library(tmp_path: Path) -> None:
+    # issue #1025: a build-tool plugin's `.executableTarget(` is not an executable product.
+    targets = ('  targets: [.target(name: "Lib"), .executableTarget(name: "Gen"),\n'
+               '    .plugin(name: "GenPlugin", capability: .buildTool(), dependencies: ["Gen"])],\n')
+    manifest = SWIFT_LIB.replace("  dependencies:", targets + "  dependencies:")
+    pinning = _pinning(tmp_path, {"Package.swift": manifest})
+    assert _rows(pinning) == {"Package.swift": (False, None, "skipped_library")}
+    assert pinning["manifests_total"] == 0
+
+
+def test_a_kotlin_multiplatform_accessor_block_is_a_dependency_block(tmp_path: Path) -> None:
+    # issue #1025: `commonMain.dependencies { ... }` declares dependencies; an empty one does not.
+    kmp = ('plugins { kotlin("multiplatform") }\nkotlin {\n  sourceSets {\n'
+           '    commonMain.dependencies {\n      implementation(libs.kotlinx.coroutines)\n    }\n  }\n}\n')
+    unlocked = _pinning(tmp_path / "a", {"build.gradle.kts": kmp})
+    assert _rows(unlocked) == {"build.gradle.kts": (False, None, None)}
+    assert _condition(unlocked)[0] == "unmet"
+    locked = _pinning(tmp_path / "b", {"build.gradle.kts": kmp, "gradle.lockfile": "x\n"})
+    assert _rows(locked) == {"build.gradle.kts": (True, "gradle.lockfile", None)}
+    empty = _pinning(tmp_path / "c", {"build.gradle.kts": kmp.replace(
+        "\n      implementation(libs.kotlinx.coroutines)\n    ", " ")})
+    assert empty["manifests"] == []
+
+
+@pytest.mark.parametrize("name, body, lock", [
+    pytest.param("vcpkg.json", json.dumps(VCPKG), None, id="vcpkg"),
+    pytest.param("composer.json", json.dumps({"type": "project", "require": {"a/b": "1"}}), None, id="composer"),
+    pytest.param("package.json", json.dumps({"dependencies": {"a": "1"}}), None, id="package"),
+])
+def test_a_json_manifest_with_a_byte_order_mark_gives_a_row(
+        tmp_path: Path, name: str, body: str, lock: str | None) -> None:
+    # issue #1025: a BOM-prefixed manifest parsed as unknown and gave no row.
+    pinning = _pinning(tmp_path, {name: "\ufeff" + body})
+    assert _rows(pinning) == {name: (False, lock, None)}
+    assert pinning["manifests_total"] == 1
