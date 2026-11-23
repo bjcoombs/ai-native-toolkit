@@ -63,7 +63,8 @@ platform scan stamps false), and runs with and without it do not compare. With
 ``assess_signals.py --units``, and ``fleet-data.json`` gives each repository its
 ``unit_rows`` (``lib/fleet/fleet_data_units.py``), one Step, next blocking gate and per-tag
 tally per unit. A unit is named only by its folder's hash under ``--hash-paths``. It costs
-one scoped pass per unit.
+one scoped pass per unit and needs ``--levels`` (exit 2 without it): a unit's Step comes
+from the model.
 
 GitLab includes (#766): every scan of a ROOT run gets ``--ghsync-root ROOT``, so a
 repository's ``include: project:`` / ``component:`` files are read from the clones
@@ -295,7 +296,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="Keep full signal blocks (free text included) instead of counts-only.")
     parser.add_argument("--monorepo-units", action="store_true",
                         help="Scan each repository by monorepo unit too (assess_signals --units): "
-                             "fleet-data.json gains unit rows. One scoped pass per unit.")
+                             "fleet-data.json gains unit rows. One scoped pass per unit. Needs --levels.")
     parser.add_argument("--hash-paths", action="store_true",
                         help="Hash repo-relative paths and repository ids under one salt drawn for this run "
                              "(hashes join within the run; reruns are not byte-identical).")
@@ -388,6 +389,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         parser.error("--platform-jobs and --platform-timeout must be at least 1")
     if not args.platform and (args.platform_jobs is not None or args.platform_timeout is not None):
         parser.error("--platform-jobs and --platform-timeout apply to --platform")
+    if args.monorepo_units and args.levels is None:
+        parser.error("--monorepo-units needs --levels: a unit's Step comes from the maturity model")
     if args.scans is not None:
         problem = platform_only_error([s.strip() for s in args.scans.split(",")], args.platform)
         if problem is not None:

@@ -123,6 +123,15 @@ def test_a_unit_row_step_equals_the_assess_unit_step(mono: Path, tmp_path: Path)
     assert [(r["key"], r["step"]) for r in rows] == [(u["path"], u["step"]) for u in ctx["unit_levels"]["units"]]
 
 
+def test_fleet_monorepo_units_needs_levels(mono: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                           capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        fleet_cli.main([str(mono.parents[2]), "--out", "o", "--monorepo-units", "--no-history"])
+    assert exc.value.code == 2 and "--monorepo-units needs --levels" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
+
+
 def test_fleet_monorepo_units_writes_hashed_unit_rows(mono: Path, tmp_path: Path,
                                                       monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
