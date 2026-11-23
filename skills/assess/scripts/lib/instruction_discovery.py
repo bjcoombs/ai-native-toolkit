@@ -76,7 +76,7 @@ from lib.agent_instructions_grader import grade_instructions
 from lib.agent_systems import AIDER_CONFIG, aider_read_files, match_system_file, might_match
 from lib.instruction_content import RepoContext
 from lib.assess_config import is_user_excluded
-from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_repo_file
+from lib.docs.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_repo_file
 from lib.git_churn import GIT_TIMEOUT_SECONDS, ContentClock
 from lib.instruction_budget import (
     CHARS_PER_TOKEN,

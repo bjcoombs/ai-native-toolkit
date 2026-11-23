@@ -50,7 +50,7 @@ def build_schema() -> JsonDict:
     # #944: the Step fields, as level.json's level_result gives them
     blocker = next(b for b in repo["next_step"]["anyOf"] if b.get("type") == "object")
     blocker_fields = blocker["properties"]["blockers"]["items"]["properties"]
-    blocker_fields["kind"] = {"enum": ["gate", "threshold"]}
+    blocker_fields["kind"] = {"enum": ["gate"]}
     blocker_fields["state"] = {"enum": list(STATES)}
     blocker_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
     blocker_fields["exclusion_kind"] = {"enum": list(EXCLUSION_KINDS)}

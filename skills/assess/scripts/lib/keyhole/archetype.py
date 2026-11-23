@@ -66,7 +66,7 @@ from pathlib import Path
 from typing import Any
 
 # Imported from doc_graph (a lib module - the inward-only layering allows it).
-from lib.doc_graph import CODE_EXTENSIONS, DOC_EXTENSIONS, EXCLUDE_DIRS
+from lib.docs.doc_graph import CODE_EXTENSIONS, DOC_EXTENSIONS, EXCLUDE_DIRS
 from lib.git_churn import tracked_files
 
 # The Karpathy LLM-wiki best-practice pointer. Surfaced in the report so a KB

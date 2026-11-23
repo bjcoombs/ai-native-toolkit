@@ -63,7 +63,7 @@ LEVEL: LevelResult = {
     "not_measured": [{"id": c["id"], "reason": c["reason"]} for c in CONDITIONS if "reason" in c],
     "conditions": CONDITIONS,
     "step": 3,
-    "next_step": {"step": 4, "threshold": 5,
+    "next_step": {"step": 4,
                   "blockers": [{"kind": "gate", "gate": "coverage_gate",
                                 "condition": "layer-6-coverage.1", "state": "unmet"}]},
 }

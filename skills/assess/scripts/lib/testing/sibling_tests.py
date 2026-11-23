@@ -63,7 +63,7 @@ The import tier reads the same index: its test and source lists are the ones
 the basename tier keys, so the built-in excludes and the tracked-files rule
 apply to it unchanged, and the files are read only when a probe reaches it.
 
-Inward-only: stdlib plus ``lib.git_churn`` / ``lib.doc_graph`` /
+Inward-only: stdlib plus ``lib.git_churn`` / ``lib.docs.doc_graph`` /
 ``lib.testing.import_credit``, imports no orchestrator. Beyond the index, file I/O is
 existence checks (``is_file`` / ``is_dir``) bounded by
 :data:`MAX_ANCESTOR_LEVELS`. Never raises.
@@ -108,7 +108,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lib.doc_graph import EXCLUDE_DIRS, is_excluded_path
+from lib.docs.doc_graph import EXCLUDE_DIRS, is_excluded_path
 from lib.git_churn import tracked_files
 from lib.testing.import_credit import BATS_SUFFIX, FileReader, ImportCredits
 

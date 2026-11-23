@@ -12,7 +12,7 @@ the figures and masks the actionable curated-wiki signal - the read most likely
 to drive a fix.
 
 This module turns "is this subtree a raw-source dump?" into a deterministic,
-threshold-based signal so :func:`lib.doc_graph.build_doc_graph` can exclude
+threshold-based signal so :func:`lib.docs.doc_graph.build_doc_graph` can exclude
 qualifying subtrees from the headline read-side metrics and report them
 separately, while leaving a repo with no such tree completely unaffected.
 

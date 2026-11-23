@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from lib.doc_directives import MAX_BYTES, directive_counts, is_directive_only
-from lib.doc_staleness import DocStalenessRow, analyze_doc_staleness, staleness_summary
+from lib.docs.doc_directives import MAX_BYTES, directive_counts, is_directive_only
+from lib.docs.doc_staleness import DocStalenessRow, analyze_doc_staleness, staleness_summary
 
 # The issue's evidence page: a heading, a setup link and one directive.
 STUB = """# Cohere

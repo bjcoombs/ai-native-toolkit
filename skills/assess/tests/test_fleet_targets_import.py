@@ -165,9 +165,15 @@ def _files(tmp_path: Path, rows: object) -> list[str]:
 
 def test_cli_writes_the_one_valid_fixture_row_and_names_the_four_refusals(tmp_path, capsys):
     args = _files(tmp_path, FIXTURE_ROWS)
-    gate = '\ngates = [{ id = "instructions", row = "instructions", level = 1 }]\n'
-    four = STEP_LEVELS + '\n[[steps]]\nstep = 3\nname = "Unattended agent PRs"\nthreshold = 0' + gate \
-        + '\n[[steps]]\nstep = 4\nname = "Autonomous loops"\nthreshold = 0' + gate
+    # each Step adds a gate over the one below (#1083: gates are all that tell Steps apart)
+    row = ('\n[[rows]]\nid = "{0}"\ntitle = "{0}"\nscope = "team"\naggregation = "min"\n'
+           '  [[rows.levels]]\n  level = 1\n'
+           '  criteria = [{{ signal = "nested_instructions.budget.claude_code.lines", op = "gt", value = 0 }}]\n')
+    gate = '{{ id = "{0}", row = "{0}", level = 1 }}'.format
+    three = f'gates = [{gate("instructions")}, {gate("ci")}]'
+    four = STEP_LEVELS + row.format("ci") + row.format("cov") \
+        + f'\n[[steps]]\nstep = 3\nname = "Unattended agent PRs"\n{three}\n' \
+        + f'\n[[steps]]\nstep = 4\nname = "Autonomous loops"\n{three[:-1]}, {gate("cov")}]\n'
     (tmp_path / "levels.toml").write_text(four, encoding="utf-8")
     assert cli.main(args) == 0
     targets = parse_targets(tomllib.loads((tmp_path / "targets.toml").read_text(encoding="utf-8")), MODEL)

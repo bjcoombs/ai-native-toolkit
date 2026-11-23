@@ -69,18 +69,15 @@ aggregation = "min"
 [[steps]]
 step = 1
 name = "Assisted"
-threshold = 0
 
 [[steps]]
 step = 2
 name = "Docs"
-threshold = 0
 gates = [{ id = "docs", row = "docs", level = 1 }]
 
 [[steps]]
 step = 3
 name = "Docs and CI"
-threshold = 0
 gates = [{ id = "docs", row = "docs", level = 1 }, { id = "ci", row = "ci", level = 1 }]
 """
 

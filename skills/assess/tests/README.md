@@ -7,7 +7,7 @@ in the same commit - this is intentional co-change, not accidental coupling.
 ## Test/source co-change seam
 
 The suites below are expected to move with the engine. A reviewer seeing
-`test_doc_graph.py` and `lib/doc_graph.py` in the same diff is looking at the normal
+`test_doc_graph.py` and `lib/docs/doc_graph.py` in the same diff is looking at the normal
 edit cycle, not a layering violation. Keep tests co-located.
 
 The three highest-frequency co-change pairs in the git history are:
@@ -18,7 +18,7 @@ The three highest-frequency co-change pairs in the git history are:
 - **`test_complexity_treemap*.py` / `complexity-treemap.py`** - the heatmap CLI and its
   filter, version-stamp and sidecar tests, split by concern. A schema bump edits
   `test_complexity_treemap_schema_versions.py` only.
-- **`test_doc_graph.py` / `lib/doc_graph.py`** - the navigability graph is the
+- **`test_doc_graph.py` / `lib/docs/doc_graph.py`** - the navigability graph is the
   foundation for Layer 0 and feeds both the staleness and the understanding analysis,
   so its contract tests are touched on most doc-analysis changes.
 
@@ -52,9 +52,9 @@ Every `test_*.py` file in this directory has a row below.
 
 | Suite | Pins |
 |---|---|
-| `test_doc_graph.py` | `lib/doc_graph.py` - doc link-graph, link parsing (unit level: `test_doc_links.py`), orphan detection, connectivity, MOC validation, doc->code edges |
-| `test_doc_links.py` | `lib/doc_links.py` - link pass called directly: wikilink and markdown-link edges, ghosts, directory links, machine-link counts, code-span skipping, ambiguity, fence stripping |
-| `test_doc_graph_layout.py` | `lib/doc_graph_layout.py` - radial shells, node classification, broken-link ghost grouping |
+| `test_doc_graph.py` | `lib/docs/doc_graph.py` - doc link-graph, link parsing (unit level: `test_doc_links.py`), orphan detection, connectivity, MOC validation, doc->code edges |
+| `test_doc_links.py` | `lib/docs/doc_links.py` - link pass called directly: wikilink and markdown-link edges, ghosts, directory links, machine-link counts, code-span skipping, ambiguity, fence stripping |
+| `test_doc_graph_layout.py` | `lib/docs/doc_graph_layout.py` - radial shells, node classification, broken-link ghost grouping |
 | `test_keyhole_hidden_coupling.py` | `lib/keyhole/keyhole_signals.py` - containment by directory, static-modularity projection, behaviour block, coupled pairs on hidden_coupling, structure-drift seams |
 | `test_keyhole_blocks.py` | `lib/keyhole/keyhole_signals.py` - documentation, understanding and runtime run-context blocks |
 | `test_keyhole_attention.py` | `lib/keyhole/keyhole_signals.py` - `assemble_findings` in `FINDING_ORDER`, candidate dead weight, attention ranking and tie-break, `FINDING_MODES` |
@@ -66,12 +66,12 @@ Every `test_*.py` file in this directory has a row below.
 | `keyhole_helpers.py` | shared `integrate()` fixtures for the `test_keyhole_*.py` files (not a test module) |
 | `test_change_coupling.py` | `lib/change_coupling.py` - B1 change-coupling pairs, B2 containment ratio, B4 authorship; synthetic git histories built in tmp dirs |
 | `test_coupling_analysis.py` | `lib/keyhole/coupling_analysis.py` - B3 static-vs-historical disagreement; hidden-coupling, bleeding-module, and refactor-boundary classification with mocked inputs |
-| `test_doc_complexity_join.py` | `lib/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
-| `test_doc_ownership.py` | `lib/doc_ownership.py` - the one doc-to-code ownership rule: spec expansion per method, the README-beside-design.md tie-break through both blocks, one `subject_code_count`, the export cap, scoped-run keys |
-| `test_rename_churn.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - churn counts that follow renames (issue #425): parity with `git log --follow`, twin histories with and without a rename giving the same finding, and low confidence when the rename map is incomplete |
-| `test_shallow_history.py` | `lib/git_churn.py` + `lib/doc_staleness.py` - shallow clones (issue #544): a lower-bound age at the boundary, the exact age on a full clone, the boundary never counted as bulk, the truncation and boundary date in the block, the stale-hub copy and the report label |
-| `test_doc_staleness.py` | `lib/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
-| `test_doc_modularity.py` | `lib/doc_staleness.py` - the `modularity` block: size-weighted coverage, the large-repo flag, and a base-doc directory ratio that counts only code directories |
+| `test_doc_complexity_join.py` | `lib/docs/doc_complexity_join.py` - Signal C: doc_value formula, slop-doc guard, threshold behaviour; mocked complexity-stats and staleness inputs |
+| `test_doc_ownership.py` | `lib/docs/doc_ownership.py` - the one doc-to-code ownership rule: spec expansion per method, the README-beside-design.md tie-break through both blocks, one `subject_code_count`, the export cap, scoped-run keys |
+| `test_rename_churn.py` | `lib/git_churn.py` + `lib/docs/doc_staleness.py` - churn counts that follow renames (issue #425): parity with `git log --follow`, twin histories with and without a rename giving the same finding, and low confidence when the rename map is incomplete |
+| `test_shallow_history.py` | `lib/git_churn.py` + `lib/docs/doc_staleness.py` - shallow clones (issue #544): a lower-bound age at the boundary, the exact age on a full clone, the boundary never counted as bulk, the truncation and boundary date in the block, the stale-hub copy and the report label |
+| `test_doc_staleness.py` | `lib/docs/doc_staleness.py` - doc->code association (base-doc, parallel docs/, code links, repo-wide fallback), churn-relative staleness ratios, and the lying-map rule that counts only the subject's commits after the doc's last edit |
+| `test_doc_modularity.py` | `lib/docs/doc_staleness.py` - the `modularity` block: size-weighted coverage, the large-repo flag, and a base-doc directory ratio that counts only code directories |
 | `test_structure_graph.py` | `lib/graph/structure_graph.py` - A1 footprint additivity, A2 SCCs and Q range, A3 front-door vs burrow, A4 cut-lines, graceful degradation |
 | `test_understanding_analysis.py` | `lib/keyhole/understanding_analysis.py` - B4 human anchor + intent source, velocity clock (D2), orphaned-understanding classification; both pure-logic (mocked) and git-integration variants |
 | `test_liveness_scan.py` | `lib/keyhole/liveness_scan.py` - dead-code tool output parsers, observability rungs, graceful degradation when tools are absent |
@@ -117,8 +117,8 @@ Every `test_*.py` file in this directory has a row below.
 | `test_dart_complexity.py` | `lib/complexity/dart_complexity.py` - the approximate Dart per-function scanner |
 | `test_decline_markers.py` | `lib/decline_markers.py` - decline-marker provenance and re-offer on a major bump |
 | `test_diff_reliability.py` | `lib/complexity/diff_reliability.py` - cross-run diff reliability: version stamps, tool-version changes, schema changes |
-| `test_doc_provenance.py` | `lib/doc_provenance.py` - provenance-aware staleness of generated docs |
-| `test_doc_claims.py` | `lib/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
+| `test_doc_provenance.py` | `lib/docs/doc_provenance.py` - provenance-aware staleness of generated docs |
+| `test_doc_claims.py` | `lib/docs/doc_claims.py` - claim checks across the doc set and cross-document contradictions |
 | `test_evidence_check.py` | `lib/evidence_check.py` - deterministic re-check of scorer evidence |
 | `test_scorer_evidence.py` | `lib/evidence_check.py` - the layer scorer's structured evidence contract |
 | `test_gap_actions.py` | `lib/gap_actions.py` - the deterministic Top 3 gap candidates |
@@ -138,7 +138,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_mutmut3.py` | `lib/test_pressure/mutmut3.py` - the mutmut 3 adapter and the mutmut version probe |
 | `test_mutmut3_layout.py` | `lib/test_pressure/mutmut3.py` - the pass across package layouts: grouping by package root, the package's own config against a generated one, files read outside the package, several packages in one focus set (mutmut faked) |
 | `test_mutmut3_runner.py` | `lib/test_pressure/mutmut3.py` (`_resolve_runner`) - the environment the pass runs in (package venv, uv scratch environment, PATH) and the reason naming the first import error or failing test when the baseline run fails |
-| `test_ownership_parser.py` | `lib/ownership_parser.py` - ownership-map parser |
+| `test_ownership_parser.py` | `lib/docs/ownership_parser.py` - ownership-map parser |
 | `test_promissory_markers.py` | `lib/keyhole/promissory_markers.py` - stale TODOs, suppressions and skips |
 | `test_promissory_markers_literals.py` | `lib/keyhole/promissory_markers.py` and `lib/keyhole/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
 | `test_raw_source.py` | `lib/complexity/raw_source.py` - raw-source subtree detection |
@@ -153,7 +153,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_import_credit.py` | `lib/testing/import_credit.py` - the import tier of the sibling-test probe |
 | `test_structure_drift.py` | `lib/keyhole/structure_drift.py` - Tier 0 path-existence structure-drift signal |
 | `test_test_focus.py` | `lib/testing/test_focus.py` - `compute_test_focus` and mutation scope |
-| `test_vault_queries.py` | `lib/vault_queries.py` - vault-native navigation query parser |
+| `test_vault_queries.py` | `lib/docs/vault_queries.py` - vault-native navigation query parser |
 | `test_wiki_state.py` | `lib/wiki_state.py` - first-flagged dates and their rekeying through the rename map |
 | `test_run_setup.py` | `lib/run_setup.py` + `lib/core_scans.py` + `lib/run_publish.py` - the setup-stage scan adapters and the publish step |
 | `test_scan_registry_degrade.py` | `lib/scan_registry.py` - degrade by construction: every scan-table entry without a `GATE_REASONS` reason is forced to raise and the run carries the unavailable marker downstream |
@@ -215,7 +215,7 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_delivery.py` | `skills/assess-pr/SKILL.md` + `skills/assess-findings/SKILL.md` (relative to the repo root) - the delivery text contract: on a read-only target the first upstream offer is issues linking the fork-hosted report, filed items are single-concern with repository-native "Done when" checks, and the report never narrates a scorer-draft correction |
 | `test_no_contributions_scan.py` | `skills/assess-pr/SKILL.md` (relative to the repo root) - extracts and runs the marked no-contributions bash block |
 | `test_uninstall.py` | `references/uninstall.md` + `scripts/assess_core.py` - run-context pointer, doc completeness, and the uninstall offer |
-| `test_scope.py` | `/assess <path>` monorepo scoping across `lib/doc_graph.py`, `lib/git_churn.py`, `lib/badge.py` and `lib/wiki_writer.py` |
+| `test_scope.py` | `/assess <path>` monorepo scoping across `lib/docs/doc_graph.py`, `lib/git_churn.py`, `lib/badge.py` and `lib/wiki_writer.py` |
 | `test_log_supersede.py` | `lib/wiki_writer.py` - `log.md` entry replacement and re-chain across core runs and finalize |
 | `test_hotspot_orphan_invariant.py` | `lib/wiki_writer.py` - executable invariant for the hotspot wiki |
 | `test_self_architecture.py` | `scripts/lib/` - the inward-only layering contract and the lib module docstring check |

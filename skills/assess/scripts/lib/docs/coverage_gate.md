@@ -124,6 +124,6 @@ JaCoCo `<maximum>` on a `MISSEDCOUNT` or `MISSEDRATIO` counter (and Gradle's `ma
 beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_ratio`:
 its `threshold_percent` is null, so it reads unknown, never 0, and any such bound
 (zero included) gates something.
-Stdlib plus `lib.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`,
+Stdlib plus `lib.docs.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`,
 `lib.testing.coverage_activation`, `lib.testing.coverage_ci` and `lib.testing.coverage_codecov`.
 Tests: `tests/test_coverage_gate.py`, `tests/test_coverage_codecov.py`.

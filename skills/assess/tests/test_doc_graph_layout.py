@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.doc_graph import build_doc_graph
-from lib.doc_graph_layout import classify_node, group_broken_links, radial_shells
+from lib.docs.doc_graph import build_doc_graph
+from lib.docs.doc_graph_layout import classify_node, group_broken_links, radial_shells
 
 
 def _write(root: Path, rel: str, text: str) -> None:

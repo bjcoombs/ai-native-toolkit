@@ -25,7 +25,11 @@ How a status counts toward Layer 6 level 1 (maintainer-approved, #882):
 
 Not gates: ``informational: true`` (the status never fails), ``off`` / ``false`` on the
 status, on ``project`` / ``patch`` or on ``coverage.status``. A YAML anchor on a status
-key (``default: &base``) is read as the block below it; a byte-order mark is skipped. The first file found is read,
+key is dropped (``default: &base`` reads the block below it, ``default: &b {target: 80%}``
+its flow map); an alias (``default: *base``) is a status whose target is not read, so it
+reads unknown, never absent. A byte-order mark is skipped. A flow map holding several
+statuses (``project: {a: {target: 80}, b: {target: 90}}``) reads as one, with its first
+target. The first file found is read,
 as Codecov does: ``codecov.yml``, ``.codecov.yml``, ``codecov.yaml``, ``.codecov.yaml``,
 at the repository root, then in ``.github/``, then in ``dev/`` (on a scoped run too: the
 config is the repository's). A config with no ``coverage.status`` section posts Codecov's
@@ -61,6 +65,7 @@ _KEY_RE = re.compile(r"^( *)(\"[^\"]*\"|'[^']*'|[^\s:#\"'{}\[\]-][^:#]*?)\s*:(?:
 _COMMENT_RE = re.compile(r"(?:^|\s)#.*$")
 _NUMBER_RE = re.compile(r"^(-?\d+(?:\.\d+)?)\s*%?$")
 _FLOW_TARGET_RE = re.compile(r"[{,\s]target\s*:\s*([^,}]+)")
+_ANCHOR_RE = re.compile(r"^&\S+\s*")
 _FLOW_INFO_RE = re.compile(r"[{,\s]informational\s*:\s*([^,}\s]+)")
 
 Excludes = tuple[set[str], list[str]]
@@ -102,12 +107,12 @@ def _entries(lines: Sequence[str]) -> list[tuple[int, tuple[str, ...], str]]:
         match = _KEY_RE.match(_COMMENT_RE.sub("", raw.expandtabs(2)).rstrip())
         if match is None:
             continue
-        value = (match.group(3) or "").strip()
+        value = _ANCHOR_RE.sub("", (match.group(3) or "").strip())
         indent = len(match.group(1))
         while stack and stack[-1][0] >= indent:
             stack.pop()
         stack.append((indent, match.group(2).strip("\"'")))
-        out.append((idx, tuple(key for _, key in stack), "" if value.startswith("&") else value))
+        out.append((idx, tuple(key for _, key in stack), value))
     return out
 
 
@@ -132,6 +137,8 @@ def _statuses(file: str, lines: Sequence[str]) -> list[Status]:
             continue
         if value.startswith("{"):
             found += _flow(file, line, kind, name, value)
+        elif value.startswith("*"):   # an alias: the status it names is not resolved
+            found.append(Status(file, line, kind, name, None))
         elif word in _ON or (len(path) == 4 and not value):
             found += _block(file, line, kind, name, entries[pos + 1:], path)
     if any(path == ("coverage", "status") and _scalar(v) in _OFF for _, path, v in entries):

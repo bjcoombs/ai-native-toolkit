@@ -97,7 +97,7 @@ from typing import Any, Literal, NamedTuple, TypedDict
 
 from lib.assess_config import _clean_rel, is_user_excluded, load_config
 from lib.command_index import repo_files
-from lib.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
+from lib.docs.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
 
 Ecosystem = Literal["cargo", "pnpm", "npm", "go", "uv", "gradle", "maven", "python"]
 Origin = Literal["manifest", "workspace_member", "config"]

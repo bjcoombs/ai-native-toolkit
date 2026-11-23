@@ -55,7 +55,7 @@ Codecov status targets in ``codecov.yml`` (#882, ``lib.testing.coverage_codecov`
 What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
 ``collectCoverage``), read per config directory, is ``lib.testing.coverage_activation``'s.
 
-Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule,
+Inward-only imports: stdlib plus ``lib.docs.doc_graph``'s path-exclusion rule,
 ``lib.assess_config.is_user_excluded``, ``lib.testing.coverage_activation``,
 ``lib.testing.coverage_ci`` and ``lib.testing.coverage_codecov``; never an orchestrator.
 
@@ -74,7 +74,7 @@ from lib.testing.coverage_activation import read_activation
 from lib.testing.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
 from lib.testing.coverage_codecov import codecov_reason, codecov_statuses, meets_percent
 from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
-from lib.doc_graph import is_excluded_path
+from lib.docs.doc_graph import is_excluded_path
 
 # The user's ``--exclude`` / config.toml excludes: (directory names, basename globs).
 Excludes = tuple[set[str], list[str]]

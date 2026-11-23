@@ -8,15 +8,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.doc_complexity_join import analyze_doc_complexity_join, doc_subjects
-from lib.doc_ownership import (
+from lib.docs.doc_complexity_join import analyze_doc_complexity_join, doc_subjects
+from lib.docs.doc_ownership import (
     SUBJECT_PATHS_CAP,
     SubjectSpec,
     bounded_subject_paths,
     rel_posix,
     resolve_subjects,
 )
-from lib.doc_staleness import analyze_doc_staleness
+from lib.docs.doc_staleness import analyze_doc_staleness
 
 
 def _na(root: str) -> SubjectSpec:
@@ -172,7 +172,7 @@ def test_scoped_run_keys_match_stats_keys(git_repo) -> None:
 def test_skill_md_is_a_base_doc_ranked_after_readme() -> None:
     """Issue #614: a skill's SKILL.md describes its skill directory, so it is a
     base doc; a README.md beside it still wins the directory."""
-    from lib.doc_ownership import BASE_DOC_PRECEDENCE, base_doc_for_dir, is_base_doc
+    from lib.docs.doc_ownership import BASE_DOC_PRECEDENCE, base_doc_for_dir, is_base_doc
 
     assert BASE_DOC_PRECEDENCE.index("skill.md") == BASE_DOC_PRECEDENCE.index("readme.md") + 1
     skill = Path("skills/foo/SKILL.md")

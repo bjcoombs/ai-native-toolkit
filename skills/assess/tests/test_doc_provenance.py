@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from lib.doc_provenance import (
+from lib.docs.doc_provenance import (
     parse_frontmatter_provenance,
     resolve_doc_sources,
     source_is_newer,

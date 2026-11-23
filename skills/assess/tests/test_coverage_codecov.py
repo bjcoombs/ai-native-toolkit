@@ -204,6 +204,28 @@ def test_an_anchored_status_reads_its_block(tmp_path: Path) -> None:
     assert _statuses(tmp_path, text) == [("project", "default", 85.0)]
 
 
+def test_an_anchor_before_a_flow_map_keeps_the_map(tmp_path: Path) -> None:
+    text = "coverage:\n  status:\n    project:\n      default: &b {target: 80%}\n"
+    assert _statuses(tmp_path, text) == [("project", "default", 80.0)]
+    assert detect_coverage_gate(tmp_path)["threshold_meets_minimum"] is True
+
+
+def test_an_anchor_on_the_kind_key_reads_the_statuses_below(tmp_path: Path) -> None:
+    text = "coverage:\n  status:\n    project: &p\n      default:\n        target: 70\n"
+    assert _statuses(tmp_path, text) == [("project", "default", 70.0)]
+
+
+@pytest.mark.parametrize("text", [
+    "coverage:\n  status:\n    project:\n      default: *d\n",
+    "coverage:\n  status:\n    project: *p\n",
+])
+def test_an_alias_reads_unknown_never_absent(tmp_path: Path, text: str) -> None:
+    assert _statuses(tmp_path, text) == [("project", "default", None)]
+    block = detect_coverage_gate(tmp_path)
+    assert block["threshold_meets_minimum"] is None
+    assert block["unmeasured_reason"] == CODECOV_UNMEASURED
+
+
 def test_a_byte_order_mark_is_skipped(tmp_path: Path) -> None:
     (tmp_path / "codecov.yml").write_bytes(b"\xef\xbb\xbf" + _project("80").encode())
     assert [s.target for s in codecov_statuses(tmp_path)] == [80.0]
