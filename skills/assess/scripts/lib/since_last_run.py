@@ -311,10 +311,16 @@ def _done_removals(repo_root: Path) -> list[PruningEntry]:
 
 
 def pruning_record(ctx: Mapping[str, Any]) -> list[PruningEntry] | None:
-    """The pruning ledger to store in ``prior-level.json`` beside the baseline (#1084)."""
+    """The pruning ledger to store in ``prior-level.json`` beside the baseline (#1084): this run's,
+    or, when the scan degraded, the stored one (``ctx["prior_level"]``), so credit is never lost
+    and a removal never credited twice."""
     block = ctx.get("since_last_run")
     found = block.get("pruning") if isinstance(block, Mapping) else None
-    return found if isinstance(found, list) else None
+    if isinstance(found, list):
+        return found
+    prior = ctx.get("prior_level")
+    kept = prior.get("pruning") if isinstance(prior, Mapping) else None
+    return kept if isinstance(kept, list) else None
 
 
 def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: Any = None,
@@ -322,6 +328,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     """The ``since_last_run`` block for this run's ``level`` block (see the module docstring)."""
     steps = default_model().get("steps", [])
     first, unknown, prev, inherited = _baseline(assess_dir, superseded)
+    held_before: list[str] | None = None  # the gates held at the previous run, for the ledger
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")
         gained, lost = inherited.get("gates_gained"), inherited.get("gates_lost")
@@ -329,6 +336,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         previous_commit, run_id = prev.get("head_sha"), prev.get("run_id")
         now = _held(steps, level)
         then = [g for g in prev["held_gates"] if isinstance(g, str)]
+        held_before = then
         gained, lost = ((None, None) if now is None
                         else ([g for g in now if g not in then], [g for g in then if g not in now]))
     else:
@@ -336,6 +344,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         previous_commit = commit.get("head_sha") if isinstance(commit, Mapping) else None
         run_id = (prev or {}).get("run_id")
         gained, lost = gate_changes(steps, level, (prev or {}).get("level")) if prev else (None, None)
+        held_before = _held(steps, (prev or {}).get("level"))
     previous_commit = previous_commit if isinstance(previous_commit, str) and previous_commit else None
     closed: list[ClosedAction] | None = None
     unresolved: int | None = None
@@ -364,7 +373,7 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     stored = load_baseline(assess_dir)
     ledger_commit = stored["head_sha"] if stored is not None else previous_commit
     pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
-                                    lost if isinstance(lost, list) else None,
+                                    held_now=_held(steps, level), held_before=held_before, head_sha=head_sha,
                                     new_commit=head_sha is not None and head_sha != ledger_commit,
                                     repo_root=repo_root)
     block: SinceLastRun = {

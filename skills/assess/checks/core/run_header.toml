@@ -89,6 +89,8 @@ revision = 1
   "prior_level.baseline.held_gates" = "token"
   "prior_level.pruning.path" = "path"
   "prior_level.pruning.completed_sha" = "token"
+  "prior_level.pruning.gates" = "token"
+  "prior_level.pruning.credited_at" = "token"
 
 [[entries]]
 id = "core:stats_summary.loc_by_class.source.p95"

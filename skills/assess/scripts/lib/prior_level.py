@@ -70,6 +70,8 @@ class PruningEntry(TypedDict):
     runs_held: int  # runs on new commits with the file unflagged and every gate held, in a row
     credited: bool  # credited once runs_held reached HOLD_RUNS
     saved: int | None  # the measured drop in always-on lines, set when credited
+    gates: list[str] | None  # the Step gates the removal must keep, set when first seen
+    credited_at: str | None  # the commit the credit was given at
 
 
 class PriorLevel(TypedDict):
@@ -122,6 +124,8 @@ def _valid_pruning(value: Any) -> bool:
         isinstance(e, Mapping) and isinstance(e.get("path"), str) and isinstance(e.get("completed_sha"), str)
         and type(e.get("cost_before")) is int and type(e.get("runs_held")) is int and e["runs_held"] >= 0
         and isinstance(e.get("credited"), bool) and (e.get("saved") is None or type(e.get("saved")) is int)
+        and (e.get("gates") is None or (isinstance(e.get("gates"), list) and all(isinstance(g, str) for g in e["gates"])))
+        and (e.get("credited_at") is None or isinstance(e.get("credited_at"), str))
         for e in value)
 
 

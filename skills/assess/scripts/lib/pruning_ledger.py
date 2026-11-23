@@ -5,18 +5,20 @@ instruction text the placement scan flags), with its measured ``cost`` (``{metri
 value}``) and a ``completed_sha`` on HEAD's history. ``update_ledger`` keeps one
 ``PruningEntry`` per removal (keyed by path and commit) and counts the runs it has held:
 
+- an entry records the Step gates it must keep when it is first seen (``gates``: those held at
+  the previous run, before the removal landed, else those held now);
 - a run on a **new** measured commit adds one hold when the file is no longer flagged (the
   scan's own flag, ``instruction_placement`` ``flagged``: a file can clear it by size or by
-  share) **and** no Step gate was lost since the previous run (``gates_lost == []``; a gate
-  never held cannot be lost, so this checks for losses, not that every gate holds);
-- either failing resets the count to 0, and an unknown (placement unavailable, a file the
-  scan does not list while it is still on disk, gate changes not known) leaves it as it was,
-  never counted;
+  share) **and** every one of the entry's ``gates`` is still held, so a gate the removal broke
+  for good never stops counting against it;
+- either failing resets the count to 0, even when the other reads unknown; an unknown alone
+  (placement unavailable, a file the scan does not list while it is still on disk, the gates
+  not known) leaves it as it was, never counted;
 - a re-run on the commit the previous run measured adds nothing, so superseding a run never
   counts twice;
 - at ``HOLD_RUNS`` holds the entry is credited once, with ``saved`` the measured drop: the
   always-on lines at the proposal less the lines now (all of them when the file is gone
-  from disk).
+  from disk), and ``credited_at``, the commit; a re-run on that commit shows the credit again.
 
 Credit is advice and record only: the number of practices is never scored, and a credited
 removal moves no Step. The entries are stored in the committed ``prior-level.json`` beside
@@ -46,7 +48,7 @@ def removal(entry: Mapping[str, Any]) -> PruningEntry | None:
             or type(cost.get("value")) is not int or not isinstance(entry.get("completed_sha"), str)):
         return None
     return {"path": cost["path"], "completed_sha": entry["completed_sha"], "cost_before": cost["value"],
-            "runs_held": 0, "credited": False, "saved": None}
+            "runs_held": 0, "credited": False, "saved": None, "gates": None, "credited_at": None}
 
 
 def _placement_now(placement: Any, path: str, repo_root: Path) -> tuple[bool, int] | None:
@@ -62,24 +64,36 @@ def _placement_now(placement: Any, path: str, repo_root: Path) -> tuple[bool, in
     return None if (repo_root / path).exists() else (False, 0)
 
 
-def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[PruningEntry], placement: Any,
-                  gates_lost: list[str] | None, new_commit: bool,
-                  repo_root: Path) -> tuple[list[PruningEntry], list[PruningEntry]]:
-    """``(every entry, the entries credited by this run)`` (see the module docstring)."""
+def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[PruningEntry], placement: Any, *,
+                  held_now: list[str] | None, held_before: list[str] | None, head_sha: str | None,
+                  new_commit: bool, repo_root: Path) -> tuple[list[PruningEntry], list[PruningEntry]]:
+    """``(every entry, the entries credited at this commit)`` (see the module docstring).
+
+    ``held_now`` and ``held_before`` are the Step gates held now and at the previous run (None
+    when unknown). An entry records the gates it must keep when it is first seen: the gates
+    held before the removal landed, else those held now."""
     entries = {(e["path"], e["completed_sha"]): cast(PruningEntry, dict(e)) for e in prior}
     for e in done_removals:
         entries.setdefault((e["path"], e["completed_sha"]), cast(PruningEntry, dict(e)))
-    credited: list[PruningEntry] = []
     for e in entries.values():
-        now = _placement_now(placement, e["path"], repo_root)
-        if e["credited"] or not new_commit or now is None or gates_lost is None:
+        if e["credited"] or not new_commit:
             continue
-        flagged, lines = now
-        e["runs_held"] = e["runs_held"] + 1 if not flagged and not gates_lost else 0
+        if e["gates"] is None:
+            e["gates"] = held_before if held_before is not None else held_now
+        now = _placement_now(placement, e["path"], repo_root)
+        flagged = now is not None and now[0]
+        gate_lost = held_now is not None and e["gates"] is not None and any(g not in held_now for g in e["gates"])
+        if flagged or gate_lost:  # a known failure resets, even beside an unknown
+            e["runs_held"] = 0
+            continue
+        if now is None or held_now is None or e["gates"] is None:
+            continue  # unknown: neither counted nor reset
+        e["runs_held"] += 1
         if e["runs_held"] >= HOLD_RUNS:
-            e["credited"], e["saved"] = True, max(e["cost_before"] - lines, 0)
-            credited.append(e)
-    return [entries[k] for k in sorted(entries)], credited
+            e["credited"], e["saved"], e["credited_at"] = True, max(e["cost_before"] - now[1], 0), head_sha
+    ordered = [entries[k] for k in sorted(entries)]
+    # credited at this commit: a re-run on the same commit shows the same credit again
+    return ordered, [e for e in ordered if e["credited"] and head_sha and e["credited_at"] == head_sha]
 
 
 def ledger_lines(entries: Sequence[PruningEntry], credited: Sequence[PruningEntry]) -> list[str]:
