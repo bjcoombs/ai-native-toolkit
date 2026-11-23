@@ -1,4 +1,4 @@
-"""Step targets: the targets file, target_hit and progress (lib/fleet_targets.py, lib/fleet_step_targets.py, #945)."""
+"""Step targets: the targets file, target_hit and progress (lib/fleet/fleet_targets.py, lib/fleet/fleet_step_targets.py, #945)."""
 from __future__ import annotations
 
 import json
@@ -9,12 +9,12 @@ import jsonschema
 import pytest
 
 from fleet_data_fixture import LEVELS
-from lib import fleet_achievements as fa
-from lib.fleet_achievements_schema import render
-from lib.fleet_credit import credit_section
-from lib.fleet_data import Privacy
-from lib.fleet_targets import TargetSpec, TargetsError, check_units, parse_targets, resolve
-from lib.fleet_units import build_trees, empty_map
+import lib.fleet.fleet_achievements as fa
+from lib.fleet.fleet_achievements_schema import render
+from lib.fleet.fleet_credit import credit_section
+from lib.fleet.fleet_data import Privacy
+from lib.fleet.fleet_targets import TargetSpec, TargetsError, check_units, parse_targets, resolve
+from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
 from test_fleet_achievements import Spec, _data
 

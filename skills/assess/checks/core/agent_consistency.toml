@@ -12,6 +12,7 @@ publishes = ["agent_consistency"]
 reads = ["repo_root", "excludes"]
 stage = "post_offers"
 headless = { agent_consistency = "registered" }
+whys.agent_consistency = "It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source."
 shapes = [
   { path = "agent_consistency", type = "lib.agent_consistency:AgentConsistencyBlock" },
 ]
@@ -58,6 +59,7 @@ id = "core.cond.agent-consistency.1.conflicts"
 kind = "condition"
 title = "Every agent system names the same checks"
 key = "agent-consistency.1:agent_consistency.conflicts"
+why = "When agent systems are told different check commands or thresholds, one agent's change passes checks another agent was told to run differently."
 fix = "Make the instruction files agree: name the same test and lint commands and the same thresholds in each, or replace each tool's file with the pointer line the report gives."
 
 [[entries]]
@@ -65,4 +67,5 @@ id = "core.cond.agent-consistency.2.unlinked"
 kind = "condition"
 title = "Every agent system reads one canonical file"
 key = "agent-consistency.2:agent_consistency.unlinked"
+why = "One source of instructions keeps every agent's picture of the repository the same, and keeps it maintained in one place."
 fix = "Keep AGENTS.md as the one source and make each other tool's file a thin pointer or a symlink to it, using the exact line the report gives for that tool."

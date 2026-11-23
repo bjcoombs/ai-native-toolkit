@@ -1,5 +1,5 @@
-"""Tests for the fleet leadership heat map (issue #570): lib/fleet_view.py,
-lib/fleet_heatmap.py and skills/fleet/scripts/heatmap.py.
+"""Tests for the fleet leadership heat map (issue #570): lib/fleet/fleet_view.py,
+lib/fleet/fleet_heatmap.py and skills/fleet/scripts/heatmap.py.
 
 The golden SVGs under ``tests/fixtures/fleet_heatmap/`` lock the whole render;
 the semantic tests check what a byte comparison cannot explain on failure.
@@ -17,12 +17,12 @@ from types import ModuleType
 import jsonschema
 import pytest
 
-from lib import fleet_heatmap as fh
-from lib import fleet_svg
-from lib import fleet_view as fv
-from lib.fleet import FLEET_ROW_VERSION
-from lib.fleet_group_schema import build_schema
-from lib.fleet_groups import GroupRow
+import lib.fleet.fleet_heatmap as fh
+import lib.fleet.fleet_svg as fleet_svg
+import lib.fleet.fleet_view as fv
+from lib.fleet.runner import FLEET_ROW_VERSION
+from lib.fleet.fleet_group_schema import build_schema
+from lib.fleet.fleet_groups import GroupRow
 from lib.levels import load_levels
 from fleet_heatmap_fixture import build
 from svg_cascade import overridden_text_attributes

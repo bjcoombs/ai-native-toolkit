@@ -279,7 +279,7 @@ def test_assess_signals_reads_the_ghsync_root_flag(tmp_path: Path) -> None:
 
 
 def test_fleet_passes_its_root_unless_delete_after(tmp_path: Path) -> None:
-    from lib.fleet import ScanOptions, signals_command
+    from lib.fleet.runner import ScanOptions, signals_command
     command = signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions(ghsync_root=tmp_path))
     assert command[command.index("--ghsync-root") + 1] == str(tmp_path)
     assert "--ghsync-root" not in signals_command(tmp_path / "c", tmp_path / "o.json", ScanOptions())

@@ -1,18 +1,18 @@
-"""Tests for the slope chart and the layer bars (issue #675): lib/fleet_slope.py and
-lib/fleet_layer_bars.py. The goldens under ``tests/fixtures/fleet_diagrams/`` (checked in
+"""Tests for the slope chart and the layer bars (issue #675): lib/fleet/fleet_slope.py and
+lib/fleet/fleet_layer_bars.py. The goldens under ``tests/fixtures/fleet_diagrams/`` (checked in
 ``test_fleet_diagrams.py``) lock the whole render; these say what a byte comparison cannot.
 """
 from __future__ import annotations
 
 import re
 
-from lib import fleet_diagrams as fd
-from lib import fleet_layer_bars as flb
-from lib import fleet_slope as fs
-from lib import fleet_svg as svg
-from lib.fleet import FleetRow
-from lib.fleet_compare import Comparison, GroupChange, LevelState, RowMove, not_comparable
-from lib.fleet_view import read_repos
+import lib.fleet.fleet_diagrams as fd
+import lib.fleet.fleet_layer_bars as flb
+import lib.fleet.fleet_slope as fs
+import lib.fleet.fleet_svg as svg
+from lib.fleet.runner import FleetRow
+from lib.fleet.fleet_compare import Comparison, GroupChange, LevelState, RowMove, not_comparable
+from lib.fleet.fleet_view import read_repos
 from lib.levels import MaturityModel, load_levels
 from fleet_diagrams_fixture import FIXTURES, WINDOW, comparison
 

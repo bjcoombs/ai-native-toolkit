@@ -17,7 +17,8 @@
   ``source`` is a condition id (a criterion key for ``eq_signal``); ``target`` is a condition
   id (a signal path for ``eq_signal``).
 
-Each entry is an object, so a later field (the #939 tag ``why``) is an added key.
+Each tag carries its ``why`` and ``why_source`` from the check manifest's root ``tags`` table
+(``lib.manifest_whys.tag_why``, #939; ``""`` from a version 1 manifest).
 """
 from __future__ import annotations
 
@@ -37,6 +38,8 @@ class CatalogTag(TypedDict):
     conditions: list[str]  # every condition carrying the tag, in model order
     listed: list[str]  # those whose first tag this is: their table rows sit in this tag's section
     shared: list[str]  # those carrying another tag as well
+    why: str  # what the tag keeps honest for an agent (#939)
+    why_source: str
 
 
 class TagPair(TypedDict):
@@ -77,14 +80,18 @@ def tag_title(tag: str) -> str:
     return TRUTH_TAG_TITLES.get(tag, tag)
 
 
-def tags(conditions: Sequence[Tagged]) -> list[CatalogTag]:
-    """One entry per truth tag, each condition listed under its first tag."""
+def tags(conditions: Sequence[Tagged],
+         whys: Mapping[str, tuple[str, str]] | None = None) -> list[CatalogTag]:
+    """One entry per truth tag, each condition listed under its first tag; ``whys`` maps a tag
+    to its ``(why, why_source)``."""
     out: list[CatalogTag] = []
     for tag in TRUTH_TAGS:
         having = [c for c in conditions if tag in c["truth"]]
         out.append(CatalogTag(id=tag, title=tag_title(tag), conditions=[c["id"] for c in having],
                               listed=[c["id"] for c in having if c["truth"][0] == tag],
-                              shared=[c["id"] for c in having if len(c["truth"]) > 1]))
+                              shared=[c["id"] for c in having if len(c["truth"]) > 1],
+                              why=(whys or {}).get(tag, ("", ""))[0],
+                              why_source=(whys or {}).get(tag, ("", ""))[1]))
     return out
 
 

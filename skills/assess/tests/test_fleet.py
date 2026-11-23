@@ -1,4 +1,4 @@
-"""Tests for the fleet runner core, lib/fleet.py (issue #567)."""
+"""Tests for the fleet runner core, lib/fleet/runner.py (issue #567)."""
 from __future__ import annotations
 
 import json
@@ -10,9 +10,9 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from lib import fleet
-from lib.fleet import ScanOptions, Target
-from lib.fleet_schema import SCHEMA_PATH, build_schema, render
+import lib.fleet.runner as fleet
+from lib.fleet.runner import ScanOptions, Target
+from lib.fleet.fleet_schema import SCHEMA_PATH, build_schema, render
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -538,7 +538,7 @@ def test_out_beside_a_plain_checkout_named_main(tmp_path):
 
 def test_schema_file_matches_the_type():
     assert SCHEMA_PATH.read_text(encoding="utf-8") == render(), (
-        "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet_schema.py")
+        "regenerate: cd skills/assess && uv run --locked python scripts/lib/fleet/fleet_schema.py")
 
 
 def test_schema_rejects_an_inconsistent_row(tmp_path):

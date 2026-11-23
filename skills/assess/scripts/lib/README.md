@@ -87,7 +87,7 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   and README follow by hand in the same PR. `skills/assess/tests/test_ci_workflow.py`
   fails the build when the template's pin drifts from `.github/workflows/assess-gate.yml`
   or the README.
-- **`fleet_rescore.py` <-> `fleet_data.py`.** `rescore` rebuilds a stored run's cells and
+- **`fleet/fleet_rescore.py` <-> `fleet/fleet_data.py`.** `rescore` rebuilds a stored run's cells and
   roll-ups with `fleet_data`'s own `repo_cells`, `row_roll_up` and `step_fields` (with
   `fleet_data_steps.step_roll_up`), so a
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
@@ -98,6 +98,68 @@ None of these is a refactor task. They are recorded here so the seam is owned: i
 ever cut, this note is where the intended boundary is written down.
 
 ---
+
+## Check manifest whys (#939)
+
+Every check manifest entry says why it matters to an agent. The loader is
+`check_manifest.load_manifest`; the why rules and accessors are in `manifest_whys.py`.
+
+| Entry | Where its why lives | Accessor |
+|---|---|---|
+| condition | `why` (and optional `why_source`) on the condition entry in its fragment, `checks/core/<scan key>.toml` | `manifest_whys.why_of`, `condition_whys` |
+| finding | `why` (and optional `why_source`) on the finding entry in its fragment | `manifest_whys.why_of` |
+| scan | the `whys` table of the collector that publishes it, keyed by scan name (the keys of its `headless` table); sources in `why_sources` | `manifest_whys.scan_why`, `scan_whys` |
+| truth tag | `[tags.<id>] why` in the root manifest, `checks/core.toml` (not a fragment) | `manifest_whys.tag_why` |
+| signal | none: a signal entry with `why` is rejected, and the catalog shows the why of each condition it feeds | - |
+
+**Version rule.** `manifest_version = 1` loads with no whys (every accessor returns `""`), and a
+version 1 manifest carrying any why, source or `tags` table is rejected. `manifest_version = 2`
+(the core) requires every why above, whatever the manifest's `owner`; a missing one is a named
+error such as `core/ci_checks.toml entries[4] (core.cond.layer-5-ci.1.enforced_check_runs).why:
+required`. A why is 1 to 300 characters and passes `lib.vocabulary` (no banned word, no layer
+number). A scan's why may be exactly `exempt: plumbing` only when no row or finding reads the
+scan, directly or through another collector's `reads` (a collector's read of its own block does
+not count); the catalog renders it "Run plumbing". A custom manifest that moves to version 2
+declares the eight truth-tag whys too, under its own root `tags` table; one that stays at
+version 1 needs none.
+
+**Where whys are written.** `measures.json` carries `why` and `why_source` on criteria, scans,
+findings and tags, and `docs/what-we-measure.md` renders them (`catalog_md`). In the run context,
+each `level.conditions[]` entry carries `why`: its criteria's whys in criterion order, each once,
+joined by one space (`level_tally.condition_why`), absent for a criterion with no manifest entry;
+`/fleet` writes the same in `level.json`. `headline.next_why` holds, for each blocking gate, the
+`why` of every condition of the gate's row up to its level that is not met, joined the same way
+(`""` with no gate blocker). Each `gap_actions` entry carries the `why` of the scan its `signal`
+names. All are static manifest text; counts-only output drops them, since a reader rejoins
+them from `measures.json` by id.
+
+---
+
+## Modules by subpackage
+
+Issue #917 moves `lib/` modules into subpackages, one group per pull request. A package
+`__init__.py` holds only its docstring, so importing a package imports none of its modules;
+`tests/test_self_architecture.py` enforces it. Two exceptions: `fleet/__init__.py` also holds
+the lazy runner forward until 4.0.0, and `test_pressure/__init__.py`, which predates the rule,
+is a facade that re-exports its package's names. The shared core (`run_context_types`,
+`assess_config`, `artifact_schema`, `tool_lookup`, `vocabulary`, `agent_identity` and
+`fleet_config`) stays at the root of `lib/`, and so does every module whose group has not
+moved yet. A moved module keeps its filename.
+
+Each old path `lib/<stem>.py` is a shim until 4.0.0: it sets `sys.modules[__name__]` to the
+moved module, so the old and new dotted paths name one module object, and a module that runs
+as a script gets a `runpy` `__main__` branch. A shim cannot be run by path, because a script
+run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the moved file
+(`python scripts/lib/<pkg>/<stem>.py`) instead. New code imports the new path.
+
+- **`fleet/`**: the `/fleet` runner, roll-ups, run history, published fleet schemas and
+  diagrams. `lib/fleet.py` became `fleet/runner.py`, because the package now holds that
+  name; until 4.0.0 the package `__init__.py` forwards each runner name (`lib.fleet.FleetRow`)
+  to `lib.fleet.runner` on first use, without importing it eagerly. `fleet_config` and
+  `fleet_activity` keep their prefix but are not fleet modules: `fleet_config` is shared core,
+  and `fleet_activity` waits for the `history` group. Files: `__init__.py`, `fleet_achievements.py`, `fleet_achievements_runs.py`, `fleet_achievements_schema.py`, `fleet_agent_building.py`, `fleet_cleanup.py`, `fleet_compare.py`, `fleet_coverage.py`, `fleet_credit.py`, `fleet_data.py`, `fleet_data_schema.py`, `fleet_data_steps.py`, `fleet_diagrams.py`, `fleet_doc_freshness.py`, `fleet_group_schema.py`, `fleet_groups.py`, `fleet_hashed.py`, `fleet_heatmap.py`, `fleet_history.py`, `fleet_labels.py`, `fleet_layer_bars.py`, `fleet_legacy.py`, `fleet_level.py`, `fleet_level_schema.py`, `fleet_maturity.py`, `fleet_next_steps.py`, `fleet_opportunities.py`, `fleet_opportunities_section.py`, `fleet_platform.py`, `fleet_publish.py`, `fleet_quadrant.py`, `fleet_repo_facts.py`, `fleet_rescore.py`, `fleet_scanner_diff.py`, `fleet_schema.py`, `fleet_slope.py`, `fleet_stamp.py`, `fleet_step_targets.py`, `fleet_svg.py`, `fleet_targets.py`, `fleet_tooling_map.py`, `fleet_trends.py`, `fleet_units.py`, `fleet_view.py`, `runner.py`.
+- **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
+  `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 
 ## Module reference
 
@@ -114,7 +176,7 @@ round-trip), and a repo-relative path is rendered with `.as_posix()`, never `str
 The fleet run files (`repos.jsonl`, `groups.jsonl`, `run.json`, `compare.json`, `labels.jsonl`,
 `doc_freshness.jsonl`, `agent_clusters.json`, `achievements.json`, `fleet-data.json`, the
 generated fleet schemas and the next-steps pages) are written with `newline="\n"`, so Windows and
-Linux produce the same bytes; the same test checks that every writer in `lib/fleet*.py` and
+Linux produce the same bytes; the same test checks that every writer in `lib/fleet/`, the `lib/fleet_*.py` modules and
 `skills/fleet/scripts/` names `newline`. `promissory_markers` asks `rg` for `--path-separator /`
 so its paths are POSIX on Windows too, and `change_coupling` keys and sorts co-change pairs
 as POSIX strings, so pair order is the same on every OS (#713). That is the canonical order

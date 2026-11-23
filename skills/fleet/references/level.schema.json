@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/level.schema.json",
   "title": "fleet level results",
-  "description": "level.json written by skills/fleet/scripts/fleet.py --levels: each scanned repository's conditions with their state and grade, the verified tally (counted conditions met, of those measured, and the conditions not measured with a reason) and its autonomy Step with what blocks the next, and under commits the HEAD sha it measured and whether the checkout was dirty. $defs.level_result is also the /assess run context's level block. Generated from lib/fleet_level.py and lib/level_result_types.py by lib/fleet_level_schema.py.",
+  "description": "level.json written by skills/fleet/scripts/fleet.py --levels: each scanned repository's conditions with their state and grade, the verified tally (counted conditions met, of those measured, and the conditions not measured with a reason) and its autonomy Step with what blocks the next, and under commits the HEAD sha it measured and whether the checkout was dirty. $defs.level_result is also the /assess run context's level block. Generated from lib/fleet/fleet_level.py and lib/level_result_types.py by lib/fleet/fleet_level_schema.py.",
   "type": "object",
   "properties": {
     "level_result_version": {
@@ -183,6 +183,9 @@
                   "hazard"
                 ],
                 "description": "present only on a hazard condition, which is never counted (lib/levels_fields.py)"
+              },
+              "why": {
+                "type": "string"
               }
             },
             "required": [

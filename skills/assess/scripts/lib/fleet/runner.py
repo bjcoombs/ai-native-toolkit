@@ -25,11 +25,11 @@ last segment.
 
 Determinism: rows are sorted by ``repo`` and serialised with sorted keys, and
 carry no absolute path, duration, stderr text or per-run stamp field (the run
-stamp is ``run.json``, lib/fleet_stamp.py). An ``ok`` row's ``active`` says
+stamp is ``run.json``, lib/fleet/fleet_stamp.py). An ``ok`` row's ``active`` says
 whether its ``HEAD`` was committed inside the window (lib/fleet_activity.py). Two runs over unchanged checkouts on the same day write
 byte-identical files. ``--hash-paths`` without a salt draws one salt per run,
 so such a run joins within itself but is not byte-identical across runs. Under a
-salt the output files name each repository by its hashed id (``lib/fleet_hashed.py``).
+salt the output files name each repository by its hashed id (``lib/fleet/fleet_hashed.py``).
 
 The committed tree (#907): an ``ok`` row records the ``HEAD`` it measured
 (``head_sha``) and whether tracked files differed from it (``dirty``, the
@@ -130,7 +130,7 @@ from lib.signals import offline_scans
 # them reads both as None through ``.get``.
 FLEET_ROW_VERSION = 2
 REPOS_FILE = "repos.jsonl"
-SIGNALS_SCRIPT = Path(__file__).resolve().parents[1] / "assess_signals.py"
+SIGNALS_SCRIPT = Path(__file__).resolve().parents[2] / "assess_signals.py"
 DEFAULT_TIMEOUT = 600
 LOGS_DIR = "logs"
 STDERR_TAIL_CHARS = 4000
@@ -212,14 +212,14 @@ class ScanOptions:
     log_dir: Path | None = None  # set: a scan_exit_* row's stderr tail lands in <log_dir>/<repo>.stderr
     active_since: date | None = None  # set: an ok row's ``active`` is HEAD committed on or after it
     fleet_config: Path | None = None  # absolute: scans run with the scratch directory as cwd
-    platform: bool = False  # set: assess_signals --platform (the platform pass, lib/fleet_platform.py)
+    platform: bool = False  # set: assess_signals --platform (the platform pass, lib/fleet/fleet_platform.py)
     cache_dir: Path | None = None  # set: the scan's gh/glab response cache (lib/platform_cli.py)
     ghsync_root: Path | None = None  # set: assess_signals --ghsync-root (GitLab includes, #766)
 
 
 ScanFn = Callable[[Target, Path, ScanOptions], FleetRow]
 # Called in the worker with each target's row as soon as it is in hand
-# (``--delete-after``, lib/fleet_cleanup.py). It must not raise.
+# (``--delete-after``, lib/fleet/fleet_cleanup.py). It must not raise.
 AfterFn = Callable[[Target, FleetRow], None]
 
 

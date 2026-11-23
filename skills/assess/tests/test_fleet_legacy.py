@@ -1,4 +1,4 @@
-"""Reading fleet output written before the 2.0.0 maturity-model rename, lib/fleet_legacy.py (#670)."""
+"""Reading fleet output written before the 2.0.0 maturity-model rename, lib/fleet/fleet_legacy.py (#670)."""
 from __future__ import annotations
 
 import json
@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from lib import fleet_trends as ft
-from lib.fleet_compare import comparability, load_run
-from lib.fleet_history import entry_conflict, entry_repos, latest_matching
-from lib.fleet_legacy import RENAMED_KEYS, upgrade
-from lib.fleet_stamp import FleetStamp
-from lib.fleet_view import load_groups
+import lib.fleet.fleet_trends as ft
+from lib.fleet.fleet_compare import comparability, load_run
+from lib.fleet.fleet_history import entry_conflict, entry_repos, latest_matching
+from lib.fleet.fleet_legacy import RENAMED_KEYS, upgrade
+from lib.fleet.fleet_stamp import FleetStamp
+from lib.fleet.fleet_view import load_groups
 from lib.levels import load_levels
 from test_fleet import make_repo
 from test_fleet_cli import fleet_cli

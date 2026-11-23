@@ -11,11 +11,11 @@ from types import ModuleType
 import jsonschema
 import pytest
 
-from lib import fleet
+import lib.fleet.runner as fleet
 from lib.counts_only import hash_value, is_hashed
-from lib.fleet import ScanOptions, Target
-from lib.fleet_data import Privacy
-from lib.fleet_hashed import public_freshness, public_groups, public_ids, public_rows
+from lib.fleet.runner import ScanOptions, Target
+from lib.fleet.fleet_data import Privacy
+from lib.fleet.fleet_hashed import public_freshness, public_groups, public_ids, public_rows
 from test_fleet import make_checkout, make_repo
 from test_fleet_cli import fleet_cli
 

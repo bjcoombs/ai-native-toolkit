@@ -20,10 +20,10 @@ import pytest
 import lib.level_tally as lt
 from lib import level_signals
 from lib.counts_only import counts_only
-from lib.fleet import STATUS_FAILED, STATUS_OK
+from lib.fleet.runner import STATUS_FAILED, STATUS_OK
 from lib.merged_sample import UNSUPPORTED_HOST_REASON
-from lib.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
-from lib.fleet_level_schema import SCHEMA_PATH, build_schema, render
+from lib.fleet.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
+from lib.fleet.fleet_level_schema import SCHEMA_PATH, build_schema, render
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
 from lib.levels import LevelsError, MaturityModel, evaluate_row, parse_levels
 from test_fleet_cli import fleet_cli
@@ -355,7 +355,11 @@ def test_counts_only_keeps_every_field_of_the_level_block():
     level = lt.level_result(model, {"doc_staleness": {"available": False, "reason": "shallow: x"},
                                     "test_pressure": {"mutation_run": False}})
     assert level["not_measured"] and level["next_step"]
-    assert counts_only({"level": level})["level"] == level
+    # A condition's why (#939) is the toolkit's own text, rejoined from measures.json by id,
+    # so counts-only output carries the ids and drops it; every other field survives.
+    assert all(c.get("why") for c in level["conditions"])
+    bare = {**level, "conditions": [{k: v for k, v in c.items() if k != "why"} for c in level["conditions"]]}
+    assert counts_only({"level": level})["level"] == bare
 
 
 def test_fleet_levels_skip_a_failed_row_and_a_run_without_a_model_removes_the_file(tmp_path):
@@ -497,3 +501,21 @@ def test_layer_three_suppressions_earn_no_tally_credit_without_a_linter(lint_run
     assert state != "met" and reason == "requires:layer-3-linters.1"
     linted = {**signals, "ci_checks": {"lint_runs": True}}
     assert _state(lt.level_result(load_default_levels(), linted), "layer-3-linters.2") == ("met", None)
+
+
+def test_each_condition_carries_the_whys_of_its_criteria():
+    """#939: a condition's why joins its criteria's manifest whys, in order, each once."""
+    from lib.check_manifest import condition_key, core_manifest
+    from lib.manifest_whys import condition_whys
+
+    model = load_default_levels()
+    whys = condition_whys(core_manifest())
+    level = lt.level_result(model, {})
+    by_id = {c["id"]: c for c in level["conditions"]}
+    for row in model["rows"]:
+        for lv in row["levels"]:
+            parts = [whys[condition_key(row["id"], lv["level"], c["signal"])] for c in lv["criteria"]]
+            assert by_id[f"{row['id']}.{lv['level']}"]["why"] == " ".join(dict.fromkeys(parts))
+    assert len(by_id["layer-0-instructions.2"]["why"].split(". ")) > 3  # three criteria
+    custom = {**model, "steps": [], "rows": [{**model["rows"][0], "id": "own-row"}]}
+    assert all("why" not in c for c in lt.level_result(custom, {})["conditions"])

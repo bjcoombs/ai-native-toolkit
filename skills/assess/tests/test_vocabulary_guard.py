@@ -124,7 +124,7 @@ def test_the_readme_documents_exactly_the_banned_list() -> None:
 
 def test_every_next_step_and_hint_the_shipped_model_can_render_is_supportive() -> None:
     """Every criterion's guidance and every signal's hint, not only the levels a fixture reaches."""
-    from lib.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
+    from lib.fleet.fleet_next_steps import FULL_RUN_HINT, PLATFORM_HINT
     from lib.headline import reason_word
     from lib.level_signals import load_default_levels
     from lib.next_step_guidance import _LAYER5_PARTS, guidance, measure_hint
@@ -182,3 +182,19 @@ def test_opening_lines_pairs_each_heading_with_its_first_line() -> None:
     page = "# T\n\nIn place: a.\n\n## A\n\n### B\n\nx\n## C\n"
     assert opening_lines(page) == [("# T", "In place: a."), ("## A", ""), ("### B", "x"), ("## C", "")]
     assert opening_lines(page, "##") == [("## A", ""), ("## C", "")]
+
+
+def test_every_manifest_why_is_supportive_and_names_no_layer_number() -> None:
+    """#939: every why in the check manifest, as measures.json carries it, reads supportively."""
+    import json
+
+    from lib.manifest_whys import PLUMBING
+    measures = json.loads((Path(__file__).resolve().parents[1] / "references" / "measures.json")
+                          .read_text(encoding="utf-8"))
+    whys = [c["why"] for r in measures["rows"] for lv in r["levels"] for c in lv["criteria"]]
+    whys += [e["why"] for key in ("scans", "findings", "tags") for e in measures[key]]
+    whys = [why for why in whys if why != PLUMBING]
+    assert len(whys) >= 83 and all(whys)
+    for why in whys:
+        assert not banned_hits(why), why
+        assert not re.search(r"layer[ -]?[0-9]", prose(why), re.I), why

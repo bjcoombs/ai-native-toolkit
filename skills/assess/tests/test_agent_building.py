@@ -333,7 +333,8 @@ def test_symlinked_config_is_not_credited(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("module", [
-    "agent_building.py", "agent_building_vocab.py", "agent_manifests.py", "fleet_agent_building.py"])
+    "agent_building.py", "agent_building_vocab.py", "agent_manifests.py",
+    pytest.param("fleet/fleet_agent_building.py", id="fleet_agent_building.py")])
 def test_the_scan_never_matches_its_own_source(module: str) -> None:
     text = (Path(__file__).resolve().parents[1] / "scripts" / "lib" / module).read_text(encoding="utf-8")
     # The patterns matched against source files (the CI patterns read CI files only).

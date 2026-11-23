@@ -1,17 +1,17 @@
-"""Tests for lib/fleet_opportunities.py and lib/fleet_opportunities_section.py (issue #746)."""
+"""Tests for lib/fleet/fleet_opportunities.py and lib/fleet/fleet_opportunities_section.py (issue #746)."""
 from __future__ import annotations
 
 import json
 import tomllib
 
 from fleet_data_fixture import STAMP
-from lib.fleet import FLEET_ROW_VERSION, FleetRow
-from lib.fleet_achievements import HistoryRun, build_achievements
-from lib.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data
-from lib.fleet_diagrams import report_markdown
-from lib.fleet_opportunities import MIN_INCLUDERS, Opportunities, build_opportunities
-from lib.fleet_opportunities_section import opportunities_section
-from lib.fleet_units import build_trees, empty_map
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow
+from lib.fleet.fleet_achievements import HistoryRun, build_achievements
+from lib.fleet.fleet_data import FleetData, Privacy, build_fleet_data, dumps_fleet_data
+from lib.fleet.fleet_diagrams import report_markdown
+from lib.fleet.fleet_opportunities import MIN_INCLUDERS, Opportunities, build_opportunities
+from lib.fleet.fleet_opportunities_section import opportunities_section
+from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
 from lib.run_context_types import JsonDict
 

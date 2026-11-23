@@ -1,5 +1,5 @@
-"""Tests for the fleet org units tree, lib/fleet_units.py, and the checkout facts it reads,
-lib/fleet_repo_facts.py (issue #703)."""
+"""Tests for the fleet org units tree, lib/fleet/fleet_units.py, and the checkout facts it reads,
+lib/fleet/fleet_repo_facts.py (issue #703)."""
 from __future__ import annotations
 
 import subprocess
@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from lib import fleet_units as fu
-from lib.fleet import Target
-from lib.fleet_repo_facts import collect_facts, default_owners, repo_facts, web_url
+import lib.fleet.fleet_units as fu
+from lib.fleet.runner import Target
+from lib.fleet.fleet_repo_facts import collect_facts, default_owners, repo_facts, web_url
 
 GITLAB = ["grp/sub/proj1", "grp/sub/proj2", "grp/other/deep/proj3", "grp/proj4"]
 

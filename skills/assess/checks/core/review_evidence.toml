@@ -13,6 +13,7 @@ reads = ["review_automation", "review_reality"]
 stage = "post_offers"
 platform_pass = true
 headless = { review_evidence = "registered" }
+whys.review_evidence = "It records whether changes get a second reader at all, from a committed AI review step or a reviewed merged change, so review is credited where it happens."
 shapes = [
   { path = "review_evidence", type = "lib.review_automation:ReviewEvidenceBlock" },
 ]
@@ -39,4 +40,5 @@ id = "core.cond.layer-7-review.1.present"
 kind = "condition"
 title = "Changes get reviewed"
 key = "layer-7-review.1:review_evidence.present"
+why = "A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for."
 fix = "Commit an AI review step in CI, or review merged changes before they land."

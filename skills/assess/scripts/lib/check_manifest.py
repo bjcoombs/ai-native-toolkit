@@ -42,6 +42,11 @@ finding ``<owner>.finding.<name>``. Grades are never authored: a signal carries 
 producer ``evidence`` class (``level_signals.SIGNAL_INPUTS``, #783), and its grade
 follows from that class.
 
+Whys (#939): ``manifest_version`` 1 loads with no whys and rejects any; version 2 (the
+core) requires a ``why`` on every condition, finding, scan (a collector's ``whys`` table)
+and truth tag (the root ``tags`` table), whatever the ``owner``. The rules and accessors
+are ``lib.manifest_whys``, which :func:`validate_manifest` runs last.
+
 Full reference: lib/docs/check_manifest.md.
 """
 from __future__ import annotations
@@ -53,10 +58,13 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, cast
 
+from lib import manifest_whys
 from lib.check_validation import ValidationError, closest, errors_only, finding, format_error
+from lib.manifest_whys import TagWhy
 
 CORE_MANIFEST = Path(__file__).resolve().parents[2] / "checks" / "core.toml"
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2  # 1 still loads, with no whys (lib.manifest_whys)
+MANIFEST_VERSIONS = (1, 2)
 
 Kind = Literal["collector", "signal", "condition", "finding"]
 KINDS: tuple[Kind, ...] = ("collector", "signal", "condition", "finding")
@@ -71,6 +79,8 @@ PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop")
 EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
             "git_history", "execution_artifact", "platform")
 HEADLESS = ("registered", "headless_variant", "unregistered")
+# How a monorepo unit reads a collector's blocks (``lib.unit_readings``, #863); absent: repo-wide.
+UNIT_SCOPES = ("scoped", "override")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
 CARRIED_IN = ("reason", "basis", "unmeasured_reason")
@@ -135,8 +145,11 @@ class CollectorEntry(_EntryBase):
     network: NotRequired[bool]
     platform_pass: NotRequired[bool]
     platform_only: NotRequired[bool]
+    unit_scope: NotRequired[Literal["scoped", "override"]]
     headless: NotRequired[dict[str, str]]
     headless_variants: NotRequired[list[HeadlessVariant]]
+    whys: NotRequired[dict[str, str]]  # scan -> its why (#939, lib.manifest_whys)
+    why_sources: NotRequired[dict[str, str]]
     evidence: NotRequired[str]
     shapes: NotRequired[list[ShapeRef]]
     unknown_reasons: NotRequired[list[UnknownReason]]
@@ -157,6 +170,8 @@ class ConditionEntry(_EntryBase):
     kind: Literal["condition"]
     key: str
     fix: str
+    why: NotRequired[str]
+    why_source: NotRequired[str]
 
 
 class FindingEntry(_EntryBase):
@@ -172,6 +187,8 @@ class FindingEntry(_EntryBase):
     suppressed_when: NotRequired[str]
     prune_missing_paths: NotRequired[bool]
     headless: NotRequired[str]
+    why: NotRequired[str]
+    why_source: NotRequired[str]
 
 
 Entry = CollectorEntry | SignalEntry | ConditionEntry | FindingEntry
@@ -182,6 +199,7 @@ class CheckManifest(TypedDict):
     owner: str
     entries: list[Entry]
     owner_version: NotRequired[str]
+    tags: NotRequired[dict[str, TagWhy]]  # truth tag -> its why (#939)
 
 
 class CheckManifestError(ValueError):
@@ -272,7 +290,8 @@ _FIELDS: dict[str, dict[str, Check]] = {
         "publishes": _STRS, "reads": _STRS, "stage": _enum(STAGES), "revision": _int(1),
         "private": _bool, "spread": _bool, "degrade": _bool, "gate_reason": _enum(GATE_REASONS),
         "label": _str(_NAME_RE), "network": _bool, "platform_pass": _bool,
-        "platform_only": _bool, "headless": _table(_enum(HEADLESS)),
+        "platform_only": _bool, "unit_scope": _enum(UNIT_SCOPES),
+        "headless": _table(_enum(HEADLESS)),
         "headless_variants": _records(
             {"block": _str(_NAME_RE), "callable": _str(_CALLABLE_RE), "reads": _STRS,
              "stage": _enum(STAGES)}, frozenset({"block", "callable", "reads", "stage"})),
@@ -284,18 +303,22 @@ _FIELDS: dict[str, dict[str, Check]] = {
              "means": _str(max_len=300), "next_step": _str(max_len=300)},
             frozenset({"code", "means", "next_step"})),
         "privacy": _table(_enum(PRIVACY_CLASSES)),
+        "whys": _table(_str()), "why_sources": _table(_str()),
     },
     "signal": {
         "path": _str(), "type": _enum(SIGNAL_TYPES), "collector": _str(_ID_RE),
         "evidence": _enum(EVIDENCE), "values": _STRS, "null_means": _str(max_len=300),
+        "why": lambda v: "",  # rejected with its own message: a signal carries no why
     },
-    "condition": {"key": _str(_KEY_RE), "fix": _str(max_len=300)},
+    "condition": {"key": _str(_KEY_RE), "fix": _str(max_len=300), "why": lambda v: "",
+                  "why_source": lambda v: ""},  # whys: lib.manifest_whys
     "finding": {
         "name": _str(_NAME_RE), "order": _int(0), "action": _str(max_len=200),
         "mode": _enum(FINDING_MODES), "concern": _bool, "inputs": _STRS,
         "derive": _str(_CALLABLE_RE), "thresholds": _table(_number),
         "suppressed_when": _str(max_len=1024), "prune_missing_paths": _bool,
         "headless": _enum(("registered", "unregistered")),
+        "why": lambda v: "", "why_source": lambda v: "",
     },
 }
 _REQUIRED: dict[str, frozenset[str]] = {
@@ -305,8 +328,9 @@ _REQUIRED: dict[str, frozenset[str]] = {
     "finding": frozenset({"name", "order", "action", "mode", "concern", "inputs"}),
 }
 _ROOT: dict[str, Check] = {
-    "manifest_version": lambda v: "" if v == MANIFEST_VERSION and not isinstance(v, bool)
-    else f"the integer {MANIFEST_VERSION}",
+    "manifest_version": lambda v: "" if v in MANIFEST_VERSIONS and not isinstance(v, bool)
+    else f"the integer {MANIFEST_VERSIONS[0]} or {MANIFEST_VERSIONS[1]}",
+    "tags": _table(lambda v: "" if isinstance(v, dict) else "a table"),
     "owner": _str(_OWNER_RE), "owner_version": _str(), "entries": lambda v: (
         "" if isinstance(v, list) else "a list of tables"),
 }
@@ -560,6 +584,7 @@ def validate_manifest(data: Mapping[str, Any],
         return out
     _reads_graph(cols, out)
     _references(cast(CheckManifest, data), where_of, out)
+    out += manifest_whys.why_errors(data, where_of)
     return out
 
 

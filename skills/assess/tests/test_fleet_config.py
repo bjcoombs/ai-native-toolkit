@@ -10,14 +10,14 @@ import pytest
 
 import assess_signals
 from lib import fleet_config as fcfg
-from lib import fleet_history as fh
-from lib import fleet_trends
+import lib.fleet.fleet_history as fh
+import lib.fleet.fleet_trends as fleet_trends
 from lib import run_setup
 from lib import scan_registry as reg
-from lib.fleet import FLEET_ROW_VERSION, ScanOptions, signals_command
-from lib.fleet_compare import FleetRun, comparability, compare
-from lib.fleet_groups import roll_up
-from lib.fleet_stamp import FleetStamp, build_stamp, write_stamp
+from lib.fleet.runner import FLEET_ROW_VERSION, ScanOptions, signals_command
+from lib.fleet.fleet_compare import FleetRun, comparability, compare
+from lib.fleet.fleet_groups import roll_up
+from lib.fleet.fleet_stamp import FleetStamp, build_stamp, write_stamp
 from lib.scan_registry import ScanSpec
 from lib.signals import build_document
 from test_fleet import make_repo
@@ -349,9 +349,9 @@ def test_a_new_empty_section_leaves_every_stored_hash_unchanged():
 
 
 def test_a_history_entry_from_before_706_still_matches_and_loads(tmp_path):
-    from lib.fleet import write_rows
-    from lib.fleet_compare import load_run
-    from lib.fleet_groups import write_groups
+    from lib.fleet.runner import write_rows
+    from lib.fleet.fleet_compare import load_run
+    from lib.fleet.fleet_groups import write_groups
 
     rows = [_row("grp/a")]
     entry = tmp_path / "org" / "2026-11-19"

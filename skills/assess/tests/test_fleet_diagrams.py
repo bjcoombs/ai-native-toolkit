@@ -1,5 +1,5 @@
-"""Tests for the fleet diagrams (issue #674): lib/fleet_svg.py, lib/fleet_quadrant.py,
-lib/fleet_tooling_map.py and lib/fleet_diagrams.py.
+"""Tests for the fleet diagrams (issue #674): lib/fleet/fleet_svg.py, lib/fleet/fleet_quadrant.py,
+lib/fleet/fleet_tooling_map.py and lib/fleet/fleet_diagrams.py.
 
 The golden files under ``tests/fixtures/fleet_diagrams/`` lock the whole render; the
 semantic tests say what a byte comparison cannot. Regenerate the fixture and goldens with
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from lib import fleet_diagrams as fd
-from lib import fleet_quadrant as fq
-from lib import fleet_svg as svg
-from lib import fleet_tooling_map as ftm
-from lib.fleet import FleetRow
-from lib.fleet_view import read_repos
+import lib.fleet.fleet_diagrams as fd
+import lib.fleet.fleet_quadrant as fq
+import lib.fleet.fleet_svg as svg
+import lib.fleet.fleet_tooling_map as ftm
+from lib.fleet.runner import FleetRow
+from lib.fleet.fleet_view import read_repos
 from lib.levels import MaturityModel, load_levels
 from fleet_diagrams_fixture import FIXTURES, ROWS, WINDOW, build, comparison, goldens
 from svg_cascade import overridden_text_attributes

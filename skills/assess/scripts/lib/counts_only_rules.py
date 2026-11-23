@@ -104,6 +104,8 @@ IDENTIFIER_KEYED_MAPS: Final = frozenset({
     "claude_config.files_by_kind",
     "doc_staleness.association.methods",
     "promissory_markers.families",
+    "unit_readings.units.blocks",
+    "unit_readings.units.blocks.promissory_markers.families",
     "instruction_files.{}.subscores",
     "nested_instructions.files.subscores",
     "stats_summary.fn_ccn.backend_by_language",
@@ -192,7 +194,7 @@ RULES: Final[dict[str, dict[str, FieldClass]]] = {
 }
 
 
-# The fleet's ``fleet-data.json`` (lib/fleet_data.py, issue #703): field pattern -> class,
+# The fleet's ``fleet-data.json`` (lib/fleet/fleet_data.py, issue #703): field pattern -> class,
 # the dotted keys from the top of that document, list levels left out. Kept apart from
 # RULES so its field names never widen the run-context record keys ``field_names`` keeps.
 # ``key`` fields (unit and repository keys, and the references to them) are PATH: kept in

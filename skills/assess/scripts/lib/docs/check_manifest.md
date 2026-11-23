@@ -17,6 +17,12 @@ raising, and `parse_manifest(data)` validates an already-parsed document. Helper
 id minus its owner), `block_collectors` (run-context block to publishing collector id)
 and `condition_key(row, level, signal)`.
 
+**Whys (#939).** `MANIFEST_VERSIONS` is `(1, 2)`. Version 1 loads with no whys and rejects
+any `why`, `why_source`, `whys`, `why_sources` or root `tags`; version 2 requires each, as
+`lib/manifest_whys.py` and the "Check manifest whys" section of `lib/README.md` describe.
+The why findings run after the cross-references, so they appear only on an otherwise valid
+manifest.
+
 **Fragments (#982).** A root manifest may list `fragments` instead of declaring
 `[[entries]]`. The core does: `checks/core.toml` holds `manifest_version`, `owner` and
 `fragments`, the scan keys in scan-table order, and each entry lives in
@@ -46,7 +52,10 @@ The manifest has `manifest_version = 1`, `owner`, an optional `owner_version` an
   `reads`, `stage`, `degrade`, `gate_reason` (a token for one of
   `scan_registry.GATE_REASONS`: `setup`, `bad_scope`, `self_degrading`, `serialiser`),
   `label`, `network`, `platform_pass` (`signals.PLATFORM_SCANS`), `platform_only`
-  (`signals.PLATFORM_ONLY_SCANS`), `headless` (published block to `registered`,
+  (`signals.PLATFORM_ONLY_SCANS`), `unit_scope` (`scoped`: a monorepo unit's reading is
+  this scan run again on the unit; `override`: the repository-wide reading, replaced when
+  the unit holds its own evidence; absent: repo-wide, inherited by every unit;
+  `lib/unit_readings.py`, #863), `headless` (published block to `registered`,
   `headless_variant` or `unregistered`; an unlisted block is not reported headless),
   `headless_variants` (the `signals.HEADLESS_SCANS` spec for a block, as `block`,
   `callable`, `reads`, `stage`), `shapes` (the `counts_only_schema.ROOTS` typed roots

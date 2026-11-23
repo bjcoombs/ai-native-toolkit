@@ -9,10 +9,13 @@ callable = "lib.run_setup:run_header"
 publishes = ["run_id", "artifact_schema_version", "assess_method_version", "run_date", "scope", "scope_slug", "measured_commit", "prior_stats_exists", "stats_summary", "instruction_files", "instructions_grade", "diff", "diff_reliable", "diff_version_note", "diff_trend_reset", "prior_plugin_version", "schema_version", "prior_schema_version", "tool_versions", "prior_tool_versions", "diff_detail", "pruned_hotspots", "retired_excluded_hotspots", "dropped_first_flagged", "provisional_first_flagged", "log_integrity", "prior_findings_snapshot"]
 reads = ["run_id", "run_date", "run_scope", "measured_commit", "current", "prior", "instruction_grading", "diff", "unfinalized"]
 stage = "setup"
+unit_scope = "scoped"
 spread = true
 degrade = false
 gate_reason = "setup"
 headless = { stats_summary = "headless_variant", diff = "unregistered" }
+whys.stats_summary = "It summarises file size and complexity across the repository; the 95th-percentile file size is what decides whether an agent can read a file whole."
+whys.diff = "exempt: plumbing"
 headless_variants = [
   { block = "stats_summary", callable = "lib.headless_layers:stats_summary", reads = ["repo_root", "excludes", "scope"], stage = "read_side" },
 ]
@@ -87,4 +90,5 @@ id = "core.cond.layer-4-architecture.2.p95"
 kind = "condition"
 title = "95% of files are 500 lines or fewer"
 key = "layer-4-architecture.2:stats_summary.loc.p95"
+why = "With nearly all files at 500 lines or fewer, an agent can read a whole file before editing it, rather than a slice."
 fix = "Split the largest files along their natural seams."

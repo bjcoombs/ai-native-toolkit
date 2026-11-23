@@ -482,7 +482,7 @@ class DeclaredMapping(TypedDict):
 def declared_block(repo_root: Path) -> list[DeclaredMapping]:
     """Standalone ``/assess``: the ``[[describes]]`` mappings, listed and not measured.
 
-    Only ``/fleet`` holds the service checkouts (``lib/fleet_doc_freshness.py``);
+    Only ``/fleet`` holds the service checkouts (``lib/fleet/fleet_doc_freshness.py``);
     a single-repo run says the mappings exist and guesses nothing.
     """
     cfg = load_describes(repo_root)

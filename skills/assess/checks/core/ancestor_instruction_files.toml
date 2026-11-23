@@ -10,6 +10,7 @@ publishes = ["ancestor_instruction_files"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { ancestor_instruction_files = "unregistered" }
+whys.ancestor_instruction_files = "Instruction files above the repository root load in a local session but never reach a fresh clone, so an agent elsewhere works without those rules."
 revision = 1
   [entries.privacy]
   ancestor_instruction_files = "drop"

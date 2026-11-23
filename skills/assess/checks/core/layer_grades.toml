@@ -11,7 +11,9 @@ callable = "lib.layer_grades:scan_layer_grades"
 publishes = ["layer_grades"]
 reads = ["instruction_grading", "nested_instructions"]
 stage = "post_offers"
+unit_scope = "override"
 headless = { layer_grades = "registered" }
+whys.layer_grades = "It republishes whether a committed instruction file exists, the evidence the `instructions` gate reads."
 shapes = [
   { path = "layer_grades", type = "lib.layer_grades:LayerGradesBlock" },
 ]
@@ -36,4 +38,5 @@ id = "core.cond.layer-0-instructions.1.instruction_file_present"
 kind = "condition"
 title = "An instruction file is committed"
 key = "layer-0-instructions.1:layer_grades.instruction_file_present"
+why = "Without one, an agent starts every task by guessing how the repository builds, tests and is laid out, and those guesses drive its first changes."
 fix = "Commit a CLAUDE.md or AGENTS.md that tells an agent how this repository works."
