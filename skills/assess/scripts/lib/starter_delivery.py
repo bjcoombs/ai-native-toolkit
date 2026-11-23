@@ -5,7 +5,8 @@ them (several scans read ``git ls-files``) and the user reviews them as one stag
 
 ``open_change`` turns that staged change into a branch and a pull request (GitHub, through
 ``gh``) or merge request (GitLab, through ``glab``) when every precondition holds: a git
-checkout whose tree was clean before the run (so nothing of the user's rides along), an
+checkout whose tree was clean before the run outside ``.assess/`` (the assessment's own output,
+which the commit leaves out by naming only the written files), an
 ``origin`` remote on a host the CLI serves, and that CLI authenticated. Otherwise the files stay
 staged in the working tree and ``Delivery.reason`` names why. A failed step stops there with
 its reason; nothing is retried. Commands run through an injectable ``Runner`` so tests make no
@@ -37,8 +38,14 @@ def is_git_repo(root: Path, runner: Runner = run) -> bool:
     return code == 0 and out == "true"
 
 
+# The run's own output: the assessment that precedes ``--fix`` writes it, so it never makes the
+# tree dirty, and the commit names only the starter files, so none of it is committed.
+ASSESS_DIR = ".assess"
+
+
 def tree_clean(root: Path, runner: Runner = run) -> bool:
-    code, out = runner(["git", "status", "--porcelain"], root)
+    """No change outside ``.assess/`` (the run's own output)."""
+    code, out = runner(["git", "status", "--porcelain", "--", ".", f":(exclude){ASSESS_DIR}"], root)
     return code == 0 and not out
 
 
@@ -57,7 +64,7 @@ def _host_cli(url: str) -> str | None:
     return "glab" if "gitlab" in low else "gh" if "github" in low else None
 
 
-def open_change(root: Path, branch: str, title: str, body: str, *, was_clean: bool,
+def open_change(root: Path, branch: str, title: str, body: str, paths: Sequence[str], *, was_clean: bool,
                 runner: Runner = run) -> Delivery:
     """A branch, commit, push and pull (merge) request, or the reason the files stay staged."""
     if not was_clean:
@@ -71,7 +78,7 @@ def open_change(root: Path, branch: str, title: str, body: str, *, was_clean: bo
     if runner(["git", "switch", "-c", branch], root)[0] != 0:
         return _working("branch_exists")
     steps: list[tuple[list[str], str]] = [
-        (["git", "commit", "-q", "-m", title], "commit_failed"),
+        (["git", "commit", "-q", "-m", title, "--", *paths], "commit_failed"),
         (["git", "push", "-q", "-u", "origin", branch], "push_failed"),
     ]
     for cmd, reason in steps:

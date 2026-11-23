@@ -23,7 +23,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import assess_fix as cli  # noqa: E402
 from lib.level_tally import default_model, level_result  # noqa: E402
-from lib.starter_delivery import open_change  # noqa: E402
+from lib.starter_delivery import open_change, tree_clean  # noqa: E402
 
 FLEET_SCRIPTS = SCRIPTS.parents[1] / "fleet" / "scripts"
 
@@ -151,11 +151,13 @@ class _Recorder:
 
 def test_open_change_makes_a_branch_and_pull_request(tmp_path: Path) -> None:
     runner = _Recorder()
-    delivery = open_change(tmp_path, "assess/fix-instructions", "chore: x", "body", was_clean=True, runner=runner)
+    delivery = open_change(tmp_path, "assess/fix-instructions", "chore: x", "body", ["CLAUDE.md"],
+                           was_clean=True, runner=runner)
     assert delivery == {"mode": "pull_request", "branch": "assess/fix-instructions",
                         "url": "https://github.com/org/pkg/pull/7", "reason": "opened"}
     assert [c[:2] for c in runner.calls] == [["git", "remote"], ["gh", "auth"], ["git", "switch"],
                                              ["git", "commit"], ["git", "push"], ["gh", "pr"]]
+    assert runner.calls[3][-2:] == ["--", "CLAUDE.md"]  # only the starter files are committed
 
 
 @pytest.mark.parametrize(("clean", "fail", "reason"), [
@@ -165,7 +167,7 @@ def test_open_change_makes_a_branch_and_pull_request(tmp_path: Path) -> None:
 ])
 def test_open_change_leaves_the_files_staged_when_a_precondition_fails(
         tmp_path: Path, clean: bool, fail: tuple[str, ...], reason: str) -> None:
-    delivery = open_change(tmp_path, "b", "t", "body", was_clean=clean, runner=_Recorder(fail))
+    delivery = open_change(tmp_path, "b", "t", "body", ["CLAUDE.md"], was_clean=clean, runner=_Recorder(fail))
     assert delivery["mode"] == "working_tree" and delivery["reason"] == reason
 
 
@@ -184,6 +186,15 @@ def test_fix_opens_the_pull_request_through_the_runner(tmp_path: Path) -> None:
     assert report["delivery"]["mode"] == "pull_request"
     create = next(c for c in runner.calls if c[:3] == ["gh", "pr", "create"])
     assert "CLAUDE.md" in create[create.index("--body") + 1]
+
+
+def test_assess_output_does_not_make_the_tree_dirty(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, {**PYTHON, ".assess/log.md": "old\n"})
+    (repo / ".assess" / "log.md").write_text("new run\n", encoding="utf-8")
+    (repo / ".assess" / "assess-report.md").write_text("report\n", encoding="utf-8")
+    assert tree_clean(repo)
+    (repo / "notes.txt").write_text("mine\n", encoding="utf-8")
+    assert not tree_clean(repo)
 
 
 def test_main_needs_a_mode_and_writes_nothing_without_one(tmp_path: Path) -> None:

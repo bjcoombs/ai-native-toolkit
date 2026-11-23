@@ -29,4 +29,4 @@ It never overwrites a file. An existing one is reported as a conflict, with the 
 
 The script stages the files, reads the Step again and reports, per gate, whether it now holds or the one manual step left: an `include:` line, a check command to name, or a coverage threshold for a language with no coverage form it knows. Exit 0 means every targeted gate holds; exit 1 means a manual step is left.
 
-When the tree was clean before the run and `gh` or `glab` is authenticated for `origin`, it commits to a new `assess/fix-<gate>` branch and opens a pull (merge) request. Otherwise the files stay staged in the working tree for review and the report says why. Relay the report to the user as written.
+When the tree was clean before the run (the assessment's own `.assess/` output aside; it is never committed) and `gh` or `glab` is authenticated for `origin`, it commits to a new `assess/fix-<gate>` branch and opens a pull (merge) request. Otherwise the files stay staged in the working tree for review and the report says why. Relay the report to the user as written.

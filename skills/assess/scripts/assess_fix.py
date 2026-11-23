@@ -14,9 +14,9 @@ language, the check command its build exposes and its CI system.
 
 It never overwrites a file: an existing one is a conflict, reported with the text to add by
 hand. The written files are staged; the scans then run again and the report says, per gate,
-whether it now holds or the one manual step left. When the tree was clean before the run and
-``gh`` or ``glab`` is authenticated for the ``origin`` remote, the change becomes a branch and a
-pull (merge) request (``lib/starter_delivery.py``); ``--no-pr`` keeps it staged in the working
+whether it now holds or the one manual step left. When the tree was clean before the run
+(``.assess/``, the assessment's own output, aside) and ``gh`` or ``glab`` is authenticated for
+the ``origin`` remote, the change becomes a branch and a pull (merge) request (``lib/starter_delivery.py``); ``--no-pr`` keeps it staged in the working
 tree, as does any failed precondition, with the reason in the report.
 
 Run:
@@ -146,7 +146,7 @@ def fix(root: Path, *, starter: bool, language: str | None = None, check_command
     elif written:
         label = "-".join(g for g in gates) or GUARDRAIL
         title = f"chore: Add the /assess starter files for the {label.replace('-', ' and ')} gate"
-        delivery = open_change(root, f"assess/fix-{label}", title, _pr_body(files, proofs),
+        delivery = open_change(root, f"assess/fix-{label}", title, _pr_body(files, proofs), written,
                                was_clean=was_clean, runner=runner)
     return {"mode": "starter" if starter else "fix", "step_before": before["step"], "step_after": after["step"],
             "facts": facts, "files": files, "gates": proofs, "delivery": delivery,
