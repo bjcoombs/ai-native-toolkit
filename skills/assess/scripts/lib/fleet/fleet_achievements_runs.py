@@ -17,7 +17,8 @@ directory (``lib/fleet/fleet_history.py``) and keeps each entry that:
 **Re-score (#771).** An entry whose only refusal is the maturity-model version is not
 passed over when the caller gives this run's model and key function: its ``repos.jsonl``
 scans are re-scored under this run's model (``lib/fleet/fleet_rescore.py``) and it replays as
-``HistoryRun(..., rescored_from=<its version>, stored=<its fleet-data.json>)``. It is passed
+``HistoryRun(..., rescored_from=<its version, or None>, stored=<its fleet-data.json>)``; a set
+``stored`` marks the entry re-scored. It is passed
 over (today's behaviour, never an error) when ``repos.jsonl`` does not read as fleet rows
 with scans or a stored repository key does not join under this run's key function. A
 ``repos.jsonl`` written by a hashed run holds hashed ids (#909), which the key keeps as
@@ -117,7 +118,7 @@ def _rescored(entry: Path, data: FleetData, stamp: FleetStamp, current: FleetSta
         return None  # a stored row an older scanner wrote that the evaluator cannot read
     if again is None:
         return None
-    return HistoryRun(stamp["scan_date"], again, stamp["levels_version"] or "none", data)
+    return HistoryRun(stamp["scan_date"], again, stamp["levels_version"], data)
 
 
 def _read(entry: Path, date: str, current: FleetStamp, rescorer: Rescorer | None = None) -> HistoryRun | None:

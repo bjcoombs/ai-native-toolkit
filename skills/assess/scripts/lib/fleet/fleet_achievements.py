@@ -238,8 +238,8 @@ class Achievements(TypedDict):
 class HistoryRun(NamedTuple):
     run_id: str
     data: FleetData
-    rescored_from: str | None = None  # the stored maturity-model version of a re-scored entry
-    stored: FleetData | None = None  # a re-scored entry's cells as stored, under its own rules
+    rescored_from: str | None = None  # a re-scored entry's stored maturity-model version (None: none stamped)
+    stored: FleetData | None = None  # a re-scored entry's cells as stored, under its own rules; set iff re-scored
 
 
 @dataclass(frozen=True)
@@ -635,7 +635,8 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
     for i, ((prev_id, prev, prev_cells), (run_id, now, now_cells)) in enumerate(zip(states, states[1:])):
         then_caused = caused[i]
         # both runs re-scored from one earlier version: the step keeps its native-model credit
-        native = runs[i].rescored_from is not None and runs[i].rescored_from == runs[i + 1].rescored_from
+        native = (runs[i].stored is not None and runs[i + 1].stored is not None
+                  and runs[i].rescored_from == runs[i + 1].rescored_from)
         rescored = (then_caused | (caused[i + 1] or frozenset())
                     if then_caused is not None and not native else None)
         replay.step(run_id, prev_id, prev, now, prev_cells, now_cells, rescored)
@@ -646,7 +647,7 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
              if (step := nearest_level_up(now_subs[key], rows[rid], rules[rid], now_cells)) is not None]
     last = earlier[-1] if earlier else None
     counted = (recount(last.stored, last.data, model, last.run_id, last.rescored_from)
-               if last is not None and last.stored is not None and last.rescored_from is not None
+               if last is not None and last.stored is not None
                and model is not None else None)
     if not earlier and note is None:
         note = BASELINE_NOTE
@@ -656,7 +657,7 @@ def build_achievements(current: HistoryRun, earlier: Sequence[HistoryRun], model
             "achievements": achievements, "nearest_level_ups": steps,
             "targets": target_progress({k: sub.members for k, sub in now_subs.items()},
                                        run_steps(current.data), targets, model), "recount": counted,
-            "rescored_runs": [run.run_id for run in earlier if run.rescored_from is not None]}
+            "rescored_runs": [run.run_id for run in earlier if run.stored is not None]}
 
 
 def dumps_achievements(doc: Achievements) -> str:

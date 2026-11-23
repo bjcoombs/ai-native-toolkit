@@ -93,7 +93,9 @@ def _recount(doc: Achievements) -> list[str]:
     counted = doc["recount"]
     if counted is None:
         return []
-    head = (f"The maturity model changed from {code(counted['from_version'])} to {code(counted['to_version'])}. "
+    was = counted["from_version"]
+    changed = f"from {code(was)} to" if was is not None else "to"
+    head = (f"The maturity model changed {changed} {code(counted['to_version'])}. "
             f"Run {code(counted['run'])} is re-scored under the new rules; these moves come from the rules, "
             "not from the repositories, and are not earned.")
     raised = [line for line in counted["lines"] if line["direction"] in (UP, NOW_MEASURED)]
