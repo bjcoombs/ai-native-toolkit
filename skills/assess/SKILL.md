@@ -77,7 +77,7 @@ Artefacts will land at:
 - `$REPO_ROOT/.assess/complexity-heatmap.svg`
 - `$REPO_ROOT/.assess/complexity-stats.json`
 - `$REPO_ROOT/.assess/doc-graph.svg`
-- `$REPO_ROOT/.assess/evidence-waffle.svg` (written by the deterministic core from the level result: one square per maturity-model condition, coloured by state and evidence grade)
+- `$REPO_ROOT/.assess/evidence-waffle.svg` and `$REPO_ROOT/.assess/tag-profile.svg` (written by the deterministic core from the level result: one square per maturity-model condition, coloured by state and evidence grade; one row per truth tag with the share of its measured conditions met, the earlier run's share as a hollow dot when `prior-level.json` holds the same maturity-model version)
 - `$REPO_ROOT/.assess/package-map.svg`, `$REPO_ROOT/.assess/doc-drift.svg` and `$REPO_ROOT/.assess/review-strip.svg` (written by the deterministic core when their data is available: the 20 largest packages as an import matrix with front-door bypasses outlined, the docs furthest behind their code, and the review state of each sampled merged change)
 - `$REPO_ROOT/.assess/assess-report.md`
 
