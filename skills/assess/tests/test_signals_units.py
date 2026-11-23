@@ -109,9 +109,11 @@ def test_hashed_path_is_dropped_plain_and_hashed_under_a_salt() -> None:
     hashed = counts_only_scans(block, hash_paths=True, salt="s")["unit_readings"]["units"][0]["path"]
     assert hashed.startswith(HASH_PREFIX)
     # a folder with a space still joins: its hash equals the stamp's hashed scope
-    spaced = {"unit_readings": {"available": True, "units": [{"path": "services/My Service", "conditions": []}]}}
-    (unit,) = counts_only_scans(spaced, hash_paths=True, salt="s")["unit_readings"]["units"]
-    assert unit["path"] == hash_value("services/My Service", "s")
+    for folder in ("services/My Service", "services/billing@corp.example"):
+        odd = {"unit_readings": {"available": True, "units": [{"path": folder, "conditions": []}]}}
+        (unit,) = counts_only_scans(odd, hash_paths=True, salt="s")["unit_readings"]["units"]
+        assert unit["path"] == hash_value(folder, "s")
+        assert counts_only_scans(odd)["unit_readings"]["units"] == [{"conditions": []}]
 
 
 # --- --scope -----------------------------------------------------------------------

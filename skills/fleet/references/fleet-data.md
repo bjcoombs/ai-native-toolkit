@@ -111,7 +111,10 @@ units. Each row has:
   `--hash-salt` it is the folder's salted hash, which joins the same unit across runs under
   one `--hash-salt`; `null` in plain counts-only output.
 - `step`: the unit's Step, from the unit's own readings over the repository's scans, the
-  same result `/assess` gives the unit in `run-context.json` `unit_levels`.
+  same result `/assess` gives the unit in `run-context.json` `unit_levels`. A unit's own
+  readings keep the fields the default maturity model reads; a `--levels` criterion on
+  another field of a scope-sensitive block (such as `coverage_gate.configured`) finds no
+  value for the unit.
 - `next_step`: the Step above; `null` at the top Step.
 - `next_blocker`: the first gate of that Step that does not hold, as tokens: `gate`,
   `state` and `disposition`, as `gate_blockers` writes them; `null` when no gate blocks it.

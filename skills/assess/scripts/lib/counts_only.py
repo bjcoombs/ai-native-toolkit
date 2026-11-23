@@ -173,9 +173,9 @@ class _Filter:
         if cls == ID:
             return self.identifier(value)
         if cls == HASHED_PATH:
-            # a folder from the file tree, as a path-keyed map key: spaces allowed, so a
-            # spaced unit folder keeps its join key
-            return self.path(value, allow_space=True) if self.hash_paths else None
+            # a folder from the file tree, only ever written hashed: no plaintext-path test,
+            # so a folder with a space or an "@" keeps its join key
+            return self._hashed(value) if self.hash_paths and value else None
         if cls == TOKEN and TOKEN_RE.match(value):
             return value
         if cls == REASON:
