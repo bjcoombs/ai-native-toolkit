@@ -832,6 +832,16 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_levels.units.next_step.blockers.disposition` | token |
 | `unit_levels.units.next_step.blockers.exclusion_kind` | token |
 
+## unit_rollup
+
+| Field | Kept as |
+|---|---|
+| `unit_rollup.unit_count_reason` | token |
+| `unit_rollup.unlocks.gate` | token |
+| `unit_rollup.unlocks.scope` | token |
+| `unit_rollup.lines` | dropped |
+| `unit_rollup.markdown` | dropped |
+
 ## fleet-data.json (the fleet skill)
 
 Patterns from the top of `fleet-data.json`, not of a run-context. A
