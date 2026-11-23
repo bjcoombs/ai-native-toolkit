@@ -130,6 +130,16 @@ def test_a_workspace_member_that_is_a_skill_is_a_unit_not_a_skip(tmp_path: Path)
     assert "skills/a" not in _skipped(block)  # type: ignore[arg-type]
 
 
+def test_a_workspace_member_inside_a_skill_is_claimed_once(tmp_path: Path) -> None:
+    files = {"package.json": '{"name": "root", "workspaces": ["skills/foo/pkg"]}\n',
+             "skills/foo/SKILL.md": "# foo\n", "skills/foo/pkg/package.json": '{"name": "pkg"}\n',
+             "skills/foo/pkg/index.js": "1\n"}
+    block = scan_units(_write(tmp_path, files))
+    assert _paths(block) == ["skills/foo"]  # type: ignore[arg-type]
+    assert [s for s in block["skipped"] if s["path"] == "skills/foo/pkg"] == [
+        {"path": "skills/foo/pkg", "problem": "claimed"}]
+
+
 def test_a_skill_fixture_inside_a_package_is_no_unit(tmp_path: Path) -> None:
     files = {"pkg/pyproject.toml": '[project]\nname = "pkg"\n', "pkg/src/m.py": "x = 1\n",
              "pkg/tests/fixtures/sample/SKILL.md": "# sample\n",

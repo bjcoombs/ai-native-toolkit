@@ -585,7 +585,9 @@ class _Walk:
                            "manifest_only")
         for ws, members, _, _ in expanded:
             for member in members:
-                if member in self.components:  # a skill a workspace lists is that skill's unit
+                # a member that is a component, or sits in one, is that component's: its unit,
+                # or a claim discover_units already lists
+                if any(_is_under(member, c) for c in self.components):
                     continue
                 if member in self.leaves:
                     # a member shallower than its workspace was read as a leaf first
