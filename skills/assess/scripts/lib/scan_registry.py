@@ -630,6 +630,7 @@ SCANS: tuple[ScanSpec, ...] = (
     # flake8 complexity limit, the coverage_gate floor, pre-commit hooks, mypy
     # strict), each checked against the graded instruction files; an unstated gate
     # carries a ready one-line snippet. stated_pct feeds the guardrails-stated row.
+    # A scoped run walks the scope only, as coverage_gate does (issue #956).
     _spec("guardrails", scan_guardrails),
 )
 
