@@ -29,7 +29,7 @@ named key, so a later field (the #939 ``why``) is an added key, never a restruct
 - ``scans``: one entry per scan name the headless runner accepts
   (``signals.known_scans()``, the ``assess_signals.py --scans`` list): the collector that
   builds it, what it reads, whether it needs the network, how a headless or fleet run
-  reports it, its counts-only privacy class, the rows, conditions and findings that use
+  reports it (``units_only``: the ``signals.UNIT_SCANS``, #866), its counts-only privacy class, the rows, conditions and findings that use
   it, its unknown reasons, and the input class and grade of each signal it feeds. A scan
   no criterion reads has the grade ``unclassified``: classifying every collector is
   #789 step 6.
@@ -58,7 +58,7 @@ files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` na
 manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key. Each criterion, scan, finding and tag carries `why` and `why_source`
-from the manifest (`lib.manifest_whys`, #939): `""` where a version 1 manifest has none, and a
+from the manifest (`lib.manifest.manifest_whys`, #939): `""` where a version 1 manifest has none, and a
 scan's `why` may be the token `exempt: plumbing`; signals carry none. `tags`, `tag_pairs`,
 `steps` and `links` come from `lib.catalog_tags`. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -71,11 +71,11 @@ from typing import Literal, NotRequired, TypedDict
 
 from lib import catalog_tags as ct
 import lib.manifest.check_manifest as cm
-from lib import manifest_whys as mw
+import lib.manifest.manifest_whys as mw
 from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.levels import Criterion, MaturityModel, Scalar, condition_id
 from lib.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
-from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
+from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, UNIT_SCANS, known_scans
 
 CATALOG_VERSION = 1
 GRADE_ORDER = ("config_only", "declared", "measured", "verified")
@@ -87,7 +87,7 @@ SOURCES = ("skills/assess/checks/core.toml", "skills/assess/checks/core/*.toml",
            "skills/assess/scripts/lib/level_signals.py", "skills/assess/scripts/lib/signals.py",
            "skills/assess/scripts/lib/scan_registry.py")
 
-Headless = Literal["registered", "headless_variant", "unregistered", "platform_only"]
+Headless = Literal["registered", "headless_variant", "unregistered", "platform_only", "units_only"]
 
 # Plain words for each maturity-model operator.
 OP_WORDS = {"eq": "is", "ne": "is not", "lt": "is below", "lte": "is at most",
@@ -335,6 +335,8 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
 def _headless(name: str, collector: cm.CollectorEntry) -> Headless:
     if name in PLATFORM_ONLY_SCANS:
         return "platform_only"
+    if name in UNIT_SCANS:
+        return "units_only"
     status = collector.get("headless", {}).get(name)
     if status == "registered":
         return "registered"

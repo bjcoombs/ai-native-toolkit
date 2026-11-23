@@ -41,7 +41,7 @@ from typing import NamedTuple
 
 from lib.catalog import UNCLASSIFIED, Catalog, CatalogCriterion, CatalogLevel, CatalogRow, CatalogScan
 from lib.catalog_tags import CatalogTag, tag_title
-from lib.manifest_whys import PLUMBING
+from lib.manifest.manifest_whys import PLUMBING
 
 PLUMBING_WORDS = "Run plumbing: no row or finding reads this scan."
 
@@ -66,6 +66,8 @@ HEADLESS_WORDS = {
     "headless_variant": "reported by headless and fleet runs (built by the headless runner's own scan)",
     "unregistered": "only a full /assess run builds it; headless and fleet runs report it not measured",
     "platform_only": "only with --platform; left out otherwise",
+    "units_only": ("only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; "
+                   "left out otherwise"),
 }
 
 

@@ -17,7 +17,7 @@
         1,
         2
       ],
-      "description": "1 loads with no whys; 2 requires every why (lib/manifest_whys.py, #939)."
+      "description": "1 loads with no whys; 2 requires every why (lib/manifest/manifest_whys.py, #939)."
     },
     "owner": {
       "type": "string",
@@ -46,7 +46,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 300,
-            "description": "What the check protects for an agent (#939, lib/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
+            "description": "What the check protects for an agent (#939, lib/manifest/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
           },
           "why_source": {
             "type": "string",
@@ -68,7 +68,8 @@
         "token",
         "reason",
         "id",
-        "drop"
+        "drop",
+        "hashed_path"
       ]
     },
     "evidence": {
@@ -478,7 +479,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 300,
-          "description": "What the check protects for an agent (#939, lib/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
+          "description": "What the check protects for an agent (#939, lib/manifest/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
         },
         "why_source": {
           "type": "string",
@@ -555,7 +556,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 300,
-          "description": "What the check protects for an agent (#939, lib/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
+          "description": "What the check protects for an agent (#939, lib/manifest/manifest_whys.py). Required at manifest_version 2, absent at 1; free of lib.vocabulary's banned words and layer numbers."
         },
         "why_source": {
           "type": "string",

@@ -36,8 +36,12 @@ Unknown stays unknown: a unit's own reading that is unavailable reads ``not_meas
 with its reason code, as in the ``level`` block, never unmet. Per-unit CI is not read
 yet (``unit_readings``), so the CI conditions always read ``inherited``.
 
+``unit_result`` is that per-unit level result on its own, the call a fleet run makes over
+a row's scans for its unit rows (``lib.fleet.fleet_data_units``, #866).
+
 Every value is a count, a boolean, a model id, a state, an origin or a reason code;
-counts-only output drops the unit paths (``checks/core/unit_levels.toml``). The roll-up
+counts-only output drops the unit paths, or hashes them under ``--hash-paths``
+(``checks/core/unit_levels.toml``, class ``hashed_path``, #866). The roll-up
 across units is #865. Tests: ``tests/test_unit_levels.py``.
 """
 from __future__ import annotations
@@ -46,7 +50,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, NotRequired, TypedDict
 
 from lib.headline import verified_count
-from lib.level_result_types import NextStep
+from lib.level_result_types import LevelResult, NextStep
 from lib.level_tally import LEVEL_READS, default_model, level_result, run_exclusions
 from lib.levels import MaturityModel
 from lib.unit_readings import Origin
@@ -96,12 +100,19 @@ class UnitLevelsBlock(TypedDict):
     units: list[UnitLevel]
 
 
+def unit_result(reading: Mapping[str, Any], repo: Mapping[str, Any], model: MaturityModel) -> LevelResult:
+    """The level result of one unit: ``reading`` (a ``unit_readings`` unit) overlaid on the
+    ``repo`` blocks, with the repository's owner exclusions. A fleet run calls it over a
+    row's scans (``lib.fleet.fleet_data_units``, #866)."""
+    own = reading.get("blocks")
+    data = {**repo, **(own if isinstance(own, Mapping) else {})}
+    return level_result(model, data, run_exclusions(repo))
+
+
 def unit_level(path: str, reading: Mapping[str, Any], repo: Mapping[str, Any],
                model: MaturityModel) -> UnitLevel:
     """One unit's result: ``reading`` (a ``unit_readings`` unit) over the ``repo`` blocks."""
-    own = reading.get("blocks")
-    data = {**repo, **(own if isinstance(own, Mapping) else {})}
-    result = level_result(model, data, run_exclusions(repo))
+    result = unit_result(reading, repo, model)
     tags = reading.get("conditions")
     origins = {c.get("id"): c.get("origin") for c in tags if isinstance(c, Mapping)} \
         if isinstance(tags, list) else {}

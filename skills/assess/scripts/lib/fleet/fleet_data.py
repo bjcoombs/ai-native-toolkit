@@ -44,6 +44,13 @@ come from the fixed truth-tag list and the rest are counts.
   (``reason``: ``unavailable``, ``type_mismatch``), or ``not_scanned`` for a
   failed repository.
 
+**Unit rows** (#866, ``lib/fleet/fleet_data_units.py``): a repository scanned with
+``--monorepo-units`` carries ``unit_rows``, one per monorepo unit: its Step, the Step above, the
+first gate of that Step that does not hold, and its per-tag tally, so the page can expand
+the repository into its units. The unit's folder is written in ``--full`` only, or as its
+salted hash under ``--hash-paths``; null in plain counts-only. ``unit_rows`` is null for a
+repository not scanned by unit.
+
 **Privacy** (``counts_only_rules.FLEET_DATA_RULES``): ``--full`` keeps
 everything. Counts-only keeps keys and tokens, writes a non-token string value
 as ``set``, drops unit names and owners (``owner_count`` stays). With path
@@ -73,6 +80,10 @@ from `fleet_level.repo_level`; `public_steps` writes the exclusions' strings und
 (the owner's reason only in `--full`). Additive and unreleased under the run 4 version freeze (#944).
 `level_results` evaluates each scanned repository once (`fleet_level.repo_level`), for both
 `step_fields` and the per-tag tally (`fleet_data_tags.repo_tags`, unit `tag_roll_up`, #1073).
+`unit_rows` (#866, `fleet_data_units`): each repository scanned with `--monorepo-units` lists its
+monorepo units, each with its Step, the Step above, the first gate blocking it and its
+per-tag tally; `public_unit_rows` writes the unit's folder only in `--full` or hashed
+(`hashed_path`: null in plain counts-only), the rest as tokens. Null when not run by unit.
 """
 from __future__ import annotations
 
@@ -84,7 +95,7 @@ from pathlib import Path
 from typing import NamedTuple, TypedDict
 
 from lib.counts_only import hash_value, is_hashed
-from lib.counts_only_rules import DROP, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
+from lib.counts_only_rules import DROP, HASHED_PATH, ID, PATH, TOKEN, TOKEN_RE, classify_fleet_data
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_data_steps import (
     NO_STEPS,
@@ -96,6 +107,7 @@ from lib.fleet.fleet_data_steps import (
     step_roll_up,
 )
 from lib.fleet.fleet_data_tags import TagRollUp, repo_tags, tag_roll_up
+from lib.fleet.fleet_data_units import UnitRow, unit_rows
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
 from lib.fleet.fleet_maturity import SCOPE
@@ -190,6 +202,7 @@ class DataRepo(TypedDict):
     exclusions: list[RepoExclusion]  # the owner's, listed and never counted
     gate_blockers: list[GateBlocker]  # #945: every Step gate that does not hold, as tokens
     tags: list[TagCell] | None  # #1073: the headline's per-tag strip; None when not measured
+    unit_rows: list[UnitRow] | None  # #866: one row per monorepo unit; None when not run by unit
 
 
 # The stamp fields RunDetails leaves out: the stamp's own envelope version, the
@@ -242,6 +255,8 @@ class Privacy(NamedTuple):
         cls = classify_fleet_data(pattern)
         if cls == PATH:
             return self.key(value)
+        if cls == HASHED_PATH:
+            return None if self.salt is None else self.key(value)
         if cls == ID:
             return None if self.salt is not None else value
         if cls == TOKEN:
@@ -417,6 +432,24 @@ def public_tags(cells: list[TagCell] | None, privacy: Privacy) -> list[TagCell] 
     return [{**cell, "tag": privacy.text("repos.tags.tag", cell["tag"]) or ""} for cell in cells]
 
 
+def public_unit_rows(rows: list[UnitRow] | None, privacy: Privacy) -> list[UnitRow] | None:
+    """``rows`` with each string written under ``privacy`` (#866): the unit's folder only in
+    ``--full`` or hashed, the blocker and tags as tokens."""
+    if rows is None:
+        return None
+    out: list[UnitRow] = []
+    for row in rows:
+        b = row["next_blocker"]
+        blocker: GateBlocker | None = None if b is None else {
+            "gate": privacy.text("repos.unit_rows.next_blocker.gate", b["gate"]) or "",
+            "state": privacy.text("repos.unit_rows.next_blocker.state", b["state"]) or "",
+            "disposition": privacy.text("repos.unit_rows.next_blocker.disposition", b["disposition"])}
+        out.append({**row, "key": privacy.text("repos.unit_rows.key", row["key"]), "next_blocker": blocker,
+                    "tags": [{**c, "tag": privacy.text("repos.unit_rows.tags.tag", c["tag"]) or ""}
+                             for c in row["tags"]]})
+    return out
+
+
 def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model: MaturityModel | None,
                      trees: Sequence[Tree], *, owners: Mapping[str, list[str]] | None = None,
                      web_urls: Mapping[str, str | None] | None = None,
@@ -447,6 +480,8 @@ def build_fleet_data(stamp: FleetStamp, rows: Sequence[FleetRow], maturity_model
             "rows": [{**cell, "value": privacy.value(cell["value"])} for cell in cells[name]],
             **public_steps(repo_step[name], privacy),
             "tags": repo_tag[name],
+            "unit_rows": public_unit_rows(unit_rows(maturity_model, repo["scans"])
+                                          if repo["status"] == STATUS_OK else None, privacy),
         })
     return {
         "fleet_data_version": FLEET_DATA_VERSION,

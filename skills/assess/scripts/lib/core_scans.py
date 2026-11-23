@@ -342,14 +342,15 @@ def owner_exclusions(repo_root: Path) -> OwnerExclusionsBlock:
 
 
 def units(repo_root: Path, excludes: tuple[set[str], list[str]]) -> UnitsBlock:
-    """The monorepo units (#862). Core-only: the headless runner and /fleet scope in #866."""
+    """The monorepo units (#862). The headless runner reports it under ``--units`` (#866,
+    ``signals.UNIT_SCANS``)."""
     return scan_units(repo_root, excludes)
 
 
 def unit_readings(units_block: Any, nested: Any, *repo_wide: Any) -> UnitReadingsBlock:
     """Each unit's own readings of the scope-sensitive scans, conditions tagged by origin (#863).
     ``repo_wide`` are ``unit_readings.REPO_BLOCKS`` then ``UNIT_EXTERNAL_READS``, in order.
-    Core-only, like ``units``."""
+    Reported by the headless runner under ``--units``, like ``units`` (#866)."""
     blocks, external = split_reads(repo_wide)
     return read_units(units_block, nested, *external, repo_blocks=blocks)
 

@@ -8,7 +8,7 @@ levels left out and the key of a path-keyed map written ``{}``:
 ``behaviour.hidden_coupling_findings.coupled_pairs.file_a`` and
 ``instruction_files["CLAUDE.md"].grade`` is ``instruction_files.{}.grade``.
 
-Five classes:
+Six classes:
 
 - ``PATH``: a repo-relative path, directory, glob or dotted module name. Kept
   as written, or replaced by a salted hash when path hashing is on.
@@ -25,6 +25,10 @@ Five classes:
   whitespace or e-mail address; hashed with the paths when hashing is on.
 - ``DROP``: free text, file contents, commands, commit subjects, program names
   and identities. Removed (a dropped list of strings becomes its length).
+- ``HASHED_PATH``: a path that is a join key only once hashed, such as a monorepo
+  unit's folder (#866): dropped in plain counts-only output, replaced by its salted
+  hash when path hashing is on, so a fleet run can join a unit across runs without
+  naming it.
 
 The per-field rules (``RULES``) are generated from the check manifest: each
 collector's ``privacy`` table in ``checks/core.toml`` (#795). The global rules, the
@@ -65,12 +69,13 @@ from typing import Final, Literal, cast
 
 from lib.manifest.check_manifest import core_manifest, privacy_rules
 
-FieldClass = Literal["path", "token", "reason", "id", "drop"]
+FieldClass = Literal["path", "token", "reason", "id", "drop", "hashed_path"]
 PATH: Final = "path"
 TOKEN: Final = "token"
 REASON: Final = "reason"
 ID: Final = "id"
 DROP: Final = "drop"
+HASHED_PATH: Final = "hashed_path"
 
 # A kept token: a slug of at most 40 characters with no spaces, slashes or "@"
 # (so no sentence, path or e-mail address passes as a kind).
@@ -240,6 +245,12 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     # #1073: the per-tag tally names a tag from the fixed truth-tag list; every other field is a count
     "repos.tags.tag": TOKEN,
     "views.units.tags.cells.tag": TOKEN,
+    # #866: each monorepo unit row; the unit's folder only hashed, the rest tokens
+    "repos.unit_rows.key": HASHED_PATH,
+    "repos.unit_rows.next_blocker.gate": TOKEN,
+    "repos.unit_rows.next_blocker.state": TOKEN,
+    "repos.unit_rows.next_blocker.disposition": TOKEN,
+    "repos.unit_rows.tags.tag": TOKEN,
 }
 
 

@@ -306,6 +306,20 @@ Why the signals named here matter:
 
 - `coverage_gate.enforced_meets_minimum` feeds `layer-6-coverage.1:coverage_gate.enforced_meets_minimum`: An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly.
 
+### `units`: Monorepo units
+
+One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
+
+The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
+
+- Collector: `core.units`, reading `repo_root`, `excludes`.
+- Network: no.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
 ### `instruction_claims`: Instruction claims
 
 An agent trusts its instruction file without checking it. This checks each claim that a script runs in CI, a version is pinned or a count holds, and names the line of each that no longer does.
@@ -528,6 +542,24 @@ Run plumbing: no row or finding reads this scan.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
 
+### `agent_outcome`: Agent commit outcomes
+
+No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.
+
+- Collector: `core.agent_outcome`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_outcome.agent_rule` token, `agent_outcome.limits` drop, `agent_outcome.reason` reason, `agent_outcome.revert_null_reason` token, `agent_outcome.rework_null_reason` token, `agent_outcome.since` drop, `agent_outcome.window` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `shallow_clone`: The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read. Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it.
+  - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
+  - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
+  - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
+  - `git_failed`: A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
+  - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
+
 ### `doc_claims`: Doc claims
 
 An agent reads guides as literally as instruction files. This checks the same pin and count claims across the doc set and names two docs that state different values.
@@ -704,6 +736,20 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `unit_readings`: Monorepo unit readings
+
+A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.
+
+Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.
+
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Network: no.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.path` hashed_path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
@@ -1025,6 +1071,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
+| `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
