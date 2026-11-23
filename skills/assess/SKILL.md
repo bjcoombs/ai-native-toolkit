@@ -54,9 +54,7 @@ The deterministic core (`lib/keyhole/archetype.py`) classifies the repo and writ
 This is intentionally **one** archetype (knowledge base), structured as an extensible dispatch so more are cheap to add later - not a general archetype framework (YAGNI). The `assess-layer-scorer` agent reads the block (its Step 0) and the `assess-findings` skill renders N/A layers in the scorecard.
 
 <!-- chat-skip:start -->
-**$ARGUMENTS**
-
-**`--tour` (the guided first run).** When the arguments contain `--tour`, skip every step below. Do not assess the current repository. Follow `references/tour.md` (relative to this skill dir) instead: it builds a small sample repository in a temporary directory, walks the report one section at a time, has the newcomer make one fix and re-runs so they see the Step move.
+Arguments: **$ARGUMENTS**. **`--tour` (the guided first run):** when the arguments contain `--tour`, skip every step below. Do not assess the current repository. Follow `references/tour.md` (relative to this skill dir) instead: it builds a small sample repository in a temporary directory, walks the report one section at a time, has the newcomer make one fix and re-runs so they see the Step move.
 <!-- chat-skip:end -->
 
 ## Step 1: Determine Repo Root and Output Directory
