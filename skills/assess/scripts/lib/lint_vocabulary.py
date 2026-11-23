@@ -28,8 +28,8 @@ file or network access. Gradle's arguments are read by ``lib.runner_args``.
   Roslyn analysers a committed project file configures (``analysers_in_build``).
 
 The lint, analyser and formatter-check words of .NET, Gradle, PHP, Elixir, Dart, Swift
-and C++ (issue #926), split from `check_command.py` for the size ratchet; it imports no
-other lib module. `program_name(word)` is the basename with a `.phar`, `.exe` or numeric
+and C++ (issue #926), split from `check_command.py` for the size ratchet; it imports only
+`lib.runner_args` (the shared Gradle parser, #1046). `program_name(word)` is the basename with a `.phar`, `.exe` or numeric
 version suffix dropped (`vendor/bin/phpstan`, `clang-tidy-18`). `ANALYSER_PROGRAMS`
 (`phpstan`, `psalm`, `phpcs`, `detekt`, `swiftlint`, `clang-tidy`, `cppcheck`) lint in any
 mode. `formatter_mode(words)` is `check` for a formatter's check mode (`pint --test`,
@@ -62,10 +62,10 @@ with warnings as errors (`mix compile --warnings-as-errors`, `-Werror` after a c
 from __future__ import annotations
 
 import re
-
-from lib.runner_args import gradle_tasks as shared_gradle_tasks
 from pathlib import PurePosixPath
 from typing import Literal
+
+from lib.runner_args import gradle_tasks as shared_gradle_tasks
 
 ANALYSER_PROGRAMS = frozenset({
     "phpstan", "psalm", "phpcs", "detekt", "swiftlint", "clang-tidy", "cppcheck",

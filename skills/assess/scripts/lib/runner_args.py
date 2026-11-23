@@ -2,7 +2,7 @@
 
 One parser, shared by the CI-line reader (``lib.check_command``, ``lib.ci_lines``,
 ``lib.lint_vocabulary``) and the coverage gate (``lib.testing.coverage_ci``, #954). Every
-rule was checked against Gradle 9.4, pdm 2 and poethepoet.
+rule was checked against Gradle 9.4, pdm 2.29.7 and poethepoet 0.49.0.
 
 Gradle:
 
@@ -32,11 +32,11 @@ as ``(words, is_script)``, or None for another command (``pdm install``):
   scripts read and no ``X`` among them it runs nothing (``[]``).
 - ``poe X``: always the task ``X`` (poe runs no program by name).
 
-The scripts come from the root ``pyproject.toml`` under ``reads_pdm_scripts`` (a decorator on
+The scripts come from every tracked ``pyproject.toml`` under ``reads_pdm_scripts`` (a decorator on
 a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``,
 ``coverage_gate.detect_coverage_gate``). Outside one (an instruction file) they are not read,
-and ``pdm X`` is read as a script by name. Inward-only imports: stdlib and
-``lib.command_flags``; never ``lib.check_command`` or an orchestrator.
+and ``pdm X`` is read as a script by name. Inward-only imports: stdlib,
+``lib.command_flags`` and ``lib.command_index``; never ``lib.check_command`` or an orchestrator.
 Tests: ``tests/test_runner_args.py``.
 """
 from __future__ import annotations
@@ -50,6 +50,7 @@ from pathlib import Path, PurePosixPath
 from typing import ParamSpec, TypeVar
 
 from lib.command_flags import make_runs_no_recipe
+from lib.command_index import read_config, repo_files
 
 GRADLE = frozenset({"gradle", "gradlew"})
 _GRADLE_DRY_RUN = frozenset({"--dry-run", "--task-graph"})
@@ -202,17 +203,24 @@ def script_run(words: Sequence[str]) -> tuple[list[str], bool] | None:
 
 
 def pdm_scripts(root: Path) -> frozenset[str] | None:
-    """The ``[tool.pdm.scripts]`` names of ``root/pyproject.toml`` (``_``, the shared
-    options, is none); empty with no such file, None when it cannot be parsed."""
-    path = root / "pyproject.toml"
-    try:
-        if not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
-            return frozenset()
-        data = tomllib.loads(path.read_text(encoding="utf-8", errors="replace"))
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    scripts = data.get("tool", {}).get("pdm", {}).get("scripts", {})
-    return frozenset(k for k in scripts if k != "_") if isinstance(scripts, dict) else frozenset()
+    """The ``[tool.pdm.scripts]`` names of every tracked ``pyproject.toml`` (``_``, the shared
+    options, is none), so a project in a subdirectory (``cd backend && pdm cov``) counts too;
+    empty with none, None when one cannot be parsed (unknown, never "no such script")."""
+    names: set[str] = set()
+    for rel in sorted(repo_files(root)):
+        if PurePosixPath(rel).name != "pyproject.toml":
+            continue
+        text = read_config(root, rel)
+        if "pdm" not in text:
+            continue
+        try:
+            data = tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            return None
+        scripts = data.get("tool", {}).get("pdm", {}).get("scripts", {})
+        if isinstance(scripts, dict):
+            names.update(k for k in scripts if k != "_")
+    return frozenset(names)
 
 
 @contextmanager

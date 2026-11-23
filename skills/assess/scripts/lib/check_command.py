@@ -104,6 +104,9 @@ def _js_check(head: str, pos: list[str], names: frozenset[str] | None) -> bool:
 def _check_target(words: list[str], names: frozenset[str] | None = None,
                   programs: frozenset[str] = ALWAYS_CHECK) -> bool:
     """Whether the program, subcommand or target a command runs is a check."""
+    script = _hatch_run(words)   # uv run poe pytest: poe's word is a task, read as poe pytest (#1046)
+    if script is not None:
+        return bool(script) and (is_check_name(script[0], names) or _check_target(script, names, programs))
     head = words[0]
     pos = _positionals(make_args(words[1:]) if head in ("make", "gmake") else words[1:])   # -j 4 (#955)
     if head in programs:

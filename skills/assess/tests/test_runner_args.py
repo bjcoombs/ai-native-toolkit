@@ -1,8 +1,8 @@
 """Gradle dry runs and exclusions, and pdm / poe read-through, on the CI reader (#1046).
 
 Each expected reading was checked against the real tools (Gradle 9.4 on a two-project
-build whose ``check`` runs a failing test and a failing lint task in each project; pdm and
-poethepoet from PyPI on a ``pyproject.toml`` with scripts):
+build whose ``check`` runs a failing test and a failing lint task in each project; pdm 2.29.7 and
+poethepoet 0.49.0 on a ``pyproject.toml`` with scripts):
 
 - ``-m``, ``-qm``, ``-mq``, ``--dry-run`` and ``--task-graph`` run no task and exit 0;
   ``-Pm`` and ``-Dmode=x`` run everything.
@@ -158,6 +158,12 @@ def test_pdm_scripts_reads_the_table_and_skips_shared_options(tmp_path: Path) ->
     assert pdm_scripts(tmp_path) == {"pytest", "lint", "cov"}
 
 
+def test_pdm_scripts_reads_every_tracked_pyproject(tmp_path: Path) -> None:
+    _repo(tmp_path, {"pyproject.toml": "[project]\nname = 'x'\n",
+                     "backend/pyproject.toml": "[tool.pdm.scripts]\ncov = \"x\"\n"})
+    assert pdm_scripts(tmp_path) == {"cov"}
+
+
 def test_pdm_scripts_absent_and_unreadable(tmp_path: Path) -> None:
     assert pdm_scripts(tmp_path) == frozenset()
     (tmp_path / "pyproject.toml").write_text("[tool.pdm.scripts\n", encoding="utf-8")
@@ -202,6 +208,13 @@ def test_script_run(tmp_path: Path, words: str, scripts: frozenset[str] | None,
     ("poe foo", None, False, True),
     ("poe ruff", None, False, True),   # a task named ruff: its recipe is unread
     ("poe", False, False, False),
+    # Wrapped forms read as the bare ones: poe's word is a task, never a program.
+    ("uv run poe pytest", None, False, True),
+    ("poetry run poe ruff", None, False, True),
+    ("uv run poe test", True, False, True),
+    ("uv run pdm run ruff check .", True, True, False),
+    ("hatch run lint", None, True, True),
+    ("uv run hatch run lint", None, True, True),
 ])
 def test_pdm_and_poe_read_through(line: str, check: bool | None, lint: bool, maylint: bool) -> None:
     assert check_verdict(line) is check
@@ -217,6 +230,8 @@ def test_issue_pdm_run_ruff_credits_a_lint_run(tmp_path: Path) -> None:
     # A pytest script shadows the program: its recipe is unread, so null, never credit.
     ("pdm run pytest", (None, "check_target")),
     ("pdm pytest", (None, "check_target")),
+    ("uv run pdm pytest", (None, "check_target")),
+    ("uv run pdm run pytest", (None, "check_target")),
     # No such script: pdm runs the program, and a bare pdm word is "Command not found".
     ("pdm run ruff check .", (True, "enforced_check")),
 ])
@@ -244,9 +259,9 @@ def test_scripts_are_read_only_inside_the_scan(tmp_path: Path) -> None:
 COV_80 = "[tool.coverage.report]\nfail_under = 80\n"
 
 
-def _gate(root: Path, line: str, pyproject: str) -> tuple[bool | None, str]:
-    block = detect_coverage_gate(_repo(root, {".github/workflows/ci.yml": _wf(line),
-                                              "pyproject.toml": pyproject}))
+def _gate(root: Path, line: str, pyproject: str, rel: str = "pyproject.toml",
+          ) -> tuple[bool | None, str]:
+    block = detect_coverage_gate(_repo(root, {".github/workflows/ci.yml": _wf(line), rel: pyproject}))
     return block["enforced_meets_minimum"], block["enforced_basis"]
 
 
@@ -265,3 +280,22 @@ def test_coverage_gate_reads_pdm_scripts(tmp_path: Path, line: str, pyproject: s
 
 def test_script_word_is_no_shell_word() -> None:
     assert SCRIPT.startswith("<")
+
+
+@pytest.mark.parametrize("root_pyproject", [None, "[project]\nname = 'x'\n"])
+def test_a_subdirectory_pdm_script_still_reads_indirect_run(tmp_path: Path,
+                                                            root_pyproject: str | None) -> None:
+    """``cd backend && pdm cov``: the script lives in a subdirectory's pyproject.toml, so a
+    bare ``pdm cov`` may run it (as on main), never "no such script"."""
+    if root_pyproject is not None:
+        (tmp_path / "pyproject.toml").write_text(root_pyproject, encoding="utf-8")
+    section = "[tool.pdm.scripts]\ncov = \"pytest --cov --cov-fail-under=80\"\n"
+    assert _gate(tmp_path, "pdm cov", "[project]\nname = 'b'\n\n" + section,
+                 rel="backend/pyproject.toml") == (None, "indirect_run")
+
+
+def test_poe_pytest_is_a_task_on_the_coverage_gate(tmp_path: Path) -> None:
+    """poe runs no program by name: ``poe pytest`` runs a task, whose recipe is unread."""
+    section = "[tool.poe.tasks]\npytest = \"pytest --cov --cov-fail-under=80\"\n"
+    assert _gate(tmp_path, "poe pytest", "[project]\nname = 'x'\n\n" + section) == (
+        None, "indirect_run")
