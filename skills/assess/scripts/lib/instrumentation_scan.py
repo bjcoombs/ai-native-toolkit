@@ -105,8 +105,11 @@ def _rule(label: str, suffixes: str, pattern: str) -> CodeRule:
 _JVM = ".java .kt .kts .scala .groovy"
 CODE_RULES: tuple[CodeRule, ...] = (
     _rule("Python logging", ".py",
-          _LINE + r"\blogging\.getLogger\s*\(|^[ \t]*from[ \t]+logging[ \t]+import[^\n]*\bgetLogger\b"),
-    _rule("Go log/slog", ".go", r'^[ \t]*(?:import[ \t]+)?(?:[\w.]+[ \t]+)?"log/slog"[ \t]*\)?[ \t]*$'),
+          _LINE + r"\blogging\.getLogger\s*\("
+          # `from logging import getLogger`, or a parenthesised list across lines.
+          r"|^[ \t]*from[ \t]+logging[ \t]+import[ \t]*"
+          r"(?:[^\n(#]*\bgetLogger\b|\([^)]*\bgetLogger\b)"),
+    _rule("Go log/slog", ".go", r'^[ \t]*(?:import[ \t]+)?(?:[\w.]+[ \t]+)?"log/slog"[ \t]*\)?[ \t]*(?://[^\n]*)?$'),
     _rule("java.util.logging", _JVM, r"^[ \t]*import[ \t]+(?:static[ \t]+)?java\.util\.logging\."),
     _rule("SLF4J", _JVM, r"^[ \t]*import[ \t]+(?:static[ \t]+)?org\.slf4j\."),
     _rule("Android Log", ".java .kt", r"^[ \t]*import[ \t]+android\.util\.Log\b"),
