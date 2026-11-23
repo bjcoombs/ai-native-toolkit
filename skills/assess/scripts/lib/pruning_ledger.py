@@ -19,7 +19,8 @@ value}``) and a ``completed_sha`` on HEAD's history. ``update_ledger`` keeps one
   counts twice;
 - several pending removals of one file (a file trimmed in rounds) fold into one entry measured
   from the first round's starting size (``_merge_rounds``, #1168), so one continuous drop is
-  credited once;
+  credited once (the first round is the one an earlier run stored; rounds first seen in the same
+  run use the largest start);
 - a pending entry whose removal is no longer a done action on HEAD's history (squashed away,
   reopened, deleted) is dropped; a credited one stays as the record. When the done removals
   cannot be read (``actions.json`` not committed or not readable, a shallow clone, git failing)
@@ -81,7 +82,9 @@ def _merge_rounds(entries: dict[tuple[str, str], PruningEntry], stored: set[tupl
     ``cost_before`` stands in for it. The kept entry is the newest removal (of the new ones, the
     smallest ``cost_before``) with its commit and hold count; it takes the first round's starting
     size and gates and lists the folded commits in ``merged`` so they are never added again. A
-    file that regrows between rounds is still measured from the first round's start."""
+    file that regrows between rounds is still measured from the first round's start when that
+    round was stored by an earlier run; rounds first seen together in one run use the largest
+    start instead."""
     by_path: dict[str, list[tuple[str, str]]] = {}
     for key, e in entries.items():
         if not e["credited"]:
