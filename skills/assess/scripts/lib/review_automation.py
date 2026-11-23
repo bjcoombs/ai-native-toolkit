@@ -29,8 +29,8 @@ match is listed with ``tracked: false`` and does not set ``present``. A
 ``ci_action`` is credited only when its workflow's ``on:`` names a
 ``REVIEW_EVENTS`` trigger (``pull_request``, ``pull_request_target``,
 ``merge_group``); one wired only to ``issue_comment`` or ``issues`` is listed
-with ``on_changes: false``. A workflow whose ``on:`` the line reader cannot read
-is credited. A GitLab include is credited as committed: the jobs it brings live
+with ``on_changes: false``. A workflow whose ``on:`` the shared ``on`` reader
+(``ci_triggers.workflow_events``, #1036) cannot read is credited. A GitLab include is credited as committed: the jobs it brings live
 in the included file, so whether they run in merge-request pipelines is not read
 (a known limit). Includes inside a GitLab template the run resolved offline
 (``lib/ci_includes.py``, #766: a ``local:`` file, or a ``project:`` /

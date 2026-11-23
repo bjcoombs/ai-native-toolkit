@@ -7,9 +7,11 @@ parser), and classifies each CI line as ``ordinary``, ``not_ordinary`` or
 ``unknown``. Literal values only.
 
 GitHub Actions, per workflow file, from its top-level ``on`` key (``"on"`` and
-the YAML 1.1 ``true`` spelling included), as a scalar, a flow list or mapping,
-or a block list or mapping (a block list may sit at the ``on`` key's own column,
-``on:`` then ``- push``, as YAML allows for a sequence under a mapping key):
+the YAML 1.1 ``true`` spelling included), as a scalar, a flow list or mapping
+(one that runs onto later lines is joined; one that never closes is unread), or a
+block list or mapping (a block list may sit at the ``on`` key's own column, ``on:``
+then ``- push``, as YAML allows for a sequence under a mapping key). It is the one
+``on`` reader: ``shared_tooling.workflow_events`` calls it too (#1036).
 
 - ``push``, ``pull_request``, ``pull_request_target`` or ``merge_group`` among
   the events: ``ordinary``. Branch and path filters are not read.
@@ -123,6 +125,19 @@ def _names(text: str) -> list[str]:
     return [text.strip("'\"")] if text else []
 
 
+def _joined_flow(inline: str, rest: list[str]) -> str | None:
+    """An inline ``on`` value with a flow collection that runs onto later lines joined
+    into one line (``on: [push,`` then ``pull_request]``); None when it never closes."""
+    text = inline
+    following = iter(rest)
+    while text.count("[") + text.count("{") > text.count("]") + text.count("}"):
+        line = next(following, None)
+        if line is None:
+            return None
+        text += " " + strip_comment(line).strip()
+    return text
+
+
 def workflow_events(text: str) -> list[str] | None:
     """The events a GitHub Actions workflow's top-level ``on`` names, or None when not readable."""
     lines = text.splitlines()
@@ -132,7 +147,8 @@ def workflow_events(text: str) -> list[str] | None:
             continue
         inline = strip_comment(match.group(1))
         if inline:
-            return _names(inline) or None
+            flow = _joined_flow(inline, lines[i + 1:])
+            return None if flow is None else _names(flow) or None
         events: list[str] = []
         child_indent = -1
         for line in lines[i + 1:]:
