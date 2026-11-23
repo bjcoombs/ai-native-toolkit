@@ -97,7 +97,10 @@ parser (the core has no YAML dependency). Only literal values count.
   script with pipefail, so it is not read there.
 - A function no statement of its GitHub bash or sh ``run:`` body calls (#1061,
   ``ci_unsure.uncalled_functions``): its body is masked, since ``f() { pytest; }`` alone runs
-  nothing. GitLab joins ``before_script:`` and ``script:``, so it is not read there.
+  nothing. A call is the name as the command a segment runs (``f``, ``} && f``, ``time f``,
+  ``out=$(f)``); the name in echoed text (``echo f``) is none. Named only as another command's
+  argument (``retry 3 f``), the body reads null. GitLab joins ``before_script:`` and
+  ``script:``, so it is not read there.
 
 Known limits: a check before ``&&`` inside a subshell or function with
 a later statement there is credited; a ``{ }`` group or function called before ``&&`` reads
@@ -603,7 +606,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     readable = run_shell is not None and bash   # the #1008 forms: a GitHub bash or sh body
     until = until_break_flags(body) if readable else [False] * len(refs)
     in_group = group_call_unsure(body, conditions) if readable else set()
-    uncalled = uncalled_functions(body) if readable else set()   # f() { pytest; } alone (#1061)
+    uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
     opaque = opaque_flags(body)
     out: list[tuple[int, int]] = []
     exempt: Segments = {}
@@ -630,7 +633,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
             whole = frozenset(range(len(statement)))
             # A ``{ }`` group or a compound body passes an exempt failure on; a subshell
             # or a function returns it (``lib.ci_unsure.opaque_flags``).
-            maybe = (whole if idx in in_group or conditions[idx] or until[idx]
+            maybe = (whole if idx in in_group or idx in named or conditions[idx] or until[idx]
                      else exempt_segments(statement, True) if (later_code or later_exit) and not opaque[idx]
                      else frozenset())
             if maybe:

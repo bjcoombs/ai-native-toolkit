@@ -236,31 +236,76 @@ def group_call_unsure(statements: list[Statement], conditions: list[bool]) -> se
     return out
 
 
-def uncalled_functions(statements: list[Statement]) -> set[int]:
-    """The statements of each function body that no statement outside it names (#1061):
-    ``f() { pytest; }`` alone defines ``f`` and runs nothing, so its check cannot fail the step.
-    Any whole-word mention outside the body counts as a call (``time f``, ``retry 3 f``,
-    ``out=$(f)``, a ``case`` arm), so a call this reader cannot place never masks the body.
-    A mention inside another uncalled function's body is no call (``f() { pytest; }; g() { f; }``
-    runs nothing), so the reading repeats until no more bodies drop out."""
+# Words a call can follow at the start of a command: keywords, wrappers and a group opener.
+_CALL_LEADS = frozenset({"!", "if", "elif", "while", "until", "then", "do", "else", "{", "(",
+                         "time", "exec", "command", "builtin", "nohup", "env", "sudo"})
+# Commands whose arguments are text, never run (``echo f``).
+_TEXT_COMMANDS = frozenset({"echo", "printf", ":"})
+_ASSIGN = re.compile(r"^[A-Za-z_]\w*=")
+_LEAD = re.compile(r"^\s*(?:function\s+[\w.-]+(?:\s*\(\s*\))?|[\w.-]+\s*\(\s*\))\s*\{")
+
+
+def _call_words(segment: str) -> list[str]:
+    """The first word of each command ``segment`` runs: its own (past keywords, wrappers,
+    ``X=1`` assignments, a ``case`` pattern), and, in a plain assignment, the one after each
+    ``$(`` / backtick."""
+    out: list[str] = []
+    pieces = re.split(r"\$\(|`", segment)
+    # A substitution's text ends at its closer, and runs as the command only in a plain
+    # assignment (``out=$(f)`` fails under errexit; ``echo "$(f)"`` does not). A function lead
+    # (``g() { f``) opens a body.
+    assigns = all(_ASSIGN.match(w) for w in pieces[0].split()) and pieces[0].rstrip().endswith("=")
+    subs = [p.split(")", 1)[0] for p in pieces[1:]] if assigns else []
+    for piece in [pieces[0], *subs]:
+        piece = _LEAD.sub("", piece)
+        words = piece.replace("(", " ( ").split()
+        if words[:1] == ["case"]:
+            words = words[words.index("in") + 1:] if "in" in words else []
+        while words and (words[0] in _CALL_LEADS or _ASSIGN.match(words[0]) or words[0].endswith(")")):
+            words = words[1:]
+        if words:
+            out.append(words[0].rstrip(";`"))
+    return out
+
+
+def uncalled_functions(statements: list[Statement]) -> tuple[set[int], set[int]]:
+    """``(uncalled, maybe)``: the body statements of each function nothing outside it calls,
+    and of each one named outside it only as another command's argument (#1061).
+
+    ``f() { pytest; }`` alone defines ``f`` and runs nothing, so its check cannot fail the step:
+    ``ci_masking`` masks that body. A call is the name as the command a segment runs (``f``,
+    ``} && f``, ``time f``, ``X=1 f``, ``out=$(f)``, a ``case`` arm). The name inside echoed text
+    (``echo f``) is no call. The name as another command's argument (``retry 3 f``, ``npm run
+    build`` beside a ``run`` function) may or may not run it, so that body reads null, never
+    credit. A mention inside another uncalled function's body is no call (``f() { pytest; };
+    g() { f; }``), so the reading repeats until no more bodies drop out."""
     bodies = {name: range(start, end + 1) for start, end, name in _groups(statements) if name}
-    words = {name: re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])") for name in bodies}
-    texts = [_join(statement) for statement in statements]
-    # A closing statement's text after its ``}`` runs outside any body, called or not
-    # (``f() { pytest; } && f``).
-    closers = {body[-1]: unquoted(texts[body[-1]]).partition("}")[2] for body in bodies.values()}
+    # A closing statement's segments after its ``}`` run outside any body (``f() { pytest; } && f``).
+    outside_closer = {body[-1]: [seg for _, seg in statements[body[-1]]
+                                 if not seg.lstrip().startswith("}")] for body in bodies.values()}
     out: set[int] = set()
+    maybe: set[int] = set()
     uncalled: set[str] = set()
     changed = True
     while changed:
         changed = False
         for name, body in bodies.items():
-            outside = (text for i, text in enumerate(texts) if i not in body and i not in out)
-            if name not in uncalled and not any(words[name].search(t) for t in (*outside, *closers.values())):
-                uncalled.add(name)
-                out.update(body)
-                changed = True
-    return out
+            if name in uncalled:
+                continue
+            segments = [seg for i, statement in enumerate(statements) if i not in body and i not in out
+                        for _, seg in statement]
+            segments += [seg for segs in outside_closer.values() for seg in segs]
+            if any(name in _call_words(seg) for seg in segments):
+                continue
+            word = re.compile(r"(?<![\w.-])" + re.escape(name) + r"(?![\w.-])")
+            named = [seg for seg in segments if word.search(unquoted(seg))]
+            if any((_call_words(seg)[:1] or [""])[0] not in _TEXT_COMMANDS for seg in named):
+                maybe.update(body)
+                continue
+            uncalled.add(name)
+            out.update(body)
+            changed = True
+    return out, maybe - out
 
 
 def opaque_flags(statements: list[Statement]) -> list[bool]:

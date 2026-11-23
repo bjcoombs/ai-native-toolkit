@@ -62,6 +62,10 @@ ROWS = [
     ("f() { pytest; }; g() { f; }", MASKED, MASKED, MASKED),   # named only in an uncalled body
     ("f() { pytest; }; g() { f; }; g", CREDIT, CREDIT, CREDIT),
     ("f() { pytest; } && f", CREDIT, CREDIT, CREDIT),   # called after the closing brace
+    ("f() { pytest; }; out=$(f)", CREDIT, CREDIT, CREDIT),   # an assignment runs it
+    ("f() { pytest; }; echo f", MASKED, MASKED, MASKED),   # named in echoed text only
+    ("test() { pytest; }; echo test passed", MASKED, MASKED, MASKED),
+    ('f() { pytest; }; echo "$(f)"', MASKED, MASKED, MASKED),   # echo hides the status
     # Gap 5: a fallback arm is judged by the commands that run.
     ("pytest || echo false", MAY, MAY, MAY),
     ("pytest || echo exit", MAY, MAY, MAY),
@@ -255,11 +259,22 @@ def test_a_piped_check_nothing_reads_back_is_masked(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("call", [
-    "run_tests", "time run_tests", "retry 3 run_tests", "X=1 run_tests", "out=$(run_tests)",
-    "case x in x) run_tests;; esac",
+    "run_tests", "time run_tests", "X=1 run_tests", "out=$(run_tests)", "case x in x) run_tests;; esac",
+    "} && run_tests",
 ])
 def test_a_function_named_outside_its_body_is_called(tmp_path: Path, call: str) -> None:
-    assert _enforced(tmp_path, _block(f"run_tests() {{\n  pytest\n}}\n{call}")) == CREDIT
+    body = (f"run_tests() {{\n  pytest\n{call}" if call.startswith("}")
+            else f"run_tests() {{\n  pytest\n}}\n{call}")
+    assert _enforced(tmp_path, _block(body)) == CREDIT
+
+
+@pytest.mark.parametrize("body", [
+    "run_tests() {\n  pytest\n}\nretry 3 run_tests",   # retry may run it
+    "run() {\n  pytest\n}\nnpm run build",              # npm's argument, not the function
+])
+def test_a_function_named_only_as_an_argument_is_not_measured(tmp_path: Path, body: str) -> None:
+    """Neither credit nor a false 0: the other command may or may not run the function."""
+    assert _enforced(tmp_path, _block(body)) == MAY
 
 
 @pytest.mark.parametrize(("run", "shell", "expected"), [
