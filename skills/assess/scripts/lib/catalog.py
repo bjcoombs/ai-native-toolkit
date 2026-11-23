@@ -1,7 +1,7 @@
 """The measures catalog: what ``/assess`` and ``/fleet`` measure, generated from the check manifest (#794).
 
 ``build_catalog`` joins the check manifest (``checks/core.toml`` and its fragments under
-``checks/core/``, ``lib.check_manifest``),
+``checks/core/``, ``lib.manifest.check_manifest``),
 the default maturity model (``levels/default.toml``) and the signal input classes
 (``lib.level_signals``, #783) into one ``Catalog`` document. ``lib.catalog_md`` renders it
 as ``docs/what-we-measure.md``; ``render_json`` writes it as
@@ -70,7 +70,7 @@ from collections.abc import Mapping, Sequence
 from typing import Literal, NotRequired, TypedDict
 
 from lib import catalog_tags as ct
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import manifest_whys as mw
 from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.levels import Criterion, MaturityModel, Scalar, condition_id

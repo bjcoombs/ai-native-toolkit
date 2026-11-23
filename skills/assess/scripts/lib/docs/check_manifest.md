@@ -1,6 +1,6 @@
-# `lib/check_manifest.py`
+# `lib/manifest/check_manifest.py`
 
-The full reference for `skills/assess/scripts/lib/check_manifest.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/manifest/check_manifest.py`, whose module docstring holds the summary.
 
 (#789 step 1, #792)
 The strict loader for the check manifest, `skills/assess/checks/core.toml` (owner

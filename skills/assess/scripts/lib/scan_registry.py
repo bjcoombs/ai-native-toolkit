@@ -84,7 +84,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import core_scans as cs
 from lib import run_setup as rs
 from lib.agent_building import scan_agent_building
@@ -115,7 +115,7 @@ from lib.guardrails import scan_guardrails
 from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
-from lib.check_manifest import core_manifest
+from lib.manifest.check_manifest import core_manifest
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
 from lib.unit_readings import bind as bind_unit_pass

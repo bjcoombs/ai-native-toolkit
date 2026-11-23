@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from lib import check_manifest as cm
+import lib.manifest.check_manifest as cm
 from lib import manifest_whys as mw
 from lib.levels_fields import TRUTH_TAGS
 
@@ -178,7 +178,7 @@ def test_sources_sit_beside_a_real_why_and_are_urls_or_paths() -> None:
 
 def test_a_load_through_the_cli_names_the_entry() -> None:
     # MLOAD: a fresh process, exit code and message, as the #939 contract runs it.
-    code = ("import sys; sys.path.insert(0, 'scripts'); from lib import check_manifest as cm;"
+    code = ("import sys; sys.path.insert(0, 'scripts'); import lib.manifest.check_manifest as cm;"
             "cm.load_manifest(); print('ok')")
     run = subprocess.run([sys.executable, "-c", code], capture_output=True, encoding="utf-8",
                          errors="replace", check=False, cwd=cm.CORE_MANIFEST.parents[1])
