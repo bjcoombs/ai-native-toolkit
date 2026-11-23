@@ -12,8 +12,8 @@ from __future__ import annotations
 import networkx as nx
 import pytest
 
-from lib import import_graph_python as igp
-from lib import structure_graph as sg
+import lib.graph.import_graph_python as igp
+import lib.graph.structure_graph as sg
 from lib.assess_config import DEFAULT_KEYHOLE_BUDGET
 
 
@@ -48,8 +48,9 @@ def test_no_packages_is_unavailable_not_an_empty_graph(tmp_path):
     assert result.as_dict()["modularity_q"] is None   # unmeasured is null, not 0.0
 
 
-@pytest.mark.parametrize("module, flag", [(igp, "_GRIMP_AVAILABLE"),
-                                          (sg, "_NETWORKX_AVAILABLE")])
+@pytest.mark.parametrize("module, flag", [
+    pytest.param(igp, "_GRIMP_AVAILABLE", id="lib.import_graph_python-_GRIMP_AVAILABLE"),
+    pytest.param(sg, "_NETWORKX_AVAILABLE", id="lib.structure_graph-_NETWORKX_AVAILABLE")])
 def test_an_unavailable_block_emits_null_modularity(monkeypatch, tmp_path, module, flag):
     monkeypatch.setattr(module, flag, False)
     (tmp_path / "pkg").mkdir()
@@ -350,7 +351,7 @@ def test_analyze_structure_on_lib_itself():
     assert result.module_count > 0
 
     modules = {fp["module"] for fp in result.footprints}
-    assert "lib.structure_graph" in modules
+    assert "lib.graph.structure_graph" in modules
     assert "lib.assess_config" in modules
 
     # Q is computed and in range; result round-trips to JSON-friendly dict.
@@ -398,7 +399,7 @@ def test_target_lib_package_is_graphed_not_the_running_assess_lib(tmp_path):
     assert _module_names(result) == {"lib", "lib.alpha", "lib.beta"}
     assert result.module_count == 3
     assert result.edge_count == 1
-    assert "lib.structure_graph" not in _module_names(result)
+    assert "lib.graph.structure_graph" not in _module_names(result)
 
 
 def test_package_named_like_an_imported_module_is_graphed(tmp_path):

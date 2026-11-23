@@ -11,7 +11,7 @@ import pytest
 import assess_core
 from lib.counts_only import COUNTS_ONLY_FILE, counts_only, reason_token
 from lib.counts_only_rules import REASON, classify
-from lib.import_graph import (
+from lib.graph.import_graph import (
     INVALID_IMPORT_GRAPH,
     LANGUAGE_BY_EXTENSION,
     NO_PYTHON_PACKAGES,
@@ -19,7 +19,7 @@ from lib.import_graph import (
     STRUCTURE_REASON_CODES,
     no_graph_reason,
 )
-from lib.import_graph_python import GRIMP_MISSING
+from lib.graph.import_graph_python import GRIMP_MISSING
 
 
 def test_structure_reason_is_a_reason_code_rule() -> None:
