@@ -89,6 +89,7 @@ from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.unit_discovery import UnitsBlock
 from lib.unit_levels import UnitLevelsBlock
+from lib.unit_rollup import UnitRollUpBlock
 from lib.unit_readings import UnitReadingsBlock
 from lib.graph.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
@@ -160,6 +161,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("headline", Headline),
     ("unit_readings", UnitReadingsBlock),
     ("unit_levels", UnitLevelsBlock),
+    ("unit_rollup", UnitRollUpBlock),
 )
 
 _UNIONS = (Union, types.UnionType)

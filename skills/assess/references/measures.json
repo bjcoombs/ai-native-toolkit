@@ -4952,6 +4952,18 @@
       ],
       "network": false,
       "private": false
+    },
+    {
+      "name": "unit_rollup",
+      "title": "Monorepo unit roll-up",
+      "publishes": [
+        "unit_rollup"
+      ],
+      "reads": [
+        "unit_levels"
+      ],
+      "network": false,
+      "private": false
     }
   ],
   "signals": [
