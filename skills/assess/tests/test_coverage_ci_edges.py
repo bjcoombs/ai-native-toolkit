@@ -94,14 +94,22 @@ def test_case2_no_cov_turns_coverage_off(
      GRADLE_080, (False, "not_run_in_ci")),
     # -x check stops the wired check crediting it; another wiring may still run it.
     ("./gradlew build -x check", GRADLE_WIRED, (None, "indirect_run")),
-    ("./gradlew check -x test", GRADLE_WIRED, (True, "ci_run")),
+    # No test task, no execution data: the verification's onlyIf skips it (Gradle 9.4).
+    ("./gradlew check -x test", GRADLE_WIRED, (False, "not_run_in_ci")),
+    ("./gradlew jacocoTestCoverageVerification -x test", GRADLE_080, (False, "not_run_in_ci")),
+    ("./gradlew check -x jacocoTestReport", GRADLE_WIRED, (True, "ci_run")),
+    ("./gradlew -qm jacocoTestCoverageVerification", GRADLE_080, (False, "not_run_in_ci")),
+    ("./gradlew -q -m jacocoTestCoverageVerification", GRADLE_080, (False, "not_run_in_ci")),
+    ("./gradlew -Dmode=ci jacocoTestCoverageVerification", GRADLE_080, (True, "ci_run")),
+    ("./gradlew -Pm jacocoTestCoverageVerification", GRADLE_080, (True, "ci_run")),
     ("./gradlew jacocoTestCoverageVerification --dry-run", GRADLE_080,
      (False, "not_run_in_ci")),
     ("./gradlew check -m", GRADLE_WIRED, (False, "not_run_in_ci")),
     ("gradle build --task-graph", GRADLE_WIRED, (False, "not_run_in_ci")),
     ("./gradlew test -m", GRADLE_080, (False, "not_run_in_ci")),
 ], ids=["check-x", "exclude-task", "exclude-task-eq-path", "named-and-excluded",
-        "x-check", "x-test", "dry-run", "m-wired-check", "task-graph", "test-dry-run"])
+        "x-check", "x-test", "verify-x-test", "x-report", "qm-cluster", "q-m",
+        "d-property", "p-property", "dry-run", "m-wired-check", "task-graph", "test-dry-run"])
 def test_cases3_4_gradle_exclusion_and_dry_run(
         tmp_path: Path, line: str, build: str, expected: tuple[bool | None, str]) -> None:
     assert _read(tmp_path, {**_ci(line), "build.gradle": build}) == expected
@@ -192,6 +200,30 @@ ADDOPTS_COV = "[tool.pytest.ini_options]\naddopts = \"--cov=src\"\n"
 ], ids=["pytest-sibling", "jest-sibling", "pytest-same-dir", "pytest-root-addopts",
         "jest-same-dir", "ci-line-package-addopts", "ci-line-root-addopts"])
 def test_case6_activation_is_per_directory(
+        tmp_path: Path, files: dict[str, str], expected: tuple[bool | None, str]) -> None:
+    assert _read(tmp_path, files) == expected
+
+
+@pytest.mark.parametrize(("files", "expected"), [
+    # Harness fixture ao_scoped_cfg: pytest -c ci/pytest.ini takes ci/'s addopts --cov, and
+    # coverage.py reads the root fail_under from the run directory (real pytest-cov exits 1).
+    ({**_ci("pytest -c ci/pytest.ini"), "pyproject.toml": PYPROJECT_80,
+      "ci/pytest.ini": "[pytest]\naddopts = --cov\n"}, (True, "ci_run")),
+    ({**_ci("pytest --config-file=ci/pytest.ini"), "pyproject.toml": PYPROJECT_80,
+      "ci/pytest.ini": "[pytest]\naddopts = --cov\n"}, (True, "ci_run")),
+    # The named config holds no --cov, so the root addopts does not apply.
+    ({**_ci("pytest -c ci/pytest.ini"), "pyproject.toml": PYPROJECT_80 + ADDOPTS_COV,
+      "ci/pytest.ini": "[pytest]\naddopts = -q\n"}, (False, "not_run_in_ci")),
+    ({**_ci("pytest -c ci/pytest.ini"), "pyproject.toml": PYPROJECT_80,
+      "ci/pytest.ini": "[pytest]\naddopts = --cov --no-cov\n"}, (False, "not_run_in_ci")),
+    # A config this scan did not read, or --rootdir: unsure, never false.
+    ({**_ci("pytest -c ci/cov.cfg"), "pyproject.toml": PYPROJECT_80}, (None, "indirect_run")),
+    ({**_ci("pytest --rootdir=ci"), "pyproject.toml": PYPROJECT_80}, (None, "indirect_run")),
+    ({**_ci("pytest -c ci/pytest.ini --cov-fail-under=80"),
+      "ci/pytest.ini": "[pytest]\naddopts = --cov\n"}, (True, "ci_run")),
+], ids=["c-file-cov", "config-file-eq", "c-file-no-cov-flag", "c-file-no-cov",
+        "c-file-unread", "rootdir", "c-file-ci-line-gate"])
+def test_pytest_config_file_on_the_line(
         tmp_path: Path, files: dict[str, str], expected: tuple[bool | None, str]) -> None:
     assert _read(tmp_path, files) == expected
 

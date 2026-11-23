@@ -44,9 +44,12 @@ its threshold (``echo --cov-fail-under=90 && pytest --cov --cov-fail-under=10``
 enforces 10), and one gate is read per ``--cov-fail-under`` on a line. ``--no-cov``
 turns pytest-cov off wherever it stands, on the line or in ``addopts``
 (``--no-cov-on-fail`` does not). A Gradle task named with ``-x`` / ``--exclude-task``
-is not run (``check -x jacocoTestCoverageVerification`` reads false; ``-x check``
-stops a wired ``check`` crediting it), and a dry run (``-m``, ``--dry-run``,
-``--task-graph``) runs nothing. Coverage switched on in config (pytest ``addopts``,
+is not run (``check -x jacocoTestCoverageVerification`` reads false, and so does ``-x
+test`` with no other test task, which leaves the verification no execution data;
+``-x check`` stops a wired ``check`` crediting it), and a dry run (``-m``, in a short
+cluster such as ``-qm`` too, ``--dry-run``, ``--task-graph``) runs nothing. ``pytest -c
+FILE`` / ``--config-file FILE`` reads FILE's ``addopts`` as the run's own (null when
+FILE was not read), and ``--rootdir`` with no ``--cov`` reads null. Coverage switched on in config (pytest ``addopts``,
 Jest ``collectCoverage: true``) is keyed by the config's directory
 (``lib.coverage_activation``): it switches on a config gate in that directory or below,
 never a sibling package's, and a gate on a CI line reads it from the root, with a
@@ -122,7 +125,8 @@ A root `addopts` or `collectCoverage: true` switches on a package's gate, though
 the root has coverage.py read the root config; Gradle's `check` wiring is still read once
 per repository; a package `addopts` `--no-cov` does not stop a CI-line gate, and a root
 `addopts` `--no-cov` turns off a package gate whose own `addopts` holds `--cov` (pytest
-reads the nearest config only). On a scoped run,
+reads the nearest config only); `pytest -p no:cov --cov` (pytest exits 4 on the unknown
+flag) still credits. On a scoped run,
 any enforced run of the tool anywhere in the repository credits the scope's config gate
 (`cd other && pytest --cov` credits `pkg/pyproject.toml`): the working directory a CI line
 runs in is not resolved. Imports `lib.ci_checks`, `lib.ci_masking`, `lib.ci_triggers`,
@@ -376,7 +380,9 @@ def cov_disabled(args: Iterable[str]) -> bool:
     return "--no-cov" in args
 
 
-_GRADLE_DRY_RUN = frozenset({"-m", "--dry-run", "--task-graph"})
+_GRADLE_DRY_RUN = frozenset({"--dry-run", "--task-graph"})
+# Gradle short options that take a value: the rest of a cluster after one is that value.
+_GRADLE_VALUE_SHORTS = frozenset("bcDgIPpx")
 _GRADLE_EXCLUDE = ("-x", "--exclude-task")
 _VERIFY = "jacocoTestCoverageVerification"
 
@@ -402,19 +408,39 @@ def gradle_tasks(args: Sequence[str]) -> tuple[list[str], set[str]]:
 
 
 def gradle_runs_nothing(words: tuple[str, ...]) -> bool:
-    """A Gradle dry run (``-m``, ``--dry-run``, ``--task-graph``) executes no task."""
+    """A Gradle dry run (``-m``, in a short cluster too: ``-qm``; ``--dry-run``,
+    ``--task-graph``) executes no task."""
     name, args = program(words)
-    return name in ("gradle", "gradlew") and bool(_GRADLE_DRY_RUN & set(args))
+    return name in ("gradle", "gradlew") and any(
+        w in _GRADLE_DRY_RUN or _short_cluster_has_m(w) for w in args)
+
+
+def _short_cluster_has_m(word: str) -> bool:
+    """``-m`` inside a short-option cluster (``-qm``), up to an option that takes a value
+    (``-Dmode=x`` is a property, not a dry run)."""
+    if not word.startswith("-") or word.startswith("--"):
+        return False
+    for char in word[1:]:
+        if char == "m":
+            return True
+        if char in _GRADLE_VALUE_SHORTS or not char.isalpha():
+            return False
+    return False
 
 
 def gradle_skips_verification(words: tuple[str, ...]) -> bool:
     """A Gradle command that runs no JaCoCo verification: a dry run, or one that
     excludes the verification task with ``-x`` (Gradle skips an excluded task even when
-    another task depends on it). ``-x check`` only stops ``check`` crediting it."""
+    another task depends on it), or excludes ``test`` with no other test task named (no
+    execution data, so the verification's ``onlyIf`` skips it; Gradle 9.4). ``-x check``
+    only stops ``check`` crediting it; ``-x jacocoTestReport`` leaves it running."""
     name, args = program(words)
     if name not in ("gradle", "gradlew"):
         return False
-    return gradle_runs_nothing(words) or _VERIFY in gradle_tasks(args)[1]
+    tasks, excluded = gradle_tasks(args)
+    no_tests = "test" in excluded and not any("test" in t.lower() for t in tasks
+                                              if t != _VERIFY)
+    return gradle_runs_nothing(words) or _VERIFY in excluded or no_tests
 
 
 def coverage_flag(args: Iterable[str]) -> bool | None:
@@ -428,9 +454,55 @@ def coverage_flag(args: Iterable[str]) -> bool | None:
     return None
 
 
+def _config_arg(args: Sequence[str]) -> tuple[str | None, bool]:
+    """``(the -c / --config-file path, whether --rootdir is given)`` of a pytest command."""
+    path: str | None = None
+    rootdir = False
+    takes: str | None = None
+    for word in args:
+        if takes is not None:
+            path = word if takes == "c" else path
+            takes = None
+        elif word in ("-c", "--config-file", "--rootdir"):
+            takes = "r" if word == "--rootdir" else "c"
+            rootdir = rootdir or word == "--rootdir"
+        elif word.startswith("--config-file="):
+            path = word.partition("=")[2]
+        elif word.startswith("--rootdir="):
+            rootdir = True
+        elif word.startswith("-c") and not word.startswith("--") and len(word) > 2:
+            path = word[2:]
+    return path, rootdir
+
+
+def pytest_on(args: Sequence[str], on: bool, off: bool,
+              activation: Activation = Activation()) -> bool | None:
+    """Is pytest-cov on for this ``pytest`` command? ``on`` / ``off`` are the directory
+    ``addopts`` that apply. ``-c FILE`` / ``--config-file FILE`` replaces them with FILE's
+    own ``addopts`` (#954: ``pytest -c ci/pytest.ini`` with ``--cov`` there enforces the
+    root ``fail_under``, which coverage.py reads from the run directory); a FILE not read
+    is None (unsure), as is ``--rootdir`` with no ``--cov`` (the config pytest finds then is
+    not resolved). ``--no-cov`` anywhere is off."""
+    if cov_disabled(args):
+        return False
+    path, rootdir = _config_arg(args)
+    if path is not None:
+        read, state = activation.config(path.removeprefix("./"))
+        if read and state is None:
+            return False
+        if cov_enabled(args) or state is True:
+            return True
+        return False if read else None
+    if off:
+        return False
+    if on or cov_enabled(args):
+        return True
+    return None if rootdir else False
+
+
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False, gradle_check: bool = False,
-              pytest_off: bool = False) -> bool | None:
+              pytest_off: bool = False, activation: Activation = Activation()) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config), or a Gradle task
@@ -444,8 +516,7 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
             # Either family gates only with pytest-cov on: ``--cov`` on the line or in
             # ``addopts``. An ``addopts`` threshold with no ``--cov`` anywhere checks nothing,
             # and ``--no-cov`` turns it off (#954).
-            return ((pytest_cov or cov_enabled(args)) and not pytest_off
-                    and not cov_disabled(args))
+            return pytest_on(args, pytest_cov, pytest_off, activation)
         return (family == "coverage.py" and name == "coverage"
                 and bool(args) and args[0] in _COVERAGE_REPORTS)
     if family in ("jest", "vitest"):
@@ -527,7 +598,7 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
         jest_collects = covers(activation.jest_collects, file)
         off = covers(activation.pytest_off, file)
         found = _merge([_tool_state(run, family, pytest_cov, jest_collects,
-                                    activation.gradle_check, off)
+                                    activation.gradle_check, off, activation)
                         for run in ci.runs] + [_indirect(ci, family)])
     if found is False and ci.elsewhere:
         return "included_jobs"
@@ -546,6 +617,7 @@ def _line_gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
     every ``pytest`` run off."""
     cov_dirs = activation.pytest_cov
     off = "" in activation.pytest_off
+    on = "" in cov_dirs
     states: list[bool | None | str] = []
     for run in ci.runs:
         if run.file != gate["file"] or _line(gate) - 1 not in run.span:
@@ -555,30 +627,33 @@ def _line_gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
                 and g["threshold"] == gate["threshold"]
                 for g in line_gates(" ".join(run.words))):
             continue
-        if off and gate["tool"] == "pytest-cov" and program(run.words)[0] in ("pytest", "py.test"):
-            continue
-        if _activates(gate, run.words, "" in cov_dirs):
+        state = _activates(gate, run.words, on, off, activation)
+        if state is False and cov_dirs and _activates(gate, run.words, True, off, activation):
+            state = None   # only a package's addopts --cov: the run directory is not resolved
+        if state is True:
             states.append(True if run.trigger == "ordinary"
                           else "unknown_trigger" if run.trigger == "unknown" else False)
-        elif cov_dirs and _activates(gate, run.words, True) and run.trigger != "not_ordinary":
+        elif state is None and run.trigger != "not_ordinary":
             states.append("indirect_run" if run.trigger == "ordinary" else "unknown_trigger")
     return _merge(states)
 
 
-def _activates(gate: Gate, words: tuple[str, ...], pytest_cov: bool) -> bool:
-    """A ``--cov-fail-under`` on a ``pytest`` line gates only with pytest-cov on (``--cov``
-    on the line or in ``addopts``); through a wrapper (``hatch run cov --``) the script
-    may set it, so the flag is taken as given."""
+def _activates(gate: Gate, words: tuple[str, ...], on: bool, off: bool,
+               activation: Activation) -> bool | None:
+    """A ``--cov-fail-under`` on a ``pytest`` line gates only with pytest-cov on
+    (``pytest_on``); through a wrapper (``hatch run cov --``) the script may set it, so
+    the flag is taken as given. None: unsure."""
     name, args = program(words)
     if gate["tool"] != "pytest-cov" or name not in ("pytest", "py.test"):
         return True
-    return (pytest_cov or cov_enabled(args)) and not cov_disabled(args)
+    return pytest_on(args, on, off, activation)
 
 
 def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
-                gradle_check: bool = False, pytest_off: bool = False) -> bool | None | str:
+                gradle_check: bool = False, pytest_off: bool = False,
+                activation: Activation = Activation()) -> bool | None | str:
     state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects,
-                      gradle_check=gradle_check, pytest_off=pytest_off)
+                      gradle_check=gradle_check, pytest_off=pytest_off, activation=activation)
     if state is False or run.trigger == "not_ordinary":
         return False
     if run.trigger == "unknown":

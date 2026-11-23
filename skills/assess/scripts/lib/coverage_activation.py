@@ -17,6 +17,8 @@ for each candidate config file and returns an ``Activation``:
   read with JavaScript comments stripped.
 - ``gradle_check``: a ``build.gradle`` / ``build.gradle.kts`` wires
   ``check.dependsOn jacocoTestCoverageVerification`` (still read once per repository).
+- ``configs``: each pytest config file read, with its ``addopts`` state (True ``--cov``,
+  None ``--no-cov``, False neither), for a CI line that names one with ``pytest -c``.
 - ``pytest_lines``: the ``(file, line)`` pairs inside a pytest config section, where a
   flag is ``addopts``, not a ``tox.ini`` ``commands`` line.
 
@@ -63,6 +65,15 @@ class Activation:
     jest_collects: frozenset[str] = frozenset()
     gradle_check: bool = False
     pytest_lines: frozenset[tuple[str, int]] = frozenset()
+    configs: tuple[tuple[str, bool | None], ...] = ()
+
+    def config(self, path: str) -> tuple[bool, bool | None]:
+        """``(read, addopts state)`` of the pytest config at repo-relative ``path``."""
+        want = posixpath.normpath(path)
+        for rel, state in self.configs:
+            if rel == want:
+                return True, state
+        return False, False
 
 
 def covers(dirs: frozenset[str], file: str) -> bool:
@@ -78,11 +89,13 @@ def read_activation(files: Iterable[tuple[str, list[str]]]) -> Activation:
     jest: set[str] = set()
     gradle = False
     pytest_lines: set[tuple[str, int]] = set()
+    configs: list[tuple[str, bool | None]] = []
     for rel, lines in files:
         name = posixpath.basename(rel)
         if name in PYTEST_CONFIG_FILES:
             pytest_lines.update((rel, n) for n in section_lines(lines, _PYTEST_SECTIONS))
             state = addopts_cov(lines)
+            configs.append((rel, state))
             if state is not False:
                 (pytest_cov if state else pytest_off).add(posixpath.dirname(rel))
         source = _JS_COMMENT_RE.sub("", "\n".join(lines))
@@ -90,7 +103,7 @@ def read_activation(files: Iterable[tuple[str, list[str]]]) -> Activation:
         if _JEST_COLLECTS_RE.search(source):
             jest.add(posixpath.dirname(rel))
     return Activation(frozenset(pytest_cov), frozenset(pytest_off), frozenset(jest), gradle,
-                      frozenset(pytest_lines))
+                      frozenset(pytest_lines), tuple(configs))
 
 
 def addopts_cov(lines: list[str]) -> bool | None:
