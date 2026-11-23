@@ -32,6 +32,7 @@ from lib.badge import write_headline_badge
 from lib.headline import as_headline
 from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.prior_level import load_prior_level, write_prior_level
+from lib.since_last_run import baseline_record
 from lib.run_setup import read_plugin_version
 from lib.run_wiki import write_run_wiki
 
@@ -83,7 +84,7 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
     ctx["prior_level"] = load_prior_level(assess_dir)
     # The /assess diagrams (#942, #943), drawn from the finished context; the report links them.
     write_all(assess_dir, build_all(ctx))
-    write_prior_level(assess_dir, ctx.get("level"))
+    write_prior_level(assess_dir, ctx.get("level"), baseline_record(ctx))
     # The committed findings snapshot (#554): read the previous one back before
     # overwriting it, so the gate can explain a method-version change by the
     # findings that appeared and cleared since.

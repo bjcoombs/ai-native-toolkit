@@ -287,3 +287,34 @@ def test_a_malformed_actions_json_and_a_shallow_clone_read_not_known(repo: Path,
                     "level": _level("met", "met")}), encoding="utf-8")
     block = since_last_run(_level("met", "met"), shallow / ".assess", shallow)
     assert (block["closed"], block["closed_reason"]) == (None, "shallow_clone")
+
+
+def test_the_committed_baseline_survives_a_deleted_run_context(ci2: Path) -> None:  # noqa: F811
+    """#1122: a fresh clone or CI has prior-level.json (committed) and no run-context.json."""
+    first = _run(ci2, "2026-11-21")
+    prior = json.loads((ci2 / ".assess" / "prior-level.json").read_text(encoding="utf-8"))
+    assert prior["prior_level_version"] == 2
+    assert prior["baseline"]["head_sha"] == first["measured_commit"]["head_sha"]
+    assert prior["baseline"]["run_id"] == first["run_id"]
+    (ci2 / "b.txt").write_text("closed\n", encoding="utf-8")
+    _commit(ci2, "2026-11-21T12:00:00Z", "the fix")
+    sha = _git(ci2, "rev-parse", "HEAD")
+    _actions(ci2, {"action": "Enforce a coverage gate", "status": "done", "completed_sha": sha})
+    _commit(ci2, "2026-11-21T13:00:00Z", "mark the action done")
+    (ci2 / ".assess" / "run-context.json").unlink()
+    block = _run(ci2, "2026-11-22")["since_last_run"]
+    assert (block["first_run"], block["closed_reason"], block["closed_count"]) == (False, None, 1)
+    assert block["closed"][0]["completed_sha"] == sha and block["previous_run_id"] == first["run_id"]
+    assert (block["gates_gained"], block["gates_lost"]) == ([], [])
+    report = subprocess.run([sys.executable, str(SCRIPTS / "assess_report.py"), str(ci2), "--stdout"],
+                            capture_output=True, encoding="utf-8", errors="replace", check=True).stdout
+    assert "- Closed since last run: 1" in report and f"`{sha[:7]}`" in report
+
+
+def test_a_committed_baseline_compares_the_held_gates(repo: Path) -> None:
+    (repo / ".assess" / "prior-level.json").write_text(json.dumps({
+        "prior_level_version": 2, "levels_version": "x", "tags": [],
+        "baseline": {"run_id": "p", "head_sha": _git(repo, "rev-parse", "HEAD"),
+                     "held_gates": ["instructions", "ci_runs_tests"]}}), encoding="utf-8")
+    block = since_last_run(_level("met", "unmet"), repo / ".assess", repo)
+    assert (block["previous_run_id"], block["gates_gained"], block["gates_lost"]) == ("p", [], ["ci_runs_tests"])
