@@ -5,6 +5,8 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
+- the "Since Last Run" section first (``lib/since_last_run.py``, #1083): actions closed
+  since the previous run with their commits, gates gained or lost and the next blocker,
 - the headline (``lib/headline.py``, #747, #844, #1083): the Step, the gate that
   blocks the next one, "Catalogue coverage: N of M measured" and the per-tag strip,
   pasted from the run context's ``headline`` block,
@@ -102,7 +104,7 @@ REPORT_TEMPLATE = Template("""# Deterministic Assessment Snapshot: $repo_name
 
 _Generated $run_date by `/assess` v$plugin_version.${commit_note}_
 
-## Headline
+${since_section}## Headline
 
 $headline
 
@@ -569,6 +571,20 @@ def _render_loc_split(loc: dict[str, Any]) -> str:
     return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
 
 
+def render_since_section(ctx: dict[str, Any]) -> str:
+    """The "Since Last Run" section that opens the report (#1083), ending in a blank line.
+
+    Empty for a run-context written before the block existed; a degraded block says it
+    was not measured, with its reason.
+    """
+    block = ctx.get("since_last_run")
+    if not isinstance(block, dict):
+        return ""
+    if block.get("available") is not True or not isinstance(block.get("markdown"), str):
+        return f"## Since Last Run\n\n_Not measured: {block.get('reason') or 'unavailable'}._\n\n"
+    return f"## Since Last Run\n\n{block['markdown']}\n\n"
+
+
 def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None = None) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
@@ -600,6 +616,7 @@ def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None =
         run_date=ctx.get("run_date", "unknown"),
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
+        since_section=render_since_section(ctx),
         headline=as_headline(ctx.get("headline"))["markdown"],
         diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),

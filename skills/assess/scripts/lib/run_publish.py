@@ -12,7 +12,8 @@ wiki's results fill the four keys the run header reserved for them
 The run's side effects, applied after every scan (#557) by
 `assess_core.build_and_publish_run`, never by `build_run_context` (#660): `publish_run` creates the
 artifact directory, writes the wiki (`run_wiki.write_run_wiki`), fills the four wiki
-keys the run header reserved in place, writes `badge.json` from the `headline` block
+keys the run header reserved in place (the `log.md` entry opens with the `since_last_run`
+block's bullets, #1083), writes `badge.json` from the `headline` block
 (`badge.write_headline_badge`, #747; the `log.md` entry's readiness line is its `summary`), reads the previous
 `findings.json` into `prior_findings_snapshot` and rewrites it
 (`findings_snapshot`), and then writes `run-context.json`. Tests: `tests/test_run_setup.py`.
@@ -30,6 +31,14 @@ from lib.headline import as_headline
 from lib.findings_snapshot import build_snapshot, load_snapshot, write_snapshot
 from lib.run_setup import read_plugin_version
 from lib.run_wiki import write_run_wiki
+
+
+def _since_markdown(ctx: Mapping[str, Any]) -> str:
+    """The since-last-run bullets that open this run's log.md entry (#1083); "" when absent."""
+    block = ctx.get("since_last_run")
+    if isinstance(block, Mapping) and block.get("available") is True and isinstance(block.get("markdown"), str):
+        return str(block["markdown"])
+    return ""
 
 
 def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
@@ -57,6 +66,7 @@ def publish_run(ctx: dict[str, Any], state: Mapping[str, Any]) -> None:
         plugin_version=read_plugin_version(),
         hot_test_index=state["hot_test_index"],
         readiness=as_headline(ctx.get("headline"))["summary"],
+        since_last_run=_since_markdown(ctx),
     )
     ctx["pruned_hotspots"] = wiki.pruned_hotspots
     ctx["retired_excluded_hotspots"] = wiki.retired_excluded

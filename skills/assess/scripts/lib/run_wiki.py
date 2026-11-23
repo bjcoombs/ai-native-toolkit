@@ -8,7 +8,8 @@ top hotspot (status from the stats diff, first-flagged date, the `Has test file`
 from `_has_sibling_test`, marker debt and accretion in the briefing), retires orphan and
 excluded-before-finalize pages, adds graduated hotspots to `index.md` with their current
 metrics, saves `first-flagged.json`, replaces a superseded unfinalized log entry and
-appends this run's, then verifies the log chain. The hot-file test index comes in as
+appends this run's (opening with the `since_last_run` bullets when given, #1083),
+then verifies the log chain. The hot-file test index comes in as
 `hot_test_index`, built once by the scan table and shared with `test_focus`. It
 returns a `RunWiki` (the retired and dropped paths, the chain verdict) for
 `run_publish.publish_run` to copy into run-context.json. Tests: `tests/test_run_wiki.py`,
@@ -249,6 +250,7 @@ def write_run_wiki(
     excluded_as_generated: Callable[[str], bool], scope_rel: str | None,
     instructions_grade: str | None, plugin_version: str,
     hot_test_index: TestIndex | None, readiness: str = "Step not measured",
+    since_last_run: str = "",
 ) -> RunWiki:
     """Write the hotspot pages, index.md and this run's log.md entry.
 
@@ -310,6 +312,7 @@ def write_run_wiki(
         run_date=run_date,
         files_scored=current.get("files_scored", 0),
         readiness=readiness,
+        since_last_run=since_last_run,
         instructions_grade=instructions_grade,
         graduated_count=len(diff.graduated),
         regressed_count=len(diff.regressed),

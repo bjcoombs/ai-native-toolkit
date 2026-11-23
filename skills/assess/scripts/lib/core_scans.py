@@ -32,6 +32,8 @@ from typing import Any
 from lib.accretion_ratchet import AccretionScan, scan_accretion_ratchet
 from lib.anomaly_detector import detect_anomalies
 from lib.archetype import analyze_archetype
+from lib.since_last_run import SinceLastRun
+from lib.since_last_run import since_last_run as since_last_run_block
 from lib.assess_config import WorkingNotesConfig, load_structure_config, load_working_notes_config
 from lib.change_coupling import RenameMap
 from lib.context_blocks import (
@@ -388,3 +390,9 @@ def headline(level_block: Any) -> Headline:
     """The run context's ``headline`` block (#747): the Step, its next unlock and the
     verified tally, worded from the ``level`` block under the default model."""
     return run_context_headline(level_block)
+
+
+def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path) -> SinceLastRun:
+    """The run context's ``since_last_run`` block (#1083): actions closed, gates gained or
+    lost and the next blocker, against the run-context the previous run left."""
+    return since_last_run_block(level_block, assess_dir, repo_root)

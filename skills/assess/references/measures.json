@@ -4897,6 +4897,20 @@
       "private": false
     },
     {
+      "name": "since_last_run",
+      "title": "Since last run",
+      "publishes": [
+        "since_last_run"
+      ],
+      "reads": [
+        "level",
+        "assess_dir",
+        "repo_root"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "unit_readings",
       "title": "Monorepo unit readings",
       "publishes": [

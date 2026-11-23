@@ -47,7 +47,7 @@
 | `scope_fence` | string | What NOT to touch. Without it a weak executor over-extends. |
 | `status` | enum | Lifecycle: `pending` \| `claimed` \| `done` \| `reopened`. See below. |
 | `claimed_by` | string \| null | Identifier of the executor that claimed the action; `null` while unclaimed. |
-| `completed_sha` | string \| null | The commit SHA that satisfied `done_when`; `null` until done. |
+| `completed_sha` | string \| null | The commit SHA that satisfied `done_when`; `null` until done. The next run credits the action under "Closed since last run" when this commit landed after the commit the previous run measured (`lib/since_last_run.py`, #1083); commit `actions.json` for it to count. |
 | `mode` | enum | Deterministic execution posture, derived from `finding`: `characterize_first` \| `verify_then_retire` \| `refactor_safe`. See below. |
 
 ### Recommended (passed through when the LLM supplies them)
