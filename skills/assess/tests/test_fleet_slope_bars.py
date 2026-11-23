@@ -1,5 +1,5 @@
-"""Tests for the slope chart and the layer bars (issue #675): lib/fleet/fleet_slope.py and
-lib/fleet/fleet_layer_bars.py. The goldens under ``tests/fixtures/fleet_diagrams/`` (checked in
+"""Tests for the slope chart (issue #675): lib/fleet/fleet_slope.py. The layer bars it shipped with
+were retired with the layer framing (#1073). The goldens under ``tests/fixtures/fleet_diagrams/`` (checked in
 ``test_fleet_diagrams.py``) lock the whole render; these say what a byte comparison cannot.
 """
 from __future__ import annotations
@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 
 import lib.fleet.fleet_diagrams as fd
-import lib.fleet.fleet_layer_bars as flb
+import lib.fleet.fleet_quadrant as fq
 import lib.fleet.fleet_slope as fs
 import lib.fleet.fleet_svg as svg
 from lib.fleet.runner import FleetRow
@@ -168,61 +168,7 @@ def test_a_raising_slope_renderer_is_a_skip_line(monkeypatch):
                               comparison=comparison(_levels(), _repos()))
     entry = next(d for d in drawn if d["file"] == fs.FILE)
     assert entry["skipped"] == "skipped: the renderer raised KeyError."
-    assert next(d for d in drawn if d["file"] == flb.FILE)["svg"] is not None
-
-
-# --- layer bars -----------------------------------------------------------------
-
-
-def test_layer_bars_count_every_repository_once_and_unknown_apart():
-    bars = flb.layer_bars(_levels(), _repos())
-    assert [b["id"] for b in bars] == ["instructions", "agent-use"]  # team rows, model order
-    for bar in bars:
-        assert sum(bar["counts"]) + len(bar["unknown"]) == len(_repos())
-        assert len(bar["counts"]) == bar["top"] + 1
-    instructions, agent = bars
-    assert instructions["unknown"] == ["data/notebooks", "mobile/android"]  # no signal, failed scan
-    assert agent["unknown"] == ["mobile/android", "mobile/watch"]
-    assert instructions["counts"] == [2, 5, 6]
-
-
-def test_layer_bars_hatch_unknown_and_name_it_never_as_level_zero():
-    text = flb.render_layer_bars(flb.layer_bars(_levels(), _repos()), ["Two-factor"])
-    assert "Level unknown for Agent instructions: data/notebooks, mobile/android." in text
-    assert text.count(f'fill="{svg.HATCH_FILL}" class="s-bg"') == 2  # one hatched segment per bar
-    assert "Agent instructions: 2 at level 0 of 2" in text  # the real zeros, apart
-    assert "org rows read group settings, not repositories: Two-factor." in text
-
-
-def test_segment_counts_use_the_ramp_ink_not_a_theme_class():
-    text = flb.render_layer_bars(flb.layer_bars(_levels(), _repos()))
-    top = svg.ramp_step(2, 2)
-    assert f'fill="{svg.LEVEL_RAMP[top]}"' in text
-    assert re.search(rf'<text [^>]*fill="{svg.STEP_TEXT[top]}" text-anchor="middle">6</text>', text)
-
-
-def test_layer_bars_titles_are_escaped_and_without_unknowns_no_note():
-    levels = _levels()
-    levels = {**levels, "rows": [{**row, "title": "Docs <&> map"} for row in levels["rows"]
-                                 if row["id"] == "agent-use"]}
-    repos = [r for r in _repos() if r["repo"] not in ("mobile/android", "mobile/watch")]
-    text = flb.render_layer_bars(flb.layer_bars(levels, repos))
-    assert "Docs &lt;&amp;&gt; map" in text
-    assert "Level unknown for" not in text
-
-
-def test_layer_bars_skip_without_levels_team_rows_or_repositories():
-    def skipped(levels: MaturityModel | None, repos: list[FleetRow]) -> str | None:
-        return next(d for d in fd.build_diagrams(levels, repos, WINDOW)
-                    if d["file"] == flb.FILE)["skipped"]
-    assert "no maturity model" in (skipped(None, _repos()) or "")
-    org_only: MaturityModel = {**_levels(), "rows": [r for r in _levels()["rows"] if r["scope"] == "org"]}
-    assert "no team rows" in (skipped(org_only, _repos()) or "")
-    assert skipped(_levels(), []) == "skipped: no repositories in the run."
-
-
-def test_axis_step_gives_whole_ticks():
-    assert [flb.axis_step(n) for n in (1, 7, 14, 15, 60, 400)] == [1, 1, 2, 5, 10, 100]
+    assert next(d for d in drawn if d["file"] == fq.FILE)["svg"] is not None
 
 
 def _text_boxes(text: str) -> list[svg.Box]:
@@ -250,22 +196,3 @@ def test_long_slope_labels_stay_inside_the_canvas():
 def test_rows_left_out_of_a_mean_are_named_visibly():
     text = fs.render_slope(_fixture_view())
     assert "Rows left out of a mean, not known in both runs (left out/rows): data\u00a0(1/2)" in text
-
-
-def test_layer_bars_legend_and_notes_stay_inside_and_scale_to_a_large_fleet():
-    many = [{**_repos()[0], "repo": f"grp/svc{i:03d}"} for i in range(150)]
-    many += [{**_repos()[0], "repo": f"grp/dead{i:03d}", "status": "failed", "scans": None}
-             for i in range(7)]
-    levels = _levels()
-    wide = {**levels["rows"][2], "id": "wide", "title": "Eight levels",
-            "levels": [{**levels["rows"][2]["levels"][0], "level": n} for n in range(1, 9)]}
-    gap = {**levels["rows"][1], "id": "gap", "title": "Unmeasured layer",
-           "levels": [{"level": 1, "criteria": [{"signal": "not.collected", "op": "eq", "value": 1}]}]}
-    model: MaturityModel = {**levels, "rows": [*levels["rows"], wide, gap]}
-    bars = flb.layer_bars(model, many)
-    text = flb.render_layer_bars(bars)
-    assert "Level unknown for Unmeasured layer: all 157 repositories." in text
-    assert "grp/dead000, grp/dead001, grp/dead002, grp/dead003, grp/dead004 and 2 more." in text
-    for box in _text_boxes(text):
-        assert box.x >= 0 and box.x + box.w <= flb.WIDTH - flb.PAD, box
-    assert "Level 8 (top)" in text

@@ -87,7 +87,7 @@ def test_no_repository_id_in_any_output_file(zroot, tmp_path, flag):
     _run(zroot, out, tmp_path / "hist", *flag)
     files = _files(out)
     for expected in ("repos.jsonl", "groups.jsonl", "level.json", "fleet-data.json", "doc_freshness.jsonl",
-                     "agent_clusters.json", "report.md", "quadrant.svg", "layer-bars.svg", "teams.md"):
+                     "agent_clusters.json", "report.md", "quadrant.svg", "teams.md"):
         assert expected in files
     assert _leaks(files) == []
     kept = _files(tmp_path / "hist")  # the entry's directory is <org>/<date>, outside --out

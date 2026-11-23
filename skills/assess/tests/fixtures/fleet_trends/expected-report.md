@@ -33,11 +33,3 @@ In place: this run, the baseline a later comparison starts from.
 What moved since the earlier run, and which row moved it?
 
 Not drawn: skipped: no earlier run compared (no --compare, or no history entry matched this run).
-
-## Maturity by layer
-
-In place: 0 repositories in this run, scanned with no model call.
-
-Which layer has the most room to grow across the fleet?
-
-Not drawn: skipped: no repositories in the run.

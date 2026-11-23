@@ -872,3 +872,5 @@ kept as written. A string
 | `repos.gate_blockers.gate` | token |
 | `repos.gate_blockers.state` | token |
 | `repos.gate_blockers.disposition` | token |
+| `repos.tags.tag` | token |
+| `views.units.tags.cells.tag` | token |
