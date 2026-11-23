@@ -97,16 +97,16 @@ Two optional additions feed the verified tally and the Steps (``lib/level_tally.
   gate of the one below and adds one. A Step needs its gates and nothing else, so a new
   condition never moves a Step (#1083); an old ``threshold`` key is refused by name.
 
-Four condition fields come from ``lib/levels_fields.py`` (#843), which documents
-them: ``truth`` (required, multi-valued tags, with the legacy layer alias for a model
-that carries none) and the additive ``polarity``, ``guarded_by`` and ``eq_signal``.
+Six condition fields come from ``lib/levels_fields.py`` (#843), which documents them:
+``truth`` (required tags, with the legacy layer alias for a model that carries none) and the
+additive ``polarity``, ``guarded_by``, ``eq_signal``, ``predicted`` and ``review`` (#1086).
 
 Loading raises ``LevelsError`` before any evaluation on a malformed maturity model: a
 missing version, an unset or invalid scope, a gap or duplicate in level
 numbering, an unknown operator or key, a team row with no aggregation rule,
 a ``requires`` naming a condition that does not exist (or itself, or a cycle),
 a missing, empty or unknown ``truth`` (``MixedTruthError`` when only some conditions
-carry it), a bad ``polarity``, ``guarded_by`` or ``eq_signal``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. A renamed 2.1.0 path loads under its new
+carry it), a bad ``polarity``, ``guarded_by``, ``eq_signal``, ``predicted`` or ``review``, a malformed Step, or a signal path the pluggable ``PathValidator`` rejects. A renamed 2.1.0 path loads under its new
 name with one stderr line (``lib.signal_aliases.dealias_model``, #970). ``dumps_result`` gives
 byte-identical JSON for identical inputs.
 
@@ -124,7 +124,7 @@ from typing import Any, Callable, Iterable, Literal, Mapping, NotRequired, Typed
 
 from lib.levels_fields import LevelsError as LevelsError, MixedTruthError as MixedTruthError
 from lib.levels_fields import check_guards, check_truth, legacy_truth, parse_eq_signal, parse_guard
-from lib.levels_fields import parse_polarity, parse_truth
+from lib.levels_fields import ReviewFields, apply_review, parse_polarity, parse_truth
 from lib.signal_aliases import dealias_model
 from lib.signal_grades import EMPTY_DENOMINATORS
 
@@ -146,7 +146,7 @@ OPERATORS = _EQUALITY_OPS + _ORDER_OPS + _MEMBER_OPS
 
 _ROOT_KEYS = frozenset({"version", "rows", "steps"})
 _ROW_KEYS = frozenset({"id", "title", "scope", "aggregation", "share", "levels"})
-_LEVEL_KEYS = frozenset({"level", "criteria", "requires", "truth", "polarity", "guarded_by"})
+_LEVEL_KEYS = frozenset({"level", "criteria", "requires", "truth", "polarity", "guarded_by", "predicted", "review"})
 _STEP_KEYS = frozenset({"step", "name", "gates"})
 # The 2.x and 3.0 Step count key, refused by name since #1083: Steps are gates only.
 REMOVED_STEP_KEY = "threshold"
@@ -181,7 +181,7 @@ class Criterion(TypedDict):
     eq_signal: NotRequired[str]
 
 
-class Level(TypedDict):
+class Level(ReviewFields):  # predicted, review: the exit rule (#1086)
     level: int
     criteria: list[Criterion]
     # condition ids (``<row id>.<level>``) this condition needs met (#744)
@@ -421,6 +421,7 @@ def _parse_levels(raw: Any, where: str) -> list[Level]:
             level["polarity"] = "hazard"
         if "guarded_by" in entry:
             level["guarded_by"] = parse_guard(entry["guarded_by"], here)
+        apply_review(level, entry, here)
         if "requires" in entry:
             requires = entry["requires"]
             if (not isinstance(requires, list) or not requires

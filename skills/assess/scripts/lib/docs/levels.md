@@ -24,7 +24,7 @@ only when both agree; `unknown_repos` names the repositories whose level is open
 `load_levels` / `parse_levels` raise `LevelsError` before evaluation on a missing
 version, an unset scope, a gap or duplicate in level numbering, an unknown operator or
 key, a missing, empty or unknown `truth` (`MixedTruthError` for a partly tagged model), a bad
-`polarity`, `guarded_by` or `eq_signal`, or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
+`polarity`, `guarded_by`, `eq_signal`, `predicted` or `review` (#1086), or a signal path the pluggable `PathValidator` (`known_paths` for a fixed set)
 rejects. `evaluate` stamps the maturity-model version; `dumps_result` is byte-identical on
 rerun. `add_renamed_flag` registers the pre-2.0.0 flag (`RENAMED_FLAG`) on a fleet script's
 parser, hidden from `--help`: any use of it exits 2 with one line naming `--levels` (#670).

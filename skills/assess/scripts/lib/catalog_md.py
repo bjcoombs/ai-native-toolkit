@@ -10,7 +10,8 @@ A tag section is a ``### <tag title>`` heading, then the tag's opening lines
 has one table row per criterion, under its first tag only, so it appears once however many
 tags it carries; its other tags name it in an "Also carries this tag" line. The table's columns are
 ``CONDITION_COLUMNS``, one ``(header, cell)`` entry each; "Why it matters" holds the condition's
-``why`` (#939). Links are
+``why`` (#939), and "Exit review" the exit rule's predicted direction and review date
+(``review_cell``, #1086), or ``-`` when the condition has none. Links are
 relative to ``docs/`` so they resolve in the repository. The words come from the check
 manifest, so an edit there shows here once ``make catalog`` regenerates the file.
 
@@ -128,6 +129,19 @@ def _links_cell(line: Line) -> str:
     return "; ".join(parts) or "-"
 
 
+# The plain words of each predicted direction (lib/levels_fields.py PREDICTIONS, #1086).
+PREDICTION_WORDS = {"lower_revert": "lower revert share", "lower_rework": "lower rework share",
+                    "none": "no effect predicted"}
+
+
+def review_cell(line: Line) -> str:
+    """The exit rule's prediction and review date (#1086), or ``-`` when the condition has none."""
+    level = line.level
+    if level["predicted"] is None or level["review"] is None:
+        return "-"
+    return f"{PREDICTION_WORDS[level['predicted']]}, review {level['review']}"
+
+
 # The columns of a condition table, in order: (header, cell). A new column is one entry.
 CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
     ("Condition", _condition_cell),
@@ -139,6 +153,7 @@ CONDITION_COLUMNS: tuple[tuple[str, Callable[[Line], str]], ...] = (
     ("Step gate", lambda line: _codes(line.level["step_gates"])),
     ("Polarity", lambda line: line.level["polarity"]),
     ("Links", _links_cell),
+    ("Exit review", review_cell),
     ("Why it matters", lambda line: _cell(line.criterion["why"]) or "-"),
     ("Next step", lambda line: _cell(line.criterion["fix"])),
 )
