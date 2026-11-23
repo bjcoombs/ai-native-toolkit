@@ -23,7 +23,7 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests
 
-Catalogue coverage: 0 of 3 [measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
+Catalogue coverage: 0 of 3 [measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
 By tag: behaviour 0 of 2 (NOT MEASURED: 1) · docs 0 of 0 (NOT MEASURED: 2) · structure 0 of 1 (NOT MEASURED: 5) · agent_context 0 of 0 (NOT MEASURED: 4) · agent_runtime 0 of 0 (NOT MEASURED: 1) · governance 0 of 0 (NOT MEASURED: 2) · supply_chain 0 of 0 (NOT MEASURED: 1)
 

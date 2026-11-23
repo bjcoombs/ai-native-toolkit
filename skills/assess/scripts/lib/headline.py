@@ -36,7 +36,8 @@ in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first blocking
 ``Step 4 · all gates held`` at the top Step, and ``no Steps defined`` for a model without
 ``[[steps]]``. ``markdown`` is the lines, the first bold, pasted verbatim by the report and
 ``assess_report.py``; in it alone, "measured" and "verified" on the catalogue coverage line link
-their plain-English entry in ``docs/glossary.md`` (``GLOSSARY_URL``, #1102), so ``lines``, the
+``docs/glossary.md`` (``GLOSSARY_URL``, #1102: the catalogue coverage and evidence grade
+entries), so ``lines``, the
 badge and the ``log.md`` entry stay plain text. ``verified`` and ``tags`` (``TagCell`` per cell, from ``tag_cells``, which lives in
 ``lib/level_tags.py`` with the level's ``tags`` rows (#940) and which the fleet's
 per-tag tally also reads, #1073) hold the coverage
@@ -211,8 +212,10 @@ def _tally_line(level: LevelResult) -> str:
 
 
 def _linked_tally(line: str) -> str:
-    """The catalogue coverage line with "measured" and "verified" linked to the glossary once."""
-    line = line.replace(" measured, ", f" [measured]({GLOSSARY_URL}#evidence-grade), ", 1)
+    """The catalogue coverage line with "measured" and "verified" linked to the glossary once:
+    "measured" names the denominator, so it links the catalogue coverage entry, and "verified"
+    the evidence grade."""
+    line = line.replace(" measured, ", f" [measured]({GLOSSARY_URL}#catalogue-coverage), ", 1)
     return line.replace(" verified", f" [verified]({GLOSSARY_URL}#evidence-grade)", 1)
 
 

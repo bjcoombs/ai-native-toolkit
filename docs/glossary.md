@@ -36,7 +36,7 @@ The run could not see this condition, for example because it had no network acce
 
 ### Catalogue coverage
 
-How much of the maturity model this run could read: of the conditions that count, how many are met out of how many the run could measure, and how many of those are verified. It is a reading of what the run saw, not a score, and it never moves the Step.
+What this run found in place: of the conditions that count, how many are met out of how many it could measure, and how many of those are verified. It is a reading of what the run saw, not a score, and it never moves the Step.
 
 ### Maturity model
 

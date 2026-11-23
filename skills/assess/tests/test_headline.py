@@ -61,8 +61,8 @@ def test_the_markdown_links_measured_and_verified_once_and_the_lines_stay_plain(
     """#1102: the catalogue coverage line in the markdown links each grade word to the
     glossary once; ``lines``, the badge summary and the log entry stay plain text."""
     h = headline(_level(), default_model())
-    grade = f"{GLOSSARY_URL}#evidence-grade"
-    assert (f"Catalogue coverage: 4 of 6 [measured]({grade}), 0 [verified]({grade})"
+    coverage, grade = f"{GLOSSARY_URL}#catalogue-coverage", f"{GLOSSARY_URL}#evidence-grade"
+    assert (f"Catalogue coverage: 4 of 6 [measured]({coverage}), 0 [verified]({grade})"
             " · 3 not measured (needs a full run: 1, no remote: 2) · model m-1") in h["markdown"]
     assert h["markdown"].count("](") == 2
     assert all("](" not in line for line in [*h["lines"], h["summary"]])
