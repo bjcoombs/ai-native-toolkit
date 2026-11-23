@@ -512,7 +512,7 @@ def test_layer_three_suppressions_earn_no_tally_credit_without_a_linter(lint_run
 def test_each_condition_carries_the_whys_of_its_criteria():
     """#939: a condition's why joins its criteria's manifest whys, in order, each once."""
     from lib.manifest.check_manifest import condition_key, core_manifest
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
 
     model = load_default_levels()
     whys = condition_whys(core_manifest())
