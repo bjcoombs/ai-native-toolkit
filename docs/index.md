@@ -16,7 +16,7 @@ The auto-discovered skills, each with its own `SKILL.md` base doc. See [`skills/
 
 Portable (work in any Claude Code session, also shipped as standalone ZIPs):
 
-- [`/assess`](../skills/assess/SKILL.md) - score a codebase's readiness for AI agent contributors against the 0-8 layered contract model; emits a complexity hotspot SVG and a doc-navigability graph SVG.
+- [`/assess`](../skills/assess/SKILL.md) - measure a codebase's readiness for AI agent contributors: a headline Step and "Practices in place: N of M measured, V verified" over the maturity model's conditions, with a complexity hotspot SVG, a doc-navigability graph SVG, an evidence waffle, a package map, a doc-drift map and a review strip.
 - [`/huddle`](../skills/huddle/SKILL.md) - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing.
 - [`/deslop`](../skills/deslop/SKILL.md) - detect and remove the telltale signs of AI writing. Ships an exhaustive [reference checklist](../skills/deslop/references/full-checklist.md).
 - [`/skill-forge`](../skills/skill-forge/SKILL.md) - harden a skill through judge-panel refinement rounds to a 3-tier promotion gate; refined through its own process. Composes the `ab-equivalence` runner for its behavioural equivalence gate.
@@ -104,4 +104,4 @@ The Six Thinking Hats team, orchestrated by [`/huddle`](../skills/huddle/SKILL.m
 - [Code review instructions](../.github/claude-review-instructions.md) - the guidelines the automated reviewer follows on pull requests.
 - [How to build a narrated skill explainer](./huddle-explainer/README.md) - the repeatable Claude Code + Claude Design + ElevenLabs pipeline, worked through end to end on `/huddle`.
 
-The rendered example SVGs used in the README hero (the doc-navigability graph and the complexity heatmap, before and after the action sweep) live alongside this file in `docs/`.
+The rendered example SVGs used in the README (the doc-navigability graph and the complexity heatmap before and after the action sweep, the calibration heatmaps, and the evidence waffle, package map, doc-drift map and review strip from a llama.cpp run) live alongside this file in `docs/`.
