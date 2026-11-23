@@ -10,9 +10,9 @@ meaning is unchanged; a change of meaning is never aliased, #774). 2.2.0 (#911, 
   copied from 2.1.0 that names an old path in a team row's ``signal`` or ``eq_signal`` loads
   with the new path, and one ``deprecated signal path`` line per distinct old path goes to
   stderr. Org rows are left alone (their paths are ghreport's, not a scan's).
-- ``aliased`` (``lib.fleet_rescore``): a stored scan holding the old path and not the new one
+- ``aliased`` (``lib.fleet.fleet_rescore``): a stored scan holding the old path and not the new one
   is also readable under the new path, so a re-score causes no Recount line.
-- ``renamed`` (``lib.fleet_compare.compare``, both sides): the old leaf moves to the new
+- ``renamed`` (``lib.fleet.fleet_compare.compare``, both sides): the old leaf moves to the new
   path, so comparing a 2.1.0 row with a 2.2.0 row lists no added or removed leaf for a rename.
 
 Neither scan helper overwrites a new path that is already present, and neither changes its

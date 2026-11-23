@@ -11,15 +11,15 @@ import jsonschema
 import pytest
 
 from fleet_data_fixture import LEVELS, STAMP
-from lib import fleet_achievements as fa
-from lib import fleet_rescore as fr
-from lib.fleet import FLEET_ROW_VERSION, FleetRow, dumps_rows
-from lib.fleet_achievements_runs import earlier_runs
-from lib.fleet_achievements_schema import render
-from lib.fleet_credit import credit_section
-from lib.fleet_data import FLEET_DATA_FILE, Cell, FleetData, Privacy, build_fleet_data, dumps_fleet_data
-from lib.fleet_stamp import RUN_FILE, FleetStamp
-from lib.fleet_units import build_trees, empty_map
+import lib.fleet.fleet_achievements as fa
+import lib.fleet.fleet_rescore as fr
+from lib.fleet.runner import FLEET_ROW_VERSION, FleetRow, dumps_rows
+from lib.fleet.fleet_achievements_runs import earlier_runs
+from lib.fleet.fleet_achievements_schema import render
+from lib.fleet.fleet_credit import credit_section
+from lib.fleet.fleet_data import FLEET_DATA_FILE, Cell, FleetData, Privacy, build_fleet_data, dumps_fleet_data
+from lib.fleet.fleet_stamp import RUN_FILE, FleetStamp
+from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import MaturityModel, parse_levels
 
 

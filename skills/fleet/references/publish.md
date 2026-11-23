@@ -1,7 +1,7 @@
 ## Database projection: `fleet-data.json` to artifact database writes
 
 The live fleet artifact (#705) keeps its data in the artifact's `db` database.
-`lib/fleet_publish.py` turns one run's [`fleet-data.json`](fleet-data.md) into the writes
+`lib/fleet/fleet_publish.py` turns one run's [`fleet-data.json`](fleet-data.md) into the writes
 the `ArtifactData` `batch` action takes. It is a pure function: it makes no network call,
 and the same bundle, run id and stored sizes give the same bytes. The `/fleet` publish
 step (#949) sends the batches.

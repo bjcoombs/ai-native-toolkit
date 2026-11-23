@@ -16,8 +16,8 @@ import pytest
 
 from conftest import pin_fleet_run_date
 from lib.counts_only import classify
-from lib.fleet_cleanup import _rmtree
-from lib.fleet_schema import build_schema
+from lib.fleet.fleet_cleanup import _rmtree
+from lib.fleet.fleet_schema import build_schema
 from test_fleet import make_repo
 
 FLEET_SCRIPT = Path(__file__).resolve().parents[2] / "fleet" / "scripts" / "fleet.py"
@@ -255,7 +255,7 @@ def test_the_slope_chart_is_drawn_only_with_compare(tmp_path, monkeypatch, capsy
 
 
 def test_a_raising_renderer_keeps_exit_0_and_the_history(froot, tmp_path, monkeypatch, capsys):
-    from lib import fleet_tooling_map
+    import lib.fleet.fleet_tooling_map as fleet_tooling_map
 
     def bug(*_args: object) -> str:
         raise RuntimeError("render bug")

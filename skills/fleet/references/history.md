@@ -77,7 +77,7 @@ reads the group's settings, not its repositories, so on both sides it is always
 `level` (`settings_changed` says whether the settings moved).
 
 Three more causes keep a toolkit change from reading as the repository's own move
-(`lib/fleet_scanner_diff.py`, #774). They apply to a moved team row present in both runs:
+(`lib/fleet/fleet_scanner_diff.py`, #774). They apply to a moved team row present in both runs:
 
 - `set` with `absent_signals`: the row is unknown on one side because that run's scans lack a
   signal the other run holds (a scanner added or dropped it). This is measured-set movement,

@@ -21,7 +21,7 @@ since the previous comparable run, read from this run's `level_up` achievements.
 progress is display only: it comes from the run history and never feeds a level or
 `fleet-data.json`. On the first kept run it says the run is the starting line; under
 `--no-history` or `--full` it says the run is not kept in the history. Without `--levels`
-the section is left out. Logic: `lib/fleet_opportunities_section.py`.
+the section is left out. Logic: `lib/fleet/fleet_opportunities_section.py`.
 Every `## ` section opens with a line that starts `In place:` and says what this run already
 has (what is measured, reached or earned) before the section's question and any next step;
 the team next-steps pages open every heading the same way. The wording rules, the words
@@ -51,6 +51,6 @@ a confirmed `floor` is shown as "at least N": a distinct hatched segment in the 
 beside each known-only mean a floor-inclusive figure labelled as a lower bound (tooltips and
 the not-plotted strip), never moving a plotted point. Colours follow the
 viewer's light or dark scheme. The SVGs have no script and no external font or link, and the
-same run draws the same bytes. Logic: `lib/fleet_diagrams.py`, `lib/fleet_quadrant.py`,
-`lib/fleet_tooling_map.py`, `lib/fleet_trends.py`, `lib/fleet_slope.py`, `lib/fleet_layer_bars.py`,
-on the shared helpers in `lib/fleet_svg.py`.
+same run draws the same bytes. Logic: `lib/fleet/fleet_diagrams.py`, `lib/fleet/fleet_quadrant.py`,
+`lib/fleet/fleet_tooling_map.py`, `lib/fleet/fleet_trends.py`, `lib/fleet/fleet_slope.py`, `lib/fleet/fleet_layer_bars.py`,
+on the shared helpers in `lib/fleet/fleet_svg.py`.

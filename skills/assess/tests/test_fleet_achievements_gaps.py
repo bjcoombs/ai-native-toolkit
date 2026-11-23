@@ -1,4 +1,4 @@
-"""A member's failed scan never loses or doubles a row level_up (lib/fleet_achievements.py, issue #1041).
+"""A member's failed scan never loses or doubles a row level_up (lib/fleet/fleet_achievements.py, issue #1041).
 
 Each run is compared with the latest earlier run measuring the same repositories
 (``same_set``, shared with the Step ``target_hit`` of #945). The team ``grp/sub`` holds
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from lib import fleet_achievements as fa
+import lib.fleet.fleet_achievements as fa
 from test_fleet_achievements import BASE, FAILED, Spec, _build
 
 TEAM = "ownership/grp/sub"

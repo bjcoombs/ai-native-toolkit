@@ -1,4 +1,4 @@
-"""Tests for fleet-data.json, lib/fleet_data.py and its schema (issue #703)."""
+"""Tests for fleet-data.json, lib/fleet/fleet_data.py and its schema (issue #703)."""
 from __future__ import annotations
 
 import json
@@ -8,10 +8,10 @@ import jsonschema
 import pytest
 
 from fleet_data_fixture import FIXTURES, ROWS, SALT, STAMP, VARIANTS, WEB_URLS, build, model
-from lib import fleet_data as fd
+import lib.fleet.fleet_data as fd
 from lib.counts_only_rules import FLEET_DATA_KEPT, FLEET_DATA_RULES, classify_fleet_data
-from lib.fleet_data_schema import SCHEMA_PATH, render
-from lib.fleet_units import build_trees, empty_map
+from lib.fleet.fleet_data_schema import SCHEMA_PATH, render
+from lib.fleet.fleet_units import build_trees, empty_map
 from lib.levels import parse_levels
 
 
@@ -123,7 +123,7 @@ def test_the_same_salt_gives_the_same_bytes_and_another_salt_does_not() -> None:
 def test_run_details_copy_every_stamp_field_but_the_documented_exclusions() -> None:
     from typing import get_type_hints
 
-    from lib.fleet_stamp import FleetStamp
+    from lib.fleet.fleet_stamp import FleetStamp
     stamp_keys = set(get_type_hints(FleetStamp))
     assert fd.RUN_EXCLUDED <= stamp_keys
     assert set(get_type_hints(fd.RunDetails)) == stamp_keys - fd.RUN_EXCLUDED

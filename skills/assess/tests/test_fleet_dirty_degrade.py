@@ -11,9 +11,9 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from lib import fleet
-from lib.fleet import ScanOptions, Target
-from lib.fleet_schema import build_schema
+import lib.fleet.runner as fleet
+from lib.fleet.runner import ScanOptions, Target
+from lib.fleet.fleet_schema import build_schema
 from test_fleet import _fake_signals, _git, make_checkout
 
 FILES = {"CLAUDE.md": "# guide\n", "src/a.py": "x = 1\n"}

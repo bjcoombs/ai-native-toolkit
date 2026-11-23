@@ -1,4 +1,4 @@
-"""Tests for the Step fields of fleet-data.json (lib/fleet_data_steps.py, issue #944)."""
+"""Tests for the Step fields of fleet-data.json (lib/fleet/fleet_data_steps.py, issue #944)."""
 from __future__ import annotations
 
 import json
@@ -7,12 +7,12 @@ from typing import Any, cast
 import pytest
 
 from fleet_data_fixture import ROWS, SALT, STAMP, VARIANTS, build, model
-from lib import fleet_data as fd
+import lib.fleet.fleet_data as fd
 from lib.counts_only import counts_only_scans
-from lib.fleet import FleetRow
-from lib.fleet_data_steps import NO_STEPS, GateBlocker, RepoSteps, repo_steps, step_hold, step_roll_up
-from lib.fleet_level import fleet_levels
-from lib.fleet_units import build_trees, empty_map
+from lib.fleet.runner import FleetRow
+from lib.fleet.fleet_data_steps import NO_STEPS, GateBlocker, RepoSteps, repo_steps, step_hold, step_roll_up
+from lib.fleet.fleet_level import fleet_levels
+from lib.fleet.fleet_units import build_trees, empty_map
 from lib.level_result_types import Blocker
 from lib.levels import StepDef
 

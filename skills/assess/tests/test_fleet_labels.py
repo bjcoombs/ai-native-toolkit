@@ -1,4 +1,4 @@
-"""Tests for the optional fleet labels step, lib/fleet_labels.py and its CLI (issue #572).
+"""Tests for the optional fleet labels step, lib/fleet/fleet_labels.py and its CLI (issue #572).
 
 The model choice is the one unverifiable step; everything around it is pinned
 here: the closed label set, the labels.jsonl schema and validation, the join to
@@ -17,8 +17,8 @@ from typing import Any
 import jsonschema
 import pytest
 
-from lib import fleet_labels as fl
-from lib.fleet import REPOS_FILE, FleetRow, dumps_rows
+import lib.fleet.fleet_labels as fl
+from lib.fleet.runner import REPOS_FILE, FleetRow, dumps_rows
 from lib.levels import Group, dumps_result, evaluate, load_levels
 
 LIB = Path(__file__).resolve().parents[1] / "scripts" / "lib"
@@ -346,7 +346,8 @@ def _imports(path: Path) -> set[str]:
 
 
 def test_no_gathering_or_scoring_module_imports_labels():
-    allowed = {LIB / "fleet_labels.py", LABELS_SCRIPT}
+    # lib/fleet_labels.py is the #917 old-path shim (removed in 4.0.0), which imports the module.
+    allowed = {LIB / "fleet" / "fleet_labels.py", LIB / "fleet_labels.py", LABELS_SCRIPT}
     sources = [*LIB.rglob("*.py"), *(SKILLS / "fleet" / "scripts").glob("*.py"),
                *(SKILLS / "assess" / "scripts").glob("*.py")]
     offenders = [p.name for p in sources
@@ -356,7 +357,7 @@ def test_no_gathering_or_scoring_module_imports_labels():
 
 def test_labels_module_has_no_model_or_network_dependency():
     banned = {"anthropic", "openai", "requests", "httpx", "urllib", "http", "socket", "subprocess"}
-    for path in (LIB / "fleet_labels.py", LABELS_SCRIPT):
+    for path in (LIB / "fleet" / "fleet_labels.py", LABELS_SCRIPT):
         roots = {m.split(".")[0] for m in _imports(path)}
         assert roots.isdisjoint(banned), (path.name, roots & banned)
 

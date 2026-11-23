@@ -6,9 +6,9 @@ this run and the earlier comparable runs' `fleet-data.json` copies in the run hi
 oldest first, every time. It never reads an earlier `achievements.json`, so editing
 output cannot change what is earned. Keys sorted, compact; the same history gives the
 same bytes. Schema: [`references/achievements.schema.json`](achievements.schema.json).
-Logic: `lib/fleet_achievements.py` (engine), `lib/fleet_achievements_runs.py` (history),
-`lib/fleet_targets.py` (`--targets`), `lib/fleet_credit.py` (report section),
-`lib/fleet_rescore.py` (re-score and Recount).
+Logic: `lib/fleet/fleet_achievements.py` (engine), `lib/fleet/fleet_achievements_runs.py` (history),
+`lib/fleet/fleet_targets.py` (`--targets`), `lib/fleet/fleet_credit.py` (report section),
+`lib/fleet/fleet_rescore.py` (re-score and Recount).
 
 **Comparable runs.** A history entry is replayed when its `run.json` passes the
 `--compare` rule against this run (plugin major version, maturity-model version, window,

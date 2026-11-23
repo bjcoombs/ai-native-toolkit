@@ -47,7 +47,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from lib import fleet_svg as svg
+import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import DIAGRAM_FILES, build_diagrams, wrap, write_diagrams
 from lib.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
 from lib.doc_ownership import REPO_BASELINE
