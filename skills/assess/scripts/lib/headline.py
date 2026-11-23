@@ -40,7 +40,13 @@ in it: ``Step 3 · next: coverage gate`` (``GATE_NOUN`` names the first blocking
 per-tag tally also reads, #1073) hold the coverage
 numbers for counts-only readers, which drop the text lines. ``next_why`` (#939) is, for
 each blocking gate, the ``why`` of every condition of its row up to its level that is not
-met, each once and joined by one space (``""`` at the top Step). A run whose ``level``
+met, each once and joined by one space (``""`` at the top Step).
+``summary_lines``, ``call_to_action`` and ``summary_markdown`` (#1102) are the executive
+summary that opens the report; this module leaves them empty and ``lib/exec_summary.py``
+fills them, because the Step sentences live beside the ladder, which imports this module.
+Their last line reads the ``since_last_run`` block, so, unlike the rest of the block, the
+summary can differ between two runs of one commit.
+A run whose ``level``
 block is missing or unavailable gets ``available: false`` and "Step not measured", never
 a guessed Step; ``as_headline`` returns that form for a degraded ``headline`` block.
 Shape: ``Headline`` in ``level_result_types.py``; under counts-only the text fields are
@@ -65,7 +71,7 @@ from lib.levels import MaturityModel
 #   "Catalogue coverage". No key is added or removed.
 HEADLINE_VERSION = 3
 
-__all__ = ["GATE_CHANGE", "GATE_NOUN", "Headline", "as_headline", "gate_change", "headline", "reason_word",
+__all__ = ["GATE_CHANGE", "GATE_NOUN", "Headline", "as_headline", "gate_change", "gate_note", "headline", "reason_word",
            "run_context_headline", "tag_cells", "verified_count"]
 
 # The change that holds each Step gate, as the Next line words it. A gate id the
@@ -120,17 +126,22 @@ def reason_word(code: str) -> str:
     return words.strip()
 
 
-def gate_change(blocker: Blocker) -> str:
-    """A blocking gate as the Next line words it: its ``GATE_CHANGE`` change, plus why it is open
-    when it was not measured or the owner excluded it. The Step ladder's caption reads it too."""
-    gate = blocker.get("gate", "")
-    change = GATE_CHANGE.get(gate, f"the {gate} gate holds")
+def gate_note(blocker: Blocker) -> str:
+    """Why a blocking gate is open when it was not measured or the owner excluded it, as
+    `` (...)``; ``""`` for a gate that is simply not yet in place."""
     if blocker.get("disposition") == "excluded_by_owner":
         kind = blocker.get("exclusion_kind", "other").replace("_", " ")
-        change += f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
-    elif blocker.get("state") == "not_measured":
-        change += f" (not measured here: {reason_word(blocker.get('reason', ''))})"
-    return change
+        return f" (excluded by owner: {kind}; the Step waits while the exclusion stands)"
+    if blocker.get("state") == "not_measured":
+        return f" (not measured here: {reason_word(blocker.get('reason', ''))})"
+    return ""
+
+
+def gate_change(blocker: Blocker) -> str:
+    """A blocking gate as the Next line words it: its ``GATE_CHANGE`` change, plus ``gate_note``.
+    The Step ladder's caption and the executive summary (``lib/exec_summary.py``) read it too."""
+    gate = blocker.get("gate", "")
+    return GATE_CHANGE.get(gate, f"the {gate} gate holds") + gate_note(blocker)
 
 
 def _next_line(level: LevelResult, names: Mapping[int, str]) -> str:
@@ -208,7 +219,7 @@ def _unavailable(reason: str) -> Headline:
     return {"headline_version": HEADLINE_VERSION, "available": False, "levels_version": None,
             "step": None, "next_step": None, "lines": [line], "markdown": f"**{line}**",
             "summary": "Step not measured", "verified": None, "tags": [], "next_why": "",
-            "reason": reason}
+            "summary_lines": [], "call_to_action": "", "summary_markdown": "", "reason": reason}
 
 
 def headline(value: Any, model: MaturityModel) -> Headline:
@@ -235,7 +246,9 @@ def headline(value: Any, model: MaturityModel) -> Headline:
             "next_step": nxt["step"] if nxt else None, "lines": lines,
             "markdown": markdown, "summary": summary,
             "verified": verified_count(level["conditions"]), "tags": cells,
-            "next_why": next_why(level, model)}
+            "next_why": next_why(level, model),
+            # the executive summary (#1102), empty until exec_summary.summarised fills it
+            "summary_lines": [], "call_to_action": "", "summary_markdown": ""}
 
 
 def run_context_headline(level: Any) -> Headline:
@@ -246,8 +259,10 @@ def run_context_headline(level: Any) -> Headline:
 def as_headline(value: Any) -> Headline:
     """``value`` when it is a headline block, else the unavailable headline (a degraded scan)."""
     if isinstance(value, dict) and isinstance(value.get("summary"), str) and "lines" in value:
-        if "next_why" in value:
+        if "next_why" in value and "summary_markdown" in value:
             return value  # type: ignore[return-value]
-        return {"next_why": "", **value}  # type: ignore[typeddict-item]  # a pre-#939 block has none
+        # a pre-#939 block has no next_why, a pre-#1102 block no summary fields
+        return {"next_why": "", "summary_lines": [], "call_to_action": "", "summary_markdown": "",
+                **value}  # type: ignore[typeddict-item]
     reason = value.get("reason") if isinstance(value, dict) else None
     return _unavailable(str(reason or "no_headline"))

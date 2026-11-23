@@ -6,10 +6,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import use_real_lizard
 
 from lib.ci_checks import scan_ci_checks
 from lib.counts_only.content_free import counts_only_scans
@@ -44,7 +46,10 @@ def _commit(repo: Path) -> Path:
 
 
 def _scans(repo: Path) -> dict[str, Any]:
-    return dict(build_document(repo)["scans"])
+    """Headless scans scored by the installed lizard, whatever stub an earlier file left (#1117)."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        use_real_lizard(monkeypatch)
+        return dict(build_document(repo)["scans"])
 
 
 @pytest.fixture(scope="module")
@@ -268,6 +273,21 @@ def test_every_default_signal_is_emitted_by_some_real_output(
         if all(resolve_signal(doc, s) is _UNAVAILABLE for doc in documents)
     )
     assert never == []
+
+
+def test_scans_score_sizes_after_an_earlier_file_left_a_lizard_stub(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1117: the treemap loaders' empty lizard stub cannot turn the fixtures' sizes unknown."""
+    stub = type(os)("lizard")
+    monkeypatch.setitem(sys.modules, "lizard", stub)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    assert _scans(_commit(tmp_path))["stats_summary"]["loc_by_class"]["source"]["p95"] == 1.0
+    assert sys.modules["lizard"] is stub   # the stub other files rely on is put back
+    monkeypatch.delitem(sys.modules, "lizard")
+    _scans(tmp_path)
+    assert "lizard" not in sys.modules     # and no entry stays no entry
 
 
 def test_default_levels_on_the_golden_fixture_repos(golden_repos: dict[str, dict[str, Any]]) -> None:

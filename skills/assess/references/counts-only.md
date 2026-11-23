@@ -829,18 +829,6 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.tags.countable_not_measured.id` | token |
 | `level.tags.countable_not_measured.reason` | token |
 
-## headline
-
-| Field | Kept as |
-|---|---|
-| `headline.levels_version` | token |
-| `headline.lines` | dropped |
-| `headline.markdown` | dropped |
-| `headline.summary` | dropped |
-| `headline.next_why` | dropped |
-| `headline.reason` | token |
-| `headline.tags.tag` | token |
-
 ## since_last_run
 
 | Field | Kept as |
@@ -866,6 +854,21 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `since_last_run.pruning.completed_sha` | token |
 | `since_last_run.pruning.gates` | token |
 | `since_last_run.pruning.credited_at` | token |
+
+## headline
+
+| Field | Kept as |
+|---|---|
+| `headline.levels_version` | token |
+| `headline.lines` | dropped |
+| `headline.markdown` | dropped |
+| `headline.summary` | dropped |
+| `headline.next_why` | dropped |
+| `headline.summary_lines` | dropped |
+| `headline.call_to_action` | dropped |
+| `headline.summary_markdown` | dropped |
+| `headline.reason` | token |
+| `headline.tags.tag` | token |
 
 ## unit_readings
 

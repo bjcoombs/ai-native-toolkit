@@ -250,6 +250,13 @@
 # #843. A condition with several tags counts once. Tags change no level, no
 # tally and no Step.
 #
+# Exit review (lib/levels_fields.py, #1086): a condition may carry
+# predicted = "lower_revert" | "lower_rework" | "none" and review = YYYY-MM-DD
+# (an unquoted TOML date), both or neither: the direction it should move the
+# agent-outcome measure (#1085) and when /fleet history is checked for it. No
+# condition here has one yet; a condition PR adds its own. They change no
+# criterion, state, tally or Step.
+#
 # Changing a criterion changes results: bump "version" with every edit.
 #
 # default-2026.11.23 (3.0.0 release): three changes since default-2026.11.22.
