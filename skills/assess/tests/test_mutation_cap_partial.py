@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from assess_finalize import FinalizeValidationError, _validate_layer6_cap
-from lib.mutation_cap import (
+from lib.testing.mutation_cap import (
     MUTATION_NOT_RUN_ANNOTATION,
     MUTATION_PARTIAL_ANNOTATION,
     layer6_cap_violation,

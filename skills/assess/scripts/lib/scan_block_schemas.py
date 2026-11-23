@@ -290,7 +290,7 @@ CI_CHECKS: JsonDict = {
 
 COVERAGE_GATE: JsonDict = {
     "description": (
-        "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI "
+        "Committed line-coverage thresholds (lib/testing/coverage_gate.py), read from config and CI "
         "files at HEAD, never from measured coverage. Each gate keeps its threshold as written "
         "beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80)."),
     "properties": {

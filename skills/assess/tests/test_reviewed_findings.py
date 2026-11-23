@@ -18,7 +18,7 @@ from assess_gate import check_finding_regressions
 from lib import reviewed_findings as rf
 from lib.counts_only import counts_only
 from lib.keyhole.keyhole_signals import finding_display_name, finding_products
-from lib.mutation_refresh import _rebuilt_findings
+from lib.testing.mutation_refresh import _rebuilt_findings
 from lib.run_context_types import DerivedFinding
 
 ACTION = "request human review - tests verify internal consistency, not truth"

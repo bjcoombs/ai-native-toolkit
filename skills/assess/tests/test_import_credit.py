@@ -1,4 +1,4 @@
-"""Contract tests for ``lib/import_credit``: the import tier of the sibling-test
+"""Contract tests for ``lib/testing/import_credit``: the import tier of the sibling-test
 probe (issue #485).
 
 A test file split by concern (``test_foo_a.py`` / ``test_foo_b.py``) is named
@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from lib import import_credit as ic
+import lib.testing.import_credit as ic
 import lib.keyhole.keyhole_signals as ks
 from lib import run_wiki
-from lib import sibling_tests as tc
-from lib.test_focus import compute_test_focus
+import lib.testing.sibling_tests as tc
+from lib.testing.test_focus import compute_test_focus
 
 A_TEST = "\n\ndef test_it():\n    assert True\n"
 

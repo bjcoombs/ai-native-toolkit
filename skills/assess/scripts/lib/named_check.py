@@ -16,7 +16,7 @@ that vocabulary and false under ``CHECK_WORDS`` (``python ci.py``, ``source ci.s
 siblings already read null): ``lib.ci_checks._line_may_check`` counts it as a target whose
 recipe is not read, so Layer 5 and Layer 3 read null with ``check_target``, never a false 0.
 ``may_lint_named(text)`` is ``check_command.may_lint`` under the instruction vocabulary;
-``lib.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
+``lib.testing.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
 coverage gate's null ``indirect_run`` rather than a false ``not_run_in_ci``.
 ``instruction_words`` runs a function under that vocabulary (the decorator behind the
 three above). ``lib.ci_checks`` wraps its missing-check test (``ci_scripts.runs_missing``) in it, so a missing

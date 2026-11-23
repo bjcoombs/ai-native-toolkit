@@ -25,7 +25,7 @@ from lib.agents.agent_ops import scan_agent_ops
 from lib.context_blocks import _structure_drift_block
 from lib.counts_only_schema import ROOTS
 from lib.counts_only import HASH_PREFIX, counts_only
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_gate import detect_coverage_gate
 from lib.headless_layers import structure_drift as headless_structure_drift
 from lib.instruction_claims import scan_instruction_claims
 from lib.level_signals import _ROOTS, load_default_levels
