@@ -11,6 +11,7 @@ publishes = ["agent_ops"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { agent_ops = "registered" }
+whys.agent_ops = "Committed allowlists, hooks, sandbox rules and routines make an agent's limits and repeated work the same on every clone, and reviewable like code."
 shapes = [
   { path = "agent_ops", type = "lib.block_shapes:AgentOpsBlock" },
 ]
@@ -48,6 +49,7 @@ id = "core.cond.layer-8-agent-ops.1.permissions_encoded"
 kind = "condition"
 title = "Agent permissions are committed"
 key = "layer-8-agent-ops.1:agent_ops.summary.permissions_encoded"
+why = "Committed permissions make what an agent may do the same for everyone, and reviewable like code."
 fix = "Commit the agent permission allowlist your team uses, so every clone shares it."
 
 [[entries]]
@@ -55,6 +57,7 @@ id = "core.cond.layer-8-agent-ops.2.hooks_present"
 kind = "condition"
 title = "Agent hooks are committed"
 key = "layer-8-agent-ops.2:agent_ops.summary.hooks_present"
+why = "Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it."
 fix = "Commit the hooks that run checks around agent actions."
 
 [[entries]]
@@ -62,4 +65,5 @@ id = "core.cond.layer-8-agent-ops.2.routines_present"
 kind = "condition"
 title = "Agent routines are committed"
 key = "layer-8-agent-ops.2:agent_ops.summary.routines_present"
+why = "Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code."
 fix = "Commit the routines agents run on a schedule or trigger."

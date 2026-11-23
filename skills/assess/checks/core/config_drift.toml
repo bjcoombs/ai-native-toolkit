@@ -11,6 +11,7 @@ reads = ["repo_root"]
 stage = "read_side"
 network = true
 headless = { config_drift = "registered" }
+whys.config_drift = "An agent that reads a committed ruleset or branch-protection export as the current rule, or restores it, acts on settings the platform no longer has; this lists each difference from the live setting."
 revision = 1
   [entries.privacy]
   "config_drift.reason" = "drop"

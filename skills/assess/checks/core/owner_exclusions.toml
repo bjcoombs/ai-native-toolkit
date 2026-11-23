@@ -14,6 +14,7 @@ stage = "read_side"
 degrade = false
 gate_reason = "self_degrading"
 headless = { owner_exclusions = "headless_variant" }
+whys.owner_exclusions = "It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository."
 headless_variants = [
   { block = "owner_exclusions", callable = "lib.headless_static:owner_exclusions", reads = ["repo_root"], stage = "read_side" },
 ]

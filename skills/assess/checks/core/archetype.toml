@@ -10,6 +10,7 @@ publishes = ["archetype"]
 reads = ["repo_root"]
 stage = "read_side"
 headless = { archetype = "headless_variant" }
+whys.archetype = "It tells a documentation repository from a software one, so the report does not ask a repository with no code for tests and CI on code it does not hold."
 headless_variants = [
   { block = "archetype", callable = "lib.headless_static:archetype", reads = ["repo_root"], stage = "read_side" },
 ]
@@ -25,6 +26,7 @@ id = "core.finding.override_contradicts_signals"
 kind = "finding"
 title = "Archetype override contradicts the signals"
 name = "override_contradicts_signals"
+why = "The declared repository kind decides which checks apply; when the signals disagree, checks marked not applicable may hide gaps an agent would meet."
 order = 9
 action = "Review archetype marker - deterministic signals suggest a different classification"
 mode = "characterize_first"

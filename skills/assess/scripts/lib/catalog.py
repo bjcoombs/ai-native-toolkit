@@ -57,7 +57,9 @@ them, not manifest order, since fragments group signals by collector) and `findi
 files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` names the
 manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
-every relation a named key, so a later field (the #939 `why`) is an added key. `tags`, `tag_pairs`,
+every relation a named key. Each criterion, scan, finding and tag carries `why` and `why_source`
+from the manifest (`lib.manifest_whys`, #939): `""` where a version 1 manifest has none, and a
+scan's `why` may be the token `exempt: plumbing`; signals carry none. `tags`, `tag_pairs`,
 `steps` and `links` come from `lib.catalog_tags`. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
 """
@@ -69,9 +71,10 @@ from typing import Literal, NotRequired, TypedDict
 
 from lib import catalog_tags as ct
 from lib import check_manifest as cm
+from lib import manifest_whys as mw
 from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.levels import Criterion, MaturityModel, Scalar, condition_id
-from lib.levels_fields import DEFAULT_POLARITY
+from lib.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS
 from lib.signals import NETWORK_REASON, PLATFORM_ONLY_SCANS, PLATFORM_SCANS, known_scans
 
 CATALOG_VERSION = 1
@@ -152,6 +155,8 @@ class CatalogCriterion(TypedDict):
     text: str
     title: str
     fix: str
+    why: str  # the condition's why from the manifest (#939); "" with no manifest entry
+    why_source: str
     input_class: str
     grade: str
     counts: bool
@@ -192,6 +197,8 @@ class CatalogScan(TypedDict):
     unknown_reasons: list[CatalogReason]
     evidence: list[Evidence]
     grades: list[str]
+    why: str  # the scan's why, or exactly "exempt: plumbing" (#939)
+    why_source: str
 
 
 class CatalogCollector(TypedDict):
@@ -223,6 +230,8 @@ class CatalogFinding(TypedDict):
     inputs: list[str]
     suppressed_when: str
     prune_missing_paths: bool
+    why: str
+    why_source: str
 
 
 class Catalog(TypedDict):
@@ -306,6 +315,7 @@ def _rows(model: MaturityModel, signals: Mapping[str, cm.SignalEntry],
                     op=criterion["op"], value=criterion["value"], eq_signal=criterion.get("eq_signal"),
                     text=criterion_text(criterion, title),
                     title=cond["title"] if cond else title, fix=cond["fix"] if cond else "",
+                    why=mw.why_of(cond) if cond else "", why_source=mw.why_source_of(cond) if cond else "",
                     input_class=input_class, grade=grade,
                     counts=counts(grade) and level.get("polarity") != "hazard"))
             cid = condition_id(row["id"], level["level"])
@@ -392,7 +402,8 @@ def _scans(manifest: cm.CheckManifest, rows: Sequence[CatalogRow],
             reads=list(collector["reads"]), network=bool(collector.get("network")),
             platform=bool(collector.get("platform_pass")), headless=headless,
             privacy=_privacy(name, collector, spread), used_by=_used_by(names, rows, findings),
-            unknown_reasons=_reasons(name, collector, headless), evidence=evidence, grades=grades))
+            unknown_reasons=_reasons(name, collector, headless), evidence=evidence, grades=grades,
+            why=mw.scan_why(collector, name), why_source=mw.scan_why_source(collector, name)))
     return out
 
 
@@ -425,7 +436,8 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
         sources=list(SOURCES),
         grades=_grades(),
         rows=rows,
-        tags=ct.tags(levels),
+        tags=ct.tags(levels, {t: (mw.tag_why(manifest, t)["why"], mw.tag_why(manifest, t).get("why_source", ""))
+                              for t in TRUTH_TAGS}),
         tag_pairs=ct.tag_pairs(levels),
         steps=steps,
         links=ct.links(model),
@@ -440,7 +452,8 @@ def build_catalog(manifest: cm.CheckManifest | None = None,
         findings=[CatalogFinding(name=f["name"], title=f["title"], order=f["order"], action=f["action"],
                                  mode=f["mode"], concern=f["concern"], inputs=list(f["inputs"]),
                                  suppressed_when=f.get("suppressed_when", ""),
-                                 prune_missing_paths=bool(f.get("prune_missing_paths")))
+                                 prune_missing_paths=bool(f.get("prune_missing_paths")),
+                                 why=mw.why_of(f), why_source=mw.why_source_of(f))
                   for f in cm.findings(manifest)],
     )
 

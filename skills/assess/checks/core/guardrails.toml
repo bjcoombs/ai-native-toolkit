@@ -12,6 +12,7 @@ publishes = ["guardrails"]
 reads = ["repo_root", "instruction_files", "coverage_gate", "excludes"]
 stage = "post_offers"
 headless = { guardrails = "registered" }
+whys.guardrails = "It lists the gates the repository configures and whether an instruction file states each rule and threshold, so an agent learns a gate before CI turns red on it."
 shapes = [
   { path = "guardrails", type = "lib.guardrails:GuardrailsBlock" },
 ]
@@ -39,6 +40,7 @@ id = "core.cond.guardrails-stated.1.stated_pct"
 kind = "condition"
 title = "Half the configured gates are stated"
 key = "guardrails-stated.1:guardrails.stated_pct"
+why = "A gate an agent does not know about turns its job red after the work is done. Stated with its threshold, the gate is a constraint it can plan for."
 fix = "Add the ready one-line snippet the report gives for each unstated gate to CLAUDE.md or AGENTS.md, so the next session knows the rule before it runs into it."
 
 [[entries]]
@@ -46,4 +48,5 @@ id = "core.cond.guardrails-stated.2.stated_pct"
 kind = "condition"
 title = "Every configured gate is stated"
 key = "guardrails-stated.2:guardrails.stated_pct"
+why = "With every configured gate written down, rule and threshold, an agent can check each one before it pushes."
 fix = "Add the remaining snippets the report gives, one line per gate: its rule, its threshold and the command that checks it before pushing."

@@ -13,6 +13,7 @@ reads = ["repo_root", "ghsync_root", "gitlab_merged_ci", "external_ci"]
 stage = "post_offers"
 platform_pass = true
 headless = { ci_checks = "registered" }
+whys.ci_checks = "It reads whether CI runs tests or linters on ordinary changes in a way that can stop the job, so \"it passed\" means a check ran and could have said no."
 shapes = [
   { path = "ci_checks", type = "lib.ci_checks:CiChecksBlock" },
 ]
@@ -66,6 +67,7 @@ id = "core.cond.layer-3-linters.1.lint_runs"
 kind = "condition"
 title = "CI runs a linter or type checker"
 key = "layer-3-linters.1:ci_checks.lint_runs"
+why = "A linter or type checker in CI catches mechanical mistakes in every change, an agent's included, before a reviewer spends time on them."
 fix = "Add a CI step that runs your linter (ruff check ., eslint, mypy, make lint) on pull requests, without || true, continue-on-error or allow_failure."
 
 [[entries]]
@@ -73,4 +75,5 @@ id = "core.cond.layer-5-ci.1.enforced_check_runs"
 kind = "condition"
 title = "CI runs your tests or linters, and an error stops the job"
 key = "layer-5-ci.1:ci_checks.enforced_check_runs"
+why = "This turns \"the agent says it works\" into \"CI says it works\": a check that can stop its job runs on ordinary changes, so a broken change turns the job red where everyone can see it."
 fix = "Add a CI step that runs your test or lint command on pull requests, without || true, continue-on-error or allow_failure."

@@ -10,6 +10,8 @@ publishes = ["claude_config"]
 reads = ["repo_root", "scope", "excludes"]
 stage = "post_offers"
 headless = { claude_config = "registered" }
+whys.claude_config = "Claude Code drops a frontmatter field it does not recognise without an error, so a skill, command or agent can look configured while doing nothing; this names each dropped field."
+why_sources.claude_config = "https://code.claude.com/docs/en/skills.md"
 shapes = [
   { path = "claude_config", type = "lib.claude_config:ClaudeConfigBlock" },
   { path = "claude_config.findings", type = "lib.claude_config:ClaudeConfigFinding" },

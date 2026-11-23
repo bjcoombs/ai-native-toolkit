@@ -10,6 +10,7 @@ publishes = ["coverage_report"]
 reads = ["repo_root", "coverage_data"]
 stage = "read_side"
 headless = { coverage_report = "unregistered" }
+whys.coverage_report = "It reads a coverage report the project already produced, so test depth on the riskiest files is known instead of assumed."
 revision = 1
   [entries.privacy]
   "coverage_report.source" = "path"

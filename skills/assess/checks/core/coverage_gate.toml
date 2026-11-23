@@ -13,6 +13,7 @@ reads = ["repo_root", "scope", "excludes"]
 stage = "read_side"
 unit_scope = "override"
 headless = { coverage_gate = "registered" }
+whys.coverage_gate = "It finds the coverage threshold the repository sets and whether CI enforces it, which is the line that keeps tests from thinning out under a run of changes."
 shapes = [
   { path = "coverage_gate", type = "lib.coverage_gate:CoverageGateBlock" },
 ]
@@ -44,4 +45,5 @@ id = "core.cond.layer-6-coverage.1.enforced_meets_minimum"
 kind = "condition"
 title = "CI runs a coverage gate of at least 50 percent"
 key = "layer-6-coverage.1:coverage_gate.enforced_meets_minimum"
+why = "An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly."
 fix = "Set a fail_under (or your tool's threshold) of at least 50 percent, written as a number, near your current coverage, and run the coverage check in a CI step on pull requests (pytest --cov, not plain pytest), without || true or continue-on-error, so CI holds the line you have reached."
