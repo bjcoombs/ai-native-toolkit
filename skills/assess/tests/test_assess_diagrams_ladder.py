@@ -89,7 +89,7 @@ def test_gate_words_come_from_gate_change_and_say_whether_they_hold(step: int) -
 
 @pytest.mark.parametrize("step, caption", [
     (1, "Step 2, Supervised agent PRs, opens when an instruction file an agent reads is committed."),
-    (2, "Step 3, Unattended agent PRs, opens when CI turns red when a check breaks."),
+    (2, "Step 3, Unattended agent PRs, opens when CI turns red on a broken check."),
     (3, "Step 4, Autonomous loops, opens when a coverage gate is enforced."),
     (4, "This is the top Step; it holds while its gates hold."),
 ])
@@ -120,7 +120,7 @@ def test_a_gate_the_run_could_not_read_never_reads_not_yet(state: str, read: str
     ci = next(c for c in level["conditions"] if c["id"] == "layer-5-ci.1")
     ci["state"] = state
     assert ladder.gate_state(level, ladder.new_gates(STEPS, 3)[0]) == read
-    assert f"CI turns red when a check breaks ({read})" in ladder.render_ladder(level, STEPS)
+    assert f"CI turns red on a broken check ({read})" in ladder.render_ladder(level, STEPS)
 
 
 def test_a_gate_above_level_one_reads_its_first_condition_not_met_like_the_engine() -> None:
@@ -139,7 +139,7 @@ def test_the_caption_says_why_a_next_gate_is_open_as_the_headline_does() -> None
     assert level["next_step"] is not None
     level["next_step"]["blockers"] = [{"kind": "gate", "gate": "ci_runs_tests", "state": "not_measured",
                                        "reason": "needs_platform"}]
-    assert ladder.ladder_caption(level, STEPS) == ("Step 3, Unattended agent PRs, opens when CI turns red when a check breaks "
+    assert ladder.ladder_caption(level, STEPS) == ("Step 3, Unattended agent PRs, opens when CI turns red on a broken check "
                                                    "(not measured here: needs GitHub or GitLab access).")
 
 

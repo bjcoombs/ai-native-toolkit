@@ -188,7 +188,9 @@ CI_CHECKS: JsonDict = {
                              "gitlab_project:<path> or gitlab_component:<path>; null for the "
                              "other kinds."),
                 "status": _field({"enum": list(STATUSES)},
-                                 "resolved, or why not: no_root, not_cloned, file_missing, "
+                                 "resolved; toolkit_gate (the toolkit's own regression gate "
+                                 "template, known to run no project tests); or why not: "
+                                 "no_root, not_cloned, file_missing, "
                                  "not_offline (template, remote), glob, bad_path, depth_limit, "
                                  "file_limit, unparsed, ref_missing (a pin the clone does not "
                                  "hold)."),

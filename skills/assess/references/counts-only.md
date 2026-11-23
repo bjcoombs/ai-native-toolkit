@@ -325,6 +325,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `promissory_markers.top_offenders.commit` | dropped |
 | `promissory_markers.stale_by_file.{}.families` | dropped |
 
+## agent_ops
+
+| Field | Kept as |
+|---|---|
+| `agent_ops.settings.default_mode` | token |
+| `agent_ops.managed.state` | token |
+| `agent_ops.managed.reason` | token |
+| `agent_ops.managed.sources.kind` | token |
+| `agent_ops.summary.permissions_source` | token |
+| `agent_ops.summary.permissions_encoded_reason` | token |
+
 ## config_drift
 
 | Field | Kept as |

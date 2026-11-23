@@ -246,6 +246,7 @@ class RunDetails(TypedDict):
     scans: list[str] | None
     fleet_config_sha256: str | None  # the --fleet-config comparability key (#706)
     platform: bool  # --platform ran the platform pass (#714); False for a stamp without it
+    managed_settings: bool  # --managed-settings read the machine's policy (#1153); False without it
     repositories: RepositoryCounts
 
 
@@ -403,6 +404,7 @@ def run_details(stamp: FleetStamp) -> RunDetails:
         "scans": list(stamp["scans"]) if stamp["scans"] is not None else None,
         "fleet_config_sha256": stamp.get("fleet_config_sha256"),
         "platform": stamp.get("platform", False),
+        "managed_settings": stamp.get("managed_settings", False),
         "repositories": {"selected": counts["selected"], "scanned_ok": counts["scanned_ok"],
                          "failed": counts["failed"], "qualifying": counts["qualifying"]},
     }

@@ -86,8 +86,9 @@ def test_assessment_steps_are_guarded_on_uv():
     guarded = [
         s for s in _steps() if "steps.ensure-uv.outputs.ok == 'true'" in (s.get("if") or "")
     ]
-    # Render, the skip-notice reporter, and the gate all require uv.
-    assert len(guarded) == 3
+    # The base-baseline swap (#1152), render, the skip-notice reporter, and the
+    # gate all require uv.
+    assert len(guarded) == 4
     ensure = next(s for s in _steps() if s.get("id") == "ensure-uv")
     assert "::notice::" in ensure["run"]
     assert "ok=false" in ensure["run"]
@@ -132,6 +133,30 @@ def test_infra_steps_cannot_red_the_check():
 
 def test_config_input_default():
     assert _action()["inputs"]["config"]["default"] == ".assess/config.toml"
+
+
+def test_fail_on_gate_loss_input_defaults_off_and_reaches_the_gate():
+    """Parity with the GitLab template's input (#1152), off by default so the
+    action stays warn-only; the value travels through env, never inline."""
+    assert _action()["inputs"]["fail_on_gate_loss"]["default"] == "false"
+    gate_step = next(s for s in _steps() if "assess_gate.py" in s.get("run", ""))
+    assert gate_step["env"]["FAIL_ON_GATE_LOSS"] == "${{ inputs.fail_on_gate_loss }}"
+    assert '"$FAIL_ON_GATE_LOSS" = "true"' in gate_step["run"]
+    assert "--fail-on-gate-loss" in gate_step["run"]
+    assert "inputs.fail_on_gate_loss" not in gate_step["run"]
+
+
+def test_base_baseline_step_runs_only_with_the_gate_loss_check():
+    """A PR is measured against its base branch's committed baseline (#1152)."""
+    step = next(s for s in _steps() if "base_baseline.sh" in s.get("run", ""))
+    # Not gated on the input: config.toml can opt in too.
+    assert "fail_on_gate_loss" not in step["if"]
+    assert "github.base_ref != ''" in step["if"]
+    assert step["env"]["BASE_REF"] == "${{ github.base_ref }}"
+    assert step["env"]["BASE_SHA"] == "${{ github.event.pull_request.base.sha }}"
+    assert '"$BASE_REF" "$BASE_SHA"' in step["run"]
+    names = [s["name"] for s in _steps()]
+    assert names.index(step["name"]) < names.index("Render the deterministic snapshot")
 
 
 def test_own_workflow_self_tests_the_action():

@@ -37,6 +37,12 @@ pattern = "^inhouse-agent"
 [review]
 [platform]
 
+# Central guardrails (issue #1153): read this machine's Claude Code managed settings
+# for the agent permissions practice, as `assess_core.py --managed-settings` does. A
+# single-repository option: /fleet and assess_signals.py never read it.
+[agent_ops]
+managed_settings = true
+
 # Owner exclusions of maturity-model conditions (issue #910), read by
 # `lib/owner_exclusions.py`, not here: a condition id, a required reason and a kind.
 [checks]
@@ -115,6 +121,7 @@ class GateConfig(TypedDict):
     ccn_p95_max: float | None
     containment_min: float | None
     fail_on_regression: bool
+    fail_on_gate_loss: bool
 
 
 # The tool's own directory under the scanned repo root: this config file lives
@@ -168,6 +175,14 @@ def load_config(repo_root: Path) -> TomlTable:
             file=sys.stderr,
         )
         return {}
+
+
+def load_managed_settings_opt_in(repo_root: Path) -> bool:
+    """``[agent_ops] managed_settings`` (#1153): true only for a literal ``true``. Read by
+    ``assess_core`` alone, so a repository's own config never turns the machine read on
+    for a fleet."""
+    section = load_config(repo_root).get("agent_ops")
+    return isinstance(section, dict) and section.get("managed_settings") is True
 
 
 def _string_list(config: TomlTable, key: str) -> list[str]:
@@ -260,6 +275,7 @@ def _parse_gate_section(cfg: TomlTable) -> GateConfig:
     )
     enabled = gate.get("enabled", True)
     fail_on_regression = gate.get("fail_on_regression", False)
+    fail_on_gate_loss = gate.get("fail_on_gate_loss", False)
     return {
         "enabled": enabled if isinstance(enabled, bool) else True,
         "fail_on": _string_list(gate, "fail_on"),
@@ -268,6 +284,9 @@ def _parse_gate_section(cfg: TomlTable) -> GateConfig:
         "containment_min": _positive_number(gate, "containment_min"),
         "fail_on_regression": (
             fail_on_regression if isinstance(fail_on_regression, bool) else False
+        ),
+        "fail_on_gate_loss": (
+            fail_on_gate_loss if isinstance(fail_on_gate_loss, bool) else False
         ),
     }
 
@@ -296,6 +315,9 @@ def load_gate_config(repo_root: Path) -> GateConfig:
     - ``fail_on_regression`` (bool, default ``False``): true *regression* check -
       fail when the cross-run diff (computed by ``assess_core`` against the prior
       committed snapshot) reports hotspots whose complexity/churn increased.
+    - ``fail_on_gate_loss`` (bool, default ``False``): fail when a Step gate the
+      committed baseline held (``prior-level.json``, read by ``since_last_run``)
+      no longer holds, such as CI no longer running the tests (#1152).
 
     Honours the same "degrade silently" contract as the other loaders: a missing
     file, missing section, or malformed value falls back to the default rather

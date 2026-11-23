@@ -16,6 +16,7 @@
 dist/standalone-skills/
 !/.github/
 !/action.yml
+!/templates/
 !/.file-size-ratchet.toml
 !/Makefile
 !/evals/

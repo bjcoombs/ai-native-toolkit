@@ -124,6 +124,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
              "instead of reporting them unavailable. Off by default: no network call.",
     )
     parser.add_argument(
+        "--managed-settings", action="store_true",
+        help="Read this machine's Claude Code managed settings for the agent permissions "
+             "practice (#1153), and stamp the run with it. Off by default: it measures the "
+             "machine, not the repository. The target's .assess/config.toml never turns it on.",
+    )
+    parser.add_argument(
         "--ghsync-root", metavar="DIR",
         help="The ghsync root (<root>/<path>/<repo>-main) holding the target: GitLab include: "
              "project: and component: files are read from the clones under it (lib/ci_includes.py). "
@@ -197,7 +203,8 @@ def main(argv: list[str] | None = None) -> int:
     warn_missing_packages()  # a no-uv run: say how to install what the layer blocks need
     document = build_document(repo_root, requested, args.window, fleet_config=fleet_config,
                               platform=args.platform, ghsync_root=ghsync_root,
-                              scope=scope, units=args.units)
+                              scope=scope, units=args.units,
+                              managed_settings=args.managed_settings)
     if args.counts_only:
         _counts_only(document, args)
     _write_atomically(out, json.dumps(document, indent=2, default=str) + "\n")

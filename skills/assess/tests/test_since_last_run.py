@@ -334,3 +334,29 @@ def test_a_baseline_from_another_branch_or_without_a_run_id_reads_safely(repo: P
             "baseline": {"head_sha": sha, "held_gates": []}}), encoding="utf-8")
         block = since_last_run(_level("met", "met"), repo / ".assess", repo)
         assert (block["previous_run_id"], block["closed"], block["closed_reason"]) == (None, None, reason)
+
+
+def test_the_kept_baseline_line_names_the_stored_run_only(repo: Path) -> None:
+    """#1158 review: with no stored baseline, a degraded run names no kept run; with one, that run."""
+    _previous(repo, _level("met", "met"), _git(repo, "rev-parse", "HEAD"))  # run-context only
+    lines = since_last_run({"available": False, "reason": "x"}, repo / ".assess", repo)["lines"]
+    assert not any(line.startswith("Baseline kept") for line in lines)
+    (repo / ".assess" / "prior-level.json").write_text(json.dumps({
+        "prior_level_version": 2, "levels_version": "x", "tags": [],
+        "baseline": {"run_id": "stored-run", "head_sha": _git(repo, "rev-parse", "HEAD"), "held_gates": []}}),
+        encoding="utf-8")
+    lines = since_last_run({"available": False, "reason": "x"}, repo / ".assess", repo)["lines"]
+    assert any(line.startswith("Baseline kept") and "`stored-run`" in line for line in lines)
+
+
+def test_the_kept_line_follows_the_write_side_rule(repo: Path) -> None:
+    """#1158 review: the line appears exactly when prior-level.json is not rebuilt."""
+    (repo / ".assess" / "prior-level.json").write_text(json.dumps({
+        "prior_level_version": 2, "levels_version": "x", "tags": [],
+        "baseline": {"run_id": "stored-run", "head_sha": _git(repo, "rev-parse", "HEAD"), "held_gates": []}}),
+        encoding="utf-8")
+    untagged = _level("met", "unmet")  # conditions but no tags: the writer keeps the file
+    recorded = {**untagged, "levels_version": "x", "tags": []}  # the writer rebuilds the file
+    assert any(line.startswith("Baseline kept") for line in since_last_run(untagged, repo / ".assess", repo)["lines"])
+    assert not any(line.startswith("Baseline kept")
+                   for line in since_last_run(recorded, repo / ".assess", repo)["lines"])

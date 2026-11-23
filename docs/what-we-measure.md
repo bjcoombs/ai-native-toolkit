@@ -132,7 +132,7 @@ Tag `governance`: 3 conditions, none shared with another tag.
 | `layer-7-review.1` Changes get reviewed | `review_evidence` | Review evidence exists: is true (`review_evidence.present eq true`) | `declared` | no, listed | - | positive | - | - | A second reader, a person or a review agent, catches what an agent misunderstood about intent, which tests and linters do not look for. | Commit an AI review step in CI, or review merged changes before they land. |
 | `layer-7-review.2` Most merged changes are reviewed | `review_reality` | Share of merged changes reviewed: is at least 0.8 (`review_reality.reviewed_share gte 0.8`) | `verified` | yes | - | positive | - | - | Review protects only the changes it reaches. At four in five merged changes, most of what lands, an agent's work included, has had a second reader. | Aim for a review on at least four in five merged changes. |
 | `layer-7-review.2` Half of merged changes are approved | `review_reality` | Share of merged changes approved: is at least 0.5 (`review_reality.approved_share gte 0.5`) | `verified` | yes | - | positive | - | - | An explicit approval records that someone accepted the change, not just that it was looked at. | Approve changes explicitly when you review them. |
-| `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | - | Committed permissions make what an agent may do the same for everyone, and reviewable like code. | Commit the agent permission allowlist your team uses, so every clone shares it. |
+| `layer-8-agent-ops.1` Agent permissions are committed | `agent_ops` | Agent permissions are committed: is true (`agent_ops.summary.permissions_encoded eq true`) | `config_only` | no, listed | - | positive | - | - | Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code. | Commit a deny rule for an action no agent should take, such as `"deny": ["Bash(git push origin main)"]` under `permissions` in `.claude/settings.json`. It holds under auto mode too. If your organisation sets this centrally, run with --managed-settings. |
 
 ### Supply chain
 
@@ -214,17 +214,17 @@ Committed allowlists, hooks, sandbox rules and routines make an agent's limits a
 
 Committed permission allowlists, hooks, sandbox rules and routine definitions.
 
-- Collector: `core.agent_ops`, reading `repo_root`.
+- Collector: `core.agent_ops`, reading `repo_root`, `managed_settings`.
 - Network: no.
 - Headless: reported by headless and fleet runs.
-- Counts-only: numbers, booleans and nulls kept; no string field kept.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_ops.managed.reason` token, `agent_ops.managed.sources.kind` token, `agent_ops.managed.state` token, `agent_ops.settings.default_mode` token, `agent_ops.summary.permissions_encoded_reason` token, `agent_ops.summary.permissions_source` token.
 - Used by: row `layer-8-agent-ops`.
 - Evidence: `agent_ops.summary.permissions_encoded` config_text (config_only), `agent_ops.summary.hooks_present` config_text (config_only), `agent_ops.summary.routines_present` config_text (config_only).
 - Not measured when: it cannot read its input; the block says why.
 
 Why the signals named here matter:
 
-- `agent_ops.summary.permissions_encoded` feeds `layer-8-agent-ops.1:agent_ops.summary.permissions_encoded`: Committed permissions make what an agent may do the same for everyone, and reviewable like code.
+- `agent_ops.summary.permissions_encoded` feeds `layer-8-agent-ops.1:agent_ops.summary.permissions_encoded`: Deny rules and hooks keep an agent inside its limits in every permission mode, auto mode included. Committed to the repository or set in managed settings, they apply the same way to everyone and are reviewed like code.
 - `agent_ops.summary.hooks_present` feeds `layer-8-agent-ops.2:agent_ops.summary.hooks_present`: Committed hooks run around an agent's actions on every clone, so a check written once applies without the agent having to remember it.
 - `agent_ops.summary.routines_present` feeds `layer-8-agent-ops.2:agent_ops.summary.routines_present`: Committed routines define the agent work the repository runs on a schedule or trigger, so it runs the same way each time and is reviewed like code.
 
@@ -1052,7 +1052,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `mutation_not_run_cap` | Mutation-not-run cap | `test_pressure` | `mutation_not_run_cap` | no |
 | `test_focus` | Test focus | `repo_root`, `current`, `coverage_data`, `test_pressure`, `hot_test_index` | `test_focus` | no |
 | `promissory_markers` | Promissory markers | `promissory` | `promissory_markers` | no |
-| `agent_ops` | Agent-operations guardrails | `repo_root` | `agent_ops` | no |
+| `agent_ops` | Agent-operations guardrails | `repo_root`, `managed_settings` | `agent_ops` | no |
 | `config_drift` | Configuration drift | `repo_root` | `config_drift` | yes |
 | `merged_sample` | Merged-change sample | `repo_root`, `history_window`, `run_date` | private input | yes |
 | `gitlab_note_facts` | GitLab merge request notes | `merged_sample`, `fleet_config` | private input | yes |

@@ -276,6 +276,16 @@ def test_a_platform_run_does_not_compare_with_an_offline_run():
     assert compare(_run(EARLIER, platform=True), _run(LATER, platform=True))["comparable"]
 
 
+def test_a_managed_settings_run_does_not_compare_with_one_without_it():
+    """#1153: reading the machine's policy moves the permissions practice, so it is a
+    comparability key, and a stamp written before it reads as not read."""
+    comparison = compare(_run(EARLIER), _run(LATER, managed_settings=True))
+    assert not comparison["comparable"]
+    assert "managed settings read changed False->True" in comparison["reasons"]
+    old: Any = {k: v for k, v in _stamp(EARLIER).items() if k != "managed_settings"}
+    assert fc.comparability(old, _stamp(LATER)) == ([], [])
+
+
 def test_a_stamp_from_before_714_reads_as_no_platform_pass():
     old: Any = {k: v for k, v in _stamp(EARLIER).items() if k != "platform"}
     assert fc.comparability(old, _stamp(LATER)) == ([], [])
