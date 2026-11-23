@@ -8,6 +8,7 @@ It renders:
 - the executive summary first (``lib/exec_summary.py``, #1102): the Step and what an
   agent can do there, the next gate as a task, what changed since the last run, and one
   linked call to action, pasted from the ``headline`` block's ``summary_markdown``,
+  then the fixed glossary line (``GLOSSARY_LINE``) linking each term to ``docs/glossary.md``,
 - the "Since Last Run" section (``lib/since_last_run.py``, #1083): actions closed
   since the previous run with their commits, gates gained or lost and the next blocker,
 - the headline (``lib/headline.py``, #747, #844, #1083): the Step, the gate that
@@ -588,11 +589,25 @@ def render_since_section(ctx: dict[str, Any]) -> str:
     return f"## Since Last Run\n\n{block['markdown']}\n\n"
 
 
+_GLOSSARY = "https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md"
+# The fixed line under the executive summary (#1102 part B): each term the summary
+# introduces links to its plain-English entry. skills/assess-findings/SKILL.md carries it
+# verbatim, so both report paths match (tests/test_glossary.py).
+GLOSSARY_LINE = (
+    f"_New to these words? The [glossary]({_GLOSSARY}) explains [Step]({_GLOSSARY}#step), "
+    f"[gate]({_GLOSSARY}#gate), [practice]({_GLOSSARY}#practice), [level]({_GLOSSARY}#level), "
+    f"[evidence grade]({_GLOSSARY}#evidence-grade) and [truth tag]({_GLOSSARY}#truth-tag) "
+    "in a sentence or two each._"
+)
+
+
 def render_summary_section(ctx: dict[str, Any]) -> str:
-    """The executive summary and its call to action (#1102), ending in a blank line; empty
-    when the headline has none (unavailable, no Steps, or a context written before it)."""
+    """The executive summary and its call to action (#1102), then the glossary line
+    (``GLOSSARY_LINE``), ending in a blank line. The summary is left out when the headline
+    has none (unavailable, no Steps, or a context written before it); the glossary line
+    always renders."""
     markdown = as_headline(ctx.get("headline"))["summary_markdown"]
-    return f"{markdown}\n\n" if markdown else ""
+    return f"{markdown}\n\n{GLOSSARY_LINE}\n\n" if markdown else f"{GLOSSARY_LINE}\n\n"
 
 
 def _headline_markdown(ctx: dict[str, Any]) -> str:

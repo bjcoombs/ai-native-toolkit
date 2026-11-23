@@ -28,7 +28,9 @@ Diagrams, in report order:
   order, coloured by state and grade (``CATEGORIES``). Met conditions read verified,
   measured or listed (counted or not, as the tally reads them); unmet, declined, not
   applicable (an empty outline) and not measured (hatched, its reason in the key)
-  follow. The verified and measured squares together are ``tally.met``. A hazard
+  follow. The verified and measured squares together are ``tally.met``, the N of the
+  headline's catalogue coverage, and the caption says they count toward catalogue
+  coverage: "level" is kept for a column, as ``docs/glossary.md`` defines it (#1102). A hazard
   condition (``polarity: "hazard"``, #843) is never counted: met draws as ``hazard``
   (the warn colour), unmet as ``hazard_absent`` (a warn outline); the key lists the two
   only when a square uses them. A "Level N" header heads each column, and the square at
@@ -282,7 +284,7 @@ def render_waffle(level: LevelResult, titles: Mapping[str, str], gates: Sequence
 
 def waffle_caption() -> str:
     """The one-line caption: what to take from the waffle."""
-    return ("Verified and measured squares count toward the level, listed ones are shown but "
+    return ("Verified and measured squares count toward catalogue coverage, listed ones are shown but "
             "never counted, and hatched ones were not measured, never read as zero.")
 
 

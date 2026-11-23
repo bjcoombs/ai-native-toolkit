@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from assess_report import GLOSSARY_LINE, render_summary_section
+from lib.assess_diagrams import waffle_caption
 from lib.levels import load_levels
 from lib.signal_grades import DEFAULT_LEVELS, INPUT_GRADES
 from lib.vocabulary import banned_hits
@@ -127,3 +129,17 @@ def test_report_template_links_each_term_at_the_summary() -> None:
 def test_readme_links_the_assess_terms() -> None:
     linked = set(_glossary_anchors(README))
     assert {"step", "gate", "practice", "evidence-grade"} <= linked
+
+
+def test_both_report_paths_carry_the_same_glossary_line() -> None:
+    assert GLOSSARY_LINE in FINDINGS_SKILL.read_text(encoding="utf-8"), (
+        "skills/assess-findings/SKILL.md must carry assess_report.GLOSSARY_LINE verbatim")
+    assert set(_glossary_anchors_in(GLOSSARY_LINE)) >= set(TEMPLATE_TERMS)
+    assert render_summary_section({}) == f"{GLOSSARY_LINE}\n\n", "the line renders without a summary too"
+
+
+def test_waffle_caption_uses_level_as_the_glossary_does() -> None:
+    # The glossary's level is a waffle column; the squares count toward catalogue coverage.
+    caption = waffle_caption()
+    assert "toward the level" not in caption
+    assert "catalogue coverage" in caption

@@ -10,6 +10,8 @@ First run.
 
 **Start here:** [Make CI run the tests](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/what-we-measure.md#step-gates).
 
+_New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md) explains [Step](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#step), [gate](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#gate), [practice](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#practice), [level](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#level), [evidence grade](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) and [truth tag](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#truth-tag) in a sentence or two each._
+
 ## Since Last Run
 
 - This is the first run, so there is no earlier run to compare with.
@@ -39,7 +41,7 @@ In place: 0 counted conditions met (0 verified, 0 measured) and 1 listed from co
 
 [![Evidence behind the Step](./evidence-waffle.svg)](./evidence-waffle.svg)
 
-Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
+Verified and measured squares count toward catalogue coverage, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.
 
 ## Practices in place by truth tag
 
