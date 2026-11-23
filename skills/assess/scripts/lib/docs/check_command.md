@@ -114,5 +114,9 @@ elsewhere a bare `pdm <word>` is read as a script. Gradle (#1046): a dry run (`-
 cluster such as `-qm`, `--dry-run`, `--task-graph`) runs nothing, like `make -n`
 (`runner_args.runs_no_task`), and a task named after `-x` / `--exclude-task` is not run
 (`runner_args.gradle_run`: `check -x check` and `ktlintCheck -x ktlintCheck` run no task).
+Gradle (#1124): every task named counts (`clean check`), read by `runner_args.gradle_tasks`
+so an option's value is no task (`--warning-mode all check`); `build` reads true where a
+JVM or Android plugin is applied in a tracked build file, null otherwise
+(`runner_args.gradle_build_verdict`), false with `-x check` or in a dry run.
 `_js_lint` reads the package managers only; `is_lint_run` reads `npx` / `bunx` by the
 program they run before it.
