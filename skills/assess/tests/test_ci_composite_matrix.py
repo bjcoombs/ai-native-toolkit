@@ -91,10 +91,44 @@ def test_only_a_local_composite_is_read(tmp_path: Path, uses: str, files: dict[s
     assert _scan(tmp_path, _wf(f"      - uses: {uses}\n") | files)[:3] == (False, False, "no_check_command")
 
 
-def test_a_nested_local_action_is_not_followed(tmp_path: Path) -> None:
-    outer = "runs:\n  using: composite\n  steps:\n    - uses: ./.github/actions/inner\n"
+_NULL = (None, None, "check_target", None, "check_target")
+
+
+def test_a_nested_local_action_is_not_followed_and_reads_null(tmp_path: Path) -> None:
+    outer = "runs:\n  using: composite\n  steps:\n    - name: x\n      uses: ./.github/actions/inner\n"
     files = _wf(_CALL) | {_ACT: outer, ".github/actions/inner/action.yml": _action("pytest")}
-    assert _scan(tmp_path, files)[:3] == (False, False, "no_check_command")
+    assert _scan(tmp_path, files) == _NULL
+
+
+def test_a_masked_nested_local_action_reads_false(tmp_path: Path) -> None:
+    outer = "runs:\n  using: composite\n  steps:\n    - uses: ./.github/actions/inner\n"
+    files = _wf(_CALL + "        continue-on-error: true\n") | {_ACT: outer}
+    assert _scan(tmp_path, files)[1:] == (False, "no_check_command", False, "no_lint_command")
+
+
+def test_a_remote_action_inside_a_composite_is_dropped(tmp_path: Path) -> None:
+    outer = "runs:\n  using: composite\n  steps:\n    - uses: actions/setup-python@v5\n"
+    assert _scan(tmp_path, _wf(_CALL) | {_ACT: outer}) == _NONE
+
+
+_INPUT = ("inputs:\n  cmd:\n    required: false\nruns:\n  using: composite\n  steps:\n"
+          "    - shell: bash\n      run: ${{ inputs.cmd }}\n")
+
+
+@pytest.mark.parametrize(("with_", "action", "reading"), [
+    ("        with:\n          cmd: pytest\n", _INPUT, (True, True, "enforced_check")),
+    ("        with:\n          cmd: 'ruff check .'\n", _INPUT, (True, True, "enforced_check")),
+    ("        with:\n          cmd: echo hi\n", _INPUT, (False, False, "no_check_command")),
+    ("", _INPUT, (None, None, "check_target")),
+    ("        with:\n          cmd: ${{ matrix.c }}\n", _INPUT, (None, None, "check_target")),
+    ("        with:\n          cmd: ${{ env.CMD }}\n", _INPUT, (None, None, "check_target")),
+    ("", _INPUT.replace("required: false", "default: pytest"), (True, True, "enforced_check")),
+    ("        with:\n          cmd: echo hi\n", _INPUT.replace("run: ${{ inputs.cmd }}", "run: echo ${{ inputs.cmd }}"),
+     (False, False, "no_check_command")),
+])
+def test_a_composite_input_takes_the_callers_literal_value(
+        tmp_path: Path, with_: str, action: str, reading: tuple[object, ...]) -> None:
+    assert _scan(tmp_path, _wf(_CALL + with_) | {_ACT: action})[:3] == reading
 
 
 def test_a_symlinked_action_outside_the_checkout_is_not_read(tmp_path: Path) -> None:
@@ -118,7 +152,7 @@ def test_a_composite_script_is_read_by_the_script_follower(tmp_path: Path) -> No
 def test_a_composite_is_inlined_after_the_calling_step() -> None:
     text = "jobs:\n  t:\n    steps:\n      - uses: ./a\n        if: x\n      - run: echo\n"
     action = "runs:\n  using: composite\n  steps:\n  - run: |\n      pytest\n    shell: bash\n"
-    assert inline_composites(text, {"a/action.yml": action}.get).splitlines()[5:9] == [
+    assert inline_composites(text, {"a/action.yml": action}.get).text.splitlines()[5:9] == [
         "      - run: |", "          pytest", "        shell: bash", "        if: x"]
 
 
@@ -173,9 +207,9 @@ def test_a_matrix_command_through_a_composite_input_is_credited(tmp_path: Path) 
 def test_a_deeper_composite_is_shifted_left_to_the_caller() -> None:
     text = "jobs:\n  t:\n    steps:\n    - uses: ./a\n"
     action = "runs:\n  using: 'composite'\n  steps:\n        - run: pytest\n          shell: bash\n"
-    assert inline_composites(text, {"a/action.yml": action}.get).splitlines()[4:] == [
+    assert inline_composites(text, {"a/action.yml": action}.get).text.splitlines()[4:] == [
         "    - run: pytest", "      shell: bash"]
-    assert inline_composites(text, {"a/action.yml": "name: no runs\n"}.get) == text
+    assert inline_composites(text, {"a/action.yml": "name: no runs\n"}.get) == (text, frozenset())
 
 
 def test_an_include_only_matrix_is_credited(tmp_path: Path) -> None:

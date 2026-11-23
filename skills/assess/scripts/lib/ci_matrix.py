@@ -44,7 +44,7 @@ from lib.ci_action_inputs import INPUT_KEYS
 from lib.ci_masking import IndentTree, parse_lines
 
 # A ``${{ ... }}`` expression where a command starts: the inner text is group 1.
-_CMD_EXPR = re.compile(r"""(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)["']?\$\{\{([^}]*)\}\}""")
+CMD_EXPR = re.compile(r"""(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)["']?\$\{\{([^}]*)\}\}""")
 _MATRIX_REF = re.compile(r"\$\{\{\s*matrix\.([\w-]+)\s*\}\}")
 _QUOTED_RUN = re.compile(r"""^(\s*(?:-\s+)?[\w.-]+:\s+)(["'])(.*\$\{\{\s*matrix\..*)\2\s*$""")
 _KEY_ONLY = re.compile(r"^\s*matrix\.([\w-]+)\s*$")
@@ -64,7 +64,7 @@ class _Matrix(NamedTuple):
     axis_items: dict[str, list[int]]   # block-list value lines per axis
 
 
-def _scalar(value: str) -> str | None:
+def scalar(value: str) -> str | None:
     """A plain or quoted scalar's text, or None for a flow collection or an expression."""
     value = value.strip()
     if not value or value[0] in "[{&*!|>" or "${{" in value:
@@ -95,7 +95,7 @@ def _flow_list(value: str) -> list[str] | None:
         return None
     if current.strip():
         items.append(current)
-    scalars = [_scalar(item) for item in items]
+    scalars = [scalar(item) for item in items]
     return None if any(s is None for s in scalars) else [s for s in scalars if s is not None]
 
 
@@ -108,7 +108,7 @@ def _entries(tree: IndentTree, key: int) -> list[Combo] | None:
         entry: Combo = {}
         for k in item:
             line = tree.lines[k]
-            value = _scalar(line.value)
+            value = scalar(line.value)
             if not line.key or value is None or tree.children(k):
                 return None
             entry[line.key] = value
@@ -122,7 +122,7 @@ def _axis(tree: IndentTree, key: int) -> tuple[list[str] | None, list[int]]:
     if value:
         return _flow_list(value), []
     lines = [k for k in tree.children(key)]
-    values = [_scalar(tree.lines[k].value) for k in lines]
+    values = [scalar(tree.lines[k].value) for k in lines]
     if not lines or any(tree.lines[k].key or not tree.lines[k].dash or v is None for k, v in zip(lines, values, strict=True)):
         return None, []
     return [v for v in values if v is not None], lines
@@ -184,7 +184,7 @@ def _command_keys(texts: list[str]) -> set[str] | None:
     """The matrix keys a run value runs as a command; None when one is not ``matrix.<key>``."""
     keys: set[str] = set()
     for text in texts:
-        for match in _CMD_EXPR.finditer(text):
+        for match in CMD_EXPR.finditer(text):
             inner = match.group(1)
             key = _KEY_ONLY.match(inner)
             if key:
@@ -219,12 +219,13 @@ def _jobs(tree: IndentTree) -> list[int]:
     return [k for top in tops for k in tree.children(top)]
 
 
-def expand_matrix(text: str) -> Expanded:
-    """Copy each matrix-command step once per value (module docstring)."""
+def expand_matrix(text: str, unknown_in: frozenset[int] = frozenset()) -> Expanded:
+    """Copy each matrix-command step once per value (module docstring). ``unknown_in`` are
+    line indexes of ``text`` already unknown (``lib.ci_composite``); they come back moved."""
     lines = text.splitlines()
     tree = IndentTree(parse_lines(lines))
     replace: dict[int, tuple[int, list[list[str]]]] = {}   # step start -> (end, copies)
-    unknown: set[int] = set()   # original indexes
+    unknown: set[int] = set(unknown_in)   # original indexes
     blank: set[int] = set()
     for job in _jobs(tree):
         steps = next((k for k in tree.children(job) if tree.lines[k].key == "steps"), None)

@@ -69,7 +69,9 @@ evidence is static, read from the files at HEAD:
   ``test_or_lint_configured`` and reads ``check_target`` (null) for the enforced signals.
 - A step ``uses:`` of a local composite action (#923, ``lib.ci_composite``) has the
   action's ``run:`` steps copied in after it, one level and repo-local only, with the
-  caller's ``continue-on-error`` and ``if:`` on each copy; a step whose command is a
+  caller's ``continue-on-error`` and ``if:`` on each copy and its literal ``with:`` values
+  substituted for ``${{ inputs.<name> }}`` (a nested local action, or an input left in
+  command position, reads unknown as below); a step whose command is a
   ``${{ matrix.<key> }}`` expression is copied once per literal matrix value
   (``lib.ci_matrix``, ``include`` / ``exclude`` applied), and a block-list axis it
   consumes is not read again. A matrix command that cannot be expanded reads as a
@@ -555,7 +557,7 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     partial_merge = False  # the merged configuration may lack jobs (a rules: include, a child pipeline)
     resolution = resolve_includes(root, ghsync_root) if any(f in CI_CONFIG_FILES for f in files) else None
     reader = _local_reader(root, tracked)
-    followed = {rel: expand_matrix(inline_composites(join_continued(read_config(root, rel)), reader))
+    followed = {rel: expand_matrix(*inline_composites(join_continued(read_config(root, rel)), reader))
                 for rel in files if rel not in CI_CONFIG_FILES}   # #923
     inputs = {rel: (Inputs(read_config(root, rel), frozenset()) if rel in CI_CONFIG_FILES
                     else read_inputs(followed[rel].text, reader)) for rel in files}
