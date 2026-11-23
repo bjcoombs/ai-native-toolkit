@@ -18,11 +18,13 @@ step (#949) sends the batches.
 The unit and repository entries copy every field of the bundle. A field the bundle gains,
 such as #945's `gate_blockers`, is published without a change to the projection.
 `update` merges nested objects, so a run writes only its own `history.<runId>`.
-Republishing a run writes the same value again and changes nothing. A run id is immutable
-once published. A merge cannot remove a field, so a corrected run cannot replace the entry
-it already holds. When the caller passes what the run id holds now (`previous`), a
-republish whose `runs` document or any `history.<runId>` entry differs is refused, and the
-error names the documents. Publish a corrected run under a new run id. `update` requires the
+Republishing the same bundle writes the same values again and changes nothing. A run id is
+immutable once published. A merge cannot remove a field or an entry, so a corrected bundle
+cannot replace what the run already holds. The caller passes what the run id holds now
+(`previous`), and the publisher must always pass it, because the check sees only what
+`previous` holds. A republish is refused, naming the documents, when its `runs` document or
+any `history.<runId>` entry differs. It is also refused when it no longer writes a document
+that the run id holds. Publish a corrected run under a new run id. `update` requires the
 document to exist, so the caller passes the documents already stored, and a new one is
 written with `set` and the same body.
 

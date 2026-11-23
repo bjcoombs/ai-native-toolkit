@@ -14,9 +14,11 @@ calls the network; the ``/fleet`` publish step (#949) sends the batches.
   repository object without its ``key``. Every field of the bundle is copied generically, so
   a field the bundle gains (#945's ``gate_blockers``) is published with no change here. The
   database's ``update`` merges nested objects recursively, so a run touches only its own
-  ``history.<runId>``; republishing it writes the same value again. A run id is immutable once
-  published: a merge cannot remove a field, so a republish whose entry differs from the stored
-  one (``previous``) is refused with ``RepublishConflict``. ``update`` requires the
+  ``history.<runId>``; republishing the same bundle writes the same value again. A run id is
+  immutable once published: a merge cannot remove a field or an entry, so a republish whose
+  ``runs`` document or any entry differs from what the run id holds (``previous``), or that
+  no longer writes a document the run id holds, is refused with ``RepublishConflict``. The
+  check runs only on what ``previous`` holds, so the publisher always passes it (#949). ``update`` requires the
   document to exist, so ``stored`` (below) decides the op: ``update`` for a document already
   stored, ``set`` (the same body) for a new one.
 - ``targets``: never written here; Contributors write it from the page (#948 reads it back).
@@ -336,7 +338,8 @@ def check_republish(writes: list[Write], previous: Mapping[str, object]) -> None
 
     ``previous`` maps ``"<collection>/<doc id>"`` to what the run already holds there: the
     ``runs`` document, or a unit's or repository's ``history.<runId>`` entry."""
-    changed = []
+    written = {f"{w['collection']}/{w['doc_id']}" for w in writes}
+    changed = sorted(name for name in previous if name not in written)  # a unit or repo the run dropped
     for write in writes:
         name = f"{write['collection']}/{write['doc_id']}"
         if name not in previous:

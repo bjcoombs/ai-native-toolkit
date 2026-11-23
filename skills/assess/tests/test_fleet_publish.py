@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import json
 from collections.abc import Mapping
 from typing import Any, cast
@@ -279,6 +280,12 @@ def test_a_republish_with_the_same_content_passes_and_a_changed_one_is_refused()
     with pytest.raises(fp.RepublishConflict, match="repos/.* a published run id is immutable"):
         fp.project(changed, RUN_1, stored=db.stored(), previous=previous)
     fp.project(changed, RUN_2, stored=db.stored(), previous=_previous(db, RUN_2))  # a new run id is fine
+    dropped = _bundle()
+    dropped["repos"] = dropped["repos"][1:]
+    gone = f"repos/{fp.doc_id(_bundle()['repos'][0]['key'])}"
+    entries = {name: entry for name, entry in previous.items() if not name.startswith("runs/")}
+    with pytest.raises(fp.RepublishConflict, match=f"in {re.escape(gone)};"):
+        fp.project(dropped, RUN_1, stored=db.stored(), previous=entries)  # only the dropped entry differs
     many = _bundle()
     for repo in many["repos"]:
         repo["active"] = not repo["active"]
