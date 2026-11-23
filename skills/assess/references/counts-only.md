@@ -787,6 +787,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.markdown` | dropped |
 | `headline.summary` | dropped |
 | `headline.reason` | token |
+| `headline.tags.tag` | token |
 
 ## fleet-data.json (the fleet skill)
 

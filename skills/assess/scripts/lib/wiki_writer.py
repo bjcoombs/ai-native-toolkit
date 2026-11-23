@@ -86,7 +86,7 @@ class LogEntry:
     run_date: str
     files_scored: int
     # The run's deterministic headline summary (lib/headline.py, #747):
-    # "Step 3 · 4 of 4 measured". Written by the core, never by the LLM.
+    # "Step 3 · 4 in place of 4 measured". Written by the core, never by the LLM.
     readiness: str
     # Optional[str]: None means no instruction file was found at any known
     # location (the schema convention in CLAUDE.md). The log template renders it

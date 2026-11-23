@@ -5,7 +5,7 @@ import cycle (the engine reads ``lib.level_signals``, which reads the counts-onl
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
 The `LevelResult` TypedDicts (`ConditionResult`, `Tally`, `NotMeasured`, `Blocker`,
-`NextStep`) and the run context's `Headline` (#747), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
+`NextStep`) and the run context's `Headline` (#747) with its per-tag `TagCell` (#844), kept apart from `level_tally.py` so `counts_only_schema` walks them without an
 import cycle. Tests: `tests/test_level_tally.py`.
 """
 from __future__ import annotations
@@ -107,6 +107,21 @@ class OwnerExclusionsBlock(TypedDict):
     disclosures: list[str]  # one line per exclusion in force, for the report
 
 
+class TagCell(TypedDict):
+    """One cell of the headline's per-tag strip (``lib/headline.py``, #844).
+
+    A condition with several tags is in each of their cells; the tally counts it once.
+    """
+
+    tag: str  # one of lib.levels_fields.TRUTH_TAGS
+    met: int  # counted conditions with this tag that are met
+    measured: int  # counted conditions with this tag, met or unmet
+    verified: int  # of ``met``, those graded verified
+    not_measured: int  # conditions of any grade with this tag not measured
+    hazards: int  # hazard conditions with this tag that are met (the harm is present)
+    declined: int  # conditions with this tag the repository declined
+
+
 class Headline(TypedDict):
     """The run context's ``headline`` block (``lib/headline.py``, #747)."""
 
@@ -118,4 +133,6 @@ class Headline(TypedDict):
     lines: list[str]
     markdown: str  # the lines as Markdown, pasted verbatim into the report
     summary: str  # the one-line form: badge message and log entry
+    verified: int | None  # counted conditions met and graded verified (#844); None: not measured
+    tags: list[TagCell]  # the per-tag strip, in TRUTH_TAGS order; empty when not measured
     reason: NotRequired[str]  # why the headline is unavailable

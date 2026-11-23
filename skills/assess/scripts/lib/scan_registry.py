@@ -633,8 +633,8 @@ SCANS: tuple[ScanSpec, ...] = (
 # core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
 # exactly those reads in that order: checked here, at import, on every run.
 SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
-# The deterministic headline (lib/headline.py, #747): the Step, its next unlock and
-# "Verified practices: N of M measured", worded from the level block. The report
+# The deterministic headline (lib/headline.py, #747, #844): the Step, its next unlock,
+# "Practices in place: N of M measured, V verified" and the per-tag strip, worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
 SCANS = (*SCANS, _spec("headline", cs.headline))
 

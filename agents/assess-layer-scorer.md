@@ -27,7 +27,7 @@ A scorecard the orchestrator forwards to the `assess-findings` step:
 - any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
 - the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
 
-You return **no headline score, fraction or band name**. The report headline (the autonomy Step, its next unlock and "Verified practices: N of M measured") is the run context's `headline` block, computed by the deterministic core from the maturity model; your verdicts are the detail underneath it and never set it.
+You return **no headline score, fraction or band name**. The report headline (the autonomy Step, its next unlock, "Practices in place: N of M measured" and the per-tag strip) is the run context's `headline` block, computed by the deterministic core from the maturity model; your verdicts are the detail underneath it and never set it.
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
 
