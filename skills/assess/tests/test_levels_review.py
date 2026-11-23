@@ -47,10 +47,23 @@ def test_without_them_the_condition_carries_neither() -> None:
     assert "predicted" not in level and "review" not in level
 
 
-def test_no_default_condition_has_a_review_date_yet() -> None:
-    # Maintainer decision on #1086: no backfill; a condition PR sets its own date.
+# The default model's conditions when the exit rule shipped (#1086). The maintainer decided
+# against a backfill, so none of these gets a review date; a later condition PR sets its own.
+BEFORE_THE_EXIT_RULE = frozenset({
+    "layer-0-instructions.1", "layer-0-instructions.2", "layer-1-liveness.1", "layer-1-liveness.2",
+    "layer-2-design.1", "layer-2-design.2", "layer-3-linters.1", "layer-3-linters.2",
+    "layer-4-architecture.1", "layer-4-architecture.2", "layer-5-ci.1", "layer-5-ci.2",
+    "layer-6-coverage.1", "layer-6-coverage.2", "layer-7-review.1", "layer-7-review.2",
+    "layer-8-agent-ops.1", "layer-8-agent-ops.2", "doc-freshness.1", "doc-freshness.2",
+    "guardrails-stated.1", "guardrails-stated.2", "agent-consistency.1", "agent-consistency.2",
+})
+
+
+def test_no_condition_from_before_the_exit_rule_is_backfilled() -> None:
     raw = tomllib.loads(DEFAULT_LEVELS.read_text(encoding="utf-8"))
-    assert not [lv for row in raw["rows"] for lv in row["levels"] if "review" in lv or "predicted" in lv]
+    backfilled = [f"{row['id']}.{lv['level']}" for row in raw["rows"] for lv in row["levels"]
+                  if f"{row['id']}.{lv['level']}" in BEFORE_THE_EXIT_RULE and ("review" in lv or "predicted" in lv)]
+    assert backfilled == []
 
 
 @pytest.mark.parametrize(("fields", "message"), [
