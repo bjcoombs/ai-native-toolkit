@@ -66,7 +66,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.ci_includes import resolve_includes
-from lib.counts_only import reason_code
+from lib.counts_only.content_free import reason_code
 from lib.hosting.gh_cli import GhUnavailable
 from lib.hosting.gitlab_cli import glab_api, open_gitlab
 from lib.merged_ci import NOT_NEEDED, NOT_READ, MergedCi

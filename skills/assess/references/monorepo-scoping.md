@@ -127,3 +127,27 @@ Units: Step 1 (lowest unit) · 0 of 3 measured units at Step 2
 
 Next unlock across units: an instruction file an agent reads is committed, once at the root, moves 3 units to their next Step
 ```
+
+## Skills and plugin components as units
+
+In a skills or plugin repository, such as a marketplace of many skills, each skill is a
+unit. Each folder holding a `SKILL.md` is a unit of kind `skill`, and a plugin root's
+`agents/` and `commands/` folders (beside its `.claude-plugin/plugin.json`) are units of
+kind `agents` and `commands`. The shallowest folder wins, so a `SKILL.md` inside a skill
+is part of that skill. A `SKILL.md` below a fixture, test, example or vendored folder is
+test data and never a unit, and one below a hidden folder (`.github/skills/`,
+`.agents/skills/`) is agent configuration, not a product. Only the folders above a skill
+are read this way, so `skills/spec/` is a skill. A skill with its own `pyproject.toml` or `package.json` is one
+unit, and a package inside a skill is listed as `claimed`. A root `SKILL.md` claims
+nothing: the packages and skills below it stay units, and the root is a `skill` unit of the
+files none of them owns, so a monorepo that adds a usage skill keeps its per-package
+readings. A repository that is only a skill is one unit. A package above the skills is a unit of the source files no
+skill holds, and no unit when the skills hold all of them.
+
+Each skill gets its own readings, Step and next unlock, as any unit does. Its own evidence
+is what sits in its folder: its `SKILL.md`, `references/`, scripts and tests, and an
+instruction file inside it. Evidence outside the folder, such as root CI or a test under a
+top-level `tests/`, reads `inherited` and is never credited to one skill. The roll-up ranks
+the change that moves the most skills to their next Step. `[[units]]` in
+`.assess/config.toml` still replaces discovery; a declared folder holding a `SKILL.md` is
+of kind `skill`.

@@ -76,8 +76,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from lib.counts_only import hash_value, is_hashed
-from lib.counts_only_rules import TOKEN_RE
+from lib.counts_only.content_free import hash_value, is_hashed
+from lib.counts_only.counts_only_rules import TOKEN_RE
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import (GroupRow, full_run_only_signals, platform_signals, repo_signals, settings_for,
                               settings_signals)

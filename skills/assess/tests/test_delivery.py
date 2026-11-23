@@ -24,7 +24,7 @@ from lib.hosting.delivery import (  # noqa: E402
     AI_REVIEWERS, DeliveryBlock, agent_authored, ai_reviewed, first_human_comment, percentile,
     scan_delivery,
 )
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.fleet_config import parse_fleet_config  # noqa: E402
 from lib.hosting.gh_cli import GhUnavailable, GithubRepo  # noqa: E402
 from lib.hosting.gitlab_cli import GitlabProject  # noqa: E402

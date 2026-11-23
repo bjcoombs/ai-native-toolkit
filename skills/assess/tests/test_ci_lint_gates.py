@@ -11,7 +11,7 @@ import pytest
 
 from lib.ci_checks import scan_ci_checks
 from lib.ci_lint_gates import dotnet_props, job_ids, rewrite_gated
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.level_signals import load_default_levels
 from lib.levels import Group, evaluate
 
@@ -83,8 +83,13 @@ def _props(*props: str) -> str:
                  (False, "no_lint_command"), id="PHPCS-CONFIG-SET"),
     pytest.param(_wf(_step("mix format\ngit diff --exit-code | tee diff.txt")),
                  (False, "no_lint_command"), id="REWRITE-DIFF-PIPED"),
+    # ``exit 1 | tee x`` exits a pipeline subshell, and without pipefail the step takes
+    # tee's 0 (#1061: bash -e and sh -e exit 0); shell: bash (pipefail) exits 1.
     pytest.param(_wf(_step("mix format\ngit diff --exit-code || exit 1 | tee x")),
-                 (True, "lint_command"), id="REWRITE-DIFF-OR-EXIT-PIPED-LATER"),
+                 (False, "no_lint_command"), id="REWRITE-DIFF-OR-EXIT-PIPED-LATER"),
+    pytest.param(_wf(_step("mix format\ngit diff --exit-code || exit 1 | tee x",
+                           extra="        shell: bash\n")),
+                 (True, "lint_command"), id="REWRITE-DIFF-OR-EXIT-PIPED-LATER-PIPEFAIL"),
     pytest.param(_wf(_step("clang-format -i a.cc\ngit diff --cached --exit-code")),
                  (False, "no_lint_command"), id="REWRITE-DIFF-CACHED"),
     pytest.param(_wf(_step("clang-format -i a.cc\ngit diff --staged --quiet")),

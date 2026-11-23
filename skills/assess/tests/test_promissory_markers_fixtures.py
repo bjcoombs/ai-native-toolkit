@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.keyhole.promissory_markers import (
     MarkerScan,
     is_marker_fixture,

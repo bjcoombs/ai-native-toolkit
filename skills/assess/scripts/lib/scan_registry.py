@@ -652,6 +652,10 @@ SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
 # "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
 SCANS = (*SCANS, _spec("headline", cs.headline))
+# What changed since the previous run (lib/since_last_run.py, #1083): actions closed with their
+# commits, gates gained or lost, the next blocker. Reads the run-context the previous run left,
+# so it runs before the publish step overwrites it; the report and the log.md entry open with it.
+SCANS = (*SCANS, _spec("since_last_run", cs.since_last_run))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
 # for each unit of the units block, every condition tagged unit or inherited. The headless
 # runner reports it under --units (signals.UNIT_SCANS, #866).

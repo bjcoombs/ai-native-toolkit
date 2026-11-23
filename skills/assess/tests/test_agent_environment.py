@@ -26,7 +26,7 @@ from lib.agents.agent_environment import (  # noqa: E402
     ci_duration,
     scan_agent_environment,
 )
-from lib.counts_only import counts_only_scans  # noqa: E402
+from lib.counts_only.content_free import counts_only_scans  # noqa: E402
 from lib.named_check import is_named_check  # noqa: E402
 from lib.scan_registry import SCANS  # noqa: E402
 

@@ -12,7 +12,7 @@ one. A maturity model row's ``scope`` picks the namespace:
   TypedDicts the counts-only allow-list is checked against) every further
   segment must name a field, may not step into a list, and must end on a
   scalar. Every block a default criterion reads is typed (#793,
-  ``lib.block_shapes``), so a misspelt sub-path under ``coverage_gate`` or
+  ``lib.counts_only.block_shapes``), so a misspelt sub-path under ``coverage_gate`` or
   ``agent_ops`` fails at load. A block without a typed shape is still open: any
   sub-path is accepted, so a typo there loads and evaluates ``unknown`` with the
   path named. Run-context
@@ -155,7 +155,7 @@ import typing
 from functools import lru_cache
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from lib.counts_only_schema import ROOTS
+from lib.counts_only.counts_only_schema import ROOTS
 from lib.levels import Criterion, PathValidator, MaturityModel, Scope, load_levels
 from lib.signals_schema import SCHEMA_PATH
 from lib.signal_grades import DEFAULT_LEVELS as DEFAULT_LEVELS

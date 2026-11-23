@@ -300,6 +300,9 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Evidence: `coverage_gate.enforced_meets_minimum` ci_executed (verified).
 - Not measured when:
   - `go_rust_gate_form_not_read`: The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read. Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.
+  - `codecov_target_not_read`: The only coverage gate that could reach 50 percent is a Codecov project status whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare. To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.
+  - `codecov_patch_only`: The only coverage gate that could reach 50 percent is a Codecov patch status. It bounds coverage of the changed lines only, and removing a test changes none, so it says nothing about the floor on total coverage. To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs), or add a numeric target to a Codecov project status.
+  - `status_check_unconfirmed`: The coverage gate of at least 50 percent is a Codecov status target, which no CI line runs: Codecov posts it as a commit status, and it holds a merge only when branch protection requires it, which this scan does not read. Nothing to change if the Codecov status is a required check. To have Layer 6 measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).
   - `root_coverage_config_unresolved`: A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, but not where CI runs coverage: coverage.py reads the config of the directory it runs in, so the root floor governs the package only when CI runs coverage from the root or names that config. Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.
 
 Why the signals named here matter:
@@ -310,12 +313,12 @@ Why the signals named here matter:
 
 One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
 
-The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
+The repository's units: each skill folder (a SKILL.md) and a plugin's agents/ and commands/, then the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
 
 - Collector: `core.units`, reading `repo_root`, `excludes`.
 - Network: no.
 - Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.kind` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
@@ -749,7 +752,7 @@ Each unit's own readings of the scope-sensitive scans (suppressions, doc stalene
 - Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
 - Network: no.
 - Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.path` hashed_path.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.kind` token, `unit_readings.units.path` hashed_path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
@@ -1076,6 +1079,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `headline` | Deterministic headline | `level` | `headline` | no |
+| `since_last_run` | Since last run | `level`, `assess_dir`, `repo_root`, `superseded` | `since_last_run` | no |
 | `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |
 | `unit_levels` | Monorepo unit Steps | `unit_readings`, `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `unit_levels` | no |
 | `unit_rollup` | Monorepo unit roll-up | `unit_levels` | `unit_rollup` | no |

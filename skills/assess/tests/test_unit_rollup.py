@@ -14,7 +14,7 @@ import pytest
 from assess_report import render_report
 from lib import core_scans as cs
 from lib import unit_rollup as ur
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 from lib.level_tally import default_model
 from lib.scan_registry import SCANS
 from test_unit_readings import MONOREPO, _write

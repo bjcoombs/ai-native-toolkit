@@ -2,6 +2,14 @@
 
 Drawn from this run's output with no model call; unknown is hatched and named, never drawn as zero.
 
+## Practices in place by truth tag, across the fleet
+
+In place: 0 repositories in this run, scanned with no model call.
+
+Which truth tags hold across the estate, and how far apart are the repositories on each?
+
+Not drawn: skipped: the run wrote no per-tag tally (fleet-data.json tag_profile).
+
 ## Activity and maturity
 
 In place: 0 repositories in this run, scanned with no model call.

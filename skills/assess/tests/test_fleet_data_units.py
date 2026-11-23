@@ -16,7 +16,7 @@ import pytest
 import assess_signals
 import lib.fleet.fleet_data as fd
 from fleet_data_fixture import ROWS, SALT, VARIANTS, build, model
-from lib.counts_only import HASH_PREFIX, hash_value
+from lib.counts_only.content_free import HASH_PREFIX, hash_value
 from lib.fleet.fleet_data_units import next_blocker, unit_rows
 from lib.fleet.fleet_publish import check_strings
 from lib.fleet.runner import ScanOptions, signals_command
@@ -147,3 +147,37 @@ def test_fleet_monorepo_units_writes_hashed_unit_rows(mono: Path, tmp_path: Path
     assert [r["key"] for r in rows] == [hash_value(p, "s") for p in ("services/billing", "services/search", "web")]
     assert all(isinstance(r["step"], int) and r["tags"] for r in rows)
     assert "billing" not in text and "services" not in text
+
+
+# --- skill units (#1098) -------------------------------------------------------------
+
+def test_a_unit_row_carries_the_unit_kind() -> None:
+    readings = PROJ2["scans"]["unit_readings"]["units"]  # type: ignore[index]
+    marked = [{**readings[0], "kind": "skill"}, {**readings[1], "kind": "bogus"}]
+    skill, other = unit_rows(model(), {**(PROJ2["scans"] or {}), "unit_readings": {
+        "available": True, "units": marked}}) or []
+    assert skill["kind"] == "skill"
+    assert other["kind"] is None  # an unknown token is no kind
+    # a stored reading from before units had a kind
+    assert [r["kind"] for r in unit_rows(model(), PROJ2["scans"]) or []] == [None, None]
+    (public,) = fd.public_unit_rows([skill], fd.Privacy()) or []
+    assert (public["key"], public["kind"]) == (None, "skill")  # counts-only keeps the token
+
+
+def test_a_skills_repository_reads_skill_by_skill(tmp_path: Path) -> None:
+    from test_unit_components import PLUGIN
+    repo = _write(tmp_path / "plugin", PLUGIN)
+    assert assess_signals.main([str(repo), "--out", str(tmp_path / "d.json"), "--units"]) == 0
+    scans = json.loads((tmp_path / "d.json").read_text(encoding="utf-8"))["scans"]
+    rows = unit_rows(default_model(), scans) or []
+    assert [(r["key"], r["kind"]) for r in rows] == [
+        ("agents", "agents"), ("commands", "commands"), ("skills/plain", "skill"), ("skills/tooled", "skill")]
+    assert all(r["step"] is not None for r in rows)
+
+
+def test_the_fleet_schema_writes_a_literal_as_an_enum() -> None:
+    from typing import Literal
+
+    from lib.fleet.fleet_group_schema import type_schema
+    assert type_schema(Literal["skill", "agents"]) == {"enum": ["skill", "agents"]}
+    assert type_schema(Literal["skill"] | None) == {"anyOf": [{"enum": ["skill"]}, {"type": "null"}]}

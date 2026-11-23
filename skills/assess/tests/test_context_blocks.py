@@ -18,7 +18,7 @@ from assess_core_helpers import (
     _write_min_stats,
 )
 from lib import context_blocks, core_scans, headless_layers
-from lib.counts_only import counts_only
+from lib.counts_only.content_free import counts_only
 
 
 def test_keyhole_blocks_present_and_backward_compatible(git_repo) -> None:

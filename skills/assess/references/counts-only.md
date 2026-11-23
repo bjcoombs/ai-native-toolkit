@@ -1,13 +1,13 @@
 # Counts-only output: fields kept per block
 
 Generated from each collector's `privacy` table in `checks/core.toml` and
-the global rules in `scripts/lib/counts_only_rules.py` (in the assess skill)
-by `lib.counts_only.render_doc`; `test_counts_only.py` fails when this file
+the global rules in `scripts/lib/counts_only/counts_only_rules.py` (in the assess skill)
+by `lib.counts_only.content_free.render_doc`; `test_counts_only.py` fails when this file
 and the table disagree. Each section below is one collector. Regenerate with:
 
 ```bash
 # from the assess skill directory
-uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only import render_doc; print(render_doc(), end='')" > references/counts-only.md
+uv run python -c "import sys; sys.path.insert(0, 'scripts'); from lib.counts_only.content_free import render_doc; print(render_doc(), end='')" > references/counts-only.md
 ```
 
 `assess_core.py --counts-only` writes `run-context.counts-only.json` beside
@@ -502,6 +502,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `units.source` | token |
 | `units.unit_count_reason` | token |
 | `units.units.path` | path, dropped unless hashing is on (then hashed) |
+| `units.units.kind` | token |
 | `units.units.origin` | token |
 | `units.units.ecosystem` | token |
 | `units.units.workspace` | dropped |
@@ -827,6 +828,24 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.reason` | token |
 | `headline.tags.tag` | token |
 
+## since_last_run
+
+| Field | Kept as |
+|---|---|
+| `since_last_run.previous_run_id` | token |
+| `since_last_run.previous_commit` | token |
+| `since_last_run.closed.action` | dropped |
+| `since_last_run.closed.condition` | token |
+| `since_last_run.closed.finding` | token |
+| `since_last_run.closed.completed_sha` | token |
+| `since_last_run.gates_gained` | token |
+| `since_last_run.gates_lost` | token |
+| `since_last_run.next_blocker` | token |
+| `since_last_run.lines` | dropped |
+| `since_last_run.markdown` | dropped |
+| `since_last_run.reason` | token |
+| `since_last_run.closed_reason` | token |
+
 ## unit_readings
 
 | Field | Kept as |
@@ -834,6 +853,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_readings.unit_count_reason` | token |
 | `unit_readings.unit_blocks` | token |
 | `unit_readings.units.path` | path, dropped unless hashing is on (then hashed) |
+| `unit_readings.units.kind` | token |
 | `unit_readings.units.conditions.id` | token |
 | `unit_readings.units.conditions.origin` | token |
 
@@ -909,6 +929,7 @@ kept as written. A string
 | `repos.gate_blockers.state` | token |
 | `repos.gate_blockers.disposition` | token |
 | `repos.tags.tag` | token |
+| `tag_profile.tag` | token |
 | `views.units.tags.cells.tag` | token |
 | `repos.unit_rows.key` | path, dropped unless hashing is on (then hashed) |
 | `repos.unit_rows.next_blocker.gate` | token |

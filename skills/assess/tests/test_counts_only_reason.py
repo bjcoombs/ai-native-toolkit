@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 import assess_core
-from lib.counts_only import COUNTS_ONLY_FILE, counts_only, reason_token
-from lib.counts_only_rules import REASON, classify
+from lib.counts_only.content_free import COUNTS_ONLY_FILE, counts_only, reason_token
+from lib.counts_only.counts_only_rules import REASON, classify
 from lib.graph.import_graph import (
     INVALID_IMPORT_GRAPH,
     LANGUAGE_BY_EXTENSION,

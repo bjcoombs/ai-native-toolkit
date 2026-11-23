@@ -26,8 +26,8 @@ from lib.agents.agent_building_vocab import (
     lookup,
     normalise,
 )
-from lib.counts_only import counts_only_scans
-from lib.counts_only_rules import TOKEN_RE
+from lib.counts_only.content_free import counts_only_scans
+from lib.counts_only.counts_only_rules import TOKEN_RE
 from lib.scan_registry import SCANS
 
 # ── fixture repositories, one per class ─────────────────────────────────────

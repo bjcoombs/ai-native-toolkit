@@ -5,8 +5,8 @@
 id = "core.units"
 kind = "collector"
 title = "Monorepo units"
-summary = "The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped."
-issues = [800, 862]
+summary = "The repository's units: each skill folder (a SKILL.md) and a plugin's agents/ and commands/, then the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped."
+issues = [800, 862, 1098]
 callable = "lib.core_scans:units"
 publishes = ["units"]
 reads = ["repo_root", "excludes"]
@@ -16,11 +16,12 @@ whys.units = "One score for a monorepo describes none of its services. Naming ea
 shapes = [
   { path = "units", type = "lib.unit_discovery:UnitsBlock" },
 ]
-revision = 1
+revision = 2
   [entries.privacy]
   "units.source" = "token"
   "units.unit_count_reason" = "token"
   "units.units.path" = "hashed_path"
+  "units.units.kind" = "token"
   "units.units.origin" = "token"
   "units.units.ecosystem" = "token"
   "units.units.workspace" = "drop"

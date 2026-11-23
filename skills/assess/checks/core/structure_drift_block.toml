@@ -18,7 +18,7 @@ headless_variants = [
   { block = "structure_drift", callable = "lib.headless_layers:structure_drift", reads = ["repo_root"], stage = "read_side" },
 ]
 shapes = [
-  { path = "structure_drift", type = "lib.block_shapes:StructureDriftBlock" },
+  { path = "structure_drift", type = "lib.counts_only.block_shapes:StructureDriftBlock" },
 ]
 revision = 2
 unknown_reasons = [

@@ -8,7 +8,7 @@ import pytest
 
 from fleet_data_fixture import ROWS, SALT, STAMP, VARIANTS, build, model
 import lib.fleet.fleet_data as fd
-from lib.counts_only import counts_only_scans
+from lib.counts_only.content_free import counts_only_scans
 from lib.fleet.runner import FleetRow
 from lib.fleet.fleet_data_steps import NO_STEPS, GateBlocker, RepoSteps, repo_steps, step_hold, step_roll_up
 from lib.fleet.fleet_level import fleet_levels

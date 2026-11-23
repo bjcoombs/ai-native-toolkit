@@ -32,7 +32,7 @@ script or ``[tool.*]`` table, a file), uvx, tox (``-e`` environments), nox
 (``-s`` sessions), pytest and ``python -m pytest`` (pytest configured, path
 arguments exist), ``python X.py``, go (any ``go.mod``), cargo (``Cargo.toml``,
 aliases), mvn / ``./mvnw`` (``pom.xml``), gradle / ``./gradlew`` (a Gradle
-build file), ``bash X.sh`` and ``./X`` (the file exists). A command whose
+build file), ``bash X.sh`` (``sh``, ``dash``, ``zsh`` too) and ``./X`` (the file exists). A command whose
 runner is not modelled resolves when a CI configuration line runs it
 verbatim; otherwise it is ``external`` when its program is in
 ``EXTERNAL_TOOLS`` and ``unknown`` when not. Inline code still has to start
@@ -727,7 +727,9 @@ def _gradle(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
 
 
 def _shell(index: RepoIndex, words: list[str], cwd: str) -> Outcome:
-    pos = _positionals(words[1:], frozenset({"-o", "-O", "--rcfile", "--init-file"}))   # #955
+    # #955; a short cluster ending in o / O takes the next word too (``-eo nounset``, #1061).
+    clusters = {w for w in words[1:] if w.startswith("-") and not w.startswith("--") and w.endswith(("o", "O"))}
+    pos = _positionals(words[1:], frozenset({"-o", "-O", "--rcfile", "--init-file", *clusters}))
     # ``-c`` alone or combined (``bash -lc``, ``sh -ec``): the program is a string, not a file.
     if any(w.startswith("-") and not w.startswith("--") and "c" in w[1:] for w in words[1:]) or not pos:
         return _UNKNOWN_RUNNER
@@ -742,7 +744,7 @@ RUNNERS: dict[str, _Resolver] = {
     "pytest": _pytest, "py.test": _pytest, "python": _python, "python3": _python,
     "go": _go, "cargo": _cargo,
     "mvn": _maven, "./mvnw": _maven, "gradle": _gradle, "./gradlew": _gradle,
-    "bash": _shell, "sh": _shell, "zsh": _shell, "source": _shell,
+    "bash": _shell, "sh": _shell, "dash": _shell, "zsh": _shell, "source": _shell,
 }
 
 

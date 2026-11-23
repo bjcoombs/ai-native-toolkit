@@ -86,9 +86,26 @@ parser (the core has no YAML dependency). Only literal values count.
   group, an ``if`` or a loop body too; not inside a subshell or a function, which return
   the status), and a ``{ }`` group or function called before ``&&`` / ``||`` or in a
   condition. ``unmasked_lines(text)`` is ``mask_lines(text)[0]``.
+- A pipe without pipefail (#1061). In a GitHub bash or sh ``run:`` body with pipefail off
+  (the default ``bash -e {0}``, ``shell: sh``, no ``set -o pipefail`` before it), every
+  pipeline member but the last is masked (``ci_exempt.piped_members``), and so is every
+  segment of a ``{ }`` / ``( )`` group piped on, or of a function only ever called piped on
+  (``piped_groups``, ``ci_unsure.piped_calls``: ``{ pytest; } | tee log``, ``f | tee log``;
+  a pipeline subshell): the pipeline takes
+  the last command's status, so ``pytest | tee log`` exits 0 on a failing check. A capture
+  (above: a later line of the job names the file and exits non-zero) stays credited. When the
+  statement or a later one reads ``PIPESTATUS`` or a later one re-raises a status (``pytest
+  | tee log; exit ${PIPESTATUS[0]}``, a capture checked later), it reads null instead. With
+  pipefail on (``shell: bash``, a custom ``-o pipefail``) it stays credited; GitLab runs its
+  script with pipefail, so it is not read there.
+- A function no statement of its GitHub bash or sh ``run:`` body calls (#1061,
+  ``ci_unsure.uncalled_functions``): its body is masked, since ``f() { pytest; }`` alone runs
+  nothing. A call is the name as the command a segment runs (``f``, ``} && f``, ``time f``,
+  ``out=$(f)``); the name in echoed text (``echo f``) is none. Named only as another command's
+  argument (``retry 3 f``), the body reads null. GitLab joins ``before_script:`` and
+  ``script:``, so it is not read there.
 
-Known limits: the status of a lone ``pytest | tee log`` without pipefail is credited,
-though it would hide the failure; a check before ``&&`` inside a subshell or function with
+Known limits: a check before ``&&`` inside a subshell or function with
 a later statement there is credited; a ``{ }`` group or function called before ``&&`` reads
 null even where its last command is the check and nothing follows (bash would exit 1); a
 GitLab body is read for the ``||`` fallback only; a compound command in an exempt position
@@ -145,8 +162,9 @@ line before any rule reads it. The default `bash -e` stops at the failing check 
 `if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
 `\\` continuations are joined first.
 Issue #1008 adds `mask_lines(text) -> (unmasked, unsure)`, the forms that read null
-(`lib.ci_unsure`). Known limits (module docstring): a lone `pytest | tee log` without
-pipefail, an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
+(`lib.ci_unsure`). Issue #1061 masks a pipeline member but the last with pipefail off
+(null with a later `PIPESTATUS` read or re-raise) and an uncalled function's body in a
+GitHub bash or sh body. Known limits (module docstring): an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
 shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
@@ -154,12 +172,17 @@ shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import PurePosixPath
 from dataclasses import dataclass
 
-from lib.ci_exempt import condition_flags, exempt_segments, pipefail_after, shell_pipefail, unquoted
-from lib.ci_statements import _join, _pick, _same_line_keep, split_statements
-from lib.ci_unsure import group_call_unsure, opaque_flags, or_arm_unsure, until_break_flags
+from lib.ci_exempt import (
+    condition_flags, exempt_segments, pipefail_after, piped_groups, piped_members, shell_pipefail, unquoted)
+from lib.ci_statements import (
+    _capture_targets, _checked_later, _join, _pick, _same_line_keep, split_statements)
+from lib.ci_unsure import (
+    condition_raises, group_call_unsure, opaque_flags, or_arm_unsure, piped_calls, uncalled_functions,
+    until_break_flags)
 from lib.command_index import ci_line_text
 
 __all__ = ["IndentTree", "parse_lines", "split_statements", "strip_comment", "unmasked_lines"]
@@ -543,6 +566,7 @@ Parsed = dict[int, list[list[tuple[str, str]]]]
 
 def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, texts: dict[int, str],
                     run_shell: tuple[bool, bool, bool] | None,
+                    captured: frozenset[tuple[int, int]] = frozenset(),
                     ) -> tuple[list[tuple[int, int]], Segments, Segments]:
     """The statements of one script body masked by ``set +e`` or by a later top-level ``exit 0``,
     and the segments a later ``exit 0`` masks in a body with errexit on.
@@ -568,9 +592,11 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     state: list[bool] = []
     off: list[bool] = []
     pipes: list[bool] = []
+    before: list[bool] = []   # pipefail as each statement starts (#1061)
     for first, k in refs:
         errexit = _errexit(parsed[first][k], errexit)
         shell_errexit = _errexit(parsed[first][k], shell_errexit)
+        before.append(pipefail)
         pipefail = pipefail_after(raw[first][k], pipefail)
         state.append(not errexit)
         off.append(run_shell is not None and not shell_errexit)
@@ -583,12 +609,16 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     conditions = condition_flags(body)
     readable = run_shell is not None and bash   # the #1008 forms: a GitHub bash or sh body
     until = until_break_flags(body) if readable else [False] * len(refs)
+    raises = condition_raises(body) if readable else [None] * len(refs)   # polarity (#1061)
     in_group = group_call_unsure(body, conditions) if readable else set()
+    uncalled, named = uncalled_functions(body) if readable else (set(), set())   # #1061
+    grouped_pipes = {**piped_groups(body), **piped_calls(body, before)} if readable else {}   # #1061
     opaque = opaque_flags(body)
     out: list[tuple[int, int]] = []
     exempt: Segments = {}
     unsure: Segments = {}
     later_code = False   # a later statement runs after this one (not a lone closer)
+    pipestatus = False   # a later statement reads ${PIPESTATUS[...]}
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
@@ -596,7 +626,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
         later_exit = exited and not (exit_reraised or own)
-        if (state[idx] and not reraised) or (later_exit and off[idx]):
+        if (state[idx] and not reraised) or (later_exit and off[idx]) or idx in uncalled:
             out.append((first, k))
         elif later_exit and run_shell is not None and code[idx] and not grouped[idx]:
             statement = raw[first][k]
@@ -604,16 +634,33 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                     else exempt_segments(statement, pipes[idx]))
             if drop:
                 exempt[(first, k)] = drop
-        elif readable and code[idx] and not (state[idx] or off[idx] or reraised or own):
+        elif readable and code[idx] and not (state[idx] or off[idx] or own or (
+                reraised if raises[idx] is None else raises[idx])):
             statement = raw[first][k]
             whole = frozenset(range(len(statement)))
             # A ``{ }`` group or a compound body passes an exempt failure on; a subshell
             # or a function returns it (``lib.ci_unsure.opaque_flags``).
-            maybe = (whole if idx in in_group or conditions[idx] or until[idx]
+            maybe = (whole if idx in in_group or idx in named or conditions[idx] or until[idx] or raises[idx] is False
                      else exempt_segments(statement, True) if (later_code or later_exit) and not opaque[idx]
                      else frozenset())
             if maybe:
                 unsure[(first, k)] = maybe
+        if readable and code[idx] and not (state[idx] or off[idx]) and (first, k) not in captured:
+            # pytest | tee log without pipefail: tee's status is the pipeline's (#1061). A later
+            # re-raise or PIPESTATUS read may carry the check's status out, so that reads null.
+            group = frozenset() if before[idx] else grouped_pipes.get(idx, frozenset())
+            piped = _piped_without_pipefail(raw[first][k], before[idx]) | group
+            if group and raw[first][k][min(group)][0] == "||":
+                # pytest || { ...; exit 1; } | tee log: the arm's pipeline takes tee's status, so
+                # the check before it may pass (an arm group over several lines too).
+                arm = frozenset(range(min(group)))
+                unsure[(first, k)] = unsure.get((first, k), frozenset()) | arm
+            text = _join(raw[first][k])
+            target = unsure if reraised or pipestatus or "PIPESTATUS" in text else exempt
+            if piped:
+                target[(first, k)] = target.get((first, k), frozenset()) | piped
+        if code[idx] and "PIPESTATUS" in _join(raw[first][k]):
+            pipestatus = True
         if code[idx] and any(seg for _, seg in raw[first][k]) and _head(raw[first][k]) not in _ENDS:
             later_code = True
         if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):
@@ -621,6 +668,19 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         reraised = reraised or own
         exit_reraised = exit_reraised or own
     return out, exempt, unsure
+
+
+def _piped_without_pipefail(statement: list[tuple[str, str]], pipefail: bool) -> frozenset[int]:
+    """The piped members of ``statement`` (``ci_exempt.piped_members``) that run with pipefail
+    off, read in command order: ``set -o pipefail && pytest | tee log`` keeps ``pytest``,
+    ``pytest | tee log && set -o pipefail`` does not."""
+    piped = piped_members(statement)
+    out: set[int] = set()
+    for k, segment in enumerate(statement):
+        if k in piped and not pipefail:
+            out.add(k)
+        pipefail = pipefail_after([segment], pipefail)
+    return frozenset(out)
 
 
 # A statement that only closes a compound command runs nothing after the one before it.
@@ -648,6 +708,17 @@ def _move_unsure(unsure: Segments, masked: dict[int, set[int]], kept: dict[tuple
     return out
 
 
+def _later_lines(lines: list[str], tree: IndentTree, first: int, last: int) -> Callable[[], list[str]]:
+    """The job's lines after ``last``, built once and only when a rule asks for them."""
+    cache: list[list[str]] = []
+
+    def later() -> list[str]:
+        if not cache:
+            cache.append([lines[j] for j in tree.job(first) if j > last])
+        return cache[0]
+    return later
+
+
 def unmasked_lines(text: str) -> list[str]:
     """``text``'s lines with every masked statement removed (an all-masked line is empty)."""
     return mask_lines(text)[0]
@@ -667,15 +738,24 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
     kept: dict[tuple[int, int], list[int]] = {}
     unsure: Segments = {}
     bodies: dict[int, list[tuple[int, int]]] = {}
+    captured: set[tuple[int, int]] = set()   # output a later line of the job checks (a capture)
     for span in spans:
         first = span[0]
         statements = parsed[first]
         if tree.step_or_job_masked(first):
             masked[first] = set(range(len(statements)))
             continue
+        later = _later_lines(lines, tree, first, span[-1])
+        body = tree.body(first)
+        # The body's pipefail for the fallback-arm reading; set -o pipefail inside it is not
+        # read there, so a piped arm reads null (never credit) where it may matter.
+        arm_pipefail = run_errexit(tree, body)[2] if tree.lines[body].key == "run" else True
         for k, statement in enumerate(statements):
-            keep = _same_line_keep(statement, lambda: [lines[j] for j in tree.job(first) if j > span[-1]])
-            arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]))
+            keep = _same_line_keep(statement, later)
+            targets = _capture_targets(statement)
+            if targets and _checked_later(targets, later()):
+                captured.add((first, k))
+            arm = or_arm_unsure(statement, " ; ".join(_join(s) for s in statements[k + 1:]), arm_pipefail)
             if arm:
                 unsure[(first, k)] = frozenset(arm)
             if len(keep) < len(statement):
@@ -685,7 +765,7 @@ def mask_lines(text: str) -> tuple[list[str], list[str]]:
     for body, refs in bodies.items():
         run_shell = run_errexit(tree, body) if tree.lines[body].key == "run" else None
         texts = {first: _joined(lines, span_at[first]) for first in dict.fromkeys(f for f, _ in refs)}
-        whole, exempt, body_unsure = _masked_in_body(refs, parsed, raw, texts, run_shell)
+        whole, exempt, body_unsure = _masked_in_body(refs, parsed, raw, texts, run_shell, frozenset(captured))
         for first, k in whole:
             masked.setdefault(first, set()).add(k)
         for (first, k), skip in exempt.items():

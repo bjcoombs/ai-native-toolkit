@@ -1,6 +1,6 @@
 """The shape of one level result (``lib/level_tally.py``, #744).
 
-Kept apart from the engine so ``lib.counts_only_schema`` can walk it without an
+Kept apart from the engine so ``lib.counts_only.counts_only_schema`` can walk it without an
 import cycle (the engine reads ``lib.level_signals``, which reads the counts-only
 shapes). String fields hold condition ids, states, grades and reason codes only.
 
@@ -71,7 +71,7 @@ class TagRow(TypedDict):
     tag: str  # one of lib.levels_fields.TRUTH_TAGS
     conditions: int  # conditions with this tag, any grade or state; 0: no condition carries it yet
     countable: int  # of those, the ones the tally can count by grade: measured or verified, not a hazard
-    set_aside: int  # of the countable ones, those excluded by the owner (not applicable) or declined
+    set_aside: int  # of the countable ones: not applicable (owner-excluded, or requires one that is) or declined
     met: int  # counted conditions with this tag that are met
     measured: int  # counted conditions with this tag, met or unmet
     not_measured: list[NotMeasured]  # conditions with this tag not measured, with the reason code
