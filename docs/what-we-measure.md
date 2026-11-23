@@ -69,7 +69,8 @@ Tag `docs`: 4 conditions, 1 shared with another tag.
 |---|---|---|---|---|---|---|---|---|---|---|
 | `doc-freshness.1` Most mapped docs keep pace with their code | `doc_staleness` | Share of mapped docs outrun by their code: is at most 50 (`doc_staleness.summary.stale_pct lte 50`) | `measured` | yes | - | positive | - | - | An agent reads the docs as true. A doc whose code has moved on misleads it about that code. | Refresh the docs the report lists under doc freshness. |
 | `doc-freshness.2` Four in five mapped docs keep pace | `doc_staleness` | Share of mapped docs outrun by their code: is at most 20 (`doc_staleness.summary.stale_pct lte 20`) | `measured` | yes | - | positive | - | - | With four in five mapped docs keeping pace with their code, an agent can take most of what it reads at its word. | Refresh the docs the report lists under doc freshness, oldest first. |
-| `contributor-files.1` A newcomer can learn how to send a change and report a vulnerability | `contributor_files` | A contributing guide and a security policy are committed: is true (`contributor_files.ready eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a CONTRIBUTING.md (how to build, test and shape a change) and a SECURITY.md (how to report a vulnerability privately) at the root, in .github/ or in docs/. |
+| `contributor-files.1` A newcomer can learn how to send a change | `contributor_files` | A contributing guide is committed: is true (`contributor_files.guide.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a CONTRIBUTING.md that says how to build, test and shape a change, at the root, in .github/ or in docs/. |
+| `contributor-files.1` A newcomer can report a vulnerability privately | `contributor_files` | A security policy is committed or shared by the owner: is true (`contributor_files.policy.present eq true`) | `measured` | yes | - | positive | - | - | A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue. | Commit a SECURITY.md that says how to report a vulnerability privately, at the root, in .github/ or in docs/, or link GitHub private vulnerability reporting. |
 
 Also carries this tag, listed under its first tag: `layer-0-instructions.2` (Agent context).
 
@@ -532,6 +533,23 @@ Each SKILL.md and agent definition against Anthropic's skill authoring guidance:
 - Evidence: `skill_disclosure.files_breaking` head_structure (measured).
 - Not measured when: it cannot read its input; the block says why.
 
+### `org_security_policy`: Owner's shared security policy
+
+A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue.
+
+The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh.
+
+- Collector: `core.org_security_policy`, reading `repo_root`.
+- Network: yes, GitHub or GitLab (with --platform).
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `org_security_policy.path` drop, `org_security_policy.reason` reason.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `network`: It reads GitHub or GitLab, and a run makes no network call without --platform. Run the fleet or assess_signals.py with --platform, with gh or glab signed in.
+  - `network`: A headless run without --platform makes no GitHub read. Run fleet or assess_signals.py with --platform, or /assess, with gh signed in.
+  - `no_remote`: The repository has no github.com remote, so there is no owner .github repository to read. Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository.
+
 ### `agent_consistency`: Cross-agent instruction consistency
 
 It compares the instruction files of every agent system present, so each agent is told the same checks and thresholds, from one source.
@@ -767,14 +785,15 @@ A contributing guide tells a newcomer, human or agent, how to build, test and sh
 
 A contributing guide and a security policy (a SECURITY file or a link to GitHub private vulnerability reporting) at the root, in .github/ or in docs/; issue and pull or merge request templates as evidence.
 
-- Collector: `core.contributor_files`, reading `repo_root`, `archetype`.
+- Collector: `core.contributor_files`, reading `repo_root`, `archetype`, `org_security_policy`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `contributor_files.guide` path, `contributor_files.policy` path, `contributor_files.policy_kind` token, `contributor_files.reason` reason.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `contributor_files.guide.path` path, `contributor_files.policy.kind` token, `contributor_files.policy.path` path, `contributor_files.policy.reason` reason, `contributor_files.policy.source` token, `contributor_files.reason` reason.
 - Used by: row `contributor-files`.
-- Evidence: `contributor_files.ready` head_structure (measured).
+- Evidence: `contributor_files.guide.present` head_structure (measured), `contributor_files.policy.present` head_structure (measured).
 - Not measured when:
   - `knowledge_base`: The repository is a knowledge base (archetype knowledge-base), which takes no code patches. Nothing to change: a contributing guide and a security policy are not measured for a knowledge base.
+  - `org_policy_not_read`: The repository holds no security policy, and the owner's shared .github repository, whose policy GitHub shows on it, was not read (offline, no --platform, a remote not on github.com, or gh not signed in). Commit a SECURITY.md, or run /assess with gh signed in (or fleet with --platform) so the owner's shared policy is read.
 
 ### `unit_readings`: Monorepo unit readings
 
@@ -1105,7 +1124,8 @@ The scan registry in run order, including the private inputs other scans read.
 | `layer_grades` | Deterministic layer grades | `instruction_grading`, `nested_instructions` | `layer_grades` | no |
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `skill_disclosure` | Skill disclosure | `repo_root`, `scope`, `excludes` | `skill_disclosure` | no |
-| `contributor_files` | Contributor files | `repo_root`, `archetype` | `contributor_files` | no |
+| `org_security_policy` | Owner's shared security policy | `repo_root` | `org_security_policy` | yes |
+| `contributor_files` | Contributor files | `repo_root`, `archetype`, `org_security_policy` | `contributor_files` | no |
 | `gap_actions` | Gap actions | `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`, `instruction_placement` | `gap_actions` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |

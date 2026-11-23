@@ -121,6 +121,7 @@
           "layer_grades",
           "nested_instructions",
           "observability",
+          "org_security_policy",
           "owner_exclusions",
           "promissory_markers",
           "review_automation",
@@ -1328,7 +1329,31 @@
             "properties": {
               "reason": {
                 "type": "string",
-                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                "description": "'code: sentence'. The codes name the missing piece: knowledge_base (the repository is a knowledge base (archetype knowledge-base), which takes no code patches); org_policy_not_read (the repository holds no security policy, and the owner's shared .github repository, whose policy GitHub shows on it, was not read (offline, no --platform, a remote not on github.com, or gh not signed in)). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "org_security_policy": {
+          "type": "object",
+          "if": {
+            "properties": {
+              "available": {
+                "const": false
+              }
+            },
+            "required": [
+              "available"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "description": "'code: sentence'. The codes name the missing piece: network (a headless run without --platform makes no GitHub read); no_remote (the repository has no github.com remote, so there is no owner .github repository to read). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
               }
             },
             "required": [

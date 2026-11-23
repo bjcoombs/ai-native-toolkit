@@ -21,29 +21,42 @@ conventions live in the maintainers' heads, so each outside change restates them
   or merge request template (``pull_request_template.md`` or ``PULL_REQUEST_TEMPLATE/``,
   ``.gitlab/merge_request_templates/``).
 
-``ready`` is true when the guide and the policy are both present. An organisation-wide policy in
-the organisation's ``.github`` repository, which GitHub also shows on the repository, is not
-read: the scan reads the commit only, with no network, so such a repository reads unmet. A knowledge base
-(``archetype`` ``knowledge-base``, ``lib.keyhole.archetype``) takes no code patches, so the
-block is ``{"available": False, "reason": "knowledge_base: ..."}`` and the condition reads not
-measured, never unmet. ``/assess`` has no mirror archetype (the ``/fleet`` labels are display
-only), so a mirror reads as the software it holds.
+**The owner's shared policy.** GitHub shows the security policy of the owner's public
+``.github`` repository on every repository of the owner that has none of its own. The commit does
+not hold it, so when the tree holds no policy the scan reads ``org_security_policy``
+(``lib.hosting.org_security_policy``, a network scan): a policy there reads present, with
+``source: "org"``; an owner with none reads absent. When that block is unavailable (offline,
+headless without ``--platform``, a GitLab or other remote, no ``gh`` sign-in, an API error) the
+``policy`` reading is ``{"available": False, "reason": "org_policy_not_read: ..."}``, so the
+condition reads not measured, never a false "missing". A policy in the tree needs no network.
+
+**The condition** (``contributor-files.1``) reads ``guide.present`` and ``policy.present``. No
+guide is unmet whatever the policy; a guide with an unread owner policy is not measured
+(``org_policy_not_read``). ``ready`` repeats the verdict: true, false, or null while the policy is
+not measured. A knowledge base (``archetype`` ``knowledge-base``, ``lib.keyhole.archetype``) takes
+no code patches, so the block is ``{"available": False, "reason": "knowledge_base: ..."}`` and the
+condition reads not measured. ``/assess`` has no mirror archetype (the ``/fleet`` labels are
+display only), so a mirror reads as the software it holds.
 
 Block (``contributor_files`` in run-context.json)::
 
-    {"available": True, "ready": bool,
-     "guide": str | None, "policy": str | None,     # the file found, repository-relative
-     "policy_kind": "file" | "private_reporting" | None,
+    {"available": True, "ready": bool | None,
+     "guide": {"present": bool, "path": str | None},
+     "policy": {"available": True, "present": bool, "path": str | None,
+                "kind": "file" | "private_reporting" | "org_file" | None,
+                "source": "repo" | "org" | None}
+               | {"available": False, "reason": "org_policy_not_read: ..."},
      "issue_template": bool, "change_template": bool}
 
 Counts-only output drops the paths, or hashes them under ``--hash-paths``, and keeps the
-booleans and ``policy_kind``.
+booleans, ``kind``, ``source`` and the reason code.
 
-Contributor files (#1045), no model. `scan_contributor_files(repo_root, archetype)` finds a
-`CONTRIBUTING` guide and a `SECURITY` policy (or a `/security/advisories/new` link in the guide
-or README) at the root, in `.github/` or in `docs/`, records issue and change templates as
-evidence, and sets `ready` when guide and policy are both present; a `knowledge-base` archetype
-is unavailable (`knowledge_base`). Tests: `tests/test_contributor_files.py`.
+Contributor files (#1045), no model. `scan_contributor_files(repo_root, archetype,
+org_security_policy)` finds a `CONTRIBUTING` guide and a `SECURITY` policy (or a
+`/security/advisories/new` link in the guide or README) at the root, in `.github/` or in `docs/`;
+with no policy in the tree it reads the owner's shared one from `org_security_policy`, and an
+unread one makes the policy not measured (`org_policy_not_read`). Templates are evidence; a
+`knowledge-base` archetype is unavailable (`knowledge_base`). Tests: `tests/test_contributor_files.py`.
 """
 from __future__ import annotations
 
@@ -61,7 +74,23 @@ REASON_KNOWLEDGE_BASE = "knowledge_base"
 _PRIVATE_REPORTING = re.compile(r"/security/advisories/new\b")
 _READMES = ("README.md", "README.rst", "README", "readme.md")
 
-PolicyKind = Literal["file", "private_reporting"]
+REASON_ORG_NOT_READ = "org_policy_not_read"
+PolicyKind = Literal["file", "private_reporting", "org_file"]
+PolicySource = Literal["repo", "org"]
+
+
+class GuideReading(TypedDict):
+    present: bool
+    path: str | None  # repository-relative
+
+
+class PolicyReading(TypedDict, total=False):
+    available: bool  # false: the owner's shared policy could not be read (org_policy_not_read)
+    reason: str
+    present: bool
+    path: str | None  # repository-relative, or inside the owner's .github repository for "org"
+    kind: PolicyKind | None
+    source: PolicySource | None
 
 
 class ContributorFilesBlock(TypedDict, total=False):
@@ -69,10 +98,9 @@ class ContributorFilesBlock(TypedDict, total=False):
 
     available: bool
     reason: str
-    ready: bool
-    guide: str | None
-    policy: str | None
-    policy_kind: PolicyKind | None
+    ready: bool | None  # null while the policy is not measured
+    guide: GuideReading
+    policy: PolicyReading
     issue_template: bool
     change_template: bool
 
@@ -117,7 +145,21 @@ def _templates(root: Path) -> tuple[bool, bool]:
     return bool(issue), bool(change)
 
 
-def scan_contributor_files(repo_root: Path, archetype: Mapping[str, Any] | None = None) -> ContributorFilesBlock:
+def _org_policy(org: Any) -> PolicyReading:
+    """The policy reading when the tree holds none: the owner's shared one, or not measured."""
+    if isinstance(org, Mapping) and org.get("available") is True:
+        found = org.get("found") is True
+        return {"available": True, "present": found, "path": org.get("path") if found else None,
+                "kind": "org_file" if found else None, "source": "org" if found else None}
+    why = org.get("reason") if isinstance(org, Mapping) else None
+    return {"available": False,
+            "reason": f"{REASON_ORG_NOT_READ}: no security policy in the repository, and the owner's "
+                      "shared .github repository, whose policy GitHub would show, was not read"
+                      + (f" ({why})" if why else "")}
+
+
+def scan_contributor_files(repo_root: Path, archetype: Mapping[str, Any] | None = None,
+                           org_security_policy: Any = None) -> ContributorFilesBlock:
     """Build the ``contributor_files`` block (see the module doc)."""
     if isinstance(archetype, Mapping) and archetype.get("archetype") == KNOWLEDGE_BASE:
         return {"available": False,
@@ -125,12 +167,16 @@ def scan_contributor_files(repo_root: Path, archetype: Mapping[str, Any] | None 
                           "contributing guide and a security policy are not measured"}
     root = repo_root.resolve()
     guide = _find(root, GUIDE_NAMES)
-    policy = _find(root, POLICY_NAMES)
-    kind: PolicyKind | None = "file" if policy else None
-    if policy is None:
+    path = _find(root, POLICY_NAMES)
+    kind: PolicyKind | None = "file" if path else None
+    if path is None:
         readmes = [name for name in _READMES if (root / name).is_file()]
-        policy = _links_private_reporting(root, [*([guide] if guide else []), *readmes])
-        kind = "private_reporting" if policy else None
+        path = _links_private_reporting(root, [*([guide] if guide else []), *readmes])
+        kind = "private_reporting" if path else None
+    policy: PolicyReading = ({"available": True, "present": True, "path": path, "kind": kind, "source": "repo"}
+                             if path is not None else _org_policy(org_security_policy))
+    ready: bool | None = (False if guide is None else
+                          None if policy.get("available") is False else bool(policy.get("present")))
     issue, change = _templates(root)
-    return {"available": True, "ready": guide is not None and policy is not None, "guide": guide,
-            "policy": policy, "policy_kind": kind, "issue_template": issue, "change_template": change}
+    return {"available": True, "ready": ready, "guide": {"present": guide is not None, "path": guide},
+            "policy": policy, "issue_template": issue, "change_template": change}

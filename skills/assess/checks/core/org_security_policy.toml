@@ -1,0 +1,28 @@
+# Check manifest fragment: the org_security_policy collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.org_security_policy"
+kind = "collector"
+title = "Owner's shared security policy"
+summary = "The SECURITY file in the owner's public .github repository, which GitHub shows on every repository of the owner that has none, read through gh."
+issues = [1045]
+callable = "lib.hosting.org_security_policy:scan_org_security_policy"
+publishes = ["org_security_policy"]
+reads = ["repo_root"]
+stage = "read_side"
+network = true
+platform_pass = true
+headless = { org_security_policy = "registered" }
+whys.org_security_policy = "A contributing guide tells a newcomer, human or agent, how to build, test and shape a change the way the project merges it, and a security policy gives them a private route for a vulnerability instead of a public issue."
+shapes = [
+  { path = "org_security_policy", type = "lib.hosting.org_security_policy:OrgSecurityPolicyBlock" },
+]
+revision = 1
+unknown_reasons = [
+  { code = "network", means = "A headless run without --platform makes no GitHub read.", next_step = "Run fleet or assess_signals.py with --platform, or /assess, with gh signed in." },
+  { code = "no_remote", means = "The repository has no github.com remote, so there is no owner .github repository to read.", next_step = "Nothing to change: the shared-policy fallback is GitHub's; commit a SECURITY.md in the repository." },
+]
+  [entries.privacy]
+  "org_security_policy.reason" = "reason"
+  "org_security_policy.path" = "drop"

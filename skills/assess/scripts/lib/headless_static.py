@@ -131,9 +131,10 @@ def archetype(repo_root: Path) -> JsonDict:
     return _guarded("archetype", lambda: analyze_archetype(repo_root))
 
 
-def contributor_files(repo_root: Path, archetype: Any) -> JsonDict:
+def contributor_files(repo_root: Path, archetype: Any, org_security_policy: Any) -> JsonDict:
     """The contributing guide and security policy (#1045), after the headless archetype."""
-    return _guarded("contributor_files", lambda: dict(scan_contributor_files(repo_root, archetype)))
+    return _guarded("contributor_files",
+                    lambda: dict(scan_contributor_files(repo_root, archetype, org_security_policy)))
 
 
 def owner_exclusions(repo_root: Path) -> JsonDict:
@@ -152,5 +153,6 @@ HEADLESS_SCANS: tuple[ScanSpec, ...] = (
     ScanSpec("archetype", archetype, ("repo_root",), STAGE_READ_SIDE),
     ScanSpec("owner_exclusions", owner_exclusions, ("repo_root",), STAGE_READ_SIDE),
     # Reads the headless archetype above, so it is a variant too (#1045).
-    ScanSpec("contributor_files", contributor_files, ("repo_root", "archetype"), STAGE_POST_OFFERS),
+    ScanSpec("contributor_files", contributor_files, ("repo_root", "archetype", "org_security_policy"),
+             STAGE_POST_OFFERS),
 )
