@@ -25,6 +25,12 @@ the maturity model as one condition, `<row id>.<level>`, and reports:
   (null without them). A Step is held when `tally.met` reaches its threshold and its gates
   hold; a gate reads the state of its row's conditions, not their grade.
 
+Each result applies the owner exclusions of the repository's own `.assess/config.toml`
+(#910), read from its `owner_exclusions` scan: an excluded condition reads `not_applicable`,
+is never counted, and never holds a gate, and the result lists it under `excluded`. A
+`--scans` subset without `owner_exclusions` applies none. Fleet-wide exclusions through
+`--fleet-config` wait on the method stamp (#952).
+
 `/assess` writes the same result for the same commit as the `level` block of its
 run context, from the same function. The file has no date or path in it, so a rerun over
 the same commits writes identical bytes. Schema: `references/level.schema.json`.

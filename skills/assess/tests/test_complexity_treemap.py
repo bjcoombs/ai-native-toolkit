@@ -185,6 +185,34 @@ def test_main_no_files_under_scope_names_it(treemap, monkeypatch, tmp_path, caps
     assert "excluded as generated" not in err
 
 
+def test_main_with_no_files_writes_a_zero_file_sidecar(treemap, monkeypatch, tmp_path):
+    """#959: with scc on PATH (it reads every language) a tree with nothing to score is a
+    measured empty set. The sidecar is written (files_scored 0), so the run reads
+    no_scored_files, never a missing sidecar (no_complexity_stats)."""
+    from lib import level_tally, run_setup
+    from lib.run_scope import load_current_stats
+
+    monkeypatch.setattr(treemap, "collect", lambda *a, **k: ([], "hotspot", {}, "commits", {}))
+    out = tmp_path / ".assess" / "complexity-stats.json"
+    out.parent.mkdir()
+    monkeypatch.setattr(sys, "argv", ["complexity-treemap.py", str(tmp_path), "--stats", str(out)])
+    # Without scc nothing outside lizard's languages is read: zero files is not a
+    # measurement, so no sidecar is written and the run reads no_complexity_stats.
+    monkeypatch.setattr(treemap.shutil, "which", lambda name: None)
+    assert treemap.main() == 1 and not out.exists()
+    monkeypatch.setattr(treemap.shutil, "which", lambda name: f"/usr/bin/{name}")
+    assert treemap.main() == 1  # still an error exit: no treemap is drawn
+    current = load_current_stats(out.parent)
+    assert current["files_scored"] == 0 and "available" not in current
+    stats = run_setup.run_header(
+        "id", "2026-11-22", (None, None, ""), {"available": False}, current, None,
+        ({}, None, [], [], {}, {}), run_setup.StatsDiff(), (set(), []))["stats_summary"]
+    signals = {"stats_summary": stats, "structure_drift": {"tier_0": {"boundary_patterns": 2}}}
+    result = level_tally.level_result(level_tally.default_model(), signals)
+    reasons = {c["id"]: c.get("reason") for c in result["conditions"]}
+    assert reasons["layer-4-architecture.2"] == "no_scored_files"
+
+
 @pytest.mark.parametrize("scope, out_name, title_suffix", [
     (None, "hotspot-{root}.svg", ""),
     ("sub/deep", "hotspot-{root}-sub-deep.svg", "/sub/deep"),
