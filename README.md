@@ -142,9 +142,9 @@ The report's scorecard has one row per practice, in reading order. It is detail,
 |----------|------|------------------|
 | Agent instructions | read | Compact rules in `CLAUDE.md` / `AGENTS.md` / `copilot-instructions`, plus a navigable doc graph (can an agent traverse links to the right place, and is what it finds still true?) |
 | Runtime legibility | read | Is the code actually live, and can the agent find out? Intra-repo dead-code signals + observability the agent can reach (logs/metrics/traces) |
-| Code design | write | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
-| Linters run in CI | write | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
-| Architecture boundaries | write | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
+| Code design (module structure) | write | Compile-time correctness via types - dimensional types, generated API clients, exhaustive enums |
+| Linters run in CI, suppression cap | write | Style + correctness with rules targeting AI failure modes (suppressions, complexity gates, leftover TODOs) |
+| Architecture boundaries and size | write | Structural rules as executable tests (`depguard`, ArchUnit-style boundary checks) |
 | CI and the agent's local check | write | Every PR runs everything; failing pipeline blocks merge |
 | Coverage gates and truth pressure | write | Test discipline as a build contract |
 | Review on merged pull requests | write | Design-level feedback (CodeRabbit, claude[bot]) catching what linters can't |
