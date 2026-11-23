@@ -78,6 +78,22 @@ def test_each_skill_unit_reads_its_own_skill_and_other_kinds_inherit(tmp_path: P
     assert "skill_disclosure" not in units["agents"]["blocks"] and origin["agents"] == "inherited"
 
 
+def test_a_root_skill_owns_only_the_files_outside_its_member_skills() -> None:
+    # A repository that is itself a skill, holding member skills: the root unit reads its own
+    # files, not skills/bad's breaks, which are that unit's.
+    block: Any = {"available": True, "files": [
+        {"path": "SKILL.md", "breaks": []},
+        {"path": "skills/bad/SKILL.md", "breaks": ["description_missing"]},
+    ], "files_considered": 2, "files_breaking": 1}
+    members = ["skills/bad"]
+    assert ur._root_owns("skill_disclosure", block, members) is False
+    own = ur._root_without("skill_disclosure", block, members, None)
+    assert own is not None and [f["path"] for f in own["files"]] == ["SKILL.md"]
+    assert (own["files_considered"], own["files_breaking"]) == (1, 0)
+    assert ur._root_owns("skill_disclosure", block, []) is True  # no member: all its own
+    assert ur._root_owns("skill_disclosure", {"available": True, "files": [{"path": "SKILL.md"}]}, members)
+
+
 def test_only_skill_units_own_the_block() -> None:
     kinds = ur.unit_kinds(cm.core_manifest())
     assert kinds == {"skill_disclosure": frozenset({"skill"})}

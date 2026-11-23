@@ -56,7 +56,8 @@ repository-wide blocks (``REPO_BLOCKS``), the same scans over the same tree, as 
 override blocks included (the root instruction file and the root gates are the root's own),
 except evidence that sits in member units: a ``layer_grades`` reading that rests on nested
 files alone (``nested_only``), or a ``coverage_gate`` whose every gate is under a member.
-Those are their units', so the root reads its own without them (#864, ``_root_without``):
+Those are their units', so the root reads its own without them (#864, ``_root_without``;
+a root skill's ``skill_disclosure`` keeps only the files under no member unit, #1045):
 ``instruction_file_present`` true only for a nested file under no member, and a
 coverage reading with no gate. Where member
 units sit below a root unit, the root's scoped readings therefore cover the members' files
@@ -429,6 +430,10 @@ def _root_owns(block: str, result: Any, members: Sequence[str]) -> bool:
         return True
     if block == "layer_grades":
         return result.get("instruction_presence") == "root"
+    if block == "skill_disclosure":  # a root skill's own files, not its member skills' (#1045)
+        files = result.get("files")
+        return not isinstance(files, list) or not any(
+            isinstance(f, Mapping) and any(_under(f.get("path"), m) for m in members) for f in files)
     if block == "coverage_gate":
         gates = result.get("gates")
         return isinstance(gates, list) and any(
@@ -453,6 +458,11 @@ def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
     """
     if not isinstance(result, Mapping):
         return None
+    if block == "skill_disclosure" and isinstance(result.get("files"), list):
+        kept = [f for f in result["files"] if isinstance(f, Mapping)
+                and not any(_under(f.get("path"), m) for m in members)]
+        return {**result, "files": kept, "files_considered": len(kept),
+                "files_breaking": sum(bool(f.get("breaks")) for f in kept)}
     if block == "layer_grades" and result.get("instruction_presence") == "nested_only":
         files = nested.get("files") if isinstance(nested, Mapping) else None
         if not isinstance(files, list):

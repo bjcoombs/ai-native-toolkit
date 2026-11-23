@@ -309,7 +309,7 @@
               "commands"
             ]
           },
-          "description": "The unit kinds (units.units[].kind) that read a scoped collector's blocks as their own (lib/unit_readings.py, #1045); every other unit inherits them. Absent: every kind"
+          "description": "The unit kinds (units.units[].kind) that read the collector's blocks as their own, whatever its unit_scope (lib/unit_readings.py, #1045); every other unit inherits them. Absent: every kind"
         },
         "headless": {
           "type": "object",

@@ -81,7 +81,7 @@ EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
 HEADLESS = ("registered", "headless_variant", "unregistered")
 # How a monorepo unit reads a collector's blocks (``lib.unit_readings``, #863); absent: repo-wide.
 UNIT_SCOPES = ("scoped", "override")
-# The unit kinds a scoped collector reads as a unit's own (``unit_components.KINDS``, #1045); absent: every kind.
+# The unit kinds a collector names as owning its blocks (``unit_components.KINDS``, #1045); absent: every kind.
 UNIT_KINDS = ("package", "skill", "agents", "commands")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
