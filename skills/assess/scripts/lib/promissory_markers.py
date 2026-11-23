@@ -15,53 +15,11 @@ CLI (standalone use)::
 
     uv run promissory_markers.py <repo_root> [--stale-touches 5] [--json OUT]
 
-Write-side erosion instrument: detects the four families of promissory markers
-(TODO/FIXME, deprecations, lint suppressions, disabled tests) via one rg pass per
-family, then ages each marker by *survived touches* - the number of commits to its
-file since the marker's introducing commit (batched `git blame` + one git-log
-pass). A marker that survived many edits to an actively-maintained file is
-unactioned intent; calendar age alone can't tell that from dormancy. Classifies
-markers as tracked (issue/ticket/URL/date reference, or a justified suppression)
-vs bare, and each introducing commit as agent/human (reusing `change_coupling`'s
-conservative B4 identity rules). Marker text that is data is not a marker: in a
-Python file `python_regions` places each hit, so one inside a string literal (a
-test fixture, a pattern table) is dropped while a todo or deprecation in a
-triple-quoted docstring still counts as prose about the code (a single-quoted
-docstring opens with a quote, which the comment-context filter does not read as
-a leader); a suppression counts only in a
-comment and a disabled test only in code or a comment. A file that does not
-tokenize, and every other language, keeps the line-based filters below. In any
-code file a line-scoped suppression quoted in a backtick code span on a
-comment-only line is a quotation (after code, ruff still reads it; a block-scoped
-`rubocop:disable`, `pylint: disable` or ESLint block disable stays live quoted), and config files (TOML, YAML, INI,
-JSON) carry no suppression family, since no listed directive is read from them.
-A `todo` token counts only in marker position -
-it opens its comment or prose line (after an optional bullet or checkbox) or a
-leaderless docstring interior line, or carries a colon or a `(owner)` - so a
-sentence that lists marker names is not a marker. In prose a comment leader opens
-a marker only at line start, so an inline example (`` `* TODO` ``) is not one, and
-a leaderless code-file line that opens with a bullet (a YAML enum's `- TODO`) is
-data, not a marker. In a prose file a phrase alternative (`remove after`,
-`temporary workaround`) inside an inline code span or quotation marks (straight
-or curly) is a quoted example and does not count; a bare phrase on the same line
-still does, and a code comment counts whatever the quoting. A justified
-suppression (a ` - reason` or ` -- reason` starting with a word character, or a
-non-empty `(reason)`, after the directive or its codes, or a trailing comment -
-for `type: ignore[...]` the trailing `  # reason` is the only form mypy accepts,
-and `pyright: ignore[...]` takes the same forms;
-a trailing comment that opens with a directive or a todo token is not a
-reason, so `# noqa: S603  # nosec B603` stays bare; the excluded directives are
-the same `SUPPRESSION_DIRECTIVES` list the suppression family detects, so the
-two cannot drift) is never stale and is counted in each family row's `justified`
-(0 outside suppressions); other tracked markers still age, since an issue or a
-deadline can go stale too. The `unactioned_intent` action states the
-`stale_touches_threshold` it applied. Honours the shared excludes and the
-generated-file filter (codegen `ignore_for_file` boilerplate is not debt), and
-degrades aging to `aging_reliable: False` on degenerate history (same verdict as
-`git_churn`). The `rg` binary comes from `tool_lookup.find_rg`, resolved once per
-scan; when none runs the scan is unavailable with `tool_lookup.RG_MISSING_REASON`.
-Feeds the `unactioned_intent` derived finding, the hotspot pages' marker-debt
-sentence, and the Layer 3/5/8 erosion rules. New ecosystem marker syntaxes need a
+Ages each marker by survived touches (commits to its file since the marker
+landed), separates tracked and justified markers from bare ones, drops marker
+text that is data, and sets aside fixture files (`lib.path_classes`, #824),
+reporting their count as `fixture_files_excluded`. Full reference:
+`lib/docs/promissory_markers.md`. New ecosystem marker syntaxes need a
 fixture in `tests/test_promissory_markers.py` - absence is a silent miss.
 """
 
@@ -82,6 +40,7 @@ try:
     from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
     from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
+    from lib.path_classes import path_class
     from lib.python_regions import PyRegions, load_regions
     from lib.tool_lookup import RG_MISSING_REASON, find_rg
 except ImportError:  # standalone CLI: script dir is lib/, put scripts/ on path
@@ -89,6 +48,7 @@ except ImportError:  # standalone CLI: script dir is lib/, put scripts/ on path
     from lib.agent_identity import coauthors_have_agent as _coauthors_have_agent
     from lib.agent_identity import identity_is_agent as _identity_is_agent
     from lib.git_churn import churn_is_degenerate
+    from lib.path_classes import path_class
     from lib.python_regions import PyRegions, load_regions
     from lib.tool_lookup import RG_MISSING_REASON, find_rg
 
@@ -259,7 +219,7 @@ EXCLUDE_GLOBS = [
     "!**/*.freezed.dart", "!**/*.gr.dart", "!**/*.min.js", "!**/*.bundle.js",
     "!**/package-lock.json", "!**/deno.lock", "!**/*.lock", "!**/*.map",
     "!**/node_modules/**", "!**/vendor/**", "!**/dist/**", "!**/build/**",
-    "!**/.assess/**", "!**/mutants/**", "!**/tests/fixtures/**", "!**/*.svg",
+    "!**/.assess/**", "!**/mutants/**", "!**/*.svg",
 ]
 
 # Cap the markers carried into run-context.json so a pathological repo can't
@@ -303,6 +263,7 @@ class MarkerScan:
     stale_touches_threshold: int = STALE_TOUCHES_DEFAULT
     markers: list[Marker] = field(default_factory=list)
     aging_reliable: bool = True  # False when history is too thin to age markers
+    fixture_files_excluded: int = 0  # fixture files set aside (path_class, #824)
 
     def is_stale(self, m: Marker) -> bool:
         """Stale = survived at least the threshold of edits, unless justified.
@@ -364,6 +325,7 @@ class MarkerScan:
             "todo_linked": linked,
             "total_markers": len(self.markers),
             "total_stale": len(stale),
+            "fixture_files_excluded": self.fixture_files_excluded,
             "stale_agent_introduced": sum(
                 1 for m in stale if m.agent_introduced
             ),
@@ -396,8 +358,15 @@ def _extra_globs(
     return globs
 
 
-def _detect(repo_root: Path, extra_globs: list[str], rg: str = "rg") -> list[Marker]:
-    """Stage 1: one rg pass per family, comment-context filtered."""
+def _detect(
+    repo_root: Path, extra_globs: list[str], rg: str = "rg",
+    fixtures: set[str] | None = None,
+) -> list[Marker]:
+    """Stage 1: one rg pass per family, comment-context filtered.
+
+    A hit in a fixture file is set aside before any filter reads it; its path
+    goes into ``fixtures`` when one is passed.
+    """
     markers: list[Marker] = []
     regions: dict[str, PyRegions | None] = {}
     for family, pattern in FAMILY_PATTERNS.items():
@@ -411,6 +380,10 @@ def _detect(repo_root: Path, extra_globs: list[str], rg: str = "rg") -> list[Mar
                 continue
             path, line_s, text = parts
             path = path.removeprefix("./")
+            if path_class(path) == "fixture":
+                if fixtures is not None:
+                    fixtures.add(path)
+                continue
             is_prose = Path(path).suffix.lower() in PROSE_SUFFIXES
             # Syntactic families in prose files are code examples, not debt.
             if family in ("suppression", "disabled_test") and is_prose:
@@ -695,8 +668,10 @@ def scan_promissory_markers(
         return MarkerScan(available=False, reason="not a git repository root")
 
     try:
+        fixtures: set[str] = set()
         markers = _detect(
-            repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns), rg
+            repo_root, _extra_globs(extra_exclude_dirs, extra_exclude_patterns), rg,
+            fixtures,
         )
         if scope is not None:
             scope_abs = scope.resolve()
@@ -704,6 +679,10 @@ def scan_promissory_markers(
                 m for m in markers
                 if (repo_root / m.path).resolve().is_relative_to(scope_abs)
             ]
+            fixtures = {
+                f for f in fixtures
+                if (repo_root / f).resolve().is_relative_to(scope_abs)
+            }
         _blame_ages(repo_root, markers)
         _classify_authorship(repo_root, markers)
         commit_times = _file_commit_times(repo_root)
@@ -732,6 +711,7 @@ def scan_promissory_markers(
             stale_touches_threshold=stale_touches,
             markers=markers,
             aging_reliable=aging_reliable,
+            fixture_files_excluded=len(fixtures),
         )
     except Exception as exc:  # noqa: BLE001 - degrade, never crash the core
         return MarkerScan(available=False, reason=f"{type(exc).__name__}: {exc}")
