@@ -64,7 +64,7 @@ from typing import Any
 from lib.headline import GATE_NOUN
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
-from lib.prior_level import Baseline, PruningEntry, load_baseline, load_pruning
+from lib.prior_level import Baseline, PruningEntry, build_prior_level, load_baseline, load_pruning
 from lib.pruning_ledger import ledger_lines, removal, update_ledger
 from lib.reviewed_findings import action_entries
 from lib.run_context_types_since import ClosedAction, SinceLastRun
@@ -247,14 +247,14 @@ def _words(block: SinceLastRun, has_steps: bool, level_known: bool, kept_run_id:
         lines += [_gates_line("gained", block["gates_gained"], block["closed_reason"]),
                   _gates_line("lost", block["gates_lost"], block["closed_reason"])]
     lines += ledger_lines(block["pruning"], block["pruned"])
+    if kept_run_id:
+        # #1158: this run leaves prior-level.json as it was, so the next run compares with the run
+        # that wrote it: name that run, not whichever run this one compared with
+        lines.append(f"Baseline kept: this run's level result could not be recorded, so the baseline "
+                     f"stays the previous good run, `{kept_run_id}`")
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
     else:
-        if not level_known and kept_run_id:
-            # #1158: this run leaves prior-level.json as it was, so the next run compares with the
-            # run that wrote it: name that run, not whichever run this one compared with
-            lines.append(f"Baseline kept: this run's level result is unavailable, so the baseline stays "
-                         f"the previous good run, `{kept_run_id}`")
         lines.append("Next blocker: not known (the level result is unavailable for this run)"
                      if not level_known else "Next blocker: none, every gate is held" if has_steps
                      else "Next blocker: none, the model defines no Steps")
@@ -399,6 +399,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
         "next_blocker": _next_blocker(current), "pruned": pruned, "pruning": pruning,
         "lines": [], "markdown": ""}
     known = isinstance(level, Mapping) and isinstance(level.get("conditions"), list)
-    block["lines"] = _words(block, bool(steps), known, stored.get("run_id") if stored is not None else None)
+    # the line follows the write side's own rule: the file is kept exactly when it is not rebuilt
+    kept = build_prior_level(level) is None and stored is not None
+    block["lines"] = _words(block, bool(steps), known, stored.get("run_id") if kept and stored is not None else None)
     block["markdown"] = _markdown(block["lines"])
     return block

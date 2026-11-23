@@ -38,13 +38,13 @@ Run:
 # ///
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from lib.plugin_version import UNKNOWN, read_version
 from lib.ci_workflow import DEFAULT_PATHS_IGNORE, emit_ci_workflow, find_path_filtered_workflow
 
 
@@ -61,15 +61,12 @@ def _running_version() -> str | None:
     """The running plugin's version from ``.claude-plugin/plugin.json``.
 
     scripts/assess_emit_workflow.py -> scripts/ -> skills/assess/ -> skills/ -> repo root.
-    Same lookup as ``lib.run_setup.read_plugin_version``; not imported from there
-    because that module pulls the whole analysis stack and its dependencies.
+    The same lookup as ``lib.run_setup.read_plugin_version``, through the stdlib-only
+    ``lib.plugin_version`` (``lib.run_setup`` pulls the whole analysis stack), so the
+    standalone skill reads its build's version file (#1166).
     """
-    plugin_json = Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json"
-    try:
-        version = json.loads(plugin_json.read_text(encoding="utf-8")).get("version")
-    except (OSError, json.JSONDecodeError):
-        return None
-    return str(version) if version else None
+    version = read_version(Path(__file__).resolve().parents[3] / ".claude-plugin" / "plugin.json")
+    return None if version == UNKNOWN else version
 
 
 def _run(cmd: list[str]) -> tuple[int, str, str]:
