@@ -168,16 +168,35 @@ def _coverage_own(unit: str, scoped: Any, ctx: Mapping[str, Any]) -> JsonDict | 
 _WILDCARDS = frozenset("*?[{")
 
 
-def _glob_reaches(pattern: str, unit: str) -> bool:
-    """Whether a repo-relative glob can match a file under ``unit``: its literal folder
-    prefix (the segments before the first wildcard) holds the unit or sits inside it."""
+def _glob_prefix(pattern: str) -> str:
+    """A repo-relative glob's literal folder prefix: the segments before the first wildcard."""
     literal: list[str] = []
     for part in pattern.strip("/").split("/")[:-1]:
         if set(part) & _WILDCARDS:
             break
         literal.append(part)
-    prefix = "/".join(literal)
+    return "/".join(literal)
+
+
+def _glob_reaches(pattern: str, unit: str) -> bool:
+    """Whether a repo-relative glob can match a file under ``unit``: its literal folder
+    prefix holds the unit or sits inside it."""
+    prefix = _glob_prefix(pattern)
     return not prefix or _under(unit, prefix) or _under(prefix, unit)
+
+
+def _root_file(entry: Any, members: Sequence[str]) -> bool:
+    """Whether a nested instruction file is the root unit's: it sits under no member and,
+    when path-scoped, one of its globs reaches outside every member."""
+    if not isinstance(entry, Mapping) or not isinstance(entry.get("path"), str):
+        return False
+    if any(_under(entry["path"], m) for m in members):
+        return False
+    scope = entry.get("scope")
+    globs = scope.get("globs") if isinstance(scope, Mapping) else None
+    patterns = [g for g in globs if isinstance(g, str)] if isinstance(globs, list) else []
+    return not patterns or any(not (prefix := _glob_prefix(g)) or not any(
+        _under(prefix, m) for m in members) for g in patterns)
 
 
 def _covers(entry: Any, unit: str) -> bool:
@@ -394,7 +413,8 @@ def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
 
     The members' evidence is theirs, so it is left out, as for a member unit
     (``_coverage_own``, ``_instructions_own``): a ``nested_only`` repository reads
-    ``instruction_file_present`` true only when a nested file sits under no member, and a
+    ``instruction_file_present`` true only when a nested file sits under no member (and,
+    path-scoped, a glob reaches outside every member), and a
     coverage reading whose every gate is under members is a no-gate reading: false, or
     null with ``go_rust_gate_form_not_read`` when the repository-wide value was not
     measured or the walk (``values``' ``repo_root`` and ``excludes``) holds a ``go.mod`` or
@@ -406,8 +426,7 @@ def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
         files = nested.get("files") if isinstance(nested, Mapping) else None
         if not isinstance(files, list):
             return None
-        own = any(isinstance(f, Mapping) and isinstance(f.get("path"), str)
-                  and not any(_under(f["path"], m) for m in members) for f in files)
+        own = any(_root_file(f, members) for f in files)
         return {"available": True, "instruction_file_present": own}
     if block == "coverage_gate" and isinstance(result.get("gates"), list) and result["gates"]:
         root = (values or {}).get("repo_root")

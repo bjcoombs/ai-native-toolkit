@@ -268,6 +268,22 @@ def test_a_path_scoped_rule_covers_only_the_units_its_globs_reach() -> None:
     assert ur._glob_reaches("docs/**", "packages/a") is False
 
 
+def test_a_root_rule_scoped_to_a_member_is_not_the_roots() -> None:
+    grades = {"available": True, "instruction_file_present": True,
+              "instruction_presence": "nested_only"}
+
+    def rule(*globs: str) -> dict[str, Any]:
+        return {"available": True, "files": [{"path": ".claude/rules/a.md", "scope": {
+            "directory": ".", "globs": list(globs), "always_loaded": False}}]}
+
+    members = ["packages/a", "packages/b"]
+    assert ur._root_without("layer_grades", grades, members, rule("packages/a/**")) == {
+        "available": True, "instruction_file_present": False}
+    for reaching in (rule("tools/**"), rule("**/*.py"), rule("packages/a/**", "scripts/*.sh")):
+        assert ur._root_without("layer_grades", grades, members, reaching) == {
+            "available": True, "instruction_file_present": True}
+
+
 def test_a_sibling_nested_file_through_the_unit_pass(tmp_path: Path) -> None:
     repo = _write(tmp_path / "repo", {
         "svc/a/pyproject.toml": "[project]\nname = 'a'\n",
