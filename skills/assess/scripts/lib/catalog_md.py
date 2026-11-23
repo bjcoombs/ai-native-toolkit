@@ -360,7 +360,8 @@ def _with_signal_whys(lines: list[str], feeds: dict[str, list[tuple[str, str]]])
         sections[-1].append(line)
     out: list[str] = []
     for section in sections:
-        text, named, extra = "\n".join(section), _named(section), []
+        text, named = "\n".join(section), _named(section)
+        extra: list[str] = []
         for signal, fed in feeds.items():
             if signal in named:
                 extra += [f"- `{signal}` feeds `{key}`: {why}" for key, why in fed

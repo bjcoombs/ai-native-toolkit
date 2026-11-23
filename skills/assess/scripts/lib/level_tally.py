@@ -91,7 +91,10 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   not excluded), `state` (`met`, `unmet`, `not_measured`, or `not_applicable` when the owner
   excluded it; `declined` is reserved for #828) and, when not measured or held by a `requires`
   that is not met, a `reason` code. An owner-excluded condition also carries
-  `disposition: "excluded_by_owner"` and `exclusion_kind`. A
+  `disposition: "excluded_by_owner"` and `exclusion_kind`. `why` (#939) is the static text of
+  the check manifest's whys for the condition's criteria, in criterion order, each once, joined
+  by one space (`condition_why`); it is absent when no criterion has one (a caller's own model),
+  and identical in `/assess` and `/fleet`. A
   `polarity = "hazard"` condition is never counted and carries `polarity: "hazard"`; a
   `guarded_by` condition reads `measured`, not `verified`, while its guard is not met (#843).
 - Owner exclusions: `level_result(model, data, exclusions)` takes the `OwnerExclusion`
@@ -262,6 +265,26 @@ def _conditions(model: MaturityModel, data: Mapping[str, Any] | None,
     return built
 
 
+def condition_why(row_id: str, level: int, criteria: Sequence[Criterion]) -> str:
+    """The whys of a condition's criteria from the core check manifest (#939), in criterion
+    order, each once, joined by one space; ``""`` when no criterion has a manifest why (a
+    caller's own model)."""
+    from lib.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
+    from lib.manifest_whys import condition_whys
+    whys = condition_whys(core_manifest())
+    found = [whys.get(condition_key(row_id, level, c["signal"]), "") for c in criteria]
+    return " ".join(dict.fromkeys(w for w in found if w))
+
+
+def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
+    """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
+    by_id = {c["id"]: c for c in conditions}
+    for row in model["rows"]:
+        for level in row["levels"]:
+            if (why := condition_why(row["id"], level["level"], level["criteria"])):
+                by_id[condition_id(row["id"], level["level"])]["why"] = why
+
+
 def _gate_blocker(gate_id: str, row_id: str, level: int,
                   by_id: Mapping[str, ConditionResult]) -> Blocker | None:
     for n in range(1, level + 1):
@@ -309,6 +332,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     an id the model does not define is ignored."""
     excluded = _excluded(model, exclusions)
     conditions = _conditions(model, data, excluded)
+    _add_whys(model, conditions)
     counted = [c for c in conditions if c["counted"]]
     met = sum(c["state"] == "met" for c in counted)
     by_id = {c["id"]: c for c in conditions}

@@ -3703,7 +3703,8 @@
         "strings_kept": {
           "gap_actions.action": "drop",
           "gap_actions.paths": "path",
-          "gap_actions.signal": "token"
+          "gap_actions.signal": "token",
+          "gap_actions.why": "drop"
         }
       },
       "used_by": {

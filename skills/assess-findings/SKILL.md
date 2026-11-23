@@ -109,7 +109,7 @@ _Note: Mutation testing stopped at its time budget in every package it ran in. L
 
 ### Why these three?
 
-<2-3 sentences explaining why these are highest leverage. Connect to specific gaps from the scorecard and to hotspot files where relevant. Be concrete about what each action prevents.>
+<For each action that names a maturity-model condition or a scan, first quote that entry's `why` verbatim, in quotation marks: a condition's from its `level.conditions[]` entry in run-context.json (`.why`), a gap action's from its `gap_actions[]` entry (`.why`), and a scan's from `.scans[] | select(.name == "<scan>") | .why` in `skills/assess/references/measures.json`. Never quote a why that is `exempt: plumbing`. Then add the repository-specific framing after the quote: connect it to the specific gaps from the scorecard and to hotspot files where relevant, and be concrete about what the action prevents here. The why states the reason; do not invent another reason, and when an action names no condition or scan, give its leverage in 2-3 sentences of framing alone.>
 
 ## Snapshots
 

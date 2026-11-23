@@ -39,6 +39,11 @@ finding ``<owner>.finding.<name>``. Grades are never authored: a signal carries 
 producer ``evidence`` class (``level_signals.SIGNAL_INPUTS``, #783), and its grade
 follows from that class.
 
+Whys (#939): ``manifest_version`` 1 loads with no whys and rejects any; version 2 (the
+core) requires a ``why`` on every condition, finding, scan (a collector's ``whys`` table)
+and truth tag (the root ``tags`` table), whatever the ``owner``. The rules and accessors
+are ``lib.manifest_whys``, which :func:`validate_manifest` runs last.
+
 Full reference: lib/docs/check_manifest.md.
 """
 from __future__ import annotations

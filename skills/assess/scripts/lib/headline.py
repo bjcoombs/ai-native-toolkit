@@ -47,7 +47,9 @@ measured (reason: count, ...) · model V" (`REASON_WORDS` words the reason codes
 E counting the excluded conditions and those whose `requires` names one (#910). Also `markdown` (the lines, the
 first bold, pasted verbatim by the report and `assess_report.py`), `summary` (the
 badge message and the `log.md` readiness line), `step`, `next_step`,
-`levels_version` and `headline_version`. A missing or degraded `level` block gives
+`levels_version`, `headline_version` and `next_why` (#939: for each blocking gate, the `why` of
+every condition of its row up to its level that is not met, from the level block's conditions,
+each once and joined by one space; `""` at the top Step or with no gate blocker). A missing or degraded `level` block gives
 `available: false` and "Step not measured", never a guessed Step; `as_headline`
 returns that form for a degraded `headline` block. Shape: `Headline` in
 `level_result_types.py`; under counts-only the text fields are dropped and the
@@ -171,6 +173,25 @@ def _next_line(level: LevelResult, model: MaturityModel, names: Mapping[int, str
     return f"Next: Step {nxt['step']} · {names.get(nxt['step'], '')} unlocks when {unlock}"
 
 
+def next_why(level: LevelResult, model: MaturityModel) -> str:
+    """The whys behind the Next line (#939): for each blocking gate, the ``why`` of every
+    condition of its row up to its level that is not met, in model order, each once, joined
+    by one space. ``""`` at the top Step, with no gate blocker, or for conditions with no why."""
+    nxt = level["next_step"]
+    if nxt is None:
+        return ""
+    blocked = {b.get("gate") for b in nxt["blockers"] if b["kind"] == "gate"}
+    step_def = next((s for s in model.get("steps", []) if s["step"] == nxt["step"]), None)
+    waiting: list[str] = []
+    for gate in (step_def["gates"] if step_def else []):
+        if gate["id"] in blocked:
+            waiting += [f"{gate['row']}.{n}" for n in range(1, gate["level"] + 1)]
+    by_id = {c["id"]: c for c in level["conditions"]}
+    whys = [by_id[cid].get("why", "") for cid in dict.fromkeys(waiting)
+            if cid in by_id and by_id[cid]["state"] != "met"]
+    return " ".join(dict.fromkeys(w for w in whys if w))
+
+
 def _tally_line(level: LevelResult) -> str:
     tally = level["tally"]
     line = f"Verified practices: {tally['met']} of {tally['measured']} measured"
@@ -188,7 +209,7 @@ def _unavailable(reason: str) -> Headline:
     line = "Step not measured: the level result is unavailable for this run"
     return {"headline_version": HEADLINE_VERSION, "available": False, "levels_version": None,
             "step": None, "next_step": None, "lines": [line], "markdown": f"**{line}**",
-            "summary": "Step not measured", "reason": reason}
+            "summary": "Step not measured", "next_why": "", "reason": reason}
 
 
 def headline(value: Any, model: MaturityModel) -> Headline:
@@ -212,7 +233,8 @@ def headline(value: Any, model: MaturityModel) -> Headline:
     return {"headline_version": HEADLINE_VERSION, "available": True,
             "levels_version": level["levels_version"], "step": step,
             "next_step": nxt["step"] if nxt else None, "lines": lines,
-            "markdown": markdown, "summary": summary}
+            "markdown": markdown, "summary": summary,
+            "next_why": next_why(level, model)}
 
 
 def run_context_headline(level: Any) -> Headline:

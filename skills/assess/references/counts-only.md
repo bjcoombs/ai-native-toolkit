@@ -674,6 +674,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `gap_actions.signal` | token |
 | `gap_actions.action` | dropped |
+| `gap_actions.why` | dropped |
 | `gap_actions.paths` | path (hashed when hashing is on) |
 
 ## instruction_placement
@@ -762,6 +763,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.conditions.state` | token |
 | `level.conditions.reason` | token |
 | `level.conditions.polarity` | token |
+| `level.conditions.why` | dropped |
 | `level.next_step.blockers.kind` | token |
 | `level.next_step.blockers.gate` | token |
 | `level.next_step.blockers.condition` | token |
@@ -783,6 +785,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.lines` | dropped |
 | `headline.markdown` | dropped |
 | `headline.summary` | dropped |
+| `headline.next_why` | dropped |
 | `headline.reason` | token |
 
 ## fleet-data.json (the fleet skill)

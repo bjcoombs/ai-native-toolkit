@@ -3,7 +3,7 @@
 A why says, in one or two sentences, what a check protects for an agent working in the
 repository. ``lib.check_manifest`` calls :func:`why_errors` on every parsed manifest; the
 catalog, the level result, the headline and the gap actions read whys through the accessors
-here (:func:`why_of`, :func:`scan_why`, :func:`tag_why`, :func:`condition_whys`), which
+here (:func:`why_of`, :func:`scan_why`, :func:`tag_why`, :func:`condition_whys`, :func:`scan_whys`), which
 return ``""`` where a version 1 manifest declares none.
 
 Where each why lives:
@@ -86,6 +86,12 @@ def tag_why(manifest: Mapping[str, Any], tag: str) -> TagWhy:
     if isinstance(raw, dict) and isinstance(raw.get("why_source"), str):
         out["why_source"] = raw["why_source"]
     return out
+
+
+def scan_whys(manifest: Mapping[str, Any]) -> dict[str, str]:
+    """Scan name -> its why (possibly :data:`PLUMBING`), for every collector's ``whys``."""
+    return {scan: why for e in manifest.get("entries", []) if e.get("kind") == "collector"
+            for scan, why in e.get("whys", {}).items() if isinstance(why, str)}
 
 
 def condition_whys(manifest: Mapping[str, Any]) -> dict[str, str]:

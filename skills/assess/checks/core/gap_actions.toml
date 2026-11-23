@@ -18,4 +18,5 @@ revision = 1
   [entries.privacy]
   "gap_actions.signal" = "token"
   "gap_actions.action" = "drop"
+  "gap_actions.why" = "drop"
   "gap_actions.paths" = "path"

@@ -908,7 +908,7 @@ Run plumbing: no row or finding reads this scan.
 - Collector: `core.gap_actions`, reading `coverage_report`, `doc_graph`, `current`, `archetype`, `layer_grades`, `nested_instructions`.
 - Network: no.
 - Headless: only a full /assess run builds it; headless and fleet runs report it not measured.
-- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.paths` path, `gap_actions.signal` token.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `gap_actions.action` drop, `gap_actions.paths` path, `gap_actions.signal` token, `gap_actions.why` drop.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when:
