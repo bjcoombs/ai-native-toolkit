@@ -427,7 +427,6 @@ def index_page(maturity_model: MaturityModel, groups: Sequence[GroupRow]) -> str
              f"Maturity model {code(maturity_model['version'])}: {len(maturity_model['rows'])} rows. One page per group.", "",
              "| Group | Repositories | Rows at top level | Rows with next steps | Rows unknown |",
              "|-------|--------------|-------------------|----------------------|--------------|"]
-    tops = {row["id"]: len(row["levels"]) for row in maturity_model["rows"]}
     for group in groups:
         known = [r for r in group["levels"] if r["status"] == "level" and r["level"] is not None]
         top = sum(1 for r in known if r["level"] == tops.get(r["id"]))

@@ -276,3 +276,21 @@ def test_headless_run_merges_fleet_and_repository_rules(repo: Path) -> None:
     text = json.dumps(reduced)
     for needle in IDENTITY_STRINGS:
         assert needle not in text
+
+
+@pytest.mark.parametrize(("email", "username", "expected"), [
+    ("29139614+renovate[bot]@users.noreply.github.com", "renovate[bot]", True),
+    ("bot@renovateapp.com", "", True),
+    ("support@dependabot.com", "", True),
+    ("", "dependabot", True),
+    ("49699333+dependabot[bot]@users.noreply.github.com", "dependabot[bot]", True),
+    ("dev@example.com", "renovate-fan", False),
+    ("41898282+github-actions[bot]@users.noreply.github.com", "github-actions[bot]", False),
+])
+def test_is_dependency_bot_reads_the_pinned_rules(email: str, username: str,
+                                                  expected: bool) -> None:
+    """The public seam ``account_discovery`` uses (#1031): Renovate and Dependabot by
+    e-mail or username, as ``AuthorMatcher`` buckets them."""
+    assert agent_identity.is_dependency_bot(email, username) is expected
+    bucket = agent_identity.AuthorMatcher().classify(email, username=username).bucket
+    assert (bucket == agent_identity.DEPENDENCY_BOT) is expected

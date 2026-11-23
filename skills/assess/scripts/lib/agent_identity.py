@@ -44,8 +44,9 @@ a case-insensitive regex searched, plus a field `email`, `username` or `name`; n
 reads e-mail and username) come from `compile_config_rules` over the
 `[[ai_usage.agent_identities]]` tables. Pinned defaults (`AGENT_RULES`,
 `DEPENDENCY_BOT_RULES`) are written in the username form and never read a display
-name; `COVERED_AUTHOR_AGENTS` names them in words. Order: a dependency bot (always,
-whatever a rule says), then config rules in order (first match credited), then
+name; `COVERED_AUTHOR_AGENTS` names them in words. `is_dependency_bot(email, username)`
+is the dependency-bot test on its own, the public seam `account_discovery` reads (#1031).
+Order: a dependency bot (always, whatever a rule says), then config rules in order (first match credited), then
 pinned agents, then a GitLab access-token user (`is_gitlab_token_user`:
 `project_<id>_bot_<hex>`, `group_<id>_bot_<hex>`, by username or its `@noreply.<host>` e-mail; never by display name, which is the
 token's owner-chosen name), which is `agent` under `token_users_as_agents` and
@@ -290,6 +291,12 @@ def _rule_matches(r: IdentityRule, email: str, username: str, name: str) -> bool
     return any(t and r.pattern.search(t[:MAX_MATCH_LENGTH]) for t in targets)
 
 
+def is_dependency_bot(email: str, username: str) -> bool:
+    """True when ``DEPENDENCY_BOT_RULES`` match the e-mail or username (Renovate,
+    Dependabot). A display name is never read."""
+    return any(_rule_matches(r, email, username, "") for r in DEPENDENCY_BOT_RULES)
+
+
 def identity_keys(email: str = "", name: str = "", username: str | None = None) -> frozenset[str]:
     """The lower-case forms a confirmed ``[identities]`` entry (#765) may name: the
     e-mail, the login (given, or the one a noreply address carries) and a display
@@ -347,7 +354,7 @@ class AuthorMatcher:
         email = email.strip()
         if username is None:
             username = username_from_email(email) or ""
-        if any(_rule_matches(r, email, username, "") for r in DEPENDENCY_BOT_RULES):
+        if is_dependency_bot(email, username):
             return AuthorClass(DEPENDENCY_BOT, None)
         confirmed = self.confirmed.class_of(identity_keys(email, name, username))
         if confirmed in ("bot", "person"):

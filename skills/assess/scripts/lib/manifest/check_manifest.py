@@ -83,7 +83,8 @@ HEADLESS = ("registered", "headless_variant", "unregistered")
 UNIT_SCOPES = ("scoped", "override")
 SIGNAL_TYPES = ("bool", "number", "string", "enum")
 FINDING_MODES = ("characterize_first", "verify_then_retire", "refactor_safe")
-CARRIED_IN = ("reason", "basis", "unmeasured_reason")
+CarriedIn = Literal["reason", "basis", "enforced_basis", "unmeasured_reason"]
+CARRIED_IN: tuple[CarriedIn, ...] = ("reason", "basis", "enforced_basis", "unmeasured_reason")
 # The one ``suppressed_when`` expression the finding tables evaluate until the rule
 # evaluator (#789 step 5): a finding that declares it is emptied on degenerate churn.
 CHURN_SUPPRESSION = "doc_staleness.churn_degenerate == true"
@@ -101,7 +102,7 @@ class UnknownReason(TypedDict):
     code: str
     means: str
     next_step: str
-    carried_in: NotRequired[Literal["reason", "basis", "unmeasured_reason"]]
+    carried_in: NotRequired[CarriedIn]
     block: NotRequired[str]
 
 

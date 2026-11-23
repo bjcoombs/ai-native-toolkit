@@ -101,9 +101,10 @@
           "enum": [
             "reason",
             "basis",
+            "enforced_basis",
             "unmeasured_reason"
           ],
-          "description": "reason: the block's available-false reason code; basis: a token on a null leaf; unmeasured_reason: the block's unmeasured_reason token beside a null signal"
+          "description": "reason: the block's available-false reason code; basis: a token on a null leaf; enforced_basis: a token in the block's enforced_basis field (ci_checks), the reason for a null or false enforced check; unmeasured_reason: the block's unmeasured_reason token beside a null signal"
         },
         "block": {
           "type": "string",

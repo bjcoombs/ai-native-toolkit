@@ -93,6 +93,11 @@ agent) trusts the boundary deliberately rather than being surprised by the seam:
   change to how `build_fleet_data` computes a cell or a unit roll-up moves both.
   `tests/test_fleet_rescore.py::test_rescore_recomputes_the_unit_roll_ups`
   fails when a re-scored run differs from a fresh `build_fleet_data` over the same rows.
+- **`account_discovery.py` <-> `agent_identity.py`.** The `dependency_bot_hint` evidence
+  token reads `agent_identity.is_dependency_bot`, the same test `AuthorMatcher` buckets a
+  `dependency_bot` with, so widening `DEPENDENCY_BOT_RULES` moves both the `ai_usage`
+  counts and the identities awaiting confirmation. `account_discovery` imports only
+  public names from `agent_identity` (#1031).
 
 None of these is a refactor task. They are recorded here so the seam is owned: if any is
 ever cut, this note is where the intended boundary is written down.
