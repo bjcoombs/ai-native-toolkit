@@ -2973,7 +2973,7 @@
       "grades": [
         "unclassified"
       ],
-      "why": "exempt: plumbing",
+      "why": "It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.",
       "why_source": ""
     },
     {

@@ -15,7 +15,7 @@ from lib.levels_fields import TRUTH_TAGS
 
 COND_KEY = "layer-5-ci.1:ci_checks.enforced_check_runs"
 PLUMBING_SCANS = {"delivery", "gate_cost_estimate", "shared_tooling", "agent_building", "ai_usage",
-                  "diff", "runtime", "derived_findings", "gap_actions", "owner_exclusions"}
+                  "diff", "runtime", "derived_findings", "gap_actions"}
 
 
 def _core() -> dict[str, Any]:
