@@ -324,7 +324,7 @@ from lib.ci_lint_gates import (
 from lib.ci_masking import unmasked_lines
 from lib.named_check import instruction_words, named_count, unread_ci_target
 from lib.ci_triggers import Trigger, gitlab_line_triggers, keep, resolve_workflows, workflow_trigger
-from lib.ci_scripts import Present, committed, present_in
+from lib.ci_scripts import Present, committed, present_in, runs_missing
 from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, read_config, repo_files
 from lib.command_resolver import command_words, extract_commands
 from lib.external_ci_rules import as_external
@@ -431,14 +431,6 @@ def _line_runs_check(line: str, *, script_item: bool = True, present: Present | 
     )
 
 
-@instruction_words   # a missing ./ci.sh is still script_not_found (#937, #951)
-def _line_runs_missing_check(line: str, *, script_item: bool = True,
-                             present: Present | None = None) -> bool:
-    """A line that runs a check only through a script the tree does not hold (#937)."""
-    return (_line_runs_check(line, script_item=script_item)
-            and not _line_runs_check(line, script_item=script_item, present=present))
-
-
 # GitHub Actions that run a linter as a step (#782): ``uses: <one of these>@<ref>``.
 # An unknown third-party action is not read.
 LINT_ACTIONS = frozenset({
@@ -480,13 +472,6 @@ def _line_runs_lint(line: str, *, script_item: bool = True, present: Present | N
     return any(is_lint_run(c.text) and committed(c.text, present)
                and not (bare_item and not script_item and _lone_linter(c.text))
                for c in line_commands(line))
-
-
-def _line_runs_missing_lint(line: str, *, script_item: bool = True,
-                            present: Present | None = None) -> bool:
-    """A line that runs a linter only through a script the tree does not hold (#937)."""
-    return (_line_runs_lint(line, script_item=script_item)
-            and not _line_runs_lint(line, script_item=script_item, present=present))
 
 
 def _line_may_lint(line: str, *, script_item: bool = True) -> bool:
@@ -683,7 +668,8 @@ def scan_ci_checks(repo_root: Path, ghsync_root: Path | None = None,
     present = present_in(root, tracked)
     tests: tuple[LineTest, ...] = tuple(
         partial(t, present=present) for t in (_line_runs_check, _line_runs_lint,
-                                              _line_runs_missing_check, _line_runs_missing_lint)
+                                              instruction_words(runs_missing(_line_runs_check)),
+                                              runs_missing(_line_runs_lint))
     ) + (_line_may_lint, _line_may_check, line_compiler_gate, line_dotnet_build)
     tallies = [_trigger_tally(texts[rel], workflows.get(rel), tests) for rel in files]
     tallies += [_trigger_tally(f.text, None, tests) for f in resolution.files] if resolution else []

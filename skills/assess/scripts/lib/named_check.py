@@ -19,7 +19,7 @@ recipe is not read, so Layer 5 and Layer 3 read null with ``check_target``, neve
 ``lib.coverage_ci._indirect`` reads it, so a CI line running only ``make ci`` keeps the
 coverage gate's null ``indirect_run`` rather than a false ``not_run_in_ci``.
 ``instruction_words`` runs a function under that vocabulary (the decorator behind the
-three above). ``lib.ci_checks`` applies it to ``_line_runs_missing_check``, so a missing
+three above). ``lib.ci_checks`` wraps its missing-check test (``ci_scripts.runs_missing``) in it, so a missing
 ``./ci.sh`` still reads ``script_not_found`` (#937), and ``named_count(count, texts)`` is
 true when ``count`` finds a check line under it, so a masked ``./ci.sh || true`` reads
 ``not_enforced``. Both are false readings or null ones, never credit: a committed ``./ci.sh``
