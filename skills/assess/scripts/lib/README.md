@@ -119,7 +119,9 @@ error such as `core/ci_checks.toml entries[4] (core.cond.layer-5-ci.1.enforced_c
 required`. A why is 1 to 300 characters and passes `lib.vocabulary` (no banned word, no layer
 number). A scan's why may be exactly `exempt: plumbing` only when no row or finding reads the
 scan, directly or through another collector's `reads` (a collector's read of its own block does
-not count); the catalog renders it "Run plumbing".
+not count); the catalog renders it "Run plumbing". A custom manifest that moves to version 2
+declares the eight truth-tag whys too, under its own root `tags` table; one that stays at
+version 1 needs none.
 
 **Where whys are written.** `measures.json` carries `why` and `why_source` on criteria, scans,
 findings and tags, and `docs/what-we-measure.md` renders them (`catalog_md`). In the run context,

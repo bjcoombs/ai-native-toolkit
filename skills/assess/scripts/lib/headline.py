@@ -245,6 +245,8 @@ def run_context_headline(level: Any) -> Headline:
 def as_headline(value: Any) -> Headline:
     """``value`` when it is a headline block, else the unavailable headline (a degraded scan)."""
     if isinstance(value, dict) and isinstance(value.get("summary"), str) and "lines" in value:
-        return value  # type: ignore[return-value]
+        if "next_why" in value:
+            return value  # type: ignore[return-value]
+        return {"next_why": "", **value}  # type: ignore[typeddict-item]  # a pre-#939 block has none
     reason = value.get("reason") if isinstance(value, dict) else None
     return _unavailable(str(reason or "no_headline"))

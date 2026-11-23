@@ -318,3 +318,9 @@ def test_next_why_holds_the_whys_of_the_unmet_gate_conditions_only() -> None:
     threshold_only = _level(next_step={"step": 4, "threshold": 5,
                                        "blockers": [{"kind": "threshold", "threshold": 5, "met": 4}]})
     assert headline(threshold_only, default_model())["next_why"] == ""
+
+
+def test_as_headline_backfills_next_why_on_an_older_block() -> None:
+    old = {k: v for k, v in headline(_level(), default_model()).items() if k != "next_why"}
+    assert as_headline(old)["next_why"] == ""
+    assert as_headline(headline(_level(), default_model()))["next_why"] == headline(_level(), default_model())["next_why"]

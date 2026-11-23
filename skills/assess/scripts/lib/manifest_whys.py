@@ -33,7 +33,8 @@ inputs name; a collector that a row or finding reads, directly or through anothe
 collector, reads everything in its ``reads``. A collector's read of its own block does not
 count (``run_header`` publishes ``diff`` and reads the private ``diff`` collector). This is
 the catalog's "Used by" relation (``lib.catalog._used_by``) closed over ``reads``. The
-catalog renders the token as "Run plumbing". Stdlib only; imports no other check module.
+catalog renders the token as "Run plumbing". Imports only ``check_validation``,
+``levels_fields`` and ``vocabulary``, so ``check_manifest`` can import it.
 """
 from __future__ import annotations
 
