@@ -5,7 +5,9 @@ the work it closed, not a count of catalogue entries. It reads three things, all
 this run's publish step overwrites any of them:
 
 - **the previous run**: ``run-context.json`` in the run's ``.assess/`` directory as the
-  previous run left it. None there means this is the first run, and the section says so.
+  previous run left it. None there, and no earlier run in ``log.md``, means this is the
+  first run, and the section says so; a log with earlier runs but no context (it is often
+  gitignored, so a fresh clone or CI has none) is unknown, ``previous_state_missing``.
   A file that cannot be read gives unknowns (``None``, ``previous_unreadable``), never a
   first run. A run that supersedes a same-day run on the same commit (the ``superseded``
   scan input) takes that run's own baseline from its ``since_last_run`` block instead, so
@@ -63,6 +65,7 @@ UNKNOWN_CLOSED = {
     "actions_unreadable": "the committed actions.json could not be read",
     "actions_not_committed": "no .assess/actions.json is committed; commit it for closed actions to count",
     "previous_unreadable": "the previous run-context.json could not be read",
+    "previous_state_missing": "log.md records an earlier run, but its run-context.json is not here",
 }
 
 
@@ -171,9 +174,9 @@ def _noun(gate: str) -> str:
     return GATE_NOUN.get(gate, gate)
 
 
-def _gates_line(word: str, gates: list[str] | None, unreadable: bool) -> str:
+def _gates_line(word: str, gates: list[str] | None, reason: str | None) -> str:
     if gates is None:
-        why = ("the previous run-context.json could not be read" if unreadable
+        why = (UNKNOWN_CLOSED[reason] if reason in ("previous_unreadable", "previous_state_missing")
                else "the previous run has no level result this model can compare")
         return f"Gates {word}: not known ({why})"
     return f"Gates {word}: " + (", ".join(_noun(g) for g in gates) if gates else "none")
@@ -199,9 +202,8 @@ def _words(block: SinceLastRun, has_steps: bool) -> list[str]:
             if block["unresolved"]:
                 lines.append(f"  {block['unresolved']} more done action(s) name a commit not in this clone, "
                              "so they were not checked")
-        unreadable = block["closed_reason"] == "previous_unreadable"
-        lines += [_gates_line("gained", block["gates_gained"], unreadable),
-                  _gates_line("lost", block["gates_lost"], unreadable)]
+        lines += [_gates_line("gained", block["gates_gained"], block["closed_reason"]),
+                  _gates_line("lost", block["gates_lost"], block["closed_reason"])]
     if block["next_blocker"] is not None:
         lines.append(f"Next blocker: {_noun(block['next_blocker'])}")
     else:
@@ -214,9 +216,14 @@ def _markdown(lines: list[str]) -> str:
     return "\n".join(f"  - {line.strip()}" if line.startswith("  ") else f"- {line}" for line in lines)
 
 
-def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, bool, Mapping[str, Any] | None,
+def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, str | None, Mapping[str, Any] | None,
                                                          Mapping[str, Any] | None]:
-    """``(first_run, unreadable, previous context, inherited block)``.
+    """``(first_run, why the previous state is unknown, previous context, inherited block)``.
+
+    No ``run-context.json`` is a first run only when ``log.md`` records no earlier run either:
+    the context is often gitignored, so a fresh clone or a CI checkout has the log and not the
+    context, and that is an unknown previous state (``previous_state_missing``), never a first
+    run written into the committed log.
 
     A run that supersedes a same-day run on the same commit (``superseded``) takes that run's
     own baseline from its ``since_last_run`` block, so the credit it showed is not lost when
@@ -224,21 +231,22 @@ def _baseline(assess_dir: Path, superseded: Any) -> tuple[bool, bool, Mapping[st
     if isinstance(superseded, Mapping):
         inherited = superseded.get("since_last_run")
         if isinstance(inherited, Mapping) and inherited.get("available") is True:
-            return bool(inherited.get("first_run")), False, None, inherited
+            return bool(inherited.get("first_run")), None, None, inherited
     path = assess_dir / "run-context.json"
     if not path.is_file():
-        return True, False, None, None
+        return ((False, "previous_state_missing", None, None) if (assess_dir / "log.md").is_file()
+                else (True, None, None, None))
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False, True, None, None
-    return (False, False, data, None) if isinstance(data, Mapping) else (False, True, None, None)
+        return False, "previous_unreadable", None, None
+    return (False, None, data, None) if isinstance(data, Mapping) else (False, "previous_unreadable", None, None)
 
 
 def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: Any = None) -> SinceLastRun:
     """The ``since_last_run`` block for this run's ``level`` block (see the module docstring)."""
     steps = default_model().get("steps", [])
-    first, unreadable, prev, inherited = _baseline(assess_dir, superseded)
+    first, unknown, prev, inherited = _baseline(assess_dir, superseded)
     if inherited is not None:
         previous_commit, run_id = inherited.get("previous_commit"), inherited.get("previous_run_id")
         gained, lost = inherited.get("gates_gained"), inherited.get("gates_lost")
@@ -253,8 +261,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     reason: str | None = None
     if first:
         pass
-    elif unreadable:
-        reason = "previous_unreadable"
+    elif unknown is not None:
+        reason = unknown
     elif previous_commit is None:
         reason = "no_previous_commit"
     elif not is_commit(repo_root, previous_commit):

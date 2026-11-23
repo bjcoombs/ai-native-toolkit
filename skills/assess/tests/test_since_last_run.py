@@ -253,3 +253,14 @@ def test_a_superseding_run_keeps_the_superseded_runs_baseline(repo: Path) -> Non
     assert (again["gates_gained"], again["lines"]) == (["ci_runs_tests"], replaced["lines"])
     # without the supersede input the same files would compare against run b: nothing closed
     assert since_last_run(_level("met", "met"), repo / ".assess", repo)["closed_count"] == 0
+
+
+def test_a_log_with_earlier_runs_but_no_context_is_not_a_first_run(repo: Path) -> None:
+    """run-context.json is often gitignored: a fresh clone has log.md and no context."""
+    (repo / ".assess" / "log.md").write_text("# Assessment log\n\n## 2026-11-01\n\n- **Files scored:** 3\n",
+                                             encoding="utf-8")
+    block = since_last_run(_level("met", "met"), repo / ".assess", repo)
+    assert block["first_run"] is False and block["closed_reason"] == "previous_state_missing"
+    assert (block["closed"], block["gates_gained"]) == (None, None)
+    assert FIRST_RUN not in block["lines"]
+    assert any("log.md records an earlier run" in line for line in block["lines"])
