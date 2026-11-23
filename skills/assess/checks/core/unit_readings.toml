@@ -21,5 +21,6 @@ revision = 1
   "unit_readings.unit_count_reason" = "token"
   "unit_readings.unit_blocks" = "token"
   "unit_readings.units.path" = "hashed_path"
+  "unit_readings.units.kind" = "token"
   "unit_readings.units.conditions.id" = "token"
   "unit_readings.units.conditions.origin" = "token"
