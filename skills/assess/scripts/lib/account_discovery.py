@@ -53,7 +53,7 @@ No candidate reaches counts-only output, the fleet run history or an artifact.
 
 Bot and agent account discovery (issue #765): suggestions for the human to confirm in
 `[identities]`. `discover(commits, matcher)` is pure: over `HistoryCommit(author_email,
-author_name, subject, coauthors)` rows (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
+author_name, subject, coauthors, sha, committed_at)` rows (the last two read by `agent_outcome`, #1085) (commit authors; a `Co-authored-by` trailer account is never a candidate on its own, since confirming it would move no count) it
 returns the `Candidate` rows (`account`, `name`, `email`, `commits`, `evidence[]`, most
 commits first). `evidence_for` gives the `EVIDENCE` tokens in order; only a
 `STRONG_EVIDENCE` token (`bot_suffix`, `gitlab_token_user`, `dependency_bot_hint`,
@@ -117,6 +117,8 @@ class HistoryCommit(NamedTuple):
     author_name: str
     subject: str
     coauthors: str  # the Co-authored-by values joined by GS (``\\x1d``)
+    sha: str = ""  # the full commit id; ``agent_outcome`` joins reverts on it (#1085)
+    committed_at: int = 0  # committer time, epoch seconds
 
 
 class Candidate(TypedDict):
