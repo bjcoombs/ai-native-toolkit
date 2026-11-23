@@ -26,6 +26,11 @@ module keeps the parts of the report that compare or redraw the level on that sa
   (default → handover); gates not compared``: a gate is never reported gained or lost across
   models. Closed actions stay, because they are commits, not gates. ``model_changed_line``
   gives that line back for the executive summary (``lib/exec_summary.py``).
+- ``on_own_steps(block, level, previous)`` compares the gates of two runs of one model on
+  that model's own Steps when ``since_last_run`` (which reads the default Steps) left them
+  unknown: a profile with fewer Steps, such as ``citizen``. ``previous`` is the level block
+  of the ``run-context.json`` the earlier run left (``previous_level``). Two runs of one
+  profile then read their gains and losses as two default runs do.
 - ``units_label(block, choice)`` marks the monorepo unit roll-up "(default model)" when the
   run's own model is not the default, since the unit pass still reads the default model.
 
@@ -38,15 +43,17 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from lib.headline import GATE_NOUN
 from lib.levels import LevelsError, MaturityModel, load_levels
 from lib.level_tally import default_model
 from lib.prior_level import load_prior_level
 from lib.profiles import CUSTOM_MODEL_SUFFIX, ModelChoice, profile_names, profile_path
 from lib.run_context_types_since import SinceLastRun
+from lib.since_last_run import gate_changes
 from lib.unit_rollup import UnitRollUpBlock
 
 __all__ = ["CUSTOM_NOT_DRAWN", "MODEL_CHANGED", "across_models", "custom_run", "model_changed_line",
-           "model_for_level",
+           "model_for_level", "on_own_steps", "previous_level",
            "model_name", "previous_levels_version", "units_label"]
 
 MODEL_CHANGED = "Model changed since last run ({} → {}); gates not compared"
@@ -131,9 +138,40 @@ def across_models(block: SinceLastRun, level: Any, previous: str | None) -> Sinc
     lines = [entry for entry in block["lines"] if not entry.startswith(_GATE_LINES)]
     at = next((i for i, entry in enumerate(lines) if entry.startswith("Next blocker:")), len(lines))
     lines.insert(at, line)
-    markdown = "\n".join(f"  - {e.strip()}" if e.startswith("  ") else f"- {e}" for e in lines)
     return cast(SinceLastRun, {**block, "gates_gained": None, "gates_lost": None,
-                               "lines": lines, "markdown": markdown})
+                               "lines": lines, "markdown": _markdown(lines)})
+
+
+def _markdown(lines: list[str]) -> str:
+    return "\n".join(f"  - {e.strip()}" if e.startswith("  ") else f"- {e}" for e in lines)
+
+
+def previous_level(assess_dir: Path) -> Mapping[str, Any] | None:
+    """The ``level`` block of the ``run-context.json`` the previous run left, or None."""
+    try:
+        data = json.loads((assess_dir / "run-context.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    level = data.get("level") if isinstance(data, Mapping) else None
+    return level if isinstance(level, Mapping) else None
+
+
+def on_own_steps(block: SinceLastRun, level: Any, previous: Any) -> SinceLastRun:
+    """``block`` with the gates compared on the run's own Steps, when two runs of one
+    non-default model left them unknown (``since_last_run`` reads the default Steps, which a
+    profile with fewer Steps, such as ``citizen``, cannot fill)."""
+    model, version, before = model_for_level(level), _version(level), _version(previous)
+    if (block.get("available") is not True or block.get("first_run") or block.get("gates_gained") is not None
+            or model is None or version is None or before is None or model_name(before) != model_name(version)):
+        return block
+    gained, lost = gate_changes(model.get("steps", []), level, previous)
+    if gained is None or lost is None:
+        return block
+    gates = {"Gates gained:": gained, "Gates lost:": lost}
+    lines = [next((f"{k} {', '.join(GATE_NOUN.get(g, g) for g in v) or 'none'}"
+                   for k, v in gates.items() if e.startswith(k)), e) for e in block["lines"]]
+    return cast(SinceLastRun, {**block, "gates_gained": gained, "gates_lost": lost,
+                               "lines": lines, "markdown": _markdown(lines)})
 
 
 def model_changed_line(since: Any) -> str | None:

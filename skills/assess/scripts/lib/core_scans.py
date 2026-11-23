@@ -68,7 +68,7 @@ from lib.level_result_types import LevelResult, OwnerExclusionsBlock
 from lib.level_tally import LEVEL_READS
 from lib.keyhole.liveness_scan import scan_liveness
 from lib.owner_exclusions import owner_exclusions_block
-from lib.model_change import across_models, previous_levels_version, units_label
+from lib.model_change import across_models, on_own_steps, previous_level, previous_levels_version, units_label
 from lib.profiles import ModelChoice, run_level
 from lib.unit_discovery import UnitsBlock, scan_units
 from lib.unit_levels import UnitLevelsBlock, unit_levels as unit_levels_block
@@ -424,4 +424,6 @@ def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, supersed
     block = since_last_run_block(level_block, assess_dir, repo_root, superseded, instruction_placement)
     # A gate is never compared across maturity models (#1150): a profile run after a default one
     # says the model changed instead.
-    return across_models(block, level_block, previous_levels_version(assess_dir, superseded))
+    block = across_models(block, level_block, previous_levels_version(assess_dir, superseded))
+    # Two runs of one profile compare their gates on its own Steps when the default Steps cannot.
+    return on_own_steps(block, level_block, previous_level(assess_dir))
