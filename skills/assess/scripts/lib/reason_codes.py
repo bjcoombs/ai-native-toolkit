@@ -18,7 +18,7 @@ from lib.graph.import_graph import STRUCTURE_REASON_CODES
 # codes of ``agent_outcome`` (``lib.agent_outcome.REASON_CODES``, #1085).
 BLOCK_REASON_CODES: frozenset[str] = frozenset({
     "no_ownership_map",
-    "no_git", "git_timeout", "not_a_repo", "shallow_clone", "shallow_unknown",
+    "no_git", "git_timeout", "not_a_repo", "shallow_clone", "shallow_unknown", "git_failed",
 })
 
 

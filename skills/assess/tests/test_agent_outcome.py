@@ -152,6 +152,49 @@ def test_a_deleted_file_is_skipped_not_counted(tmp_path: Path) -> None:
     assert block["reworked_commits"] == 0
 
 
+def test_a_branch_merged_after_the_span_is_not_reworked(tmp_path: Path) -> None:
+    """The blame point descends from the agent commit: mainline work on the file
+    before a late merge never reads as rework."""
+    r = _init(tmp_path)
+    _commit(r, "s.txt", "".join(f"line {i}\n" for i in range(10)), T0 + DAY)
+    _git(r, "checkout", "-q", "-b", "feat", at=T0 + DAY)
+    lines = [f"line {i}\n" for i in range(10)]
+    lines[8] = "agent line 8\n"
+    _commit(r, "s.txt", "".join(lines), T0 + 3 * DAY, agent=True)
+    _git(r, "checkout", "-q", "main", at=T0 + 3 * DAY)
+    main_lines = [f"line {i}\n" for i in range(10)]
+    main_lines[1] = "human line 1\n"
+    _commit(r, "s.txt", "".join(main_lines), T0 + 10 * DAY)
+    _git(r, "merge", "-q", "--no-ff", "-m", "merge feat", "feat", at=T0 + 20 * DAY)
+    _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 10) * DAY)
+    block = _ok(scan_agent_outcome(r, None, None))
+    assert block["rework_sampled_commits"] == 1
+    assert block["reworked_commits"] == 0
+
+
+def test_a_rename_adds_no_line_and_is_not_rework(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    _commit(r, "f.txt", "".join(f"line {i}\n" for i in range(10)), T0 + DAY)
+    _git(r, "mv", "f.txt", "g.txt", at=T0 + 2 * DAY)
+    _git(r, "commit", "-q", "-m", f"rename\n\nCo-authored-by: {CLAUDE}", at=T0 + 2 * DAY)
+    _commit(r, "g.txt", "".join(f"line {i}\n" for i in range(10)) + "appended\n", T0 + 3 * DAY)
+    _commit(r, "pad.txt", "pad\n", T0 + (REWORK_DAYS + 10) * DAY)
+    assert agent_outcome._added_lines(r, _git(r, "rev-parse", "HEAD~2").strip()) == {}
+    block = _ok(scan_agent_outcome(r, None, None))
+    assert block["rework_sampled_commits"] == 1
+    assert block["reworked_commits"] == 0
+
+
+def test_a_rename_with_an_edit_counts_only_the_edited_lines(tmp_path: Path) -> None:
+    r = _init(tmp_path)
+    _commit(r, "f.txt", "".join(f"line {i}\n" for i in range(10)), T0 + DAY)
+    _git(r, "mv", "f.txt", "g.txt", at=T0 + 2 * DAY)
+    (r / "g.txt").write_text("".join(f"line {i}\n" for i in range(10)) + "agent\n", encoding="utf-8")
+    _git(r, "add", "g.txt", at=T0 + 2 * DAY)
+    _git(r, "commit", "-q", "-m", "rename and add", at=T0 + 2 * DAY)
+    assert agent_outcome._added_lines(r, _git(r, "rev-parse", "HEAD").strip()) == {"g.txt": 1}
+
+
 def test_rework_sample_is_the_newest_observed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agent_outcome, "REWORK_SAMPLE", 1)
     r = _init(tmp_path)

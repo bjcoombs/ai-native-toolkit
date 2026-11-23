@@ -12,8 +12,8 @@ of the run window, the commits ``ai_usage`` counts in ``agent_either_commits``
   ``git patch-id --stable`` equals the patch-id of the agent commit's diff
   reversed, and it comes after the agent commit in ``--topo-order``.
 - **reworked**: some line the agent commit added is no longer attributed to it
-  by ``git blame`` at the last commit on HEAD's history within ``REWORK_DAYS``
-  days of it (``git rev-list -1 --before``): another commit rewrote or deleted
+  by ``git blame`` at its newest descendant on HEAD's history within ``REWORK_DAYS``
+  days of it (``git rev-list -1 --ancestry-path --before``; a rename adds no line): another commit rewrote or deleted
   it. Only commits at least ``REWORK_DAYS`` older than HEAD's commit time are
   observed (a younger one has not had the full span), and of those the newest
   ``REWORK_SAMPLE`` are checked, so the cost stays bounded on a busy history.
@@ -64,9 +64,9 @@ rework_observed_commits, rework_sampled_commits, reworked_commits, rework_share,
 rework_null_reason, limits[]}`. Reverted: a later window commit's message names the
 sha (`This reverts commit`, abbreviated ids matched by prefix) or its stable patch-id
 equals the agent commit's reversed patch-id and it precedes it in `--topo-order`.
-Reworked: `git blame` at the last HEAD-history commit within `REWORK_DAYS` attributes
-fewer lines of some file to it than it added (`--numstat`, binary files and files
-gone by then skipped); observed only when `REWORK_DAYS` older than HEAD, newest
+Reworked: `git blame` at its newest descendant on HEAD's history within `REWORK_DAYS`
+(`--ancestry-path`) attributes fewer lines of some file to it than it added (`--numstat -M`,
+so a rename adds no line; binary files and files gone by then skipped); observed only when `REWORK_DAYS` older than HEAD, newest
 `REWORK_SAMPLE` checked. A share is null with a token reason (`no_agent_commits`,
 `none_old_enough`). Git failures and shallow clones degrade to `available: false` with
 a `code: sentence` reason from `REASON_CODES`. No Step, count or headline reads it.
@@ -102,6 +102,9 @@ DAY_SECONDS = 86400
 NO_AGENT_COMMITS = "no_agent_commits"
 NONE_OLD_ENOUGH = "none_old_enough"
 
+# A git read past the windowed log failed on a repository that log could read.
+REASON_GIT_FAILED = "a git read of the history failed"
+
 # The reason code each git failure degrades to, as ``code: sentence``.
 REASON_CODES: dict[str, str] = {
     REASON_NO_GIT: "no_git",
@@ -109,6 +112,7 @@ REASON_CODES: dict[str, str] = {
     REASON_NOT_A_REPO: "not_a_repo",
     REASON_SHALLOW: "shallow_clone",
     REASON_SHALLOW_UNKNOWN: "shallow_unknown",
+    REASON_GIT_FAILED: "git_failed",
 }
 _OWN_TIMEOUT = f"git timed out after {GIT_TIMEOUT_SECONDS}s"
 
@@ -171,7 +175,7 @@ def _git(repo_root: Path, *args: str, stdin: str | None = None) -> str:
     except subprocess.TimeoutExpired as e:
         raise _GitFailed(f"git_timeout: {_OWN_TIMEOUT}") from e
     except subprocess.CalledProcessError as e:
-        raise _GitFailed(f"not_a_repo: {REASON_NOT_A_REPO}") from e
+        raise _GitFailed(f"git_failed: {REASON_GIT_FAILED}") from e
 
 
 def _share(count: int, total: int) -> float | None:
@@ -241,33 +245,50 @@ def _reverted(repo_root: Path, agents: list[HistoryCommit],
 
 
 def _added_lines(repo_root: Path, sha: str) -> dict[str, int]:
-    """Lines the commit added, per path; binary files left out."""
-    out = _git(repo_root, "show", "--numstat", "--no-renames", "--format=", sha)
+    """Lines the commit added, per path it leaves; binary files left out.
+
+    Renames are detected (``-M``), so a pure ``git mv`` adds no line and a rename with
+    an edit adds only the edited lines, under the new path: ``git blame`` follows the
+    rename back and credits the moved lines to their first commit."""
+    out = _git(repo_root, "show", "--numstat", "-z", "-M", "--format=", sha)
+    fields = out.lstrip("\n").split("\0")
     added: dict[str, int] = {}
-    for line in out.splitlines():
-        cols = line.split("\t", 2)
-        if len(cols) == 3 and cols[0].isdigit() and int(cols[0]) > 0:
-            added[cols[2]] = int(cols[0])
+    i = 0
+    while i < len(fields):
+        cols = fields[i].lstrip("\n").split("\t", 2)
+        if len(cols) != 3:
+            i += 1
+            continue
+        path = cols[2]
+        i += 1
+        if not path:  # a rename: the old path, then the new one, follow
+            path = fields[i + 1] if i + 1 < len(fields) else ""
+            i += 2
+        if path and cols[0].isdigit() and int(cols[0]) > 0:
+            added[path] = int(cols[0])
     return added
 
 
 def _surviving(repo_root: Path, sha: str, at: str, path: str) -> int | None:
     """Lines of ``path`` at ``at`` that ``git blame`` attributes to ``sha``; None when the
     path is gone at ``at``."""
-    try:
-        out = _git(repo_root, "blame", "-l", "-s", "--root", at, "--", path)
-    except _GitFailed as e:
-        if str(e).startswith("not_a_repo"):
-            return None
-        raise
+    if not _git(repo_root, "ls-tree", "--name-only", at, "--", path).strip():
+        return None
+    out = _git(repo_root, "blame", "-l", "-s", "--root", at, "--", path)
     return sum(1 for line in out.splitlines() if line.startswith(sha))
 
 
 def _reworked(repo_root: Path, commit: HistoryCommit) -> bool:
-    """Whether a line the commit added is not its own in blame ``REWORK_DAYS`` later."""
+    """Whether a line the commit added is not its own in blame ``REWORK_DAYS`` later.
+
+    The blame point is the newest descendant of the commit on HEAD's history within the
+    span (``--ancestry-path``), so a mainline commit that lacks the change (a branch
+    merged after the span) is never read; with no descendant in the span, nothing
+    could have rewritten it."""
     horizon = commit.committed_at + REWORK_DAYS * DAY_SECONDS
-    at = _git(repo_root, "rev-list", "-1", f"--before=@{horizon}", "HEAD").strip()
-    if not at or at == commit.sha:
+    at = _git(repo_root, "rev-list", "-1", "--ancestry-path", f"--before=@{horizon}",
+              f"{commit.sha}..HEAD").strip()
+    if not at:
         return False
     for path, count in _added_lines(repo_root, commit.sha).items():
         if not _git(repo_root, "log", "--format=%H", f"{commit.sha}..{at}", "--", path).strip():

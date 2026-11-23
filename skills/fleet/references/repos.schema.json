@@ -273,7 +273,7 @@
                 "properties": {
                   "reason": {
                     "type": "string",
-                    "description": "'code: sentence'. The codes name the missing piece: shallow_clone (the checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read); shallow_unknown (git could not confirm the checkout is a full clone); not_a_repo (the path is not a git repository, or one with no commits); no_git (git is not installed where the scan ran); git_timeout (a git read took longer than the scan allows). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
+                    "description": "'code: sentence'. The codes name the missing piece: shallow_clone (the checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read); shallow_unknown (git could not confirm the checkout is a full clone); not_a_repo (the path is not a git repository, or one with no commits); no_git (git is not installed where the scan ran); git_failed (a git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read); git_timeout (a git read took longer than the scan allows). A counts-only document keeps only the leading code, or unavailable when the reason has no code."
                   }
                 },
                 "required": [
