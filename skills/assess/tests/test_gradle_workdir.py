@@ -154,6 +154,7 @@ def test_gradle_root_from_the_working_directory(
     (f"-p app {TASK}", "", "app/build.gradle", True),
     (f"-p .. {TASK}", "app", "lib/build.gradle", True),
     (f"-p ../.. {TASK}", "app", "lib/build.gradle", None),
+    (f"-p ..cache {TASK}", "", "..cache/build.gradle", True),
     (f"-p /abs {TASK}", "", "lib/build.gradle", None),
     (f"-c other.gradle {TASK}", None, "lib/build.gradle", True),
     (f"-p android :app:{TASK}", None, "android/app/build.gradle", True),
