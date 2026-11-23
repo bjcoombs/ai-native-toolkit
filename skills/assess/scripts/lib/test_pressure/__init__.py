@@ -85,9 +85,11 @@ Layer 1 write-side truth pressure. Two tiers:
   import error, else pytest's first failing test, scratch and home paths labelled
   (`test_pressure/reason_paths.py`, `cut_prefix`: each spelling of a directory, as given
   and resolved, is cut under `/`, `\\` and a repr's doubled `\\\\` (an `OSError` quotes its
-  filename that way), longest first and only before a separator, so a Windows path the
-  tool printed with `/` is cut too and the rest of the path reads with `/`; on Windows the
-  match ignores case; a root home is never a label, issue #964). Directory entries are mirrored and
+  filename that way), longest first and only where the directory's last segment ends
+  (a separator, the end of the text or any character that cannot continue a segment, so
+  `/home/u` leaves `/home/u2` alone and a bare `HOME=/home/u` reads `HOME=~`, issue #978),
+  so a Windows path the tool printed with `/` is cut too and the rest of the path reads
+  with `/`; on Windows the match ignores case; a root home is never a label, issue #964). Directory entries are mirrored and
   `.meta` files read in code-point name order on every platform (#965). mutmut
   runs pytest under the interpreter that launches it, so `_resolve_runner` picks one that
   can import the suite's dependencies (`runner`): a package `.venv` / `venv` that already
