@@ -55,6 +55,11 @@ def test_a_document_separator_ends_the_on_list() -> None:
 def test_an_unclosed_flow_list_is_not_read() -> None:
     assert ci_triggers.workflow_events("on: [push,\n") is None
     assert shared_tooling.workflow_events("on: [push,\n") is None
+    assert ci_triggers.workflow_trigger("on: [push,\n" + _JOB) == "unknown"
+    assert ci_triggers.unclosed_on("on: [push,\n" + _JOB)
+    assert not ci_triggers.unclosed_on("on: [push,\n  pull_request]\n" + _JOB)
+    assert not ci_triggers.unclosed_on("on:\n- push\n" + _JOB)
+    assert not ci_triggers.unclosed_on("name: x\n")
 
 
 @pytest.mark.parametrize(("on", "credited"), [
@@ -64,6 +69,9 @@ def test_an_unclosed_flow_list_is_not_read() -> None:
     ("on:\n- workflow_dispatch\n", False),
     ("on: {\n  issue_comment: {}\n}\n", False),
     ("on: [issue_comment,\n  pull_request]\n", True),
+    # An unclosed flow list is invalid YAML: unread, but never credit.
+    ("on: [issue_comment,\n", False),
+    ("on: {pull_request: {},\n", False),
 ])
 def test_a_review_action_runs_on_changes_from_the_shared_reader(on: str, credited: bool) -> None:
     assert runs_on_changes(on + _JOB) is credited

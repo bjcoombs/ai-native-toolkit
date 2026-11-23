@@ -30,7 +30,8 @@ match is listed with ``tracked: false`` and does not set ``present``. A
 ``REVIEW_EVENTS`` trigger (``pull_request``, ``pull_request_target``,
 ``merge_group``); one wired only to ``issue_comment`` or ``issues`` is listed
 with ``on_changes: false``. A workflow whose ``on:`` the shared ``on`` reader
-(``ci_triggers.workflow_events``, #1036) cannot read is credited. A GitLab include is credited as committed: the jobs it brings live
+(``ci_triggers.workflow_events``, #1036) cannot read is credited, except an unclosed
+flow collection (``ci_triggers.unclosed_on``), which GitHub rejects. A GitLab include is credited as committed: the jobs it brings live
 in the included file, so whether they run in merge-request pipelines is not read
 (a known limit). Includes inside a GitLab template the run resolved offline
 (``lib/ci_includes.py``, #766: a ``local:`` file, or a ``project:`` /
@@ -109,6 +110,7 @@ from pathlib import Path
 from typing import Any, Literal, NotRequired, TypeGuard, TypedDict
 
 from lib.ci_includes import resolve_includes
+from lib.ci_triggers import unclosed_on
 from lib.merged_ci import MergedCi, as_merged
 from lib.fleet_config import FleetConfig
 from lib.git_churn import is_tracked, tracked_files
@@ -240,7 +242,10 @@ def _match(kind: ReviewKind, source: str, pinned: str | None, configured: Sequen
 
 def runs_on_changes(text: str) -> bool:
     """A workflow that triggers on proposed changes (``REVIEW_EVENTS``); one whose ``on:``
-    cannot be read is credited, as a GitLab include is."""
+    cannot be read is credited, as a GitLab include is, unless it is an unclosed flow
+    collection GitHub rejects (#1036)."""
+    if unclosed_on(text):
+        return False
     events = workflow_events(text)
     return events is None or bool(events & REVIEW_EVENTS)
 

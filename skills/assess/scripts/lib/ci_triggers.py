@@ -8,7 +8,8 @@ parser), and classifies each CI line as ``ordinary``, ``not_ordinary`` or
 
 GitHub Actions, per workflow file, from its top-level ``on`` key (``"on"`` and
 the YAML 1.1 ``true`` spelling included), as a scalar, a flow list or mapping
-(one that runs onto later lines is joined; one that never closes is unread), or a
+(one that runs onto later lines is joined; one that never closes is unread, and
+``unclosed_on`` reports it so a caller that credits an unread ``on`` does not), or a
 block list or mapping (a block list may sit at the ``on`` key's own column, ``on:``
 then ``- push``, as YAML allows for a sequence under a mapping key). It is the one
 ``on`` reader: ``shared_tooling.workflow_events`` calls it too (#1036).
@@ -136,6 +137,18 @@ def _joined_flow(inline: str, rest: list[str]) -> str | None:
             return None
         text += " " + strip_comment(line).strip()
     return text
+
+
+def unclosed_on(text: str) -> bool:
+    """True when the top-level ``on`` opens a flow collection that never closes
+    (``on: [issue_comment,`` then the jobs): GitHub rejects the file, so it never runs."""
+    lines = text.splitlines()
+    for i, raw in enumerate(lines):
+        match = _ON.match(raw)
+        if match is not None:
+            inline = strip_comment(match.group(1))
+            return bool(inline) and _joined_flow(inline, lines[i + 1:]) is None
+    return False
 
 
 def workflow_events(text: str) -> list[str] | None:
