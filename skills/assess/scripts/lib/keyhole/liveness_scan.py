@@ -13,7 +13,7 @@ the report: static reachability proves "nothing in *this* repo calls it", never
 **Observability tier (the decisive one), scored by three rungs:**
   1. **Instrumented** -- telemetry is emitted (OpenTelemetry, Prometheus,
      Datadog/APM, structured logging, or a standard-library logger in use in
-     production source; ``lib.instrumentation_scan`` records which kind matched).
+     production source; ``lib.keyhole.instrumentation_scan`` records which kind matched).
      Necessary, not sufficient.
   2. **Discoverable** -- an ``OBSERVABILITY.md`` / runbook tells the agent where
      runtime truth lives. Orients, but grants no access. Docs under a test or
@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from lib.doc_graph import EXCLUDE_DIRS, EXCLUDE_PATH_SEQUENCES, is_excluded_path
-from lib.instrumentation_scan import InstrumentationKind, detect_instrumented
+from lib.keyhole.instrumentation_scan import InstrumentationKind, detect_instrumented
 from lib.path_classes import path_class
 from lib.run_context_types import (
     DeadCodeBlock,
@@ -572,7 +572,7 @@ class ObservabilityRung(TypedDict):
 
 
 class InstrumentedRung(ObservabilityRung):
-    """Rung 1, plus the kinds of evidence found (``lib.instrumentation_scan``, #823)."""
+    """Rung 1, plus the kinds of evidence found (``lib.keyhole.instrumentation_scan``, #823)."""
 
     kinds: list[InstrumentationKind]
 

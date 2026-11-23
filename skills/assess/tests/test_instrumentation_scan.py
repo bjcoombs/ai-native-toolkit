@@ -1,12 +1,12 @@
-"""Tests for lib/instrumentation_scan.py: observability rung 1 from manifests, code and config (#823)."""
+"""Tests for lib/keyhole/instrumentation_scan.py: observability rung 1 from manifests, code and config (#823)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-import lib.instrumentation_scan as inst
-from lib.instrumentation_scan import detect_instrumented
+import lib.keyhole.instrumentation_scan as inst
+from lib.keyhole.instrumentation_scan import detect_instrumented
 from lib.keyhole.liveness_scan import scan_observability
 
 

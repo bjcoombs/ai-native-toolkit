@@ -16,7 +16,7 @@ Layer 1 liveness inputs, three tiers:
 - Observability tier: scores three rungs - instrumented (telemetry emitted), discoverable
   (runbook present), reachable (agent has an invokable path to runtime state). The
   reachability rung decides the Layer 1 score. Rung 1 comes from
-  `instrumentation_scan.py` (#823): a telemetry dependency in a manifest, matched as a
+  `keyhole/instrumentation_scan.py` (#823): a telemetry dependency in a manifest, matched as a
   whole name; a standard-library logger or logging facade in use in production source;
   or a committed collector config. `instrumented.kinds` records which of `dependency`,
   `code` and `config` matched. Only production source counts (`path_classes.py`), and a
