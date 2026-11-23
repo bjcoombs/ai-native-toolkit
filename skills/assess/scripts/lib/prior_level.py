@@ -31,7 +31,9 @@ holds the pruning ledger's removals beside it (``PruningEntry``, ``load_pruning`
 hold count survives a fresh clone too; a malformed ledger is dropped the same way.
 
 Every value is a tag token, a condition id, a reason code, a version token, a count, a
-commit sha (``baseline.head_sha``), a run id token or a gate id, so the file and the run context's ``prior_level`` name no path, repository or person.
+commit sha (``baseline.head_sha``, ``pruning[].completed_sha``), a run id token, a gate id or,
+in ``pruning[].path``, the repository-relative path of an instruction file the ledger tracks
+(hashed in counts-only output); no repository or person is named.
 Tests: ``tests/test_prior_level.py``.
 """
 from __future__ import annotations

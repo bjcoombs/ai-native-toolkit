@@ -134,3 +134,10 @@ def test_unknown_done_removals_leave_the_ledger_as_it_was() -> None:
     assert (after, credited) == (pending, [])
     later, credited = _run(after, _placement(False, 170), head="c3")
     assert credited and later[0]["credited"]
+
+
+def test_unflagged_by_share_alone_saves_nothing_and_is_not_held() -> None:
+    """Review of #1134: no drop in always-on lines, no hold and no "saved 0" credit."""
+    entries, _ = _run([], _placement(False, 312), head="c1")
+    entries, credited = _run(entries, _placement(False, 312), head="c2")
+    assert (entries[0]["runs_held"], credited) == (0, [])

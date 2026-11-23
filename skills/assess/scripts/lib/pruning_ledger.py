@@ -8,8 +8,9 @@ value}``) and a ``completed_sha`` on HEAD's history. ``update_ledger`` keeps one
 - an entry records the Step gates it must keep when it is first seen (``gates``: those held at
   the previous run, before the removal landed, else those held now);
 - a run on a **new** measured commit adds one hold when the file is no longer flagged (the
-  scan's own flag, ``instruction_placement`` ``flagged``: a file can clear it by size or by
-  share) **and** every one of the entry's ``gates`` is still held, so a gate the removal broke
+  scan's own flag, ``instruction_placement`` ``flagged``) **with** fewer always-on lines than
+  at the proposal (a file can clear the flag by share alone, saving nothing) **and** every one
+  of the entry's ``gates`` is still held, so a gate the removal broke
   for good never stops counting against it;
 - either failing resets the count to 0, even when the other reads unknown; an unknown alone
   (placement unavailable, a file the scan does not list while it is still on disk, the gates
@@ -92,7 +93,8 @@ def update_ledger(prior: Sequence[PruningEntry], done_removals: Iterable[Pruning
         if e["gates"] is None:
             e["gates"] = held_before if held_before is not None else held_now
         now = _placement_now(placement, e["path"], repo_root)
-        flagged = now is not None and now[0]
+        # unflagged by share alone (more fetch-on-need text, the same always-on lines) saves nothing
+        flagged = now is not None and (now[0] or now[1] >= e["cost_before"])
         gate_lost = held_now is not None and e["gates"] is not None and any(g not in held_now for g in e["gates"])
         if flagged or gate_lost:  # a known failure resets, even beside an unknown
             e["runs_held"] = 0
