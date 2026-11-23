@@ -548,7 +548,7 @@ _MEASURE_HINTS = {
                  "external_ci_marker`): for `external_ci_marker`, a run with `--platform` "
                  "reads the checks on merged pull requests instead. "
                  "A scan stored before `enforced_check_runs` existed has no such key: re-run "
-                 "the scan to measure it. `lint_runs` (Layer 3) is unknown for the same "
+                 "the scan to measure it. `lint_runs` (the linters practice) is unknown for the same "
                  "reasons, and when no CI line calls a linter but one runs a check target "
                  "or script that may (`lint_basis: check_target`: `make check`, `npm test`, "
                  "`tox`, `pre-commit run`): the scan does not read recipes, so call the "

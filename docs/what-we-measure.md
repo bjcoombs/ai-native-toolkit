@@ -189,15 +189,15 @@ The rows the conditions come from. A row's level is the highest level whose cond
 
 | Row | Title | Scope | Aggregated by | Levels |
 |---|---|---|---|---|
-| `layer-0-instructions` | Layer 0: agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
-| `layer-1-liveness` | Layer 1: runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
-| `layer-2-design` | Layer 2: code design (module structure) | team | `min` | `layer-2-design.1`, `layer-2-design.2` |
-| `layer-3-linters` | Layer 3: linters run in CI, suppression cap | team | `min` | `layer-3-linters.1`, `layer-3-linters.2` |
-| `layer-4-architecture` | Layer 4: architecture boundaries and size | team | `min` | `layer-4-architecture.1`, `layer-4-architecture.2` |
-| `layer-5-ci` | Layer 5: CI and the agent's local check | team | `min` | `layer-5-ci.1`, `layer-5-ci.2` |
-| `layer-6-coverage` | Layer 6: coverage gates and truth pressure | team | `min` | `layer-6-coverage.1`, `layer-6-coverage.2` |
-| `layer-7-review` | Layer 7: review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
-| `layer-8-agent-ops` | Layer 8: AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
+| `layer-0-instructions` | Agent instructions | team | `min` | `layer-0-instructions.1`, `layer-0-instructions.2` |
+| `layer-1-liveness` | Runtime legibility | team | `min` | `layer-1-liveness.1`, `layer-1-liveness.2` |
+| `layer-2-design` | Code design (module structure) | team | `min` | `layer-2-design.1`, `layer-2-design.2` |
+| `layer-3-linters` | Linters run in CI, suppression cap | team | `min` | `layer-3-linters.1`, `layer-3-linters.2` |
+| `layer-4-architecture` | Architecture boundaries and size | team | `min` | `layer-4-architecture.1`, `layer-4-architecture.2` |
+| `layer-5-ci` | CI and the agent's local check | team | `min` | `layer-5-ci.1`, `layer-5-ci.2` |
+| `layer-6-coverage` | Coverage gates and truth pressure | team | `min` | `layer-6-coverage.1`, `layer-6-coverage.2` |
+| `layer-7-review` | Review on merged pull requests | team | `min` | `layer-7-review.1`, `layer-7-review.2` |
+| `layer-8-agent-ops` | AI project management | team | `min` | `layer-8-agent-ops.1`, `layer-8-agent-ops.2` |
 | `doc-freshness` | Documentation freshness | team | `min` | `doc-freshness.1`, `doc-freshness.2` |
 | `guardrails-stated` | Guardrails stated | team | `min` | `guardrails-stated.1`, `guardrails-stated.2` |
 | `agent-consistency` | Cross-agent instruction consistency | team | `min` | `agent-consistency.1`, `agent-consistency.2` |
@@ -300,9 +300,9 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 - Evidence: `coverage_gate.enforced_meets_minimum` ci_executed (verified).
 - Not measured when:
   - `go_rust_gate_form_not_read`: The repository holds a go.mod or Cargo.toml with no coverage gate found for it, and no gate of at least 50 percent for another language (a low Python gate beside go.mod is not unmet): its gate may be a script comparing go tool cover (or a report) to a number, which this scan does not read. Nothing to change if a script gates coverage. To have it measured, set the threshold in go-test-coverage's .testcoverage.yml, cargo tarpaulin --fail-under or cargo llvm-cov --fail-under-lines.
-  - `codecov_target_not_read`: The only coverage gate that could reach 50 percent is a Codecov project status whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare. To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.
-  - `codecov_patch_only`: The only coverage gate that could reach 50 percent is a Codecov patch status. It bounds coverage of the changed lines only, and removing a test changes none, so it says nothing about the floor on total coverage. To have Layer 6 measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs), or add a numeric target to a Codecov project status.
-  - `status_check_unconfirmed`: The coverage gate of at least 50 percent is a Codecov status target, which no CI line runs: Codecov posts it as a commit status, and it holds a merge only when branch protection requires it, which this scan does not read. Nothing to change if the Codecov status is a required check. To have Layer 6 measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).
+  - `codecov_target_not_read`: The only coverage gate that could reach 50 percent is a Codecov project status whose target is auto, missing (Codecov's default is auto) or not a number, so the floor it holds is the base commit's coverage, not a number this scan can compare. To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs). A numeric Codecov target (target: 80%) makes the threshold readable, but whether branch protection requires the status is not read.
+  - `codecov_patch_only`: The only coverage gate that could reach 50 percent is a Codecov patch status. It bounds coverage of the changed lines only, and removing a test changes none, so it says nothing about the floor on total coverage. To have the coverage gate measured, run a coverage threshold of at least 50 percent in a CI step (pytest --cov --cov-fail-under=80, or a fail_under your CI runs), or add a numeric target to a Codecov project status.
+  - `status_check_unconfirmed`: The coverage gate of at least 50 percent is a Codecov status target, which no CI line runs: Codecov posts it as a commit status, and it holds a merge only when branch protection requires it, which this scan does not read. Nothing to change if the Codecov status is a required check. To have the coverage gate measured, also run the threshold in a CI step (pytest --cov --cov-fail-under=80).
   - `root_coverage_config_unresolved`: A scoped run found a fail_under in the root coverage.py config for a Python package with none of its own, but not where CI runs coverage: coverage.py reads the config of the directory it runs in, so the root floor governs the package only when CI runs coverage from the root or names that config. Run coverage in CI from the repository root (pytest --cov, coverage report), or pass the root config with --cov-config or --rcfile; or give the package its own fail_under and run coverage from its directory or with --cov-config naming that config.
 
 Why the signals named here matter:
@@ -383,7 +383,7 @@ Committed hooks, env blocks and MCP servers run in every agent session, headless
 
 It reads what an agent needs to work like CI does: the check command its instructions name, the committed setup and a lockfile for each dependency manifest.
 
-Committed agent setup, the check command an instruction file names, lockfiles per manifest and the Layer 5 cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).
+Committed agent setup, the check command an instruction file names, lockfiles per manifest and the CI cap; the CI-duration probe is off in headless runs. A manifest row's note is skipped_library (a library whose ecosystem commits no lock: listed, not counted in manifests_total or unlocked_total) or direct_pins_only (a Gradle version catalog or NuGet central package management with no lock: unlocked).
 
 - Collector: `core.agent_environment`, reading `repo_root`, `instruction_files`, `agent_harness`, `excludes`.
 - Network: yes, GitHub or GitLab.

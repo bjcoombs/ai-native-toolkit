@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, headline, run_context_headline
+from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
 from lib.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -395,3 +395,10 @@ def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
     assert head["lines"][3].startswith("By tag: ") and head["tags"]
     for cell in head["tags"]:
         assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][3]
+
+
+def test_gate_change_is_public_and_words_a_gate_like_the_next_line():
+    """The Step ladder imports it (#1104, #1099): the caption and the Next line agree."""
+    blocker = {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"}
+    assert gate_change(blocker) == "a coverage gate is enforced"
+    assert headline(_level(), default_model())["lines"][1].endswith(gate_change(blocker))
