@@ -217,6 +217,36 @@ def test_a_symlinked_clone_outside_the_root_is_not_read(tmp_path: Path) -> None:
     assert scan_ci_checks(app, root)["includes"][0]["status"] == "not_cloned"
 
 
+def test_a_differently_cased_project_path_reads_the_clone_on_every_os(tmp_path: Path) -> None:
+    # GitLab project paths are case-insensitive; the ghsync clone keeps the case it was cloned
+    # with. The match ignores case on a case-sensitive filesystem too (#859).
+    ci = "include:\n  - project: Grp/CI-Templates\n    file: /templates/test.yml\n    ref: main\n"
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
+    block = scan_ci_checks(app, root)
+    assert block["includes"] == [{"kind": "project", "id": "gitlab_project:grp/ci-templates",
+                                  "status": "resolved", "ref_basis": "ref", "depth": 1}]
+    assert block["test_or_lint_configured"] is True
+    # The clone is named with its on-disk case, so the walk sees the same path on every OS.
+    assert ci_includes._clone(root, "Grp/CI-Templates") == _clone(root, "grp/ci-templates").resolve()
+
+
+def test_a_different_project_path_still_does_not_match(tmp_path: Path) -> None:
+    ci = "include:\n  - project: Grp/CI-Template\n    file: /templates/test.yml\n"
+    root, app = _root_with_template(tmp_path, {"templates/test.yml": TEST_TPL}, ci=ci)
+    assert scan_ci_checks(app, root)["includes"][0]["status"] == "not_cloned"
+
+
+def test_two_clones_differing_only_in_case_are_ambiguous(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    (root / "grp").mkdir(parents=True)
+    if (root / "GRP").exists():
+        pytest.skip("case-insensitive filesystem holds one of the two")
+    for name in ("Tpl", "tpl"):
+        _commit(_clone(root, f"grp/{name}"), {"t.yml": TEST_TPL})
+    assert ci_includes._clone(root, "grp/Tpl") == _clone(root, "grp/Tpl").resolve()
+    assert ci_includes._clone(root, "grp/TPL") is None
+
+
 def test_an_unparsed_include_section_stays_unknown(tmp_path: Path) -> None:
     app = tmp_path / "app"
     _commit(app, {".gitlab-ci.yml": "include:\n  - !reference [x]\n"})

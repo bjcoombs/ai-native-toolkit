@@ -15,7 +15,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from conftest import skip_without_posix_shell
+from assess_test_support import skip_without_posix_shell
 
 import lib.fleet.fleet_platform as fleet_platform
 from lib.fleet.runner import (

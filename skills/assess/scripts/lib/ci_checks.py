@@ -59,6 +59,7 @@ evidence is static, read from the files at HEAD:
   tests skipped and only lifecycle phases (``mvn -DskipTests verify``), or a Gradle run
   with ``test`` excluded and no other test task (``./gradlew check -x test``, #1046), reads
   as a target it cannot settle (``check_target``, in ``basis`` too: null), never credit.
+  ``./gradlew build`` is a check where a JVM or Android plugin is applied, else null (#1124).
   A Gradle dry run (``./gradlew -qm check``, ``--dry-run``, ``--task-graph``) runs nothing,
   for Layer 5 and Layer 3 alike, and ``pdm run`` / ``poe`` are read through to the program
   or script they run (``lib.runner_args``).

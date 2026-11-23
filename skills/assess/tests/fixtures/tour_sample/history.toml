@@ -1,0 +1,30 @@
+# The sample repository's git history, replayed by scripts/assess_tour.py with these
+# fixed dates and one fixed author, so every build has the same commits (same SHAs) and
+# the same report. Each commit adds the listed paths from repo/ as they stand.
+
+author = "Sam Sample <sam@example.com>"
+
+[[commits]]
+date = "2026-09-01T10:00:00+00:00"
+message = "Add the ledger and its tests"
+paths = [".gitignore", "README.md", "pyproject.toml", "src/tally/__init__.py", "src/tally/ledger.py", "tests/test_ledger.py"]
+
+[[commits]]
+date = "2026-09-08T10:00:00+00:00"
+message = "Add the per-category report and the command line"
+paths = ["src/tally/report.py", "src/tally/__main__.py", "tests/test_report.py"]
+
+[[commits]]
+date = "2026-09-15T10:00:00+00:00"
+message = "Run the tests in CI"
+paths = [".github/workflows/ci.yml"]
+
+[[commits]]
+date = "2026-09-22T10:00:00+00:00"
+message = "Add agent instructions"
+paths = ["AGENTS.md"]
+
+# The tour's one fix: fix.patch, committed with this date and message.
+[fix]
+date = "2026-09-29T10:00:00+00:00"
+message = "Let CI fail when the tests fail"

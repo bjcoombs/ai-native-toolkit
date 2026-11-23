@@ -78,7 +78,10 @@ CODEOWNERS catch-all owners), `units` (`{view, unit}` per view it sits in), and 
 one cell per `team` row: `status`, `level`, `top_level` and the criterion behind it. Below the top level, `signal` and `value` are the first unmet criterion of the
 next level and its measured value; at the top level both are `null`; an unknown cell
 names the signal that could not be read and `reason` (`unavailable`, `type_mismatch`, or
-`not_scanned` for a failed repository). `step`, `next_step` and `tally` are the
+`not_scanned` for a failed repository). `why` is the check manifest's why for that
+criterion at its level, the same text as the condition's `why` in `level.json`, or `null`
+when there is no `signal` or the maturity model is a caller's own (#1128); it is the
+toolkit's text, so counts-only output keeps it. `step`, `next_step` and `tally` are the
 repository's [`level.json`](level.md) entry for the same commit (`null` when failed or
 without `--levels`), and `exclusions` lists the conditions the owner excluded in its
 `.assess/config.toml` (#910): `id`, `kind`, `source` and `reason`, listed and never
@@ -165,7 +168,7 @@ order), and no insight names a person.
 |-----|-------|
 | `measured` | Repositories scanned `ok`. |
 | `in_place` | Per `team` row: `row`, `at_top` (measured repositories already at its top level) and `measured`. The report opens the section with it. |
-| `biggest_lift` | The single next-level criterion whose completion would lift the most repositories: `row`, `level` (the level they would reach), `signal`, `repo_count`, `repos` (sorted keys), `gate` and `step` (the Step gate this condition is, else `null`), `change` and `done_when` (the same wording as the team pages), and `text`. A repository counts only when its row level is known and that criterion is the one unmet criterion of its next level; an unknown never counts. Ties go to maturity-model row order, then level. `null` when no single change lifts a measured repository. |
+| `biggest_lift` | The single next-level criterion whose completion would lift the most repositories: `row`, `level` (the level they would reach), `signal`, `repo_count`, `repos` (sorted keys), `gate` and `step` (the Step gate this condition is, else `null`), `change` and `done_when` (the same wording as the team pages), `why` (the check manifest's why for the criterion, `null` when none), and `text`. A repository counts only when its row level is known and that criterion is the one unmet criterion of its next level; an unknown never counts. Ties go to maturity-model row order, then level. `null` when no single change lifts a measured repository. |
 | `shared_templates` | One entry per shared CI source (a `shared_tooling.ci_source_ids` id at least 2 repositories include) and row level it would unlock: `source` (the id, such as `gitlab_project:grp/ci-templates`), `kind`, `includers`, `row`, `level`, `signal`, `repo_count`, `repos` and `text`. Its `repos` are the including repositories whose one unmet next-level criterion reads a `ci_checks.` signal: what the template would lift if it ran tests or another enforced check. Sorted by `source`, then row order. |
 
 Privacy follows the keys: `repos` and `source` are in clear in counts-only output (shared

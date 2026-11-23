@@ -83,6 +83,7 @@ regen:
 	cd skills/assess && uv run --locked python tests/fleet_data_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_diagrams_fixture.py
 	cd skills/assess && uv run --locked python tests/fleet_tag_profile_fixture.py
+	cd skills/assess && uv run --locked python tests/fleet_tag_heatmap_fixture.py
 	cd skills/assess && uv run --locked python tests/assess_diagrams_fixture.py
 	cd skills/assess && uv run --locked python tests/assess_diagrams_review_fixture.py
 	cd skills/assess && uv run --locked python tests/assess_diagrams_tags_fixture.py

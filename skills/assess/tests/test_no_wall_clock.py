@@ -89,20 +89,69 @@ def _own_nodes(scope: ast.AST) -> Iterator[ast.AST]:
             stack.extend(ast.iter_child_nodes(node))
 
 
+def _aliases(tree: ast.AST) -> dict[str, str]:
+    """Each name an import binds to the dotted name it stands for: ``import time as t``
+    binds ``t`` to ``time``, ``from time import time_ns as tn`` binds ``tn`` to
+    ``time.time_ns`` (#861). An import anywhere in the module counts, so an alias
+    bound inside a function is still resolved."""
+    bound: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bound[alias.asname] = alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            for alias in node.names:
+                bound[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return bound
+
+
+def _resolved(dotted: str, bound: dict[str, str]) -> str:
+    head, dot, rest = dotted.partition(".")
+    return bound.get(head, head) + dot + rest
+
+
+def _clock_calls(tree: ast.AST) -> dict[str, list[int]]:
+    """``function -> [line, ...]`` of every wall-clock call in one module."""
+    bound = _aliases(tree)
+    found: dict[str, list[int]] = {}
+    for name, scope in _functions(tree):
+        for node in _own_nodes(scope):
+            if not isinstance(node, ast.Call):
+                continue
+            dotted = _dotted(node.func)
+            full = _resolved(dotted, bound)
+            if any(d.endswith(_CLOCK_SUFFIXES) or d in _CLOCK_NAMES for d in (dotted, full)):
+                found.setdefault(name, []).append(node.lineno)
+    return found
+
+
 def _clock_reads() -> dict[tuple[str, str], list[int]]:
     """``(path, function) -> [line, ...]`` of every wall-clock call under scripts/."""
     found: dict[tuple[str, str], list[int]] = {}
     for path in _sources():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         rel = path.relative_to(SCRIPTS_DIR).as_posix()
-        for name, scope in _functions(tree):
-            for node in _own_nodes(scope):
-                if not isinstance(node, ast.Call):
-                    continue
-                dotted = _dotted(node.func)
-                if dotted.endswith(_CLOCK_SUFFIXES) or dotted in _CLOCK_NAMES:
-                    found.setdefault((rel, name), []).append(node.lineno)
+        for name, lines in _clock_calls(tree).items():
+            found[(rel, name)] = lines
     return found
+
+
+@pytest.mark.parametrize("source", [
+    "import time\ndef f():\n    return time.time()",
+    "from time import time\ndef f():\n    return time()",
+    "from time import time_ns\ndef f():\n    return time_ns()",
+    "from time import time as clock\ndef f():\n    return clock()",
+    "import time as t\ndef f():\n    return t.time_ns()",
+    "import datetime as dt\ndef f():\n    return dt.datetime.now()",
+    "from datetime import date as D\ndef f():\n    return D.today()",
+])
+def test_the_clock_guard_sees_an_aliased_or_bare_read(source: str) -> None:
+    assert _clock_calls(ast.parse(source)) == {"f": [3]}
+
+
+def test_the_clock_guard_ignores_a_local_function_named_like_a_clock() -> None:
+    assert _clock_calls(ast.parse("def time():\n    return 0\ndef f():\n    return time()")) == {}
 
 
 def test_no_signal_producer_reads_the_wall_clock() -> None:

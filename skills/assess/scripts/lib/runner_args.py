@@ -8,7 +8,8 @@ Gradle:
 
 - ``gradle_tasks(args)``: ``(tasks run, tasks excluded)``. A run task is named by its last
   path part (``:app:check`` is ``check``); an option's value is no task (``-p sub``,
-  ``-P key``). A word after ``-x`` / ``--exclude-task`` (or its ``=`` form) is excluded: a
+  ``-P key``, ``--warning-mode all``: every value-taking option in Gradle 9.4's ``--help``,
+  plus ``-b``, ``-c`` and the ``--tests`` filter, #1124). A word after ``-x`` / ``--exclude-task`` (or its ``=`` form) is excluded: a
   bare or root name (``test``, ``:test``) excludes the task in every project and is kept
   bare, a project path (``:app:test``) only in that project and is kept whole.
 - ``gradle_dry_run(args)``: ``-m`` (alone or in a short cluster such as ``-qm``),
@@ -21,6 +22,16 @@ Gradle:
   test task named (``check -x test`` still runs ``check``'s other tasks, never the tests):
   ``lib.ci_lines`` reads it as ``command_flags.maven_skips_tests`` (#799), a target it
   cannot settle. ``runs_no_task(words)``: a Gradle dry run or ``make_runs_no_recipe``.
+- ``gradle_build_verdict(words)`` (#1124): ``build`` depends on ``check``, which runs the
+  tests with a JVM or Android plugin. True where ``gradle_tests_in_check`` read such a
+  plugin applied in a tracked ``*.gradle[.kts]`` (under ``reads_pdm_scripts``), else None;
+  False for a dry run or ``-x check``.
+- ``gradle_task_paths(args)`` keeps each run task's project path, and
+  ``gradle_runs_in(args, names, build_file)`` (#1126) matches it to a build file's
+  directory under the Gradle root, the nearest tracked ``settings.gradle[.kts]`` at or above
+  the ``-p`` start or the gate (``:app:x`` is ``android/app/build.gradle`` beside
+  ``android/settings.gradle``; ``:x`` the root build file): True on a match or an
+  unqualified task, None on a mismatch, a root-file gate or ``-b`` / ``-c``.
 
 Script runners (``script_run(words)``): what ``hatch run``, ``pdm [run]`` and ``poe`` run,
 as ``(words, is_script)``, or None for another command (``pdm install``):
@@ -40,11 +51,13 @@ a scan whose first argument is the repository root: ``ci_checks.scan_ci_checks``
 where they classify the coverage gate's runs). Outside one (an instruction file) they are not read,
 and ``pdm X`` is read as a script by name. Inward-only imports: stdlib,
 ``lib.command_flags`` and ``lib.command_index``; never ``lib.check_command`` or an orchestrator.
-Tests: ``tests/test_runner_args.py``.
+Tests: ``tests/test_runner_args.py``, ``tests/test_gradle_tasks.py``.
 """
 from __future__ import annotations
 
 import functools
+import posixpath
+import re
 import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
@@ -58,13 +71,27 @@ from lib.command_index import read_config, repo_files
 GRADLE = frozenset({"gradle", "gradlew"})
 _GRADLE_DRY_RUN = frozenset({"--dry-run", "--task-graph"})
 # Gradle short options that take a value: the rest of a cluster after one is that value.
-_GRADLE_VALUE_SHORTS = frozenset("bcDgIPpx")
+_GRADLE_VALUE_SHORTS = frozenset("bcDFgIMPpx")
 _GRADLE_EXCLUDE = ("-x", "--exclude-task")
-# Gradle options that take the next word as their value (``-p sub``, ``-P key``).
+# Gradle options that take the next word as their value (``-p sub``, ``--warning-mode all``):
+# every one in Gradle 9.4's ``--help``, ``-b`` / ``-c`` (gone from 9.x, still in older
+# wrappers) and the ``test`` task's ``--tests`` (#1124).
 _GRADLE_VALUED = frozenset({
     "-p", "--project-dir", "-b", "--build-file", "-c", "--settings-file", "-I",
-    "--init-script", "-g", "--gradle-user-home", "--include-build", "-D", "-P",
+    "--init-script", "-g", "--gradle-user-home", "--include-build", "-D", "--system-prop",
+    "-P", "--project-prop", "-F", "--dependency-verification", "-M",
+    "--write-verification-metadata", "--console", "--console-unicode", "--warning-mode",
+    "--max-workers", "--priority", "--project-cache-dir", "--configuration-cache-problems",
+    "--update-locks", "--tests",
 })
+# Options that replace the build or settings file, so a project path is not read against
+# the checkout's own layout (``-c other/settings.gradle :app:check``).
+_GRADLE_LAYOUT = frozenset({"-b", "-c", "--build-file", "--settings-file"})
+_GRADLE_BUILD_FILES = frozenset({"build.gradle", "build.gradle.kts"})
+_GRADLE_SETTINGS = frozenset({"settings.gradle", "settings.gradle.kts"})
+# The directories of the tracked settings files (each a Gradle root), set by
+# ``gradle_roots_set`` (from the coverage gate's ``CiRuns.gradle_roots``); None outside one.
+_GRADLE_ROOTS: ContextVar[frozenset[str] | None] = ContextVar("gradle_roots", default=None)
 
 
 def is_gradle(words: Sequence[str]) -> bool:
@@ -74,6 +101,16 @@ def is_gradle(words: Sequence[str]) -> bool:
 
 def gradle_tasks(args: Sequence[str]) -> tuple[list[str], set[str]]:
     """``(tasks run, tasks excluded)`` of a Gradle command's arguments (module docstring)."""
+    paths, excluded = _gradle_words(args)
+    return [word.rsplit(":", 1)[-1] for word in paths], excluded
+
+
+def gradle_task_paths(args: Sequence[str]) -> list[str]:
+    """The tasks a Gradle command runs as written, project path kept (``:app:check``)."""
+    return _gradle_words(args)[0]
+
+
+def _gradle_words(args: Sequence[str]) -> tuple[list[str], set[str]]:
     tasks: list[str] = []
     excluded: set[str] = set()
     skip: str | None = None
@@ -89,8 +126,82 @@ def gradle_tasks(args: Sequence[str]) -> tuple[list[str], set[str]]:
         elif word.startswith("-"):
             skip = "v" if word in _GRADLE_VALUED else None
         elif not word.startswith("$"):
-            tasks.append(word.rsplit(":", 1)[-1])
+            tasks.append(word)
     return tasks, excluded
+
+
+def gradle_project(task: str) -> str | None:
+    """The project directory a run task names in Gradle's default layout: None for an
+    unqualified task (every project), ``""`` for ``:task`` (the root project only), ``a/b``
+    for ``:a:b:task`` or ``a:b:task`` (relative to the root, Gradle 9.4)."""
+    if ":" not in task:
+        return None
+    return "/".join(part for part in task.split(":")[:-1] if part)
+
+
+def gradle_runs_in(args: Sequence[str], names: frozenset[str],
+                   build_file: str | None) -> bool | None:
+    """Does a run task named in ``names`` run in ``build_file``'s project (#1126)? True for
+    an unqualified one (every project) or a project path naming ``build_file``'s directory
+    (``_in_project``); None when only a path to another or unmatched project names one (a
+    ``settings.gradle`` ``projectDir`` can move a project, a root build file can configure
+    subprojects, ``-b`` / ``-c`` replace the layout); False when none is named.
+    ``build_file`` None: any named task."""
+    start, replaced = _gradle_start(args)
+    named = False
+    for task in gradle_task_paths(args):
+        if task.rsplit(":", 1)[-1] not in names:
+            continue
+        project = gradle_project(task)
+        if project is None or build_file is None:
+            return True
+        if (not replaced and posixpath.basename(build_file) in _GRADLE_BUILD_FILES
+                and _in_project(project, posixpath.dirname(build_file), start)):
+            return True
+        named = True
+    return None if named else False
+
+
+def _gradle_start(args: Sequence[str]) -> tuple[str | None, bool]:
+    """``(the -p / --project-dir directory, normalised, or None, whether the layout is
+    unread)``: ``-b`` / ``-c``, or a ``-p`` value that is a shell expansion."""
+    start: str | None = None
+    replaced = False
+    words = iter(args)
+    for word in words:
+        head, eq, value = word.partition("=") if word.startswith("--") else (word[:2], "", word[2:])
+        if head in _GRADLE_LAYOUT:
+            replaced = True
+        elif head in ("-p", "--project-dir"):
+            value = value if eq or value else next(words, "")
+            replaced = replaced or not value or value.startswith(("$", "/", "~"))
+            start = posixpath.normpath(value) if value else None
+            start = "" if start == "." else start
+    return start, replaced
+
+
+def _in_project(project: str, gate_dir: str, start: str | None) -> bool:
+    """``:a:b`` is ``a/b`` under the Gradle root: the nearest directory holding a tracked
+    ``settings.gradle[.kts]`` at or above the start (``-p``), else above the gate's own
+    directory (a CI line's ``cd`` is not resolved, so the gate's build is taken as the one
+    run: ``cd android && ./gradlew :app:x`` is ``android/app``). With no root read, the
+    gate's directory is ``project`` or ends with ``/project``."""
+    roots = _GRADLE_ROOTS.get()
+    base = gate_dir if start is None else start
+    root = None if roots is None else _nearest(base, roots)
+    if root is None:
+        want = "/".join(p for p in (start, project) if p)
+        return gate_dir == want or gate_dir.endswith("/" + want)
+    return gate_dir == "/".join(p for p in (root, project) if p)
+
+
+def _nearest(directory: str, roots: frozenset[str]) -> str | None:
+    """``directory`` or its nearest parent in ``roots`` (``""`` is the repository root)."""
+    while directory not in roots:
+        if not directory:
+            return None
+        directory = posixpath.dirname(directory)
+    return directory
 
 
 def _excluded_name(task: str) -> str:
@@ -159,6 +270,59 @@ def gradle_skips_tests(words: Sequence[str]) -> bool:
     tasks, excluded = gradle_tasks(words[1:])
     return (any(e.rsplit(":", 1)[-1] == "test" for e in excluded)
             and not any("test" in t.lower() for t in tasks if t not in excluded))
+
+
+# A plugin whose ``check`` runs the tests, applied (not ``apply false``) in a Gradle build
+# file: ``plugins { id 'java' }``, ``apply plugin: 'java'``, ``kotlin("jvm")``, a bare
+# ``java`` / ``application`` line in a Kotlin DSL ``plugins {}`` block, or Android's.
+_JVM_PLUGIN_IDS = (r"java|java-library|application|groovy|scala|java-gradle-plugin|kotlin"
+                   r"|kotlin-android|org\.jetbrains\.kotlin\.(?:jvm|android)"
+                   r"|com\.android\.(?:application|library|dynamic-feature)")
+_JVM_PLUGIN_RE = re.compile(
+    rf"""^.*?(?:\bapply\s*\(?\s*plugin\s*[:=]\s*|\bid\s*\(?\s*)["'](?:{_JVM_PLUGIN_IDS})["']"""
+    r"""(?!.*\bapply\s*\(?\s*false)"""
+    r"""|^.*?\bkotlin\s*\(\s*["'](?:jvm|android)["']\s*\)(?!.*\bapply\s*\(?\s*false)"""
+    r"""|^\s*(?:java|`java-library`|application|groovy|scala|`java-gradle-plugin`)\s*$""",
+    re.M)
+_GRADLE_COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\"'])//[^\n]*", re.S)
+_GRADLE_TESTS_IN_CHECK: ContextVar[bool] = ContextVar("gradle_tests_in_check", default=False)
+
+
+def gradle_tests_in_check(root: Path) -> bool:
+    """A tracked ``*.gradle`` / ``*.gradle.kts`` file applies a plugin whose ``check`` runs
+    the tests (``_JVM_PLUGIN_RE``). False is unknown, never "no tests": a version-catalog
+    alias or a convention plugin applies one this does not read."""
+    return any(_JVM_PLUGIN_RE.search(_GRADLE_COMMENT_RE.sub("", read_config(root, rel)))
+               for rel in sorted(repo_files(root)) if rel.endswith((".gradle", ".gradle.kts")))
+
+
+def gradle_roots(root: Path) -> frozenset[str]:
+    """The directories of the tracked ``settings.gradle[.kts]`` files (``""``: the root)."""
+    return frozenset(posixpath.dirname(rel) for rel in repo_files(root)
+                     if posixpath.basename(rel) in _GRADLE_SETTINGS)
+
+
+@contextmanager
+def gradle_roots_set(roots: frozenset[str] | None) -> Iterator[None]:
+    """Give ``gradle_runs_in`` these Gradle roots (None: not read) inside the block."""
+    token = _GRADLE_ROOTS.set(roots)
+    try:
+        yield
+    finally:
+        _GRADLE_ROOTS.reset(token)
+
+
+def gradle_build_verdict(words: Sequence[str]) -> bool | None:
+    """Does ``./gradlew build`` run the tests (#1124)? ``build`` depends on ``check`` (the
+    base plugin, Gradle 9.4), which runs ``test`` with a JVM or Android plugin: True when
+    ``gradle_tests_in_check`` read one, None when it did not or ``check`` is excluded in one
+    project only, False for another command, a dry run, no ``build`` task or ``-x check``."""
+    if not is_gradle(words) or gradle_dry_run(words[1:]):
+        return False
+    tasks, excluded = gradle_tasks(words[1:])
+    if "build" not in tasks or {"build", "check"} & excluded:
+        return False
+    return None if partly_excluded(excluded, "check") else (_GRADLE_TESTS_IN_CHECK.get() or None)
 
 
 # --- Python script runners ----------------------------------------------------------
@@ -254,12 +418,17 @@ R = TypeVar("R")
 
 
 def reads_pdm_scripts(scan: Callable[P, R]) -> Callable[P, R]:
-    """Run ``scan`` (first argument: the repository root) with its pdm scripts read."""
+    """Run ``scan`` (first argument: the repository root) with its pdm scripts and
+    ``gradle_tests_in_check`` read."""
     @functools.wraps(scan)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         root = args[0] if args else kwargs.get("repo_root")
         if not isinstance(root, (Path, str)):
             return scan(*args, **kwargs)
-        with pdm_scripts_of(Path(root)):
-            return scan(*args, **kwargs)
+        token = _GRADLE_TESTS_IN_CHECK.set(gradle_tests_in_check(Path(root)))
+        try:
+            with pdm_scripts_of(Path(root)):
+                return scan(*args, **kwargs)
+        finally:
+            _GRADLE_TESTS_IN_CHECK.reset(token)
     return wrapper

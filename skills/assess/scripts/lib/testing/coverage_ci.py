@@ -28,7 +28,8 @@ How a gate is run, by where it is written:
   threshold). Jest: ``jest --coverage``, or ``jest`` with ``collectCoverage:
   true`` committed; Vitest: ``vitest --coverage``; nyc/c8: the program; JaCoCo:
   ``mvn verify`` / ``install`` / ``deploy`` / ``jacoco:check``, Gradle's
-  ``jacocoTestCoverageVerification``; go-test-coverage: the program or its
+  ``jacocoTestCoverageVerification`` (by project path, ``:app:...``, only in that
+  project's build file, else ``indirect_run``, #1126); go-test-coverage: the program or its
   action. A threshold flag in a pytest config section (``[pytest]``,
   ``[tool:pytest]``, ``[tool.pytest.ini_options]``) is ``addopts``, run by any
   ``pytest`` line with pytest-cov on (``--cov`` there or in ``addopts``); a ``tox.ini`` ``[testenv]`` ``commands`` line is a task command.
@@ -161,8 +162,8 @@ from lib.command_index import CI_CONFIG_FILES, ci_config_files, ci_line_text, re
 from lib.unread_ci import unread_ci_paths
 from lib.command_resolver import command_words, extract_commands
 from lib.runner_args import (
-    GRADLE, SCRIPT, gradle_dry_run, gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts,
-    pdm_scripts_set, script_run)
+    GRADLE, SCRIPT, gradle_dry_run, gradle_roots, gradle_roots_set, gradle_runs_in,
+    gradle_tasks as gradle_tasks, partly_excluded, pdm_scripts, pdm_scripts_set, script_run)
 from lib.shared_tooling import pulls_jobs_from_elsewhere
 
 EnforcedBasis = Literal[
@@ -215,6 +216,7 @@ class CiRuns:
     elsewhere: bool
     unread: bool
     pdm_scripts: frozenset[str] | None = None   # runner_args.pdm_scripts (#1046)
+    gradle_roots: frozenset[str] | None = None   # runner_args.gradle_roots (#1126)
 
 
 # Nothing read: the CI is not read when no threshold of at least 50 percent is set.
@@ -325,7 +327,8 @@ def read_ci_runs(repo_root: Path) -> CiRuns:
         for span, line_text in _command_groups(lines, unmasked, unsure, 1):
             runs.extend(Run(rel, span, words, command, triggers[span[0]], True)
                         for words, command in _word_lists(line_text) if words)
-    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread, pdm_scripts(root))
+    return CiRuns(tuple(runs), frozenset(files), elsewhere, unread, pdm_scripts(root),
+                  gradle_roots(root))
 
 
 def _size(path: Path) -> int:
@@ -491,12 +494,13 @@ def pytest_on(args: Sequence[str], on: bool, off: bool,
 def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
               jest_collects: bool = False, gradle_check: bool = False,
               pytest_off: bool = False, activation: Activation = Activation(),
-              pytest_maybe: bool = False) -> bool | None:
+              pytest_maybe: bool = False, gate_file: str | None = None) -> bool | None:
     """Does this command run ``family``'s coverage check? The tool must be the program
     the command runs (``program``), never an argument. None: it runs the tool, but
     whether coverage is on is set elsewhere (a Jest or Vitest config), or a Gradle task
     may run the verification (``build`` / ``check`` are met when the build file wires
-    ``check`` to ``jacocoTestCoverageVerification``, ``gradle_check``)."""
+    ``check`` to ``jacocoTestCoverageVerification``, ``gradle_check``). A Gradle task
+    named by project path (``:app:check``) credits only ``gate_file``'s project (#1126)."""
     if is_info_invocation(" ".join(words)):   # pytest --version runs no gate (#919)
         return False
     name, args = program(words)
@@ -525,12 +529,13 @@ def runs_tool(words: tuple[str, ...], family: str, *, pytest_cov: bool = False,
     if family == "gradle-jacoco":
         if name not in GRADLE or gradle_skips_verification(words):
             return False   # #954: a dry run, or -x jacocoTestCoverageVerification
-        tasks, excluded = gradle_tasks(args)
+        _, excluded = gradle_tasks(args)
         # A project-path exclusion may or may not be the gate's project: unsure, never false.
         partly = any(partly_excluded(excluded, t) for t in (_VERIFY, "test", "check"))
-        if _VERIFY in tasks:
+        if gradle_runs_in(args, frozenset({_VERIFY}), gate_file):
             return None if partly else True
-        if gradle_check and {"build", "check"} & set(tasks) and "check" not in excluded:
+        if (gradle_check and gradle_runs_in(args, frozenset({"build", "check"}), gate_file)
+                and "check" not in excluded):
             return None if partly else True
         return None
     if family == "go-test-coverage":
@@ -595,7 +600,7 @@ def gate_run(gate: Gate, ci: CiRuns, line_gates: LineGates,
         off = covers(activation.pytest_off, file)
         maybe = below(activation.pytest_cov, file)
         found = _merge([_tool_state(run, family, pytest_cov, jest_collects,
-                                    activation.gradle_check, off, activation, maybe)
+                                    activation.gradle_check, off, activation, maybe, file)
                         for run in ci.runs] + [_indirect(ci, family)])
     if found is False and ci.elsewhere:
         return "included_jobs"
@@ -650,10 +655,11 @@ def _activates(gate: Gate, words: tuple[str, ...], on: bool, off: bool,
 
 def _tool_state(run: Run, family: str, pytest_cov: bool, jest_collects: bool,
                 gradle_check: bool = False, pytest_off: bool = False,
-                activation: Activation = Activation(), maybe: bool = False) -> bool | None | str:
+                activation: Activation = Activation(), maybe: bool = False,
+                gate_file: str | None = None) -> bool | None | str:
     state = runs_tool(run.words, family, pytest_cov=pytest_cov, jest_collects=jest_collects,
                       gradle_check=gradle_check, pytest_off=pytest_off, activation=activation,
-                      pytest_maybe=maybe)
+                      pytest_maybe=maybe, gate_file=gate_file)
     if state is False or run.trigger == "not_ordinary":
         return False
     if run.trigger == "unknown":
@@ -716,7 +722,7 @@ def enforced_meets_minimum(
         unfloored = is_patch(gate) or (gate["tool"] == "codecov" and percent is None)
         if not counted(gate) or unfloored or (isinstance(percent, (int, float)) and percent < minimum):
             continue
-        with pdm_scripts_set(ci.pdm_scripts):   # a pytest script shadows pytest (#1046)
+        with pdm_scripts_set(ci.pdm_scripts), gradle_roots_set(ci.gradle_roots):   # #1046, #1126
             state = gate_run(gate, ci, line_gates, activation)
         if state is True and percent is not None:
             return True, "ci_run"

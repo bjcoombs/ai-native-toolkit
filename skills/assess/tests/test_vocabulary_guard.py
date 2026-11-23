@@ -25,6 +25,7 @@ import fleet_trends_fixture
 from assess_report import render_report
 import lib.keyhole.keyhole_signals as ks
 from lib.level_signals import DEFAULT_LEVELS
+from lib.run_context_types import KeyholeConcern
 from lib.vocabulary import BANNED_WORDS, IN_PLACE, RETIRED_LABELS, banned_hits, opening_lines, prose
 from test_decomposition_parity import _build_parity_fixture
 from test_fleet_cli import fleet_cli, froot  # noqa: F401 - froot is a fixture
@@ -83,8 +84,8 @@ def outputs(fleet_out: Path, tmp_path_factory: pytest.TempPathFactory) -> dict[s
     rendered["assess report"] = render_report(build_and_publish_run(repo_root=repo, run_date="2026-01-01"), "r")
     every = ks.assemble_findings({name: ["src/a.py"] for name in ks.FINDING_ORDER})
     rendered["assess findings"] = ks.render_findings_markdown(every, [])
-    concerns = [{"name": name, "count": 1} for name in ks.FINDING_ORDER]
-    rendered["assess keyhole summary"] = ks._format_summary(concerns, 2)  # type: ignore[arg-type]
+    concerns: list[KeyholeConcern] = [{"name": name, "count": 1} for name in ks.FINDING_ORDER]
+    rendered["assess keyhole summary"] = ks._format_summary(concerns, 2)
     return rendered
 
 

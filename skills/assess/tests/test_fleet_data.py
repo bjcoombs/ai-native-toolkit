@@ -74,7 +74,7 @@ def test_repo_cells_explain_the_level() -> None:
     repos = {r["key"]: r for r in build(fd.Privacy(full=True))["repos"]}
     proj2 = {c["row"]: c for c in repos["grp/sub/proj2"]["rows"]}
     assert proj2["docs"] == {"row": "docs", "status": "level", "level": 1, "top_level": 2,
-                             "signal": "docs.grade", "value": "C", "reason": None}
+                             "signal": "docs.grade", "value": "C", "reason": None, "why": None}
     assert proj2["ci"]["value"] is False and proj2["ci"]["signal"] == "ci.required"
     proj1 = {c["row"]: c for c in repos["grp/sub/proj1"]["rows"]}
     assert proj1["docs"]["signal"] is None and proj1["docs"]["level"] == 2  # top level: nothing holds it back

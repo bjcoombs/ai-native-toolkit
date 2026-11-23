@@ -59,12 +59,15 @@ set -euo pipefail
 # ===================================================================
 
 # Under Git Bash on Windows a native jq.exe writes CRLF line endings, and every
-# name read back from it would end in a carriage return. --binary keeps LF
-# (jq 1.6 on Linux and macOS rejects the flag, so it is set only here).
+# name read back from it would end in a carriage return. --binary keeps LF.
+# A POSIX jq 1.6 (Linux, macOS, or an MSYS2 or Cygwin package) rejects the
+# flag, so the wrapper is defined only on Windows and only when jq accepts it.
 case "${OSTYPE:-}" in
     msys* | cygwin*)
-        jq() { command jq --binary "$@"; }
-        export -f jq
+        if command jq --binary -n 'empty' >/dev/null 2>&1; then
+            jq() { command jq --binary "$@"; }
+            export -f jq
+        fi
         ;;
 esac
 

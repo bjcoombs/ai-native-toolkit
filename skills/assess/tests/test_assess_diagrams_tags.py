@@ -117,8 +117,7 @@ def test_marks_are_dots_on_one_linear_scale_with_no_filled_area() -> None:
     xs = {tag: float(re.search(r'<circle cx="([\d.]+)"[^>]*data-mark="dot"', _row(svg, tag)).group(1))  # type: ignore[union-attr]
           for tag in ("behaviour", "structure", "agent_context")}
     zero, full = xs["structure"], xs["agent_context"]
-    # not pytest.approx: it calls into numpy, which test_complexity_treemap stubs (#831)
-    assert abs(xs["behaviour"] - (zero + (full - zero) * 2 / 3)) <= 0.1
+    assert xs["behaviour"] == pytest.approx(zero + (full - zero) * 2 / 3, abs=0.1)
 
 
 def test_hover_text_is_each_tag_why() -> None:

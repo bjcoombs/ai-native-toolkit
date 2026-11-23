@@ -9,12 +9,21 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 from lib.complexity.diff_reliability import compute_diff_reliability
 from lib.docs.doc_complexity_join import _extract_file_ccn, analyze_doc_complexity_join
 from lib.run_context_types import ScoredHotspotRow
 from lib.complexity.stats_rows import file_ccn_rows, strip_score, top_lists
-from test_complexity_treemap import _load_treemap
+from test_complexity_treemap import stubbed_treemap
+
+
+@pytest.fixture(scope="module")
+def treemap():
+    with stubbed_treemap() as mod:
+        yield mod
 
 
 def _row(path: str, ccn: float, loc: int, score: float) -> ScoredHotspotRow:
@@ -43,14 +52,13 @@ def test_top_lists_cap_at_ten_and_strip_score() -> None:
     assert strip_score([]) == []
 
 
-def _write_repo_stats(tmp_path: Path) -> dict:
+def _write_repo_stats(treemap: ModuleType, tmp_path: Path) -> dict:
     """Write real stats for 12 big complex files plus one small complex file.
 
     The small one (CCN 15, few lines) falls outside top_complex (ten files with
     CCN 20+ outrank it), top_large and top_hotspots, and 300 trivial files keep
     p95 under the MIN_HIGH_CCN floor of 10.
     """
-    treemap = _load_treemap()
     root = tmp_path
     files: list[tuple[Path, int, float, str]] = []
     for i in range(12):
@@ -64,9 +72,9 @@ def _write_repo_stats(tmp_path: Path) -> dict:
     return json.loads(out.read_text(encoding="utf-8"))
 
 
-def test_write_stats_files_key_reaches_the_join(tmp_path: Path) -> None:
-    stats = _write_repo_stats(tmp_path)
-    assert stats["schema_version"] == _load_treemap().STATS_SCHEMA_VERSION == 8
+def test_write_stats_files_key_reaches_the_join(treemap: ModuleType, tmp_path: Path) -> None:
+    stats = _write_repo_stats(treemap, tmp_path)
+    assert stats["schema_version"] == treemap.STATS_SCHEMA_VERSION == 8
     assert len(stats["files"]) == stats["files_scored"] == 313
     top_paths = {r["path"] for k in ("top_complex", "top_large", "top_hotspots")
                  for r in stats[k]}
@@ -76,9 +84,9 @@ def test_write_stats_files_key_reaches_the_join(tmp_path: Path) -> None:
     assert ccn["pkg/small.py"] == 15.0
 
 
-def test_complex_file_outside_top_lists_yields_lying_map(tmp_path: Path) -> None:
+def test_complex_file_outside_top_lists_yields_lying_map(treemap: ModuleType, tmp_path: Path) -> None:
     """A stale doc over a complex file no top-10 list holds is a lying map."""
-    stats = _write_repo_stats(tmp_path)
+    stats = _write_repo_stats(treemap, tmp_path)
     staleness = {"available": True, "docs": [{
         "path": "pkg/README.md", "ratio": 4.0, "confidence": "high",
         "subject_method": "nearest-ancestor", "subject_roots": ["pkg"],

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import skip_without_posix_shell
+from assess_test_support import skip_without_posix_shell
 
 import lib.hosting.gitlab_ci_lint as gitlab_ci_lint
 from lib.ci_checks import scan_ci_checks

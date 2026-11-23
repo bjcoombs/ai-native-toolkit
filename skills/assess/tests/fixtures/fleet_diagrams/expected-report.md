@@ -10,6 +10,14 @@ Which truth tags hold across the estate, and how far apart are the repositories 
 
 [![Practices in place by truth tag, across the fleet](./tag-profile.svg)](./tag-profile.svg)
 
+## Truth tags by repository
+
+In place: 0 repository and tag pairs measured, over 15 repositories.
+
+Which tags have the most room to grow across the estate, and on which repositories?
+
+[![Truth tags by repository](./tag-heatmap.svg)](./tag-heatmap.svg)
+
 ## Activity and maturity
 
 In place: 14 repositories with a measured level, 9 of them at or above half the top level.

@@ -15,7 +15,6 @@ identity, so commits resolve an author/committer with no global config.
 from __future__ import annotations
 
 import datetime as _dt
-import importlib
 import os
 import shutil
 import subprocess
@@ -25,6 +24,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from assess_test_support import (
+    WINDOWS_SKIP_MARKERS,
+    leaked_stand_ins,
+    pin_fleet_run_date,
+    stand_in_snapshot,
+)
 
 # Applied at import time so it is in effect before any module/session-scoped
 # fixture creates a repo. See the module docstring for the why.
@@ -36,17 +41,6 @@ os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 # the real ~/.local/share.
 _XDG_DATA_HOME = tempfile.mkdtemp(prefix="assess-tests-xdg-")
 os.environ["XDG_DATA_HOME"] = _XDG_DATA_HOME
-
-
-# Windows skip markers (#713). The windows-latest job runs this suite; a test
-# that needs POSIX-only machinery carries one of these markers and is skipped
-# there with the marker's reason, so the skip list reads as a category, not a
-# scatter of ad-hoc skipif lines. Anything else that fails on Windows is a bug.
-WINDOWS_SKIP_MARKERS = {
-    "needs_symlink": "symlink creation is not reliable on Windows",
-    "needs_posix_perms": "chmod/getuid permission semantics are POSIX-only",
-    "needs_posix_shell": "runs a #!/bin/sh stub or sh -c, which Windows cannot execute",
-}
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -105,16 +99,6 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
     """Skip a ``cpu_budget`` test inside a pytest-xdist worker (see above)."""
     if os.environ.get("PYTEST_XDIST_WORKER") and item.get_closest_marker("cpu_budget"):
         pytest.skip(CPU_BUDGET_SKIP)
-
-
-def skip_without_posix_shell() -> None:
-    """Call first in a fixture that puts a ``#!/bin/sh`` stub (fake gh/glab) on PATH.
-
-    The fixture-level form of ``needs_posix_shell``: Windows cannot execute the
-    stub, so every test using the fixture skips with the same reason.
-    """
-    if sys.platform == "win32":
-        pytest.skip(f"Windows: {WINDOWS_SKIP_MARKERS['needs_posix_shell']}")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -241,34 +225,6 @@ def dated_git_repo(tmp_path: Path) -> Path:
     return build_dated_repo(tmp_path / "dated")
 
 
-def pin_fleet_run_date(monkeypatch: pytest.MonkeyPatch, cli: object) -> _dt.date:
-    """Pin ``cli.utc_today`` (``skills/fleet/scripts/fleet.py``) to the date it reads now."""
-    day: _dt.date = cli.utc_today()  # type: ignore[attr-defined]
-    monkeypatch.setattr(cli, "utc_today", lambda: day)
-    return day
-
-
-def use_real_lizard(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Put the installed lizard in ``sys.modules`` until ``monkeypatch`` undoes it.
-
-    The undo restores what stood there before: the empty stub, or no entry at all. An
-    installed lizard already in place is left alone.
-
-    The treemap loaders (``test_complexity_treemap._load_treemap``, ``test_scope``) leave
-    an empty ``lizard`` module in ``sys.modules`` for the rest of the worker process, and
-    other files depend on that stub persisting. ``lib.headless_layers.lizard_analyzer``
-    reads a stub as "lizard not installed", so a headless ``stats_summary`` built after
-    one of those files reads ``no_lizard``. Which files share an xdist worker depends on
-    timing, which made #1117 look load-dependent.
-    """
-    module = sys.modules.get("lizard")
-    if module is not None and hasattr(module, "analyze_file"):
-        return
-    monkeypatch.setitem(sys.modules, "lizard", module)  # records the stub, or no entry
-    del sys.modules["lizard"]
-    importlib.import_module("lizard")
-
-
 @pytest.fixture(autouse=True)
 def _one_fleet_run_date(monkeypatch: pytest.MonkeyPatch) -> None:
     """#1029: every in-process fleet run in one test stamps the same ``scan_date``, so a
@@ -277,3 +233,19 @@ def _one_fleet_run_date(monkeypatch: pytest.MonkeyPatch) -> None:
     cli = sys.modules.get("fleet_cli")
     if cli is not None:
         pin_fleet_run_date(monkeypatch, cli)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _no_leaked_dependency_stand_ins() -> Iterator[None]:
+    """#831: a test module leaves ``sys.modules`` without the stand-ins it installed.
+
+    Module-scoped and autouse, so it is set up before, and torn down after, any
+    module-scoped fixture that loads a CLI wrapper with stand-ins. Install them
+    with ``assess_test_support.stub_heavy_deps(monkeypatch)``.
+    """
+    before = stand_in_snapshot()
+    yield
+    leaked = leaked_stand_ins(before, stand_in_snapshot())
+    if leaked:
+        pytest.fail(f"this test module left stand-in modules in sys.modules: {', '.join(leaked)}. "
+                    "Install them with assess_test_support.stub_heavy_deps(monkeypatch) (#831).")

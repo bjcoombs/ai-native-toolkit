@@ -23,7 +23,8 @@ from pathlib import PurePosixPath
 
 from lib.command_flags import SHELLS, make_args, shell_args, shell_string
 from lib.command_resolver import RUNNERS, command_words
-from lib.runner_args import SCRIPT, gradle_run, runs_no_task, script_run
+from lib.runner_args import (
+    SCRIPT, gradle_build_verdict, gradle_run, gradle_tasks, is_gradle, runs_no_task, script_run)
 from lib.lint_vocabulary import (
     ANALYSER_PROGRAMS, ecosystem_lint, formatter_mode, program_name, runs_no_analysis)
 
@@ -131,7 +132,9 @@ def _check_target(words: list[str], names: frozenset[str] | None = None,
         return args is not None and bool(args) and is_check_name(PurePosixPath(args[0]).name, names)
     if head.startswith("./") and head not in RUNNERS:
         return is_check_name(PurePosixPath(head).name, names)
-    # make, just, go, cargo, mvn, gradle: the first target or goal names the work. A shell
+    if is_gradle(words):   # Gradle runs every task named; an option's value is none (#1124)
+        return any(is_check_name(t, names) for t in gradle_tasks(words[1:])[0])
+    # make, just, go, cargo, mvn: the first target or goal names the work. A shell
     # expansion (``mvn ${MVN_ARGS} verify``) is not read as one: it is unknown, the next word
     # is the goal (#799).
     goals = [w for w in pos if not w.startswith("$")]
@@ -666,7 +669,7 @@ def _toolchain_test(words: list[str]) -> bool | None:
     head, pos = words[0], _positionals(words[1:])
     name = PurePosixPath(head).name
     if name in _GRADLE:   # ./gradlew testDebugUnitTest, :app:testReleaseUnitTest
-        tasks = [t.rsplit(":", 1)[-1] for t in pos]
+        tasks = gradle_tasks(words[1:])[0]   # --warning-mode all test (#1124)
         return any(_GRADLE_TEST.match(t) and not t.endswith("Classes") for t in tasks)
     if head == "php":   # php artisan test, php vendor/bin/phpunit
         return pos[:2] == ["artisan", "test"] or (
@@ -681,6 +684,7 @@ def _toolchain_test(words: list[str]) -> bool | None:
 
 def _check_verdict(words: list[str]) -> bool | None:
     """Whether a command runs a check: True, False, or None for a target whose recipe is not read."""
+    build = gradle_build_verdict(words)   # build runs check: by the plugin applied (#1124)
     words = gradle_run(words)   # ./gradlew check -x check, test -x test: no task runs (#1046)
     head = words[0]
     if runs_no_task(words):   # make -n test, make -i test, gradle -qm check: no recipe can fail
@@ -709,7 +713,7 @@ def _check_verdict(words: list[str]) -> bool | None:
         return _target_verdict(_positionals(words[1:])[1:2])
     toolchain = _toolchain_test(words)
     if toolchain is not None:
-        return toolchain
+        return toolchain or build
     if head in TARGET_RUNNERS:
         if _RUNNER_INFO_FLAGS.intersection(words):   # make --version, task --list, rake -T
             return False
