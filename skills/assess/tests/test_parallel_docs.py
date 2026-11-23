@@ -129,3 +129,14 @@ def test_docs_dir_is_never_a_parent_name_key() -> None:
     index = ParallelIndex(["docs/conf.py", "docs/hooks.py", "src/auth/a.py"])
     assert index.match("docs/tutorial.md") is None
     assert index.match("docs/auth.md") == ParallelMatch("src/auth", "stem:only-match")
+
+
+def test_generated_or_vendored_file_under_a_test_tree_is_not_a_candidate() -> None:
+    """`path_class` reads generated and vendored before test, so the test tree
+    is checked on its own: `tests/models/client.generated.ts` adds no candidate."""
+    index = ParallelIndex(["tests/models/client.generated.ts",
+                           "tests/fixtures/vendor/models/m.py", "src/pkg/models/bar.py"])
+    assert index.match("docs/api/models/cohere.md") == ParallelMatch(
+        "src/pkg/models", "parent-name:only-match")
+    index = ParallelIndex(["tests/models/client.generated.ts"])
+    assert index.match("docs/api/models/cohere.md") is None

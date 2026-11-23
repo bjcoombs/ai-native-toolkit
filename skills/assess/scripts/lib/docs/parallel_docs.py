@@ -7,8 +7,10 @@ like it. ``ParallelIndex`` indexes the discovered code once per run and
 1. **Never test or fixture code.** A candidate is a code file or the directory that
    directly holds one, and only when ``lib.path_classes.path_class`` does not
    read it as ``test`` or ``fixture`` (``tests/models/``,
-   ``tests/fixtures/models/``). A doc whose name matches only test code has no
-   parallel match, so it falls through to its explicit links or the baseline.
+   ``tests/fixtures/models/``), nor a generated or vendored file under a test
+   or fixture directory (``tests/models/client.generated.ts``). A doc whose
+   name matches only test code has no parallel match, so it falls through to
+   its explicit links or the baseline.
    Example, vendored and generated code stay eligible (a page about an example
    maps to it), so this is not ``is_production``.
 2. **Stem before parent name.** The doc's stem (``cohere`` for
@@ -40,7 +42,8 @@ from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
-from lib.path_classes import path_class
+from lib.path_classes import FIXTURE_DIRS, TEST_DIRS, path_class
+from lib.testing.sibling_tests import is_test_path
 
 # Classes a doc never maps to: test code and the data it reads.
 NON_SUBJECT_CLASSES = frozenset({"test", "fixture"})
@@ -74,6 +77,13 @@ class _Candidate(NamedTuple):
     parts: tuple[str, ...]  # lowercased; a file's last part is its stem
 
 
+def _non_subject(rel: str, parts: tuple[str, ...]) -> bool:
+    """True for test or fixture code, including a generated or vendored file
+    under a test tree (``path_class`` reads those classes first)."""
+    return (path_class(rel) in NON_SUBJECT_CLASSES or is_test_path(rel)
+            or any(p in TEST_DIRS or p in FIXTURE_DIRS for p in parts[:-1]))
+
+
 def _suffix_len(a: tuple[str, ...], b: tuple[str, ...]) -> int:
     n = 0
     while n < min(len(a), len(b)) and a[-1 - n] == b[-1 - n]:
@@ -89,10 +99,10 @@ class ParallelIndex:
         self._dirs: dict[str, list[_Candidate]] = {}
         seen_dirs: set[str] = set()
         for rel in sorted(set(code_rels)):
-            if path_class(rel) in NON_SUBJECT_CLASSES:
-                continue
             path = PurePosixPath(rel)
             parts = tuple(p.lower() for p in path.parts)
+            if _non_subject(rel, parts):
+                continue
             stem = path.stem.lower()
             self._files.setdefault(stem, []).append(_Candidate(rel, (*parts[:-1], stem)))
             parent = path.parent.as_posix()
