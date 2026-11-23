@@ -10,7 +10,7 @@ one page per group, with no rescan:
   Each step leads with the change and a "done when" in the repository's own
   terms (``lib/next_step_guidance.py``); the signal expression follows as the
   optional re-run check. Between the two, a "Why:" line gives the check manifest's why
-  for that criterion at its level (``lib.level_tally.criterion_why``, #1128); a criterion
+  for that criterion at its level (``lib.fleet.fleet_why.criterion_why``, #1128); a criterion
   with no manifest entry (a caller's own model) gets no Why line, never an empty one. A team row names the repositories holding the group
   back, each with its current value; an org row names the settings scope it
   applies to;
@@ -83,7 +83,7 @@ from lib.counts_only.counts_only_rules import TOKEN_RE
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import (GroupRow, full_run_only_signals, platform_signals, repo_signals, settings_for,
                               settings_signals)
-from lib.level_tally import criterion_why
+from lib.fleet.fleet_why import criterion_why
 from lib.next_step_guidance import guidance, measure_hint
 from lib.next_step_guidance import parts as unmet_parts_of
 from lib.levels import Criterion, CriterionOutcome, Evaluation, Row, RowResult, MaturityModel, evaluate, floor_of
@@ -266,7 +266,7 @@ def _team_steps(row: Row, result: RowResult, target: int, failed: Mapping[str, s
             for name, o in hits)
         union = sorted({p for found_parts in found.values() for p in found_parts})
         lines += _step(number, criterion, [f"   - Holding the group back ({len(hits)}): {listed}."], union,
-                       criterion_why(row["id"], level, criterion["signal"]))
+                       criterion_why(row, level, criterion["signal"]))
     unmeasured = [name for name in below if name not in blocking]
     if unmeasured and report_unmeasured:
         parts = []
@@ -292,7 +292,7 @@ def _org_steps(row: Row, result: RowResult, target: int, scope: str | None, repo
             continue
         number += 1
         lines += _step(number, criterion, [f"   - Now: {scalar(outcome['actual'])}.", where],
-                       why=criterion_why(row["id"], level, criterion["signal"]))
+                       why=criterion_why(row, level, criterion["signal"]))
     return lines
 
 

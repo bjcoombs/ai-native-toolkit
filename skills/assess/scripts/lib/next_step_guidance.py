@@ -20,7 +20,7 @@ signal can be unavailable and how to get it measured, so an ``unknown`` level
 reads as a measurement gap, not a setback.
 
 The wording is keyed by signal alone. Why a step matters is keyed by the criterion's row
-and level in the check manifest, so the page reads it from ``lib.level_tally.criterion_why``
+and level in the check manifest, so the page reads it from ``lib.fleet.fleet_why.criterion_why``
 (#1128), not from here.
 
 Every signal in the shipped ``levels/default.toml`` has wording here

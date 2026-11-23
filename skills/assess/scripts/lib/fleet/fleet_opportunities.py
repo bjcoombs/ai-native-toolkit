@@ -38,7 +38,7 @@ repository only when its level is known and exactly one criterion, status `unmet
 before its next level (unknown never counts). `biggest_lift` is the (row, level, signal)
 holding the most such repositories (ties: row order, level, signal), worded by
 `next_step_guidance.guidance`, with its Step gate (`[[steps]]`) when it is one and its
-manifest `why` (`level_tally.criterion_why`, #1128; null when the manifest has none).
+manifest `why` (`fleet_why.criterion_why`, #1128; null when the manifest has none).
 `shared_templates`: per `shared_tooling.ci_source_ids` id with at least `MIN_INCLUDERS`
 includers, the includers whose sole unmet criterion reads a `ci_checks.` signal, by row and
 level. Repository keys go through the run's `Privacy.key`; a source id is kept as the scan
@@ -55,7 +55,7 @@ from typing import Any, TypedDict
 from lib.fleet.runner import STATUS_OK, FleetRow
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_maturity import SCOPE
-from lib.level_tally import criterion_why
+from lib.fleet.fleet_why import criterion_why
 from lib.levels import Criterion, MaturityModel, Row, evaluate_row
 from lib.next_step_guidance import guidance
 
@@ -174,7 +174,7 @@ def _biggest_lift(model: MaturityModel, team_rows: Sequence[Row], lifts: Mapping
             "repos": sorted(key(r) for r in repos), "gate": gate, "step": step,
             "change": words["change"] if words else None,
             "done_when": words["done_when"] if words else None,
-            "why": criterion_why(row_id, level, signal), "text": text}
+            "why": criterion_why(row, level, signal), "text": text}
 
 
 def _sources(row: FleetRow) -> dict[str, str]:

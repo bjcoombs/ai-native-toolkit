@@ -48,7 +48,7 @@ per-repository tallies, with the repositories measured; null stats when none is 
   failed repository.
 
 Beside ``signal`` the cell carries ``why`` (#1128): the check manifest's why for that
-criterion at its level (``lib.level_tally.criterion_why``, the text the level result's
+criterion at its level (``lib.fleet.fleet_why.criterion_why``, the text the level result's
 conditions carry), so a fleet view explains a step without reading the checks TOML. Null
 when there is no ``signal`` or the manifest has no entry for it (a caller's own model),
 never invented. It is the toolkit's own text, never a repository's, so counts-only keeps
@@ -122,7 +122,7 @@ from lib.fleet.fleet_data_units import UnitRow, unit_rows
 from lib.fleet.fleet_tag_profile import FleetTagRow, tag_profile
 from lib.fleet.fleet_groups import repo_signals
 from lib.fleet.fleet_level import repo_level
-from lib.level_tally import criterion_why
+from lib.fleet.fleet_why import criterion_why
 from lib.fleet.fleet_maturity import SCOPE
 from lib.fleet.fleet_opportunities import Opportunities, build_opportunities
 from lib.fleet.fleet_stamp import FleetStamp, RepositoryCounts
@@ -305,12 +305,12 @@ def _explain(row: Row, ev: Evaluation) -> tuple[str | None, Value, str | None, s
             return None, None, None, None
         outcome = next((o for o in nxt["unmet"] if o["status"] == "unmet"), nxt["unmet"][0])
         return (outcome["signal"], _scalar(outcome["actual"]), None,
-                criterion_why(row["id"], nxt["level"], outcome["signal"]))
+                criterion_why(row, nxt["level"], outcome["signal"]))
     for level in ev["levels"]:
         for outcome in level["unmet"]:
             if outcome["status"] == "unknown":
                 return (outcome["signal"], None, outcome["reason"] or "unavailable",
-                        criterion_why(row["id"], level["level"], outcome["signal"]))
+                        criterion_why(row, level["level"], outcome["signal"]))
     return None, None, "unavailable", None  # pragma: no cover - unknown always has an unknown criterion
 
 
