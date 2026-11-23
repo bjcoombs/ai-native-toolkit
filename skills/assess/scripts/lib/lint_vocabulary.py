@@ -39,8 +39,8 @@ mode. `formatter_mode(words)` is `check` for a formatter's check mode (`pint --t
 `rewrite` when it rewrites in place, and None otherwise (`clang-format a.cc` and `dart
 format -o none` only print); formatter checks count as lint (maintainer decision 2).
 `subcommand_lint(words)`: `mix credo`, `mix dialyzer` (not `--plt`), `dart analyze`,
-`flutter analyze`, and Gradle tasks (`gradle_tasks` drops the `:project:` prefix and the
-task after `-x`) named `lint*`, `ktlint*Check`, `detekt*`, `spotless*Check` or
+`flutter analyze`, and Gradle tasks (`gradle_tasks` drops the `:project:` prefix, option
+values and the task after `-x`) named `lint*`, `ktlint*Check`, `detekt*`, `spotless*Check` or
 `checkstyle*`, never one that fixes, formats, applies or records a baseline (`lintFix`,
 `ktlintFormat`, `spotlessApply`, `detektBaseline`). `ecosystem_lint(words)` is any of the
 three, with `php <program>` read as the program, and never a run `runs_no_analysis(words)`
