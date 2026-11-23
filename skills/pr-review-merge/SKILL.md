@@ -210,7 +210,7 @@ HEAD_SHA=$(gh pr view $PR --json headRefOid | jq -r .headRefOid)
 gh pr merge $PR --match-head-commit "$HEAD_SHA"   # no strategy flag: the queue's merge method applies
 # GraphQL equivalent (one call, no CLI): enqueuePullRequest(input: {pullRequestId: <node id>, expectedHeadOid: "<sha>"})
 ```
-- **Never pass `--admin`** on a queued branch: it merges directly and skips the queue's group checks, which are the point. `--delete-branch` does not apply either; the repository's "delete head branches" setting removes the branch after the queue merges.
+- **Never pass `--admin`** on a queued branch: a bypass actor of the queue's ruleset merges past the group checks, which are the point, and anyone else is refused. `--delete-branch` does not apply either; the repository's "delete head branches" setting removes the branch after the queue merges.
 - **Do not re-check main plus the PR by hand** before enqueueing; the queue runs that check on every group. A pre-merge review that reads the diff (a hot-file or contract PR, where the caller's configuration asks for one) still happens before enqueueing: the queue tests code, it does not read it.
 - **The merge is asynchronous.** The command returns once the PR is queued. Confirm the outcome later with `gh pr view $PR --json state,mergedAt` (or the `pull_request` closed event). A group that fails removes the PR from the queue with a timeline event naming the failing check; read it, fix on the PR branch, and enqueue again once the required checks are green. A push to a queued PR removes it from the queue too.
 - **Merge order** (below) becomes queue order: enqueue in the order you would have merged, since each PR is tested on top of the ones ahead of it.

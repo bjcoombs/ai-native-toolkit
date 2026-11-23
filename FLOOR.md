@@ -94,7 +94,11 @@ read as a deletion.
 `main` may merge through GitHub's merge queue, which tests a temporary branch
 holding `main` plus the queued pull requests ahead of a pull request plus that
 pull request (a merge group), and merges only when every required check passes
-on it. The floor's behaviour there:
+on it. GitHub documents the queue for organization-owned repositories and this
+one is user-owned, the same limit that descoped the floor.yml path lock, so
+whether a queue can exist here is settled only when its ruleset is created.
+Until one exists, the `merge_group` triggers never fire and nothing below
+applies. The floor's behaviour in a merge group:
 
 - **`floor enforcement` runs on every merge group.** Marker removal is judged
   against the group's base commit, so it covers every pull request in the
@@ -108,9 +112,9 @@ on it. The floor's behaviour there:
   admits only a pull request whose required checks passed on its head, and
   `floor enforcement` on that head is red until the maintainer approves the
   review (clause iii). A push to a queued pull request removes it from the
-  queue, so the approved head is the head that merges. An administrator merge
-  bypasses the queue, not the review: with `enforce_admins` on, branch
-  protection still requires `floor enforcement`.
+  queue, so the approved head is the head that merges. Only a bypass actor of
+  the queue's ruleset can merge past the queue, and with `enforce_admins` on,
+  branch protection still requires `floor enforcement` of that actor too.
 - **A workflow that stops triggering on merge groups fails closed.** Its
   required context never reports on the group, and the queue removes the pull
   request when the check timeout expires; nothing merges.
