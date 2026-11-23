@@ -8,7 +8,8 @@ parser), and classifies each CI line as ``ordinary``, ``not_ordinary`` or
 
 GitHub Actions, per workflow file, from its top-level ``on`` key (``"on"`` and
 the YAML 1.1 ``true`` spelling included), as a scalar, a flow list or mapping
-(one that runs onto later lines is joined; one that never closes is unread, and
+(one that runs onto later lines is joined, with a quoted ``#`` or bracket read as
+scalar content, not a comment or delimiter; one that never closes is unread, and
 ``unclosed_on`` reports it so a caller that credits an unread ``on`` does not), or a
 block list or mapping (a block list may sit at the ``on`` key's own column, ``on:``
 then ``- push``, as YAML allows for a sequence under a mapping key). It is the one
@@ -108,8 +109,10 @@ def _names(text: str) -> list[str]:
         names: list[str] = []
         depth = 0
         word: list[str] = []
-        for ch in text:
-            if ch in "{[":
+        for ch, quoted in _scan(text):
+            if quoted:
+                word.append(ch)
+            elif ch in "{[":
                 depth += 1
                 word = []
             elif ch in "}]":
@@ -126,16 +129,61 @@ def _names(text: str) -> list[str]:
     return [text.strip("'\"")] if text else []
 
 
+def _scan(text: str) -> list[tuple[str, bool]]:
+    """Each character of a flow value with whether it sits inside a quoted scalar. A quote
+    opens a scalar only where one can start (after ``[{,:``, a space or at the start);
+    ``''`` and a backslash escape stay inside it."""
+    out: list[tuple[str, bool]] = []
+    quote = ""
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            out.append((ch, ch != quote))
+            if ch == "\\" and quote == '"' and i + 1 < len(text):
+                out.append((text[i + 1], True))
+                i += 1
+            elif ch == quote == "'" and text[i + 1:i + 2] == "'":
+                out[-1] = (ch, True)
+                out.append(("'", True))
+                i += 1
+            elif ch == quote:
+                quote = ""
+        else:
+            if ch in "\"'" and (i == 0 or text[i - 1].isspace() or text[i - 1] in "[{,:"):
+                quote = ch
+            out.append((ch, False))
+        i += 1
+    return out
+
+
+def _flow_comment(line: str) -> str:
+    """``line`` without a trailing ``# comment``; a ``#`` inside quotes is kept."""
+    for i, (ch, quoted) in enumerate(_scan(line)):
+        if ch == "#" and not quoted and (i == 0 or line[i - 1].isspace()):
+            return line[:i].strip()
+    return line.strip()
+
+
+def _open(text: str) -> bool:
+    """True while a flow collection in ``text`` is still open; quoted brackets do not count."""
+    depth = 0
+    for ch, quoted in _scan(text):
+        if not quoted:
+            depth += (ch in "[{") - (ch in "]}")
+    return depth > 0
+
+
 def _joined_flow(inline: str, rest: list[str]) -> str | None:
     """An inline ``on`` value with a flow collection that runs onto later lines joined
     into one line (``on: [push,`` then ``pull_request]``); None when it never closes."""
     text = inline
     following = iter(rest)
-    while text.count("[") + text.count("{") > text.count("]") + text.count("}"):
+    while _open(text):
         line = next(following, None)
         if line is None:
             return None
-        text += " " + strip_comment(line).strip()
+        text += " " + _flow_comment(line)
     return text
 
 
@@ -146,7 +194,7 @@ def unclosed_on(text: str) -> bool:
     for i, raw in enumerate(lines):
         match = _ON.match(raw)
         if match is not None:
-            inline = strip_comment(match.group(1))
+            inline = _flow_comment(match.group(1))
             return bool(inline) and _joined_flow(inline, lines[i + 1:]) is None
     return False
 
@@ -158,7 +206,7 @@ def workflow_events(text: str) -> list[str] | None:
         match = _ON.match(raw)
         if match is None:
             continue
-        inline = strip_comment(match.group(1))
+        inline = _flow_comment(match.group(1))
         if inline:
             flow = _joined_flow(inline, lines[i + 1:])
             return None if flow is None else _names(flow) or None

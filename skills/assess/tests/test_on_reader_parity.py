@@ -26,6 +26,12 @@ _SHAPES = [
     "on: {\n  issue_comment: {}\n}\n",
     "on: [\n  issue_comment,  # c\n  issues\n]\n",
     "on: [workflow_dispatch,\n  push]\n",
+    # A quoted `#` or bracket is scalar content, not a comment or a delimiter (#1050 review).
+    'on: {pull_request: {branches: ["rel #1"]}}\n',
+    "on: {pull_request: {}, workflow_dispatch: {inputs: {note: {description: '[', type: string}}}}\n",
+    "on: {pull_request: {},\n  workflow_dispatch: {inputs: {note: {description: 'Build #1', type: string}}}}\n",
+    "on: {issue_comment: {types: ['it''s [']}, pull_request: {}}  # c [\n",
+    'on: {issue_comment: {types: ["a \\" ["]}, issues: {}}\n',
     "name: x\n",
 ]
 
@@ -72,6 +78,8 @@ def test_an_unclosed_flow_list_is_not_read() -> None:
     # An unclosed flow list is invalid YAML: unread, but never credit.
     ("on: [issue_comment,\n", False),
     ("on: {pull_request: {},\n", False),
+    ('on: {pull_request: {branches: ["rel #1"]}}\n', True),
+    ("on: {pull_request: {},\n  workflow_dispatch: {inputs: {n: {description: 'Build #1'}}}}\n", True),
 ])
 def test_a_review_action_runs_on_changes_from_the_shared_reader(on: str, credited: bool) -> None:
     assert runs_on_changes(on + _JOB) is credited
