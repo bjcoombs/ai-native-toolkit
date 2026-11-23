@@ -9,16 +9,21 @@ A page is directive-only when it has at least one directive and its other
 content is small: at most ``max(PROSE_LINE_ALLOWANCE, directives)`` prose lines.
 What counts:
 
-- **Directive:** a line ``::: <dotted.identifier>`` outside a code fence. The
-  indented lines right after it (its ``options:`` block) belong to it.
+- **Directive:** a line ``::: <dotted.identifier>`` outside a code fence. An
+  indented ``options:`` line straight after it, and the lines indented deeper
+  than that line (mkdocstrings options are YAML), belong to it. Any other
+  indented line after a directive is prose.
 - **Not prose:** blank lines, ATX headings, a leading YAML frontmatter block,
-  HTML comments, and the lines inside code fences are ignored. A code fence
-  counts as one prose line, since an example is hand-written.
-- **Prose:** every other line, including a bare ``:::`` closer.
+  HTML comments, and the lines inside code fences are ignored. Headings never
+  count as prose, so a page of headings and one directive is directive-only, by
+  design. A code fence counts as one prose line, since an example is hand-written.
+- **Prose:** every other line.
 
 Other ``:::`` syntaxes are not directives: a Docusaurus or VitePress admonition
 (``:::note``, ``::: warning``, a name in ``ADMONITION_NAMES``) and a pandoc
-fenced div with attributes (``::: {.class}``). A hand-written page that embeds
+fenced div with attributes (``::: {.class}``). A bare ``:::`` closer anywhere on
+the page marks div syntax (``::: notes`` ... ``:::``), which mkdocstrings never
+writes, so such a page is never directive-only. A hand-written page that embeds
 one directive among its prose still reads as hand-written, so it stays measured.
 Sphinx autodoc stubs (reST) are out of scope until reST docs are read. The read
 is bounded to ``MAX_BYTES``; a longer page is never directive-only. Tests:
@@ -52,11 +57,16 @@ def _strip_frontmatter(lines: list[str]) -> list[str]:
     return lines
 
 
-def directive_counts(text: str) -> tuple[int, int]:
-    """``(directive lines, prose lines)`` in a markdown page, by the module rules."""
-    directives = prose = 0
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def directive_counts(text: str) -> tuple[int, int, int]:
+    """``(directive lines, prose lines, bare ::: closers)`` in a markdown page."""
+    directives = prose = closers = 0
     fence: str | None = None
-    in_comment = in_options = False
+    in_comment = after_directive = False
+    options_indent: int | None = None
     for line in _strip_frontmatter(text.splitlines()):
         stripped = line.strip()
         if fence is not None:
@@ -66,9 +76,18 @@ def directive_counts(text: str) -> tuple[int, int]:
         if in_comment:
             in_comment = "-->" not in stripped
             continue
-        if in_options and line[:1] in (" ", "\t") and stripped:
+        if options_indent is not None:
+            if not stripped or _indent(line) > options_indent:
+                continue
+            options_indent = None
+        if after_directive and stripped:
+            after_directive = False
+            if _indent(line) > 0 and stripped.startswith("options:"):
+                options_indent = _indent(line)
+                continue
+        if stripped == ":::":
+            closers += 1
             continue
-        in_options = False
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.startswith("<!--"):
@@ -82,10 +101,10 @@ def directive_counts(text: str) -> tuple[int, int]:
         match = _DIRECTIVE.match(line)
         if match and match.group(1).lower() not in ADMONITION_NAMES:
             directives += 1
-            in_options = True
+            after_directive = True
             continue
         prose += 1
-    return directives, prose
+    return directives, prose, closers
 
 
 def is_directive_only(doc: Path) -> bool:
@@ -98,5 +117,6 @@ def is_directive_only(doc: Path) -> bool:
         return False
     if len(raw) > MAX_BYTES:
         return False
-    directives, prose = directive_counts(raw.decode("utf-8", errors="replace"))
-    return directives > 0 and prose <= max(PROSE_LINE_ALLOWANCE, directives)
+    directives, prose, closers = directive_counts(raw.decode("utf-8", errors="replace"))
+    return (directives > 0 and not closers
+            and prose <= max(PROSE_LINE_ALLOWANCE, directives))

@@ -68,8 +68,32 @@ def test_other_pages_are_not_directive_only(tmp_path: Path, text: str) -> None:
 
 
 def test_the_counts_follow_the_rules() -> None:
-    assert directive_counts(STUB) == (1, 1)
-    assert directive_counts(GUIDE) == (1, 5)
+    assert directive_counts(STUB) == (1, 1, 0)
+    assert directive_counts(GUIDE) == (1, 5, 0)
+
+
+def test_only_an_options_block_belongs_to_a_directive() -> None:
+    options = "::: pkg.mod\n    options:\n      show_source: false\n      members:\n        - run\n"
+    assert directive_counts(options) == (1, 0, 0)
+    swallowed = ("::: pkg.mod\n    This module is deprecated; use pkg.v2.\n    It keeps one shim.\n"
+                 "    The shim logs a warning.\n    It goes in 4.0.\n"
+                 "    Never call reset() in production.\n")
+    assert directive_counts(swallowed) == (1, 5, 0)
+    # Indented prose after an options block is prose too.
+    after = options + "  A note under the options.\n"
+    assert directive_counts(after) == (1, 1, 0)
+
+
+@pytest.mark.parametrize("name", ["notes", "columns", "raw"])
+def test_a_one_word_div_with_a_closer_is_not_directive_only(tmp_path: Path, name: str) -> None:
+    _write(tmp_path, "div.md", f"# Div\n\n::: {name}\nText.\n:::\n")
+    assert directive_counts((tmp_path / "div.md").read_text(encoding="utf-8"))[2] == 1
+    assert not is_directive_only(tmp_path / "div.md")
+
+
+def test_a_page_of_headings_and_one_directive_is_directive_only(tmp_path: Path) -> None:
+    _write(tmp_path, "api.md", "# API\n\n## Models\n\n### Cohere\n\n::: pkg.mod\n")
+    assert is_directive_only(tmp_path / "api.md")
 
 
 def test_non_markdown_unreadable_and_oversized_pages_are_not_directive_only(tmp_path: Path) -> None:
