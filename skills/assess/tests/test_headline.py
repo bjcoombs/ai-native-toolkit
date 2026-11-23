@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, gate_change, headline, run_context_headline
+from lib.headline import GATE_CHANGE, GATE_NOUN, GLOSSARY_URL, as_headline, gate_change, headline, run_context_headline
 from lib.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -57,6 +57,17 @@ def test_three_lines_step_next_and_coverage():
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
 
 
+def test_the_markdown_links_measured_and_verified_once_and_the_lines_stay_plain():
+    """#1102: the catalogue coverage line in the markdown links each grade word to the
+    glossary once; ``lines``, the badge summary and the log entry stay plain text."""
+    h = headline(_level(), default_model())
+    coverage, grade = f"{GLOSSARY_URL}#catalogue-coverage", f"{GLOSSARY_URL}#evidence-grade"
+    assert (f"Catalogue coverage: 4 of 6 [measured]({coverage}), 0 [verified]({grade})"
+            " · 3 not measured (needs a full run: 1, no remote: 2) · model m-1") in h["markdown"]
+    assert h["markdown"].count("](") == 2
+    assert all("](" not in line for line in [*h["lines"], h["summary"]])
+
+
 def test_the_summary_and_next_line_carry_no_count():
     """#1083: the badge and log.md summary, and the Next line, name gates and never an "of" count."""
     for lvl in (_level(), _level(step=4, next_step=None), _level(step=1, next_step={"step": 2, "blockers": [
@@ -90,7 +101,7 @@ def test_not_measured_gate_says_so():
     gate = {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1",
             "state": "not_measured", "reason": "needs_platform"}
     h = headline(_level(step=2, next_step={"step": 3, "blockers": [gate]}), default_model())
-    assert h["lines"][1] == ("Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests "
+    assert h["lines"][1] == ("Next: Step 3 · Unattended agent PRs unlocks when CI turns red when a check breaks "
                              "(not measured here: needs GitHub or GitLab access)")
 
 

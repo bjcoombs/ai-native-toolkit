@@ -31,26 +31,36 @@ untouched, so a single-unit repository reads exactly as before.
   units one change of the entry lifts (``lifted`` for ``repo_wide``, at most 1 for
   ``unit``). The ranking is by ``lift_per_change``, then repository-wide first, then
   ``held``, then model gate order, so a repository-wide change that lifts many units leads;
+- ``learn_from`` (#1155): per unit whose first blocking gate is one to make (unmet, not
+  owner-excluded), the sibling units that already hold it (``lib.fleet.fleet_learn_from``):
+  ``unit`` (its folder), ``gate``, ``holders`` (how many siblings hold it) and ``names`` (up
+  to three of them, the same ecosystem and kind first, then by folder). A unit no sibling
+  holds the gate for is not listed. The ``units`` block gives each unit's kind and ecosystem;
 - ``lines`` and ``markdown``: the roll-up line ("Units: Step 1 (lowest unit) · 2 of 3
   measured units at Step 2") and, when a change lifts a unit, the next-unlock line naming
-  the top-ranked change. Empty for fewer than two units, so a single-unit repository's
-  report is unchanged.
+  the top-ranked change, then one line per ``learn_from`` entry ("apps/web: CI runs the
+  tests. Learn from: apps/api"), the first ``LEARN_LINES`` of them and a count of the rest,
+  so a large workspace keeps a short roll-up. Empty for fewer than two units, so a single-unit
+  repository's report is unchanged.
 
-Every value is a count, a Step, a gate id or a token; counts-only output drops the text
-lines (``checks/core/unit_rollup.toml``) and the block names no unit. Tests:
-``tests/test_unit_rollup.py``.
+The roll-up counts name no unit (#800 decision 3); only the ``learn_from`` entries and their
+lines do (#1155), where a team asks who to learn from. Counts-only output drops the text
+lines and writes the ``learn_from`` folders only hashed, under ``--hash-paths``
+(``checks/core/unit_rollup.toml``, class ``hashed_path``); every other value is a count, a
+Step, a gate id or a token. Tests: ``tests/test_unit_rollup.py``, ``tests/test_learn_from.py``.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, TypedDict
 
+from lib.fleet.fleet_learn_from import Sibling, condition_states, ecosystems, learn_from, line, next_gate
 from lib.headline import GATE_CHANGE
 from lib.level_tally import default_model
 from lib.levels import MaturityModel, StepDef
 
 SECTION = "unit_rollup"
-READS = ("unit_levels",)
+READS = ("unit_levels", "units")
 
 Scope = Literal["repo_wide", "unit"]
 
@@ -66,6 +76,15 @@ class UnitUnlock(TypedDict):
     lift_per_change: int
 
 
+class UnitLearnFrom(TypedDict):
+    """One unit's next gate and the sibling units that already hold it (#1155)."""
+
+    unit: str
+    gate: str
+    holders: int  # every sibling that holds the gate
+    names: list[str]  # up to three of them, best match first
+
+
 class UnitRollUpBlock(TypedDict):
     """The run context's ``unit_rollup`` block (#865)."""
 
@@ -78,6 +97,7 @@ class UnitRollUpBlock(TypedDict):
     next_step: int | None
     at_next_step: int | None
     unlocks: list[UnitUnlock]
+    learn_from: list[UnitLearnFrom]  # #1155
     lines: list[str]
     markdown: str
 
@@ -143,6 +163,44 @@ def rank_unlocks(units: Sequence[Mapping[str, Any]], model: MaturityModel) -> li
                                                  -e["held"], order.get(e["gate"], len(order)), e["gate"]))
 
 
+def learn_from_entries(units: Sequence[Mapping[str, Any]], units_block: Any,
+                       model: MaturityModel) -> list[UnitLearnFrom]:
+    """Per unit, the siblings that hold its next gate (#1155; see the module docstring)."""
+    kinds = {str(u.get("path")): u.get("kind") for u in (units_block or {}).get("units") or []
+             if isinstance(u, Mapping)} if isinstance(units_block, Mapping) else {}
+    eco = ecosystems(units_block)
+
+    def sibling(u: Mapping[str, Any]) -> Sibling:
+        path = str(u.get("path"))
+        kind = kinds.get(path)
+        return Sibling(path, kind if isinstance(kind, str) else None, eco.get(path),
+                       condition_states(u.get("conditions") or []))
+
+    siblings = [sibling(u) for u in units]
+    out: list[UnitLearnFrom] = []
+    for me, unit in zip(siblings, units):
+        gate = next_gate(unit.get("next_step"), model)
+        if gate is None:
+            continue
+        names, holders = learn_from(me, gate, siblings)
+        if holders:
+            out.append({"unit": me.name, "gate": gate.gate, "holders": holders, "names": names})
+    return out
+
+
+LEARN_LINES = 5  # "Learn from" lines under the headline; the block lists every entry
+
+
+def _learn_lines(entries: Sequence[UnitLearnFrom]) -> list[str]:
+    out: list[str] = []
+    for e in entries[:LEARN_LINES]:
+        change = GATE_CHANGE.get(e["gate"], f"the {e['gate']} gate holds")
+        out.append(f"{e['unit']}: {change}. {line(e['names'])}")
+    if len(entries) > LEARN_LINES:
+        out.append(f"{len(entries) - LEARN_LINES} more units have a sibling unit that holds their next gate")
+    return out
+
+
 def _lines(block: UnitRollUpBlock) -> list[str]:
     if block["units"] < 2:
         return []
@@ -164,16 +222,16 @@ def _lines(block: UnitRollUpBlock) -> list[str]:
         noun = "unit to its" if top["lift_per_change"] == 1 else "units to their"
         lines.append(f"Next unlock across units: {change}, {where}, moves "
                      f"{top['lift_per_change']} {noun} next Step")
-    return lines
+    return lines + _learn_lines(block["learn_from"])
 
 
-def unit_rollup(levels: Any, model: MaturityModel | None = None) -> UnitRollUpBlock:
+def unit_rollup(levels: Any, model: MaturityModel | None = None, units_block: Any = None) -> UnitRollUpBlock:
     """The ``unit_rollup`` block over the ``unit_levels`` block (see the module docstring)."""
     model = model if model is not None else default_model()
     if not isinstance(levels, Mapping) or levels.get("available") is not True:
         return {"available": False, "unit_count": None, "unit_count_reason": "units_unavailable",
                 "units": 0, "measured": 0, "lowest_step": None, "next_step": None,
-                "at_next_step": None, "unlocks": [], "lines": [], "markdown": ""}
+                "at_next_step": None, "unlocks": [], "learn_from": [], "lines": [], "markdown": ""}
     units = [u for u in levels.get("units") or [] if isinstance(u, Mapping)]
     held = [u["step"] for u in units if isinstance(u.get("step"), int)]
     lowest = min(held) if held else None
@@ -184,7 +242,8 @@ def unit_rollup(levels: Any, model: MaturityModel | None = None) -> UnitRollUpBl
         "unit_count_reason": levels.get("unit_count_reason"),
         "units": len(units), "measured": len(held), "lowest_step": lowest, "next_step": nxt,
         "at_next_step": sum(s >= nxt for s in held) if nxt is not None else None,
-        "unlocks": rank_unlocks(units, model), "lines": [], "markdown": ""}
+        "unlocks": rank_unlocks(units, model),
+        "learn_from": learn_from_entries(units, units_block, model), "lines": [], "markdown": ""}
     block["lines"] = _lines(block)
     block["markdown"] = "\n\n".join(block["lines"])
     return block

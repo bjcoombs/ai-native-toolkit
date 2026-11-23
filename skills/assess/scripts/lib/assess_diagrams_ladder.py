@@ -5,7 +5,7 @@
 name and one plain sentence of what an agent can do there (``STEP_MEANING``, the one
 table of those sentences; a Step it does not know reads its model name only). Between
 two rungs sits the gate that lifts you to the upper one: the gates the upper Step adds
-over the one below, worded by ``headline.GATE_CHANGE`` ("CI runs the tests"), each marked
+over the one below, worded by ``headline.GATE_CHANGE`` ("CI turns red when a check breaks"), each marked
 "in place", "not yet", "not measured" or "excluded by owner" from the level result's
 conditions (``gate_state``; a gate holds when its row's conditions 1..level are met, and
 missing evidence never reads "not yet"). The run's Step (``level["step"]``) carries the "You are
