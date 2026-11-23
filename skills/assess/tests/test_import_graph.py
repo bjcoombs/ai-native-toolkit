@@ -14,7 +14,7 @@ import pytest
 
 from lib import structure_drift as sd
 from lib.headless_layers import structure
-from lib.import_graph import (
+from lib.graph.import_graph import (
     NO_PYTHON_PACKAGES,
     NO_SOURCE_FILES,
     GraphUnavailable,
@@ -24,10 +24,10 @@ from lib.import_graph import (
     language_counts,
     select_graph,
 )
-from lib.import_graph_builders import BUILDERS
-from lib.import_graph_python import PYTHON_BUILDER
-from lib.import_graph_typescript import TYPESCRIPT_BUILDER
-from lib.structure_graph import analyze_structure
+from lib.graph.import_graph_builders import BUILDERS
+from lib.graph.import_graph_python import PYTHON_BUILDER
+from lib.graph.import_graph_typescript import TYPESCRIPT_BUILDER
+from lib.graph.structure_graph import analyze_structure
 
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "structure_golden"
 REPO = GOLDEN / "repo"
@@ -244,7 +244,7 @@ def test_the_golden_repo_package_data_matches_its_burrows_and_sizes() -> None:
 
 def test_the_package_list_is_capped_and_edges_stay_among_kept_packages(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lib.structure_graph.MAX_PACKAGES", 2)
+    monkeypatch.setattr("lib.graph.structure_graph.MAX_PACKAGES", 2)
     builder = _StubBuilder("typescript", ["a/index", "b/index", "c/index"],
                            {"a/index": {"b/index", "c/index"}})
     block = analyze_structure(tmp_path, builders=(builder,)).as_dict()
@@ -255,7 +255,7 @@ def test_the_package_list_is_capped_and_edges_stay_among_kept_packages(
 
 def test_the_package_edge_list_keeps_the_heaviest_pairs_and_counts_them_all(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lib.structure_graph.MAX_PACKAGE_EDGES", 2)
+    monkeypatch.setattr("lib.graph.structure_graph.MAX_PACKAGE_EDGES", 2)
     builder = _StubBuilder("typescript", ["a/index", "a/x", "b/index", "c/index", "d/index"],
                            {"a/index": {"b/index", "c/index", "d/index"}, "a/x": {"c/index", "d/index"}})
     block = analyze_structure(tmp_path, builders=(builder,)).as_dict()

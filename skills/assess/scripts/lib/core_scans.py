@@ -71,7 +71,7 @@ from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
 from lib.promissory_markers import scan_promissory_markers
 from lib.run_context_types import DocGraphBlock, KeyholeIntegration
 from lib.sibling_tests import TestIndex, build_test_index
-from lib.structure_graph import StructureBlock, analyze_structure
+from lib.graph.structure_graph import StructureBlock, analyze_structure
 from lib.test_focus import compute_test_focus
 from lib.test_pressure import scan_test_pressure
 

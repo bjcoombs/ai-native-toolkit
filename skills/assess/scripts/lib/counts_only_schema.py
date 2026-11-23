@@ -89,7 +89,7 @@ from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.unit_discovery import UnitsBlock
 from lib.unit_readings import UnitReadingsBlock
-from lib.structure_graph import StructureBlock
+from lib.graph.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
 
 # Where each typed shape sits in run-context.json, as a field pattern. A list

@@ -19,8 +19,8 @@ import subprocess
 from pathlib import Path
 
 from lib import ownership_parser, structure_drift
-from lib import structure_graph as sg
-from lib.import_graph import ModuleGraph
+import lib.graph.structure_graph as sg
+from lib.graph.import_graph import ModuleGraph
 from lib.structure_drift import (
     SEAM_ALLOWLIST,
     apply_seam_allowlist,

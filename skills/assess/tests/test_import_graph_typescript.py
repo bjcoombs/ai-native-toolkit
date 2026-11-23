@@ -15,16 +15,16 @@ from typing import Any
 
 import assess_signals
 from lib.headless_layers import structure
-from lib.import_graph_builders import BUILDERS
-from lib.import_graph_typescript import (
+from lib.graph.import_graph_builders import BUILDERS
+from lib.graph.import_graph_typescript import (
     TYPESCRIPT_BUILDER,
     export_surface,
     import_specifiers,
     read_jsonc,
     strip_comments,
 )
-from lib.import_graph import ModuleGraph
-from lib.structure_graph import analyze_structure
+from lib.graph.import_graph import ModuleGraph
+from lib.graph.structure_graph import analyze_structure
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "ts_workspace"
 APP = "packages/app/src"

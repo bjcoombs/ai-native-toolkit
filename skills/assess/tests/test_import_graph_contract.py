@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from lib.headless_layers import structure
-from lib.import_graph import (
+from lib.graph.import_graph import (
     INVALID_IMPORT_GRAPH,
     LANGUAGE_BY_EXTENSION,
     ImportGraphBuilder,
@@ -24,8 +24,8 @@ from lib.import_graph import (
     builder_languages,
     select_graph,
 )
-from lib.import_graph_builders import BUILDERS
-from lib.structure_graph import analyze_structure
+from lib.graph.import_graph_builders import BUILDERS
+from lib.graph.structure_graph import analyze_structure
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 CONTRACT_FIXTURES = (

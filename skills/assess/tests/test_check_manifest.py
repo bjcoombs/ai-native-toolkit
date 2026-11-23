@@ -34,7 +34,7 @@ from lib import coupling_analysis as ca
 from lib.assess_config import GATE_CONCERN_FINDINGS
 from lib.counts_only_rules import RULES, FieldClass
 from lib.counts_only_schema import ROOTS
-from lib.import_graph import STRUCTURE_REASON_CODES
+from lib.graph.import_graph import STRUCTURE_REASON_CODES
 from lib.keyhole_signals import (FINDING_ACTIONS, FINDING_MODE_VALUES, FINDING_MODES,
                                  FINDING_ORDER, GIT_HISTORY_FINDINGS, _CHURN_DERIVED_FINDINGS)
 from lib.level_signals import InputClass, load_default_levels
