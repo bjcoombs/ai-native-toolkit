@@ -117,7 +117,7 @@ def test_unknown_previous_state_reads_null_not_zero(repo: Path) -> None:
     assert (block["closed"], block["closed_count"], block["gates_gained"]) == (None, None, None)
     assert block["closed_reason"] == "no_previous_commit"
     assert "Closed since last run: not known (the previous run recorded no commit)" in block["lines"]
-    assert "Gates gained: not known (the previous run has no level result)" in block["lines"]
+    assert "Gates gained: not known (the previous run has no level result this model can compare)" in block["lines"]
     assert block["lines"][-1] == "Next blocker: none, every gate is held"
     (repo / ".assess" / "run-context.json").write_text("{not json", encoding="utf-8")
     block = since_last_run(_level("met", "met"), repo / ".assess", repo)
