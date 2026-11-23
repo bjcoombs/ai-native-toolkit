@@ -107,7 +107,7 @@ ever cut, this note is where the intended boundary is written down.
 ## Check manifest whys (#939)
 
 Every check manifest entry says why it matters to an agent. The loader is
-`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest_whys.py`.
+`check_manifest.load_manifest` (`manifest/check_manifest.py`); the why rules and accessors are in `manifest/manifest_whys.py`.
 
 | Entry | Where its why lives | Accessor |
 |---|---|---|
@@ -189,14 +189,14 @@ run as `python scripts/lib/<stem>.py` does not have `lib` on `sys.path`; run the
 - **`keyhole/`**: the keyhole-readiness signals and findings, and the Layer 1 liveness
   inputs: accretion, promissory markers, structure drift, hidden coupling, understanding,
   archetype and the Dart and JVM capability entries. `promissory_markers` and
-  `accretion_ratchet` also run as scripts: run `python scripts/lib/keyhole/<stem>.py`, or
-  `python -m lib.<stem>` from `scripts/` through the shim. Files: `__init__.py`,
+  `accretion_ratchet` also run as scripts: run the moved file,
+  `python scripts/lib/keyhole/<stem>.py`. Files: `__init__.py`,
   `accretion_ratchet.py`, `archetype.py`, `coupling_analysis.py`, `dart_capabilities.py`,
   `jvm_capabilities.py`, `keyhole_signals.py`, `liveness_scan.py`, `promissory_markers.py`,
   `python_regions.py`, `structure_drift.py`, `understanding_analysis.py`.
-- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments) and its
-  structured validation errors. `manifest_whys` (#939), which the loader calls, postdates the #917 module map,
-  so it has no group and stays at the root. Files: `__init__.py`, `check_manifest.py`, `check_validation.py`.
+- **`manifest/`**: the check manifest loader (`checks/core.toml` and its fragments), its
+  structured validation errors, and the `why` rules the loader applies to every entry
+  (#939). Files: `__init__.py`, `check_manifest.py`, `check_validation.py`, `manifest_whys.py`.
 - **`test_pressure/`** (predates #917): write-side truth pressure, with a facade
   `__init__.py` that re-exports the package's names. Files: `__init__.py`, `aggregate.py`, `common.py`, `heuristics.py`, `mutation.py`, `mutmut3.py`, `reason_paths.py`.
 

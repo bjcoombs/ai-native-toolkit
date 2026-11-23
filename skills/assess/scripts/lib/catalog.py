@@ -58,7 +58,7 @@ files it is generated from, repo-relative; `skills/assess/checks/core/*.toml` na
 manifest fragments as a glob (#994). A scan no criterion reads is
 graded `unclassified` until #789 step 6 classifies every collector. Every entry is an object and
 every relation a named key. Each criterion, scan, finding and tag carries `why` and `why_source`
-from the manifest (`lib.manifest_whys`, #939): `""` where a version 1 manifest has none, and a
+from the manifest (`lib.manifest.manifest_whys`, #939): `""` where a version 1 manifest has none, and a
 scan's `why` may be the token `exempt: plumbing`; signals carry none. `tags`, `tag_pairs`,
 `steps` and `links` come from `lib.catalog_tags`. No date,
 commit or version string is read, so a version-only bump of the model leaves it unchanged.
@@ -71,7 +71,7 @@ from typing import Literal, NotRequired, TypedDict
 
 from lib import catalog_tags as ct
 import lib.manifest.check_manifest as cm
-from lib import manifest_whys as mw
+import lib.manifest.manifest_whys as mw
 from lib.level_signals import INPUT_GRADES, counts_toward_level, load_default_levels
 from lib.levels import Criterion, MaturityModel, Scalar, condition_id
 from lib.levels_fields import DEFAULT_POLARITY, TRUTH_TAGS

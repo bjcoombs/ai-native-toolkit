@@ -31,9 +31,12 @@ Each run is compared with the latest earlier run measuring the same repositories
 before a move delays the credit to the run it returns instead of losing it; the
 achievement's ``previous_run`` names the run compared with. One move is credited once: each
 row records its last credited move, up or down, and a move credited after the run
-compared with is where the next one starts (``Evidence`` ``from_level`` is that level).
-So a member returning after the others moved neither credits the move again nor counts a
-slip twice, and a real drop and recovery, on a subset or not, is two moves.
+compared with bounds the next one (``_credited_bounds``, #1060): a ``level_up`` starts above
+the credited level (``Evidence`` ``from_level``), and a slip falls below both the credited
+level and the level then. So a
+member returning after the others moved neither credits the move again, nor counts a slip
+twice, nor reads the full set's unchanged level as a slip from the subset's credited one,
+and a real drop and recovery, on a subset or not, is two moves.
 
 **Re-scored entries (#771).** An earlier run kept under another maturity-model version
 replays re-scored under this run's model (``lib/fleet/fleet_achievements_runs.py``,
@@ -451,21 +454,21 @@ class _Replay:
                 now_row = sub.rows[row]
                 lv_then, lv_now = then_row.level, now_row.level
                 assert lv_then is not None and lv_now is not None  # same_set guarantees both
-                # a move already credited after that run (on a subset) is where this one starts:
-                # one move, one level_up or slip, and a real drop then recovery is two moves
-                credited = self.moved_at.get((key, row))
-                base = credited[1] if credited is not None and self.order[credited[0]] > self.order[prev_run] \
-                    else lv_then
-                if lv_now != base:
+                # a move already credited after that run (on a subset) bounds this one: only the
+                # part outside [the level then, the credited level] is new (#1060), so one move
+                # is one level_up or slip, and a real drop then recovery is two moves
+                low, high = _credited_bounds(self.moved_at.get((key, row)), lv_then,
+                                             lambda credited: self.order[credited] > self.order[prev_run])
+                if lv_now < low or lv_now > high:
                     self.moved_at[(key, row)] = (run, lv_now)
-                if lv_now < base:
+                if lv_now < low:
                     slipped = True
-                if lv_now > base:
+                if lv_now > high:
                     moves = moves_up(row, now_row, self.cells[prev_run], now_cells)
-                    self._earn(LEVEL_UP, sub, run, prev_run, _evidence(row, base, lv_now, moves))
+                    self._earn(LEVEL_UP, sub, run, prev_run, _evidence(row, high, lv_now, moves))
                     held = reached_before.get((sub.view, sub.kind, row))
                     if self.firsts and (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:
-                        self._earn(FIRST, sub, run, prev_run, _evidence(row, base, lv_now, moves, level=lv_now))
+                        self._earn(FIRST, sub, run, prev_run, _evidence(row, high, lv_now, moves, level=lv_now))
             moved_unknown = [unknown_move(then_cells, now_cells, sub.key, row, rescored)
                              for row in sorted(sub.rows) if row not in compared] \
                 if rescored is not None and sub.kind == REPO_VIEW and old is not None else []
@@ -510,6 +513,19 @@ def same_set(history: Sequence[tuple[str, State]], measured: frozenset[str], kno
         return None
     return next(((run, state) for run, state in reversed(history)
                  if is_known(state) and state.measured == measured), None)
+
+
+def _credited_bounds(credited: tuple[str, int] | None, then: int,
+                     after: Callable[[str], bool]) -> tuple[int, int]:
+    """``(low, high)`` a row's level must leave to be a new move, after a move credited after the
+    run compared with (#1060). ``high`` is the credited level: a ``level_up`` starts above it, so a
+    move up credited on a subset is not credited again, and a recovery from a slip credited on a
+    subset is a new move. ``low`` is the lower of the credited level and the level then: a slip
+    falls below both, so a return to the level before the gap is no slip. Without such a move
+    both are the level then."""
+    if credited is None or not after(credited[0]):
+        return then, then
+    return min(then, credited[1]), credited[1]
 
 
 def _row_known(state: RowState) -> bool:

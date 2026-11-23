@@ -13,7 +13,7 @@ step (#949) sends the batches.
 | `runs/{runId}` | run | `set` | The bundle without `views` and `repos`, plus `views` (`{view, units}` counts) and `counts` (`repos`, `units`). |
 | `units/{unitKey}` | unit | `update`, or `set` when new | `{"history": {<runId>: <the unit without its key>}}` |
 | `repos/{repoKey}` | repository | `update`, or `set` when new | `{"history": {<runId>: <the repository without its key>}}` |
-| `targets/...` | target | never written here | Contributors write it from the page; #948 reads it back. |
+| `targets/{view}~{unitDocId}` | target | never written here | Contributors write it from the page; [read back](#targets-read-back) before the next run. |
 
 The unit and repository entries copy every field of the bundle. A field the bundle gains,
 such as #945's `gate_blockers`, is published without a change to the projection.
@@ -90,3 +90,62 @@ Writes are ordered `runs`, `units`, `repos`, each by document id. They are cut i
 batches within the count and body limits. The writes carry no `if_version`. The
 `ArtifactData` tool refuses a write to an existing document without one, so the publisher
 reads the current versions and pins each write.
+
+### Targets read-back
+
+The page writes one `targets` document per Step target, and `/fleet` reads the collection
+back before the next run (#948). `fleet.py` stays free of network calls, so the session
+exports the collection to a JSON file and runs
+`scripts/fleet_targets_import.py`, which writes the targets file that
+`fleet.py --targets` reads ([format](achievements.md#output-achievementsjson)). The logic
+is `lib/fleet/fleet_targets_import.py`.
+
+<!-- chat-skip:start -->
+```bash
+uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_targets_import.py" targets-export.json \
+    --fleet-data out/fleet-data.json --levels levels.toml --out targets.toml
+```
+<!-- chat-skip:end -->
+
+**Row contract.** The page writes to this shape.
+
+- **Export.** A JSON list with one object per document. Only `doc_id` and `data` are read;
+  the tool's other fields (version, timestamps) are ignored.
+- **`doc_id`.** `{view}~{unitDocId}`: the view (`ownership`, `system` or `repo`), a `~`, then
+  the unit's `fleet-data.json` key encoded as a [document id](#collections). A unit key
+  keeps its view prefix, so `ownership/acme/payments` is
+  `ownership~ownership~2Facme~2Fpayments`. A repository is `repo~acme~2Fsvc`. The whole id
+  is at most 200 characters, so a unit whose encoded key is longer than 200 less the view
+  and the `~` cannot hold a target, and the page offers no target control for it
+  (`target_doc_id` refuses it). Only an unhashed key can be that long.
+- **`data`.** `{"step": <2 to the top Step>}`, plus an optional `note` string of at most
+  280 characters. The note is never copied into the targets file.
+
+**Untrusted input.** Viewers write these rows. Each row becomes a target or is refused
+with one reason, checked in this order:
+
+| Reason | The row |
+|---|---|
+| `malformed_row` | is not an object, has no string `doc_id`, or its `data` is not an object |
+| `bad_doc_id` | has no `~` separator, or a key that is not the canonical encoding |
+| `unknown_view` | names a view other than `ownership`, `system` or `repo` |
+| `unknown_field` | has a `data` key other than `step` and `note` |
+| `string_too_long` | has a `note` that is not a string of at most 280 characters |
+| `step_out_of_range` | has a `step` that is not a whole number from 2 to the top Step |
+| `hashed_key` | names a hashed key. `fleet.py --targets` matches the run's plain unit ids, so a `--hash-paths` publish cannot be read back. |
+| `unknown_unit` | names a key that is not a unit of that view, or a repository, in `--fleet-data` |
+| `duplicate` | is one of two or more rows for the same unit (all of them are refused) |
+
+Refusals go to stderr as `row N: <reason>`. The script never echoes a row's id or
+text. A refused row never stops the import: the valid rows are still written. When the
+export has rows and none is accepted, the import stops instead (exit 2) and leaves the
+targets file as it was. This most often means `--fleet-data` is the bundle of another run,
+or of a `--hash-paths` run.
+
+**Output.** Only a known view, the unit id from the matched `fleet-data.json` entry and an
+integer Step reach the file, so no text a viewer typed is copied into it. Targets are
+sorted by view and unit, with LF line endings, and the same export and bundle give the
+same bytes. The file is rewritten on every import, and an empty export writes it with no
+targets, so a cleared target does not linger. Exit 2 means the export, the bundle or the
+maturity model is unreadable, the model has no `[[steps]]` above Step 1, or no row of a
+non-empty export was accepted. On exit 2 the targets file is not touched.

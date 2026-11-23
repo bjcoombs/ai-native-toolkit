@@ -146,23 +146,60 @@ def test_dart_scanner_run_boundaries_keep_the_token_rules(
     assert scan_dart_functions(src) == expected
 
 
+
+# Pathological inputs, each as (generator of a size-n input, n, reps). The
+# 1 s budget test scans gen(n); the scaling test scans gen(n) `reps` times
+# against gen(n // 4) `4 * reps` times, so both sides do the same work when the
+# scan is linear. `reps` lifts a fast case well above the 15.6 ms tick of
+# Windows' `process_time`.
+PATHOLOGICAL = {
+    "deep-nesting": (lambda n: "void f() {" + "{" * n, 200_000, 2),
+    "unclosed-functions": (lambda n: "void f() {" * n, 100_000, 1),
+    "nested-functions": (lambda n: "void f() {" * n + "}" * n, 50_000, 1),
+    "unterminated-string": (
+        lambda n: "void f() { var s = '" + "if (x) " * n, 50_000, 40),
+    "unterminated-interpolation": (
+        lambda n: "void f() { var s = '''" + "${" * n, 50_000, 1),
+    "nested-comment": (lambda n: "/*" * n, 100_000, 3),
+    "long-line": (
+        lambda n: "void f() { if (a && b || c) {} } " * n, 10_000, 1),
+    "one-token": (lambda n: "x" * n, 1_000_000, 3),
+    # A `=>` body still open when its enclosing function's `}` arrives: closing
+    # the function first scanned `fns` on every `}`, quadratic in depth (#929).
+    "nested-arrow-bodies": (
+        lambda n: "void f() { g() => 1 " * n + "}" * n, 20_000, 1),
+}
+
+
+def _fastest_cpu_seconds(text: str, reps: int) -> float:
+    """CPU time of `reps` scans of ``text``, the fastest of 3 runs."""
+    def once() -> float:
+        start = time.process_time()
+        for _ in range(reps):
+            scan_dart_functions(text)
+        return time.process_time() - start
+
+    return min(once() for _ in range(3))
+
+
+def test_dart_scanner_closes_an_open_arrow_body_with_its_enclosing_brace() -> None:
+    """A `}` closes the `=>` bodies inside it and its own function, in either
+    nesting shape, and the result stays in source order (#929)."""
+    src = "void f() { g() => 1 }  int h() { k() => a ?? b }  void m() {}"
+    assert scan_dart_functions(src) == [
+        ("f", 1.0), ("g", 1.0), ("h", 1.0), ("k", 2.0), ("m", 1.0)]
+    nested = "void f() { g() => 1 " * 3 + "}" * 3
+    assert scan_dart_functions(nested) == [
+        ("f", 1.0), ("g", 1.0)] * 3
+
+
 # pytest-cov's line tracing (CI runs this suite under --cov) slows the scanner
 # past the 1s budget; no_cover pauses tracing for this test so the budget stays
 # exact instead of being widened to fit the tracer.
 @pytest.mark.no_cover
 @pytest.mark.cpu_budget
-@pytest.mark.parametrize("text", [
-    "void f() {" + "{" * 200_000,
-    "void f() {" * 100_000,
-    "void f() {" * 50_000 + "}" * 50_000,
-    "void f() { var s = '" + "if (x) " * 50_000,
-    "void f() { var s = '''" + "${" * 50_000,
-    "/*" * 100_000,
-    "void f() { if (a && b || c) {} } " * 10_000,
-    "x" * 1_000_000,
-], ids=["deep-nesting", "unclosed-functions", "nested-functions", "unterminated-string", "unterminated-interpolation",
-        "nested-comment", "long-line", "one-token"])
-def test_dart_scanner_pathological_input_is_fast(text: str) -> None:
+@pytest.mark.parametrize("case", list(PATHOLOGICAL))
+def test_dart_scanner_pathological_input_is_fast(case: str) -> None:
     """Each pathological input scans in under 1 s, the fastest of 3 runs by CPU time.
 
     CPU time, not wall time, and the fastest of 3, to drop first-run and
@@ -170,12 +207,29 @@ def test_dart_scanner_pathological_input_is_fast(text: str) -> None:
     core, so ``cpu_budget`` keeps this test in the serial pass (conftest.py,
     #930). The 1 s bound itself is unchanged.
     """
-    def cpu_seconds() -> float:
-        start = time.process_time()
-        scan_dart_functions(text)
-        return time.process_time() - start
+    gen, n, _reps = PATHOLOGICAL[case]
+    assert _fastest_cpu_seconds(gen(n), 1) < 1.0
 
-    assert min(cpu_seconds() for _ in range(3)) < 1.0
+
+@pytest.mark.no_cover
+@pytest.mark.cpu_budget
+@pytest.mark.parametrize("case", list(PATHOLOGICAL))
+def test_dart_scanner_pathological_input_scales_linearly(case: str) -> None:
+    """A pathological input's scaling ratio time(n) / time(n/4) stays under 8 (#929).
+
+    The bound is ``time(n) < 8 * time(n/4) + slack``: a linear scan gives a
+    ratio near 4 and a quadratic 16, so 8 separates them with room for CI timer
+    noise. The check compares the
+    scanner with itself on the same machine at the same moment, so it holds on
+    a slow runner where an absolute budget would not, and the 1 s budget above
+    stays the absolute guard. The small side runs ``4 * reps`` scans, so both
+    sides take about the same CPU time and a coarse timer tick weighs on them
+    equally; the slack covers about two Windows ticks.
+    """
+    gen, n, reps = PATHOLOGICAL[case]
+    big = _fastest_cpu_seconds(gen(n), reps)
+    small_x4 = _fastest_cpu_seconds(gen(n // 4), 4 * reps)
+    assert big < 2 * small_x4 + 0.035, (case, big, small_x4)
 
 
 def test_dart_scanner_reads_a_bounded_prefix(tmp_path: Path,

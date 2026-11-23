@@ -133,21 +133,21 @@ JOB_OUTPUT_RE = re.compile(
     + r":\s*\$\{\{\s*steps\.([A-Za-z0-9_-]+)\.outputs\." + FLOOR_CORE_OUTPUT
     + r"\s*\}\}\s*$"
 )
-# ...and that step must ask the BASE ref's copy of floor_check.py (#583, #645):
-# the head copy is the one the pull request under review can edit. The decision
-# lives in the script's ``path-filter`` subcommand, so the step is a fixed text
-# compared here byte for byte, ``env:`` included (#679). Text rules over shell
-# left gaps -- a path variable reassigned between extract and call, a glob copy
-# over the extract, ``eval``, an answer overwritten after the fail-closed
-# branch -- and an exact comparison closes every one without parsing shell.
+# ...and that step must ask the BASE ref's copy of floor_check.py (#583, #645),
+# not the head copy the pull request can edit. The decision lives in its
+# ``path-filter``, so the step is fixed text compared byte for byte, ``env:``
+# included (#679): text rules over shell left gaps (a reassigned path, a glob
+# copy, ``eval``, a late overwrite) that an exact comparison closes.
 FILTER_STEP = """\
       - name: Detect changes to protected paths
         id: filter
         env:
+          EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ACTOR: ${{ github.actor }}
         run: |
+          [ "${EVENT_NAME}" != "merge_group" ] || { printf 'run_canaries=false\\nfloor_core_changed=false\\n' >> "$GITHUB_OUTPUT"; exit 0; }
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
           BASE_COPY="${RUNNER_TEMP}/floor_check_base.py"
           if ! git show "${BASE_SHA}:scripts/floor_check.py" > "${BASE_COPY}" \\
