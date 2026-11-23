@@ -10,6 +10,7 @@ callable = "lib.core_scans:doc_staleness"
 publishes = ["doc_staleness"]
 reads = ["repo_root", "doc_graph", "excludes", "scope"]
 stage = "read_side"
+unit_scope = "scoped"
 headless = { doc_staleness = "headless_variant" }
 headless_variants = [
   { block = "doc_staleness", callable = "lib.headless_static:doc_staleness", reads = ["repo_root", "doc_graph", "excludes"], stage = "read_side" },

@@ -4732,6 +4732,28 @@
       ],
       "network": false,
       "private": false
+    },
+    {
+      "name": "unit_readings",
+      "title": "Monorepo unit readings",
+      "publishes": [
+        "unit_readings"
+      ],
+      "reads": [
+        "units",
+        "nested_instructions",
+        "coverage_gate",
+        "doc_staleness",
+        "layer_grades",
+        "promissory_markers",
+        "stats_summary",
+        "structure",
+        "excludes",
+        "repo_root",
+        "working_notes"
+      ],
+      "network": false,
+      "private": false
     }
   ],
   "signals": [
