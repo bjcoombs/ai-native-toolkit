@@ -114,7 +114,10 @@ uv run "${CLAUDE_SKILL_DIR}/scripts/fleet_targets_import.py" targets-export.json
 - **`doc_id`.** `{view}~{unitDocId}`: the view (`ownership`, `system` or `repo`), a `~`, then
   the unit's `fleet-data.json` key encoded as a [document id](#collections). A unit key
   keeps its view prefix, so `ownership/acme/payments` is
-  `ownership~ownership~2Facme~2Fpayments`. A repository is `repo~acme~2Fsvc`.
+  `ownership~ownership~2Facme~2Fpayments`. A repository is `repo~acme~2Fsvc`. The whole id
+  is at most 200 characters, so a unit whose encoded key is longer than 200 less the view
+  and the `~` cannot hold a target, and the page offers no target control for it
+  (`target_doc_id` refuses it). Only an unhashed key can be that long.
 - **`data`.** `{"step": <2 to the top Step>}`, plus an optional `note` string of at most
   280 characters. The note is never copied into the targets file.
 
@@ -134,11 +137,15 @@ with one reason, checked in this order:
 | `duplicate` | is one of two or more rows for the same unit (all of them are refused) |
 
 Refusals go to stderr as `row N: <reason>`. The script never echoes a row's id or
-text. A refused row never stops the import: the valid rows are still written.
+text. A refused row never stops the import: the valid rows are still written. When the
+export has rows and none is accepted, the import stops instead (exit 2) and leaves the
+targets file as it was. This most often means `--fleet-data` is the bundle of another run,
+or of a `--hash-paths` run.
 
 **Output.** Only a known view, the unit id from the matched `fleet-data.json` entry and an
 integer Step reach the file, so no text a viewer typed is copied into it. Targets are
 sorted by view and unit, with LF line endings, and the same export and bundle give the
-same bytes. The file is rewritten on every import, even with no valid rows, so a cleared
-target does not linger. Exit 2 means the export, the bundle or the maturity model is
-unreadable, or the model has no `[[steps]]` above Step 1.
+same bytes. The file is rewritten on every import, and an empty export writes it with no
+targets, so a cleared target does not linger. Exit 2 means the export, the bundle or the
+maturity model is unreadable, the model has no `[[steps]]` above Step 1, or no row of a
+non-empty export was accepted. On exit 2 the targets file is not touched.

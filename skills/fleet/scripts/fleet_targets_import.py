@@ -15,7 +15,9 @@ contract are in ``skills/assess/scripts/lib/fleet/fleet_targets_import.py``.
 
 Exit codes:
     0  the targets file was written (refused rows are reported, not fatal)
-    2  usage error: an unreadable export, bundle or maturity model, or a model without Steps
+    2  usage error: an unreadable export, bundle or maturity model, a model without Steps, or an
+       export with rows of which none was accepted (a bundle from another run); the targets
+       file is left untouched
 
 Run:
     uv run fleet_targets_import.py targets-export.json --fleet-data out/fleet-data.json \\
@@ -37,7 +39,7 @@ sys.dont_write_bytecode = True
 ASSESS_SCRIPTS = Path(__file__).resolve().parents[2] / "assess" / "scripts"
 sys.path.insert(0, str(ASSESS_SCRIPTS))
 
-from lib.fleet.fleet_targets_import import TargetsImportError, dumps_targets, import_rows  # noqa: E402
+from lib.fleet.fleet_targets_import import ImportResult, TargetsImportError, dumps_targets, import_rows  # noqa: E402
 from lib.levels import LevelsError, load_levels  # noqa: E402
 
 
@@ -63,6 +65,7 @@ def _json(path: str, what: str) -> object:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    result: ImportResult | None = None
     try:
         model = load_levels(Path(args.levels))
         rows = _json(args.export, "the export")
@@ -74,9 +77,14 @@ def main(argv: list[str] | None = None) -> int:
             result = import_rows(rows, bundle, model)  # type: ignore[arg-type]
         except (KeyError, TypeError) as e:
             raise TargetsImportError(f"--fleet-data {args.fleet_data} is not a fleet-data.json bundle") from e
+        if isinstance(rows, list) and rows and not result.targets:
+            raise TargetsImportError(f"none of the {len(rows)} exported row(s) was accepted; is --fleet-data the "
+                                     f"bundle of the run the page shows? {args.out} is left as it was")
         text = dumps_targets(result.targets, model)
         Path(args.out).write_bytes(text.encode("utf-8"))
     except (TargetsImportError, LevelsError, OSError) as e:
+        for refusal in result.refusals if result is not None else []:
+            print(f"fleet_targets_import: row {refusal.row}: {refusal.reason}", file=sys.stderr)
         print(f"error: {e}", file=sys.stderr)
         return 2
     for refusal in result.refusals:

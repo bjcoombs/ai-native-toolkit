@@ -12,6 +12,7 @@ import pytest
 
 import lib.fleet.fleet_targets_import as ti
 from lib.fleet.fleet_data import FleetData
+from lib.fleet.fleet_publish import PublishError
 from lib.fleet.fleet_targets import TargetSpec, parse_targets
 from lib.levels import MaturityModel
 from test_fleet_achievements_cli import STEP_LEVELS, _root, _seed_lower
@@ -234,3 +235,46 @@ def test_the_imported_file_drives_fleet_targets_to_a_target_hit(tmp_path, monkey
     doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
     assert ("target_hit", "grpa/svc1") in {(a["kind"], a["unit"]) for a in doc["achievements"]}
     assert {("repo", "grpa/svc1"), ("ownership", unit_key)} <= {(t["view"], t["unit"]) for t in doc["targets"]}
+
+
+def test_cli_refuses_an_export_none_of_whose_rows_is_accepted_and_keeps_the_file(tmp_path, capsys):
+    """A bundle from another run (or a hashed one) must not wipe every target with exit 0."""
+    args = _files(tmp_path, [_row("repo", "other/svc", {"step": 2}), _row("repo", "other/lib", {"step": 2})])
+    (tmp_path / "targets.toml").write_bytes(b'[[target]]\nview = "repo"\nunit = "acme/svc"\nstep = 2\n')
+    before = (tmp_path / "targets.toml").read_bytes()
+    assert cli.main(args) == 2
+    err = capsys.readouterr().err
+    assert "row 1: unknown_unit" in err and "none of the 2 exported row(s) was accepted" in err
+    assert (tmp_path / "targets.toml").read_bytes() == before
+    (tmp_path / "fleet-data.json").write_text(json.dumps(_bundle(hashed=True)), encoding="utf-8")
+    (tmp_path / "export.json").write_text(json.dumps([_row("repo", "h:fedcba9876543210", {"step": 2})]),
+                                          encoding="utf-8")
+    assert cli.main(args) == 2
+    assert "row 1: hashed_key" in capsys.readouterr().err
+    assert (tmp_path / "targets.toml").read_bytes() == before
+
+
+def test_cli_an_empty_export_clears_the_targets_file(tmp_path):
+    args = _files(tmp_path, [])
+    (tmp_path / "targets.toml").write_bytes(b'[[target]]\nview = "repo"\nunit = "acme/svc"\nstep = 2\n')
+    assert cli.main(args) == 0
+    text = (tmp_path / "targets.toml").read_text(encoding="utf-8")
+    assert parse_targets(tomllib.loads(text), MODEL) == [] and text == ti.HEADER
+
+
+@pytest.mark.parametrize("bundle", [
+    {"views": [{"view": "ownership", "units": [{"key": 7}]}], "repos": []},
+    {"views": [], "repos": [{"key": ["acme/svc"]}]},
+])
+def test_cli_a_bundle_with_a_non_string_key_exits_2(tmp_path, capsys, bundle):
+    args = _files(tmp_path, [_row("repo", "acme/svc", {"step": 2})])
+    (tmp_path / "fleet-data.json").write_text(json.dumps(bundle), encoding="utf-8")
+    assert cli.main(args) == 2
+    assert "key is not a string" in capsys.readouterr().err
+
+
+def test_a_target_id_over_the_database_cap_is_refused():
+    key = "ownership/" + "y" * 185
+    with pytest.raises(PublishError, match="at most 200"):
+        ti.target_doc_id("ownership", key)
+    assert len(ti.target_doc_id("ownership", "ownership/" + "y" * 178)) == 200

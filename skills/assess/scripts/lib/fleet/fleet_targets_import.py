@@ -32,9 +32,16 @@ reason token, checked in this order:
 **Output.** Only an enumerated view, a unit id taken from the matched ``fleet-data.json``
 entry (never from the row) and an integer Step reach the file, so no free text in a row is
 ever copied. Targets are sorted by view and unit, written as UTF-8 with LF line endings, and
-the same export and bundle give byte-identical output. Zero valid rows still writes the file
-(with no targets), so a cleared target does not linger. ``dumps_targets`` re-reads its text
+the same export and bundle give byte-identical output. An empty export still writes the file
+(with no targets), so a cleared target does not linger; an export with rows of which none is
+accepted (most often a bundle from another run, or a ``--hash-paths`` one) is a usage error
+in the CLI, which leaves the existing file untouched. ``dumps_targets`` re-reads its text
 through ``fleet_targets.parse_targets`` before returning it.
+
+**Id length.** A target id is ``{view}~`` plus ``doc_id(unitKey)``, and a document id takes at
+most 200 characters, so a unit key that encodes to more than ``200 - len(view) - 1``
+characters cannot hold a target (``target_doc_id`` raises ``PublishError``); the page
+offers no target control for it.
 
 Refusals are reported by row index and reason token only: the doc id and the row's text are
 viewer-written and never echoed.
@@ -48,7 +55,7 @@ from typing import NamedTuple
 from lib.counts_only import is_hashed
 from lib.fleet.fleet_achievements import REPO_VIEW
 from lib.fleet.fleet_data import FleetData
-from lib.fleet.fleet_publish import decode_doc_id, doc_id
+from lib.fleet.fleet_publish import MAX_ID, PublishError, decode_doc_id, doc_id
 from lib.fleet.fleet_targets import TARGET_VIEWS, TargetSpec, parse_targets
 from lib.levels import MaturityModel
 
@@ -82,8 +89,13 @@ class ImportResult(NamedTuple):
 
 
 def target_doc_id(view: str, key: str) -> str:
-    """The ``targets`` document id the page writes for ``key`` (a ``fleet-data.json`` key) in ``view``."""
-    return f"{view}{SEPARATOR}{doc_id(key)}"
+    """The ``targets`` document id the page writes for ``key`` (a ``fleet-data.json`` key) in ``view``;
+    raises ``PublishError`` when it would exceed the database's 200-character id."""
+    out = f"{view}{SEPARATOR}{doc_id(key)}"
+    if len(out) > MAX_ID:
+        raise PublishError(f"a target id for this {view} key is {len(out)} characters; a document id takes "
+                           f"at most {MAX_ID}")
+    return out
 
 
 def known_units(bundle: FleetData) -> dict[tuple[str, str], str]:
@@ -92,9 +104,14 @@ def known_units(bundle: FleetData) -> dict[tuple[str, str], str]:
     for view in bundle["views"]:
         prefix = f"{view['view']}/"
         for unit in view["units"]:
-            if unit["key"].startswith(prefix) and unit["key"][len(prefix):].strip():
-                known[(view["view"], unit["key"])] = unit["key"][len(prefix):]
+            key = unit["key"]
+            if not isinstance(key, str):
+                raise TargetsImportError("a fleet-data.json unit key is not a string")
+            if key.startswith(prefix) and key[len(prefix):].strip():
+                known[(view["view"], key)] = key[len(prefix):]
     for repo in bundle["repos"]:
+        if not isinstance(repo["key"], str):
+            raise TargetsImportError("a fleet-data.json repository key is not a string")
         if repo["key"].strip():
             known[(REPO_VIEW, repo["key"])] = repo["key"]
     return known
