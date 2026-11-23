@@ -80,12 +80,15 @@ def test_an_unresolvable_parent_reads_null(tmp_path: Path) -> None:
     # Two different only: maps are deep-merged by GitLab and not read here.
     (".v:\n  only:\n    variables:\n      - $X\ntest:\n  extends: .v\n  only:\n    refs:\n      - tags\n"
      "  script: pytest\n", "unknown"),
+    # A flow map deep-merged with a block map is not read either.
+    (".v:\n  except: {variables: [$SKIP]}\ntest:\n  extends: .v\n  except:\n    refs:\n      - tags\n"
+     "  script: pytest\n", "unknown"),
     # rules: and only: meeting in one merged job: GitLab rejects the job, so it is not read.
     (_NIGHTLY + "test:\n  extends: .nightly\n  only: [branches]\n  script: pytest\n", "unknown"),
 ], ids=["two_level", "middle_overrides", "own_rules_override", "flow_list_last_wins",
         "block_list_last_wins", "inherited_when", "inherited_default_when", "inherited_only",
         "no_read_keys", "unresolvable_grandparent", "cycle", "anchor",
-        "inline_parent", "alias_parent", "merge_key_parent", "anchored_template", "diamond_one_map", "two_maps", "rules_and_only"])
+        "inline_parent", "alias_parent", "merge_key_parent", "anchored_template", "diamond_one_map", "two_maps", "flow_and_block_maps", "rules_and_only"])
 def test_extends_is_resolved(text: str, trigger: str) -> None:
     assert _trigger(text) == trigger
 

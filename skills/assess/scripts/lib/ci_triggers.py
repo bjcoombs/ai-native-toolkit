@@ -322,6 +322,8 @@ def _job_keys(tree: IndentTree, job: int, top: dict[str, int], seen: frozenset[i
 
 
 def _is_map(tree: IndentTree, key: int) -> bool:
+    if tree.lines[key].value.startswith("{"):
+        return True  # a flow map (``except: {variables: [$X]}``)
     children = tree.children(key)
     return not tree.lines[key].value and bool(children) and not all(tree.lines[k].dash for k in children)
 
