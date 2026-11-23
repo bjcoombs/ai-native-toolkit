@@ -21,7 +21,10 @@ Subcommands, each printing one JSON line:
 - ``report --out PATH [--fixed]`` builds and runs in a temporary directory and copies the
   report to ``PATH``: the one command CI needs for the sample report.
 
-The same build gives the same report, byte for byte (``tests/test_assess_tour.py``).
+``run`` and ``fix`` refuse a path that is not the top of a sample ``build`` made
+(``require_sample``: the root commit's author and message), so a wrong or empty path never
+commits into, or writes a report into, another repository. The same build gives the same
+report, byte for byte (``tests/test_assess_tour.py``).
 """
 # /// script
 # requires-python = ">=3.11"
@@ -130,6 +133,32 @@ def build(dest: Path, *, fixed: bool = False, sample: Path = SAMPLE_DIR) -> Path
     return dest
 
 
+def require_sample(repo: Path, history: TourHistory) -> None:
+    """Refuse any ``repo`` that is not the root of a sample ``build`` made.
+
+    The tour commits, so a wrong path (an empty shell variable reads as the current
+    directory) must never reach the user's own repository. A sample's root commit has the
+    first message and the author of ``history.toml``, and ``repo`` is its top level.
+    """
+    env = _git_env(history["author"], history["commits"][0]["date"])
+    done = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--show-toplevel"], check=False,
+        capture_output=True, encoding="utf-8", errors="replace", env=env,
+    )
+    top = done.stdout.strip()
+    if done.returncode != 0 or Path(top).resolve() != repo.resolve():
+        raise ValueError(f"{repo.as_posix()} is not the top of a git repository; pass the path build printed")
+    roots = _git(repo, env, "log", "--max-parents=0", "--format=%ae%x00%s", "HEAD").splitlines()
+    first = f"{history['author'].partition(' <')[2].rstrip('>')}\0{history['commits'][0]['message']}"
+    if roots != [first]:
+        raise ValueError(f"{repo.as_posix()} is not a tour sample; pass the path build printed")
+
+
+def patched_paths(patch: str) -> list[str]:
+    """The files a unified diff changes, from its ``+++ b/<path>`` lines."""
+    return [line[len("+++ b/"):].strip() for line in patch.splitlines() if line.startswith("+++ b/")]
+
+
 def _apply(repo: Path, env: dict[str, str], patch: str, *flags: str) -> bool:
     done = subprocess.run(
         ["git", "-C", str(repo), "apply", *flags, "-"], input=patch, check=False,
@@ -144,12 +173,15 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
     ``applied``: ``fix.patch`` applied to a clean tree and was committed. ``edited``: the
     tree already held an edit (the newcomer made the fix by hand), committed as it is.
     ``already_fixed``: HEAD already has the fix, so nothing was committed. The commit takes
-    the fixed date and message from ``history.toml`` either way.
+    the fixed date and message from ``history.toml`` either way, and holds only the files
+    ``fix.patch`` names. ``repo`` must be a tour sample (``require_sample``).
     """
     history = load_history(sample)
     env = _git_env(history["author"], history["fix"]["date"])
+    require_sample(repo, history)
     patch = (sample / "fix.patch").read_text(encoding="utf-8").replace("\r\n", "\n")
-    if _git(repo, env, "status", "--porcelain", "--untracked-files=no").strip():
+    paths = patched_paths(patch)
+    if _git(repo, env, "status", "--porcelain", "--untracked-files=no", "--", *paths).strip():
         how = "edited"
     elif _apply(repo, env, patch, "--check"):
         _apply(repo, env, patch)
@@ -158,13 +190,14 @@ def fix(repo: Path, *, sample: Path = SAMPLE_DIR) -> str:
         return "already_fixed"
     else:
         raise ValueError(f"{repo}: fix.patch does not apply and the tree has no edit to commit")
-    _git(repo, env, "commit", "-q", "-a", "-m", history["fix"]["message"])
+    _git(repo, env, "commit", "-q", "-m", history["fix"]["message"], "--", *paths)
     return how
 
 
 def run(repo: Path) -> TourResult:
     """Run the deterministic core headless on ``repo`` and write the report beside it."""
     repo = repo.resolve()
+    require_sample(repo, load_history())
     env = _git_env("Tour <tour@example.com>", "2026-01-01T00:00:00+00:00")
     run_date = _git(repo, env, "log", "-1", "--format=%cs").strip()
     ctx = assess_core.build_and_publish_run(repo_root=repo, run_date=run_date, non_interactive=True)

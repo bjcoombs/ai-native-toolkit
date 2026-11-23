@@ -111,3 +111,40 @@ def test_a_missing_sample_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(assess_tour, "SAMPLE_DIR", tmp_path / "absent")
     assert assess_tour.main(["report", "--out", str(tmp_path / "r.md")]) == 2
     assert "not installed" in capsys.readouterr().err
+
+
+def test_a_repository_that_is_not_a_sample_is_refused(tmp_path: Path) -> None:
+    other = tmp_path / "mine"
+    other.mkdir()
+    env = assess_tour._git_env("Me <me@example.com>", "2026-10-01T00:00:00+00:00")
+    assess_tour._git(other, env, "init", "-q", "-b", "main")
+    ci = other / ".github" / "workflows" / "ci.yml"
+    ci.parent.mkdir(parents=True)
+    ci.write_text("run: pytest || true\n", encoding="utf-8")
+    assess_tour._git(other, env, "add", "-A")
+    assess_tour._git(other, env, "commit", "-q", "-m", "Mine")
+    ci.write_text("run: pytest\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not a tour sample"):
+        assess_tour.fix(other)
+    with pytest.raises(ValueError, match="not a tour sample"):
+        assess_tour.run(other)
+    # Nothing was committed: the edit is still in the working tree.
+    assert assess_tour._git(other, env, "rev-list", "--count", "HEAD").strip() == "1"
+    assert not (other / ".assess").exists()
+
+
+def test_a_path_inside_a_sample_is_refused(tmp_path: Path) -> None:
+    repo = assess_tour.build(tmp_path / "tally")
+    with pytest.raises(ValueError, match="not the top"):
+        assess_tour.fix(repo / "src")
+    assert assess_tour.main(["fix", ""]) == 2
+
+
+def test_a_fix_commits_only_the_patched_file(tmp_path: Path) -> None:
+    repo = assess_tour.build(tmp_path / "tally")
+    (repo / "README.md").write_text("changed\n", encoding="utf-8")
+    assert assess_tour.fix(repo) == "applied"
+    env = assess_tour._git_env("A <a@example.com>", "2026-10-01T00:00:00+00:00")
+    changed = assess_tour._git(repo, env, "show", "--name-only", "--format=", "HEAD").split()
+    assert changed == [".github/workflows/ci.yml"]
+    assert "README.md" in assess_tour._git(repo, env, "status", "--porcelain")
