@@ -107,9 +107,9 @@ Every `test_*.py` file in this directory has a row below.
 | `test_assess_config.py` | `lib/assess_config.py` - the working-notes keys in `.assess/config.toml` |
 | `test_badge.py` | `lib/badge.py` - the shields.io endpoint badge: the headline summary as its message, colour by Step |
 | `test_claude_config.py` | `lib/claude_config.py` - legacy command files and Claude Code frontmatter the runtime ignores, plugin path overrides, scope, and the unchanged run-context of an unconfigured repo |
-| `test_config_drift.py` | `lib/config_drift.py` + `lib/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
-| `test_review_reality_gitlab.py` | `lib/gitlab_cli.py` + the GitLab path of `lib/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
-| `test_gitlab_protected_branches.py` | `lib/gitlab_cli.branch_protection` + the GitLab paths of `lib/config_drift.py` and `lib/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
+| `test_config_drift.py` | `lib/hosting/config_drift.py` + `lib/hosting/gh_cli.py` - committed GitHub-config snapshots against the live setting, and the shared `gh` helper |
+| `test_review_reality_gitlab.py` | `lib/hosting/gitlab_cli.py` + the GitLab path of `lib/hosting/review_reality.py` - provider detection, `glab` refusal mapping, merged merge request approvals |
+| `test_gitlab_protected_branches.py` | `lib/gitlab_cli.branch_protection` + the GitLab paths of `lib/hosting/config_drift.py` and `lib/hosting/review_reality.py` - wildcard protected-branch matching, 403/404 as unavailable, GitLab protected-branch snapshots, rules scoped to all protected branches |
 | `test_context_blocks.py` | `lib/context_blocks.py` - keyhole, stale-hub, liveness, coverage-report, accretion, structure-drift and exclusion/pruning blocks in run-context |
 | `test_coverage_gate.py` | `lib/coverage_gate.py` - configured coverage-threshold detector |
 | `test_coverage_report.py` | `lib/coverage_report.py` - coverage-report parser |
@@ -142,10 +142,10 @@ Every `test_*.py` file in this directory has a row below.
 | `test_promissory_markers.py` | `lib/promissory_markers.py` - stale TODOs, suppressions and skips |
 | `test_promissory_markers_literals.py` | `lib/promissory_markers.py` and `lib/python_regions.py` - marker text in Python string literals, quoted directives and config files is data, not a marker; docstrings and real comments still count and age |
 | `test_raw_source.py` | `lib/complexity/raw_source.py` - raw-source subtree detection |
-| `test_review_reality.py` | `lib/review_reality.py` - review-automation evidence from merged PRs |
+| `test_review_reality.py` | `lib/hosting/review_reality.py` - review-automation evidence from merged PRs |
 | `test_reviewed_findings.py` | `lib/reviewed_findings.py` - a done review in the committed `.assess/actions.json` clears `self_referential_tests` from attention and the prescribed actions while the source is unchanged since `completed_sha` (the path keeps a `reviewed` note in `derived_findings`), a later source change re-flags it, entries that do not clear, the mutation refresh, counts-only, and `assess_finalize` keeping done entries under `completed` (#721) |
-| `test_delivery.py` | `lib/delivery.py` + `lib/merged_sample.py` - delivery figures over a recorded, scrubbed `gh pr list` response (`fixtures/platform/`), the windowed two-read GitHub sample and one-read GitLab sample |
-| `test_gitlab_notes.py` | `lib/gitlab_notes.py` - GitLab merge-request note classification (markers, agent accounts, unmarked access-token notes as automation, the author's own notes), the `gitlab_note_facts` spec and the GitLab `delivery` note figures |
+| `test_delivery.py` | `lib/hosting/delivery.py` + `lib/hosting/merged_sample.py` - delivery figures over a recorded, scrubbed `gh pr list` response (`fixtures/platform/`), the windowed two-read GitHub sample and one-read GitLab sample |
+| `test_gitlab_notes.py` | `lib/hosting/gitlab_notes.py` - GitLab merge-request note classification (markers, agent accounts, unmarked access-token notes as automation, the author's own notes), the `gitlab_note_facts` spec and the GitLab `delivery` note figures |
 | `test_platform_argv_contract.py` | every `PLATFORM_SCANS` scan through recording `gh`/`glab` stubs: each argv names its target (`--repo`, `repos/<slug>`, `users/<login>`, `--hostname`), as the argv-keyed response cache needs |
 | `test_run_wiki.py` | `lib/run_wiki.py` - hotspot pages, `index.md` rows and graduation records for one run |
 | `test_scan_registry.py` | `lib/scan_registry.py` - the declared scan table and the loop that runs it |

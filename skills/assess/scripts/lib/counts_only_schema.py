@@ -49,7 +49,7 @@ from lib.block_shapes import (
 )
 from lib.claude_config import ClaudeConfigBlock, ClaudeConfigFinding
 from lib.counts_only_rules import PATH_KEYED_MAPS
-from lib.delivery import DeliveryBlock
+from lib.hosting.delivery import DeliveryBlock
 from lib.doc_claims import DocClaimsBlock
 from lib.agent_consistency import AgentConsistencyBlock
 from lib.doc_complexity_join import DocUnit

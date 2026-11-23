@@ -1,6 +1,6 @@
 """Tests for GitLab protected-branch reads: lib/gitlab_cli.branch_protection,
-the GitLab path of lib/config_drift.py, and the "all protected branches"
-approval rules of lib/review_reality.py.
+the GitLab path of lib/hosting/config_drift.py, and the "all protected branches"
+approval rules of lib/hosting/review_reality.py.
 
 Reuses the offline `glab` / `gh` stubs of test_review_reality_gitlab.py: the
 stub directory is the whole PATH, `glab api` answers from JSON files keyed by
@@ -16,10 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from lib.config_drift import find_snapshots, scan_config_drift  # noqa: E402
-from lib.gh_cli import GhUnavailable  # noqa: E402
-from lib.gitlab_cli import GitlabProject, branch_protection  # noqa: E402
-from lib.review_reality import gitlab_review_required  # noqa: E402
+from lib.hosting.config_drift import find_snapshots, scan_config_drift  # noqa: E402
+from lib.hosting.gh_cli import GhUnavailable  # noqa: E402
+from lib.hosting.gitlab_cli import GitlabProject, branch_protection  # noqa: E402
+from lib.hosting.review_reality import gitlab_review_required  # noqa: E402
 import test_review_reality_gitlab as _stubs  # noqa: E402
 from test_review_reality_gitlab import ENC, PROJECT, World, _git  # noqa: E402
 
@@ -208,7 +208,7 @@ def test_a_malformed_later_page_is_unavailable(world: World) -> None:
 
 def test_a_list_still_full_after_the_page_cap_is_truncated(
         world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lib.gitlab_cli.PROTECTED_MAX_PAGES", 2)
+    monkeypatch.setattr("lib.hosting.gitlab_cli.PROTECTED_MAX_PAGES", 2)
     world.serve(LIST, [_rule("main")] + _filler(0, 99))
     world.serve(_page(2), _filler(99, 100))
     with pytest.raises(GhUnavailable) as e:
