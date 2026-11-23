@@ -61,11 +61,21 @@ CASES: list[tuple[str, str, bool]] = [
     ("./x.sh", SH + "set -e\ncat <<EOF\nx\nEOF\npytest\n", False),
     ("./x.sh", SH + "set -e\neval pytest\n", False),
     ("./x.sh", SH + "set -e\nfor d in a b; do pytest $d; done\n", False),
+    # the last review round (#1054): each was credited, yet the step can pass
+    ("./x.sh", SH + "set -e\necho hi; trap 'exit 0' ERR\npytest\n", False),
+    ("./x.sh", SH + "set -e\necho; pytest() { true; }\npytest\n", False),
+    ("./x.sh", SH + "set -e\necho; exec true\npytest\n", False),
+    ("./x.sh", SH + "set -e\n[ -z \"$RUN\" ] && exit 0\npytest\n", False),
+    ("./x.sh", SH + "set -e\n. ./lib.sh\npytest\necho done\n", False),
+    ("./x.sh", SH + "set -e\n. venv/bin/activate\npytest\n", True),   # an env file is fine
 ]
 # Bodies that must not fail the step when pytest fails: the reader is right to skip them.
 MASKED = [SH + "pytest\necho done\n", SH + "pytest || true\n", SH + "set -e\npytest | tee log\n",
           SH + "pytest\nexit 0\n", SH + "set -e\n! pytest\n",
-          SH + "[ -n \"$STRICT\" ] && set -e\npytest\necho done\n", SH + "set -e\necho \"Usage:\npytest\n\"\n"]
+          SH + "[ -n \"$STRICT\" ] && set -e\npytest\necho done\n", SH + "set -e\necho \"Usage:\npytest\n\"\n",
+          SH + "set -e\necho hi; trap 'exit 0' ERR\npytest\n", SH + "set -e\necho; pytest() { true; }\npytest\n",
+          SH + "set -e\necho; exec true\npytest\n", SH + "set -e\n[ -z \"$RUN\" ] && exit 0\npytest\n",
+          SH + "set -e\n. ./lib.sh\npytest\necho done\n"]
 
 
 def _read(invocation: str, body: str) -> bool:
@@ -115,6 +125,9 @@ def _run(shell: list[str], tmp_path: Path, invocation: str, body: str) -> int:
     fake.mkdir(exist_ok=True)
     (fake / "pytest").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     (fake / "pytest").chmod(0o755)
+    (tmp_path / "lib.sh").write_text("set +e\n", encoding="utf-8")
+    (tmp_path / "venv/bin").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "venv/bin/activate").write_text("X=1\n", encoding="utf-8")
     env = {**os.environ, "PATH": f"{fake}{os.pathsep}{os.environ.get('PATH', '')}"}
     done = subprocess.run([*shell, invocation], cwd=tmp_path, env=env, capture_output=True,
                           encoding="utf-8", errors="replace", check=False)

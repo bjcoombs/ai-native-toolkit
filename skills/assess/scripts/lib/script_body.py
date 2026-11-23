@@ -18,7 +18,12 @@ after a check with errexit off is the last statement, so it hides the check. A b
 anything this reader does not model is not read (false): a compound command or keyword
 (``if``, ``for``, ``while``, ``case``, ``function``, braces, subshells), a heredoc, a line
 continuation, a function definition, ``eval``, ``exec``, ``trap``, ``return`` or a
-background ``&``. False means "not shown", never "no check": callers only upgrade a
+background ``&``, any of these as a later ``;`` statement on a line (``echo; trap 'exit 0'
+ERR``), a nested ``.`` / ``source`` of anything but an environment file (``. ./lib.sh`` may
+``set +e``; ``. venv/bin/activate`` is fine), and an ``exit`` behind ``&&`` / ``||`` other than a
+non-zero re-raise (``[ -z "$RUN" ] && exit 0``). A check behind a guard (``[ -n "$RUN" ] &&
+pytest``) is credited as a CI line with the same guard is: it fails the script when it runs.
+False means "not shown", never "no check": callers only upgrade a
 reading with it (``lib.ci_scripts.ScriptTree``), so a name rule's True or null stands.
 
 ``start_state(form, body)`` gives the errexit and pipefail a script starts with:
@@ -41,6 +46,7 @@ from collections.abc import Callable
 
 from lib.ci_exempt import exempt_segments, pipefail_after
 from lib.ci_masking import split_statements
+from lib.named_check import sourced_env
 
 _UNMODELLED = frozenset({
     "if", "then", "elif", "else", "fi", "for", "while", "until", "do", "done", "case", "esac",
@@ -97,6 +103,23 @@ def _reraised(statement: list[tuple[str, str]], k: int) -> bool:
     return len(words) == 2 and words[0] == "exit" and words[1] != "0"
 
 
+def _nested_source(segment: str) -> bool:
+    """``. ./lib.sh`` inside a body: the sourced file may ``set +e`` or redefine the check, so the
+    body is not read; an environment file (``. venv/bin/activate``, ``source .env``) is fine."""
+    words = segment.split()
+    return words[:1] in (["."], ["source"]) and not sourced_env(" ".join(["source", *words[1:]]))
+
+
+def _guarded_exit(statement: list[tuple[str, str]]) -> bool:
+    """An ``exit`` after ``&&`` / ``||`` other than a non-zero re-raise (``[ -z "$RUN" ] && exit
+    0``): the script may stop before the check runs, so the body is not read."""
+    for op, seg in statement[1:]:
+        words = seg.split()
+        if words[:1] == ["exit"] and not (op == "||" and len(words) == 2 and words[1] != "0"):
+            return True
+    return False
+
+
 def body_runs(text: str, *, errexit: bool, pipefail: bool, test: Callable[[str], bool],
               sourced: bool = False) -> bool:
     """True when ``text`` provably fails on a failing ``test`` command (module docstring)."""
@@ -109,7 +132,8 @@ def body_runs(text: str, *, errexit: bool, pipefail: bool, test: Callable[[str],
             return False
         for statement in split_statements(line):
             if any(op == "&" for op, _ in statement) or any(
-                    _unmodelled(seg) for _, seg in statement[1:]) or (
+                    _unmodelled(seg) or _nested_source(seg) for _, seg in statement) or (
+                    _guarded_exit(statement)) or (
                     len(statement) > 1 and any(seg.split()[:1] == ["set"] for _, seg in statement)):
                 return False   # [ -n "$CI" ] && set -e: errexit is not known after it
             statements.append(statement)
