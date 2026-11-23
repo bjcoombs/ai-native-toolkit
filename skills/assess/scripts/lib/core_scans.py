@@ -426,4 +426,4 @@ def since_last_run(level_block: Any, assess_dir: Path, repo_root: Path, supersed
     # says the model changed instead.
     block = across_models(block, level_block, previous_levels_version(assess_dir, superseded))
     # Two runs of one profile compare their gates on its own Steps when the default Steps cannot.
-    return on_own_steps(block, level_block, previous_level(assess_dir))
+    return on_own_steps(block, level_block, previous_level(assess_dir, superseded))

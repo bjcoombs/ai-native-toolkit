@@ -17,7 +17,7 @@ from lib.assess_diagrams import build_diagrams
 from lib.exec_summary import since_line
 from lib.level_tally import LEVEL_READS, default_model
 from lib.model_change import (CUSTOM_NOT_DRAWN, across_models, custom_run, model_changed_line, model_for_level,
-                              model_name, on_own_steps, previous_levels_version, units_label)
+                              model_name, on_own_steps, previous_level, previous_levels_version, units_label)
 from lib.prior_level import write_prior_level
 from lib.profiles import ModelChoice, resolve
 from test_headline import ci2  # noqa: F401 - ci2 is a fixture
@@ -191,3 +191,15 @@ def test_on_own_steps_leaves_a_known_or_cross_model_block_alone() -> None:
 def test_a_model_change_from_the_baseline_is_never_refilled_from_run_context() -> None:
     changed = across_models(_since(), _level(CITIZEN), DEFAULT_VERSION)
     assert on_own_steps(changed, _level(CITIZEN), _level(CITIZEN)) is changed
+
+
+def test_a_default_run_or_an_inherited_block_is_never_refilled(tmp_path: Path) -> None:
+    unknown = _since(gates_gained=None, gates_lost=None, closed_reason="previous_state_missing")
+    assert on_own_steps(unknown, _level(None), _level(None)) is unknown
+    (tmp_path / "run-context.json").write_text(json.dumps({"level": _level(CITIZEN)}), encoding="utf-8")
+    assert previous_level(tmp_path) == _level(CITIZEN)
+    superseded = {"since_last_run": {"available": True}, "level": _level(CITIZEN)}
+    assert previous_level(tmp_path, superseded) is None
+    assert on_own_steps(unknown, _level(CITIZEN), previous_level(tmp_path, superseded)) is unknown
+    (tmp_path / "run-context.json").write_text("[]", encoding="utf-8")
+    assert previous_level(tmp_path) is None
