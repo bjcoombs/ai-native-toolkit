@@ -171,7 +171,7 @@ class Resolution:
 SETTLED: frozenset[str] = frozenset({"resolved", "toolkit_gate"})
 # The toolkit's own regression gate template (#1152), matched exactly; no other remote.
 _TOOLKIT_GATE_REMOTE = re.compile(
-    r"^https://raw\.githubusercontent\.com/bjcoombs/ai-native-toolkit/[A-Za-z0-9._/-]+?"
+    r"^https://raw\.githubusercontent\.com/bjcoombs/ai-native-toolkit/[^/\s]+"
     r"/templates/assess-gate\.yml$")
 _TOOLKIT_GATE_COMPONENT = re.compile(r"^[^@\s]+/ai-native-toolkit/assess-gate@[^@\s/]+$")
 
@@ -181,8 +181,9 @@ def is_toolkit_gate(kind: str, source: str) -> bool:
     source = source.strip().strip("\"'")
     if kind == "remote":
         return bool(_TOOLKIT_GATE_REMOTE.match(source)) and ".." not in source
-    if kind == "component":
-        return bool(_TOOLKIT_GATE_COMPONENT.match(source))
+    if kind == "component":  # GitLab project paths match ignoring case (#859)
+        path, at, version = source.partition("@")
+        return bool(_TOOLKIT_GATE_COMPONENT.match(path.lower() + at + version))
     return False
 
 

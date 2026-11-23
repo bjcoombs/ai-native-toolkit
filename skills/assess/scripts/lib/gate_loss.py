@@ -16,6 +16,10 @@ reads the run context; nothing writes a file or recomputes ``since_last_run``:
   the highest Step whose gates, and every lower Step's, are all in ``held_gates``
   (``baseline_step``). ``step_change`` gives (baseline Step, this run's Step) when this run's
   is lower, else None. A lost Step is always a lost gate, so the Step only words the loss.
+- **Confirmed by the baseline.** ``since_last_run`` falls back to an earlier
+  ``run-context.json`` left on disk when no baseline is committed; ``held_at_baseline`` keeps
+  only the gates the committed ``prior_level.baseline.held_gates`` lists, the only loss that
+  can fail the gate.
 - **No baseline.** ``no_baseline`` is True on a first run or when the run context carries no
   committed baseline (``prior_level.baseline`` absent): there is nothing to compare with, so
   the gate passes and the log says so.
@@ -30,7 +34,8 @@ from typing import Any
 from lib.level_tally import default_model, gate_blockers
 from lib.levels import StepDef
 
-__all__ = ["baseline_step", "lost_gates", "no_baseline", "split_lost", "step_change"]
+__all__ = ["baseline_step", "held_at_baseline", "lost_gates", "no_baseline", "split_lost",
+           "step_change"]
 
 
 def _steps() -> list[StepDef]:
@@ -102,11 +107,18 @@ def step_change(ctx: Mapping[str, Any]) -> tuple[int, int] | None:
     return before, now
 
 
+def held_at_baseline(ctx: Mapping[str, Any], gates: Sequence[str]) -> list[str]:
+    """The ``gates`` the committed baseline's ``held_gates`` lists. ``since_last_run`` can
+    also compare with an earlier ``run-context.json`` left on disk; only the committed
+    baseline confirms a loss that can fail the gate."""
+    baseline = _baseline(ctx)
+    held = set(baseline["held_gates"]) if baseline is not None else set()
+    return [g for g in gates if g in held]
+
+
 def no_baseline(ctx: Mapping[str, Any]) -> bool:
     """True on a first run, or when no committed baseline was read."""
     since = ctx.get("since_last_run")
-    if not isinstance(since, Mapping):
-        return _baseline(ctx) is None
-    if since.get("first_run") is True:
+    if isinstance(since, Mapping) and since.get("first_run") is True:
         return True
-    return not isinstance(since.get("gates_lost"), list) and _baseline(ctx) is None
+    return _baseline(ctx) is None

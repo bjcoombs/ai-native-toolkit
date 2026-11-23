@@ -20,7 +20,9 @@ snapshot should fail a pull request. Two kinds of check, both strictly opt-in:
   On a first run, or when the gate changes are not known (``gates_lost`` is
   null), nothing fires. Only a gate that now reads ``unmet`` can fail: one that
   could not be read this run (``not_measured``) is a warn line, never a loss.
-  Without the opt-in a lost gate is a warn line only.
+  A loss counts only against the committed baseline: one ``since_last_run`` read from an
+  earlier ``run-context.json`` left on disk is a warn line. Without the opt-in a lost
+  gate is a warn line only.
 
 A third, explanatory part: when the committed ``.assess/findings.json`` (read
 from disk, or the prior the run recorded before rewriting it) was
@@ -62,7 +64,7 @@ from typing import Any, NotRequired, TypedDict, cast
 # scripts/ is on sys.path (pyproject pythonpath); lib is a package under it.
 from lib.assess_config import GateConfig, load_gate_config, load_gate_config_file
 from lib.findings_snapshot import committed_prior, method_change
-from lib.gate_loss import no_baseline, split_lost, step_change
+from lib.gate_loss import held_at_baseline, no_baseline, split_lost, step_change
 from lib.reviewed_findings import open_findings
 from lib.run_context_types import DerivedFinding, JsonDict, MethodChange
 
@@ -215,7 +217,7 @@ def check_gate_loss(ctx: JsonDict, gate: GateConfig) -> list[JsonDict]:
     baseline held now reads unmet."""
     if not gate.get("fail_on_gate_loss"):
         return []
-    unmet, _ = split_lost(ctx)
+    unmet = held_at_baseline(ctx, split_lost(ctx)[0])
     if not unmet:
         return []
     breach: JsonDict = {"metric": "gates_lost", "count": len(unmet), "paths": unmet}
@@ -257,8 +259,9 @@ def evaluate(ctx: JsonDict, gate: GateConfig) -> GateVerdict:
         "method_change": method_change(ctx),
     }
     unmet, unread = split_lost(ctx)
-    if unmet and not gate.get("fail_on_gate_loss"):
-        verdict["gates_lost_warning"] = unmet
+    failing = held_at_baseline(ctx, unmet) if gate.get("fail_on_gate_loss") else []
+    if [g for g in unmet if g not in failing]:
+        verdict["gates_lost_warning"] = [g for g in unmet if g not in failing]
     if unread:
         verdict["gates_unread_warning"] = unread
     if gate.get("fail_on_gate_loss") and no_baseline(ctx):
@@ -300,8 +303,9 @@ def format_verdict(verdict: GateVerdict) -> str:
     lost = verdict.get("gates_lost_warning")
     if lost:
         lines.append(
-            f"  warn gate lost: {', '.join(lost)} held at the committed baseline "
-            "and no longer holds (set fail_on_gate_loss to fail on it)"
+            f"  warn gate lost: {', '.join(lost)} held at the last run and no longer "
+            "holds (it fails the gate with fail_on_gate_loss on and a committed "
+            ".assess/prior-level.json that held it)"
         )
     unread = verdict.get("gates_unread_warning")
     if unread:

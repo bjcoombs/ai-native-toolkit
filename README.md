@@ -218,11 +218,15 @@ include:
     inputs: { config: .assess/config.toml }
 ```
 
-The job runs the same headless gate as the GitHub Action, on merge request pipelines only, and writes the summary that opens the report to the job log. It also fails the merge request when a Step gate your committed baseline held now reads unmet, such as CI no longer running the tests, and names the Step it costs. The baseline is `.assess/prior-level.json`, written by every `/assess` run, so commit your `.assess/` directory first; until there is one, the log says "no baseline yet" and the job passes. A gate the job could not read is reported, never counted as lost.
+The template and its job script first ship in the toolkit release after 3.0.0. Each release moves the tag in the include line to itself; on 3.0.0 or earlier the include line has no file to fetch, and a `toolkit_ref` of 3.0.0 or earlier makes the job print a notice and pass without running the gate.
+
+The job runs the same headless gate as the GitHub Action, in merge request pipelines only, and writes the summary that opens the report to the job log. It also fails the merge request when a Step gate your committed baseline held now reads unmet, such as CI no longer running the tests, and names the Step it costs. The baseline is `.assess/prior-level.json`, written by every `/assess` run, so commit your `.assess/` directory first; until there is one, the log says "no baseline yet" and the job passes. The job reads the baseline from the merge request's target branch, not from the change itself, so a change that deletes or re-freezes the baseline is still measured against what the target held, and the log notes the edit. A gate the job could not read is reported, never counted as lost.
 
 One difference from the Action: `fail_on_gate_loss` is on by default here and off in the Action. The Action takes the same input (`fail_on_gate_loss: 'true'`), or set `fail_on_gate_loss = true` under `[gate]` in `.assess/config.toml` for both. Set the `fail_on_gate_loss: false` input to report a lost gate on GitLab without failing.
 
-To post the summary as a merge request note too, add a project access token with `api` scope as a masked CI/CD variable named `ASSESS_GATE_TOKEN`. Without it the job tries `CI_JOB_TOKEN`, which most GitLab versions don't allow to post notes, so the summary stays in the job log and the job carries on.
+Your project needs merge request pipelines. Without a `workflow:` section, the included job's rule starts one for each merge request, beside your branch pipelines. If your `.gitlab-ci.yml` has `workflow: rules`, keep your existing rules and add `- if: $CI_PIPELINE_SOURCE == "merge_request_event"` among them, or the job never runs.
+
+To post the summary as a merge request note too, add a project access token with `api` scope as a masked CI/CD variable named `ASSESS_GATE_TOKEN`. Without it the job tries `CI_JOB_TOKEN`, which most GitLab versions don't allow to post notes, so the summary stays in the job log and the job carries on. Each pipeline adds a new note.
 
 The other inputs are `mr_note`, `toolkit_ref` (keep it equal to the tag in the include line), `toolkit_url` (for a mirror on a self-hosted GitLab), `image` and `stage`. The file follows the CI/CD component layout (`templates/assess-gate.yml` with `spec: inputs`), so a team that mirrors this repository onto its GitLab can include it as a component instead: `component: $CI_SERVER_FQDN/<group>/ai-native-toolkit/assess-gate@<version>`.
 

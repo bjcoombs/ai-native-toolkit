@@ -419,6 +419,7 @@ GATE_REMOTE = "https://raw.githubusercontent.com/bjcoombs/ai-native-toolkit/v3.0
     ("remote", GATE_REMOTE.replace("v3.0.0", "main"), True),
     ("component", "gitlab.example.com/tools/ai-native-toolkit/assess-gate@3.0.0", True),
     ("component", "$CI_SERVER_FQDN/grp/sub/ai-native-toolkit/assess-gate@~latest", True),
+    ("component", "gl.test/Grp/AI-Native-Toolkit/assess-gate@3.0.0", True),
     # Every other include stays as it was.
     ("remote", GATE_REMOTE.replace("bjcoombs", "someone"), False),
     ("remote", GATE_REMOTE.replace("assess-gate.yml", "other.yml"), False),

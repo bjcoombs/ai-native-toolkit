@@ -41,8 +41,8 @@ inputs:
     default: '.assess/config.toml'
   fail_on_gate_loss:
     description: >-
-      'true' fails the PR when a Step gate the committed baseline
-      (.assess/prior-level.json) held now reads unmet, as
+      'true' fails the PR when a Step gate the base branch's committed
+      baseline (.assess/prior-level.json) held now reads unmet, as
       `fail_on_gate_loss = true` in the config does. Default 'false' keeps the
       action warn-only; the GitLab template (templates/assess-gate.yml)
       defaults it to true.
@@ -96,6 +96,18 @@ runs:
           echo "::notice::assess-gate: uv unavailable - skipping the assessment this run (warn-only contract; it runs again on the next push)."
           echo "ok=false" >> "$GITHUB_OUTPUT"
         fi
+
+    - name: Compare with the base branch's gate baseline
+      # With fail_on_gate_loss on, a pull request is measured against the
+      # .assess/prior-level.json its base branch committed, never its own copy,
+      # so deleting or re-freezing the baseline cannot switch the check off.
+      # Always exits 0: an unreadable base is a notice, never a red check.
+      if: steps.ensure-uv.outputs.ok == 'true' && inputs.fail_on_gate_loss == 'true' && github.base_ref != ''
+      shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
+      run: |
+        bash "${GITHUB_ACTION_PATH}/skills/assess/scripts/base_baseline.sh" "${GITHUB_WORKSPACE}" "$BASE_REF"
 
     - name: Render the deterministic snapshot
       id: render

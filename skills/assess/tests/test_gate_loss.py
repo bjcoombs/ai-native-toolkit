@@ -3,7 +3,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.gate_loss import baseline_step, lost_gates, no_baseline, split_lost, step_change
+from lib.gate_loss import (
+    baseline_step,
+    held_at_baseline,
+    lost_gates,
+    no_baseline,
+    split_lost,
+    step_change,
+)
 from lib.level_tally import default_model
 
 
@@ -68,6 +75,12 @@ def test_no_baseline():
     assert no_baseline(_ctx(None, None, 2, first_run=True)) is True
     assert no_baseline(_ctx(None, None, 2)) is True
     assert no_baseline({}) is True
-    assert no_baseline(_ctx([], None, 2)) is False  # compared against the previous run-context
+    assert no_baseline(_ctx([], None, 2)) is True  # only an earlier run-context.json: no committed baseline
     assert no_baseline(_ctx(None, ["instructions"], 2)) is False
     assert no_baseline({"prior_level": {"baseline": {"held_gates": []}}}) is False
+
+
+def test_held_at_baseline_keeps_only_gates_the_baseline_held():
+    ctx = _ctx(["ci_runs_tests"], ["instructions"], 2)
+    assert held_at_baseline(ctx, ["instructions", "ci_runs_tests"]) == ["instructions"]
+    assert held_at_baseline(_ctx([], None, 2), ["instructions"]) == []

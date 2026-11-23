@@ -29,7 +29,7 @@ spec:
       type: boolean
       default: true
     toolkit_ref:
-      description: The ai-native-toolkit release tag the job runs. Keep it equal to the tag in the include line.
+      description: The ai-native-toolkit release tag the job runs (a tag or branch name, not a commit SHA). Keep it equal to the tag in the include line.
       default: v3.0.0
     toolkit_url:
       description: Where to clone the toolkit from, for a mirror on a self-hosted GitLab.
@@ -48,18 +48,20 @@ assess-gate:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   variables:
     GIT_DEPTH: "0"  # full history: churn and the since-last-run baseline need it
-    ASSESS_CONFIG: $[[ inputs.config ]]
+    ASSESS_CONFIG: "$[[ inputs.config ]]"
+    ASSESS_TOOLKIT_REF: "$[[ inputs.toolkit_ref ]]"
+    ASSESS_TOOLKIT_URL: "$[[ inputs.toolkit_url ]]"
     ASSESS_FAIL_ON_GATE_LOSS: "$[[ inputs.fail_on_gate_loss ]]"
     ASSESS_MR_NOTE: "$[[ inputs.mr_note ]]"
   script:
     - |
       ASSESS_TOOLKIT_DIR="$(mktemp -d)/ai-native-toolkit"
-      if ! git clone --quiet --depth 1 --branch "$[[ inputs.toolkit_ref ]]" "$[[ inputs.toolkit_url ]]" "$ASSESS_TOOLKIT_DIR"; then
+      if ! git clone --quiet --depth 1 --branch "$ASSESS_TOOLKIT_REF" "$ASSESS_TOOLKIT_URL" "$ASSESS_TOOLKIT_DIR"; then
         echo "assess-gate: could not fetch the toolkit - skipping the assessment this run (warn-only contract; it runs again on the next push)."
         exit 0
       fi
       if [ ! -f "$ASSESS_TOOLKIT_DIR/skills/assess/scripts/gitlab_gate.sh" ]; then
-        echo "assess-gate: toolkit $[[ inputs.toolkit_ref ]] has no GitLab gate script - skipping the assessment this run."
+        echo "assess-gate: toolkit $ASSESS_TOOLKIT_REF has no GitLab gate script - skipping the assessment this run."
         exit 0
       fi
       bash "$ASSESS_TOOLKIT_DIR/skills/assess/scripts/gitlab_gate.sh"

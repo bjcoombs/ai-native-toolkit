@@ -18,10 +18,13 @@
 #   ASSESS_PROJECT_DIR        the checked-out project (default: $CI_PROJECT_DIR)
 #   ASSESS_CONFIG             gate config, relative to the project (default: .assess/config.toml)
 #   ASSESS_FAIL_ON_GATE_LOSS  "true" passes --fail-on-gate-loss to assess_gate.py
-#   ASSESS_MR_NOTE            "true" posts the summary as a merge request note
+#   ASSESS_MR_NOTE            "true" posts the summary as a merge request note, one new
+#                             note per pipeline
 #   ASSESS_GATE_TOKEN         optional token with api scope for the note (PRIVATE-TOKEN);
 #                             without it the note is tried with CI_JOB_TOKEN
-#   CI_API_V4_URL, CI_PROJECT_ID, CI_MERGE_REQUEST_IID, CI_JOB_TOKEN: set by GitLab
+#   CI_API_V4_URL, CI_PROJECT_ID, CI_MERGE_REQUEST_IID, CI_JOB_TOKEN,
+#   CI_MERGE_REQUEST_TARGET_BRANCH_NAME: set by GitLab. With the gate-loss check on,
+#   base_baseline.sh swaps in the target branch's .assess/prior-level.json first.
 #
 # Tests: skills/assess/tests/test_gitlab_gate.py runs this script against a
 # fixture project with stubbed curl.
@@ -79,7 +82,9 @@ post_note() {
         notice "not a merge request pipeline, so no merge request note was posted."
         return 0
     fi
-    if [ -z "${CI_API_V4_URL:-}" ] || [ -z "${CI_PROJECT_ID:-}" ]; then
+    # The merge request's own project: a fork's pipeline runs in the source project.
+    local project_id="${CI_MERGE_REQUEST_PROJECT_ID:-${CI_PROJECT_ID:-}}"
+    if [ -z "${CI_API_V4_URL:-}" ] || [ -z "$project_id" ]; then
         notice "the GitLab API address is not set, so no merge request note was posted."
         return 0
     fi
@@ -94,9 +99,9 @@ post_note() {
     fi
     local body status
     body="$(printf '#### AI-readiness gate\n\n```\n%s\n```\n' "$(cat "$1")")"
-    status="$(curl -sS -o /dev/null -w '%{http_code}' --request POST \
+    status="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 --request POST \
         --header "$header" --form-string "body=$body" \
-        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" 2>/dev/null)"
+        "${CI_API_V4_URL}/projects/${project_id}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" 2>/dev/null)"
     case "$status" in
         2??) notice "posted the summary as a merge request note." ;;
         *) notice "the merge request note was not posted (HTTP ${status:-none}), so the summary stays in this job log. A token with api scope in ASSESS_GATE_TOKEN can post it." ;;
@@ -110,6 +115,10 @@ main() {
         notice "uv unavailable - skipping the assessment this run (warn-only contract; it runs again on the next push)."
         return 0
     fi
+    if [ "${ASSESS_FAIL_ON_GATE_LOSS:-true}" = "true" ]; then
+        # Measure the change against its target branch's baseline, never its own.
+        bash "$TOOLKIT_ASSESS/scripts/base_baseline.sh" "$PROJECT" "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-}"
+    fi
     if ! render; then
         notice "skipped: infrastructure failure rendering the snapshot - not a finding. The gate runs again on the next push."
         return 0
@@ -118,7 +127,8 @@ main() {
     [ "${ASSESS_FAIL_ON_GATE_LOSS:-true}" = "true" ] && args+=(--fail-on-gate-loss)
     local out rc
     out="$(mktemp)"
-    (cd "$TOOLKIT_ASSESS" && uv run scripts/assess_gate.py "${args[@]}") >"$out" 2>&1
+    # stdout is the verdict and the note body; stderr (uv progress, notices) stays in the log.
+    (cd "$TOOLKIT_ASSESS" && uv run scripts/assess_gate.py "${args[@]}") >"$out"
     rc=$?
     cat "$out"
     post_note "$out"

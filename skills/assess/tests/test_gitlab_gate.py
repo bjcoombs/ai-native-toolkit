@@ -83,7 +83,10 @@ def test_job_runs_on_merge_requests_with_full_history():
 
 def test_job_runs_the_toolkit_script_and_degrades_a_failed_fetch():
     script = "\n".join(_job()["script"])
-    assert 'git clone --quiet --depth 1 --branch "$[[ inputs.toolkit_ref ]]"' in script
+    assert 'git clone --quiet --depth 1 --branch "$ASSESS_TOOLKIT_REF" "$ASSESS_TOOLKIT_URL"' in script
+    # Inputs reach the shell through quoted variables, never interpolated into script:.
+    assert "$[[" not in script
+    assert _job()["variables"]["ASSESS_TOOLKIT_REF"] == "$[[ inputs.toolkit_ref ]]"
     assert "skills/assess/scripts/gitlab_gate.sh" in script
     # A failed fetch or a toolkit without the script is a notice and exit 0.
     assert script.count("exit 0") == 2
@@ -92,6 +95,13 @@ def test_job_runs_the_toolkit_script_and_degrades_a_failed_fetch():
 def test_config_input_mirrors_the_action():
     action = yaml.safe_load(ACTION.read_text(encoding="utf-8"))
     assert _spec()["config"]["default"] == action["inputs"]["config"]["default"]
+
+
+def test_both_hosts_expose_fail_on_gate_loss_with_different_defaults():
+    """One shared option: off in the Action (warn-only), on in the GitLab template."""
+    action = yaml.safe_load(ACTION.read_text(encoding="utf-8"))
+    assert action["inputs"]["fail_on_gate_loss"]["default"] == "false"
+    assert _spec()["fail_on_gate_loss"]["default"] is True
 
 
 def test_toolkit_pin_follows_the_plugin_version():
@@ -230,15 +240,18 @@ def test_fixture_passes_on_the_baseline_and_fails_when_ci_stops_running_tests(pr
 @needs_bash
 def test_note_posts_with_a_provided_token(project, tmp_path):
     out = _run(project, tmp_path, "201", CI_MERGE_REQUEST_IID="7", CI_API_V4_URL="https://gl.example/api/v4",
-               CI_PROJECT_ID="42", ASSESS_GATE_TOKEN="secret-token", ASSESS_FAIL_ON_GATE_LOSS="false")
+               CI_PROJECT_ID="41", CI_MERGE_REQUEST_PROJECT_ID="42", ASSESS_GATE_TOKEN="secret-token",
+               ASSESS_FAIL_ON_GATE_LOSS="false")
     assert out.returncode == 0, out.stdout + out.stderr
     assert "posted the summary as a merge request note" in out.stdout
     assert "secret-token" not in out.stdout + out.stderr
     args = (tmp_path / "curl.args").read_text(encoding="utf-8").split("\0")
     assert "PRIVATE-TOKEN: secret-token" in args
     assert "https://gl.example/api/v4/projects/42/merge_requests/7/notes" in args
+    assert args[args.index("--max-time") + 1] == "30"
     body = args[args.index("--form-string") + 1]
     assert body.startswith("body=#### AI-readiness gate") and "/assess gate" in body
+    assert "Resolved" not in body and "Installed" not in body  # no uv progress from stderr
 
 
 @needs_bash
@@ -293,3 +306,52 @@ def test_first_run_reports_no_baseline_yet(tmp_path):
     out = _run(repo, tmp_path / "a")
     assert out.returncode == 0, out.stdout + out.stderr
     assert "no baseline yet" in out.stdout
+
+
+def _mr_case(tmp_path: Path, tamper: str) -> tuple[Path, subprocess.CompletedProcess[str]]:
+    """main holds the baseline at Step 3; a feature branch drops the test job and
+    tampers with the baseline; the job runs as that branch's merge request."""
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    assert _run(repo, tmp_path / "a").returncode == 0
+    _commit_all(repo, "assess baseline")
+    _git(repo, "remote", "add", "origin", str(repo))  # the fetch path: no origin/main yet
+    _git(repo, "checkout", "-q", "-b", "feature")
+    (repo / ".gitlab-ci.yml").write_text(INCLUDE + CI_NO_TESTS, encoding="utf-8")
+    if tamper == "delete":
+        (repo / ".assess" / "prior-level.json").unlink()
+    elif tamper == "refreeze":  # /assess run on the branch, its loss committed as the baseline
+        _commit_all(repo, "drop the test job")
+        _run(repo, tmp_path / "b", ASSESS_FAIL_ON_GATE_LOSS="false")
+    _commit_all(repo, "tamper with the baseline")
+    return repo, _run(repo, tmp_path / "c", CI_MERGE_REQUEST_TARGET_BRANCH_NAME="main")
+
+
+@needs_bash
+@pytest.mark.parametrize("tamper", ["delete", "refreeze"])
+def test_a_change_cannot_switch_off_its_own_gate(tmp_path, tamper):
+    _, out = _mr_case(tmp_path, tamper)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "this change edits .assess/prior-level.json" in out.stdout
+    assert "comparing with the gate baseline committed on main" in out.stdout
+    assert "FAIL gate lost: ci_runs_tests" in out.stdout
+
+
+@needs_bash
+def test_a_target_without_a_baseline_passes_with_a_note(tmp_path):
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    _git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    out = _run(repo, tmp_path / "a", CI_MERGE_REQUEST_TARGET_BRANCH_NAME="main")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "main has no committed .assess/prior-level.json, so there is no baseline yet" in out.stdout
+    assert "no baseline yet: commit" in out.stdout
+
+
+@needs_bash
+@pytest.mark.parametrize("target", ["no-such-branch", "-bad"])
+def test_an_unreadable_target_is_a_notice(tmp_path, target):
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    out = subprocess.run(["bash", str(ASSESS / "scripts" / "base_baseline.sh"), str(repo), target],
+                         capture_output=True, encoding="utf-8", errors="replace")
+    assert out.returncode == 0
+    assert "so the gate compares with the baseline in this branch" in out.stdout
