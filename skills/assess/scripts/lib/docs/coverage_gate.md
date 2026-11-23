@@ -1,6 +1,6 @@
-# `lib/coverage_gate.py`
+# `lib/testing/coverage_gate.py`
 
-The full reference for `skills/assess/scripts/lib/coverage_gate.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/testing/coverage_gate.py`, whose module docstring holds the summary.
 
 Answers the Layer 6 question measurement cannot: is a line-coverage threshold
 *configured*? `detect_coverage_gate(repo_root, scope, excludes)` runs from the scan
@@ -76,7 +76,7 @@ a null from another gate (a templated threshold) keeps its own reason, and a gat
 for every Go and Rust manifest present, even one gating nothing, keeps the normal
 reading, with `unmeasured_reason` null. The collector's manifest `revision` moved to 2 for the
 #788 change of meaning, and to 4 in the 3.0.0 release for the #937 widening.
-Root coverage.py config on a scoped run (#1032, `lib.coverage_root_config`): coverage.py
+Root coverage.py config on a scoped run (#1032, `lib.testing.coverage_root_config`): coverage.py
 reads its config from the directory it runs in, so a root `[tool.coverage]`, `.coveragerc`,
 `setup.cfg` or `tox.ini` floor governs a Python scope with no coverage.py config of its own
 when CI runs coverage from the root. `_root_floor` scans that root config's `fail_under` and
@@ -106,5 +106,5 @@ JaCoCo `<maximum>` on a `MISSEDCOUNT` or `MISSEDRATIO` counter (and Gradle's `ma
 beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_ratio`:
 its `threshold_percent` is null, so it reads unknown, never 0, and any such bound
 (zero included) gates something.
-Stdlib plus `lib.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`,
-`lib.coverage_activation` and `lib.coverage_ci`. Tests: `tests/test_coverage_gate.py`.
+Stdlib plus `lib.docs.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`,
+`lib.testing.coverage_activation` and `lib.testing.coverage_ci`. Tests: `tests/test_coverage_gate.py`.

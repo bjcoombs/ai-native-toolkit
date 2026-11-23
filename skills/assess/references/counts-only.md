@@ -49,7 +49,8 @@ carry full text. Only `run-context.counts-only.json` (and an
 `review-strip.counts-only.svg` drawn from it. Like the JSON, those copies keep
 path-class values (package ids, doc paths) in clear under `--counts-only` alone;
 only `--hash-paths` or `--hash-salt` hashes them, so share them from a hashed run.
-The evidence waffle has no copy: it names only maturity-model rows and counts.
+The Step ladder and the evidence waffle have no copy: they name only the model's Steps,
+gates and rows, and counts.
 
 ## Path-keyed maps
 
@@ -132,6 +133,13 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `instruction_files.{}.findings.reason` | dropped |
 | `prior_findings_snapshot.findings.name` | token |
 | `prior_findings_snapshot.findings.paths` | path (hashed when hashing is on) |
+| `prior_level.levels_version` | token |
+| `prior_level.tags.tag` | token |
+| `prior_level.tags.not_measured.id` | token |
+| `prior_level.tags.not_measured.reason` | token |
+| `prior_level.tags.countable_not_measured.id` | token |
+| `prior_level.tags.countable_not_measured.reason` | token |
+| `prior_level.reason` | token |
 
 ## doc_graph
 
@@ -245,6 +253,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `dead_code.tools.consent` | dropped |
 | `observability.boundary` | dropped |
 | `observability.instrumented.signals` | dropped |
+| `observability.instrumented.kinds` | token |
 | `observability.discoverable.signals` | dropped |
 | `observability.reachable.signals` | dropped |
 | `capability_offers.build_system` | token |
@@ -492,7 +501,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `units.source` | token |
 | `units.unit_count_reason` | token |
-| `units.units.path` | dropped |
+| `units.units.path` | path, dropped unless hashing is on (then hashed) |
 | `units.units.origin` | token |
 | `units.units.ecosystem` | token |
 | `units.units.workspace` | dropped |
@@ -737,6 +746,18 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `ai_usage.covered_author_agents` | dropped |
 | `ai_usage.limits` | dropped |
 
+## agent_outcome
+
+| Field | Kept as |
+|---|---|
+| `agent_outcome.reason` | reason code |
+| `agent_outcome.window` | token |
+| `agent_outcome.since` | dropped |
+| `agent_outcome.agent_rule` | token |
+| `agent_outcome.revert_null_reason` | token |
+| `agent_outcome.rework_null_reason` | token |
+| `agent_outcome.limits` | dropped |
+
 ## doc_claims
 
 | Field | Kept as |
@@ -788,6 +809,11 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `level.excluded.id` | token |
 | `level.excluded.kind` | token |
 | `level.excluded.source` | token |
+| `level.tags.tag` | token |
+| `level.tags.not_measured.id` | token |
+| `level.tags.not_measured.reason` | token |
+| `level.tags.countable_not_measured.id` | token |
+| `level.tags.countable_not_measured.reason` | token |
 
 ## headline
 
@@ -807,7 +833,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `unit_readings.unit_count_reason` | token |
 | `unit_readings.unit_blocks` | token |
-| `unit_readings.units.path` | dropped |
+| `unit_readings.units.path` | path, dropped unless hashing is on (then hashed) |
 | `unit_readings.units.conditions.id` | token |
 | `unit_readings.units.conditions.origin` | token |
 
@@ -817,7 +843,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 |---|---|
 | `unit_levels.unit_count_reason` | token |
 | `unit_levels.levels_version` | token |
-| `unit_levels.units.path` | dropped |
+| `unit_levels.units.path` | path, dropped unless hashing is on (then hashed) |
 | `unit_levels.units.inherited` | token |
 | `unit_levels.units.conditions.id` | token |
 | `unit_levels.units.conditions.state` | token |
@@ -884,3 +910,8 @@ kept as written. A string
 | `repos.gate_blockers.disposition` | token |
 | `repos.tags.tag` | token |
 | `views.units.tags.cells.tag` | token |
+| `repos.unit_rows.key` | path, dropped unless hashing is on (then hashed) |
+| `repos.unit_rows.next_blocker.gate` | token |
+| `repos.unit_rows.next_blocker.state` | token |
+| `repos.unit_rows.next_blocker.disposition` | token |
+| `repos.unit_rows.tags.tag` | token |

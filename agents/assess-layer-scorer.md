@@ -27,7 +27,7 @@ A scorecard the orchestrator forwards to the `assess-findings` step:
 - any layer-specific observations the report should lead with (e.g. "Layer 3 linter exists but no complexity gate"), and
 - the **`evidence`** list: every existence or wiring fact a verdict rests on, as structured entries in the schema below.
 
-You return **no headline score, fraction or band name**. The report headline (the autonomy Step, its next unlock, "Practices in place: N of M measured" and the per-tag strip) is the run context's `headline` block, computed by the deterministic core from the maturity model; your verdicts are the detail underneath it and never set it.
+You return **no headline score, fraction or band name**. The report headline (the autonomy Step, the gate that blocks the next one, "Catalogue coverage: N of M measured" and the per-tag strip) is the run context's `headline` block, computed by the deterministic core from the maturity model; your verdicts are the detail underneath it and never set it.
 
 Return this as a compact structured summary (not the full report prose). The `assess-findings` step renders it into the report template alongside the deterministic findings.
 
@@ -241,7 +241,7 @@ jq '.language_capabilities' "$REPO_ROOT/.assess/run-context.json"
 
 **Observability tier (the decisive one) - three rungs (`observability.rung`, 0-3):**
 
-1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging). Necessary, not sufficient.
+1. **Instrumented** - telemetry is emitted (OpenTelemetry, Prometheus, Datadog/APM, structured logging, or a standard-library logger such as Python `logging.getLogger`, Go `log/slog` or the Rust `tracing` crate). `observability.instrumented.kinds` says whether it came from a manifest dependency, from code or from a collector config. Necessary, not sufficient.
 2. **Discoverable** - an `OBSERVABILITY.md` / runbook tells the agent *where* runtime truth lives. Orients, but grants no access.
 3. **Reachable** - the agent has an *invokable* path to runtime state: an MCP server over logs/metrics/traces (`.mcp.json`), a repo skill that tails logs / queries metrics, or a runbook with runnable query commands. **This is the rung that decides the score** - without it the agent *knows* telemetry exists but cannot *use* it, so liveness stays unverifiable in practice. A Grafana no agent can query from stops at rung 1. **Boundary:** this scores what the *repo provides* toward agent-reachability; it cannot know the agent's live environment - say so in the report.
 

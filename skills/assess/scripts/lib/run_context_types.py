@@ -131,7 +131,7 @@ class DocSignal(TypedDict, total=False):
 
 
 class DocGraphBlock(TypedDict):
-    """``run-context.json`` ``doc_graph``: :meth:`lib.doc_graph.DocGraphResult.as_dict`."""
+    """``run-context.json`` ``doc_graph``: :meth:`lib.docs.doc_graph.DocGraphResult.as_dict`."""
 
     available: bool
     reason: str
@@ -785,6 +785,7 @@ class SignalsStamp(TypedDict):
     window: str  # e.g. "6mo"
     target_head: str | None  # None: the target is not a git repo
     target_dirty: bool | None
+    scope: str | None  # --scope, repository-relative (#866); None: the whole checkout
 
 
 class SignalsDocument(TypedDict):

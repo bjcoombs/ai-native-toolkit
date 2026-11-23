@@ -25,7 +25,7 @@ from lib.hosting.merged_sample import UNSUPPORTED_HOST_REASON
 from lib.fleet.fleet_level import LEVEL_FILE, fleet_levels, write_fleet_levels
 from lib.fleet.fleet_level_schema import SCHEMA_PATH, build_schema, render
 from lib.level_signals import DEFAULT_LEVELS, load_default_levels
-from lib.levels import LevelsError, MaturityModel, evaluate_row, parse_levels
+from lib.levels import LevelsError, MaturityModel, Row, evaluate_row, parse_levels
 from test_fleet_cli import fleet_cli
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -65,8 +65,8 @@ def _state(result: lt.LevelResult, cid: str) -> tuple[str, str | None]:
 # --- loading: requires and Steps ---------------------------------------------
 
 STEPS = [
-    {"step": 1, "name": "Assisted", "threshold": 0},
-    {"step": 2, "name": "Supervised agent PRs", "threshold": 1,
+    {"step": 1, "name": "Assisted"},
+    {"step": 2, "name": "Supervised agent PRs",
      "gates": [{"id": "instructions", "row": "instr", "level": 1}]},
 ]
 
@@ -77,14 +77,18 @@ def test_a_model_without_steps_or_requires_loads_as_before():
 
 
 @pytest.mark.parametrize("steps, message", [
-    ([{"step": 2, "name": "x", "threshold": 0}], "numbered 1..K"),
-    ([{"step": 1, "name": "x", "threshold": 1}], "always reached"),
+    ([{"step": 2, "name": "x"}], "numbered 1..K"),
+    ([{"step": 1, "name": "x", "gates": [{"id": "g", "row": "instr", "level": 1}]}], "always reached"),
     ([STEPS[0], {**STEPS[1], "gates": [{"id": "g", "row": "nope", "level": 1}]}], "unknown row"),
     ([STEPS[0], {**STEPS[1], "gates": [{"id": "g", "row": "instr", "level": 2}]}], "must be a level"),
-    ([*STEPS, {"step": 3, "name": "x", "threshold": 1, "gates": []}], "gates accumulate"),
-    ([*STEPS, {**STEPS[1], "step": 3, "threshold": 0}], "below step 2"),
-    ([STEPS[0], {**STEPS[1], "threshold": -1}], "at least 0"),
+    ([*STEPS, {"step": 3, "name": "x", "gates": []}], "gates accumulate"),
     ([STEPS[0], {**STEPS[1], "extra": 1}], "unknown key"),
+    # #1083: a count threshold is refused by name, never silently ignored
+    ([{**STEPS[0], "threshold": 0}, STEPS[1]], "'threshold' was removed .*gates only"),
+    ([STEPS[0], {**STEPS[1], "threshold": 3}], "'threshold' was removed"),
+    # gates are all that tell two Steps apart, so a Step must add one
+    ([STEPS[0], {**STEPS[1], "gates": []}], "adds no gate over step 1"),
+    ([*STEPS, {**STEPS[1], "step": 3}], "adds no gate over step 2"),
 ])
 def test_a_malformed_step_fails_at_load(steps, message):
     with pytest.raises(LevelsError, match=message):
@@ -299,14 +303,14 @@ def _stepped() -> MaturityModel:
     return _model(
         _row("instr", [_eq(INSTR)]), _row("ci", [_eq(CI)]),
         _row("fresh", [{"signal": DOC, "op": "lte", "value": 50}], [{"signal": DOC, "op": "lte", "value": 20}]),
-        steps=[*STEPS, {"step": 3, "name": "Unattended agent PRs", "threshold": 2,
+        steps=[*STEPS, {"step": 3, "name": "Unattended agent PRs",
                         "gates": [*STEPS[1]["gates"], {"id": "ci_runs_tests", "row": "ci", "level": 1}]}])
 
 
 def test_a_missing_gate_blocks_the_next_step_and_names_it():
     result = lt.level_result(_stepped(), {**_fresh(), "layer_grades": {"instruction_file_present": False}})
     assert result["step"] == 1
-    assert result["next_step"] == {"step": 2, "threshold": 1, "blockers": [
+    assert result["next_step"] == {"step": 2, "blockers": [
         {"kind": "gate", "gate": "instructions", "condition": "instr.1", "state": "unmet"}]}
 
 
@@ -318,14 +322,45 @@ def test_a_declared_gate_holds_while_staying_out_of_the_tally():
     assert result["tally"]["met"] == 2 and "instr.1" in result["listed"]
 
 
-def test_an_unmeasured_gate_and_a_short_tally_both_block():
+def test_an_unmeasured_gate_blocks_and_the_tally_never_does():
     signals = {**_fresh(40), "layer_grades": {"instruction_file_present": True}}
     result = lt.level_result(_stepped(), signals)
-    assert result["step"] == 2
-    assert result["next_step"] == {"step": 3, "threshold": 2, "blockers": [
+    assert result["step"] == 2 and result["tally"]["met"] == 1
+    assert result["next_step"] == {"step": 3, "blockers": [
         {"kind": "gate", "gate": "ci_runs_tests", "condition": "ci.1", "state": "not_measured",
-         "reason": "block_absent"},
-        {"kind": "threshold", "threshold": 2, "met": 1}]}
+         "reason": "block_absent"}]}
+
+
+def test_gates_with_no_counted_condition_met_reach_the_top_step():
+    """#1083: a tally of 0 holds no Step back once the gates hold."""
+    signals = {**_fresh(90), "layer_grades": {"instruction_file_present": True},
+               "ci_checks": {"test_or_lint_configured": True}}
+    result = lt.level_result(_stepped(), signals)
+    assert result["tally"]["met"] == 0 and (result["step"], result["next_step"]) == (3, None)
+
+
+def _plus_met_row(model: MaturityModel, n: int) -> MaturityModel:
+    """``model`` with ``n`` new rows of one counted condition each that ``_fresh()`` meets."""
+    rows: list[Row] = [{"id": f"new-{i}", "title": "new", "scope": "team", "aggregation": {"rule": "min", "share": 1},
+                        "levels": [{"level": 1, "criteria": [{"signal": DOC, "op": "lte", "value": 100}],
+                                    "truth": ["docs"]}]} for i in range(n)]
+    return {**model, "rows": [*model["rows"], *rows]}
+
+
+@pytest.mark.parametrize("signals", [
+    {},  # nothing measured: Step 1
+    {"layer_grades": {"instruction_file_present": True}},  # the instructions gate: Step 2
+    {"layer_grades": {"instruction_file_present": True}, "ci_checks": {"test_or_lint_configured": True}},
+])
+@pytest.mark.parametrize("added", [1, 7])
+def test_a_new_counted_condition_the_repository_meets_never_moves_its_step(signals, added):
+    """#1083 success criterion: the catalogue grows by met, counted conditions; the Step stays."""
+    for model in (_stepped(), load_default_levels()):
+        data = {**_fresh(), **signals}
+        before = lt.level_result(model, data)
+        after = lt.level_result(_plus_met_row(model, added), data)
+        assert after["tally"]["met"] == before["tally"]["met"] + added
+        assert (after["step"], after["next_step"]) == (before["step"], before["next_step"])
 
 
 def test_the_default_steps_stage_their_gates():
@@ -337,7 +372,7 @@ def test_the_default_steps_stage_their_gates():
     prefixes = [[g["row"].split("-")[1] for g in s["gates"]] for s in steps]
     assert prefixes == [[], ["0"], ["0", "5"], ["0", "5", "6"]]
     assert [g["id"] for g in steps[3]["gates"]] == ["instructions", "ci_runs_tests", "coverage_gate"]
-    assert all(s["threshold"] >= 0 for s in steps)
+    assert all(set(s) == {"step", "name", "gates"} for s in steps)  # gates only, no count (#1083)
 
 
 # --- output: determinism, schema, counts-only --------------------------------
@@ -512,7 +547,7 @@ def test_layer_three_suppressions_earn_no_tally_credit_without_a_linter(lint_run
 def test_each_condition_carries_the_whys_of_its_criteria():
     """#939: a condition's why joins its criteria's manifest whys, in order, each once."""
     from lib.manifest.check_manifest import condition_key, core_manifest
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
 
     model = load_default_levels()
     whys = condition_whys(core_manifest())

@@ -45,7 +45,7 @@ follows from that class.
 Whys (#939): ``manifest_version`` 1 loads with no whys and rejects any; version 2 (the
 core) requires a ``why`` on every condition, finding, scan (a collector's ``whys`` table)
 and truth tag (the root ``tags`` table), whatever the ``owner``. The rules and accessors
-are ``lib.manifest_whys``, which :func:`validate_manifest` runs last.
+are ``lib.manifest.manifest_whys``, which :func:`validate_manifest` runs last.
 
 Full reference: lib/docs/check_manifest.md.
 """
@@ -58,12 +58,12 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, cast
 
-from lib import manifest_whys
+import lib.manifest.manifest_whys as manifest_whys
 from lib.manifest.check_validation import ValidationError, closest, errors_only, finding, format_error
-from lib.manifest_whys import TagWhy
+from lib.manifest.manifest_whys import TagWhy
 
 CORE_MANIFEST = Path(__file__).resolve().parents[3] / "checks" / "core.toml"
-MANIFEST_VERSION = 2  # 1 still loads, with no whys (lib.manifest_whys)
+MANIFEST_VERSION = 2  # 1 still loads, with no whys (lib.manifest.manifest_whys)
 MANIFEST_VERSIONS = (1, 2)
 
 Kind = Literal["collector", "signal", "condition", "finding"]
@@ -74,7 +74,7 @@ STAGES = ("setup", "read_side", "post_offers", "final")
 PROVIDED_INPUTS = frozenset({"repo_root", "requested_scope", "run_date", "non_interactive"})
 # Tokens for ``scan_registry.GATE_REASONS``, the reasons a scan may opt out of degrading.
 GATE_REASONS = ("setup", "bad_scope", "self_degrading", "serialiser")
-PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop")
+PRIVACY_CLASSES = ("path", "token", "reason", "id", "drop", "hashed_path")
 # Producer input classes (``level_signals.InputClass``, #783 and #789 3.1).
 EVIDENCE = ("config_text", "head_text", "head_structure", "ci_executed",
             "git_history", "execution_artifact", "platform")
@@ -149,7 +149,7 @@ class CollectorEntry(_EntryBase):
     unit_scope: NotRequired[Literal["scoped", "override"]]
     headless: NotRequired[dict[str, str]]
     headless_variants: NotRequired[list[HeadlessVariant]]
-    whys: NotRequired[dict[str, str]]  # scan -> its why (#939, lib.manifest_whys)
+    whys: NotRequired[dict[str, str]]  # scan -> its why (#939, lib.manifest.manifest_whys)
     why_sources: NotRequired[dict[str, str]]
     evidence: NotRequired[str]
     shapes: NotRequired[list[ShapeRef]]
@@ -312,7 +312,7 @@ _FIELDS: dict[str, dict[str, Check]] = {
         "why": lambda v: "",  # rejected with its own message: a signal carries no why
     },
     "condition": {"key": _str(_KEY_RE), "fix": _str(max_len=300), "why": lambda v: "",
-                  "why_source": lambda v: ""},  # whys: lib.manifest_whys
+                  "why_source": lambda v: ""},  # whys: lib.manifest.manifest_whys
     "finding": {
         "name": _str(_NAME_RE), "order": _int(0), "action": _str(max_len=200),
         "mode": _enum(FINDING_MODES), "concern": _bool, "inputs": _STRS,

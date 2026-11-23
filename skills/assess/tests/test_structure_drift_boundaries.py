@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 from lib.context_blocks import structure_drift_tier_0
-from lib.ownership_parser import is_boundary_pattern
-from lib.structure_drift import detect_path_existence_drift
+from lib.docs.ownership_parser import is_boundary_pattern
+from lib.keyhole.structure_drift import detect_path_existence_drift
 
 _ARCH = "# Architecture\n\nThe entry point is `src/a.py`.\n"
 _ARCH_NON_MODULE = ("# Architecture\n\nRead `CONTRIBUTING.md` first; CI runs "

@@ -198,7 +198,7 @@ EXCLUDE_FILE_PATTERNS = [
 # does not count: a bare top-level `fixtures/` often holds hand-kept reference
 # data, while a nested `fixtures/` (`test/fixtures/`, `mcp/test/fixtures/`)
 # holds recorded tool output. Path-aware like `EXCLUDE_PATH_SEQUENCES` in
-# lib/doc_graph.py, but broader: any `fixtures` component below the top level
+# lib/docs/doc_graph.py, but broader: any `fixtures` component below the top level
 # matches, whatever its parent, since recorded JSONL sits under `mcp/test/`,
 # `src/` or `e2e/` as often as under `tests/`.
 EXCLUDE_NESTED_PATH_PATTERNS: tuple[tuple[str, str], ...] = (

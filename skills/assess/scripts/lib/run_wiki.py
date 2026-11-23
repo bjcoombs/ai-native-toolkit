@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
-from lib.sibling_tests import TestIndex, has_sibling_test, shared_name_keys
+from lib.testing.sibling_tests import TestIndex, has_sibling_test, shared_name_keys
 from lib.complexity.stats_diff import StatsDiff, hotspot_commits
 from lib.wiki_state import (
     drop_superseded_log_entry,
@@ -55,7 +55,7 @@ def _has_sibling_test(
 ) -> bool | None:
     """Best-effort: does this file have a test file?
 
-    Delegates to ``lib.sibling_tests.has_sibling_test``, the one resolver the
+    Delegates to ``lib.testing.sibling_tests.has_sibling_test``, the one resolver the
     ``test_focus`` signal also reads, so the hotspot page's ``Has test file`` row
     and the focus table agree. ``True``/``False`` from a filesystem check of the
     naming idioms (``foo.ts`` next to ``foo.test.ts``, ``FooTest.java``, an
@@ -254,7 +254,7 @@ def write_run_wiki(
 
     Mutates ``first_flagged_map`` (new dates stamped, retired entries dropped)
     and persists it to ``first-flagged.json``. ``hot_test_index`` is the one
-    repository test index (``lib.sibling_tests.build_test_index``) for every hot
+    repository test index (``lib.testing.sibling_tests.build_test_index``) for every hot
     file's parallel-tree probe, built by the scan table and shared with the
     ``test_focus`` block.
     """

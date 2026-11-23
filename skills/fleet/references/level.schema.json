@@ -213,9 +213,6 @@
                 "step": {
                   "type": "integer"
                 },
-                "threshold": {
-                  "type": "integer"
-                },
                 "blockers": {
                   "type": "array",
                   "items": {
@@ -223,8 +220,7 @@
                     "properties": {
                       "kind": {
                         "enum": [
-                          "gate",
-                          "threshold"
+                          "gate"
                         ]
                       },
                       "gate": {
@@ -238,12 +234,6 @@
                       },
                       "reason": {
                         "type": "string"
-                      },
-                      "threshold": {
-                        "type": "integer"
-                      },
-                      "met": {
-                        "type": "integer"
                       },
                       "disposition": {
                         "enum": [
@@ -269,8 +259,7 @@
               },
               "required": [
                 "blockers",
-                "step",
-                "threshold"
+                "step"
               ],
               "additionalProperties": false
             },
@@ -309,6 +298,91 @@
             ],
             "additionalProperties": false
           }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "enum": [
+                  "behaviour",
+                  "contracts",
+                  "docs",
+                  "structure",
+                  "agent_context",
+                  "agent_runtime",
+                  "governance",
+                  "supply_chain"
+                ]
+              },
+              "conditions": {
+                "type": "integer"
+              },
+              "countable": {
+                "type": "integer"
+              },
+              "set_aside": {
+                "type": "integer"
+              },
+              "met": {
+                "type": "integer"
+              },
+              "measured": {
+                "type": "integer"
+              },
+              "not_measured": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "countable_not_measured": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "conditions",
+              "countable",
+              "countable_not_measured",
+              "measured",
+              "met",
+              "not_measured",
+              "set_aside",
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "description": "one row per truth tag, every tag in this order (#940); met and measured are the headline strip's cells, and measured 0 means not measured, never a share of 0 (lib/level_tags.py)"
         }
       },
       "required": [

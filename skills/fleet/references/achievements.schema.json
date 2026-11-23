@@ -300,13 +300,7 @@
               "null"
             ]
           },
-          "threshold": {
-            "type": "integer"
-          },
           "held": {
-            "type": "integer"
-          },
-          "below_threshold": {
             "type": "integer"
           },
           "missing_gates": {
@@ -346,7 +340,6 @@
           }
         },
         "required": [
-          "below_threshold",
           "distance",
           "held",
           "lowest_step",
@@ -354,7 +347,6 @@
           "missing_gates",
           "repos",
           "step",
-          "threshold",
           "unit",
           "view"
         ],

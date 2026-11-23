@@ -4,8 +4,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import lib.liveness_scan as liveness
-from lib.liveness_scan import (
+import pytest
+
+import lib.keyhole.liveness_scan as liveness
+from lib.keyhole.liveness_scan import (
     _parse_deadcode,
     _parse_staticcheck,
     _parse_ts_prune,
@@ -154,7 +156,7 @@ def test_dead_code_excludes_test_fixtures(tmp_path: Path, monkeypatch) -> None:
     """Vulture is told to skip `**/tests/fixtures/**` at scan time, and the
     post-scan filter drops any fixture candidate that slips through, so a
     deliberately-dead fixture file never surfaces as repo dead code (#83)."""
-    from lib.liveness_scan import _under_excluded, _vulture_excludes
+    from lib.keyhole.liveness_scan import _under_excluded, _vulture_excludes
 
     assert "*/tests/fixtures/*" in _vulture_excludes().split(",")
     assert _under_excluded("a/tests/fixtures/sample.py") is True
@@ -276,6 +278,55 @@ def test_mcp_tooling_reaches_rung_3_without_instrumentation(tmp_path: Path) -> N
     assert r["instrumented"]["present"] is False
     assert r["rung"] == 3
     assert any("MCP server" in s for s in r["reachable"]["signals"])
+
+
+@pytest.mark.parametrize("rel", [
+    "crates/ty_python_semantic/resources/lint_docs/function-call-in-default-argument.md",
+    "crates/ty_python_semantic/resources/lint_docs/non-callable-init-subclass.md",
+    "docs/rules/function_call.md", "docs/rules/FunctionCall.md", "docs/NONCALLABLE.md",
+])
+def test_a_word_containing_on_call_is_not_a_runbook(tmp_path: Path, rel: str) -> None:
+    """#823: the on-call name pattern is anchored on word or segment boundaries.
+    These paths classify as source, so only the pattern keeps them out."""
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, rel, "# A lint rule\n")
+    r = scan_observability(tmp_path)
+    assert r.discoverable == []
+    assert r.rung == 1
+
+
+@pytest.mark.parametrize("rel", [
+    "docs/on-call.md", "docs/oncall.md", "docs/on_call_rota.md", "on-call/escalation.md",
+    "docs/team-oncall.md", "docs/OnCallGuide.md", "docs/oncalls.md", "docs/TeamOnCall.md",
+    "PagerOnCall/escalation.md",
+])
+def test_an_on_call_doc_is_a_runbook(tmp_path: Path, rel: str) -> None:
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, rel, "# Paging\n")
+    assert scan_observability(tmp_path).rung == 2
+
+
+@pytest.mark.parametrize("rel", [
+    "tests/fixtures/runbook.md", "crates/x/resources/mdtest/oncall.md",
+    "tests/docs/observability.md",
+])
+def test_a_runbook_under_a_test_or_fixture_path_is_not_discoverable(tmp_path: Path,
+                                                                    rel: str) -> None:
+    """#823: the shared path classifier sets test and fixture docs aside, for the
+    name signal and for the body-content fallback alike."""
+    _write(tmp_path, "requirements.txt", "structlog\n")
+    _write(tmp_path, rel, "We watch SLOs in Grafana and page via alerting.\n")
+    r = scan_observability(tmp_path)
+    assert r.discoverable == []
+    assert r.rung == 1
+
+
+def test_instrumented_kinds_ride_on_the_block(tmp_path: Path) -> None:
+    _write(tmp_path, "package.json", '{"dependencies":{"winston":"3"}}')
+    assert scan_observability(tmp_path).as_dict()["instrumented"]["kinds"] == ["dependency"]
+    (tmp_path / "empty").mkdir()
+    assert scan_observability(tmp_path / "empty").as_dict()["instrumented"] == {
+        "present": False, "signals": [], "kinds": []}
 
 
 # ── read-only: build-mutating dead-code tools are gated ────────────────────
@@ -498,7 +549,7 @@ def test_scorer_doc_names_every_dead_code_status() -> None:
     emitted = set(re.findall(r'"(?:absent_)?status":\s*"(\w+)"', source))
     emitted |= set(re.findall(r'get\("absent_status",\s*"(\w+)"\)', source))
     assert {"not_applicable", "honest_degrade", "tool_absent"} <= emitted
-    repo_root = lib_dir.parents[3]
+    repo_root = lib_dir.parents[4]
     doc = (repo_root / "agents" / "assess-layer-scorer.md").read_text(encoding="utf-8")
     missing = sorted(s for s in emitted if f"`{s}`" not in doc)
     assert not missing, f"assess-layer-scorer.md does not name: {missing}"

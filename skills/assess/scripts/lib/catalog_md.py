@@ -41,7 +41,7 @@ from typing import NamedTuple
 
 from lib.catalog import UNCLASSIFIED, Catalog, CatalogCriterion, CatalogLevel, CatalogRow, CatalogScan
 from lib.catalog_tags import CatalogTag, tag_title
-from lib.manifest_whys import PLUMBING
+from lib.manifest.manifest_whys import PLUMBING
 
 PLUMBING_WORDS = "Run plumbing: no row or finding reads this scan."
 
@@ -66,6 +66,8 @@ HEADLESS_WORDS = {
     "headless_variant": "reported by headless and fleet runs (built by the headless runner's own scan)",
     "unregistered": "only a full /assess run builds it; headless and fleet runs report it not measured",
     "platform_only": "only with --platform; left out otherwise",
+    "units_only": ("only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; "
+                   "left out otherwise"),
 }
 
 
@@ -223,17 +225,17 @@ def _relations(catalog: Catalog) -> list[str]:
     if not catalog["tag_pairs"]:
         out.append("No two tags share a condition yet.")
     out += ["", "### Step gates", "",
-            "The autonomy Steps in order. A Step needs its threshold of met, counted conditions and "
-            "every gate, whatever the gate's grade; gates accumulate, so each Step keeps the gates "
-            "below it.", "",
-            "| Step | Name | Threshold | New gates | Gate covers | Tags |", "|---|---|---|---|---|---|"]
+            "The autonomy Steps in order. A Step needs every gate, whatever the gate's grade, and "
+            "nothing else: no count of conditions moves a Step. Gates accumulate, so each Step keeps "
+            "the gates below it.", "",
+            "| Step | Name | New gates | Gate covers | Tags |", "|---|---|---|---|---|"]
     for step in catalog["steps"]:
         new = [g for g in step["gates"] if g["id"] in step["added_gates"]]
-        out.append(f"| {step['step']} | {_cell(step['name'])} | {step['threshold']} | "
+        out.append(f"| {step['step']} | {_cell(step['name'])} | "
                    f"{_codes(g['id'] for g in new)} | {_codes(c for g in new for c in g['conditions'])} | "
                    f"{_codes(t for g in new for t in g['tags'])} |")
     if not catalog["steps"]:
-        out.append("| - | The model defines no Steps | - | - | - | - |")
+        out.append("| - | The model defines no Steps | - | - | - |")
     out += ["", "### Requires, guard and equality links", ""]
     words = {"requires": "requires", "guarded_by": "is guarded by", "eq_signal": "compares with signal"}
     out += [f"- `{link['source']}` {words[link['kind']]} `{link['target']}`." for link in catalog["links"]]

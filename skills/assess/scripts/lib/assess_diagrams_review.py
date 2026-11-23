@@ -2,7 +2,8 @@
 
 ``review_diagrams(ctx)`` returns both as ``AssessDiagram`` entries
 (``lib/run_context_types_diagrams.py``), each an SVG or the one-line reason it was not
-drawn; it never raises. ``build_all(ctx)`` is ``assess_diagrams.build_diagrams``, the package map
+drawn; it never raises. ``build_all(ctx)`` is ``assess_diagrams.build_diagrams``, the tag profile strip
+(``lib/assess_diagrams_tags.py``, #940), the package map
 (``lib/assess_diagrams_packages.py``, #942), then these two, in report order, and ``write_all`` writes every diagram file through
 ``assess_diagrams.write_diagrams`` with ``ALL_FILES``, so a file this run did not draw is
 removed. ``run_publish.publish_run``, ``assess_core.run_opt_in_mutation`` and
@@ -51,9 +52,10 @@ from typing import Any
 
 import lib.fleet.fleet_svg as svg
 from lib.assess_diagrams import DIAGRAM_FILES, build_diagrams, wrap, write_diagrams
+from lib.assess_diagrams_tags import TAG_FILES, tag_diagrams
 from lib.assess_diagrams_packages import PACKAGE_COUNTS_ONLY_FILE, PACKAGE_FILE, package_diagrams
-from lib.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
-from lib.doc_ownership import REPO_BASELINE
+from lib.docs.doc_complexity_join import STALENESS_RATIO_THRESHOLD, is_stale
+from lib.docs.doc_ownership import REPO_BASELINE
 from lib.headline import reason_word
 from lib.reason_codes import reason_code
 from lib.hosting.review_reality import APPROVED, BOT, NO_BOT, REVIEWED, SEQUENCE_STATES, UNKNOWN, UNREVIEWED
@@ -70,7 +72,7 @@ HEADINGS: dict[str, str] = {
 REVIEW_FILES = tuple(HEADINGS)
 COUNTS_ONLY_FILES = (PACKAGE_COUNTS_ONLY_FILE,
                      *(f.removesuffix(".svg") + ".counts-only.svg" for f in REVIEW_FILES))
-ALL_FILES = (*DIAGRAM_FILES, PACKAGE_FILE, *REVIEW_FILES)
+ALL_FILES = (*DIAGRAM_FILES, *TAG_FILES, PACKAGE_FILE, *REVIEW_FILES)
 DRIFT_TOP = 15
 
 # Colour roles, (light, dark), added to the shared diagram theme.
@@ -414,9 +416,11 @@ def counts_only_diagrams(content_free: Mapping[str, Any]) -> list[AssessDiagram]
 
 def build_all(ctx: Mapping[str, Any],
               model_rows: Sequence[Mapping[str, Any]] | None = None) -> list[AssessDiagram]:
-    """Every /assess diagram in report order: ``build_diagrams``, the package map (#942,
-    ``lib/assess_diagrams_packages.py``), then these two."""
-    return [*build_diagrams(ctx, model_rows), *package_diagrams(ctx), *review_diagrams(ctx)]
+    """Every /assess diagram in report order: ``build_diagrams``, the tag profile strip (#940,
+    ``lib/assess_diagrams_tags.py``), the package map (#942, ``lib/assess_diagrams_packages.py``),
+    then these two."""
+    return [*build_diagrams(ctx, model_rows), *tag_diagrams(ctx), *package_diagrams(ctx),
+            *review_diagrams(ctx)]
 
 
 def write_all(assess_dir: Path, diagrams: Sequence[AssessDiagram],

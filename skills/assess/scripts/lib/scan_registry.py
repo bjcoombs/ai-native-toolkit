@@ -92,16 +92,17 @@ from lib.agent_consistency import scan_agent_consistency
 from lib.agents.agent_environment import scan_agent_environment
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
+from lib.agent_outcome import scan_agent_outcome
 from lib.ai_usage import scan_ai_usage
 from lib.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config
 from lib.hosting.config_drift import scan_config_drift
 from lib.degrade import safe as safe  # re-exported: callers import it from here
 from lib.degrade import unavailable
-from lib.coverage_gate import detect_coverage_gate
+from lib.testing.coverage_gate import detect_coverage_gate
 from lib.hosting.delivery import scan_delivery
 from lib.external_ci import no_external_ci, read_external_ci
-from lib.doc_claims import scan_doc_claims
+from lib.docs.doc_claims import scan_doc_claims
 from lib.gate_cost import estimate_gate_cost
 from lib.hosting.gitlab_notes import gitlab_note_facts
 from lib.instruction_claims import scan_instruction_claims
@@ -519,7 +520,8 @@ SCANS: tuple[ScanSpec, ...] = (
     # The owner's condition exclusions (.assess/config.toml [checks], #910); the level reads them.
     _spec("owner_exclusions", cs.owner_exclusions),
     # Monorepo units (#862): the shallowest build-manifest folders, a workspace root's
-    # declared members in its place, or the [[units]] of .assess/config.toml. Core-only.
+    # declared members in its place, or the [[units]] of .assess/config.toml. The headless
+    # runner reports it under --units (signals.UNIT_SCANS, #866).
     _spec("units", cs.units),
     # Headless runs pre-record every offer as skipped; never inferred from stdin.
     _spec("offers_block", cs.offers_blocks, spread=("interactive", "offers")),
@@ -621,6 +623,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # excluded. Since #695 also the commits an agent identity authored (pinned
     # defaults plus the [ai_usage] rules of `fleet_config`). Matcher: lib.agent_identity.
     _spec("ai_usage", scan_ai_usage),
+    # Agent commit outcomes (issue #1085): of the ai_usage agent commits (trailer or
+    # agent author), the share later reverted and the share whose added lines were
+    # rewritten within REWORK_DAYS. Informational: no Step, count or headline reads it.
+    _spec("agent_outcome", scan_agent_outcome),
     # Checkable claims across the doc set (issue #491): the instruction_claims
     # kinds run over docs/ (minus the historical design records),
     # skills/*/references/ and skills/*/SKILL.md, plus the cross-document kind
@@ -642,12 +648,13 @@ SCANS: tuple[ScanSpec, ...] = (
 # core_scans.level zips its blocks with LEVEL_READS, so checks/core/level.toml must list
 # exactly those reads in that order: checked here, at import, on every run.
 SCANS = (*SCANS, pinned_reads(_spec("level", cs.level), LEVEL_READS))
-# The deterministic headline (lib/headline.py, #747, #844): the Step, its next unlock,
-# "Practices in place: N of M measured, V verified" and the per-tag strip, worded from the level block. The report
+# The deterministic headline (lib/headline.py, #747, #844, #1083): the Step, the gate that blocks the next one,
+# "Catalogue coverage: N of M measured" and the per-tag strip, worded from the level block. The report
 # pastes it verbatim and the badge and log entry carry its summary.
 SCANS = (*SCANS, _spec("headline", cs.headline))
 # Monorepo unit readings (lib/unit_readings.py, #863): the scoped and override scans again
-# for each unit of the units block, every condition tagged unit or inherited. Core-only.
+# for each unit of the units block, every condition tagged unit or inherited. The headless
+# runner reports it under --units (signals.UNIT_SCANS, #866).
 # core_scans.unit_readings splits its arguments by position, so the manifest reads are pinned.
 SCANS = (*SCANS, pinned_reads(_spec("unit_readings", cs.unit_readings),
                               (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS)))

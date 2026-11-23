@@ -1258,14 +1258,12 @@
     {
       "step": 1,
       "name": "Assisted",
-      "threshold": 0,
       "gates": [],
       "added_gates": []
     },
     {
       "step": 2,
       "name": "Supervised agent PRs",
-      "threshold": 1,
       "gates": [
         {
           "id": "instructions",
@@ -1286,7 +1284,6 @@
     {
       "step": 3,
       "name": "Unattended agent PRs",
-      "threshold": 3,
       "gates": [
         {
           "id": "instructions",
@@ -1318,7 +1315,6 @@
     {
       "step": 4,
       "name": "Autonomous loops",
-      "threshold": 5,
       "gates": [
         {
           "id": "instructions",
@@ -1679,6 +1675,48 @@
         "verified"
       ],
       "why": "It finds the coverage threshold the repository sets and whether CI enforces it, which is the line that keeps tests from thinning out under a run of changes.",
+      "why_source": ""
+    },
+    {
+      "name": "units",
+      "title": "Monorepo units",
+      "summary": "The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.",
+      "collector": "core.units",
+      "reads": [
+        "repo_root",
+        "excludes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "units_only",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "units.aggregators.ecosystem": "token",
+          "units.aggregators.path": "drop",
+          "units.skipped.path": "drop",
+          "units.skipped.problem": "token",
+          "units.source": "token",
+          "units.unit_count_reason": "token",
+          "units.units.ecosystem": "token",
+          "units.units.name": "drop",
+          "units.units.origin": "token",
+          "units.units.path": "hashed_path",
+          "units.units.workspace": "drop",
+          "units.unreadable_manifests": "drop"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.",
       "why_source": ""
     },
     {
@@ -2123,6 +2161,12 @@
           "carried_in": "enforced_basis"
         },
         {
+          "code": "check_may_pass",
+          "means": "In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way.",
+          "next_step": "Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).",
+          "carried_in": "enforced_basis"
+        },
+        {
           "code": "script_not_found",
           "means": "In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it.",
           "next_step": "Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.",
@@ -2404,6 +2448,76 @@
         "unclassified"
       ],
       "why": "exempt: plumbing",
+      "why_source": ""
+    },
+    {
+      "name": "agent_outcome",
+      "title": "Agent commit outcomes",
+      "summary": "",
+      "collector": "core.agent_outcome",
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_outcome.agent_rule": "token",
+          "agent_outcome.limits": "drop",
+          "agent_outcome.reason": "reason",
+          "agent_outcome.revert_null_reason": "token",
+          "agent_outcome.rework_null_reason": "token",
+          "agent_outcome.since": "drop",
+          "agent_outcome.window": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "shallow_clone",
+          "means": "The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read.",
+          "next_step": "Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it."
+        },
+        {
+          "code": "shallow_unknown",
+          "means": "Git could not confirm the checkout is a full clone.",
+          "next_step": "Nothing to change in the repository; run the scan on a full clone."
+        },
+        {
+          "code": "not_a_repo",
+          "means": "The path is not a git repository, or one with no commits.",
+          "next_step": "Nothing to change: there is no history to read."
+        },
+        {
+          "code": "no_git",
+          "means": "git is not installed where the scan ran.",
+          "next_step": "Install git where the scan runs."
+        },
+        {
+          "code": "git_failed",
+          "means": "A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read.",
+          "next_step": "Nothing to change in the repository; re-run the scan, and report the failure if it repeats."
+        },
+        {
+          "code": "git_timeout",
+          "means": "A git read took longer than the scan allows.",
+          "next_step": "Nothing to change in the repository; a shorter --window reads less history."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.",
       "why_source": ""
     },
     {
@@ -2778,6 +2892,7 @@
         "strings_kept": {
           "observability.boundary": "drop",
           "observability.discoverable.signals": "drop",
+          "observability.instrumented.kinds": "token",
           "observability.instrumented.signals": "drop",
           "observability.reachable.signals": "drop"
         }
@@ -2986,6 +3101,50 @@
         "unclassified"
       ],
       "why": "It reads the checks a repository's owners have committed as not applying to them, so the Step holds a team only to practices it has not deliberately set aside, and each exclusion stays visible and reviewable in the repository.",
+      "why_source": ""
+    },
+    {
+      "name": "unit_readings",
+      "title": "Monorepo unit readings",
+      "summary": "Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.",
+      "collector": "core.unit_readings",
+      "reads": [
+        "units",
+        "nested_instructions",
+        "coverage_gate",
+        "doc_staleness",
+        "layer_grades",
+        "promissory_markers",
+        "stats_summary",
+        "structure",
+        "excludes",
+        "repo_root",
+        "working_notes"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "units_only",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "unit_readings.unit_blocks": "token",
+          "unit_readings.unit_count_reason": "token",
+          "unit_readings.units.conditions.id": "token",
+          "unit_readings.units.conditions.origin": "token",
+          "unit_readings.units.path": "hashed_path"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.",
       "why_source": ""
     },
     {
@@ -4013,7 +4172,8 @@
         "dropped_first_flagged",
         "provisional_first_flagged",
         "log_integrity",
-        "prior_findings_snapshot"
+        "prior_findings_snapshot",
+        "prior_level"
       ],
       "reads": [
         "run_id",
@@ -4834,6 +4994,21 @@
       "private": false
     },
     {
+      "name": "agent_outcome",
+      "title": "Agent commit outcomes",
+      "publishes": [
+        "agent_outcome"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
       "name": "doc_claims",
       "title": "Doc claims",
       "publishes": [
@@ -5052,7 +5227,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs, merged_config_partial: an include may run it; unknown_trigger: unsettled; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI may; external_ci, external_ci_marker: CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
+      "null_means": "included_jobs, merged_config_partial: an include may; unknown_trigger: unsettled; check_may_pass: may pass; script_not_found: not committed; check_target: a target may; unread_ci_system: unparsed CI; external_ci(_marker): CI elsewhere; analysers_in_build: .NET analysers; compiler_gate_only: -Werror"
     },
     {
       "path": "promissory_markers.families.suppression.stale",
@@ -5097,7 +5272,7 @@
       "collector": "core.ci_checks",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; script_not_found: its script is not committed; check_target: a target may run it; unread_ci_system: an unparsed CI system may; external_ci: merged changes carry external checks; external_ci_marker: a root Prow OWNERS_ALIASES"
+      "null_means": "included_jobs: in an included file; unknown_trigger: triggers unsettled; check_may_pass: may pass; script_not_found: script not committed; check_target: a target may; unread_ci_system: an unparsed CI system may; external_ci: external checks on merges; external_ci_marker: a root Prow OWNERS_ALIASES"
     },
     {
       "path": "agent_environment.pinning.unlocked_total",
@@ -5115,7 +5290,7 @@
       "collector": "core.coverage_gate",
       "input_class": "ci_executed",
       "grade": "verified",
-      "null_means": "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are not settled; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: it may run in an unparsed CI system"
+      "null_means": "threshold_not_read: the threshold is unknown; unknown_trigger: the run's triggers are unsettled; check_may_pass: may not fail its job; indirect_run: a CI target or script (make test, tox) may run it; included_jobs: it may be in an included file; unread_ci_system: an unparsed CI system may run it"
     },
     {
       "path": "test_pressure.mutation_run",

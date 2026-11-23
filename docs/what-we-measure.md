@@ -163,14 +163,14 @@ How many conditions each pair of tags shares. The diagonal is the tag's own coun
 
 ### Step gates
 
-The autonomy Steps in order. A Step needs its threshold of met, counted conditions and every gate, whatever the gate's grade; gates accumulate, so each Step keeps the gates below it.
+The autonomy Steps in order. A Step needs every gate, whatever the gate's grade, and nothing else: no count of conditions moves a Step. Gates accumulate, so each Step keeps the gates below it.
 
-| Step | Name | Threshold | New gates | Gate covers | Tags |
-|---|---|---|---|---|---|
-| 1 | Assisted | 0 | - | - | - |
-| 2 | Supervised agent PRs | 1 | `instructions` | `layer-0-instructions.1` | `agent_context` |
-| 3 | Unattended agent PRs | 3 | `ci_runs_tests` | `layer-5-ci.1` | `behaviour` |
-| 4 | Autonomous loops | 5 | `coverage_gate` | `layer-6-coverage.1` | `behaviour` |
+| Step | Name | New gates | Gate covers | Tags |
+|---|---|---|---|---|
+| 1 | Assisted | - | - | - |
+| 2 | Supervised agent PRs | `instructions` | `layer-0-instructions.1` | `agent_context` |
+| 3 | Unattended agent PRs | `ci_runs_tests` | `layer-5-ci.1` | `behaviour` |
+| 4 | Autonomous loops | `coverage_gate` | `layer-6-coverage.1` | `behaviour` |
 
 ### Requires, guard and equality links
 
@@ -305,6 +305,20 @@ Finds coverage thresholds written in CI, task-runner and tool config, each with 
 Why the signals named here matter:
 
 - `coverage_gate.enforced_meets_minimum` feeds `layer-6-coverage.1:coverage_gate.enforced_meets_minimum`: An enforced floor turns the job red when a change takes coverage below it, so tests an agent removes or skips show in CI instead of passing quietly.
+
+### `units`: Monorepo units
+
+One score for a monorepo describes none of its services. Naming each unit lets every one be scored on its own, so one service's gaps are not hidden behind another's practices.
+
+The repository's units: the shallowest build-manifest folders, each workspace root's declared members in its place, or the [[units]] of .assess/config.toml; manifest-only folders skipped.
+
+- Collector: `core.units`, reading `repo_root`, `excludes`.
+- Network: no.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `units.aggregators.ecosystem` token, `units.aggregators.path` drop, `units.skipped.path` drop, `units.skipped.problem` token, `units.source` token, `units.unit_count_reason` token, `units.units.ecosystem` token, `units.units.name` drop, `units.units.origin` token, `units.units.path` hashed_path, `units.units.workspace` drop, `units.unreadable_manifests` drop.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
 
 ### `instruction_claims`: Instruction claims
 
@@ -441,6 +455,7 @@ Whether a GitHub Actions or GitLab CI line runs a test or lint command, whether 
   - `included_jobs`: A CI file pulls its jobs from a file this checkout does not hold, so the check may live there. Nothing to change: this reads as not measured until the included file can be read. On GitLab, fleet --platform reads the merged configuration through the CI lint API.
   - `merged_config_partial`: GitLab's merged CI configuration was read and runs no check, but it may lack jobs: an include under rules: or a trigger: child pipeline is not expanded by the lint API. Nothing to change: a check in a conditional include or child pipeline is not read, so this stays not measured rather than reading false.
   - `unknown_trigger`: In enforced_basis: an unmasked check sits in a workflow or job whose triggers this reader cannot settle (no on: key, a rules: if: on a custom variable). Nothing to change if it runs on every change; naming push or pull_request, or a merge request rule, lets the scan read it.
+  - `check_may_pass`: In enforced_basis and lint_basis: the check's exit status may not reach its job: a || fallback that can pass (pytest || echo failed), an if or while condition, an until loop that breaks, a check before && with more of the step after it, or a { } group or function called that way. Let the check's exit status reach the step: run it on its own line, or end the fallback with exit 1 (pytest || { echo failed; exit 1; }).
   - `script_not_found`: In enforced_basis and lint_basis: the only CI line that would settle the signal runs a committed script (./ci.sh, bash scripts/test.sh, ./scripts/lint.sh) that no tracked file matches, so it is not credited; an earlier step may still create it. Commit the script the CI step runs, or call the test or lint command in its own CI step (pytest, ruff check .), so the scan can read it.
   - `check_target`: No CI line runs the linter (lint_basis) or the check (enforced_basis), but one runs a target whose recipe is not read and may run it: make check or npm test for a linter; make foo, npm run foo or ./scripts/foo.sh for a check. Nothing to change if the target runs the check; calling the test or lint command in its own CI step (make test, pytest, ruff check .) lets the scan read it.
   - `unread_ci_system`: No readable GitHub Actions or GitLab CI line settles the signal, and the tree tracks a CI file of a system this scan does not parse (Jenkins, CircleCI, Azure Pipelines, Buildkite, LUCI, Prow, Zuul and others; the lib/unread_ci.py docstring lists the paths); unread_ci_files counts them. Nothing to change: the scanner cannot read those systems' configuration, so their checks read as not measured rather than absent.
@@ -526,6 +541,24 @@ Run plumbing: no row or finding reads this scan.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
+
+### `agent_outcome`: Agent commit outcomes
+
+No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.
+
+- Collector: `core.agent_outcome`, reading `repo_root`, `scope`, `history_window`, `fleet_config`.
+- Network: no.
+- Headless: reported by headless and fleet runs.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `agent_outcome.agent_rule` token, `agent_outcome.limits` drop, `agent_outcome.reason` reason, `agent_outcome.revert_null_reason` token, `agent_outcome.rework_null_reason` token, `agent_outcome.since` drop, `agent_outcome.window` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when:
+  - `shallow_clone`: The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read. Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it.
+  - `shallow_unknown`: Git could not confirm the checkout is a full clone. Nothing to change in the repository; run the scan on a full clone.
+  - `not_a_repo`: The path is not a git repository, or one with no commits. Nothing to change: there is no history to read.
+  - `no_git`: git is not installed where the scan ran. Install git where the scan runs.
+  - `git_failed`: A git read past the windowed log (a patch-id, numstat or blame read) failed on a repository the log could read. Nothing to change in the repository; re-run the scan, and report the failure if it repeats.
+  - `git_timeout`: A git read took longer than the scan allows. Nothing to change in the repository; a shorter --window reads less history.
 
 ### `doc_claims`: Doc claims
 
@@ -640,7 +673,7 @@ It reads how far the repository gives an agent a view of the running system: tel
 - Collector: `core.liveness_blocks`, reading `liveness`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `observability.boundary` drop, `observability.discoverable.signals` drop, `observability.instrumented.kinds` token, `observability.instrumented.signals` drop, `observability.reachable.signals` drop.
 - Used by: row `layer-1-liveness`.
 - Evidence: `observability.rung` head_text (declared).
 - Not measured when: it cannot read its input; the block says why.
@@ -703,6 +736,20 @@ The conditions the owner excluded in .assess/config.toml [checks], each with its
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
 - Counts-only: numbers, booleans and nulls kept; strings by field: `owner_exclusions.disclosures` drop, `owner_exclusions.exclusions.excluded_at` token, `owner_exclusions.exclusions.excluded_by` drop, `owner_exclusions.exclusions.id` token, `owner_exclusions.exclusions.kind` token, `owner_exclusions.exclusions.reason` drop, `owner_exclusions.exclusions.source` token, `owner_exclusions.exclusions.version` token, `owner_exclusions.skipped.id` drop, `owner_exclusions.skipped.problem` token.
+- Used by: no row or finding yet.
+- Evidence: `unclassified`.
+- Not measured when: it cannot read its input; the block says why.
+
+### `unit_readings`: Monorepo unit readings
+
+A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit.
+
+Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited.
+
+- Collector: `core.unit_readings`, reading `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes`.
+- Network: no.
+- Headless: only with assess_signals --units (or --scans naming it) or fleet --monorepo-units; left out otherwise.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `unit_readings.unit_blocks` token, `unit_readings.unit_count_reason` token, `unit_readings.units.conditions.id` token, `unit_readings.units.conditions.origin` token, `unit_readings.units.path` hashed_path.
 - Used by: no row or finding yet.
 - Evidence: `unclassified`.
 - Not measured when: it cannot read its input; the block says why.
@@ -962,7 +1009,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `accretion_scan` | Accretion scan | `repo_root` | private input | no |
 | `accretion_by_file` | Accretion by file | `accretion_scan` | private input | no |
 | `hot_test_index` | Repository test index | `repo_root`, `current` | private input | no |
-| `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot` | no |
+| `run_header` | Run header | `run_id`, `run_date`, `run_scope`, `measured_commit`, `current`, `prior`, `instruction_grading`, `diff`, `unfinalized` | `run_id`, `artifact_schema_version`, `assess_method_version`, `run_date`, `scope`, `scope_slug`, `measured_commit`, `prior_stats_exists`, `stats_summary`, `instruction_files`, `instructions_grade`, `diff`, `diff_reliable`, `diff_version_note`, `diff_trend_reset`, `prior_plugin_version`, `schema_version`, `prior_schema_version`, `tool_versions`, `prior_tool_versions`, `diff_detail`, `pruned_hotspots`, `retired_excluded_hotspots`, `dropped_first_flagged`, `provisional_first_flagged`, `log_integrity`, `prior_findings_snapshot`, `prior_level` | no |
 | `working_notes` | Working notes | `repo_root` | private input | no |
 | `doc_graph` | Doc graph | `repo_root`, `excludes`, `scope`, `working_notes` | `doc_graph` | no |
 | `doc_staleness` | Doc staleness | `repo_root`, `doc_graph`, `excludes`, `scope` | `doc_staleness` | no |
@@ -1024,6 +1071,7 @@ The scan registry in run order, including the private inputs other scans read.
 | `instruction_placement` | Instruction placement | `repo_root`, `instruction_files`, `nested_instructions`, `scope`, `excludes` | `instruction_placement` | no |
 | `agent_consistency` | Cross-agent instruction consistency | `repo_root`, `excludes` | `agent_consistency` | no |
 | `ai_usage` | AI-assisted change share | `repo_root`, `scope`, `history_window`, `fleet_config` | `ai_usage` | no |
+| `agent_outcome` | Agent commit outcomes | `repo_root`, `scope`, `history_window`, `fleet_config` | `agent_outcome` | no |
 | `doc_claims` | Doc claims | `repo_root`, `instruction_files`, `scope`, `excludes` | `doc_claims` | no |
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |

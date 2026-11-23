@@ -11,7 +11,7 @@ import pytest
 
 import lib.fleet.fleet_doc_freshness as fdf
 from lib.assess_config import load_describes
-from lib.doc_staleness import analyze_doc_staleness
+from lib.docs.doc_staleness import analyze_doc_staleness
 from lib.fleet.fleet_doc_freshness import Checkout, freshness_rows, measure
 from lib.fleet.fleet_history import persist
 from lib.fleet.fleet_schema import FRESHNESS_SCHEMA_PATH, build_freshness_schema, render_freshness

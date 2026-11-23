@@ -78,7 +78,9 @@ repeats a path. Declared units are used when at least one entry is valid;
 otherwise discovery runs and the skipped entries are still listed.
 
 Counts-only output drops every path and name (``checks/core/units.toml``): it
-keeps the counts, the origin and ecosystem tokens and the skip codes. Pure apart
+keeps the counts, the origin and ecosystem tokens and the skip codes. A unit's folder
+alone survives as its salted hash under ``--hash-paths`` (class ``hashed_path``, #866),
+the join key of a fleet unit row. Pure apart
 from reading the file list and the manifests.
 """
 from __future__ import annotations
@@ -95,7 +97,7 @@ from typing import Any, Literal, NamedTuple, TypedDict
 
 from lib.assess_config import _clean_rel, is_user_excluded, load_config
 from lib.command_index import repo_files
-from lib.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
+from lib.docs.doc_graph import CODE_EXTENSIONS, EXCLUDE_DIRS
 
 Ecosystem = Literal["cargo", "pnpm", "npm", "go", "uv", "gradle", "maven", "python"]
 Origin = Literal["manifest", "workspace_member", "config"]

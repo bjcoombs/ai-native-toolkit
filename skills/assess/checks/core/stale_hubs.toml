@@ -10,7 +10,7 @@ publishes = ["stale_hubs"]
 reads = ["doc_graph", "doc_staleness"]
 stage = "read_side"
 shapes = [
-  { path = "stale_hubs", type = "lib.doc_staleness:DocStalenessRow" },
+  { path = "stale_hubs", type = "lib.docs.doc_staleness:DocStalenessRow" },
 ]
 revision = 1
   [entries.privacy]

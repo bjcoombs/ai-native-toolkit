@@ -55,7 +55,7 @@ units sit below a root unit, the root's scoped readings therefore cover the memb
 too (a known limit: no scan can leave out the folders of other units yet). Each unit's pass goes through ``scan_registry.run_scans``,
 so a failing scan degrades to its unavailable marker for that unit alone.
 
-**The block** (``unit_readings``, core-only, after ``headline``): ``unit_count`` and
+**The block** (``unit_readings``, after ``headline``; the headless runner reports it under ``--units``, #866): ``unit_count`` and
 ``unit_count_reason`` copied from ``units`` (a null count stays null, #1030), ``unit_blocks``
 (the model blocks a unit can read as its own), and per unit its ``path``, ``blocks`` (each
 own reading, projected to the model's signal paths plus the ``available`` and ``reason``
@@ -67,7 +67,8 @@ no entry for it. A degraded or absent ``units`` block yields ``available: false`
 ``lib.unit_levels`` (#864) overlays each unit's ``blocks`` on the run context and runs the
 tally for the unit's Step; the roll-up across units is #865.
 
-Counts-only output drops the unit paths (``checks/core/unit_readings.toml``) and keeps the
+Counts-only output drops the unit paths, or hashes them under ``--hash-paths`` (class
+``hashed_path``, #866; ``checks/core/unit_readings.toml``), and keeps the
 numbers, the origin tokens and the condition ids. Tests: ``tests/test_unit_readings.py``.
 """
 from __future__ import annotations
@@ -77,7 +78,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol, TypedDict
 
 import lib.manifest.check_manifest as cm
-from lib.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
+from lib.testing.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
 from lib.level_tally import DEFAULT_BLOCKS, default_model
 from lib.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict

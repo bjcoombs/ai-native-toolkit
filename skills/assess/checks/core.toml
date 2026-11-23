@@ -101,6 +101,7 @@ fragments = [
   "instruction_placement",
   "agent_consistency",
   "ai_usage",
+  "agent_outcome",
   "doc_claims",
   "guardrails",
   "level",

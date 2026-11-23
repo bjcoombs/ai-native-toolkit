@@ -51,7 +51,7 @@ def _full_ctx() -> dict:
             "ccn": {"max": 169.0, "p50": 31.0, "p95": 107.35, "basis": "file-aggregate"},
             "top_hotspots": [
                 {"path": "scripts/assess_core.py", "loc": 493, "ccn": 106.0, "commits": 14},
-                {"path": "lib/doc_graph.py", "loc": 514, "ccn": 169.0, "commits": 7},
+                {"path": "lib/docs/doc_graph.py", "loc": 514, "ccn": 169.0, "commits": 7},
             ],
         },
         "diff": {"graduated": 1, "regressed": 1, "new": 1, "persistent": 1},
@@ -300,7 +300,7 @@ def test_hotspots_table_rows_and_header() -> None:
     out = render_hotspots_table(_full_ctx())
     assert "| Path | LOC | CCN | Commits |" in out
     assert "| `scripts/assess_core.py` | 493 | 106 | 14 |" in out
-    assert "| `lib/doc_graph.py` | 514 | 169 | 7 |" in out
+    assert "| `lib/docs/doc_graph.py` | 514 | 169 | 7 |" in out
 
 
 def test_hotspots_table_missing_metric_renders_question_mark() -> None:

@@ -171,7 +171,7 @@ def test_every_string_field_is_classified() -> None:
     assert fd.Privacy().text("repos.status", "ok") == "ok"
     assert fd.Privacy(salt=SALT).text("repos.web_url", "https://x/y") is None
     assert fd.Privacy().text("repos.status", None) is None
-    assert set(FLEET_DATA_RULES.values()) <= {"path", "token", "id", "drop"}
+    assert set(FLEET_DATA_RULES.values()) <= {"path", "token", "id", "drop", "hashed_path"}
 
 
 def test_without_a_maturity_model_units_still_roll_up_counts() -> None:

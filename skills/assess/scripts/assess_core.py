@@ -38,22 +38,23 @@ from typing import Any
 # Make sibling lib package importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from lib.prior_level import write_prior_level
 from lib.assess_diagrams_review import COUNTS_ONLY_FILES, build_all, counts_only_diagrams, write_all
 from lib.badge import write_headline_badge
 from lib.headline import as_headline, run_context_headline
 from lib.counts_only import COUNTS_ONLY_FILE
 from lib.counts_only import add_cli_arguments as add_counts_only_arguments
 from lib.counts_only import apply_cli as apply_counts_only, validate_cli_args as validate_counts_only_args
-from lib.coverage_report import load_coverage_data
+from lib.testing.coverage_report import load_coverage_data
 from lib.level_tally import run_context_level
-from lib.mutation_cap import mutation_not_run_cap, normalize_test_pressure
-from lib.mutation_refresh import recorded_excludes, refresh_mutation_findings
+from lib.testing.mutation_cap import mutation_not_run_cap, normalize_test_pressure
+from lib.testing.mutation_refresh import recorded_excludes, refresh_mutation_findings
 from lib.run_publish import publish_run
 from lib.run_wiki import refresh_log_readiness
 from lib.run_scope import assess_dir_for, load_current_stats, resolve_scope
 from lib.scan_registry import run_scans
 from lib.scan_registry import safe as _safe
-from lib.test_focus import mutation_scope
+from lib.testing.test_focus import mutation_scope
 from lib.test_pressure import scan_test_pressure
 
 
@@ -121,7 +122,7 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     after the user accepts the mutation offer - it mutates and *runs* code, so it
     is never part of the default pass. It does not recompute the whole context:
     it reads the existing ``run-context.json``, takes the focus targets that carry
-    test evidence from the ``test_focus`` block (``lib.test_focus.mutation_scope``),
+    test evidence from the ``test_focus`` block (``lib.testing.test_focus.mutation_scope``),
     runs ``scan_test_pressure(..., opt_in=True)`` scoped to them, and rewrites the
     ``test_pressure`` block in place along with every block derived from it: the
     Layer 6 ``mutation_not_run_cap``, the ``level`` tally with the ``headline`` and
@@ -129,7 +130,7 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
     ``derived_findings``, and the products ranked or rendered from the findings
     (``attention``, ``attention_low_signal``, ``findings_markdown``,
     ``keyhole_summary``, ``prescribed_actions``, the archive and config-exclude
-    disclosures), through ``lib.mutation_refresh``. Blocks that
+    disclosures), through ``lib.testing.mutation_refresh``. Blocks that
     do not read ``test_pressure`` (``test_focus``, ``gap_actions``) are kept.
     ``run_bounded_mutation`` itself caps the scope at ``MAX_FILES_TO_MUTATE``, so
     passing every focus path is safe.
@@ -185,8 +186,11 @@ def run_opt_in_mutation(repo_root: Path, scope: Path | None = None) -> int:
         refresh_log_readiness(
             assess_dir, ctx.get("run_id"), as_headline(ctx["headline"])["summary"],
         )
-        # The evidence waffle draws the level's conditions (#942): redraw it with them.
+        # The Step ladder and the evidence waffle draw the level (#942, #1102): redraw them with it.
+        # The tag profile strip reads the earlier run from ctx["prior_level"]; the recounted tags
+        # are this run's, so they replace prior-level.json (#940).
         write_all(assess_dir, build_all(ctx))
+        write_prior_level(assess_dir, ctx["level"])
     # E1 crosses the refreshed survivor density with this run's hotspots; the
     # findings, attention and report products are rebuilt from it.
     refresh_mutation_findings(

@@ -1,6 +1,6 @@
-# `lib/promissory_markers.py`
+# `lib/keyhole/promissory_markers.py`
 
-The full reference for `skills/assess/scripts/lib/promissory_markers.py`, whose module docstring holds the summary.
+The full reference for `skills/assess/scripts/lib/keyhole/promissory_markers.py`, whose module docstring holds the summary.
 
 Write-side erosion instrument: detects the four families of promissory markers
 (TODO/FIXME, deprecations, lint suppressions, disabled tests) via one rg pass per

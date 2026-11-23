@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from lib.counts_only import counts_only
-from lib.promissory_markers import MarkerScan, scan_promissory_markers
+from lib.keyhole.promissory_markers import MarkerScan, scan_promissory_markers
 
 _ENV = {
     "GIT_AUTHOR_NAME": "Dev One", "GIT_AUTHOR_EMAIL": "dev@example.com",

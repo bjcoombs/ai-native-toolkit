@@ -17,8 +17,10 @@ with no prior run, no stored state and no model in the path:
   ``measured`` the number of counted conditions met or unmet, and
   ``not_measured`` the number of conditions of any grade not measured. An
   unknown never earns anything, so a blind run neither lowers nor raises ``met``;
-- the **Step**: the highest Step whose threshold ``met`` reaches and whose gates
-  hold, every lower Step held too, plus the next Step and what blocks it.
+- the **Step**: the highest Step whose gates hold, every lower Step held too,
+  plus the next Step and the gates that block it. A Step reads its gates and
+  nothing else (#1083): the tally never moves it, so a condition added to the
+  model that a repository already meets leaves its Step where it was.
 
 A condition reads its own criteria only; a level does not need the level below
 it (the row's level in ``lib.levels`` still climbs). A real dependency is
@@ -108,11 +110,16 @@ returns a `LevelResult` (shapes in `level_result_types.py`):
   unmet) and `not_measured` (conditions of any grade not measured). An unknown never counts.
 - `counted` and `listed`: the ids of the counted and the listed (config-only, declared or
   unclassified) conditions that are met. `not_measured[]`: `{id, reason}`.
-- `step` (null without `[[steps]]`) and `next_step` (`step`, `threshold`, `blockers[]`; null at
-  the top Step): a Step is held when `tally.met` reaches its threshold and every gate holds
-  (the gate row's conditions up to its level all `met`, whatever their grade), every lower
-  Step held too. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
-  condition of a gate that is not met, or `{kind: "threshold", threshold, met}`.
+- `tags` (#940, `lib/level_tags.py` `tag_rows`): one row per truth tag, all of `TRUTH_TAGS` in
+  that order, with `conditions` (the conditions carrying the tag, 0 for a tag none carries
+  yet), `countable` and `set_aside` (by grade, and of those excluded or declined), `met` and `measured` (the headline strip cell's, `tag_cells`, never a second
+  tally) `not_measured[]` (`{id, reason}`) and `countable_not_measured[]`, its countable subset. A multi-tagged condition is on each of its rows
+  and counted once in `tally`; `measured` 0 means not measured, never a share of 0.
+- `step` (null without `[[steps]]`) and `next_step` (`step`, `blockers[]`; null at the top
+  Step): a Step is held when every gate holds (the gate row's conditions up to its level all
+  `met`, whatever their grade), every lower Step held too. Gates only (#1083): the tally never
+  moves a Step. A blocker is `{kind: "gate", gate, condition, state, reason?}` for the first
+  condition of a gate that is not met.
 
 Reason codes: an `EMPTY_DENOMINATORS` code, checked first (a statistic over a set whose count
 is 0, such as `stats_summary.loc_by_class.source.p95` with its `files_scored` 0: `no_source_files`, #906 and #820, and
@@ -135,6 +142,7 @@ import json
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
+from lib.level_tags import tag_rows
 from lib.reason_codes import reason_code, reason_token
 from lib.level_result_types import Blocker, ConditionResult, ExcludedCondition, LevelResult, NextStep
 from lib.levels import Criterion, CriterionOutcome, Evaluation, LevelOutcome, MaturityModel, Row, StepDef
@@ -279,7 +287,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
     caller's own model). ``whys`` is ``manifest_whys.condition_whys`` of the core manifest,
     built here when not given."""
     from lib.manifest.check_manifest import condition_key, core_manifest  # lazy: the manifest loads once
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
     whys = condition_whys(core_manifest()) if whys is None else whys
     found = [whys.get(condition_key(row_id, level, c["signal"]), "") for c in criteria]
     return " ".join(dict.fromkeys(w for w in found if w))
@@ -288,7 +296,7 @@ def condition_why(row_id: str, level: int, criteria: Sequence[Criterion],
 def _add_whys(model: MaturityModel, conditions: Sequence[ConditionResult]) -> None:
     """Set each condition's ``why`` (``condition_why``) where its criteria have one."""
     from lib.manifest.check_manifest import core_manifest
-    from lib.manifest_whys import condition_whys
+    from lib.manifest.manifest_whys import condition_whys
     whys = condition_whys(core_manifest())
     by_id = {c["id"]: c for c in conditions}
     for row in model["rows"]:
@@ -329,11 +337,9 @@ def gate_blockers(steps: Sequence[StepDef], conditions: Sequence[ConditionResult
     return out
 
 
-def _blockers(step: StepDef, met: int, by_id: Mapping[str, ConditionResult]) -> list[Blocker]:
-    found = [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
-    if met < step["threshold"]:
-        found.append({"kind": "threshold", "threshold": step["threshold"], "met": met})
-    return found
+def _blockers(step: StepDef, by_id: Mapping[str, ConditionResult]) -> list[Blocker]:
+    """The gates of ``step`` that do not hold: the only thing that holds a Step back (#1083)."""
+    return [b for g in step["gates"] if (b := _gate_blocker(g["id"], g["row"], g["level"], by_id)) is not None]
 
 
 def condition_ids(model: MaturityModel) -> frozenset[str]:
@@ -367,9 +373,9 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     step: int | None = None
     next_step: NextStep | None = None
     for definition in model.get("steps", []):
-        blockers = _blockers(definition, met, by_id)
+        blockers = _blockers(definition, by_id)
         if blockers:
-            next_step = {"step": definition["step"], "threshold": definition["threshold"], "blockers": blockers}
+            next_step = {"step": definition["step"], "blockers": blockers}
             break
         step = definition["step"]
     result: LevelResult = {
@@ -387,6 +393,7 @@ def level_result(model: MaturityModel, data: Mapping[str, Any] | None,
     }
     if excluded:
         result["excluded"] = [excluded[c["id"]] for c in conditions if c["id"] in excluded]
+    result["tags"] = tag_rows(result, model)
     return result
 
 

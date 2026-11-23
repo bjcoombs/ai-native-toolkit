@@ -23,7 +23,7 @@ import assess_diagrams_review_fixture
 import fleet_diagrams_fixture
 import fleet_trends_fixture
 from assess_report import render_report
-from lib import keyhole_signals as ks
+import lib.keyhole.keyhole_signals as ks
 from lib.level_signals import DEFAULT_LEVELS
 from lib.vocabulary import BANNED_WORDS, IN_PLACE, RETIRED_LABELS, banned_hits, opening_lines, prose
 from test_decomposition_parity import _build_parity_fixture
@@ -188,7 +188,7 @@ def test_every_manifest_why_is_supportive_and_names_no_layer_number() -> None:
     """#939: every why in the check manifest, as measures.json carries it, reads supportively."""
     import json
 
-    from lib.manifest_whys import PLUMBING
+    from lib.manifest.manifest_whys import PLUMBING
     measures = json.loads((Path(__file__).resolve().parents[1] / "references" / "measures.json")
                           .read_text(encoding="utf-8"))
     whys = [c["why"] for r in measures["rows"] for lv in r["levels"] for c in lv["criteria"]]

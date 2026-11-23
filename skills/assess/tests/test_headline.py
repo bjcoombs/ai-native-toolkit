@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from lib.headline import GATE_CHANGE, as_headline, headline, run_context_headline
+from lib.headline import GATE_CHANGE, GATE_NOUN, as_headline, headline, run_context_headline
 from lib.level_tally import default_model
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -37,81 +37,74 @@ def _level(**over: Any) -> dict[str, Any]:
         "conditions": [{"id": "c.1", "row": "c", "level": 1, "grade": "measured", "counted": True,
                         "state": "unmet"}],
         "step": 3,
-        "next_step": {"step": 4, "threshold": 5, "blockers": [
-            {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"},
-            {"kind": "threshold", "threshold": 5, "met": 4}]},
+        "next_step": {"step": 4, "blockers": [
+            {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"}]},
     }
     base.update(over)
     return base
 
 
-def test_three_lines_step_next_and_tally():
+def test_three_lines_step_next_and_coverage():
     h = headline(_level(), default_model())
     assert h["lines"] == [
         "Step 3 · Unattended agent PRs · contracts in place",
-        "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced and "
-        "1 more practice is in place, for example `c.1`",
-        "Practices in place: 4 of 6 measured, 0 verified · 3 not measured (needs a full run: 1, no remote: 2)"
+        "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced",
+        "Catalogue coverage: 4 of 6 measured, 0 verified · 3 not measured (needs a full run: 1, no remote: 2)"
         " · model m-1",
     ]
-    assert h["summary"] == "Step 3 · 4 in place of 6 measured"
+    assert h["summary"] == "Step 3 · next: coverage gate"
     assert h["markdown"].startswith("**Step 3 · Unattended agent PRs · contracts in place**\n\n")
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
 
 
-_COUNTED_GATE = {"id": "layer-6-coverage.1", "row": "layer-6-coverage", "level": 1, "grade": "measured",
-                 "counted": True, "state": "unmet"}
+def test_the_summary_and_next_line_carry_no_count():
+    """#1083: the badge and log.md summary, and the Next line, name gates and never an "of" count."""
+    for lvl in (_level(), _level(step=4, next_step=None), _level(step=1, next_step={"step": 2, "blockers": [
+            {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]})):
+        h = headline(lvl, default_model())
+        assert not re.search(r"\d+ (of|in place of) \d+", h["summary"]), h["summary"]
+        assert "practice" not in h["lines"][1] and " of " not in h["lines"][1]
+    assert headline(_level(step=4, next_step=None), default_model())["summary"] == "Step 4 · all gates held"
+    assert headline(_level(step=1, next_step={"step": 2, "blockers": [
+        {"kind": "gate", "gate": "instructions", "condition": "layer-0-instructions.1", "state": "unmet"}]}),
+        default_model())["summary"] == "Step 1 · next: instruction file"
 
 
-def _gate_and_threshold(threshold: int) -> dict[str, Any]:
-    return _level(conditions=[_COUNTED_GATE, _level()["conditions"][0]], next_step={
-        "step": 4, "threshold": threshold, "blockers": [
-            {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"},
-            {"kind": "threshold", "threshold": threshold, "met": 4}]})
+def test_the_summary_names_the_first_blocking_gate_and_an_unknown_gate_by_id():
+    two = _level(step=2, next_step={"step": 4, "blockers": [
+        {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1", "state": "unmet"},
+        {"kind": "gate", "gate": "coverage_gate", "condition": "layer-6-coverage.1", "state": "unmet"}]})
+    assert headline(two, default_model())["summary"] == "Step 2 · next: CI runs tests"
+    own = _level(next_step={"step": 4, "blockers": [{"kind": "gate", "gate": "own_gate", "condition": "x.1",
+                                                     "state": "unmet"}]})
+    assert headline(own, default_model())["summary"] == "Step 3 · next: own_gate"
 
 
-def test_a_counted_gate_that_also_meets_the_threshold_is_the_one_change():
-    h = headline(_gate_and_threshold(5), default_model())
-    assert h["lines"][1] == "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced"
+def test_a_model_without_steps_says_so_with_no_count():
+    h = headline(_level(step=None, next_step=None), default_model())
+    assert h["summary"] == "no Steps defined"
+    assert h["lines"][0].startswith("Catalogue coverage: ")
 
 
-def test_the_shortfall_after_the_gate_holds_is_added_and_never_names_the_gate():
-    h = headline(_gate_and_threshold(7), default_model())
-    assert h["lines"][1] == ("Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced "
-                             "and 2 more practices are in place, for example `c.1`")
-
-
-def test_a_gate_listed_not_counted_adds_nothing_to_the_tally():
-    listed = {**_COUNTED_GATE, "grade": "config_only", "counted": False}
-    lvl = _gate_and_threshold(5)
-    lvl["conditions"][0] = listed
-    assert headline(lvl, default_model())["lines"][1].endswith(
-        "a coverage gate is enforced and 1 more practice is in place, for example `c.1`")
-
-
-def test_not_measured_gate_says_so_and_threshold_only_names_the_count():
+def test_not_measured_gate_says_so():
     gate = {"kind": "gate", "gate": "ci_runs_tests", "condition": "layer-5-ci.1",
             "state": "not_measured", "reason": "needs_platform"}
-    h = headline(_level(step=2, next_step={"step": 3, "threshold": 3, "blockers": [gate]}), default_model())
+    h = headline(_level(step=2, next_step={"step": 3, "blockers": [gate]}), default_model())
     assert h["lines"][1] == ("Next: Step 3 · Unattended agent PRs unlocks when CI runs the tests "
                              "(not measured here: needs GitHub or GitLab access)")
-    lvl = _level(step=1, conditions=[], next_step={"step": 2, "threshold": 1, "blockers": [
-        {"kind": "threshold", "threshold": 3, "met": 1}]})
-    assert headline(lvl, default_model())["lines"][1] == (
-        "Next: Step 2 · Supervised agent PRs unlocks when 2 more practices are in place")
 
 
 def test_top_step_and_zero_not_measured():
     h = headline(_level(step=4, next_step=None, not_measured=[],
                         tally={"met": 9, "measured": 9, "not_measured": 0}), default_model())
     assert h["lines"][1] == "Next: Step 4 is the top Step; it holds while its gates hold"
-    assert h["lines"][2] == "Practices in place: 9 of 9 measured, 0 verified · 0 not measured · model m-1"
+    assert h["lines"][2] == "Catalogue coverage: 9 of 9 measured, 0 verified · 0 not measured · model m-1"
     assert h["next_step"] is None
 
 
 def test_unknown_gate_and_requires_reason_fall_back_to_their_ids():
     lvl = _level(not_measured=[{"id": "x.1", "reason": "requires:layer-5-ci.1"}],
-                 next_step={"step": 4, "threshold": 0, "blockers": [
+                 next_step={"step": 4, "blockers": [
                      {"kind": "gate", "gate": "own_gate", "condition": "x.1", "state": "unmet"}]})
     h = headline(lvl, default_model())
     assert h["lines"][1].endswith("unlocks when the own_gate gate holds")
@@ -120,7 +113,7 @@ def test_unknown_gate_and_requires_reason_fall_back_to_their_ids():
 
 def test_every_default_gate_has_wording():
     gates = {g["id"] for s in default_model().get("steps", []) for g in s["gates"]}
-    assert gates and gates <= set(GATE_CHANGE)
+    assert gates and gates <= set(GATE_CHANGE) and gates <= set(GATE_NOUN)
 
 
 def test_unavailable_level_claims_no_step():
@@ -218,7 +211,8 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     assert first["headline"] == second["headline"]
     assert badge1["message"] == badge2["message"]
     level, head = second["level"], second["headline"]
-    assert badge2["message"] == f"Step {level['step']} · {level['tally']['met']} in place of {level['tally']['measured']} measured"
+    assert badge2["message"] == head["summary"]
+    assert badge2["message"].startswith(f"Step {level['step']} · ") and " of " not in badge2["message"]
     assert head["lines"][0].startswith(f"Step {level['step']} · ") and "contracts in place" in head["lines"][0]
     assert head["lines"][1].startswith(f"Next: Step {level['next_step']['step']} · ")
     assert f"{level['tally']['not_measured']} not measured" in head["lines"][2]
@@ -278,10 +272,10 @@ def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
 
     ctx = _run(ci2, "2026-11-22")
     assess = ci2 / ".assess"
-    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 in place of 1 measured")
-    assert "- **Readiness:** Step 9 · 1 in place of 1 measured" in (assess / "log.md").read_text(encoding="utf-8")
+    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · all gates held")
+    assert "- **Readiness:** Step 9 · all gates held" in (assess / "log.md").read_text(encoding="utf-8")
     assert verify_log_chain(assess) == (True, None)
-    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 in place of 1 measured")
+    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · all gates held")
     assert not refresh_log_readiness(assess, None, "x")
     assert not refresh_log_readiness(assess, "no-such-run", "x")
 
@@ -315,9 +309,8 @@ def test_next_why_holds_the_whys_of_the_unmet_gate_conditions_only() -> None:
     others = [c["why"] for c in level["conditions"] if c["row"] not in gated]
     assert not any(w in h["next_why"] for w in others)
     assert headline(_level(next_step=None), default_model())["next_why"] == ""
-    threshold_only = _level(next_step={"step": 4, "threshold": 5,
-                                       "blockers": [{"kind": "threshold", "threshold": 5, "met": 4}]})
-    assert headline(threshold_only, default_model())["next_why"] == ""
+    no_gate = _level(next_step={"step": 4, "blockers": []})
+    assert headline(no_gate, default_model())["next_why"] == ""
 
 
 def test_as_headline_backfills_next_why_on_an_older_block() -> None:
@@ -356,10 +349,10 @@ def _tagged_level() -> dict[str, Any]:
 
 def test_tally_line_shows_the_verified_share_of_n():
     h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
-    assert h["lines"][0] == ("Practices in place: 2 of 2 measured, 1 verified · 1 not measured "
+    assert h["lines"][0] == ("Catalogue coverage: 2 of 2 measured, 1 verified · 1 not measured "
                              "(no remote: 1) · model t-1")
     assert h["verified"] == 1
-    assert h["summary"] == "2 in place of 2 measured"
+    assert h["summary"] == "no Steps defined"
 
 
 def test_strip_counts_a_multi_tagged_condition_in_each_cell_and_once_in_n():
@@ -372,7 +365,7 @@ def test_strip_counts_a_multi_tagged_condition_in_each_cell_and_once_in_n():
                                   "not_measured": 0, "hazards": 0, "declined": 0}
     assert cells["docs"]["verified"] == 1 and cells["docs"]["not_measured"] == 1
     # r.1 sits in two cells; the tally counts it once
-    assert sum(c["met"] for c in h["tags"]) == 3 and h["lines"][0].startswith("Practices in place: 2 of")
+    assert sum(c["met"] for c in h["tags"]) == 3 and h["lines"][0].startswith("Catalogue coverage: 2 of")
 
 
 def test_no_tagged_condition_gives_no_strip_line():

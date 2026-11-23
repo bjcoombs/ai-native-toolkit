@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.coverage_report import (
+from lib.testing.coverage_report import (
     _parse_cobertura,
     _parse_lcov,
     detect_coverage_report,

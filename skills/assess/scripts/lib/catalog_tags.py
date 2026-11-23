@@ -18,7 +18,7 @@
   id (a signal path for ``eq_signal``).
 
 Each tag carries its ``why`` and ``why_source`` from the check manifest's root ``tags`` table
-(``lib.manifest_whys.tag_why``, #939; ``""`` from a version 1 manifest).
+(``lib.manifest.manifest_whys.tag_why``, #939; ``""`` from a version 1 manifest).
 """
 from __future__ import annotations
 
@@ -58,8 +58,7 @@ class CatalogGate(TypedDict):
 class CatalogStep(TypedDict):
     step: int
     name: str
-    threshold: int  # met, counted conditions the Step needs
-    gates: list[CatalogGate]
+    gates: list[CatalogGate]  # the only thing a Step needs (#1083)
     added_gates: list[str]  # gate ids new at this Step
 
 
@@ -118,8 +117,7 @@ def steps(model: MaturityModel, truth: Mapping[str, list[str]]) -> list[CatalogS
                                      tags=[t for t in TRUTH_TAGS if t in held]))
         added = [g["id"] for g in gates if g["id"] not in seen]
         seen.update(added)
-        out.append(CatalogStep(step=step["step"], name=step["name"], threshold=step["threshold"],
-                               gates=gates, added_gates=added))
+        out.append(CatalogStep(step=step["step"], name=step["name"], gates=gates, added_gates=added))
     return out
 
 

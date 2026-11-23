@@ -5,8 +5,8 @@ blocks carry the figures a fleet reader compares across repositories, so the
 published schemas (``skills/assess/references/signals.schema.json`` and
 ``skills/fleet/references/repos.schema.json``) name and explain their fields
 here: ``ai_usage`` (#547, #695), ``ci_checks`` (#698), ``coverage_gate`` (#781),
-``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768) and
-``layer_grades`` (#620, #821).
+``delivery`` (#715), ``review_reality`` (#943), ``guardrails`` (#767), ``agent_consistency`` (#768),
+``agent_outcome`` (#1085) and ``layer_grades`` (#620, #821).
 Both generators read :data:`BLOCK_SCHEMAS`, so the two files describe the same
 fields in the same words.
 
@@ -19,7 +19,8 @@ a field of the block's TypedDict, and that real documents validate.
 
 `BLOCK_SCHEMAS` (`dict[str, JsonDict]`): hand-written field descriptions (with units: delivery durations are hours)
 of the blocks a fleet reader compares, `ai_usage`, `ci_checks`, `coverage_gate` (#781),
-`delivery` (#779), `review_reality` (#943), `guardrails` (#767) and `agent_consistency` (#768), read
+`delivery` (#779), `review_reality` (#943), `guardrails` (#767), `agent_consistency` (#768) and
+`agent_outcome` (#1085), read
 by both `signals_schema` and `fleet_schema` so `signals.schema.json` and `repos.schema.json`
 describe them alike. Tests: `tests/test_scan_block_schemas.py` (every described field is a
 TypedDict field and every TypedDict field is described; real full and counts-only blocks
@@ -91,6 +92,44 @@ AI_USAGE: JsonDict = {
         "lower_bound": {"type": "boolean"},
         "covered_agents": _STRINGS,
         "covered_author_agents": _STRINGS,
+        "limits": _STRINGS,
+        "reason": {"type": "string"},
+    },
+}
+
+AGENT_OUTCOME: JsonDict = {
+    "description": (
+        "Revert and rework rate of the agent commits of the run window (lib/agent_outcome.py, "
+        "issue #1085). Informational: no Step, count or headline reads it. The agent commits "
+        "are those ai_usage counts in agent_either_commits (an AI-assistant trailer or an agent "
+        "author). Reverted: a later commit's 'This reverts commit' message names it, or a later "
+        "commit's diff is its exact inverse (equal git patch-id). Reworked: git blame, "
+        "rework_days after the commit, no longer attributes some line it added to it. A share "
+        "with nothing to divide by is null with a token reason."),
+    "properties": {
+        "available": {"type": "boolean"},
+        "window": _field({"type": "string"}, "The history window read, as in ai_usage."),
+        "since": _field({"type": ["string", "null"]},
+                        "The window as an absolute git --since bound; dropped in counts-only output."),
+        "informational": _field({"type": "boolean"}, "Always true: nothing scores this block."),
+        "agent_rule": _field({"type": "string"},
+                             "Which commits count as agent commits (trailer_or_author)."),
+        "agent_commits": _field(_INT, "Agent commits in the window."),
+        "reverted_commits": _field(_INT, "Agent commits later reverted, by message or by inverse diff."),
+        "reverted_by_message": _field(_INT, "Agent commits a 'This reverts commit' message names."),
+        "reverted_by_restore": _field(_INT, "Agent commits a later commit's inverse diff undoes; "
+                                            "a git revert usually counts here too."),
+        "revert_share": _share("agent commits later reverted"),
+        "revert_null_reason": _field({"type": ["string", "null"]},
+                                     "Why revert_share is null: no_agent_commits."),
+        "rework_days": _field(_INT, "The rework span, in days after each agent commit."),
+        "rework_observed_commits": _field(_INT, "Agent commits at least rework_days older than HEAD."),
+        "rework_sampled_commits": _field(_INT, "Of those, the newest checked (at most 50)."),
+        "reworked_commits": _field(_INT, "Sampled agent commits with an added line rewritten "
+                                         "or removed within rework_days."),
+        "rework_share": _share("sampled agent commits reworked within rework_days"),
+        "rework_null_reason": _field({"type": ["string", "null"]},
+                                     "Why rework_share is null: no_agent_commits or none_old_enough."),
         "limits": _STRINGS,
         "reason": {"type": "string"},
     },
@@ -174,16 +213,18 @@ CI_CHECKS: JsonDict = {
         "test_or_lint_configured": _field(
             {"type": ["boolean", "null"]},
             "The CI test-or-lint signal: true, false, or null when included jobs may hold "
-            "the check."),
+            "the check or a Maven run skips its tests."),
         "basis": _field(
             {"enum": ["check_command", "merged_config", "included_jobs", "merged_config_partial",
                       "unread_ci_system", "external_ci", "external_ci_marker",
-                      "no_check_command", "no_ci"]},
+                      "check_target", "no_check_command", "no_ci"]},
             "The reason for test_or_lint_configured: check_command or merged_config (true; the second "
             "when only the merged configuration ran a check), included_jobs or "
             "merged_config_partial (null; the second when the merged configuration was read "
             "with no check but may lack jobs: an include under rules:, or a trigger: child "
-            "pipeline), unread_ci_system (false: no readable check, but a CI file of a system "
+            "pipeline), check_target (null: no check, but a Maven run with its tests skipped, "
+            "mvn -DskipTests verify, whose phase may still run a lint plugin), "
+            "unread_ci_system (false: no readable check, but a CI file of a system "
             "the scan does not parse is tracked), external_ci or external_ci_marker (false: no "
             "readable check, but CI runs off the repository; as enforced_basis), "
             "no_check_command or no_ci (false)."),
@@ -194,11 +235,14 @@ CI_CHECKS: JsonDict = {
             "script the tree does not hold, a target whose recipe is not read, a CI system the "
             "scan does not parse or an external CI system may hold one, else false."),
         "enforced_basis": _field(
-            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "script_not_found",
-                      "check_target", "unread_ci_system", "external_ci", "external_ci_marker",
-                      "not_enforced", "no_check_command", "no_ci"]},
+            {"enum": ["enforced_check", "included_jobs", "unknown_trigger", "check_may_pass",
+                      "script_not_found", "check_target", "unread_ci_system", "external_ci",
+                      "external_ci_marker", "not_enforced", "no_check_command", "no_ci"]},
             "The reason for enforced_check_runs: enforced_check (true), included_jobs, "
-            "unknown_trigger, script_not_found, check_target or unread_ci_system (null), "
+            "unknown_trigger, check_may_pass (a check whose failure the step may hide: pytest || "
+            "echo failed, an if or while condition, an until loop that breaks out, a check before "
+            "&& with more of the step after it, a { } group or function called in such a "
+            "position; issue #1008), script_not_found, check_target or unread_ci_system (null), "
             "external_ci (null: an "
             "external check context on merged changes under --platform; more than half of the "
             "sampled merged pull requests carry a check run or commit status of a known "
@@ -225,11 +269,11 @@ CI_CHECKS: JsonDict = {
             "counts only when a later line of its job runs git diff --exit-code."),
         "lint_basis": _field(
             {"enum": ["lint_command", "included_jobs", "merged_config_partial", "unknown_trigger",
-                      "script_not_found", "check_target", "unread_ci_system", "external_ci",
+                      "check_may_pass", "script_not_found", "check_target", "unread_ci_system", "external_ci",
                       "external_ci_marker", "analysers_in_build", "compiler_gate_only", "not_enforced",
                       "no_lint_command", "no_ci"]},
             "The reason for lint_runs: lint_command (true), included_jobs, merged_config_partial, "
-            "unknown_trigger, script_not_found, check_target, unread_ci_system, external_ci or "
+            "unknown_trigger, check_may_pass, script_not_found, check_target, unread_ci_system, external_ci or "
             "external_ci_marker "
             "(null; as enforced_basis), analysers_in_build (null: "
             "a CI .NET build runs the analysers a committed Directory.Build.props or .csproj turns "
@@ -246,7 +290,7 @@ CI_CHECKS: JsonDict = {
 
 COVERAGE_GATE: JsonDict = {
     "description": (
-        "Committed line-coverage thresholds (lib/coverage_gate.py), read from config and CI "
+        "Committed line-coverage thresholds (lib/testing/coverage_gate.py), read from config and CI "
         "files at HEAD, never from measured coverage. Each gate keeps its threshold as written "
         "beside threshold_percent, the same value as a percentage (a JaCoCo ratio 0.80 is 80)."),
     "properties": {
@@ -306,11 +350,12 @@ COVERAGE_GATE: JsonDict = {
             "is null or the run cannot be told (see enforced_basis); false otherwise."),
         "enforced_basis": _field(
             {"enum": ["ci_run", "no_gate", "threshold_below_minimum", "threshold_not_read",
-                      "unknown_trigger", "indirect_run", "included_jobs", "unread_ci_system",
-                      "not_run_in_ci", "no_ci"]},
+                      "unknown_trigger", "check_may_pass", "indirect_run", "included_jobs",
+                      "unread_ci_system", "not_run_in_ci", "no_ci"]},
             "The reason for enforced_meets_minimum: ci_run (true); no_gate, "
             "threshold_below_minimum, not_run_in_ci and no_ci (false); threshold_not_read, "
-            "unknown_trigger, indirect_run (a check target or script such as make test may run "
+            "unknown_trigger, check_may_pass (the run's failure may not fail its job: pytest "
+            "--cov || echo failed; issue #1008), indirect_run (a check target or script such as make test may run "
             "it), included_jobs and unread_ci_system (null)."),
         "not_detected": _STRINGS,
     },
@@ -346,6 +391,11 @@ DELIVERY: JsonDict = {
             {"type": ["integer", "null"]},
             "Changes per heavy read of the sample (lib/hosting/merged_sample.py PAGE_SIZE, or half "
             "of it after one retry on HTTP 502 or 504); null when no heavy read was made."),
+        "unconfirmed_ai_accounts": _field(
+            _INT,
+            "Distinct sampled accounts that are name-only AI matches awaiting confirmation in "
+            "[identities] (#883): change authors, and on GitLab note authors. A non-zero count "
+            "is why the share it would decide reads null."),
     },
 }
 
@@ -515,6 +565,7 @@ LAYER_GRADES: JsonDict = {
 
 BLOCK_SCHEMAS: dict[str, JsonDict] = {
     "agent_consistency": AGENT_CONSISTENCY,
+    "agent_outcome": AGENT_OUTCOME,
     "ai_usage": AI_USAGE,
     "ci_checks": CI_CHECKS,
     "coverage_gate": COVERAGE_GATE,

@@ -2,7 +2,8 @@
 
 ``LEVEL`` is a hand-built ``LevelResult`` with every waffle category, including the
 ``declined`` and ``not_applicable`` states no rule produces yet, and not-measured
-conditions with a plain and a ``requires:`` reason. ``test_assess_diagrams.py`` fails
+conditions with a plain and a ``requires:`` reason, at Step 3 with Step 4 next under the
+shipped model's Steps (the Step ladder, #1102). ``test_assess_diagrams.py`` fails
 when a committed golden differs from a fresh render. Regenerate the goldens with
 ``uv run --locked python tests/assess_diagrams_fixture.py`` from ``skills/assess``, then
 review the diff.
@@ -14,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.assess_diagrams import WAFFLE_FILE, build_diagrams, diagrams_section  # noqa: E402
+from lib.assess_diagrams import LADDER_FILE, WAFFLE_FILE, build_diagrams, diagrams_section  # noqa: E402
 from lib.level_result_types import ConditionResult, LevelResult  # noqa: E402
 from lib.run_context_types import JsonDict  # noqa: E402
 
@@ -61,8 +62,10 @@ LEVEL: LevelResult = {
     "listed": ["layer-0-instructions.1", "layer-5-ci.2", "guardrails.3"],
     "not_measured": [{"id": c["id"], "reason": c["reason"]} for c in CONDITIONS if "reason" in c],
     "conditions": CONDITIONS,
-    "step": None,
-    "next_step": None,
+    "step": 3,
+    "next_step": {"step": 4,
+                  "blockers": [{"kind": "gate", "gate": "coverage_gate",
+                                "condition": "layer-6-coverage.1", "state": "unmet"}]},
 }
 
 
@@ -70,7 +73,7 @@ def goldens() -> dict[str, str]:
     """The golden renders: ``expected-<file>`` -> text."""
     diagrams = build_diagrams({"level": LEVEL}, MODEL_ROWS)
     files = {f"expected-{d['file']}": d["svg"] for d in diagrams if d["svg"] is not None}
-    assert f"expected-{WAFFLE_FILE}" in files
+    assert f"expected-{WAFFLE_FILE}" in files and f"expected-{LADDER_FILE}" in files
     return {**files, "expected-section.md": diagrams_section(diagrams) + "\n"}
 
 
