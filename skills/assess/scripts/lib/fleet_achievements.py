@@ -29,10 +29,11 @@ anything. This is how an unknown level never earns or loses anything at unit lev
 Each run is compared with the latest earlier run measuring the same repositories
 (``same_set``, #1041), not only the run before it, so a member's failed scan on the run
 before a move delays the credit to the run it returns instead of losing it; the
-achievement's ``previous_run`` names the run compared with. One move is credited once: a
-``level_up`` credited after that run raises the level a move must pass (``Evidence``
-``from_level`` is that level), so a member returning after the others moved does not
-credit the move again, while a real drop and recovery is a new move.
+achievement's ``previous_run`` names the run compared with. One move is credited once: each
+row records its last credited move, up or down, and a move credited after the run
+compared with is where the next one starts (``Evidence`` ``from_level`` is that level).
+So a member returning after the others moved neither credits the move again nor counts a
+slip twice, and a real drop and recovery, on a subset or not, is two moves.
 
 **Re-scored entries (#771).** An earlier run kept under another maturity-model version
 replays re-scored under this run's model (``lib/fleet_achievements_runs.py``,
@@ -393,7 +394,8 @@ class _Replay:
         self.hit_at: dict[tuple[SubjectKey, Target], str] = {}  # the run each target was last credited
         self.rows: dict[tuple[SubjectKey, str], list[tuple[str, RowState]]] = {}  # each run's row state
         self.cells: dict[str, Mapping[str, Mapping[str, Cell]]] = {}  # each run's cells, by run id
-        self.up_at: dict[tuple[SubjectKey, str], tuple[str, int]] = {}  # last level_up: (run, level reached)
+        # each row's last credited move, up or down: (run, level it moved to)
+        self.moved_at: dict[tuple[SubjectKey, str], tuple[str, int]] = {}
         self.out: list[Achievement] = []
 
     def see(self, run: str, subs: Mapping[SubjectKey, Subject], cells: Mapping[str, Mapping[str, Cell]]) -> None:
@@ -437,15 +439,17 @@ class _Replay:
                 now_row = sub.rows[row]
                 lv_then, lv_now = then_row.level, now_row.level
                 assert lv_then is not None and lv_now is not None  # same_set guarantees both
-                if lv_now < lv_then:
+                # a move already credited after that run (on a subset) is where this one starts:
+                # one move, one level_up or slip, and a real drop then recovery is two moves
+                credited = self.moved_at.get((key, row))
+                base = credited[1] if credited is not None and self.order[credited[0]] > self.order[prev_run] \
+                    else lv_then
+                if lv_now != base:
+                    self.moved_at[(key, row)] = (run, lv_now)
+                if lv_now < base:
                     slipped = True
-                credited = self.up_at.get((key, row))
-                base = lv_then
-                if credited is not None and self.order[credited[0]] > self.order[prev_run]:
-                    base = max(base, credited[1])  # already credited after that run: one move, one level_up
                 if lv_now > base:
                     moves = moves_up(row, now_row, self.cells[prev_run], now_cells)
-                    self.up_at[(key, row)] = (run, lv_now)
                     self._earn(LEVEL_UP, sub, run, prev_run, _evidence(row, base, lv_now, moves))
                     held = reached_before.get((sub.view, sub.kind, row))
                     if self.firsts and (held is None or lv_now > held) and peers[(sub.view, sub.kind)] > 1:

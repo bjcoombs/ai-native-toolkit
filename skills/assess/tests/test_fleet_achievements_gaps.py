@@ -69,3 +69,31 @@ def test_a_slip_after_a_gap_still_resets_the_streak() -> None:
 def test_two_runs_give_identical_bytes() -> None:
     history = [("2026-11-01", BASE), ("2026-11-08", {**BASE, "grp/sub/b": GONE}), ("2026-11-15", UP)]
     assert fa.dumps_achievements(_build(history)) == fa.dumps_achievements(_build(history))
+
+
+def test_a_recovery_after_a_slip_on_a_subset_is_credited() -> None:
+    """The slip on the subset run is the move the return compares from, so the recovery to the
+    credited level is a new level_up, not lost to the earlier credit."""
+    history: list[tuple[str, Spec]] = [
+        ("2026-11-01", BASE),  # {a, b} at docs 1
+        ("2026-11-08", {**BASE, "grp/sub/b": GONE}),  # {a} at docs 1
+        ("2026-11-15", {**BASE, "grp/sub/a": (2, True), "grp/sub/b": GONE}),  # {a} at docs 2: credited
+        ("2026-11-22", {**BASE, "grp/sub/b": GONE}),  # {a} at docs 1: a slip
+        ("2026-11-29", UP),  # {a, b} at docs 2, compared with 11-01: a recovery
+    ]
+    assert _ups(history) == [("2026-11-15", "2026-11-08", 1), ("2026-11-29", "2026-11-01", 1)]
+
+
+def test_one_drop_seen_on_two_runs_is_one_slip() -> None:
+    """a drops once while b flaps: the drop shows against the full set on one run and against the
+    subset on the next, but the slip after the first sets where the second starts."""
+    flap: list[tuple[str, Spec]] = [
+        ("2026-11-01", UP),  # {a, b} at docs 2
+        ("2026-11-08", {**UP, "grp/sub/b": GONE}),  # {a} at docs 2
+        ("2026-11-15", {**UP, "grp/sub/a": (1, True)}),  # {a, b} at docs 1: the slip
+        ("2026-11-22", {**UP, "grp/sub/a": (1, True), "grp/sub/b": GONE}),  # {a} at docs 1: no second slip
+        ("2026-11-29", {**UP, "grp/sub/a": (1, True)}), ("2026-12-06", {**UP, "grp/sub/a": (1, True)}),
+    ]
+    streaks = [a["run"] for a in _build(flap)["achievements"] if a["kind"] == fa.STREAK and a["unit"] == TEAM]
+    # reset to 1 on 11-15 only; 11-22, 11-29 count (2, 3); a second reset on 11-22 would move it to 12-06
+    assert streaks == ["2026-11-29"]
