@@ -77,6 +77,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol, TypedDict
 
 from lib import check_manifest as cm
+from lib.coverage_gate import GO_RUST_UNMEASURED, go_rust_manifests
 from lib.level_tally import DEFAULT_BLOCKS, default_model
 from lib.levels import MaturityModel, condition_id
 from lib.run_context_types import JsonDict
@@ -365,16 +366,18 @@ def _root_owns(block: str, result: Any, members: Sequence[str]) -> bool:
     return True
 
 
-def _root_without(block: str, result: Any, members: Sequence[str],
-                  nested: Any) -> JsonDict | None:
+def _root_without(block: str, result: Any, members: Sequence[str], nested: Any,
+                  values: Mapping[str, Any] | None = None) -> JsonDict | None:
     """The root unit's own reading of an override block it does not own (``_root_owns``
     false), or None to inherit the repository-wide one (#864).
 
     The members' evidence is theirs, so it is left out, as for a member unit
     (``_coverage_own``, ``_instructions_own``): a ``nested_only`` repository reads
     ``instruction_file_present`` true only when a nested file sits under no member, and a
-    coverage reading whose every gate is under members is a no-gate reading (false, or
-    null with its ``unmeasured_reason`` when the repository-wide value was not measured).
+    coverage reading whose every gate is under members is a no-gate reading: false, or
+    null with ``go_rust_gate_form_not_read`` when the repository-wide value was not
+    measured or the walk (``values``' ``repo_root`` and ``excludes``) holds a ``go.mod`` or
+    ``Cargo.toml``, whose gate form the scan does not read (an unknown never reads unmet).
     """
     if not isinstance(result, Mapping):
         return None
@@ -386,9 +389,13 @@ def _root_without(block: str, result: Any, members: Sequence[str],
                   and not any(_under(f["path"], m) for m in members) for f in files)
         return {"available": True, "instruction_file_present": own}
     if block == "coverage_gate" and isinstance(result.get("gates"), list) and result["gates"]:
-        meets = None if result.get("unmeasured_reason") else False
+        root = (values or {}).get("repo_root")
+        unread = bool(result.get("unmeasured_reason")) or (
+            root is not None and bool(go_rust_manifests(root, (values or {}).get("excludes"))))
+        meets = None if unread else False
         return {**result, "configured": False, "gates": [], "max_threshold_percent": None,
                 "threshold_meets_minimum": meets, "enforced_meets_minimum": meets,
+                "unmeasured_reason": GO_RUST_UNMEASURED if unread else None,
                 "enforced_basis": "no_gate"}
     return None
 
@@ -455,7 +462,7 @@ def read_units(units: Any, nested_instructions: Any, *external: Any,
                 if result is None:
                     continue
                 if not _root_owns(block, result, members):
-                    result = _root_without(block, result, members, nested_instructions)
+                    result = _root_without(block, result, members, nested_instructions, values)
                     if result is None:
                         continue
             elif scopes[block] == "override":

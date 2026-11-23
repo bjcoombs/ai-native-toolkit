@@ -214,6 +214,23 @@ def test_a_parent_build_gate_is_inherited_beside_a_members_gate(tmp_path: Path) 
                                                "members": ["svc/a", "svc/b"]}) is None
 
 
+def test_a_root_no_gate_reading_beside_go_is_not_measured(tmp_path: Path) -> None:
+    # a member gate that meets the minimum leaves the repository reason null; the root's
+    # own no-gate reading beside a go.mod is still unknown, never unmet
+    repo = _write(tmp_path / "repo", {"go.mod": "module x\n", "svc/a/pyproject.toml": "x\n"})
+    meets = {"available": True, "gates": [{"file": "svc/a/pyproject.toml"}],
+             "enforced_meets_minimum": True, "unmeasured_reason": None}
+    out = ur._root_without("coverage_gate", meets, ["svc/a"], None,
+                           {"repo_root": repo, "excludes": NO_EXCLUDES})
+    assert out is not None
+    assert out["enforced_meets_minimum"] is None
+    assert out["unmeasured_reason"] == "go_rust_gate_form_not_read"
+    plain = _write(tmp_path / "plain", {"svc/a/pyproject.toml": "x\n"})
+    out = ur._root_without("coverage_gate", meets, ["svc/a"], None,
+                           {"repo_root": plain, "excludes": NO_EXCLUDES})
+    assert out is not None and out["enforced_meets_minimum"] is False
+
+
 def _nested(*entries: tuple[str, str]) -> dict[str, Any]:
     return {"available": True, "files": [{"path": p, "scope": {"directory": d, "globs": [],
                                                                 "always_loaded": False}}
