@@ -51,7 +51,7 @@ graph already surfaces it.
 """
 from __future__ import annotations
 
-from lib.check_manifest import core_manifest, finding_thresholds
+from lib.manifest.check_manifest import core_manifest, finding_thresholds
 from lib.run_context_types import CouplingRow, JsonDict
 
 # Per-directory static metrics (``modularity_q`` / ``front_door_ratio``), keyed

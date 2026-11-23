@@ -9,8 +9,8 @@ reaching the scanners. ``SIGNAL_INPUTS`` is generated at import from each signal
 The classification data `level_signals.py` documents and re-exports: `InputClass`, `Grade`,
 `INPUT_GRADES`, `LISTED_GRADES`, `SIGNAL_INPUTS`, `UNMEASURED_VALUES`, `EMPTY_DENOMINATORS` (signal
 to its set's count and the code when that count is 0, read by `levels.py`: `no_scored_files`,
-`no_manifests`) and the `DEFAULT_LEVELS` path, importing only `lib.check_manifest` (which imports only
-`lib.check_validation`), so `level_tally.py` and the run context's `level` entry read them
+`no_manifests`) and the `DEFAULT_LEVELS` path, importing only `lib.manifest.check_manifest` (which imports only
+`lib.manifest.check_validation` and `lib.manifest_whys`, neither a scanner), so `level_tally.py` and the run context's `level` entry read them
 without importing the scanners (#744). Tests: `tests/test_signal_inputs.py`,
 `tests/test_level_tally.py`, `tests/test_manifest_tables.py`.
 """
@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, cast
 
-from lib.check_manifest import core_manifest, signal_inputs
+from lib.manifest.check_manifest import core_manifest, signal_inputs
 
 DEFAULT_LEVELS = Path(__file__).resolve().parents[2] / "levels" / "default.toml"
 

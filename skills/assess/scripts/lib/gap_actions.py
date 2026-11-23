@@ -162,7 +162,7 @@ def build_gap_actions(
         _coverage_gap(coverage_report or {}, top_hotspots or [], archetype or {}),
         _reachability_gap(doc_graph or {}),
     ]
-    from lib.check_manifest import core_manifest  # lazy: the manifest loads once
+    from lib.manifest.check_manifest import core_manifest  # lazy: the manifest loads once
     from lib.manifest_whys import scan_whys
     whys = scan_whys(core_manifest())
     out = [g for g in gaps if g is not None]
