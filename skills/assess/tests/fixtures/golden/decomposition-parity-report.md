@@ -21,7 +21,7 @@ _New to these words? The [glossary](https://github.com/bjcoombs/ai-native-toolki
 
 **Step 2 · Supervised agent PRs · contracts in place**
 
-Next: Step 3 · Unattended agent PRs unlocks when CI turns red when a check breaks
+Next: Step 3 · Unattended agent PRs unlocks when CI turns red on a broken check
 
 Catalogue coverage: 0 of 3 [measured](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#catalogue-coverage), 0 [verified](https://github.com/bjcoombs/ai-native-toolkit/blob/main/docs/glossary.md#evidence-grade) · 15 not measured (needs a full run: 1, no manifests read: 1, no ownership map: 1, no remote: 2, no source files: 2, no value read: 6, waits on layer-4-architecture.1: 1, unavailable: 1) · model <<normalized>>
 
@@ -33,7 +33,7 @@ In place: Step 2 of 4, Supervised agent PRs: an agent opens pull requests, a per
 
 [![Where you are on the Steps](./step-ladder.svg)](./step-ladder.svg)
 
-Step 3, Unattended agent PRs, opens when CI turns red when a check breaks.
+Step 3, Unattended agent PRs, opens when CI turns red on a broken check.
 
 ## Evidence behind the Step
 
