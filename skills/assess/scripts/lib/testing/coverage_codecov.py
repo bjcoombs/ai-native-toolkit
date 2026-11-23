@@ -13,16 +13,20 @@ How a status counts toward Layer 6 level 1 (maintainer-approved, #882):
   ``threshold_meets_minimum`` true, and an ``auto`` target makes it null with
   ``unmeasured_reason`` ``codecov_target_not_read`` (``CODECOV_UNMEASURED``) when no
   other gate decides it, never false.
-- A patch status bounds only the changed lines (removing a test changes none), so it
-  never makes ``threshold_meets_minimum`` true; read as a gate whose percentage of total
-  coverage is not known (``meets_percent``), a patch-only config reads null with
-  ``codecov_patch_only`` (``PATCH_ONLY``), never false.
+- A patch status bounds only the changed lines (removing a test changes none), so
+  ``threshold_meets_minimum`` leaves it out (``is_patch``) and the other gates decide:
+  a project target of 20 beside a patch target of 100 reads false, and so does a patch
+  status beside a CI ``--cov-fail-under=40``. When patch statuses are the only gates,
+  the reading is null with ``codecov_patch_only`` (``PATCH_ONLY``), never false, and
+  ``max_threshold_percent`` leaves them out too (``meets_percent``).
 - The status is server-side: it gates a merge only when branch protection requires it,
   which this read does not see. So a Codecov gate never reads as run by CI:
   ``lib.testing.coverage_ci`` reads it null with ``enforced_basis`` ``status_check_unconfirmed``
-  (``STATUS_UNCONFIRMED``); a patch status is skipped there (``is_patch``), so it never
-  turns a known false (an unrun ``fail_under``) into null. A Codecov status alone
-  therefore never makes Layer 6 level 1 true or false: it reads not measured.
+  (``STATUS_UNCONFIRMED``); a patch status is skipped there too, so it never turns a
+  known false (an unrun ``fail_under``) into null. Codecov statuses alone therefore
+  never make Layer 6 level 1 true or false: a numeric project target reads
+  ``status_check_unconfirmed``, an ``auto`` one ``threshold_not_read``, and patch
+  statuses alone ``threshold_not_read`` (with ``codecov_patch_only``).
 
 Not gates: ``informational: true`` (the status never fails), ``off`` / ``false`` on the
 status, on ``project`` / ``patch`` or on ``coverage.status``. A YAML anchor on a status

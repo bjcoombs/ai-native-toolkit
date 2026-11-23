@@ -3,8 +3,8 @@
 A project ``target: 80%`` is a gate at 80, but Codecov posts its status server-side, so
 whether it gates a merge (branch protection requiring it) is not read: Layer 6 level 1
 reads null, never true and never false. ``target: auto`` (or no target) reads unknown
-with ``codecov_target_not_read``. A patch status bounds changed lines only: it never
-meets the minimum, and a patch-only config reads null with ``codecov_patch_only``, never
+with ``codecov_target_not_read``. A patch status bounds changed lines only: it is left
+out of the minimum, so other gates decide, and a patch-only config reads null with ``codecov_patch_only``, never
 false (maintainer-approved on #882). A malformed config never raises.
 """
 from __future__ import annotations
@@ -112,12 +112,23 @@ def test_a_patch_only_config_reads_unknown_never_met_or_unmet(tmp_path: Path, ta
     assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (None, "threshold_not_read")
 
 
-def test_a_patch_status_never_meets_beside_a_low_project_target(tmp_path: Path) -> None:
+def test_a_patch_status_leaves_a_low_project_target_unmet(tmp_path: Path) -> None:
     text = ("coverage:\n  status:\n    project:\n      default:\n        target: 20%\n"
             "    patch:\n      default:\n        target: 100%\n")
     block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": text}))
-    assert block["threshold_meets_minimum"] is None
-    assert block["unmeasured_reason"] == PATCH_ONLY
+    assert block["threshold_meets_minimum"] is False
+    assert block["unmeasured_reason"] is None
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (
+        False, "threshold_below_minimum")
+
+
+def test_a_patch_status_leaves_a_low_ci_floor_unmet(tmp_path: Path) -> None:
+    patch = "coverage:\n  status:\n    patch:\n      default:\n        target: 90%\n"
+    block = detect_coverage_gate(_write(tmp_path, {"codecov.yml": patch, CI: WORKFLOW.format(n=40)}))
+    assert block["threshold_meets_minimum"] is False
+    assert block["unmeasured_reason"] is None
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == (
+        False, "threshold_below_minimum")
 
 
 def test_max_threshold_percent_leaves_out_a_patch_target(tmp_path: Path) -> None:

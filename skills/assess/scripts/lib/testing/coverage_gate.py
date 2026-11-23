@@ -72,7 +72,7 @@ from typing import Literal, TypedDict
 from lib.assess_config import is_user_excluded
 from lib.testing.coverage_activation import read_activation
 from lib.testing.coverage_ci import NO_RUNS, CiRuns, EnforcedBasis, enforced_meets_minimum, read_ci_runs
-from lib.testing.coverage_codecov import codecov_reason, codecov_statuses, meets_percent
+from lib.testing.coverage_codecov import codecov_reason, codecov_statuses, is_patch, meets_percent
 from lib.testing.coverage_root_config import ROOT_UNRESOLVED, root_config, root_config_applies
 from lib.docs.doc_graph import is_excluded_path
 
@@ -699,11 +699,15 @@ def threshold_meets_minimum(gates: list[CoverageGate]) -> bool | None:
     gates nothing. True when one has ``threshold_percent`` of at least
     ``MINIMUM_THRESHOLD_PERCENT``; otherwise None (not measured) when one has a
     null ``threshold_percent`` (a template, an nyc/c8 default, an uncovered-line
-    count), since it could be 50 or more; otherwise False.
+    count), since it could be 50 or more; otherwise False. A Codecov patch status is left
+    out (#882), and read None only when it is the only counted gate.
     """
-    counted = [g for g in gates if gates_something(g)]
-    percents = [meets_percent(g) for g in counted]   # #882: a Codecov patch status is unknown
-    if any(isinstance(p, (int, float)) and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
+    every = [g for g in gates if gates_something(g)]
+    counted = [g for g in every if not is_patch(g)]
+    if every and not counted:
+        return None
+    percents = [g["threshold_percent"] for g in counted]
+    if any(p is not None and p >= MINIMUM_THRESHOLD_PERCENT for p in percents):
         return True
     if any(p is None for p in percents):
         return None

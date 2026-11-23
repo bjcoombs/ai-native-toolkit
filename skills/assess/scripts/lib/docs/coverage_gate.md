@@ -100,12 +100,13 @@ or null for `auto`, no target or a non-number. `informational: true` and `off` /
 statuses are not gates; an anchor on a status key (`default: &base`) reads as its block,
 and a byte-order mark is skipped. Every status counts (`codecov` is in
 `_NULL_THRESHOLD_GATES`, so an `auto` target counts with a null percentage), but a patch
-status bounds changed lines only, so `threshold_meets_minimum` reads its percentage of
-total coverage as unknown (`coverage_codecov.meets_percent`): it never makes the reading
-true, and a patch-only config reads null, never false. When `threshold_meets_minimum` is
+status bounds changed lines only, so `threshold_meets_minimum` and the CI-run reading
+leave it out (`coverage_codecov.is_patch`) and the other gates decide (project 20 beside
+patch 100 reads false); when patch statuses are the only gates the reading is null,
+never false, and `max_threshold_percent` leaves them out (`meets_percent`). When `threshold_meets_minimum` is
 null and every counted gate with an unknown percentage is a Codecov one,
 `unmeasured_reason` is `codecov_target_not_read` (one is a project status) or
-`codecov_patch_only` (all are patch; `coverage_codecov.codecov_reason`). A counted Codecov gate is never run by CI: `coverage_ci.gate_run`
+`codecov_patch_only` (all are patch; `coverage_codecov.codecov_reason`). A counted Codecov project gate is never run by CI: `coverage_ci.gate_run`
 reads it `status_check_unconfirmed` (null), since the status gates a merge only when
 branch protection requires it. A config with no `coverage.status` section is not read as a
 gate. The manifest `revision` moved to 6.
