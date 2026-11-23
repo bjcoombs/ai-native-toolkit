@@ -86,6 +86,7 @@ from lib.run_context_types import (
 )
 from lib.layer_grades import LayerGradesBlock
 from lib.level_result_types import Headline, LevelResult, OwnerExclusionsBlock
+from lib.run_context_types_since import SinceLastRun
 from lib.prior_level import PriorLevelBlock
 from lib.complexity.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
@@ -165,6 +166,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("owner_exclusions", OwnerExclusionsBlock),
     ("units", UnitsBlock),
     ("headline", Headline),
+    ("since_last_run", SinceLastRun),
     ("unit_readings", UnitReadingsBlock),
     ("unit_levels", UnitLevelsBlock),
     ("unit_rollup", UnitRollUpBlock),

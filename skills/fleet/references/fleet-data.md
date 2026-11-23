@@ -109,6 +109,11 @@ units. Each row has:
 - `key`: the unit's folder. Written in clear only under `--full`; with `--hash-paths` or
   `--hash-salt` it is the folder's salted hash, which joins the same unit across runs under
   one `--hash-salt`; `null` in plain counts-only output.
+- `kind`: the unit's kind, a token kept in counts-only output: `skill` for a folder holding
+  a `SKILL.md`, `agents` and `commands` for a plugin's components, `package` for a
+  build-manifest unit (#1098). A skills marketplace repository's rows are its skills, so an
+  estate of marketplace repositories reads skill by skill. `null` in rows rebuilt from
+  scans stored before units had a kind.
 - `step`: the unit's Step, from the unit's own readings over the repository's scans, the
   same result `/assess` gives the unit in `run-context.json` `unit_levels`. A unit's own
   readings keep the fields the default maturity model reads; a `--levels` criterion on

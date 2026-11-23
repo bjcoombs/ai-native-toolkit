@@ -828,6 +828,24 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.reason` | token |
 | `headline.tags.tag` | token |
 
+## since_last_run
+
+| Field | Kept as |
+|---|---|
+| `since_last_run.previous_run_id` | token |
+| `since_last_run.previous_commit` | token |
+| `since_last_run.closed.action` | dropped |
+| `since_last_run.closed.condition` | token |
+| `since_last_run.closed.finding` | token |
+| `since_last_run.closed.completed_sha` | token |
+| `since_last_run.gates_gained` | token |
+| `since_last_run.gates_lost` | token |
+| `since_last_run.next_blocker` | token |
+| `since_last_run.lines` | dropped |
+| `since_last_run.markdown` | dropped |
+| `since_last_run.reason` | token |
+| `since_last_run.closed_reason` | token |
+
 ## unit_readings
 
 | Field | Kept as |
@@ -835,6 +853,7 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `unit_readings.unit_count_reason` | token |
 | `unit_readings.unit_blocks` | token |
 | `unit_readings.units.path` | path, dropped unless hashing is on (then hashed) |
+| `unit_readings.units.kind` | token |
 | `unit_readings.units.conditions.id` | token |
 | `unit_readings.units.conditions.origin` | token |
 

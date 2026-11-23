@@ -91,13 +91,33 @@ when they change
 `root_coverage_config_unresolved` (so `enforced_basis` is `threshold_not_read`); a root
 floor below 50 leaves false, which is false either way. A scope holding no `.py` file, or
 its own coverage.py config, is not affected. Only CI runs on ordinary triggers count. The manifest `revision` moved to 5 for this change of meaning.
+Codecov status targets (#882, `lib.testing.coverage_codecov`): the first Codecov config Codecov
+reads (`codecov.yml`, `.codecov.yml`, `codecov.yaml`, `.codecov.yaml` at the root, then in
+`.github/`, then `dev/`; on a scoped run too) gives one gate per `coverage.status.project`
+or `.patch` status, tool `codecov`, `metric` `project` or `patch`, `form`
+`coverage.status.<kind>.<name>.target`, unit `percent`, threshold as written (`80%` is 80)
+or null for `auto`, no target or a non-number. `informational: true` and `off` / `false`
+statuses are not gates; an anchor on a status key (`default: &base`) reads as its block,
+and a byte-order mark is skipped. Every status counts (`codecov` is in
+`_NULL_THRESHOLD_GATES`, so an `auto` target counts with a null percentage), but a patch
+status bounds changed lines only, so `threshold_meets_minimum` and the CI-run reading
+leave it out (`coverage_codecov.is_patch`) and the other gates decide (project 20 beside
+patch 100 reads false); when patch statuses are the only gates the reading is null,
+never false, and `max_threshold_percent` leaves them out (`meets_percent`). When `threshold_meets_minimum` is
+null and every counted gate with an unknown percentage is a Codecov one,
+`unmeasured_reason` is `codecov_target_not_read` (one is a project status) or
+`codecov_patch_only` (all are patch; `coverage_codecov.codecov_reason`). A counted Codecov project gate is never run by CI: `coverage_ci.gate_run`
+reads it `status_check_unconfirmed` (null; a patch or `auto` status is skipped in the
+CI-run loop, holding no floor of 50), since the status gates a merge only when
+branch protection requires it. A config with no `coverage.status` section is not read as a
+gate. The manifest `revision` moved to 6.
 Adding a gate form: build the gate with `_gate` and the right
 `unit`; `threshold_percent` and both block fields follow with no other change. A form
 whose number is not a coverage percentage (a count) needs its own `unit`, mapped to
 null in `threshold_percent()`, so it reads unknown rather than credited.
 Nothing found is `configured: false`, never inferred from a coverage report, and
 `not_detected` names the forms not read (Go `-coverprofile` scripts, shell scripts and
-other CI systems, Codecov / Coveralls status targets, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
+other CI systems, Coveralls thresholds and whether a Codecov status is required, Kover, scoverage, SimpleCov, cargo llvm-cov `--fail-under-regions` / `--fail-under-functions`, a `tarpaulin.toml` `fail-under`) so an empty
 result reads as "none of these forms". A configured threshold proves the tool
 fails below it when coverage runs; `enforced_meets_minimum` (`coverage_ci.py`) adds the run,
 and `coverage_activation.py` reads, per config directory, what switches coverage on for a
@@ -107,4 +127,5 @@ beside `value = "MISSED..."`) is a gate with unit `uncovered_count` or `missed_r
 its `threshold_percent` is null, so it reads unknown, never 0, and any such bound
 (zero included) gates something.
 Stdlib plus `lib.docs.doc_graph.is_excluded_path`, `lib.assess_config.is_user_excluded`,
-`lib.testing.coverage_activation` and `lib.testing.coverage_ci`. Tests: `tests/test_coverage_gate.py`.
+`lib.testing.coverage_activation`, `lib.testing.coverage_ci` and `lib.testing.coverage_codecov`.
+Tests: `tests/test_coverage_gate.py`, `tests/test_coverage_codecov.py`.
