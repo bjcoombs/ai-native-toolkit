@@ -224,7 +224,18 @@ The job runs the same headless gate as the GitHub Action, in merge request pipel
 
 One difference from the Action: `fail_on_gate_loss` is on by default here and off in the Action. The Action takes the same input (`fail_on_gate_loss: 'true'`), or set `fail_on_gate_loss = true` under `[gate]` in `.assess/config.toml` for both. Set the `fail_on_gate_loss: false` input to report a lost gate on GitLab without failing.
 
-Your project needs merge request pipelines. Without a `workflow:` section, the included job's rule starts one for each merge request, beside your branch pipelines. If your `.gitlab-ci.yml` has `workflow: rules`, keep your existing rules and add `- if: $CI_PIPELINE_SOURCE == "merge_request_event"` among them, or the job never runs.
+Your project needs merge request pipelines. Without a `workflow:` section, the included job's rule starts a separate merge request pipeline holding only `assess-gate`, and your own jobs without `rules:` stay in the branch pipeline. That merge request pipeline becomes the merge request's head pipeline, so "Pipelines must succeed" can end up checking a pipeline with no tests in it. To run everything in one merge request pipeline, switch the project to merge request pipelines with GitLab's standard pattern, which also skips the duplicate branch pipeline while a merge request is open:
+
+```yaml
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+```
+
+If your `.gitlab-ci.yml` already has `workflow: rules`, keep them and add the merge request rule among them, or the job never runs. This pipeline behaviour follows GitLab's documentation and has not been checked on a real GitLab instance.
 
 To post the summary as a merge request note too, add a project access token with `api` scope as a masked CI/CD variable named `ASSESS_GATE_TOKEN`. Without it the job tries `CI_JOB_TOKEN`, which most GitLab versions don't allow to post notes, so the summary stays in the job log and the job carries on. Each pipeline adds a new note.
 

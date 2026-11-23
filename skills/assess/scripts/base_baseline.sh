@@ -14,7 +14,8 @@
 #   checkout lacks it. A target that cannot be read leaves the working copy as
 #   it is, with a notice (infrastructure, never a red job).
 # - No baseline on the target removes the working copy's file: no baseline yet.
-# - A change that edits or deletes .assess/prior-level.json gets a warning line.
+# - A change that edits or deletes .assess/prior-level.json gets a warning line;
+#   with no merge base to diff against (a shallow checkout) a notice says so instead.
 #
 # Called by templates/assess-gate.yml (through gitlab_gate.sh) and by
 # action.yml when fail_on_gate_loss is on. It always exits 0.
@@ -40,9 +41,12 @@ if ! git -C "$PROJECT" rev-parse -q --verify "$REF^{commit}" >/dev/null 2>&1; th
     notice "the target branch $TARGET could not be read, so the gate compares with the baseline in this branch."
     exit 0
 fi
-if ! git -C "$PROJECT" diff --quiet "$REF...HEAD" -- "$FILE" >/dev/null 2>&1; then
-    notice "warning: this change edits $FILE. The gate compares with the baseline on $TARGET instead."
-fi
+git -C "$PROJECT" diff --quiet "$REF...HEAD" -- "$FILE" >/dev/null 2>&1
+case $? in
+    0) ;;
+    1) notice "warning: this change edits $FILE. The gate compares with the baseline on $TARGET instead." ;;
+    *) notice "could not compare this change with $TARGET (no merge base, such as a shallow checkout), so edits to $FILE are not reported." ;;
+esac
 mkdir -p "$PROJECT/.assess"
 if git -C "$PROJECT" cat-file -e "$REF:$FILE" 2>/dev/null; then
     git -C "$PROJECT" show "$REF:$FILE" >"$PROJECT/$FILE"

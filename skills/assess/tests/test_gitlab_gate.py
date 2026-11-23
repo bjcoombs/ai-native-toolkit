@@ -355,3 +355,18 @@ def test_an_unreadable_target_is_a_notice(tmp_path, target):
                          capture_output=True, encoding="utf-8", errors="replace")
     assert out.returncode == 0
     assert "so the gate compares with the baseline in this branch" in out.stdout
+
+
+@needs_bash
+def test_no_merge_base_is_a_notice_not_an_edit_warning(tmp_path):
+    """git diff A...B exits 128 without a merge base; that is not an edit."""
+    repo = _make_project(tmp_path / "project", INCLUDE)
+    _git(repo, "checkout", "-q", "--orphan", "other")
+    _commit_all(repo, "unrelated history")
+    _git(repo, "update-ref", "refs/remotes/origin/other", "other")
+    _git(repo, "checkout", "-q", "main")
+    out = subprocess.run(["bash", str(ASSESS / "scripts" / "base_baseline.sh"), str(repo), "other"],
+                         capture_output=True, encoding="utf-8", errors="replace")
+    assert out.returncode == 0
+    assert "could not compare this change with other (no merge base" in out.stdout
+    assert "this change edits" not in out.stdout
