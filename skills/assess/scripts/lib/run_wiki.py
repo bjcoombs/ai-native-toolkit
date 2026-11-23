@@ -25,7 +25,7 @@ from typing import Any
 
 from lib.artifact_schema import ARTIFACT_SCHEMA_VERSION
 from lib.sibling_tests import TestIndex, has_sibling_test, shared_name_keys
-from lib.stats_diff import StatsDiff, hotspot_commits
+from lib.complexity.stats_diff import StatsDiff, hotspot_commits
 from lib.wiki_state import (
     drop_superseded_log_entry,
     retire_excluded_unfinalized,

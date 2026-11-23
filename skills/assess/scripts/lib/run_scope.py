@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lib.stats_diff import load_stats
+from lib.complexity.stats_diff import load_stats
 
 
 def resolve_scope(

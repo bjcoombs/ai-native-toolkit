@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from lib.stats_diff import (
+from lib.complexity.stats_diff import (
     diff_stats,
     hotspot_commits,
     load_stats,

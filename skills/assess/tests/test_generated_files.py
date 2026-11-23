@@ -1,4 +1,4 @@
-"""Tests for lib/generated_files.py: the header sniff and long-line detector."""
+"""Tests for lib/complexity/generated_files.py: the header sniff and long-line detector."""
 from __future__ import annotations
 
 import sys
@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from lib.generated_files import (  # noqa: E402
+from lib.complexity.generated_files import (  # noqa: E402
     LONG_LINE_THRESHOLD,
     matches_generated_name,
     average_line_length,
@@ -63,7 +63,7 @@ def test_generated_header_generated_file_only_as_banner(tmp_path, first_line, ex
 def test_long_line_small_file_skips_read(tmp_path, monkeypatch):
     f = tmp_path / "small.py"
     f.write_text("x = 1\n", encoding="utf-8")
-    import lib.generated_files as mod
+    import lib.complexity.generated_files as mod
     monkeypatch.setattr(mod, "average_line_length",
                         lambda p: (_ for _ in ()).throw(AssertionError("read")))
     assert mod.is_long_line_artifact(f) is False
@@ -164,7 +164,7 @@ def test_long_line_counts_unterminated_last_line(tmp_path):
 
 def test_generated_header_sniff_spares_its_own_module():
     """The module documents the markers; they must stay out of its first lines."""
-    import lib.generated_files as mod
+    import lib.complexity.generated_files as mod
     assert has_generated_header(Path(mod.__file__)) is False
     assert generated_reason(Path(mod.__file__)) is None
 

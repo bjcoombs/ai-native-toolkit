@@ -81,7 +81,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
-from lib.diff_reliability import _diff_is_reliable
+from lib.complexity.diff_reliability import _diff_is_reliable
 from lib.fleet.runner import FLEET_ROW_VERSION, REPOS_FILE, STATUS_OK, FleetRow
 from lib.fleet.fleet_data import FLEET_DATA_FILE
 from lib.fleet.fleet_groups import FLEET_GROUP_VERSION, GROUPS_FILE, GroupRow, RowLevel
