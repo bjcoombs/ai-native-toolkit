@@ -11,6 +11,8 @@ callable = "lib.core_scans:unit_readings"
 publishes = ["unit_readings"]
 reads = ["units", "nested_instructions", "coverage_gate", "doc_staleness", "layer_grades", "promissory_markers", "stats_summary", "structure", "excludes", "repo_root", "working_notes"]
 stage = "post_offers"
+headless = { unit_readings = "registered" }
+whys.unit_readings = "A unit inherits root CI and review but not the root's suppressions, stale docs or structure. Reading those per unit, with each condition labelled, shows which change lifts which unit."
 shapes = [
   { path = "unit_readings", type = "lib.unit_readings:UnitReadingsBlock" },
 ]
@@ -18,6 +20,6 @@ revision = 1
   [entries.privacy]
   "unit_readings.unit_count_reason" = "token"
   "unit_readings.unit_blocks" = "token"
-  "unit_readings.units.path" = "drop"
+  "unit_readings.units.path" = "hashed_path"
   "unit_readings.units.conditions.id" = "token"
   "unit_readings.units.conditions.origin" = "token"

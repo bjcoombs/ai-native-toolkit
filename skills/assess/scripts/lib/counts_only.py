@@ -61,6 +61,7 @@ from lib.counts_only_rules import (
     DROP,
     EXTRA_FIELD_NAMES,
     FLEET_DATA_RULES,
+    HASHED_PATH,
     ID,
     FLAT_RULES,
     IDENTIFIER_KEYED_MAPS,
@@ -171,6 +172,10 @@ class _Filter:
             return self.path(value)
         if cls == ID:
             return self.identifier(value)
+        if cls == HASHED_PATH:
+            # a folder from the file tree, only ever written hashed: no plaintext-path test,
+            # so a folder with a space or an "@" keeps its join key
+            return self._hashed(value) if self.hash_paths and value else None
         if cls == TOKEN and TOKEN_RE.match(value):
             return value
         if cls == REASON:
@@ -216,7 +221,7 @@ class _Filter:
         cls = classify(pattern)
         if cls == DROP and not any(isinstance(v, (Mapping, list)) for v in value):
             return True, len(value)
-        if value and all(isinstance(v, str) for v in value) and cls not in (PATH, TOKEN, ID):
+        if value and all(isinstance(v, str) for v in value) and cls not in (PATH, TOKEN, ID, HASHED_PATH):
             return True, len(value)
         out: list[Any] = []
         for item in value:
@@ -297,7 +302,8 @@ def unclassified_strings(ctx: Mapping[str, Any]) -> list[str]:
 
 _CLASS_LABEL = {PATH: "path (hashed when hashing is on)", TOKEN: "token",
                 REASON: "reason code",
-                ID: "external id (hashed when hashing is on)", DROP: "dropped"}
+                ID: "external id (hashed when hashing is on)", DROP: "dropped",
+                HASHED_PATH: "path, dropped unless hashing is on (then hashed)"}
 
 
 def render_doc() -> str:

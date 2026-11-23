@@ -300,9 +300,10 @@ def test_a_check_in_an_errexit_exempt_position_before_exit_0_is_masked(text: str
     pytest.param(_wf("pytest && echo ok"), id="and_list_with_no_exit_0"),
     pytest.param(_wf("pytest || exit 1; exit 0"), id="own_reraise_default_shell"),
     pytest.param(_wf("pytest && echo ok || exit 1; exit 0"), id="and_list_with_reraise"),
-    pytest.param(_wf("pytest && echo ok; [ -f x ] && exit 0"), id="conditional_exit_0_masks_nothing"),
-    pytest.param(_wf("ruff check . --exit-zero && pytest || echo x"), id="and_after_exit_zero_still_runs"),
     pytest.param(_wf("ruff check . --exit-zero | grep E || pytest"), id="exit_zero_not_ending_its_pipeline"),
+    # #1008 moved ``pytest && echo ok; [ -f x ] && exit 0``, ``... && pytest || echo x``,
+    # ``if pytest; then :; fi`` and ``{ pytest && echo ok; }; exit 0`` to not measured
+    # (tests/test_ci_may_pass.py).
     # A subshell or a function returns the list's status as one command: errexit stops there.
     pytest.param(_wf("( pytest && echo ok ); exit 0"), id="and_list_in_a_subshell"),
     pytest.param(_block("(\n  pytest && echo ok\n)\nexit 0"), id="and_list_in_a_multi_line_subshell"),
@@ -371,9 +372,6 @@ def test_a_condition_or_negated_check_before_exit_0_is_dropped(text: str) -> Non
     pytest.param(_wf("if ! pytest; then exit 1; fi; exit 0"), id="if_not_check_then_exit_1"),
     pytest.param(_block("if pytest; then\n  echo ok\nelse\n  exit 1\nfi\nexit 0"), id="if_else_exit_1"),
     pytest.param(_wf("until pytest; do sleep 5; done; exit 0"), id="until_retries_until_it_passes"),
-    pytest.param(_wf("if pytest; then :; fi"), id="if_condition_with_no_exit_0"),
-    # Known limit: a ``{ }`` group is read like a function body, so its exempt check stays credited.
-    pytest.param(_wf("{ pytest && echo ok; }; exit 0"), id="brace_group_known_limit"),
 ])
 def test_a_condition_with_a_reraise_or_no_exit_0_is_kept(text: str) -> None:
     assert _reads_pytest(text)

@@ -95,6 +95,7 @@ def test_recorded_sample_gives_every_github_figure():
         "approved_share": 0.5, "self_merged_share": 1.0,
         "agent_authored_share": 0.0,
         "sample_page_size": 20,
+        "unconfirmed_ai_accounts": 0,
     }
     assert "github-actions" not in bots.probed  # a status bot is never probed
     assert len(bots.probed) == len(set(bots.probed))  # one probe per login
@@ -297,7 +298,9 @@ def test_an_empty_sample_is_available_with_null_figures():
     block = scan_delivery(sample([]), {"available": True, "approved_share": None,
                                        "self_merged_share": None})
     assert block["merged_count"] == 0
-    assert all(block[k] is None for k in block if k not in ("available", "merged_count"))
+    assert block["unconfirmed_ai_accounts"] == 0
+    assert all(block[k] is None for k in block
+               if k not in ("available", "merged_count", "unconfirmed_ai_accounts"))
 
 
 def test_unavailable_review_reality_copies_nothing():

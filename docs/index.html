@@ -2,492 +2,256 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AI Native Toolkit</title>
-<meta name="description" content="A Claude Code plugin and standalone Agent Skills that make a codebase legible to AI contributors: /assess scores AI-readiness and maps complexity hotspots, /huddle runs Six Thinking Hats deliberation, /deslop removes the signs of AI writing, /fleet measures many repositories at once, /doc-contradictions finds docs that disagree.">
+<meta name="description" content="/assess tells you how much an AI agent can safely do in your repository on its own, and the one change that would let it do more.">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#7a1712">
-<link rel="canonical" href="https://bjcoombs.github.io/ai-native-toolkit/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AI Native Toolkit">
-<meta property="og:title" content="AI Native Toolkit">
-<meta property="og:description" content="An AI contributor is always the new hire. Skills for Claude Code and any AI assistant that make the codebase supply the tenure: a navigable map, explicit contracts, and guardrails.">
+<meta property="og:title" content="How much can an AI agent safely do in your repository?">
+<meta property="og:description" content="/assess tells you how much an AI agent can safely do in your repository on its own, and the one change that would let it do more.">
 <meta property="og:url" content="https://bjcoombs.github.io/ai-native-toolkit/">
 <meta name="twitter:card" content="summary">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,800;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
 <style>
-  :root {
-    --hue: 28;
-    --bg: oklch(0.985 0.004 var(--hue));
-    --surface: oklch(0.955 0.008 var(--hue));
-    --ink: oklch(0.22 0.02 var(--hue));
-    --muted: oklch(0.43 0.025 var(--hue));
-    --rule: oklch(0.87 0.012 var(--hue));
-    --brand: oklch(0.38 0.135 var(--hue));
-    --brand-deep: oklch(0.29 0.105 var(--hue));
-    --on-brand: oklch(0.97 0.012 50);
-    --on-brand-muted: oklch(0.86 0.04 40);
-    --ember: oklch(0.76 0.14 48);
-    --link: oklch(0.45 0.15 var(--hue));
-    --plate: #ffffff;
-    --focus: oklch(0.62 0.17 48);
+/* Layout: one readable column; the ladder is the centrepiece, everything else is a short card under it. */
+:root {
+  --bg: #f6f8f7; --surface: #ffffff; --fg: #14201d; --muted: #52635e; --line: #d5dfdb;
+  --teal: #0f766e; --teal-soft: #ccebe6; --amber: #b45309; --amber-soft: #fdecd3;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1513; --surface: #16201d; --fg: #e6efec; --muted: #9fb3ad; --line: #2a3834;
+  --teal: #5cc8bb; --teal-soft: #173b36; --amber: #f2a54a; --amber-soft: #3d2a12; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1513; --surface: #16201d; --fg: #e6efec; --muted: #9fb3ad; --line: #2a3834;
+  --teal: #5cc8bb; --teal-soft: #173b36; --amber: #f2a54a; --amber-soft: #3d2a12; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 760px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(30px, 6vw, 44px); }
+h2 { font-size: 22px; }
+p { margin: 0; max-width: 65ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); }
+.pitch { font-size: 19px; color: var(--muted); }
+section { display: grid; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 10px; }
+.summary { font-family: var(--mono); font-size: 14.5px; display: grid; gap: 6px; overflow-x: auto; }
+.summary b { color: var(--teal); font-weight: 500; }
+.note { font-size: 13px; color: var(--muted); }
+.cta { border: 2px solid var(--amber); background: var(--amber-soft); }
+.cta strong { color: var(--amber); }
+.ladder { overflow-x: auto; }
+.ladder svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.terms { display: grid; grid-template-columns: max-content 1fr; gap: 10px 18px; margin: 0; }
+.terms dt { font-weight: 600; }
+.terms dd { margin: 0; color: var(--muted); min-width: 0; }
+.steps { display: grid; gap: 10px; margin: 0; padding-left: 22px; }
+code { font-family: var(--mono); font-size: .92em; background: var(--teal-soft); padding: 1px 5px; border-radius: 4px; }
+.waffle { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.waffle svg { flex: none; }
+.waffle p { flex: 1 1 260px; min-width: 0; }
+@media (max-width: 480px) { .terms { grid-template-columns: 1fr; gap: 2px 0; } .terms dd { margin-bottom: 10px; } }
 
-    --sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.gallery a { display: grid; gap: 6px; text-decoration: none; color: var(--muted); font-size: 13px; min-width: 0; }
+.gallery img { background: #fff; border: 1px solid var(--line); border-radius: 8px; aspect-ratio: 4 / 3; object-fit: contain; width: 100%; }
+a { color: var(--teal); }
+.legend { display: grid; gap: 8px; margin: 0; }
+.legend div { display: grid; grid-template-columns: 11rem 1fr; gap: 12px; }
+.legend dt { font-family: var(--mono); font-weight: 500; }
+.legend dd { margin: 0; color: var(--muted); min-width: 0; }
+.group-label { font-size: 13px; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 8px 0 0; }
+footer { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 20px; }
+@media (max-width: 480px) { .legend div { grid-template-columns: 1fr; gap: 0; } }
 
-    --step--1: clamp(0.86rem, 0.84rem + 0.1vw, 0.92rem);
-    --step-0: clamp(1.02rem, 0.98rem + 0.2vw, 1.12rem);
-    --step-1: clamp(1.3rem, 1.2rem + 0.5vw, 1.55rem);
-    --step-2: clamp(1.65rem, 1.45rem + 1vw, 2.2rem);
-    --step-3: clamp(2.2rem, 1.7rem + 2.6vw, 4rem);
-
-    --gutter: clamp(1rem, 0.6rem + 2vw, 2.5rem);
-    --measure: 68ch;
-    --wide: 76rem;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: oklch(0.17 0.012 var(--hue));
-      --surface: oklch(0.21 0.016 var(--hue));
-      --ink: oklch(0.94 0.008 var(--hue));
-      --muted: oklch(0.76 0.018 var(--hue));
-      --rule: oklch(0.33 0.02 var(--hue));
-      --brand: oklch(0.31 0.11 var(--hue));
-      --brand-deep: oklch(0.23 0.08 var(--hue));
-      --link: oklch(0.78 0.12 45);
-      --plate: #ffffff;
-    }
-  }
-
-  *, *::before, *::after { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: var(--step-0);
-    line-height: 1.6;
-    overflow-wrap: break-word;
-  }
-  h1, h2, h3 { line-height: 1.12; text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
-  p { margin: 0; text-wrap: pretty; }
-  a { color: var(--link); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
-  a:hover { text-decoration-thickness: 2px; }
-  :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
-  code, kbd, pre { font-family: var(--mono); font-size: 0.92em; }
-  img { max-width: 100%; height: auto; display: block; }
-
-  .skip { position: absolute; left: var(--gutter); top: -4rem; background: var(--ink); color: var(--bg); padding: 0.5rem 0.9rem; z-index: 10; }
-  .skip:focus { top: 0.75rem; }
-
-  .wrap { max-width: var(--wide); margin-inline: auto; padding-inline: var(--gutter); }
-
-  /* Masthead and hero: one drenched oxblood band */
-  .hero { background: var(--brand); color: var(--on-brand); }
-  .hero a { color: var(--on-brand); }
-  .masthead {
-    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
-    gap: 0.5rem 1.5rem; padding-block: 1.25rem;
-    border-bottom: 1px solid color-mix(in oklch, var(--on-brand) 22%, transparent);
-  }
-  .wordmark { font-weight: 800; letter-spacing: -0.01em; text-decoration: none; font-size: var(--step-0); }
-  .masthead nav ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; list-style: none; margin: 0; padding: 0; font-size: var(--step--1); }
-  .masthead nav a { text-decoration: none; color: var(--on-brand-muted); }
-  .masthead nav a:hover { color: var(--on-brand); text-decoration: underline; }
-
-  .hero-body {
-    display: grid; gap: clamp(2rem, 4vw, 4rem);
-    padding-block: clamp(3rem, 8vw, 6.5rem) clamp(3rem, 7vw, 5.5rem);
-  }
-  @media (min-width: 60rem) { .hero-body { grid-template-columns: 1fr 1.1fr; align-items: start; } .hero-body h1 { grid-column: 1 / -1; } }
-  .hero-body > * { min-width: 0; }
-  p code, dd code, li code { overflow-wrap: anywhere; }
-  .hero h1 { font-size: var(--step-3); font-weight: 800; letter-spacing: -0.025em; max-width: 22ch; }
-  .hero h1 span { color: var(--ember); }
-  .lede { margin-top: 0; font-size: var(--step-1); line-height: 1.45; max-width: 36ch; color: var(--on-brand-muted); }
-  .lede strong { color: var(--on-brand); font-weight: 600; }
-
-  .install h2 { font-size: var(--step-0); font-weight: 600; margin-bottom: 0.25rem; }
-  .install p { font-size: var(--step--1); color: var(--on-brand-muted); max-width: 46ch; }
-  .install p + p { margin-top: 0.85rem; }
-
-  .cmd {
-    position: relative; margin: 0.9rem 0 1rem;
-    background: var(--brand-deep); border-radius: 6px;
-    border: 1px solid color-mix(in oklch, var(--on-brand) 16%, transparent);
-  }
-  .cmd pre { margin: 0; padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.75; font-size: var(--step--1); }
-  .cmd pre code { font-size: 1em; }
-  .cmd .prompt { color: var(--ember); user-select: none; }
-  .cmd-bar {
-    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-    padding: 0.45rem 0.5rem 0.45rem 1.1rem; font-size: 0.78rem; color: var(--on-brand-muted);
-    border-bottom: 1px solid color-mix(in oklch, var(--on-brand) 14%, transparent);
-  }
-  .copy {
-    font: 600 0.78rem/1 var(--sans); padding: 0.45rem 0.65rem; border-radius: 4px; cursor: pointer;
-    color: var(--on-brand); background: color-mix(in oklch, var(--on-brand) 12%, transparent);
-    border: 1px solid color-mix(in oklch, var(--on-brand) 28%, transparent);
-  }
-  .copy:hover { background: color-mix(in oklch, var(--on-brand) 22%, transparent); }
-  .copy[hidden] { display: none; }
-
-  /* Sections */
-  main section { padding-block: clamp(3.5rem, 8vw, 6rem); }
-  main section + section { border-top: 1px solid var(--rule); }
-  .section-head { max-width: var(--measure); margin-bottom: clamp(2rem, 4vw, 3rem); }
-  .section-head h2 { font-size: var(--step-2); font-weight: 800; }
-  .section-head p { margin-top: 0.9rem; color: var(--muted); }
-
-  /* Thesis: two halves of one ethic */
-  .thesis { display: grid; gap: 2rem clamp(2rem, 5vw, 5rem); }
-  @media (min-width: 52rem) { .thesis { grid-template-columns: 1fr 1fr; } }
-  .thesis h3 { font-size: var(--step-1); font-weight: 600; margin-bottom: 0.6rem; }
-  .thesis p { max-width: 52ch; color: var(--muted); }
-  .thesis p strong { color: var(--ink); font-weight: 600; }
-  .pull {
-    margin: clamp(2.5rem, 5vw, 3.5rem) 0 0; font-size: var(--step-2); font-weight: 800;
-    letter-spacing: -0.02em; line-height: 1.15; max-width: 24ch; text-wrap: balance;
-  }
-  .pull em { font-style: normal; color: var(--link); }
-
-  /* Skill index: a ruled legend, not cards */
-  .legend { margin: 0; display: grid; }
-  .legend > div {
-    display: grid; gap: 0.25rem 2rem; padding-block: 1.1rem;
-    border-top: 1px solid var(--rule);
-  }
-  .legend > div:last-child { border-bottom: 1px solid var(--rule); }
-  @media (min-width: 46rem) { .legend > div { grid-template-columns: 13rem 1fr; align-items: baseline; } }
-  .legend dt { font-family: var(--mono); font-weight: 600; font-size: var(--step-0); }
-  .legend dd { margin: 0; max-width: var(--measure); }
-  .group-label { font-size: var(--step-1); font-weight: 600; margin: 2.75rem 0 0.75rem; }
-  .group-label:first-of-type { margin-top: 0; }
-  .note { margin-top: 1rem; font-size: var(--step--1); color: var(--muted); max-width: var(--measure); }
-
-  /* Showcase */
-  .figure-row { display: grid; gap: 1.25rem; }
-  @media (min-width: 48rem) { .figure-row { grid-template-columns: 1fr 1fr; } }
-  .figure-row + .figure-row, .delta + .figure-row, .howto + .figure-row { margin-top: clamp(3rem, 6vw, 4.5rem); }
-  .row-title { font-size: var(--step-1); font-weight: 600; grid-column: 1 / -1; }
-  .row-title + p { grid-column: 1 / -1; color: var(--muted); max-width: var(--measure); margin-top: -0.5rem; }
-  figure { margin: 0; }
-  .plate {
-    display: block; background: var(--plate); border: 1px solid var(--rule); border-radius: 4px;
-    padding: clamp(0.4rem, 1vw, 0.75rem); transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1);
-  }
-  .plate:hover { border-color: var(--link); }
-  figcaption { margin-top: 0.7rem; font-size: var(--step--1); color: var(--muted); }
-  figcaption b { color: var(--ink); font-weight: 600; }
-
-  .delta { margin-top: clamp(2.5rem, 5vw, 3.5rem); display: grid; gap: 0; border-top: 2px solid var(--ink); }
-  @media (min-width: 40rem) { .delta { grid-template-columns: repeat(4, 1fr); } }
-  .delta div { padding: 1rem 1rem 1rem 0; border-bottom: 1px solid var(--rule); }
-  .delta dt { font-size: var(--step--1); color: var(--muted); }
-  .delta dd { margin: 0.2rem 0 0; font-family: var(--mono); font-size: var(--step-1); }
-  .delta dd s { color: var(--muted); text-decoration-thickness: 1px; }
-
-  .howto { margin-top: clamp(2.5rem, 5vw, 3.5rem); display: grid; gap: 1.5rem clamp(2rem, 5vw, 4rem); }
-  @media (min-width: 52rem) { .howto { grid-template-columns: 1fr 1fr; } }
-  .howto h3 { font-size: var(--step-0); font-weight: 600; margin-bottom: 0.5rem; }
-  .howto ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
-  .howto li + li { margin-top: 0.35rem; }
-  .howto li strong { color: var(--ink); font-weight: 600; }
-
-  /* Elsewhere */
-  .links { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
-  .links li { border-top: 1px solid var(--rule); padding-block: 1.1rem; display: grid; gap: 0.2rem 2rem; }
-  .links li:last-child { border-bottom: 1px solid var(--rule); }
-  @media (min-width: 46rem) { .links li { grid-template-columns: 22rem 1fr; align-items: baseline; } }
-  .links a { font-weight: 600; }
-  .links span { color: var(--muted); max-width: var(--measure); }
-
-  footer { background: var(--surface); padding-block: 2rem; font-size: var(--step--1); color: var(--muted); }
-  footer .wrap { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; justify-content: space-between; }
-
-  /* One page-load move: the headline settles in, then the install panel */
-  @media (prefers-reduced-motion: no-preference) {
-    .hero h1, .hero .lede, .install { animation: settle 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-    .hero .lede { animation-delay: 90ms; }
-    .install { animation-delay: 180ms; }
-    @keyframes settle { from { opacity: 0.001; transform: translateY(0.6rem); } }
-  }
+:root { padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
 </style>
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header style="display:grid;gap:14px">
+    <span class="eyebrow">AI Native Toolkit · /assess</span>
+    <h1>How much can an AI agent safely do in your repository?</h1>
+    <p class="pitch"><code>/assess</code> tells you how much an AI agent can safely do in your repository on its own, and the one change that would let it do more.</p>
+  </header>
 
-<header class="hero">
-  <div class="wrap">
-    <div class="masthead">
-      <a class="wordmark" href="./">ai-native-toolkit</a>
-      <nav aria-label="Primary">
-        <ul>
-          <li><a href="#skills">Skills</a></li>
-          <li><a href="#assess">What /assess draws</a></li>
-          <li><a href="#elsewhere">Elsewhere</a></li>
-          <li><a href="https://github.com/bjcoombs/ai-native-toolkit">GitHub</a></li>
-        </ul>
-      </nav>
+  <section>
+    <h2>The ladder</h2>
+    <p>Every repository sits on one of four Steps. Each Step is a level of trust you can give an agent. Between Steps is a gate: one concrete thing your repository must enforce before the next level of trust is safe.</p>
+    <div class="card ladder" role="img" aria-label="Four Steps of agent autonomy. Step 1 Assisted, gate: an instruction file is committed. Step 2 Supervised agent PRs, gate: CI runs the tests. Step 3 Unattended agent PRs, gate: a coverage gate is enforced. Step 4 Autonomous loops. Example marker on Step 2, next gate CI runs the tests.">
+      <svg viewBox="0 0 640 430" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Sans, system-ui, sans-serif">
+        <style>
+          .rung { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+          .here { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 2.5; }
+          .num { fill: var(--teal); font: 700 30px "Bricolage Grotesque", system-ui, sans-serif; }
+          .name { fill: var(--fg); font-weight: 600; font-size: 16px; }
+          .desc { fill: var(--muted); font-size: 13.5px; }
+          .gate { fill: var(--muted); font-size: 13px; font-family: "IBM Plex Mono", monospace; }
+          .gate-next { fill: var(--amber); font-size: 13px; font-weight: 600; font-family: "IBM Plex Mono", monospace; }
+          .rail { stroke: var(--line); stroke-width: 3; }
+          .arrow-next { stroke: var(--amber); stroke-width: 3; fill: none; }
+          .arrow { stroke: var(--line); stroke-width: 2; fill: none; }
+          .pin { fill: var(--teal); }
+          .pin-t { fill: var(--surface); font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+        </style>
+        <line class="rail" x1="40" y1="14" x2="40" y2="416"/>
+        <line class="rail" x1="600" y1="14" x2="600" y2="416"/>
+
+        <!-- Step 4 -->
+        <rect class="rung" x="40" y="14" width="560" height="66" rx="8"/>
+        <text class="num" x="62" y="57">4</text>
+        <text class="name" x="100" y="42">Autonomous loops</text>
+        <text class="desc" x="100" y="63">Agents run longer loops on their own.</text>
+        <!-- gate 3 to 4 -->
+        <path class="arrow" d="M120 120 v-30 m-6 8 l6 -8 l6 8"/>
+        <text class="gate" x="140" y="111">gate: a coverage gate is enforced</text>
+
+        <!-- Step 3 -->
+        <rect class="rung" x="40" y="126" width="560" height="66" rx="8"/>
+        <text class="num" x="62" y="169">3</text>
+        <text class="name" x="100" y="154">Unattended agent PRs</text>
+        <text class="desc" x="100" y="175">Agents open pull requests nobody has to watch.</text>
+        <!-- gate 2 to 3, the next one -->
+        <path class="arrow-next" d="M120 232 v-30 m-7 9 l7 -9 l7 9"/>
+        <text class="gate-next" x="140" y="223">next gate: CI runs the tests</text>
+
+        <!-- Step 2, you are here -->
+        <rect class="here" x="40" y="238" width="560" height="66" rx="8"/>
+        <text class="num" x="62" y="281">2</text>
+        <text class="name" x="100" y="266">Supervised agent PRs</text>
+        <text class="desc" x="100" y="287">An agent opens pull requests; a person reviews each one.</text>
+        <rect class="pin" x="490" y="256" width="96" height="26" rx="13"/>
+        <text class="pin-t" x="538" y="273" text-anchor="middle">YOU ARE HERE</text>
+        <!-- gate 1 to 2 -->
+        <path class="arrow" d="M120 344 v-30 m-6 8 l6 -8 l6 8"/>
+        <text class="gate" x="140" y="335">gate: an instruction file an agent reads is committed</text>
+
+        <!-- Step 1 -->
+        <rect class="rung" x="40" y="350" width="560" height="66" rx="8"/>
+        <text class="num" x="62" y="393">1</text>
+        <text class="name" x="100" y="378">Assisted</text>
+        <text class="desc" x="100" y="399">An agent can read and help with your code.</text>
+      </svg>
     </div>
+    <p class="note">Example position. Your report marks your own Step and your own next gate.</p>
+  </section>
 
-    <div class="hero-body">
-      <h1>An AI contributor is always the new hire. <span>Make the codebase supply the tenure.</span></h1>
-      <div>
-        <p class="lede">A Claude Code plugin, and standalone skills for any AI assistant, built so a fresh agent works like an engineer who has been in the org <strong>eighteen months</strong>: a navigable map, the contracts other code relies on made explicit, and guardrails that make the wrong change hard.</p>
-      </div>
-
-      <section class="install" aria-labelledby="install-title">
-        <h2 id="install-title">Install in Claude Code</h2>
-        <p>Run these inside a Claude Code session, not a shell. <code>/plugin</code> is a Claude Code command.</p>
-        <div class="cmd">
-          <div class="cmd-bar"><span>Claude Code prompt</span><button class="copy" type="button" hidden data-copy="/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit&#10;/plugin install ai-native-toolkit@ai-native-toolkit">Copy</button></div>
-          <pre tabindex="0" aria-label="Install commands"><code><span class="prompt" aria-hidden="true">&gt; </span>/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit
-<span class="prompt" aria-hidden="true">&gt; </span>/plugin install ai-native-toolkit@ai-native-toolkit</code></pre>
-        </div>
-        <p>Skills appear namespaced, for example <code>/ai-native-toolkit:assess</code>. Update with <code>/plugin update ai-native-toolkit</code>.</p>
-        <p>No Claude Code? <a href="https://github.com/bjcoombs/ai-native-toolkit/releases/latest">Download the standalone skill ZIPs</a> from the latest release and upload them to claude.ai, Claude Desktop, Cowork, or any assistant that reads the Agent Skills format.</p>
-      </section>
+  <section>
+    <h2>What the report says first</h2>
+    <p>The report opens with its headline. Its first three lines tell you where you are and what to do next.</p>
+    <div class="card summary" aria-label="Example report headline">
+      <div><b>Step 2</b> · Supervised agent PRs · contracts in place</div>
+      <div><b>Next:</b> Step 3 · Unattended agent PRs unlocks when CI runs the tests</div>
+      <div><b>Practices in place:</b> 4 of 9 measured, 2 verified</div>
     </div>
-  </div>
-</header>
+    <p class="note">Shortened example for a repository at Step 2. In plain words: an agent can open pull requests, a person reviews each one, and making CI run the tests is the next step up.</p>
+  </section>
 
-<main id="main">
-  <section aria-labelledby="why-title">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="why-title">The difference is context, not capability</h2>
-        <p>Every agent session starts with an empty head and one narrow context window. The question is how much of a tenured engineer's implicit map the codebase has made explicit.</p>
-      </div>
-      <div class="thesis">
-        <div>
-          <h3>The map</h3>
-          <p>Where things live, which contracts other code relies on, where the minefields are. The aim is a codebase legible enough that <strong>the relevant slice fits one context window</strong>, with the agent's answers anchored to code a person can check in ten seconds.</p>
-        </div>
-        <div>
-          <h3>The guardrails</h3>
-          <p>When a contributor makes a mistake, ask what made it possible and what would make it impossible next time. Linters, architecture tests, CI gates, coverage and review bots <strong>protect the contributor by design</strong>, the way staged environments protect a new engineer.</p>
-        </div>
-      </div>
-      <p class="pull">Legibility you can trust, <em>not omniscience you can't.</em></p>
+  <section>
+    <h2>The one thing to do</h2>
+    <div class="card cta">
+      <p><strong>Close the next gate.</strong> The report names the next change, usually just one, with the evidence it found and why it matters. Everything else in the report is detail you can read later.</p>
     </div>
   </section>
 
-  <section id="skills" aria-labelledby="skills-title">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="skills-title">Skills</h2>
-        <p>Invoke each one in Claude Code as <code>/ai-native-toolkit:&lt;name&gt;</code>. The standalone ZIPs fire on the same slash name or on a natural-language request.</p>
-      </div>
+  <section>
+    <h2>Why gates, not a score</h2>
+    <p>A score rewards collecting practices, and more is not always safer. A Step needs its gates and enough practices in place, and the gates come first: collecting more practices never lets you skip one.</p>
+  </section>
 
-      <h3 class="group-label">Portable, also as standalone ZIPs</h3>
-      <dl class="legend" data-kind="skill" data-standalone="true">
-        <div>
-          <dt>/assess</dt>
-          <dd>Measures a codebase's readiness for AI contributors as a list of conditions, each one practice with file:line evidence and truth tags naming what it keeps honest. The headline is the autonomy Step the repo supports, from 1 Assisted to 4 Autonomous loops, each Step past the first held by a named gate, then "Practices in place: N of M measured, V verified", where a condition the run could not see never counts as 0. Draws a complexity hotspot treemap, a doc-navigability graph, an evidence waffle, a package map, a doc-drift map and a review strip. Writes a report with the Top 3 Actions, naming files.</dd>
-        </div>
-        <div>
-          <dt>/huddle</dt>
-          <dd>Structured multi-perspective deliberation using Six Thinking Hats, sized by Fibonacci from solo to board.</dd>
-        </div>
-        <div>
-          <dt>/deslop</dt>
-          <dd>Detects and removes the telltale signs of AI writing, derived from Wikipedia's "Signs of AI writing". Runs as a silent gate or an explicit edit pass.</dd>
-        </div>
-        <div>
-          <dt>/skill-forge</dt>
-          <dd>Hardens a skill or agent instruction file through judge-panel refinement rounds until it clears a 3-tier promotion gate.</dd>
-        </div>
-        <div>
-          <dt>/semantic-compress</dt>
-          <dd>Shrinks an LLM-directed document while preserving what it does, gating whole-document distillation on an A/B behavioural-equivalence check.</dd>
-        </div>
-      </dl>
-
-      <h3 class="group-label">Claude Code only</h3>
-      <dl class="legend" data-kind="skill">
-        <div>
-          <dt>/ghsync</dt>
-          <dd>Bulk-clones and fast-forward syncs every GitHub repo you can access across an org or personal account, or every GitLab project across your groups, skipping archived and empty ones. Partial and shallow clones for analysis-only mirrors.</dd>
-        </div>
-        <div>
-          <dt>/ghreport</dt>
-          <dd>Read-only org repo state report: open PRs or merge requests, default-branch CI, security alerts and branch protection per repo, plus org or group settings. GitHub or GitLab.</dd>
-        </div>
-        <div>
-          <dt>/fleet</dt>
-          <dd>Runs the headless /assess signals across every repository under a /ghsync root or in a list, one counts-only JSON line per repository. Rolls them up per group through a maturity model, keeps a run history to compare against, and draws a heat map and per-team next-steps pages.</dd>
-        </div>
-        <div>
-          <dt>/doc-contradictions</dt>
-          <dd>Finds documents that contradict each other or the code they describe, with one read-only Haiku comparer per doc cluster and both sides cited as path:line.</dd>
-        </div>
-      </dl>
-
-      <h3 class="group-label">Portable commands</h3>
-      <dl class="legend" data-kind="manual">
-        <div><dt>/6hats</dt><dd>Solo Six Thinking Hats analysis: <code>/huddle</code> at team size 1.</dd></div>
-        <div><dt>/understand</dt><dd>Deep understanding mode (nemawashi): exhaustive context-gathering before action.</dd></div>
-      </dl>
-
-      <h3 class="group-label">Workflow commands</h3>
-      <dl class="legend" data-kind="manual">
-        <div><dt>/tm</dt><dd>Task Master orchestration: starts, reviews, or cleans up tasks based on current state.</dd></div>
-        <div><dt>/issues</dt><dd>Triages open GitHub issues, then runs the agent-ready ones to merge with Agent Teams.</dd></div>
-        <div><dt>/fix-pr</dt><dd>Iterates on a PR's CI failures and review comments until it is green.</dd></div>
-        <div><dt>/fix-develop</dt><dd>Fix loop for failing CI on the repo's default branch.</dd></div>
-      </dl>
-      <p class="note">Each skill's full behaviour, flags and outputs are in its <code>SKILL.md</code>, indexed in the <a href="https://github.com/bjcoombs/ai-native-toolkit/blob/main/skills/README.md">skills catalog</a>.</p>
-      <p class="note">The workflow commands bake in one author's daily setup: a <code>&lt;repo&gt;-main/</code> plus <code>worktree/</code> layout, GitHub and the <code>gh</code> CLI, Task Master, review bots, and the Agent Teams flag. Read the <a href="https://github.com/bjcoombs/ai-native-toolkit#adapting-for-your-workflow">adapting notes</a> before relying on them elsewhere.</p>
+  <section>
+    <h2>Behind the Step: the evidence</h2>
+    <div class="waffle">
+      <svg width="120" height="96" viewBox="0 0 120 96" aria-hidden="true">
+        <defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--surface)"/><line x1="0" y1="0" x2="0" y2="5" stroke="var(--muted)" stroke-width="2"/></pattern></defs>
+        <rect x="0" y="0" width="20" height="20" rx="3" fill="var(--teal)"/>
+        <rect x="26" y="0" width="20" height="20" rx="3" fill="var(--teal-soft)"/>
+        <rect x="0" y="26" width="20" height="20" rx="3" fill="var(--teal)" opacity=".6"/>
+        <rect x="26" y="26" width="20" height="20" rx="3" fill="var(--line)"/>
+        <rect x="0" y="52" width="20" height="20" rx="3" fill="var(--line)"/>
+        <rect x="26" y="52" width="20" height="20" rx="3" fill="url(#hatch)" stroke="var(--line)"/>
+        <text x="10" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L1</text>
+        <text x="36" y="90" font-size="10" text-anchor="middle" fill="var(--muted)">L2</text>
+      </svg>
+      <p>One square per practice, in rows by area, such as agent instructions, CI or code review. Most areas have two practices: <b>level 1</b> is the basic one, <b>level 2</b> the stronger bar. Dark teal is met and verified by a run, mid teal met and measured from the code, pale teal met but only listed from config (shown, not counted), grey not met yet, hatched not measured. Purple marks a practice the owners declined, and an empty outline one that does not apply.</p>
     </div>
   </section>
 
-  <section id="assess" aria-labelledby="assess-title">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="assess-title">What <code>/assess</code> draws</h2>
-        <p>Two views from one run on a real monorepo of about 650k lines, file paths sanitized: before, and after its maintainers worked through the report's Top 3 Actions. The analysis is conventional static analysis and git history, not the model, so the findings reproduce run to run. Open any image for the full interactive SVG.</p>
-      </div>
+  <section>
+    <h2>Four words</h2>
+    <dl class="terms">
+      <dt>Step</dt><dd>How much you can trust an agent here, from 1 (it helps) to 4 (it runs loops on its own).</dd>
+      <dt>Gate</dt><dd>The one guarantee that must hold before the next Step is safe.</dd>
+      <dt>Practice</dt><dd>One checkable thing a healthy repository does, such as committing agent instructions or reviewing every merge. The headline counts practices.</dd>
+      <dt>Level</dt><dd>Within an area, level 1 is the basic practice and level 2 the stronger one.</dd>
+    </dl>
+  </section>
 
-      <div class="figure-row">
-        <h3 class="row-title">Doc-navigability graph</h3>
-        <p>Can an agent traverse the docs to the right place, and is what it finds still true?</p>
-        <figure>
-          <a class="plate" href="./example-doc-graph.svg"><img src="./example-doc-graph.svg" width="1180" height="1230" loading="lazy" decoding="async" alt="Doc-navigability graph before the action sweep: 254 docs, 30% reachable from the entry point, 43 islands, 15 broken links."></a>
-          <figcaption><b>Before.</b> 30% reachable, 24% orphaned, 43 islands, 15 broken links.</figcaption>
-        </figure>
-        <figure>
-          <a class="plate" href="./example-doc-graph-after.svg"><img src="./example-doc-graph-after.svg" width="1180" height="1230" loading="lazy" decoding="async" alt="Doc-navigability graph after the action sweep: 247 docs, 89% reachable from the entry point, 20 islands, 0 broken links."></a>
-          <figcaption><b>After the Top 3 Actions.</b> 89% reachable, 11% orphaned, 20 islands, no broken links.</figcaption>
-        </figure>
-      </div>
+  <section>
+    <h2>Try it</h2>
+    <ol class="steps">
+      <li>Install the plugin in Claude Code: <code>/plugin marketplace add https://github.com/bjcoombs/ai-native-toolkit</code>, then <code>/plugin install ai-native-toolkit@ai-native-toolkit</code>.</li>
+      <li>In your repository, run <code>/assess</code>.</li>
+      <li>Read the first three lines, close the next gate, run it again and watch the Step move.</li>
+    </ol>
+  </section>
 
-      <dl class="delta" aria-label="Doc graph change after the Top 3 Actions">
-        <div><dt>Reachable from entry</dt><dd><s>30%</s> 89%</dd></div>
-        <div><dt>Orphaned docs</dt><dd><s>24%</s> 11%</dd></div>
-        <div><dt>Disconnected islands</dt><dd><s>43</s> 20</dd></div>
-        <div><dt>Broken links</dt><dd><s>15</s> 0</dd></div>
-      </dl>
-
-      <div class="figure-row">
-        <h3 class="row-title">Complexity hotspot heatmap</h3>
-        <p>Which files are riskiest to change next week? The heatmap stays the same repo's complexity profile throughout: it shows which territory is dangerous, while the graph shows whether the map is honest.</p>
-        <figure>
-          <a class="plate" href="./example-heatmap.svg"><img src="./example-heatmap.svg" width="1600" height="1000" loading="lazy" decoding="async" alt="Complexity hotspot heatmap before the action sweep."></a>
-          <figcaption><b>Before.</b> Size is estimated tokens, hue is complexity, saturation is churn.</figcaption>
-        </figure>
-        <figure>
-          <a class="plate" href="./example-heatmap-after.svg"><img src="./example-heatmap-after.svg" width="1600" height="1000" loading="lazy" decoding="async" alt="Complexity hotspot heatmap for the same repo after the action sweep."></a>
-          <figcaption><b>After.</b> The same repo, same encoding.</figcaption>
-        </figure>
-      </div>
-
-      <div class="howto">
-        <div>
-          <h3>Reading the doc graph</h3>
-          <ul>
-            <li><strong>Position is reachability.</strong> The centre is the entry doc, rings are link distance from it, the rim is unreachable, and a dashed ring marks an orphan.</li>
-            <li><strong>Colour is staleness.</strong> Vivid red is a frozen doc beside churning code: a lying map.</li>
-            <li><strong>Size is file length.</strong> Solid edges are links, dotted edges are references.</li>
-          </ul>
-        </div>
-        <div>
-          <h3>Reading the heatmap</h3>
-          <ul>
-            <li><strong>Size is estimated tokens</strong> (about chars/4, the context-window unit). Lines of code are in the tooltip.</li>
-            <li><strong>Hue is cyclomatic complexity</strong>, red for high. <strong>Saturation is recent git churn</strong>, vivid for active.</li>
-            <li>The vivid-red blocks are what an agent or a person is most likely to break next week. Both views use the colour-blind-safe OrRd ramp, with no red-green.</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="figure-row">
-        <h3 class="row-title">Four more views of one run: llama.cpp</h3>
-        <p>One run of the current toolkit against the public <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> repo at commit <code>1f8baae</code> (22 November 2026). Its headline is Step 3, Unattended agent PRs, with "Practices in place: 6 of 14 measured, 3 verified" and one condition not measured.</p>
-        <figure>
-          <a class="plate" href="./example-step-ladder.svg"><img src="./example-step-ladder.svg" width="680" height="412" loading="lazy" decoding="async" alt="Step ladder for llama.cpp: four rungs of agent autonomy, bottom to top - 1 Assisted, an agent can read and help with your code; 2 Supervised agent PRs, an agent opens pull requests and a person reviews each one; 3 Unattended agent PRs, agents open pull requests nobody has to watch; 4 Autonomous loops, agents run longer loops on their own. You are here on Step 3; the instruction-file and CI gates below are in place, and the next gate, a coverage gate is enforced, is highlighted."></a>
-          <figcaption><b>Step ladder.</b> Step 3 of 4, Unattended agent PRs; the next gate is an enforced coverage gate.</figcaption>
-        </figure>
-        <figure>
-          <a class="plate" href="./example-waffle.svg"><img src="./example-waffle.svg" width="680" height="612" loading="lazy" decoding="async" alt="Evidence waffle for llama.cpp: 24 conditions, each row a practice and each square one of its levels, the three Step-gate squares outlined; 3 met and verified, 3 met and measured, 4 met but only listed from config, 13 not met yet, 1 not measured."></a>
-          <figcaption><b>Evidence waffle.</b> 6 counted conditions met (3 verified, 3 measured), 4 listed, 13 not met, 1 not measured.</figcaption>
-        </figure>
-        <figure>
-          <a class="plate" href="./example-package-map.svg"><img src="./example-package-map.svg" width="729" height="734" loading="lazy" decoding="async" alt="Package map for llama.cpp's TypeScript import graph: the 20 largest of 77 packages as a matrix of row-imports-column cells; 106 cross-package imports, 84 of them through a front door."></a>
-          <figcaption><b>Package map.</b> 77 TypeScript packages, 106 cross-package imports, 84 through a front door.</figcaption>
-        </figure>
-        <figure>
-          <a class="plate" href="./example-doc-drift.svg"><img src="./example-doc-drift.svg" width="720" height="762" loading="lazy" decoding="async" alt="Doc-drift map for llama.cpp: the 15 docs furthest behind their code, of 82 mapped to code of their own; gguf-py/README.md leads with 435 commits to its code per edit of the doc."></a>
-          <figcaption><b>Doc-drift map.</b> 38 of 82 mapped docs behind their code; <code>gguf-py/README.md</code> at 435.</figcaption>
-        </figure>
-        <figure>
-          <a class="plate" href="./example-review-strip.svg"><img src="./example-review-strip.svg" width="680" height="264" loading="lazy" decoding="async" alt="Review strip for llama.cpp: 30 sampled merged pull requests, oldest first; 28 approved by someone other than the author, 2 reviewed but not approved, none merged without review, 5 with review-bot output."></a>
-          <figcaption><b>Review strip.</b> 28 of 30 merges approved, 2 reviewed, none unreviewed, 5 with review-bot output.</figcaption>
-        </figure>
-      </div>
-
-      <div class="howto">
-        <div>
-          <h3>Reading the waffle and the package map</h3>
-          <ul>
-            <li><strong>One square per condition</strong>, one row per maturity-model row. Dark teal is verified by a run or the platform, mid teal measured from the code or its history, pale teal listed from config and never counted, grey not met yet, counted or listed: here 8 of the 13 grey squares count, so 6 met plus 8 make the "of 14". A hatched square was not measured, its reason in the key. The verified and measured squares are the N in "Practices in place".</li>
-            <li><strong>Row imports from column</strong>, darker for more imports, with a lines-of-code bar per package. A corner mark flags imports that reach past the target package's front door.</li>
-            <li>The import graph builders read Python, Go, and TypeScript or JavaScript, so on llama.cpp, whose C and C++ they cannot read, the map shows the TypeScript web UI.</li>
-          </ul>
-        </div>
-        <div>
-          <h3>Reading the doc drift and the review strip</h3>
-          <ul>
-            <li><strong>Bar length is drift:</strong> commits to the doc's code per edit of the doc, since the doc last changed. An amber bar is behind its code, past the dashed line at 2 or with a newer declared source, so it is the first doc to reread before an agent leans on it.</li>
-            <li><strong>One tick per sampled merged change</strong>, oldest first: approved, reviewed, or merged without review. A dot marks review-bot output.</li>
-            <li>A run of unreviewed ticks shows a stretch that a single share would hide.</li>
-          </ul>
-        </div>
-      </div>
+  <section>
+    <h2>See it on a real repository</h2>
+    <p>Diagrams from an <code>/assess</code> run on <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>. Click to open full size.</p>
+    <div class="gallery">
+      <a href="./example-step-ladder.svg"><img src="./example-step-ladder.svg" alt="Step ladder: four rungs of agent autonomy, you are here on Step 3, the next gate highlighted">Where you are on the Steps</a>
+      <a href="./example-waffle.svg"><img src="./example-waffle.svg" alt="Evidence waffle: one square per practice level">Evidence behind the Step</a>
+      <a href="./example-heatmap-llamacpp.svg"><img src="./example-heatmap-llamacpp.svg" alt="Complexity treemap">Where the code is hard to change</a>
+      <a href="./example-package-map.svg"><img src="./example-package-map.svg" alt="Package import matrix">How the packages depend on each other</a>
+      <a href="./example-doc-drift.svg"><img src="./example-doc-drift.svg" alt="Docs furthest behind their code">Docs that have fallen behind</a>
     </div>
   </section>
 
-  <section id="elsewhere" aria-labelledby="elsewhere-title">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="elsewhere-title">Elsewhere</h2>
-      </div>
-      <ul class="links">
-        <li><a href="./huddle-explainer/visualization.html">Huddle explainer</a><span>A narrated visual walkthrough of how <code>/huddle</code> sizes a team and seats its hats.</span></li>
-        <li><a href="https://github.com/marketplace/actions/ai-readiness-assess-gate">AI-Readiness Assess Gate</a><span>The <code>/assess</code> deterministic core as a GitHub Action. Runs on every PR with no model and no API keys; warn-only unless <code>.assess/config.toml</code> opts in to failing.</span></li>
-        <li><a href="https://github.com/bjcoombs/ai-native-toolkit">Source on GitHub</a><span>The README, the Map of Content, and every skill's <code>SKILL.md</code>.</span></li>
-        <li><a href="https://github.com/bjcoombs/ai-native-toolkit/releases/latest">Latest release</a><span>Release notes and the link to that version's standalone skill ZIPs.</span></li>
-      </ul>
-    </div>
+  <section id="skills">
+    <h2>Everything in the toolkit</h2>
+    <p>One line each. Details, flags and outputs are in the <a href="https://github.com/bjcoombs/ai-native-toolkit#readme">README</a>.</p>
+    <h3 class="group-label">Any AI assistant (standalone ZIPs)</h3>
+    <dl class="legend" data-kind="skill" data-standalone="true">
+      <div><dt>/assess</dt><dd>How much an agent can safely do here, and the one change that lets it do more.</dd></div>
+      <div><dt>/huddle</dt><dd>Weigh a hard decision from several angles with Six Thinking Hats.</dd></div>
+      <div><dt>/deslop</dt><dd>Remove the telltale signs of AI writing.</dd></div>
+      <div><dt>/skill-forge</dt><dd>Harden a skill or instruction file until a judge panel passes it.</dd></div>
+      <div><dt>/semantic-compress</dt><dd>Shrink a prompt or skill without changing what it does.</dd></div>
+    </dl>
+    <h3 class="group-label">Claude Code only</h3>
+    <dl class="legend" data-kind="skill">
+      <div><dt>/ghsync</dt><dd>Clone and keep in sync every repository you can access.</dd></div>
+      <div><dt>/ghreport</dt><dd>One report on open PRs, CI, security alerts and protection across an org.</dd></div>
+      <div><dt>/fleet</dt><dd>Run <code>/assess</code> across every repository and roll it up by team.</dd></div>
+      <div><dt>/doc-contradictions</dt><dd>Find docs that contradict each other or the code.</dd></div>
+    </dl>
+    <h3 class="group-label">Commands</h3>
+    <dl class="legend" data-kind="manual">
+      <div><dt>/6hats</dt><dd>A quick solo Six Thinking Hats pass.</dd></div>
+      <div><dt>/understand</dt><dd>Gather all the context before acting.</dd></div>
+      <div><dt>/tm</dt><dd>Run Task Master tasks to merge.</dd></div>
+      <div><dt>/issues</dt><dd>Triage GitHub issues, then run the ready ones to merge with an agent team.</dd></div>
+      <div><dt>/fix-pr</dt><dd>Fix a PR's CI failures and review comments until it is green.</dd></div>
+      <div><dt>/fix-develop</dt><dd>Fix failing CI on the default branch.</dd></div>
+    </dl>
   </section>
-</main>
 
-<footer>
-  <div class="wrap">
-    <span>Licensed under <a href="https://github.com/bjcoombs/ai-native-toolkit/blob/main/LICENSE">Apache 2.0</a>.</span>
-    <span><a href="https://github.com/bjcoombs/ai-native-toolkit">github.com/bjcoombs/ai-native-toolkit</a></span>
-  </div>
-</footer>
-
-<script>
-  (function () {
-    if (!navigator.clipboard) return;
-    document.querySelectorAll('.copy').forEach(function (btn) {
-      btn.hidden = false;
-      btn.addEventListener('click', function () {
-        navigator.clipboard.writeText(btn.dataset.copy).then(function () {
-          btn.textContent = 'Copied';
-          setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
-        }, function () {
-          btn.textContent = 'Select and copy';
-          setTimeout(function () { btn.textContent = 'Copy'; }, 2400);
-        });
-      });
-    });
-  })();
-</script>
+  <footer>
+    <a href="https://github.com/bjcoombs/ai-native-toolkit">GitHub</a>
+    <a href="https://github.com/bjcoombs/ai-native-toolkit/releases/latest">Latest release</a>
+    <a href="./huddle-explainer/visualization.html">Huddle explainer</a>
+    <a href="https://github.com/marketplace/actions/ai-readiness-assess-gate">CI gate action</a>
+    <a href="https://github.com/bjcoombs/ai-native-toolkit/blob/main/LICENSE">License</a>
+  </footer>
+</div>
 </body>
 </html>
