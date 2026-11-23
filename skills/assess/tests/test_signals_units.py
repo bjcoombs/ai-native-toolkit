@@ -16,7 +16,7 @@ import pytest
 import assess_signals
 from lib import signals
 from lib.catalog import build_catalog
-from lib.counts_only import HASH_PREFIX, counts_only_scans
+from lib.counts_only import HASH_PREFIX, counts_only_scans, hash_value
 from lib.counts_only_rules import HASHED_PATH, classify
 from lib.signals_schema import SCHEMA_PATH
 from test_unit_readings import MONOREPO, _write
@@ -108,6 +108,10 @@ def test_hashed_path_is_dropped_plain_and_hashed_under_a_salt() -> None:
     assert counts_only_scans(block)["unit_readings"]["units"] == [{"conditions": []}]
     hashed = counts_only_scans(block, hash_paths=True, salt="s")["unit_readings"]["units"][0]["path"]
     assert hashed.startswith(HASH_PREFIX)
+    # a folder with a space still joins: its hash equals the stamp's hashed scope
+    spaced = {"unit_readings": {"available": True, "units": [{"path": "services/My Service", "conditions": []}]}}
+    (unit,) = counts_only_scans(spaced, hash_paths=True, salt="s")["unit_readings"]["units"]
+    assert unit["path"] == hash_value("services/My Service", "s")
 
 
 # --- --scope -----------------------------------------------------------------------
