@@ -191,7 +191,8 @@ def _gradle_start(args: Sequence[str], cwd: str | None = None
         elif head in ("-p", "--project-dir"):
             value = value if eq or value else next(words, "")
             joined = posixpath.normpath(posixpath.join(cwd or "", value)) if value else ""
-            unread = (unread or not value or value.startswith(("$", "/", "~"))
+            unread = (unread or not value or value.startswith(("/", "~")) or "$" in value
+                      or "`" in value
                       or joined == ".." or joined.startswith("../"))
             start = None if not value else ("" if joined == "." else joined)
     return start, replaced, unread

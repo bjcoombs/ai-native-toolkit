@@ -206,3 +206,63 @@ def test_exact_cwd_refuses_a_misplaceable_run(line: str) -> None:
 def test_exact_cwd_keeps_two_runs_without_a_cd() -> None:
     line = "      - run: ./gradlew x && ./gradlew y"
     assert exact_cwd(range(0, 1), ["./gradlew", "y"], [line], False) == PurePosixPath()
+
+
+# --- Round 2 review on #1175: shell expansions inside -p, cds after the run, || cds ------
+
+@pytest.mark.parametrize(("args", "runs"), [
+    (f"-p app/$T/.. {TASK}", None),
+    (f"-p app/`echo x`/.. {TASK}", None),
+    (f"-p app/sub/.. {TASK}", True),
+])
+def test_p_holding_an_expansion_reads_unsure(args: str, runs: bool | None) -> None:
+    assert gradle_runs_in(args.split(), V, "app/build.gradle", "") is runs
+
+
+def _steps(body: str) -> str:
+    return f"on: pull_request\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n{body}"
+
+
+FOLDED = (f"      - run: >\n          cd app && ../gradlew {TASK} &&\n"
+          "          cd ../lib && echo done\n")
+CONTINUED = (f"      - run: |\n          cd lib && ../gradlew {TASK} && \\\n"
+             "            cd ../app && echo done\n")
+
+
+@pytest.mark.parametrize(("body", "gate", "expected"), [
+    (FOLDED, "app/build.gradle", CREDIT),
+    (FOLDED, "lib/build.gradle", NULL),
+    (CONTINUED, "lib/build.gradle", CREDIT),
+    (CONTINUED, "app/build.gradle", NULL),
+])
+def test_a_cd_after_the_run_does_not_move_it(tmp_path: Path, body: str, gate: str,
+                                              expected: tuple[bool | None, str]) -> None:
+    repo = _repo(tmp_path, {".github/workflows/ci.yml": _steps(body), **ROOTED, gate: GATE})
+    block = detect_coverage_gate(repo)
+    assert (block["enforced_meets_minimum"], block["enforced_basis"]) == expected
+
+
+@pytest.mark.parametrize(("line", "cwd"), [
+    ("      - run: cd app || cd ../lib; ../gradlew x", None),
+    ("      - run: cd app || (cd ../lib); ../gradlew x", None),
+    ("      - run: cd app || exit 1; ../gradlew x", PurePosixPath("app")),
+    ("      - run: cd app && ../gradlew x || cd ../lib", PurePosixPath("app")),
+])
+def test_a_cd_as_an_alternative_is_unresolved(line: str, cwd: PurePosixPath | None) -> None:
+    assert exact_cwd(range(0, 1), ["../gradlew", "x"], [line], False) == cwd
+
+
+def test_exact_cwd_stops_at_the_run_on_a_folded_span() -> None:
+    lines = ["      - run: >", f"          cd app && ../gradlew {TASK} &&", "          cd ../lib"]
+    assert exact_cwd(range(1, 3), ["../gradlew", TASK], lines, False) == PurePosixPath("app")
+    assert run_cwd(range(1, 3), ["../gradlew", TASK], lines, False) == PurePosixPath("lib")
+    assert exact_cwd(range(1, 3), ["./other", TASK], lines, False) is None
+
+
+@pytest.mark.parametrize(("line", "gate", "expected"), [
+    (f"cd app || exit 1; ../gradlew {TASK}", "lib/build.gradle", NULL),
+    (f"cd app || exit 1; ../gradlew {TASK}", "app/build.gradle", CREDIT),
+])
+def test_an_exit_alternative_keeps_the_scope(tmp_path: Path, line: str, gate: str,
+                                             expected: tuple[bool | None, str]) -> None:
+    assert _gate(tmp_path, line, ROOTED | {gate: GATE}) == expected

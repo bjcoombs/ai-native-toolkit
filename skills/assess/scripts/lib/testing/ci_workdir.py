@@ -17,9 +17,11 @@ for a Gradle run, #1162):
   anything else (``$VAR``, ``~``, an absolute path, ``cd -``, ``popd``, a path above the
   root) is unresolved.
 - ``uv --directory X`` and ``poetry -C X`` / ``--directory X`` run the tool in X.
-- ``exact_cwd`` (the Gradle reading) is also unresolved where ``run_cwd`` may misplace the
-  run: a line holding a ``cd`` that names the program twice, or a ``cd`` after a quote
-  (``bash -c "cd x && ..."``).
+- ``exact_cwd`` (the Gradle reading) reads only what runs before the command (a ``cd`` on a
+  later folded or continued line of its span is not applied) and is also unresolved where
+  ``run_cwd`` may misplace the run: a line holding a ``cd`` that names the program twice, a
+  ``cd`` after a quote (``bash -c "cd x && ..."``), or a ``cd`` as the alternative of
+  ``||`` (``cd app || cd ../lib``).
 
 ``PurePosixPath()`` is the repository root. Inward-only imports: stdlib and
 ``lib.command_index``; never an orchestrator. Tests: ``tests/test_coverage_root_config.py``,
@@ -160,18 +162,36 @@ def run_cwd(span: range, words: Sequence[str], lines: Sequence[str], gitlab: boo
 # A ``cd`` / ``pushd`` right after a quote or backtick (``bash -c "cd x && ..."``), which
 # ``_CD_RE`` does not read.
 _QUOTED_CD_RE = re.compile(r"[\"'`]\s*(?:cd|pushd)(?=\s)")
+# A ``cd`` / ``pushd`` as the alternative of ``||`` (``cd app || cd ../lib``): which ran is
+# not settled. ``cd app || exit 1`` holds none.
+_ALT_CD_RE = re.compile(r"\|\|\s*[({]?\s*(?:cd|pushd)(?=\s|$)")
 
 
 def exact_cwd(span: range, words: Sequence[str], lines: Sequence[str], gitlab: bool) -> Cwd:
-    """``run_cwd`` for a caller that relies on the exact directory (a Gradle run, #1162):
-    also None when the run's own lines hold a ``cd`` and name ``words[0]`` twice (``cd a &&
-    ./gradlew x && cd ../b && ./gradlew y``: ``run_cwd`` reads both runs at the first), or a
-    ``cd`` after a quote (``bash -c "cd android && ./gradlew x"``)."""
-    text = " ".join(ci_line_text(lines[r]) for r in span)
-    named = re.findall(r"(?<![\w./-])" + re.escape(words[0]) + r"(?![\w./-])", text) if words else []
-    if (len(named) > 1 and _CD_RE.search(text)) or _QUOTED_CD_RE.search(text):
+    """``run_cwd`` for a caller that relies on the exact directory (a Gradle run, #1162).
+    Only what runs before the command moves it: a span line after the one naming
+    ``words[0]`` (a folded ``run: >`` or ``\\`` continuation) is not read. None (unresolved)
+    also when the run's own lines hold a ``cd`` and name ``words[0]`` twice (``cd a &&
+    ./gradlew x && cd ../b && ./gradlew y``: ``run_cwd`` reads both runs at the first), a
+    ``cd`` after a quote (``bash -c "cd android && ./gradlew x"``), a ``cd`` as the
+    alternative of ``||`` before the command (``cd app || cd ../lib; ./gradlew x``), or no
+    span line names ``words[0]``."""
+    if not words:
         return None
-    return run_cwd(span, words, lines, gitlab)
+    named = re.compile(r"(?<![\w./-])" + re.escape(words[0]) + r"(?![\w./-])")
+    text = " ".join(ci_line_text(lines[r]) for r in span)
+    if (len(named.findall(text)) > 1 and _CD_RE.search(text)) or _QUOTED_CD_RE.search(text):
+        return None
+    row = next((r for r in span if named.search(ci_line_text(lines[r]))), None)
+    if row is None:
+        return None
+    head = ci_line_text(lines[row])
+    found = named.search(head)
+    before = [ci_line_text(lines[r]) for r in range(_step_lines(lines, span[0], gitlab).start, row)]
+    if found is None or _ALT_CD_RE.search(" ".join([*before, head[:found.start()]])):
+        return None
+    kept = ["" if row < r <= span[-1] else line for r, line in enumerate(lines)]
+    return run_cwd(span, words, kept, gitlab)
 
 
 def _runner_directory(cwd: Cwd, words: Sequence[str]) -> Cwd:
