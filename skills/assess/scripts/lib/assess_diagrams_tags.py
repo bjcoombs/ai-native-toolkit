@@ -11,7 +11,7 @@ tally) and ``prior_level`` (``lib/prior_level.py``, read before this run wrote i
 row per truth tag, every tag of ``TRUTH_TAGS`` in that fixed order, so two profiles always
 compare row for row. Each row's label is the tag title and its condition count
 (``Supply chain · 1``), and its ``<title>`` hover text is the tag's ``why`` from the check
-manifest (``manifest_whys.tag_why``, #939). A row reads one of (``row_state``):
+manifest (``lib.manifest.manifest_whys.tag_why``, #939). A row reads one of (``row_state``):
 
 - ``share``: a dot on a shared 0 to 100 percent scale at ``met`` of ``measured``, with the
   counts beside it. A point mark on a line, never a filled area;
@@ -135,7 +135,7 @@ def tag_rows_of(level: Mapping[str, Any]) -> list[TagRow] | None:
 def tag_whys() -> dict[str, str]:
     """Each tag's ``why`` from the core check manifest; the tag title where it has none."""
     from lib.manifest.check_manifest import core_manifest  # lazy: the manifest loads once
-    from lib.manifest_whys import tag_why
+    from lib.manifest.manifest_whys import tag_why
     manifest = core_manifest()
     return {tag: tag_why(manifest, tag)["why"] or TRUTH_TAG_TITLES[tag] for tag in TRUTH_TAGS}
 
