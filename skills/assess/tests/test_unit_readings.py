@@ -180,6 +180,63 @@ def test_the_root_unit_does_not_own_a_members_coverage_gate(tmp_path: Path) -> N
         assert _origins(root)["layer-6-coverage.1"] == ("unit" if owned else "inherited")
 
 
+def test_a_parent_build_gate_is_inherited_beside_a_members_gate(tmp_path: Path) -> None:
+    repo_gate = {"available": True, "enforced_meets_minimum": True,
+                 "gates": [{"file": "svc/a/pyproject.toml"}, {"file": "pom.xml"}]}
+    no_gate = {"available": True, "gates": [], "enforced_meets_minimum": False}
+    assert ur._coverage_own("svc/b", no_gate, {"coverage_gate": repo_gate,
+                                               "members": ["svc/a", "svc/b"]}) is None
+    only_a = {**repo_gate, "gates": [{"file": "svc/a/pyproject.toml"}]}
+    assert ur._coverage_own("svc/b", no_gate, {"coverage_gate": only_a,
+                                               "members": ["svc/a", "svc/b"]}) == no_gate
+    # no gate anywhere: the repository's reading (configured false) is inherited
+    assert ur._coverage_own("svc/b", no_gate, {"coverage_gate": no_gate,
+                                               "members": ["svc/a", "svc/b"]}) is None
+
+
+def _nested(*entries: tuple[str, str]) -> dict[str, Any]:
+    return {"available": True, "files": [{"path": p, "scope": {"directory": d, "globs": [],
+                                                                "always_loaded": False}}
+                                         for p, d in entries]}
+
+
+def test_a_sibling_units_nested_file_is_not_inherited() -> None:
+    nested_only = {"available": True, "instruction_file_present": True,
+                   "instruction_presence": "nested_only"}
+    sibling = _nested(("svc/a/AGENTS.md", "svc/a"))
+    ctx = {"layer_grades": nested_only, "nested_instructions": sibling}
+    assert ur._instructions_own("svc/b", None, ctx) == {
+        "available": True, "instruction_file_present": False}
+    ancestor = _nested(("svc/AGENTS.md", "svc"))
+    assert ur._instructions_own("svc/b", None, {**ctx, "nested_instructions": ancestor}) is None
+    root = {**nested_only, "instruction_presence": "root"}
+    assert ur._instructions_own("svc/b", None, {**ctx, "layer_grades": root}) is None
+    # not measured stays inherited (the repository's null), never a false own reading
+    unmeasured = {"available": True, "instruction_file_present": None, "instruction_presence": None}
+    assert ur._instructions_own("svc/b", None, {**ctx, "layer_grades": unmeasured}) is None
+
+
+def test_a_sibling_nested_file_through_the_unit_pass(tmp_path: Path) -> None:
+    repo = _write(tmp_path / "repo", {
+        "svc/a/pyproject.toml": "[project]\nname = 'a'\n",
+        "svc/a/a/__init__.py": "x = 1\n",
+        "svc/a/CLAUDE.md": "# A\n\nRun `pytest`.\n",
+        "svc/b/pyproject.toml": "[project]\nname = 'b'\n",
+        "svc/b/b/__init__.py": "y = 1\n",
+    })
+    nested = nested_instruction_surface(repo, NO_EXCLUDES)
+    grades = scan_layer_grades(rs.instruction_grading(repo), nested)
+    assert grades["instruction_presence"] == "nested_only"
+    blocks = {"layer_grades": grades}
+    units = {"unit_count": 2, "units": [{"path": "svc/a"}, {"path": "svc/b"}]}
+    block = cs.unit_readings(units, nested, *[blocks.get(b) for b in ur.REPO_BLOCKS],
+                             NO_EXCLUDES, repo, None)
+    a, b = block["units"]
+    assert resolve_signal(a["blocks"], "layer_grades.instruction_file_present") is True
+    assert resolve_signal(b["blocks"], "layer_grades.instruction_file_present") is False
+    assert _origins(b)["layer-0-instructions.1"] == "unit"
+
+
 def test_no_model_condition_mixes_unit_and_repo_wide_blocks() -> None:
     # An origin is "unit" when any criterion reads an own block (#864 relies on a level
     # reading one kind only); a level mixing both would need a finer rule.
@@ -240,6 +297,8 @@ def test_a_unit_coverage_gate_overrides_the_parent_build(monorepo: ur.UnitReadin
     assert billing["blocks"]["coverage_gate"]["available"] is True
     assert "enforced_meets_minimum" in billing["blocks"]["coverage_gate"]
     assert _origins(billing)["layer-6-coverage.1"] == "unit"
+    # Without the repository-wide readings there is no parent gate to weigh, so search
+    # inherits; a full run, which passes them, reads search's own (tests/test_unit_levels.py)
     assert "coverage_gate" not in search["blocks"]
     assert _origins(search)["layer-6-coverage.1"] == "inherited"
 

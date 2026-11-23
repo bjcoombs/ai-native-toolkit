@@ -116,6 +116,7 @@ from lib.review_automation import review_evidence, scan_review_automation
 from lib.review_reality import review_reality_from_sample
 from lib.shared_tooling import scan_shared_tooling
 from lib.check_manifest import core_manifest
+from lib.unit_levels import READS as UNIT_LEVEL_READS
 from lib.unit_readings import OWN_READS as UNIT_OWN_READS
 from lib.unit_readings import UNIT_EXTERNAL_READS, UnitTable, unit_table
 from lib.unit_readings import bind as bind_unit_pass
@@ -649,6 +650,9 @@ SCANS = (*SCANS, _spec("headline", cs.headline))
 # core_scans.unit_readings splits its arguments by position, so the manifest reads are pinned.
 SCANS = (*SCANS, pinned_reads(_spec("unit_readings", cs.unit_readings),
                               (*UNIT_OWN_READS, *UNIT_EXTERNAL_READS)))
+# Each unit's Step and tally (lib/unit_levels.py, #864): the level engine over the run
+# context with each unit's own readings in place. Core-only; reads pinned by position.
+SCANS = (*SCANS, pinned_reads(_spec("unit_levels", cs.unit_levels), UNIT_LEVEL_READS))
 
 validate(SCANS)
 

@@ -1,0 +1,33 @@
+# Check manifest fragment: the unit_levels collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.unit_levels"
+kind = "collector"
+title = "Monorepo unit Steps"
+summary = "Each unit's Step, verified tally and not-measured count from the default maturity model, with each unit's own readings in place and every condition labelled unit or inherited."
+issues = [800, 864]
+callable = "lib.core_scans:unit_levels"
+publishes = ["unit_levels"]
+reads = ["unit_readings", "agent_consistency", "agent_environment", "agent_ops", "ci_checks", "coverage_gate", "doc_staleness", "guardrails", "instruction_claims", "layer_grades", "nested_instructions", "observability", "promissory_markers", "review_evidence", "review_reality", "stats_summary", "structure", "structure_drift", "test_pressure", "owner_exclusions"]
+stage = "post_offers"
+shapes = [
+  { path = "unit_levels", type = "lib.unit_levels:UnitLevelsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "unit_levels.unit_count_reason" = "token"
+  "unit_levels.levels_version" = "token"
+  "unit_levels.units.path" = "drop"
+  "unit_levels.units.inherited" = "token"
+  "unit_levels.units.conditions.id" = "token"
+  "unit_levels.units.conditions.state" = "token"
+  "unit_levels.units.conditions.origin" = "token"
+  "unit_levels.units.conditions.reason" = "token"
+  "unit_levels.units.next_step.blockers.kind" = "token"
+  "unit_levels.units.next_step.blockers.gate" = "token"
+  "unit_levels.units.next_step.blockers.condition" = "token"
+  "unit_levels.units.next_step.blockers.state" = "token"
+  "unit_levels.units.next_step.blockers.reason" = "token"
+  "unit_levels.units.next_step.blockers.disposition" = "token"
+  "unit_levels.units.next_step.blockers.exclusion_kind" = "token"
