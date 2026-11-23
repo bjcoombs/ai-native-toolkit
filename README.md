@@ -22,7 +22,7 @@ There's a second half, and it's the same ethic pointed the other way. When a con
 
 The headline pieces are five **skills**:
 
-- **`/assess`** - score any codebase's readiness for AI agent contributors against a 9-layer (0-8) contract model (navigability, runtime liveness, code design, linters, architecture tests, CI, coverage, review bots, AI project management), with a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe). Generates a report with its SVGs (the two maps and an evidence waffle) and opens a PR in the target repo.
+- **`/assess`** - measure how ready a codebase is for AI agent contributors. The maturity model is a list of conditions, each one checkable practice with file:line evidence and one or more truth tags naming what it keeps honest (behaviour, docs, structure, agent context and others). The deterministic headline leads with the autonomy **Step** the repo's contracts support, from 1 Assisted to 4 Autonomous loops, each Step past the first held by a named gate (an instruction file, CI that runs the tests, an enforced coverage gate), and the one change that unlocks the next Step. Then comes "Practices in place: N of M measured, V verified", which counts only conditions measured from the code or verified by a run or the platform; a condition the run could not see is shown with its reason and never counts as 0. The run draws a Codecov-style complexity hotspot SVG and a doc-navigability graph SVG (both colour-blind-safe), plus an evidence waffle, a package map, a doc-drift map and a review strip, writes a report and opens a PR in the target repo.
 - **`/huddle`** - structured multi-perspective deliberation using Six Thinking Hats with Fibonacci team sizing (solo -> debate -> huddle -> panel -> board). See it in action: a [narrated visual explainer](https://bjcoombs.github.io/ai-native-toolkit/huddle-explainer/visualization.html), and the [repeatable pipeline](./docs/huddle-explainer/README.md) used to build it.
 - **`/deslop`** - detect and remove the telltale signs of AI writing (puffery, the rule of three, "not X but Y", filler diction, chatbot leakage, fabricated citations). Runs as a silent quality gate while writing, or as an explicit audit/edit pass. Derived from Wikipedia's "Signs of AI writing".
 - **`/skill-forge`** - harden a skill (draft or existing) through judge-panel refinement rounds until it clears a strict 3-tier promotion gate. A prove-and-promote quality gate that runs after authoring, built on the same team-lead pattern as `/huddle` - and proven by forging itself.
@@ -83,13 +83,38 @@ The pair above is this toolkit assessing a private monorepo. Below is `/assess` 
   </tr>
 </table>
 
-> **What the spread shows.** Three real projects land three full points apart, so the model is reading enforcement, not reputation. `ktor` scores highest because it is the only one with all the write-side trust signals present - a CodeRabbit review bot, repo-wide `explicitApi()` type discipline, and a mandatory CI gate order - and its treemap stays calm (worst file ccn 141, against `llama.cpp`'s 4,123). `llama.cpp` pairs strong CI and type-checking with no coverage gates, no review bot, and no feedback loop; its `ggml-vulkan.cpp` is the textbook hotspot - cyclomatic complexity 4,123, a single function at 350, 14k LOC, 289 commits in a year - the large vivid-red block you cannot miss. `candle` is type-safe Rust with real CI but is missing both read-side layers (no committed `AGENTS.md`/`CLAUDE.md`, a fragmented doc graph), which caps how far its enforced write-side quality can carry the score. The lizard cyclomatic-complexity engine scored Rust and Kotlin directly here, not the scc keyword fallback. Point-in-time snapshot, June 2026 - these scores move as the projects do, which is the whole point.
+> **What the spread shows.** Three real projects land three full points apart, so the model is reading enforcement, not reputation. `ktor` scores highest because it is the only one with all the write-side trust signals present - a CodeRabbit review bot, repo-wide `explicitApi()` type discipline, and a mandatory CI gate order - and its treemap stays calm (worst file ccn 141, against `llama.cpp`'s 4,123). `llama.cpp` pairs strong CI and type-checking with no coverage gates, no review bot, and no feedback loop; its `ggml-vulkan.cpp` is the textbook hotspot - cyclomatic complexity 4,123, a single function at 350, 14k LOC, 289 commits in a year - the large vivid-red block you cannot miss. `candle` is type-safe Rust with real CI but is missing both read-side layers (no committed `AGENTS.md`/`CLAUDE.md`, a fragmented doc graph), which caps how far its enforced write-side quality can carry the score. The lizard cyclomatic-complexity engine scored Rust and Kotlin directly here, not the scc keyword fallback. Point-in-time snapshot, June 2026, scored on the earlier 0-8 layer score that the Step and the "Practices in place" tally have since replaced - these scores move as the projects do, which is the whole point.
+
+### Four more views of one run: llama.cpp
+
+`/assess` also draws four smaller diagrams beside the report. These four come from one run of the current toolkit against [`llama.cpp`](https://github.com/ggml-org/llama.cpp) at commit `1f8baae` (22 November 2026), the same public repo as the middle heatmap above. That run's headline is **Step 3, Unattended agent PRs**, with "Practices in place: 6 of 14 measured, 3 verified" and one condition not measured. Click any image for the full SVG; hover any square, cell or tick for its numbers.
+
+<table>
+  <tr>
+    <th width="50%">Evidence waffle</th>
+    <th width="50%">Package map</th>
+  </tr>
+  <tr>
+    <td><a href="docs/example-waffle.svg"><img alt="Evidence waffle for llama.cpp: 24 conditions, one square each, grouped by maturity-model row; 3 met and verified, 3 met and measured, 4 met but only listed from config, 13 not met yet, 1 not measured" title="llama.cpp: 6 counted conditions met (3 verified, 3 measured), 4 listed, 13 not met, 1 not measured" src="docs/example-waffle.svg"></a></td>
+    <td><a href="docs/example-package-map.svg"><img alt="Package map for llama.cpp's TypeScript import graph: the 20 largest of 77 packages as a matrix of row-imports-column cells; 106 cross-package imports, 84 of them through a front door" title="llama.cpp (TypeScript graph): 77 packages, 106 cross-package imports, 84 through a front door" src="docs/example-package-map.svg"></a></td>
+  </tr>
+  <tr>
+    <th width="50%">Doc-drift map</th>
+    <th width="50%">Review strip</th>
+  </tr>
+  <tr>
+    <td><a href="docs/example-doc-drift.svg"><img alt="Doc-drift map for llama.cpp: the 15 docs furthest behind their code, of 82 mapped to code of their own; gguf-py/README.md leads with 435 commits to its code per edit of the doc" title="llama.cpp: 38 of 82 mapped docs behind their code; gguf-py/README.md at 435" src="docs/example-doc-drift.svg"></a></td>
+    <td><a href="docs/example-review-strip.svg"><img alt="Review strip for llama.cpp: 30 sampled merged pull requests, oldest first; 28 approved by someone other than the author, 2 reviewed but not approved, none merged without review, 5 with review-bot output" title="llama.cpp: 28 of 30 merges approved, 2 reviewed, 0 unreviewed, 5 with review-bot output" src="docs/example-review-strip.svg"></a></td>
+  </tr>
+</table>
+
+> **How to read them.** *Evidence waffle* - one square per condition of the maturity model, one row per model row; dark teal is met and verified by a run or the platform, mid teal met and measured from the code or its history, pale teal met but only listed from config or a declaration (shown, never counted), grey not met yet, and a hatched square was not measured, with its reason in the key. The verified and measured squares are the N in "Practices in place". *Package map* - row imports from column, darker for more imports, with a lines-of-code bar beside each package and a corner mark where an import reaches past the target package's front door; it draws the 20 largest packages and states what it leaves out. The import graph builders read Python, Go, and TypeScript or JavaScript, so on llama.cpp, whose C and C++ they cannot read, the map shows its TypeScript web UI. *Doc-drift map* - one bar per doc with code of its own, its length the commits to that code per edit of the doc since the doc last changed; an amber bar is behind its code (past the dashed line at 2, or with a newer declared source), so `gguf-py/README.md` is the first doc to reread before an agent leans on it. *Review strip* - one tick per sampled merged change, oldest first, coloured approved, reviewed or merged without review, with a dot for review-bot output, so a run of unreviewed merges shows where a single share would hide it. The five dots are review-bot output the June snapshot above did not record.
 
 ### Why this matters for an AI-driven codebase
 
 Once a codebase outgrows any single LLM context window and AI agents become regular contributors, code quality stops being a function of *who knows what* and starts being a function of *what the system enforces*. Norms ("we prefer X") fail because new contributors - especially AI agents starting each session fresh - never read them. Contracts ("the build fails if you don't do X") work because they're enforced regardless of who's reading.
 
-`/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse - a score across the layers below, each marked Present / Partial / Missing with concrete evidence:
+`/assess` gives you paired views to act on that. The doc-navigability graph shows whether an agent can even find its way - how much of the docs is reachable, and which are stale maps of churning code. The complexity SVG shows where the codebase is today - which files will bite next week. The accompanying `assess-report.md` shows what scaffolding is in place to stop it getting worse: the Step and the "Practices in place" tally in its headline, then a scorecard that marks each of the layers below Present / Partial / Missing with concrete evidence.
 
 ### The intent: keep codebases comprehensible as AI accelerates them
 
@@ -105,7 +130,7 @@ So `/assess` is grounded in the accumulated practice of legacy-code engineering,
 
 The goal is a codebase that stays legible to whoever — or whatever — works on it next: that its self-descriptions (docs, tests, types, instructions) are kept *honest under pressure*, not merely present. That honesty is what lets an agent (or a new hire) act without first having to rediscover the whole system.
 
-The 9 layers (0-8) fall into three dependency-ordered bands: **read-side** (can the agent form a true picture?), **write-side** (can it be trusted to produce good output?), and **meta** (does the system keep itself honest?).
+The nine layers (0-8) are the report's scorecard and its reading order, not its score: the headline counts conditions, and its per-tag strip groups them by truth tag, not by layer. The layer numbers survive in the maturity model's row ids and as an alias that lets older configs and fleet history resolve. Read in order, the layers run from **read-side** (can the agent form a true picture?) through **write-side** (can it be trusted to produce good output?) to **meta** (does the system keep itself honest?). The full list of conditions, their grades and their tags is in [What /assess measures](docs/what-we-measure.md); the decisions behind the model are in the [scoring model](skills/assess/references/scoring-model.md).
 
 | Layer | Band | What it enforces |
 |-------|------|------------------|
@@ -459,7 +484,7 @@ ai-native-toolkit/
     ├── superpowers/                   # Design history: plans/ + specs/ behind the skills
     ├── design/                        # Modernization programme specs
     ├── huddle-explainer/              # Narrated skill explainer pipeline
-    └── example-*.svg                  # Real /assess heatmaps and doc graphs (README hero and gallery)
+    └── example-*.svg                  # Real /assess diagrams: heatmaps, doc graphs, waffle, package map, doc drift, review strip
 ```
 
 The [Map of Content](docs/index.md) links each subtree's entry doc: [`skills/README.md`](skills/README.md) for skills, and its own [Agents](docs/index.md#agents) section for `agents/`, which holds no README because Claude Code would load one as an agent.

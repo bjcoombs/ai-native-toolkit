@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 574" width="680" height="574" role="img">
+<title>Evidence behind the level</title>
+<desc>In place: 6 counted conditions met (3 verified, 3 measured) and 4 listed from config or a declaration. Verified and measured squares count toward the level, listed ones are shown but never counted, and hatched ones were not measured, never read as zero.</desc>
+<style>text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }.t-bg,.f-bg{fill:#ffffff}.s-bg{stroke:#ffffff}.t-fg,.f-fg{fill:#1d2321}.s-fg{stroke:#1d2321}.t-muted,.f-muted{fill:#5d6763}.s-muted{stroke:#5d6763}.t-rule,.f-rule{fill:#d9dedb}.s-rule{stroke:#d9dedb}.t-accent,.f-accent{fill:#1f6f6b}.s-accent{stroke:#1f6f6b}.t-bad,.f-bad{fill:#b33a2e}.s-bad{stroke:#b33a2e}.t-warn,.f-warn{fill:#b7791f}.s-warn{stroke:#b7791f}.t-unk,.f-unk{fill:#9aa39f}.s-unk{stroke:#9aa39f}.t-ev-verified,.f-ev-verified{fill:#00635d}.s-ev-verified{stroke:#00635d}.t-ev-measured,.f-ev-measured{fill:#3f8f89}.s-ev-measured{stroke:#3f8f89}.t-ev-listed,.f-ev-listed{fill:#a8d5cf}.s-ev-listed{stroke:#a8d5cf}.t-ev-unmet,.f-ev-unmet{fill:#d3d8d6}.s-ev-unmet{stroke:#d3d8d6}.t-ev-declined,.f-ev-declined{fill:#7b4fa6}.s-ev-declined{stroke:#7b4fa6}@media (prefers-color-scheme: dark){.t-bg,.f-bg{fill:#1a201e}.s-bg{stroke:#1a201e}.t-fg,.f-fg{fill:#e6ebe8}.s-fg{stroke:#e6ebe8}.t-muted,.f-muted{fill:#9aa5a0}.s-muted{stroke:#9aa5a0}.t-rule,.f-rule{fill:#2c3532}.s-rule{stroke:#2c3532}.t-accent,.f-accent{fill:#5fb8b1}.s-accent{stroke:#5fb8b1}.t-bad,.f-bad{fill:#ec7a6c}.s-bad{stroke:#ec7a6c}.t-warn,.f-warn{fill:#e0a84a}.s-warn{stroke:#e0a84a}.t-unk,.f-unk{fill:#5f6a66}.s-unk{stroke:#5f6a66}.t-ev-verified,.f-ev-verified{fill:#4fc1b5}.s-ev-verified{stroke:#4fc1b5}.t-ev-measured,.f-ev-measured{fill:#2e9c94}.s-ev-measured{stroke:#2e9c94}.t-ev-listed,.f-ev-listed{fill:#24524d}.s-ev-listed{stroke:#24524d}.t-ev-unmet,.f-ev-unmet{fill:#4a524f}.s-ev-unmet{stroke:#4a524f}.t-ev-declined,.f-ev-declined{fill:#b892dd}.s-ev-declined{stroke:#b892dd}}</style>
+<defs><pattern id="fleet-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="f-bg"/><line x1="0" y1="0" x2="0" y2="6" class="s-unk" stroke-width="2.4"/></pattern></defs>
+<rect x="0" y="0" width="680" height="574" class="f-bg"/>
+<text x="16.0" y="28.0" font-size="15" text-anchor="start" class="t-fg" font-weight="600">Evidence behind the level</text>
+<text x="16.0" y="48.0" font-size="12" text-anchor="start" class="t-muted">24 conditions, one square each, by maturity-model row</text>
+<text x="261.0" y="77.0" font-size="12" text-anchor="end" class="t-fg">Agent instructions</text>
+<rect x="273.0" y="64.0" width="16.0" height="16.0" rx="2" class="f-ev-listed s-rule" stroke-width="1" data-category="listed"><title>Agent instructions level 1: Met, listed from config or a declaration, not counted</title></rect>
+<rect x="293.0" y="64.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Agent instructions level 2: Not met yet</title></rect>
+<text x="261.0" y="101.0" font-size="12" text-anchor="end" class="t-fg">Runtime legibility</text>
+<rect x="273.0" y="88.0" width="16.0" height="16.0" rx="2" class="f-ev-listed s-rule" stroke-width="1" data-category="listed"><title>Runtime legibility level 1: Met, listed from config or a declaration, not counted</title></rect>
+<rect x="293.0" y="88.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Runtime legibility level 2: Not met yet</title></rect>
+<text x="261.0" y="125.0" font-size="12" text-anchor="end" class="t-fg">Code design (module structure)</text>
+<rect x="273.0" y="112.0" width="16.0" height="16.0" rx="2" class="f-ev-measured s-rule" stroke-width="1" data-category="measured"><title>Code design (module structure) level 1: Met, measured from the code or its history</title></rect>
+<rect x="293.0" y="112.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Code design (module structure) level 2: Not met yet</title></rect>
+<text x="261.0" y="149.0" font-size="12" text-anchor="end" class="t-fg">Linters run in CI, suppression cap</text>
+<rect x="273.0" y="136.0" width="16.0" height="16.0" rx="2" class="f-ev-verified s-rule" stroke-width="1" data-category="verified"><title>Linters run in CI, suppression cap level 1: Met, verified by a run or the platform</title></rect>
+<rect x="293.0" y="136.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Linters run in CI, suppression cap level 2: Not met yet</title></rect>
+<text x="261.0" y="173.0" font-size="12" text-anchor="end" class="t-fg">Architecture boundaries and size</text>
+<rect x="273.0" y="160.0" width="16.0" height="16.0" rx="2" class="f-ev-listed s-rule" stroke-width="1" data-category="listed"><title>Architecture boundaries and size level 1: Met, listed from config or a declaration, not counted</title></rect>
+<rect x="293.0" y="160.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Architecture boundaries and size level 2: Not met yet</title></rect>
+<text x="261.0" y="197.0" font-size="12" text-anchor="end" class="t-fg">CI and the agent's local check</text>
+<rect x="273.0" y="184.0" width="16.0" height="16.0" rx="2" class="f-ev-verified s-rule" stroke-width="1" data-category="verified"><title>CI and the agent's local check level 1: Met, verified by a run or the platform</title></rect>
+<rect x="293.0" y="184.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>CI and the agent's local check level 2: Not met yet</title></rect>
+<text x="261.0" y="221.0" font-size="12" text-anchor="end" class="t-fg">Coverage gates and truth pressure</text>
+<rect x="273.0" y="208.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Coverage gates and truth pressure level 1: Not met yet</title></rect>
+<rect x="293.0" y="208.0" width="16.0" height="16.0" rx="2" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1" data-category="not_measured"><title>Coverage gates and truth pressure level 2: Not measured (needs a full run)</title></rect>
+<text x="261.0" y="245.0" font-size="12" text-anchor="end" class="t-fg">Review on merged pull requests</text>
+<rect x="273.0" y="232.0" width="16.0" height="16.0" rx="2" class="f-ev-listed s-rule" stroke-width="1" data-category="listed"><title>Review on merged pull requests level 1: Met, listed from config or a declaration, not counted</title></rect>
+<rect x="293.0" y="232.0" width="16.0" height="16.0" rx="2" class="f-ev-verified s-rule" stroke-width="1" data-category="verified"><title>Review on merged pull requests level 2: Met, verified by a run or the platform</title></rect>
+<text x="261.0" y="269.0" font-size="12" text-anchor="end" class="t-fg">AI project management</text>
+<rect x="273.0" y="256.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>AI project management level 1: Not met yet</title></rect>
+<rect x="293.0" y="256.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>AI project management level 2: Not met yet</title></rect>
+<text x="261.0" y="293.0" font-size="12" text-anchor="end" class="t-fg">Documentation freshness</text>
+<rect x="273.0" y="280.0" width="16.0" height="16.0" rx="2" class="f-ev-measured s-rule" stroke-width="1" data-category="measured"><title>Documentation freshness level 1: Met, measured from the code or its history</title></rect>
+<rect x="293.0" y="280.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Documentation freshness level 2: Not met yet</title></rect>
+<text x="261.0" y="317.0" font-size="12" text-anchor="end" class="t-fg">Guardrails stated</text>
+<rect x="273.0" y="304.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Guardrails stated level 1: Not met yet</title></rect>
+<rect x="293.0" y="304.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Guardrails stated level 2: Not met yet</title></rect>
+<text x="261.0" y="341.0" font-size="12" text-anchor="end" class="t-fg">Cross-agent instruction consistency</text>
+<rect x="273.0" y="328.0" width="16.0" height="16.0" rx="2" class="f-ev-measured s-rule" stroke-width="1" data-category="measured"><title>Cross-agent instruction consistency level 1: Met, measured from the code or its history</title></rect>
+<rect x="293.0" y="328.0" width="16.0" height="16.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1" data-category="unmet"><title>Cross-agent instruction consistency level 2: Not met yet</title></rect>
+<rect x="16.0" y="366.0" width="14.0" height="14.0" rx="2" class="f-ev-verified s-rule" stroke-width="1"></rect>
+<text x="38.0" y="377.0" font-size="12" text-anchor="start" class="t-fg">Met, verified by a run or the platform (3)</text>
+<rect x="16.0" y="386.0" width="14.0" height="14.0" rx="2" class="f-ev-measured s-rule" stroke-width="1"></rect>
+<text x="38.0" y="397.0" font-size="12" text-anchor="start" class="t-fg">Met, measured from the code or its history (3)</text>
+<rect x="16.0" y="406.0" width="14.0" height="14.0" rx="2" class="f-ev-listed s-rule" stroke-width="1"></rect>
+<text x="38.0" y="417.0" font-size="12" text-anchor="start" class="t-fg">Met, listed from config or a declaration, not counted (4)</text>
+<rect x="16.0" y="426.0" width="14.0" height="14.0" rx="2" class="f-ev-unmet s-rule" stroke-width="1"></rect>
+<text x="38.0" y="437.0" font-size="12" text-anchor="start" class="t-fg">Not met yet (13)</text>
+<rect x="16.0" y="446.0" width="14.0" height="14.0" rx="2" class="f-ev-declined s-rule" stroke-width="1"></rect>
+<text x="38.0" y="457.0" font-size="12" text-anchor="start" class="t-fg">Declined (0)</text>
+<rect x="16.0" y="466.0" width="14.0" height="14.0" rx="2" class="f-bg s-muted" stroke-width="1.5"></rect>
+<text x="38.0" y="477.0" font-size="12" text-anchor="start" class="t-fg">Not applicable (0)</text>
+<rect x="16.0" y="486.0" width="14.0" height="14.0" rx="2" fill="url(#fleet-hatch)" class="s-muted" stroke-width="1"></rect>
+<text x="38.0" y="497.0" font-size="12" text-anchor="start" class="t-fg">Not measured (1)</text>
+<text x="38.0" y="516.0" font-size="11.5" text-anchor="start" class="t-muted">needs a full run: 1</text>
+<text x="16.0" y="540.0" font-size="12" text-anchor="start" class="t-fg">Verified and measured squares count toward the level, listed ones are shown but never</text>
+<text x="16.0" y="558.0" font-size="12" text-anchor="start" class="t-fg">counted, and hatched ones were not measured, never read as zero.</text>
+</svg>
