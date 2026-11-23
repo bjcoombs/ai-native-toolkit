@@ -1,6 +1,7 @@
 """The pruning ledger (lib/pruning_ledger.py, #1084): holds, resets, credit and its wording."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from lib.gap_actions import REMOVAL_FINDING
@@ -8,6 +9,7 @@ from lib.prior_level import PruningEntry
 from lib.pruning_ledger import HOLD_RUNS, ledger_lines, removal, update_ledger
 
 SHA = "a" * 40
+ROOT = Path(__file__).resolve().parent  # no CLAUDE.md here: an unlisted file reads gone
 
 
 def _placement(flagged: bool, lines: int, present: bool = True) -> dict[str, Any]:
@@ -39,35 +41,44 @@ def test_a_removal_is_a_done_remove_action_with_a_measured_cost() -> None:
 
 
 def test_two_held_runs_credit_the_measured_drop_and_score_nothing() -> None:
-    entries, credited = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True)
+    entries, credited = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True, repo_root=ROOT)
     assert (entries[0]["runs_held"], credited) == (1, [])
-    entries, credited = update_ledger(entries, [_new()], _placement(False, 170), [], new_commit=True)
+    entries, credited = update_ledger(entries, [_new()], _placement(False, 170), [], new_commit=True, repo_root=ROOT)
     assert entries[0]["credited"] and credited == entries
     assert entries[0]["saved"] == 312 - 170
     assert ledger_lines(entries, credited) == ["Pruned: always-on text in `CLAUDE.md`, saved 142 always-on lines"]
     # credited once: a later run neither counts it again nor lists it
-    again, credited = update_ledger(entries, [_new()], _placement(False, 170), [], new_commit=True)
+    again, credited = update_ledger(entries, [_new()], _placement(False, 170), [], new_commit=True, repo_root=ROOT)
     assert (again, credited, ledger_lines(again, credited)) == (entries, [], [])
 
 
 def test_a_flag_or_a_lost_gate_resets_the_count() -> None:
-    held, _ = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True)
-    flagged, _ = update_ledger(held, [], _placement(True, 260), [], new_commit=True)
-    lost, _ = update_ledger(held, [], _placement(False, 180), ["instructions"], new_commit=True)
+    held, _ = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True, repo_root=ROOT)
+    flagged, _ = update_ledger(held, [], _placement(True, 260), [], new_commit=True, repo_root=ROOT)
+    lost, _ = update_ledger(held, [], _placement(False, 180), ["instructions"], new_commit=True, repo_root=ROOT)
     assert flagged[0]["runs_held"] == lost[0]["runs_held"] == 0
 
 
 def test_an_unknown_or_the_same_commit_leaves_the_count_alone() -> None:
-    held, _ = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True)
+    held, _ = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True, repo_root=ROOT)
     for placement, lost, new in (({"available": False}, [], True), (_placement(False, 180), None, True),
                                  (_placement(False, 180), [], False)):
-        after, credited = update_ledger(held, [], placement, lost, new_commit=new)
+        after, credited = update_ledger(held, [], placement, lost, new_commit=new, repo_root=ROOT)
         assert (after[0]["runs_held"], credited) == (1, [])
 
 
 def test_a_deleted_file_saves_its_whole_cost_and_pending_removals_are_listed() -> None:
-    entries, _ = update_ledger([], [_new()], _placement(False, 0, present=False), [], new_commit=True)
+    entries, _ = update_ledger([], [_new()], _placement(False, 0, present=False), [], new_commit=True, repo_root=ROOT)
     assert ledger_lines(entries, []) == [
-        "Pruning in progress: `CLAUDE.md` (1 of 2 runs with the file unflagged and every gate held)"]
-    entries, credited = update_ledger(entries, [], _placement(False, 0, present=False), [], new_commit=True)
+        "Pruning in progress: `CLAUDE.md` (1 of 2 runs with the file unflagged and no gate lost)"]
+    entries, credited = update_ledger(entries, [], _placement(False, 0, present=False), [], new_commit=True, repo_root=ROOT)
     assert credited[0]["saved"] == 312
+
+
+def test_a_file_the_scan_does_not_list_but_still_on_disk_is_unknown(tmp_path: Path) -> None:
+    """Review of #1134: a nested scan that did not run lists no file; that is no saving."""
+    (tmp_path / "CLAUDE.md").write_text("still here\n", encoding="utf-8")
+    held, _ = update_ledger([], [_new()], _placement(False, 180), [], new_commit=True, repo_root=tmp_path)
+    after, credited = update_ledger(held, [], _placement(False, 0, present=False), [], new_commit=True,
+                                    repo_root=tmp_path)
+    assert (after[0]["runs_held"], credited) == (1, [])

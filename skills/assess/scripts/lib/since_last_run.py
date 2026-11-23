@@ -365,7 +365,8 @@ def since_last_run(level: Any, assess_dir: Path, repo_root: Path, superseded: An
     ledger_commit = stored["head_sha"] if stored is not None else previous_commit
     pruning, pruned = update_ledger(load_pruning(assess_dir), _done_removals(repo_root), instruction_placement,
                                     lost if isinstance(lost, list) else None,
-                                    new_commit=head_sha is not None and head_sha != ledger_commit)
+                                    new_commit=head_sha is not None and head_sha != ledger_commit,
+                                    repo_root=repo_root)
     block: SinceLastRun = {
         "available": True, "first_run": first,
         "previous_run_id": run_id if isinstance(run_id, str) else None,
