@@ -258,7 +258,9 @@ def test_a_document_nested_too_deep_is_refused() -> None:
 def test_batches_cut_on_count_and_on_body_size() -> None:
     writes = _writes(fp.project(_synthetic(120), RUN_1))
     assert [len(b) for b in fp.batches(writes)] == [50, 50, 25]
-    one = len(json.dumps(writes[-1]).encode())
+    # Rows differ in size (#945 adds per-target fields), so the limit is three of the
+    # smallest write: any four writes exceed it, so no batch can hold more than three.
+    one = min(len(json.dumps(w).encode()) for w in writes[1:])
     tight = fp.LIMITS._replace(batch_bytes=one * 3)
     cut = fp.batches(writes[1:], tight)
     assert all(len(b) <= 3 for b in cut) and [w for b in cut for w in b] == writes[1:]
