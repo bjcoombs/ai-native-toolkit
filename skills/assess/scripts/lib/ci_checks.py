@@ -21,8 +21,9 @@ evidence is static, read from the files at HEAD:
   does not run one in a subfolder (#919).
 - Each line with its ``- `` / ``run:`` / ``script:`` lead dropped
   (``command_index.ci_line_text``), split into shell segments and tokenised the
-  way instruction-file commands are (``command_resolver.extract_commands``),
-  and classified with ``check_command.is_check_command``: any test or
+  way instruction-file commands are (``command_resolver.extract_commands``), each
+  segment read from the command a compound-command lead runs (``if ! pytest``, ``{
+  pytest``, ``f() { pytest``, ``(pytest)``; ``lib.ci_compound``, #1061), and classified with ``check_command.is_check_command``: any test or
   check target of a modelled runner counts (``pytest``, ``make check``,
   ``npm test``, ``uv run ruff check``, ``./scripts/test.sh``), and so do the
   common test runners (``dotnet test``, ``swift test``, ``mix test``,

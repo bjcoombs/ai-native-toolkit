@@ -86,9 +86,19 @@ parser (the core has no YAML dependency). Only literal values count.
   group, an ``if`` or a loop body too; not inside a subshell or a function, which return
   the status), and a ``{ }`` group or function called before ``&&`` / ``||`` or in a
   condition. ``unmasked_lines(text)`` is ``mask_lines(text)[0]``.
+- A pipe without pipefail (#1061). In a GitHub bash or sh ``run:`` body with pipefail off
+  (the default ``bash -e {0}``, ``shell: sh``, no ``set -o pipefail`` before it), every
+  pipeline member but the last is masked (``ci_exempt.piped_members``): the pipeline takes
+  the last command's status, so ``pytest | tee log`` exits 0 on a failing check. When the
+  statement or a later one reads ``PIPESTATUS`` or a later one re-raises a status (``pytest
+  | tee log; exit ${PIPESTATUS[0]}``, a capture checked later), it reads null instead. With
+  pipefail on (``shell: bash``, a custom ``-o pipefail``) it stays credited; GitLab runs its
+  script with pipefail, so it is not read there.
+- A function no statement of its GitHub bash or sh ``run:`` body calls (#1061,
+  ``ci_unsure.uncalled_functions``): its body is masked, since ``f() { pytest; }`` alone runs
+  nothing. GitLab joins ``before_script:`` and ``script:``, so it is not read there.
 
-Known limits: the status of a lone ``pytest | tee log`` without pipefail is credited,
-though it would hide the failure; a check before ``&&`` inside a subshell or function with
+Known limits: a check before ``&&`` inside a subshell or function with
 a later statement there is credited; a ``{ }`` group or function called before ``&&`` reads
 null even where its last command is the check and nothing follows (bash would exit 1); a
 GitLab body is read for the ``||`` fallback only; a compound command in an exempt position
@@ -145,8 +155,9 @@ line before any rule reads it. The default `bash -e` stops at the failing check 
 `if: 'false'` or `if: ${{ false }}` masks its step or job like `continue-on-error: true`.
 `\\` continuations are joined first.
 Issue #1008 adds `mask_lines(text) -> (unmasked, unsure)`, the forms that read null
-(`lib.ci_unsure`). Known limits (module docstring): a lone `pytest | tee log` without
-pipefail, an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
+(`lib.ci_unsure`). Issue #1061 masks a pipeline member but the last with pipefail off
+(null with a later `PIPESTATUS` read or re-raise) and an uncalled function's body in a
+GitHub bash or sh body. Known limits (module docstring): an exempt check inside a subshell or function with a later statement there, `allow_failure` through `default:` / `extends:` / anchors, a
 `before_script:` `set +e` reaching `script:`, reusable-workflow internals. Tests:
 `tests/test_ci_checks.py`. `IndentTree` / `parse_lines` (the indentation model) are
 shared with `ci_triggers.py`. Tests for the #919 and #936 rules: `tests/test_ci_false_credit.py`.
@@ -157,9 +168,11 @@ import re
 from pathlib import PurePosixPath
 from dataclasses import dataclass
 
-from lib.ci_exempt import condition_flags, exempt_segments, pipefail_after, shell_pipefail, unquoted
+from lib.ci_exempt import (
+    condition_flags, exempt_segments, pipefail_after, piped_members, shell_pipefail, unquoted)
 from lib.ci_statements import _join, _pick, _same_line_keep, split_statements
-from lib.ci_unsure import group_call_unsure, opaque_flags, or_arm_unsure, until_break_flags
+from lib.ci_unsure import (
+    group_call_unsure, opaque_flags, or_arm_unsure, uncalled_functions, until_break_flags)
 from lib.command_index import ci_line_text
 
 __all__ = ["IndentTree", "parse_lines", "split_statements", "strip_comment", "unmasked_lines"]
@@ -584,11 +597,13 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
     readable = run_shell is not None and bash   # the #1008 forms: a GitHub bash or sh body
     until = until_break_flags(body) if readable else [False] * len(refs)
     in_group = group_call_unsure(body, conditions) if readable else set()
+    uncalled = uncalled_functions(body) if readable else set()   # f() { pytest; } alone (#1061)
     opaque = opaque_flags(body)
     out: list[tuple[int, int]] = []
     exempt: Segments = {}
     unsure: Segments = {}
     later_code = False   # a later statement runs after this one (not a lone closer)
+    pipestatus = False   # a later statement reads ${PIPESTATUS[...]}
     reraised = False
     exited = False   # a later top-level ``exit 0`` ends the body with success
     exit_reraised = False
@@ -596,7 +611,7 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
         first, k = refs[idx]
         own = bool(_RERAISE.search(_join(parsed[first][k])))
         later_exit = exited and not (exit_reraised or own)
-        if (state[idx] and not reraised) or (later_exit and off[idx]):
+        if (state[idx] and not reraised) or (later_exit and off[idx]) or idx in uncalled:
             out.append((first, k))
         elif later_exit and run_shell is not None and code[idx] and not grouped[idx]:
             statement = raw[first][k]
@@ -614,6 +629,16 @@ def _masked_in_body(refs: list[tuple[int, int]], parsed: Parsed, raw: Parsed, te
                      else frozenset())
             if maybe:
                 unsure[(first, k)] = maybe
+        if readable and code[idx] and not (pipes[idx] or state[idx] or off[idx]):
+            # pytest | tee log without pipefail: tee's status is the pipeline's (#1061). A later
+            # re-raise or PIPESTATUS read may carry the check's status out, so that reads null.
+            piped = piped_members(raw[first][k])
+            text = _join(raw[first][k])
+            target = unsure if reraised or pipestatus or "PIPESTATUS" in text else exempt
+            if piped:
+                target[(first, k)] = target.get((first, k), frozenset()) | piped
+        if code[idx] and "PIPESTATUS" in _join(raw[first][k]):
+            pipestatus = True
         if code[idx] and any(seg for _, seg in raw[first][k]) and _head(raw[first][k]) not in _ENDS:
             later_code = True
         if code[idx] and depths[idx] == 0 and _exit_zero(parsed[first][k]):

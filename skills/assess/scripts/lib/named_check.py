@@ -129,7 +129,7 @@ def _targets(words: list[str]) -> list[str]:
     """The targets a target runner or package manager is asked for, or a script's own path."""
     if not words:
         return []
-    if words[0] in ("bash", "sh", "zsh", "source"):
+    if words[0] in ("bash", "sh", "dash", "zsh", "source"):
         pos = [w for w in words[1:] if not w.startswith("-")]
         return pos[:1]
     if words[0] not in _TARGET_HEADS:

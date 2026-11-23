@@ -1,7 +1,7 @@
 """Does the tree hold the script a CI line runs? (issue #937)
 
 ``script_path(text)`` names the repository file a command runs as a committed script:
-``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` and ``. scripts/test.sh`` (``source``, #1033)
+``./ci.sh`` is ``ci.sh``, ``bash scripts/test.sh`` (``sh``, ``dash`` and ``zsh`` too, #1061) and ``. scripts/test.sh`` (``source``, #1033)
 are ``scripts/test.sh``, ``bin/test``
 is itself. It returns None for no script (``bash -c '...'``, ``pytest``), a modelled
 runner (``./gradlew``), a known tool installed into the tree (``_KNOWN_TOOLS``: the lint,
@@ -76,7 +76,7 @@ def script_path(text: str) -> str | None:
     if not words:
         return None
     head = words[0]
-    if head in ("bash", "sh", "zsh", "source"):   # . reads as source (command_words)
+    if head in ("bash", "sh", "dash", "zsh", "source"):   # . reads as source (command_words)
         i, flags = 1, []
         while i < len(words) and words[i][:1] in ("-", "+"):
             flags.append(words[i])
@@ -170,7 +170,7 @@ def _index_modes(root: Path) -> dict[str, str]:
 
 
 _MAX_BODY = 64 * 1024
-_SHELL_HEADS = frozenset({"bash", "sh", "zsh"})
+_SHELL_HEADS = frozenset({"bash", "sh", "dash", "zsh"})
 
 
 def _flags(words: list[str]) -> list[str]:

@@ -13,7 +13,10 @@ step may still pass, depending on what runs after it. They read null with the re
   of its ``( )`` group) read null. A no-op arm masks them instead (``|| true``), and a
   failing arm keeps them credited: ``|| false``, ``|| exit 1``, ``|| exit $?``, a bare
   ``|| exit`` (it exits with the check's status), ``|| return 1`` or an arm group holding
-  one (``|| { echo failed; exit 1; }``). An arm group that runs on past its line (``|| {``
+  one (``|| { echo failed; exit 1; }``). An arm is judged by the commands that run, never
+  by its words (#1061): each later ``||`` / ``&&`` runs or is skipped by the status so far,
+  so ``|| echo false``, ``|| echo exit`` and ``|| echo failed || exit 1`` (the ``exit 1``
+  never runs) can pass, and ``|| echo failed && exit 1`` fails. An arm group that runs on past its line (``|| {``
   then the body on the lines below) is not read, so the check stays credited as before.
 - In a GitHub ``run:`` body with errexit on and bash grammar (``ci_masking``'s backward
   walk; a later top-level ``exit 0`` masks these instead, #936):
@@ -26,7 +29,7 @@ step may still pass, depending on what runs after it. They read null with the re
   - a check before ``&&`` / ``||`` with a later statement in the body (``pytest && echo
     ok; echo next`` exits 0). As the last statement it stays credited: bash exits with
     the list's status (``pytest && echo ok`` exits 1). A non-last pipeline member with
-    pipefail off (``pytest | tee log``) is not read here.
+    pipefail off (``pytest | tee log``) is masked by ``ci_masking`` (#1061), not read here.
   - a ``{ }`` group whose closing brace, or a function whose call, sits before ``&&`` /
     ``||`` or in a condition (``group_call_unsure``): errexit is ignored inside it, so
     ``{ pytest; echo done; } && echo ok`` and ``f() { pytest; echo done; }; f && echo
@@ -35,9 +38,11 @@ step may still pass, depending on what runs after it. They read null with the re
 
 Conservative nulls (known limits): a ``{ }`` group or function called before ``&&`` reads
 null even where its last command is the check and nothing follows (``{ pytest; } && echo
-ok`` exits 1); a call or closer that re-raises (``f || exit 1``) stays credited. Not read:
-a non-last pipeline member without pipefail, a check before ``&&`` inside a subshell or
-function with a later statement there (both stay credited), and a formatter gate whose
+ok`` exits 1); a call or closer that re-raises (``f || exit 1``) stays credited; an arm
+group followed on its line by a re-raise (``pytest || { echo x; }; exit 1``) reads null.
+``uncalled_functions`` names the body statements of a function no statement outside it
+calls, which ``ci_masking`` masks (#1061). Not read: a check before ``&&`` inside a
+subshell or function with a later statement there (it stays credited), and a formatter gate whose
 ``git diff --exit-code`` has a fallback that can pass (``lib.ci_lint_gates`` reads it as
 no gate, false, not null).
 
@@ -50,7 +55,7 @@ from __future__ import annotations
 import re
 
 from lib.ci_exempt import Statement, exempt_segments, unquoted
-from lib.ci_statements import _NOOPS, or_arms
+from lib.ci_statements import _NOOPS, _join, _pick, or_arms, split_statements
 
 # A status that fails the step: ``false``, ``exit`` / ``return`` with a non-zero literal,
 # a variable or ``$?``, or a bare ``exit`` (it exits with the failing check's status).
@@ -63,20 +68,93 @@ _FUNCTION = re.compile(r"^(?:function\s+([\w-]+)(?:\s*\(\))?|([\w-]+)\s*\(\))\s*
 def or_arm_unsure(statement: Statement, tail: str = "") -> set[int]:
     """The segments a ``||`` arm that can pass leaves unsure: those before it, back to the
     start of its ``( )`` group. ``tail`` is the rest of the line after this statement, read
-    when the arm opens a group that runs past it (``|| { echo failed; exit 1; }``)."""
+    when the arm opens a group that runs past it (``|| { echo failed; exit 1; }``).
+
+    An arm is judged by the commands that run, not by its words (#1061): from the failing
+    check on, each ``||`` / ``&&`` arm runs or is skipped by the status so far, so ``pytest ||
+    echo false`` and ``pytest || echo failed || exit 1`` (the ``echo`` succeeds, so ``exit 1``
+    never runs) can pass, while ``pytest || false`` and ``pytest || echo failed && exit 1`` fail."""
     out: set[int] = set()
     for span, arm in or_arms(statement):
         if arm in _NOOPS:
             continue
-        rest = unquoted(" ".join(seg for _, seg in statement[span.stop - 1:]))
-        if statement[span.stop - 1][1].lstrip().startswith(("{", "(")):
-            rest = unquoted(rest + " " + tail)
-            bare = rest.replace("$(", "")
-            if bare.count("{") > bare.count("}") or bare.count("(") > bare.count(")"):
-                continue   # the arm group runs on past this line: not read, as before #1008
-        if not _FAILS.search(rest):
+        if _chain_fails(statement, span.stop - 1, tail) is False:
             out.update(range(span.start, span.stop - 1))
     return out
+
+
+def _chain_fails(statement: Statement, start: int, tail: str) -> bool | None:
+    """Does the step fail when the command before segment ``start`` (a ``||`` arm) fails?
+    None when a group arm runs on past its line: not read, so the check stays credited."""
+    failing = True
+    for j in range(start, len(statement)):
+        op, seg = statement[j]
+        if (op == "&&" and failing) or (op == "||" and not failing):
+            continue   # skipped: a group it opens is skipped whole, its closer is not read
+        if seg.lstrip().startswith(("{", "(")):
+            body = _group_body(_join(_pick(statement, list(range(j, len(statement))))) + " ; " + tail)
+            return None if body is None else _body_fails(body)
+        result = _status(seg, failing)
+        if result is not None:
+            return result
+        failing = _fails_status(seg)
+    return failing
+
+
+def _status(seg: str, failing: bool) -> bool | None:
+    """True / False when ``seg`` ends the step (``exit 1`` / ``exit 0``), else None.
+    A bare ``exit``, or ``exit $?``, exits with the status so far."""
+    words = seg.strip().strip("(){} ").split()
+    if not words or words[0] not in ("exit", "return"):
+        return None
+    if len(words) == 1 or words[1].strip('"') in ("$?", "${?}"):
+        return failing
+    return words[1].strip('"\'') != "0"
+
+
+def _fails_status(seg: str) -> bool:
+    """``false`` fails; any other command may pass."""
+    words = seg.strip().strip("(){} ").split()
+    return words[:1] in (["false"], ["/bin/false"])
+
+
+def _group_body(text: str) -> str | None:
+    """The text inside the ``{ }`` / ``( )`` group ``text`` opens, or None when the group does
+    not close on this line. Quotes, ``$(...)`` and ``${...}`` open no group."""
+    bare = unquoted(text.lstrip())
+    stack: list[str] = []
+    i = 0
+    while i < len(bare):
+        if bare.startswith(("$(", "${"), i):
+            stack.append("$")
+            i += 2
+            continue
+        ch = bare[i]
+        if ch in "({":
+            stack.append(ch)
+        elif ch in ")}" and stack:
+            top = stack.pop()
+            if not stack:
+                return bare[1:i] if top == bare[0] else None
+        i += 1
+    return None
+
+
+def _body_fails(body: str) -> bool:
+    """A group body fails the step when a statement exits non-zero or ends failing (errexit
+    applies in the last command of a list); an ``exit 0`` ends it with success."""
+    for statement in split_statements(body):
+        failing = False
+        for op, seg in statement:
+            if (op == "&&" and failing) or (op == "||" and not failing):
+                continue
+            result = _status(seg, failing)
+            if result is not None:
+                return result
+            failing = _fails_status(seg)
+        if failing:
+            return True
+    return False
 
 
 def until_break_flags(statements: list[Statement]) -> list[bool]:
@@ -122,6 +200,21 @@ def group_call_unsure(statements: list[Statement], conditions: list[bool]) -> se
                     and (k in exempt or conditions[i])):
                 out.update(body)
     return out
+
+
+def uncalled_functions(statements: list[Statement]) -> set[int]:
+    """The statements of each function body that no statement outside it calls (#1061):
+    ``f() { pytest; }`` alone defines ``f`` and runs nothing, so its check cannot fail the step."""
+    bodies = {name: range(start, end + 1) for start, end, name in _groups(statements) if name}
+    called: set[str] = set()
+    for i, statement in enumerate(statements):
+        for _, seg in statement:
+            words = seg.split()
+            while words and words[0] in ("!", "if", "elif", "while", "until", "then", "do", "else", "{"):
+                words = words[1:]
+            if words and words[0] in bodies and i not in bodies[words[0]]:
+                called.add(words[0])
+    return {i for name, body in bodies.items() if name not in called for i in body}
 
 
 def opaque_flags(statements: list[Statement]) -> list[bool]:

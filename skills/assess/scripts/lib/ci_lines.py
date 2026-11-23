@@ -28,7 +28,7 @@ from lib.ci_lint_gates import line_commands
 from lib.ci_scripts import Present, committed, script_runs
 from lib.command_flags import maven_skips_tests
 from lib.command_index import ci_line_text
-from lib.command_resolver import command_words, extract_commands
+from lib.command_resolver import command_words
 from lib.lint_vocabulary import dotnet_build
 from lib.named_check import setup_ci_target, sourced_env, unread_ci_target
 
@@ -46,10 +46,7 @@ def _line_runs_check(line: str, *, script_item: bool = True, present: Present | 
     (``_script_items``): a lone ``- pytest`` there is a value, not a run. With ``present``,
     a check that runs a script the tree does not hold is not counted (#937).
     """
-    text = ci_line_text(line).removesuffix("\\").strip()
-    if not text:
-        return False
-    commands = extract_commands(f"```bash\n{text}\n```\n")
+    commands = line_commands(line)   # the compound-command reader (#1061)
     bare_item = _BARE_ITEM.match(line) is not None
     return any(
         not is_info_invocation(c.text) and committed(c.text, present) and (

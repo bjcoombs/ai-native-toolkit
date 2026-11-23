@@ -25,7 +25,8 @@ pipeline, and, with pipefail off, of the last pipeline but its last command;
 condition, up to its `then` / `do` (an `until` condition loops until the check passes,
 so it is not read as exempt); `pipefail_after` reads `set -o pipefail` / `set -euo
 pipefail` / `set +o pipefail`; `shell_pipefail` reads a custom shell's flags;
-`unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
+`piped_members(statement)` is every pipeline member but the last (#1061: with pipefail
+off its status is lost, so `ci_masking` masks it); `unquoted(text)` drops quoted spans and escapes, so `_depths` and `_not_code` read no
 `{` or `<<EOF` inside quotes. Tests: `tests/test_ci_false_credit.py`.
 """
 from __future__ import annotations
@@ -65,6 +66,13 @@ def exempt_segments(statement: Statement, pipefail: bool) -> frozenset[int]:
         elif not pipefail:
             out.update(last[:-1])
     return frozenset(out)
+
+
+def piped_members(statement: Statement) -> frozenset[int]:
+    """The segments of one statement piped into a later command (``pytest`` in ``pytest | tee
+    log``): with ``pipefail`` off a pipeline's status is its last command's, so theirs is lost
+    (#1061)."""
+    return frozenset(k for k in range(len(statement) - 1) if statement[k + 1][0] == "|")
 
 
 def condition_flags(statements: list[Statement]) -> list[bool]:
