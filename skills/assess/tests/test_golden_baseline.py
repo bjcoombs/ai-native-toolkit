@@ -135,7 +135,7 @@ def test_load_bearing_surface_is_outside_folds() -> None:
     # Essential: must be on the default-visible surface, never folded.
     assert "## Top 3 Actions" in surface
     assert surface.startswith("# Codebase Assessment") and "**Step 3 · " in surface
-    assert "Verified practices: " in surface
+    assert "Verified practices: " in surface  # a frozen oracle: the label before #844
     # The two SVG snapshots carry the human value up top.
     assert surface.count("![") >= 2
 

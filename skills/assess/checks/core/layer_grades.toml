@@ -11,6 +11,7 @@ callable = "lib.layer_grades:scan_layer_grades"
 publishes = ["layer_grades"]
 reads = ["instruction_grading", "nested_instructions"]
 stage = "post_offers"
+unit_scope = "override"
 headless = { layer_grades = "registered" }
 shapes = [
   { path = "layer_grades", type = "lib.layer_grades:LayerGradesBlock" },

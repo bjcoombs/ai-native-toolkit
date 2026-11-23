@@ -1,0 +1,23 @@
+# Check manifest fragment: the unit_readings collector and the signals, conditions and
+# findings it owns. Layout and merge order: skills/assess/checks/core.toml.
+
+[[entries]]
+id = "core.unit_readings"
+kind = "collector"
+title = "Monorepo unit readings"
+summary = "Each unit's own readings of the scope-sensitive scans (suppressions, doc staleness, structure, size, its own coverage gate or instruction file), with every condition tagged unit or inherited."
+issues = [800, 863]
+callable = "lib.core_scans:unit_readings"
+publishes = ["unit_readings"]
+reads = ["units", "nested_instructions", "coverage_gate", "doc_staleness", "layer_grades", "promissory_markers", "stats_summary", "structure", "excludes", "repo_root", "working_notes"]
+stage = "post_offers"
+shapes = [
+  { path = "unit_readings", type = "lib.unit_readings:UnitReadingsBlock" },
+]
+revision = 1
+  [entries.privacy]
+  "unit_readings.unit_count_reason" = "token"
+  "unit_readings.unit_blocks" = "token"
+  "unit_readings.units.path" = "drop"
+  "unit_readings.units.conditions.id" = "token"
+  "unit_readings.units.conditions.origin" = "token"

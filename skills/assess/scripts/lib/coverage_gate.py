@@ -42,8 +42,12 @@ and ``enforced_basis`` tokens are in ``lib.coverage_ci``. A JaCoCo
 percentage is not read (unit ``uncovered_count`` / ``missed_ratio``), so it
 reads unknown, never 0.
 
-Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule and
-``lib.assess_config.is_user_excluded``; never an orchestrator.
+What switches coverage on for a plain ``pytest`` or ``jest`` run (``addopts``,
+``collectCoverage``), read per config directory, is ``lib.coverage_activation``'s.
+
+Inward-only imports: stdlib plus ``lib.doc_graph``'s path-exclusion rule,
+``lib.assess_config.is_user_excluded``, ``lib.coverage_activation`` and
+``lib.coverage_ci``; never an orchestrator.
 
 Full reference: lib/docs/coverage_gate.md.
 """
@@ -56,6 +60,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from lib.assess_config import is_user_excluded
+from lib.coverage_activation import read_activation
 from lib.coverage_ci import NO_RUNS, EnforcedBasis, enforced_meets_minimum, read_ci_runs
 from lib.doc_graph import is_excluded_path
 
@@ -167,18 +172,6 @@ _POM_MAXIMUM_RE = re.compile(r"<maximum>\s*" + _NUM + r"\s*</maximum>")
 _POM_VALUE_RE = re.compile(r"<value>\s*(\w+)\s*</value>")
 _GRADLE_MAXIMUM_RE = re.compile(r"\bmaximum\s*=\s*[^0-9\n]{0,20}?" + _NUM)
 _GRADLE_VALUE_RE = re.compile(r"\bvalue\s*=\s*[\"'](\w+)[\"']")
-# pytest ``addopts`` holding a ``--cov`` flag: a plain ``pytest`` runs coverage.
-_ADDOPTS_RE = re.compile(r"^\s*addopts\s*=(.*)$")
-# pytest-cov's enabling flag: ``--cov`` or ``--cov=src``, not ``--cov-report``.
-_COV_FLAG_RE = re.compile(r"--cov(?![\w-])")
-_JS_COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\"'])//[^\n]*", re.S)
-_PYTEST_CONFIG_FILES = {"pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
-_PYTEST_SECTIONS = {"pytest", "tool:pytest", "tool.pytest.ini_options"}
-# ``check.dependsOn jacocoTestCoverageVerification`` (Groovy or Kotlin DSL, a
-# ``tasks.check { dependsOn(...) }`` block): ``gradle check`` / ``build`` runs the gate.
-_GRADLE_CHECK_WIRED_RE = re.compile(
-    r"\bcheck\b[^\n{]*(?:\{[^}]*)?\bdependsOn\b[^\n]*jacocoTestCoverageVerification")
-_JEST_COLLECTS_RE = re.compile(r"[\"']?collectCoverage[\"']?\s*:\s*true\b")
 
 # Common gate forms this scan does not read - reported so an empty result reads
 # as "none of the detected forms", never as "no gate anywhere".
@@ -346,10 +339,10 @@ def _scan_cli(rel: str, lines: list[str], branch: bool = False) -> list[Coverage
 def _cli_line_gates(rel: str, idx: int, line: str, branch: bool) -> list[CoverageGate]:
     gates = []
     metric = _total_or_lines(branch or bool(_COV_BRANCH_FLAG_RE.search(line)))
-    match = _PYTEST_COV_RE.search(line)
-    if match:
+    # One gate per flag: ``echo --cov-fail-under=10 && pytest --cov --cov-fail-under=90``.
+    for flag in _PYTEST_COV_RE.finditer(line):
         gates.append(_gate(rel, idx, "pytest-cov", "--cov-fail-under",
-                           _value(match.group(1)), "percent", metric))
+                           _value(flag.group(1)), "percent", metric))
     match = _COVERAGE_CLI_RE.search(line)
     if match:
         gates.append(_gate(rel, idx, "coverage.py",
@@ -664,44 +657,6 @@ def _read_lines(path: Path) -> list[str] | None:
         return None
 
 
-def _addopts_cov(lines: list[str]) -> bool:
-    """A pytest ``addopts`` in a pytest config section holds a ``--cov`` flag, on its own
-    line, in a TOML list (``addopts = [`` ... ``]``) or on INI continuation lines."""
-    section = set(_pytest_section_lines(lines))
-    for idx, line in enumerate(lines, 1):
-        match = _ADDOPTS_RE.match(line) if idx in section else None
-        if match is None:
-            continue
-        value = [match.group(1)]
-        listed = match.group(1).strip().startswith("[") and "]" not in match.group(1)
-        for nxt in lines[idx:]:
-            if listed:
-                value.append(nxt)
-                if "]" in nxt:
-                    break
-            elif nxt[:1].isspace() and nxt.strip():
-                value.append(nxt)
-            else:
-                break
-        if any(_COV_FLAG_RE.search(v) for v in value):
-            return True
-    return False
-
-
-def _pytest_section_lines(lines: list[str]) -> list[int]:
-    """1-based lines inside a pytest config section (``[pytest]``, ``[tool:pytest]``,
-    ``[tool.pytest.ini_options]``), where a flag is ``addopts``, not a task command."""
-    out: list[int] = []
-    current = None
-    for idx, line in enumerate(lines, 1):
-        header = _SECTION_RE.match(line)
-        if header:
-            current = header.group(1).strip().strip("\"'")
-        elif current in _PYTEST_SECTIONS:
-            out.append(idx)
-    return out
-
-
 def gates_something(gate: CoverageGate) -> bool:
     """A gate `configured` counts: a non-zero threshold, a null one from nyc/c8, or any
     bound on what is missed (a JaCoCo ``MISSEDCOUNT`` maximum of 0 misses nothing)."""
@@ -757,22 +712,14 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     root = Path(repo_root).resolve()
     scope_abs = (root / scope).resolve() if scope else None
     gates: list[CoverageGate] = []
-    pytest_cov = jest_collects = gradle_check = False
-    pytest_lines: set[tuple[str, int]] = set()
+    read: list[tuple[str, list[str]]] = []
     for path, rel in _candidate_files(root, scope_abs, excludes or (set(), [])):
         lines = _read_lines(path)
         if lines is None:
             continue
         for scan in _scanners_for(path.name, Path(rel).parts):
             gates.extend(scan(rel, lines))
-        if path.name in _PYTEST_CONFIG_FILES:
-            pytest_lines.update((rel, n) for n in _pytest_section_lines(lines))
-        pytest_cov = pytest_cov or (path.name in _PYTEST_CONFIG_FILES
-                                    and _addopts_cov(lines))
-        gradle_check = gradle_check or (path.name in _JACOCO_GRADLE and bool(
-            _GRADLE_CHECK_WIRED_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines)))))
-        jest_collects = jest_collects or bool(
-            _JEST_COLLECTS_RE.search(_JS_COMMENT_RE.sub("", "\n".join(lines))))
+        read.append((rel, lines))
     manifests = _go_rust_manifests(root, scope_abs if scope_abs != root else None,
                                    excludes or (set(), []))
     meets = threshold_meets_minimum(gates)
@@ -784,8 +731,7 @@ def detect_coverage_gate(repo_root: Path | str, scope: Path | None = None,
     enforced, basis = enforced_meets_minimum(
         gates, meets, read_ci_runs(root) if meets else NO_RUNS,
         lambda text: _cli_line_gates("", 0, text, False), counted=gates_something,
-        minimum=MINIMUM_THRESHOLD_PERCENT, pytest_cov=pytest_cov, jest_collects=jest_collects,
-        gradle_check=gradle_check, pytest_lines=frozenset(pytest_lines))
+        minimum=MINIMUM_THRESHOLD_PERCENT, activation=read_activation(read))
     return {
         "available": True,
         "configured": any(gates_something(g) for g in gates),

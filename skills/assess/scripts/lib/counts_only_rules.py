@@ -104,6 +104,8 @@ IDENTIFIER_KEYED_MAPS: Final = frozenset({
     "claude_config.files_by_kind",
     "doc_staleness.association.methods",
     "promissory_markers.families",
+    "unit_readings.units.blocks",
+    "unit_readings.units.blocks.promissory_markers.families",
     "instruction_files.{}.subscores",
     "nested_instructions.files.subscores",
     "stats_summary.fn_ccn.backend_by_language",
@@ -229,6 +231,10 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.exclusions.kind": TOKEN,
     "repos.exclusions.source": TOKEN,
     "repos.exclusions.reason": DROP,
+    # #945: each Step gate that does not hold, as tokens (gate id, state, disposition)
+    "repos.gate_blockers.gate": TOKEN,
+    "repos.gate_blockers.state": TOKEN,
+    "repos.gate_blockers.disposition": TOKEN,
 }
 
 

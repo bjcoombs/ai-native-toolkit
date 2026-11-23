@@ -50,11 +50,11 @@ def test_three_lines_step_next_and_tally():
     assert h["lines"] == [
         "Step 3 · Unattended agent PRs · contracts in place",
         "Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced and "
-        "1 more verified practice is met, for example `c.1`",
-        "Verified practices: 4 of 6 measured · 3 not measured (needs a full run: 1, no remote: 2)"
+        "1 more practice is in place, for example `c.1`",
+        "Practices in place: 4 of 6 measured, 0 verified · 3 not measured (needs a full run: 1, no remote: 2)"
         " · model m-1",
     ]
-    assert h["summary"] == "Step 3 · 4 of 6 measured"
+    assert h["summary"] == "Step 3 · 4 in place of 6 measured"
     assert h["markdown"].startswith("**Step 3 · Unattended agent PRs · contracts in place**\n\n")
     assert (h["step"], h["next_step"], h["levels_version"], h["available"]) == (3, 4, "m-1", True)
 
@@ -78,7 +78,7 @@ def test_a_counted_gate_that_also_meets_the_threshold_is_the_one_change():
 def test_the_shortfall_after_the_gate_holds_is_added_and_never_names_the_gate():
     h = headline(_gate_and_threshold(7), default_model())
     assert h["lines"][1] == ("Next: Step 4 · Autonomous loops unlocks when a coverage gate is enforced "
-                             "and 2 more verified practices are met, for example `c.1`")
+                             "and 2 more practices are in place, for example `c.1`")
 
 
 def test_a_gate_listed_not_counted_adds_nothing_to_the_tally():
@@ -86,7 +86,7 @@ def test_a_gate_listed_not_counted_adds_nothing_to_the_tally():
     lvl = _gate_and_threshold(5)
     lvl["conditions"][0] = listed
     assert headline(lvl, default_model())["lines"][1].endswith(
-        "a coverage gate is enforced and 1 more verified practice is met, for example `c.1`")
+        "a coverage gate is enforced and 1 more practice is in place, for example `c.1`")
 
 
 def test_not_measured_gate_says_so_and_threshold_only_names_the_count():
@@ -98,14 +98,14 @@ def test_not_measured_gate_says_so_and_threshold_only_names_the_count():
     lvl = _level(step=1, conditions=[], next_step={"step": 2, "threshold": 1, "blockers": [
         {"kind": "threshold", "threshold": 3, "met": 1}]})
     assert headline(lvl, default_model())["lines"][1] == (
-        "Next: Step 2 · Supervised agent PRs unlocks when 2 more verified practices are met")
+        "Next: Step 2 · Supervised agent PRs unlocks when 2 more practices are in place")
 
 
 def test_top_step_and_zero_not_measured():
     h = headline(_level(step=4, next_step=None, not_measured=[],
                         tally={"met": 9, "measured": 9, "not_measured": 0}), default_model())
     assert h["lines"][1] == "Next: Step 4 is the top Step; it holds while its gates hold"
-    assert h["lines"][2] == "Verified practices: 9 of 9 measured · 0 not measured · model m-1"
+    assert h["lines"][2] == "Practices in place: 9 of 9 measured, 0 verified · 0 not measured · model m-1"
     assert h["next_step"] is None
 
 
@@ -218,7 +218,7 @@ def test_ci2_headline_badge_report_and_log_agree(ci2: Path):
     assert first["headline"] == second["headline"]
     assert badge1["message"] == badge2["message"]
     level, head = second["level"], second["headline"]
-    assert badge2["message"] == f"Step {level['step']} · {level['tally']['met']} of {level['tally']['measured']} measured"
+    assert badge2["message"] == f"Step {level['step']} · {level['tally']['met']} in place of {level['tally']['measured']} measured"
     assert head["lines"][0].startswith(f"Step {level['step']} · ") and "contracts in place" in head["lines"][0]
     assert head["lines"][1].startswith(f"Next: Step {level['next_step']['step']} · ")
     assert f"{level['tally']['not_measured']} not measured" in head["lines"][2]
@@ -278,10 +278,10 @@ def test_log_readiness_line_is_rewritten_and_rechained(ci2: Path):
 
     ctx = _run(ci2, "2026-11-22")
     assess = ci2 / ".assess"
-    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 of 1 measured")
-    assert "- **Readiness:** Step 9 · 1 of 1 measured" in (assess / "log.md").read_text(encoding="utf-8")
+    assert refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 in place of 1 measured")
+    assert "- **Readiness:** Step 9 · 1 in place of 1 measured" in (assess / "log.md").read_text(encoding="utf-8")
     assert verify_log_chain(assess) == (True, None)
-    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 of 1 measured")
+    assert not refresh_log_readiness(assess, ctx["run_id"], "Step 9 · 1 in place of 1 measured")
     assert not refresh_log_readiness(assess, None, "x")
     assert not refresh_log_readiness(assess, "no-such-run", "x")
 
@@ -295,3 +295,81 @@ def test_counts_only_keeps_the_headline_numbers_and_drops_its_text():
     # a dropped string list is kept as its length, a dropped string goes
     assert kept == {**{k: v for k, v in head.items() if k not in ("markdown", "summary")},
                     "lines": len(head["lines"])}
+
+
+# --- the verified share and the per-tag strip (#844) ---------------------------
+
+def _cond(cid: str, state: str, grade: str = "measured", counted: bool = True, **extra: Any) -> dict[str, Any]:
+    row, lv = cid.rsplit(".", 1)
+    return {"id": cid, "row": row, "level": int(lv), "grade": grade, "counted": counted,
+            "state": state, **extra}
+
+
+def _tagged_model() -> dict[str, Any]:
+    level = lambda n, truth, **x: {"level": n, "criteria": [], "truth": truth, **x}  # noqa: E731
+    return {"version": "t-1", "rows": [
+        {"id": "r", "title": "R", "scope": "repo", "aggregation": None,
+         "levels": [level(1, ["behaviour", "docs"]), level(2, ["behaviour"]), level(3, ["docs"])]},
+        {"id": "h", "title": "H", "scope": "repo", "aggregation": None,
+         "levels": [level(1, ["governance"], polarity="hazard"), level(2, ["governance"])]},
+    ], "steps": []}
+
+
+def _tagged_level() -> dict[str, Any]:
+    return _level(step=None, next_step=None, levels_version="t-1",
+                  tally={"met": 2, "measured": 2, "not_measured": 1},
+                  not_measured=[{"id": "r.3", "reason": "no_remote"}],
+                  conditions=[_cond("r.1", "met", grade="verified"), _cond("r.2", "met"),
+                              _cond("r.3", "not_measured"),
+                              _cond("h.1", "met", counted=False, polarity="hazard"),
+                              _cond("h.2", "declined")])
+
+
+def test_tally_line_shows_the_verified_share_of_n():
+    h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
+    assert h["lines"][0] == ("Practices in place: 2 of 2 measured, 1 verified · 1 not measured "
+                             "(no remote: 1) · model t-1")
+    assert h["verified"] == 1
+    assert h["summary"] == "2 in place of 2 measured"
+
+
+def test_strip_counts_a_multi_tagged_condition_in_each_cell_and_once_in_n():
+    h = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
+    assert h["lines"][1] == ("By tag: behaviour 2 of 2 · docs 1 of 1 (NOT MEASURED: 1) · "
+                             "governance 0 of 0 (HAZARD: 1, DECLINED: 1)")
+    cells = {c["tag"]: c for c in h["tags"]}
+    assert [c["tag"] for c in h["tags"]] == ["behaviour", "docs", "governance"]
+    assert cells["behaviour"] == {"tag": "behaviour", "met": 2, "measured": 2, "verified": 1,
+                                  "not_measured": 0, "hazards": 0, "declined": 0}
+    assert cells["docs"]["verified"] == 1 and cells["docs"]["not_measured"] == 1
+    # r.1 sits in two cells; the tally counts it once
+    assert sum(c["met"] for c in h["tags"]) == 3 and h["lines"][0].startswith("Practices in place: 2 of")
+
+
+def test_no_tagged_condition_gives_no_strip_line():
+    h = headline(_level(), default_model())
+    assert h["tags"] == [] and not any(line.startswith("By tag:") for line in h["lines"])
+    assert run_context_headline(None)["tags"] == [] and run_context_headline(None)["verified"] is None
+
+
+def test_counts_only_keeps_the_strip_numbers_and_tag_tokens():
+    from lib.counts_only import counts_only
+
+    head = headline(_tagged_level(), _tagged_model())  # type: ignore[arg-type]
+    kept = counts_only({"headline": head})["headline"]
+    assert kept["verified"] == 1
+    assert kept["tags"] == head["tags"]
+    assert "summary" not in kept and "markdown" not in kept
+
+
+def test_ci2_strip_and_verified_total_match_the_conditions(ci2: Path):
+    """The #844 acceptance on a real run: a strip renders and V is the verified conditions met."""
+    ctx = _run(ci2, "2026-11-22")
+    level, head = ctx["level"], ctx["headline"]
+    verified = [c for c in level["conditions"]
+                if c["counted"] and c["state"] == "met" and c["grade"] == "verified"]
+    assert head["verified"] == len(verified)
+    assert f"measured, {len(verified)} verified · " in head["lines"][2]
+    assert head["lines"][3].startswith("By tag: ") and head["tags"]
+    for cell in head["tags"]:
+        assert f"{cell['tag']} {cell['met']} of {cell['measured']}" in head["lines"][3]

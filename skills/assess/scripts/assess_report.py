@@ -5,9 +5,9 @@ Reads ``.assess/run-context.json`` and renders a Markdown report from a stdlib
 tokens and produces the same report for the same context, on every PR forever.
 
 It renders:
-- the headline (``lib/headline.py``, #747): the Step, its next unlock and
-  "Verified practices: N of M measured", pasted from the run context's
-  ``headline`` block,
+- the headline (``lib/headline.py``, #747, #844): the Step, its next unlock,
+  "Practices in place: N of M measured, V verified" and the per-tag strip,
+  pasted from the run context's ``headline`` block,
 - the diagram sections (``lib/assess_diagrams.py``, #942, and
   ``lib/assess_diagrams_review.py``, #943): the evidence waffle, the doc-drift map and
   the review strip the publish step wrote beside the report, linked, or why each was
@@ -569,10 +569,13 @@ def _render_loc_split(loc: dict[str, Any]) -> str:
     return f"; code {_fmt(loc['max_code'])}, data {_fmt(loc['max_data'])}"
 
 
-def render_report(ctx: dict[str, Any], repo_name: str) -> str:
+def render_report(ctx: dict[str, Any], repo_name: str, assess_dir: Path | None = None) -> str:
     """Render the full deterministic Markdown report from a run-context dict.
 
-    Pure: takes the loaded context and the repo name, returns the report string.
+    Takes the loaded context and the repo name, returns the report string. Pure when
+    ``assess_dir`` is None; with it (the CLI passes ``<repo>/.assess``), it checks each
+    drawn diagram's file on disk and says ``Not drawn:`` for one that is not there
+    instead of linking it.
     ``Template.substitute`` is strict - a missing key raises, which surfaces a
     template/data drift at the seam rather than silently emitting ``$placeholder``.
     """
@@ -598,7 +601,7 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         plugin_version=ctx.get("plugin_version", "unknown"),
         commit_note=_render_commit_note(ctx),
         headline=as_headline(ctx.get("headline"))["markdown"],
-        diagrams_section=diagrams_section(build_all(ctx)),
+        diagrams_section=diagrams_section(build_all(ctx), assess_dir),
         files_scored=_fmt(stats.get("files_scored", 0)),
         loc_total=_fmt(loc.get("total")),
         loc_p95=_fmt(loc.get("p95")),
@@ -614,8 +617,8 @@ def render_report(ctx: dict[str, Any], repo_name: str) -> str:
         diff_section=render_diff_section(ctx),
     )
     # The scans this run measured, the ones it skipped and why, and the catalog link (#794).
-    # A full run runs every scan; one that left no block (structure_drift with no ownership
-    # map, or a degraded scan) ran but was not measured.
+    # A full run runs every scan; one that left no block (a degraded scan) ran but was not
+    # measured. structure_drift with no ownership map leaves a no_ownership_map marker.
     measured = measured_section([ctx], absent_code="no_block")
     return f"{report.rstrip()}\n\n{measured}\n"
 
@@ -658,7 +661,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 0
-    report = render_report(ctx, repo_root.name)
+    report = render_report(ctx, repo_root.name, repo_root / ".assess")
     if to_stdout:
         # UTF-8 and LF whatever the console: the report holds "·" and other
         # non-ASCII text, which cp1252 on Windows would garble or refuse, and

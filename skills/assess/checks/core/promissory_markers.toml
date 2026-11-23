@@ -9,6 +9,7 @@ callable = "lib.core_scans:promissory_block"
 publishes = ["promissory_markers"]
 reads = ["promissory"]
 stage = "read_side"
+unit_scope = "scoped"
 headless = { promissory_markers = "headless_variant" }
 headless_variants = [
   { block = "promissory_markers", callable = "lib.headless_layers:promissory_markers", reads = ["promissory"], stage = "read_side" },

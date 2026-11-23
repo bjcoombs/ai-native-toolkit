@@ -54,6 +54,9 @@ def build_schema() -> JsonDict:
     blocker_fields["state"] = {"enum": list(STATES)}
     blocker_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER]}
     blocker_fields["exclusion_kind"] = {"enum": list(EXCLUSION_KINDS)}
+    gate_fields = repo["gate_blockers"]["items"]["properties"]
+    gate_fields["state"] = {"enum": list(STATES)}
+    gate_fields["disposition"] = {"enum": [EXCLUDED_BY_OWNER, None]}
     exclusion = repo["exclusions"]["items"]["properties"]
     exclusion["kind"] = {"enum": list(EXCLUSION_KINDS)}
     exclusion["source"] = {"enum": [SOURCE_REPO]}

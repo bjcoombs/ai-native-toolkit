@@ -88,6 +88,7 @@ from lib.scc_coverage import UnreliableCcnRow
 from lib.review_automation import ReviewAutomationBlock, ReviewEvidenceBlock
 from lib.shared_tooling import SharedToolingBlock
 from lib.unit_discovery import UnitsBlock
+from lib.unit_readings import UnitReadingsBlock
 from lib.structure_graph import StructureBlock
 from lib.understanding_analysis import UnderstandingModule
 
@@ -156,6 +157,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("owner_exclusions", OwnerExclusionsBlock),
     ("units", UnitsBlock),
     ("headline", Headline),
+    ("unit_readings", UnitReadingsBlock),
 )
 
 _UNIONS = (Union, types.UnionType)

@@ -451,7 +451,7 @@ Lists the gates the repository configures (a ruff or flake8 complexity limit, th
 - Collector: `core.keyhole_blocks`, reading `keyhole`.
 - Network: no.
 - Headless: reported by headless and fleet runs (built by the headless runner's own scan).
-- Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.reason` reason, `structure.sccs` path.
+- Counts-only: numbers, booleans and nulls kept; strings by field: `structure.breakup_candidates.clusters` path, `structure.breakup_candidates.package` path, `structure.footprints.module` path, `structure.internal_burrow_edges.imported` path, `structure.internal_burrow_edges.importer` path, `structure.language` token, `structure.modularity_reason` token, `structure.name_collisions.name` path, `structure.name_collisions.paths` path, `structure.package_edges.from` path, `structure.package_edges.to` path, `structure.packages.id` path, `structure.reason` reason, `structure.sccs` path.
 - Used by: row `layer-2-design`.
 - Evidence: `structure.modularity_q` head_structure (measured), `structure.cross_package_edges` head_structure (measured), `structure.front_door_ratio` head_structure (measured).
 - Not measured when:
@@ -839,3 +839,4 @@ The scan registry in run order, including the private inputs other scans read.
 | `guardrails` | Guardrails stated | `repo_root`, `instruction_files`, `coverage_gate`, `excludes`, `scope` | `guardrails` | no |
 | `level` | Verified tally and Step | `agent_consistency`, `agent_environment`, `agent_ops`, `ci_checks`, `coverage_gate`, `doc_staleness`, `guardrails`, `instruction_claims`, `layer_grades`, `nested_instructions`, `observability`, `promissory_markers`, `review_evidence`, `review_reality`, `stats_summary`, `structure`, `structure_drift`, `test_pressure`, `owner_exclusions` | `level` | no |
 | `headline` | Deterministic headline | `level` | `headline` | no |
+| `unit_readings` | Monorepo unit readings | `units`, `nested_instructions`, `coverage_gate`, `doc_staleness`, `layer_grades`, `promissory_markers`, `stats_summary`, `structure`, `excludes`, `repo_root`, `working_notes` | `unit_readings` | no |

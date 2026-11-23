@@ -9,6 +9,7 @@ callable = "lib.core_scans:promissory_scan"
 publishes = []
 reads = ["repo_root", "excludes", "scope"]
 stage = "setup"
+unit_scope = "scoped"
 private = true
 label = "promissory_markers"
 revision = 1

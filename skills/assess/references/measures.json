@@ -2392,6 +2392,9 @@
           "structure.modularity_reason": "token",
           "structure.name_collisions.name": "path",
           "structure.name_collisions.paths": "path",
+          "structure.package_edges.from": "path",
+          "structure.package_edges.to": "path",
+          "structure.packages.id": "path",
           "structure.reason": "reason",
           "structure.sccs": "path"
         }
@@ -4728,6 +4731,28 @@
       ],
       "reads": [
         "level"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "unit_readings",
+      "title": "Monorepo unit readings",
+      "publishes": [
+        "unit_readings"
+      ],
+      "reads": [
+        "units",
+        "nested_instructions",
+        "coverage_gate",
+        "doc_staleness",
+        "layer_grades",
+        "promissory_markers",
+        "stats_summary",
+        "structure",
+        "excludes",
+        "repo_root",
+        "working_notes"
       ],
       "network": false,
       "private": false

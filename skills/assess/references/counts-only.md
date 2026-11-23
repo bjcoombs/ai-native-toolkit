@@ -78,6 +78,8 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 - `promissory_markers.families`
 - `stats_summary.fn_ccn.backend_by_language`
 - `tool_versions`
+- `unit_readings.units.blocks`
+- `unit_readings.units.blocks.promissory_markers.families`
 
 ## run_header
 
@@ -382,6 +384,9 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `structure.internal_burrow_edges.imported` | path (hashed when hashing is on) |
 | `structure.name_collisions.name` | path (hashed when hashing is on) |
 | `structure.name_collisions.paths` | path (hashed when hashing is on) |
+| `structure.packages.id` | path (hashed when hashing is on) |
+| `structure.package_edges.from` | path (hashed when hashing is on) |
+| `structure.package_edges.to` | path (hashed when hashing is on) |
 | `behaviour.reason` | dropped |
 | `behaviour.static_modularity_projection` | dropped |
 | `behaviour.static_history_disagreement.finding` | token |
@@ -787,6 +792,17 @@ field name, so a map keyed by a login, a function or a directory is dropped.
 | `headline.markdown` | dropped |
 | `headline.summary` | dropped |
 | `headline.reason` | token |
+| `headline.tags.tag` | token |
+
+## unit_readings
+
+| Field | Kept as |
+|---|---|
+| `unit_readings.unit_count_reason` | token |
+| `unit_readings.unit_blocks` | token |
+| `unit_readings.units.path` | dropped |
+| `unit_readings.units.conditions.id` | token |
+| `unit_readings.units.conditions.origin` | token |
 
 ## fleet-data.json (the fleet skill)
 
@@ -825,3 +841,6 @@ kept as written. A string
 | `repos.exclusions.kind` | token |
 | `repos.exclusions.source` | token |
 | `repos.exclusions.reason` | dropped |
+| `repos.gate_blockers.gate` | token |
+| `repos.gate_blockers.state` | token |
+| `repos.gate_blockers.disposition` | token |
