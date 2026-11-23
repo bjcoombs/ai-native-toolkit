@@ -115,6 +115,8 @@ layer `row` with a `level` or a mean `share` was removed in 3.0.0: a file using 
 `level` or `share` is refused with an error naming the entry and saying to use `step`.
 Credit names units and repositories only, never people. With hashed paths the unit is
 hashed under the run's salt before it is matched.
+The fleet artifact's page writes targets to its database; `fleet_targets_import.py`
+reads them back into this file before the next run ([targets read-back](publish.md#targets-read-back)).
 
 **Report.** `report.md` opens with "What changed and who earned it", before the
 diagrams: this run's achievements by kind (up to 20 lines each), then each unit's nearest
