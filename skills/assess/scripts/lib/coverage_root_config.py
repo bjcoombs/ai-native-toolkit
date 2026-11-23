@@ -90,7 +90,7 @@ _PYTEST_CONFIGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 # ``cd`` at the start of a command: the line's start, or after ``;``, ``&&``, ``||``, ``|``, ``(``.
 _CD_RE = re.compile(r"(?:^|[;&|(])\s*(cd|pushd|popd)(?=\s|$|[;&|)])\s*([^\s;&|)]*)")
 _WORKDIR_RE = re.compile(r"^(\s*)(?:-\s+)?working-directory\s*:\s*(.*?)\s*(?:#.*)?$")
-_STEP_RE = re.compile(r"^(\s*)-\s")
+_STEP_RE = re.compile(r"^(\s*)-\s+")
 # A path step: "" is the repository root; None is unresolved.
 Cwd = PurePosixPath | None
 
@@ -227,7 +227,8 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
     if not gitlab:
         if _defaults_workdir(lines):
             return None
-        key_indent = len(lines[step.start]) - len(lines[step.start].lstrip()) + 2
+        dash = _STEP_RE.match(lines[step.start])   # step keys sit where the first key does
+        key_indent = len(dash.group(0)) if dash else -1
         for r in step:
             match = _WORKDIR_RE.match(lines[r])
             if match and (r == step.start or len(match.group(1)) == key_indent):
@@ -238,7 +239,8 @@ def _cwd(run: Run, lines: Sequence[str], gitlab: bool) -> Cwd:
             continue   # GitLab runs ``after_script`` in its own shell, after ``script``
         text = ci_line_text(lines[r])
         if r in run.span:
-            at = text.find(run.words[0])
+            word = re.search(r"(?<![\w./-])" + re.escape(run.words[0]) + r"(?![\w./-])", text)
+            at = word.start() if word else -1
             text = text[:at] if at >= 0 else text
         for match in _CD_RE.finditer(text):
             if match.group(1) == "popd" or _in_closed_group(text, match.start(1)):

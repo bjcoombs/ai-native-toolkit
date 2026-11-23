@@ -145,6 +145,8 @@ def test_the_whole_repo_run_is_unchanged(tmp_path: Path) -> None:
     ("      - run: poetry -C pkg run pytest --cov\n", False),
     ("      - run: uv run --directory $D pytest --cov\n", None),
     ("      - run: uv run pytest --cov\n", True),
+    ("      -   name: t\n          run: pytest --cov\n          working-directory: pkg\n", False),
+    ("      - run: cd pytest-plugin && pytest --cov\n", False),
     ("      - run: pytest -c ci/pytest.ini\n      - run: cd pkg && pytest --cov\n", None),
 ])
 def test_where_ci_runs_coverage_decides(tmp_path: Path, steps: str, applies: bool | None) -> None:
