@@ -4,7 +4,7 @@ Moved out of ``lib.counts_only`` (which re-exports both) so ``lib/level_tally.py
 reads the same codes without importing the scanners' block shapes (#744).
 
 `reason_code` (the `code` of a `code: sentence` reason, else `unavailable`) and `reason_token`
-(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map`, or the code a known sentence maps to), moved out of `counts_only.py`,
+(a known structure code, a `BLOCK_REASON_CODES` code such as `no_ownership_map` or an `agent_outcome` git code, or the code a known sentence maps to), moved out of `counts_only.py`,
 which re-exports both, so the tally reads the same codes as counts-only output (#744).
 Tests: `tests/test_counts_only.py`, `tests/test_level_tally.py`.
 """
@@ -14,8 +14,12 @@ from lib.counts_only_rules import REASON_SENTENCE_CODES, TOKEN_RE
 from lib.graph.import_graph import STRUCTURE_REASON_CODES
 
 # The other leading codes a ``REASON`` field keeps: ``structure_drift``'s marker,
-# which the full run writes as the headless runner does (#908).
-BLOCK_REASON_CODES: frozenset[str] = frozenset({"no_ownership_map"})
+# which the full run writes as the headless runner does (#908), and the git-read
+# codes of ``agent_outcome`` (``lib.agent_outcome.REASON_CODES``, #1085).
+BLOCK_REASON_CODES: frozenset[str] = frozenset({
+    "no_ownership_map",
+    "no_git", "git_timeout", "not_a_repo", "shallow_clone", "shallow_unknown",
+})
 
 
 def reason_code(reason: object) -> str:

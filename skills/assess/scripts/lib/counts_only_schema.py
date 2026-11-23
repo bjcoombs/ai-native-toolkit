@@ -38,6 +38,7 @@ from lib.agents.agent_environment import AgentEnvironmentBlock
 from lib.agents.agent_harness import AgentHarnessBlock
 from lib.agent_instructions_grader import SensitiveFinding
 from lib.ci_checks import CiChecksBlock
+from lib.agent_outcome import AgentOutcomeBlock
 from lib.ai_usage import AiUsageBlock
 from lib.block_shapes import (
     AgentOpsBlock,
@@ -141,6 +142,7 @@ ROOTS: tuple[tuple[str, Any], ...] = (
     ("prior_findings_snapshot", FindingsSnapshot),
     ("instruction_placement", InstructionPlacementBlock),
     ("ai_usage", AiUsageBlock),
+    ("agent_outcome", AgentOutcomeBlock),
     ("delivery", DeliveryBlock),
     ("doc_claims", DocClaimsBlock),
     ("guardrails", GuardrailsBlock),

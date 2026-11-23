@@ -2407,6 +2407,71 @@
       "why_source": ""
     },
     {
+      "name": "agent_outcome",
+      "title": "Agent commit outcomes",
+      "summary": "",
+      "collector": "core.agent_outcome",
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "platform": false,
+      "headless": "registered",
+      "privacy": {
+        "written": true,
+        "strings_kept": {
+          "agent_outcome.agent_rule": "token",
+          "agent_outcome.limits": "drop",
+          "agent_outcome.reason": "reason",
+          "agent_outcome.revert_null_reason": "token",
+          "agent_outcome.rework_null_reason": "token",
+          "agent_outcome.since": "drop",
+          "agent_outcome.window": "token"
+        }
+      },
+      "used_by": {
+        "rows": [],
+        "conditions": [],
+        "findings": []
+      },
+      "unknown_reasons": [
+        {
+          "code": "shallow_clone",
+          "means": "The checkout is a shallow clone, so a reverting or rewriting commit may be cut from the history read.",
+          "next_step": "Nothing to change in the repository; a full clone (git fetch --unshallow) lets the scan read it."
+        },
+        {
+          "code": "shallow_unknown",
+          "means": "Git could not confirm the checkout is a full clone.",
+          "next_step": "Nothing to change in the repository; run the scan on a full clone."
+        },
+        {
+          "code": "not_a_repo",
+          "means": "The path is not a git repository, or one with no commits.",
+          "next_step": "Nothing to change: there is no history to read."
+        },
+        {
+          "code": "no_git",
+          "means": "git is not installed where the scan ran.",
+          "next_step": "Install git where the scan runs."
+        },
+        {
+          "code": "git_timeout",
+          "means": "A git read took longer than the scan allows.",
+          "next_step": "Nothing to change in the repository; a shorter --window reads less history."
+        }
+      ],
+      "evidence": [],
+      "grades": [
+        "unclassified"
+      ],
+      "why": "No other scan says whether agent work holds once it lands; this records the share of agent commits later reverted or rewritten within two weeks, as a history to set beside the gates. Nothing scores it.",
+      "why_source": ""
+    },
+    {
       "name": "doc_claims",
       "title": "Doc claims",
       "summary": "",
@@ -4823,6 +4888,21 @@
       "title": "AI-assisted change share",
       "publishes": [
         "ai_usage"
+      ],
+      "reads": [
+        "repo_root",
+        "scope",
+        "history_window",
+        "fleet_config"
+      ],
+      "network": false,
+      "private": false
+    },
+    {
+      "name": "agent_outcome",
+      "title": "Agent commit outcomes",
+      "publishes": [
+        "agent_outcome"
       ],
       "reads": [
         "repo_root",

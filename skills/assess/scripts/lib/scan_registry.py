@@ -92,6 +92,7 @@ from lib.agent_consistency import scan_agent_consistency
 from lib.agents.agent_environment import scan_agent_environment
 from lib.agents.agent_harness import scan_agent_harness
 from lib.agents.agent_ops import scan_agent_ops
+from lib.agent_outcome import scan_agent_outcome
 from lib.ai_usage import scan_ai_usage
 from lib.ci_checks import scan_ci_checks
 from lib.claude_config import scan_claude_config
@@ -621,6 +622,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # excluded. Since #695 also the commits an agent identity authored (pinned
     # defaults plus the [ai_usage] rules of `fleet_config`). Matcher: lib.agent_identity.
     _spec("ai_usage", scan_ai_usage),
+    # Agent commit outcomes (issue #1085): of the ai_usage agent commits (trailer or
+    # agent author), the share later reverted and the share whose added lines were
+    # rewritten within REWORK_DAYS. Informational: no Step, count or headline reads it.
+    _spec("agent_outcome", scan_agent_outcome),
     # Checkable claims across the doc set (issue #491): the instruction_claims
     # kinds run over docs/ (minus the historical design records),
     # skills/*/references/ and skills/*/SKILL.md, plus the cross-document kind

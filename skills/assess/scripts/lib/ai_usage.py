@@ -97,7 +97,8 @@ commit with both once. `agent_identity_rule_commits[i]` counts the commits credi
 config rule `i`, by position (counts-only keeps it as numbers; no pattern is emitted).
 `identities_awaiting_confirmation` counts the window's accounts `account_discovery.discover`
 lists (#765), a number only. `window_commits(repo_root, scope, window)` is the shared
-windowed read (`WindowCommits(commits, since)` or a fixed reason string).
+windowed read (`WindowCommits(commits, since)` or a fixed reason string); each commit
+carries its sha and committer time for `agent_outcome` (#1085).
 Each share is null at zero commits.
 `merge_rule` is always `"excluded"`. `history_window` is a `<n>d|w|mo|y` window (the
 churn window `pick_churn_window` chose, normalised by `window_from_churn_label`, or
@@ -230,7 +231,8 @@ def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[Hist
     share above the true value, so it is no floor.
     """
     args = ["log", "--no-merges",
-            "--format=%x1e%ae%x1f%an%x1f%s%x1f%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
+            "--format=%x1e%H%x1f%ct%x1f%ae%x1f%an%x1f%s%x1f"
+            "%(trailers:key=Co-authored-by,valueonly,separator=%x1d)"]
     args += [*bound, "--", str(scope) if scope is not None else "."]
     out = _git(repo_root, *args)
     try:
@@ -242,10 +244,13 @@ def _commits(repo_root: Path, scope: Path | None, bound: list[str]) -> list[Hist
     # Each record starts with RS; the first split element is the empty prefix.
     commits = []
     for record in out.split("\x1e")[1:]:
-        email, _, rest = record.partition("\x1f")
+        sha, _, rest = record.partition("\x1f")
+        ctime, _, rest = rest.partition("\x1f")
+        email, _, rest = rest.partition("\x1f")
         name, _, rest = rest.partition("\x1f")
         subject, _, coauthors = rest.partition("\x1f")
-        commits.append(HistoryCommit(email, name, subject, coauthors.strip("\n")))
+        commits.append(HistoryCommit(email, name, subject, coauthors.strip("\n"),
+                                     sha.strip(), int(ctime) if ctime.isdigit() else 0))
     return commits
 
 

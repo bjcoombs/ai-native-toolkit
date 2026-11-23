@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from lib.agent_consistency import AgentConsistencyBlock  # noqa: E402
+from lib.agent_outcome import AgentOutcomeBlock  # noqa: E402
 from lib.ai_usage import AiUsageBlock  # noqa: E402
 from lib.block_shapes import ReviewRealityBlock  # noqa: E402
 from lib.ci_checks import CiChecksBlock  # noqa: E402
@@ -29,6 +30,7 @@ from lib.signals_schema import REASON_KEPT, build_schema, described_block  # noq
 TYPED = {"ai_usage": AiUsageBlock, "ci_checks": CiChecksBlock, "coverage_gate": CoverageGateBlock,
          "delivery": DeliveryBlock, "guardrails": GuardrailsBlock,
          "agent_consistency": AgentConsistencyBlock, "layer_grades": LayerGradesBlock,
+         "agent_outcome": AgentOutcomeBlock,
          "review_reality": ReviewRealityBlock}
 
 
