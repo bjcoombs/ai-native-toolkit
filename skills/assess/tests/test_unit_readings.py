@@ -266,6 +266,8 @@ def test_a_path_scoped_rule_covers_only_the_units_its_globs_reach() -> None:
     assert ur._glob_reaches("packages/*/src/**", "packages/b") is True
     assert ur._glob_reaches("packages/a/src/x.py", "packages/a") is True
     assert ur._glob_reaches("docs/**", "packages/a") is False
+    assert ur._glob_reaches("packages/a", "packages/b") is False
+    assert ur._glob_reaches("packages/a", "packages/a") is True
 
 
 def test_a_nested_rules_glob_reads_relative_to_its_folder_too() -> None:

@@ -169,9 +169,10 @@ _WILDCARDS = frozenset("*?[{")
 
 
 def _glob_prefix(pattern: str) -> str:
-    """A repo-relative glob's literal folder prefix: the segments before the first wildcard."""
+    """A repo-relative glob's literal prefix: the segments before the first wildcard (the
+    whole path when it has none)."""
     literal: list[str] = []
-    for part in pattern.strip("/").split("/")[:-1]:
+    for part in pattern.strip("/").split("/"):
         if set(part) & _WILDCARDS:
             break
         literal.append(part)
