@@ -28,7 +28,9 @@ at HEAD (``lib.command_index.repo_files``):
   count (``AGENT_LOADED``), not a review-bot prompt. ``named`` lists the ones that resolve. A check
   is classified by the target it runs (``make test``, ``npm run ci``, the
   program after ``uv run``), so an install command such as ``npm ci`` or
-  ``uv sync --extra test`` is never a check.
+  ``uv sync --extra test`` is never a check. Instruction files are read with
+  ``lib.named_check`` (#951), so a named ``make ci`` counts here though a CI line
+  running it reads null at Layer 5.
 - ``pinning``: one row per dependency manifest and the lockfile found for it,
   built by ``lib.pinning`` (the manifest table, the ``skipped_library`` and
   ``direct_pins_only`` notes). ``manifests_total`` counts the manifests the lock
@@ -101,7 +103,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, NotRequired, TypedDict
 
-from lib.check_command import is_check_command, is_check_name
+from lib.named_check import is_named_check, is_named_check_name
 from lib.command_index import RepoIndex, build_index
 from lib.command_resolver import extract_commands, resolve
 from lib.gh_cli import GhUnavailable, gh_json, open_github
@@ -414,7 +416,7 @@ def _entry_points(index: RepoIndex) -> list[CheckEntry]:
                 (index.tox_envs, "tox -e", "tox"),
                 (index.nox_sessions, "nox -s", "noxfile.py"))
     for family, runner, source in families:
-        for name in sorted(n for n in (family.names if family else frozenset()) if is_check_name(n)):
+        for name in sorted(n for n in (family.names if family else frozenset()) if is_named_check_name(n)):
             out.append({"command": f"{runner} {name}", "source": source})
     if index.tox_envs is not None:
         out.append({"command": "tox", "source": "tox"})
@@ -435,7 +437,7 @@ def _named(index: RepoIndex, instruction_files: Any) -> list[NamedCheck]:
     files = sorted(instruction_files) if isinstance(instruction_files, dict) else []
     for rel in (f for f in files if f in AGENT_LOADED):
         for cmd in extract_commands(_read(index.root, rel)):
-            if not is_check_command(cmd.text):
+            if not is_named_check(cmd.text):
                 continue
             res = resolve(cmd, index=index)
             rows.append({"file": rel, "line": cmd.line, "command": cmd.text,

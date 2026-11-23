@@ -57,7 +57,7 @@ def test_is_lint_command_keeps_its_meaning() -> None:
 
 
 @pytest.mark.parametrize(("text", "expected"), [
-    ("make check", True), ("npm test", True), ("npm run ci", True), ("tox -e lint", True),
+    ("make check", True), ("npm test", True), ("npm run check", True), ("tox -e lint", True),
     ("nox", True), ("./scripts/test.sh", True), ("task check", True),
     ("pre-commit run --all-files", True), ("uv run pre-commit run", True),
     ("pytest", False), ("uv run pytest -q", False), ("python -m pytest", False),

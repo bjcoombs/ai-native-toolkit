@@ -24,6 +24,8 @@ unknown_reasons = [
 ]
   [entries.privacy]
   "review_reality.reason" = "drop"
+  "review_reality.sequence" = "token"
+  "review_reality.bot_sequence" = "token"
 
 [[entries]]
 id = "core:review_reality.reviewed_share"
