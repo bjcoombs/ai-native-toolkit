@@ -8,7 +8,11 @@ the conditions the owner excluded in the repository's ``.assess/config.toml`` (#
 the order the level result lists them: ``id``, ``kind``, ``source`` and the owner's
 ``reason``. They are listed, never counted. The reason is the owner's own words, so
 ``lib.fleet.fleet_data`` writes it only in ``--full`` output (``FLEET_DATA_RULES``: drop); a
-counts-only scan has already dropped it.
+counts-only scan has already dropped it. ``gate_blockers`` lists every gate of the model's
+Steps that does not hold (``level_tally.gate_blockers``: once per gate id, in Step order),
+each as tokens only: its ``gate`` id, the blocking condition's ``state`` and its
+``disposition`` (``excluded_by_owner``, else null), so a Step target above the repository's next Step
+reads which of its gates are missing (#945); empty when every gate holds or not measured.
 
 **Per unit** (``step_roll_up``), over every repository below the unit (#772 option A: no
 average and no repository named):
@@ -18,8 +22,8 @@ average and no repository named):
   Step 1;
 - ``lowest_step``: the lowest Step a measured repository holds; null when none is measured;
 - ``next_step``: the Step above ``lowest_step``, null at the top Step or when none is
-  measured. ``held`` is the measured repositories below it (those whose own next Step it
-  is; a repository already at or above it is held back by nothing). Each gate of that Step,
+  measured. ``held`` is the measured repositories below it (a repository already at or
+  above it is held back by nothing). Each gate of that Step,
   in model order and with zero counts kept, gives ``held``: the repositories the gate holds
   back, and of those ``not_measured`` (the gate's condition could not be measured) and
   ``excluded`` (the owner excluded it, so the Step stays unreached while the exclusion
@@ -32,6 +36,9 @@ Exclusions apply where the fleet's model shares condition ids with the default m
 ``.assess/config.toml`` entries are checked against the default model, and the engine
 ignores an id the ``--levels`` model does not define.
 
+``step_hold`` gives the same counts for any Step (a Step target, #945); the roll-up's
+``next_step`` is ``step_hold`` of the Step above ``lowest_step``.
+
 Every count comes from the level results, so the page computes no Step.
 """
 from __future__ import annotations
@@ -40,8 +47,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
 from lib.level_result_types import LevelResult, NextStep, Tally
-from lib.level_tally import EXCLUDED_BY_OWNER
-from lib.levels import StepDef
+from lib.level_tally import EXCLUDED_BY_OWNER, gate_blockers
+from lib.levels import StepDef, StepGate
 
 
 class RepoExclusion(TypedDict):
@@ -51,11 +58,20 @@ class RepoExclusion(TypedDict):
     reason: str | None  # the owner's words; None in counts-only output
 
 
+class GateBlocker(TypedDict):
+    """A Step gate that does not hold, as tokens only (#945)."""
+
+    gate: str  # the gate id of the model's [[steps]]
+    state: str  # the blocking condition's state (lib.level_tally.STATES)
+    disposition: str | None  # "excluded_by_owner" when the owner excluded it, else None
+
+
 class RepoSteps(TypedDict):
     step: int | None
     next_step: NextStep | None
     tally: Tally | None
     exclusions: list[RepoExclusion]
+    gate_blockers: list[GateBlocker]  # every Step gate that does not hold, in model order (#945)
 
 
 class GateHold(TypedDict):
@@ -82,7 +98,7 @@ class StepRollUp(TypedDict):
     next_step: StepHold | None  # None at the top Step or when none was measured
 
 
-NO_STEPS: RepoSteps = {"step": None, "next_step": None, "tally": None, "exclusions": []}
+NO_STEPS: RepoSteps = {"step": None, "next_step": None, "tally": None, "exclusions": [], "gate_blockers": []}
 
 
 def _reasons(scans: Mapping[str, Any] | None) -> dict[str, str]:
@@ -96,10 +112,12 @@ def _reasons(scans: Mapping[str, Any] | None) -> dict[str, str]:
     return out
 
 
-def repo_steps(result: LevelResult | None, scans: Mapping[str, Any] | None) -> RepoSteps:
-    """One repository's Step fields from its level result (None: not measured)."""
+def repo_steps(result: LevelResult | None, scans: Mapping[str, Any] | None,
+               steps: Sequence[StepDef] = ()) -> RepoSteps:
+    """One repository's Step fields from its level result (None: not measured) under ``steps``,
+    the model's ``[[steps]]``."""
     if result is None:
-        return {**NO_STEPS, "exclusions": []}
+        return {**NO_STEPS, "exclusions": [], "gate_blockers": []}
     reasons = _reasons(scans)
     return {
         "step": result["step"],
@@ -107,26 +125,32 @@ def repo_steps(result: LevelResult | None, scans: Mapping[str, Any] | None) -> R
         "tally": result["tally"],
         "exclusions": [{"id": e["id"], "kind": e["kind"], "source": e["source"], "reason": reasons.get(e["id"])}
                        for e in result.get("excluded", [])],
+        "gate_blockers": [{"gate": b.get("gate", ""), "state": b.get("state", ""),
+                           "disposition": b.get("disposition")} for b in gate_blockers(steps, result["conditions"])],
     }
 
 
-def _gate_hold(gate: Mapping[str, Any], held: Sequence[NextStep]) -> GateHold:
-    blockers = [b for ns in held for b in ns["blockers"] if b["kind"] == "gate" and b.get("gate") == gate["id"]]
+def _gate_hold(gate: StepGate, held: Sequence[RepoSteps]) -> GateHold:
+    blockers = [b for m in held for b in m["gate_blockers"] if b["gate"] == gate["id"]]
     return {"gate": gate["id"], "row": gate["row"], "level": gate["level"], "held": len(blockers),
-            "not_measured": sum(b.get("state") == "not_measured" for b in blockers),
-            "excluded": sum(b.get("disposition") == EXCLUDED_BY_OWNER for b in blockers)}
+            "not_measured": sum(b["state"] == "not_measured" for b in blockers),
+            "excluded": sum(b["disposition"] == EXCLUDED_BY_OWNER for b in blockers)}
 
 
 def step_roll_up(steps: Sequence[StepDef], members: Sequence[RepoSteps]) -> StepRollUp:
     """The Step roll-up over the repositories below a unit (see the module docstring)."""
     measured = [m for m in members if m["step"] is not None]
     lowest = min(m["step"] for m in measured if m["step"] is not None) if measured else None
-    hold: StepHold | None = None
     definition = next((s for s in steps if lowest is not None and s["step"] == lowest + 1), None)
-    if definition is not None:
-        held = [m["next_step"] for m in measured
-                if m["next_step"] is not None and m["next_step"]["step"] == definition["step"]]
-        hold = {"step": definition["step"], "threshold": definition["threshold"], "held": len(held),
-                "gates": [_gate_hold(g, held) for g in definition["gates"]],
-                "below_threshold": sum(any(b["kind"] == "threshold" for b in ns["blockers"]) for ns in held)}
+    hold = step_hold(definition, members) if definition is not None else None
     return {"measured": len(measured), "repos": len(members), "lowest_step": lowest, "next_step": hold}
+
+
+def step_hold(definition: StepDef, members: Sequence[RepoSteps]) -> StepHold:
+    """How the measured repositories among ``members`` stand against one Step: those below it,
+    per gate how many it holds back, and how many have a met tally below its threshold."""
+    held = [m for m in members if m["step"] is not None and m["step"] < definition["step"]]
+    return {"step": definition["step"], "threshold": definition["threshold"], "held": len(held),
+            "gates": [_gate_hold(g, held) for g in definition["gates"]],
+            "below_threshold": sum(m["tally"] is not None and m["tally"]["met"] < definition["threshold"]
+                                   for m in held)}

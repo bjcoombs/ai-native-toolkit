@@ -229,6 +229,10 @@ FLEET_DATA_RULES: Final[dict[str, FieldClass]] = {
     "repos.exclusions.kind": TOKEN,
     "repos.exclusions.source": TOKEN,
     "repos.exclusions.reason": DROP,
+    # #945: each Step gate that does not hold, as tokens (gate id, state, disposition)
+    "repos.gate_blockers.gate": TOKEN,
+    "repos.gate_blockers.state": TOKEN,
+    "repos.gate_blockers.disposition": TOKEN,
 }
 
 

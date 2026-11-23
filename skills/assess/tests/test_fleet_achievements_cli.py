@@ -9,9 +9,23 @@ from pathlib import Path
 from test_fleet import make_repo
 from test_fleet_cli import TEAM_LEVELS, fleet_cli
 
+# the instruction row gates Step 2 (#945: a target names a Step)
+STEP_LEVELS = TEAM_LEVELS + """
+[[steps]]
+step = 1
+name = "Assisted"
+threshold = 0
+
+[[steps]]
+step = 2
+name = "Supervised agent PRs"
+threshold = 0
+gates = [{ id = "instructions", row = "instructions", level = 1 }]
+"""
+
 
 def _seed_lower(entry: Path, date: str, repo: str) -> None:
-    """Copy a history entry to an earlier date with ``repo`` one level lower on every row."""
+    """Copy a history entry to an earlier date with ``repo`` one level lower on every row and at Step 1."""
     earlier = entry.parent / date
     shutil.copytree(entry, earlier)
     stamp = json.loads((earlier / "run.json").read_text(encoding="utf-8"))
@@ -20,6 +34,7 @@ def _seed_lower(entry: Path, date: str, repo: str) -> None:
     data["run"]["scan_date"] = date
     for row in data["repos"]:
         if row["key"] == repo:
+            row["step"] = 1
             for cell in row["rows"]:
                 cell["signal"], cell["level"] = "nested_instructions.budget.claude_code.lines", cell["level"] - 1
     (earlier / "fleet-data.json").write_text(json.dumps(data), encoding="utf-8")
@@ -35,9 +50,9 @@ def _root(tmp_path: Path) -> Path:
 def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tmp_path, monkeypatch, capsys):
     root = _root(tmp_path)
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
-    (tmp_path / "targets.toml").write_text('[[target]]\nview = "repo"\nunit = "grpa/svc1"\nrow = "instructions"\n'
-                                           'level = 1\n', encoding="utf-8")
+    (tmp_path / "levels.toml").write_text(STEP_LEVELS, encoding="utf-8")
+    (tmp_path / "targets.toml").write_text('[[target]]\nview = "repo"\nunit = "grpa/svc1"\nstep = 2\n',
+                                           encoding="utf-8")
     args = [str(root), "--levels", "levels.toml", "--history-dir", "hist", "--targets", "targets.toml"]
     assert fleet_cli.main([*args, "--out", "o1"]) == 0
     first = json.loads((tmp_path / "o1" / "achievements.json").read_text(encoding="utf-8"))
@@ -58,7 +73,7 @@ def test_a_run_credits_what_moved_since_the_history_and_reruns_byte_identical(tm
     doc = json.loads((tmp_path / "o2" / "achievements.json").read_text(encoding="utf-8"))
     kinds = {(a["kind"], a["unit"]) for a in doc["achievements"]}
     assert ("level_up", "grpa/svc1") in kinds and ("target_hit", "grpa/svc1") in kinds
-    assert "`grpa/svc1` hit its target of level 1" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
+    assert "`grpa/svc1` reached its target of Step 2: Step 1 to Step 2." in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
     # #746: recent progress reads this run's level-ups from the history, display only
     assert "- `grpa/svc1` reached level" in (tmp_path / "o2" / "report.md").read_text(encoding="utf-8")
     assert (tmp_path / "o2" / "report.md").read_bytes() == (tmp_path / "o3" / "report.md").read_bytes()
@@ -73,13 +88,29 @@ def test_no_history_writes_next_steps_and_a_note(tmp_path, monkeypatch):
     assert [s["unit"] for s in doc["nearest_level_ups"] if s["view"] == "repo"] == ["grpb/lib1"]
 
 
-def test_a_bad_targets_file_exits_2_before_any_scan(tmp_path, monkeypatch, capsys):
+def test_an_old_format_targets_file_exits_2_before_any_scan(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "levels.toml").write_text(TEAM_LEVELS, encoding="utf-8")
-    (tmp_path / "t.toml").write_text('[[target]]\nunit = "x"\nrow = "nope"\nlevel = 1\n', encoding="utf-8")
+    (tmp_path / "levels.toml").write_text(STEP_LEVELS, encoding="utf-8")
+    (tmp_path / "t.toml").write_text('[[target]]\nunit = "x"\nrow = "instructions"\nlevel = 1\n',
+                                     encoding="utf-8")
     assert fleet_cli.main([str(tmp_path), "--levels", "levels.toml", "--targets", "t.toml", "--out", "out"]) == 2
-    assert "error: --targets t.toml: target 1: 'row' must name a team row" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "error: --targets t.toml: target 1: 'row', 'level' no longer set a target" in err and "step = " in err
     assert not (tmp_path / "out").exists()
+
+
+def test_a_target_on_a_unit_not_in_the_run_exits_2_before_any_scan(tmp_path, monkeypatch, capsys):
+    root = _root(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "levels.toml").write_text(STEP_LEVELS, encoding="utf-8")
+    for text, message in (('[[target]]\nunit = "nope"\nstep = 2\n',
+                           "target 1: unit 'nope' is not a unit of the ownership view in this run"),
+                          ('[[target]]\nview = "repo"\nunit = "grpa/gone"\nstep = 2\n',
+                           "target 1: repository 'grpa/gone' is not in this run")):
+        (tmp_path / "t.toml").write_text(text, encoding="utf-8")
+        assert fleet_cli.main([str(root), "--levels", "levels.toml", "--targets", "t.toml", "--out", "out"]) == 2
+        assert message in capsys.readouterr().err
+        assert not (tmp_path / "out").exists()
 
 
 def test_an_achievements_failure_keeps_exit_0_and_clears_a_stale_file(tmp_path, monkeypatch, capsys):

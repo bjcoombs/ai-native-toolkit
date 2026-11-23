@@ -236,6 +236,19 @@ def test_child_pipeline_reads_a_job_key_only():
     assert not child_pipeline("trigger: x\nbuild:\n  script:\n    - echo trigger: no\n")
 
 
+def test_a_top_level_trigger_job_after_a_blank_line_is_not_a_child_pipeline():
+    # `^\s+` crossed the blank line's newline and read the job name as a `trigger:` key (#958).
+    from lib.ci_checks import child_pipeline
+    assert not child_pipeline("build:\n  script: make\n\ntrigger:\n  script: x\n")
+    assert child_pipeline("build:\n  script: make\n\nchild:\n\n  trigger:\n    include: a.yml\n")
+
+
+def test_include_sources_records_a_padded_duplicate_once():
+    includes = [{"type": "file", "extra": {"project": "grp/x"}},
+                {"type": "file", "extra": {"project": " grp/x "}}]
+    assert gitlab_ci_lint.include_sources(includes) == ("grp/x",)
+
+
 def test_conditional_include_reads_only_the_include_section():
     from lib.ci_checks import conditional_include
     assert not conditional_include(INCLUDE.format(project="a/b") + "t:\n  rules:\n    - if: $X\n")

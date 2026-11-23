@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bjcoombs/ai-native-toolkit/skills/fleet/references/achievements.schema.json",
   "title": "fleet achievements",
-  "description": "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository earned over the comparable runs in the history (level-ups, firsts, streaks, personal bests, targets hit), each with its evidence and a credit line, plus each one's nearest level-up and target distances, and the Recount of a maturity-model change. Generated from lib/fleet/fleet_achievements.py by lib/fleet/fleet_achievements_schema.py.",
+  "description": "achievements.json written by skills/fleet/scripts/fleet.py: what each unit and repository earned over the comparable runs in the history (level-ups, firsts, streaks, Step targets hit), each with its evidence and a credit line, plus each one's nearest level-up and each Step target's progress (lowest Step, missing gates), and the Recount of a maturity-model change. Generated from lib/fleet/fleet_achievements.py by lib/fleet/fleet_achievements_schema.py.",
   "type": "object",
   "properties": {
     "achievements_version": {
@@ -98,21 +98,21 @@
                   "null"
                 ]
               },
-              "share_from": {
+              "from_step": {
                 "type": [
-                  "number",
+                  "integer",
                   "null"
                 ]
               },
-              "share_to": {
+              "to_step": {
                 "type": [
-                  "number",
+                  "integer",
                   "null"
                 ]
               },
-              "target_share": {
+              "target_step": {
                 "type": [
-                  "number",
+                  "integer",
                   "null"
                 ]
               },
@@ -159,14 +159,14 @@
             },
             "required": [
               "from_level",
+              "from_step",
               "level",
               "moves",
               "row",
               "runs",
-              "share_from",
-              "share_to",
-              "target_share",
-              "to_level"
+              "target_step",
+              "to_level",
+              "to_step"
             ],
             "additionalProperties": false
           },
@@ -279,32 +279,20 @@
           "unit": {
             "type": "string"
           },
-          "row": {
-            "type": "string"
+          "step": {
+            "type": "integer"
           },
-          "target": {
+          "lowest_step": {
             "type": [
               "integer",
               "null"
             ]
           },
-          "share_target": {
-            "type": [
-              "number",
-              "null"
-            ]
+          "measured": {
+            "type": "integer"
           },
-          "level": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "share": {
-            "type": [
-              "number",
-              "null"
-            ]
+          "repos": {
+            "type": "integer"
           },
           "distance": {
             "type": [
@@ -312,21 +300,61 @@
               "null"
             ]
           },
-          "share_distance": {
-            "type": [
-              "number",
-              "null"
-            ]
+          "threshold": {
+            "type": "integer"
+          },
+          "held": {
+            "type": "integer"
+          },
+          "below_threshold": {
+            "type": "integer"
+          },
+          "missing_gates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "type": "string"
+                },
+                "row": {
+                  "type": "string"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "held": {
+                  "type": "integer"
+                },
+                "not_measured": {
+                  "type": "integer"
+                },
+                "excluded": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "excluded",
+                "gate",
+                "held",
+                "level",
+                "not_measured",
+                "row"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
+          "below_threshold",
           "distance",
-          "level",
-          "row",
-          "share",
-          "share_distance",
-          "share_target",
-          "target",
+          "held",
+          "lowest_step",
+          "measured",
+          "missing_gates",
+          "repos",
+          "step",
+          "threshold",
           "unit",
           "view"
         ],

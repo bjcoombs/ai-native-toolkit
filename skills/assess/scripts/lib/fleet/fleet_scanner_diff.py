@@ -62,7 +62,7 @@ Delta attribution for scanner changes (issue #774), read by `fleet_compare.compa
 Signal meaning convention: a scanner change that alters a signal's meaning ships under a new
 signal name or a `signals_schema_version` bump (`lib/signals.py` `SIGNALS_SCHEMA_VERSION`). An
 earlier run then reads the new signal as absent (unknown), never as a false repository move.
-A pure rename is aliased instead (`fleet_rescore.SIGNAL_ALIASES`).
+A pure rename is aliased instead (`signal_aliases.SIGNAL_ALIASES`).
 
 The backstop catches a change that kept the name. `scanner_diff` compares the stamps'
 `toolkit_commit`. Equal commits are `same`, and git never runs (two null commits only at one
