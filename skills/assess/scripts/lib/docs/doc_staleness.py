@@ -37,7 +37,8 @@ Associating a doc with the code it describes uses the one ownership rule in
 ``lib.docs.doc_ownership`` (nearest-ancestor base doc, then a parallel ``docs/`` tree,
 the doc's explicit code links, then repo-wide churn), the same rule the
 complexity join applies. Each row reports the method (``subject_method``), the
-rule's roots (``subject_roots``), the subject size (``subject_code_count``) and
+rule's roots (``subject_roots``), for a parallel ``docs/`` match the deciding key and
+tie-break (``subject_match``, #817), the subject size (``subject_code_count``) and
 up to ``SUBJECT_PATHS_CAP`` of its paths (``subject_paths``), so a finding's
 subject can be checked.
 
@@ -100,6 +101,7 @@ from lib.docs.doc_ownership import (
     subject_spec,
 )
 from lib.docs.doc_provenance import resolve_doc_sources, source_is_newer
+from lib.docs.parallel_docs import parallel_index
 from lib.git_churn import (
     CHURN_WINDOWS,
     GIT_TIMEOUT_SECONDS,
@@ -132,6 +134,7 @@ class DocStalenessRow(TypedDict):
     subject_code_count: int
     subject_method: str
     subject_roots: list[str]
+    subject_match: NotRequired[str]
     base_doc_dir: str | None
     subject_paths: list[str]
     ratio: float
@@ -224,6 +227,7 @@ class DocStaleness:
     # The ownership rule's roots for this doc and its bounded, sorted subject
     # paths (repo-relative POSIX); see lib.docs.doc_ownership.
     subject_roots: tuple[str, ...] = ()
+    subject_match: str | None = None
     base_doc_dir: str | None = None
     subject_paths: tuple[str, ...] = ()
     # Whole-window ratio and the subject churn after the doc's last content
@@ -232,12 +236,9 @@ class DocStaleness:
     # per-commit read failed, and `ratio` then falls back to `window_ratio`.
     window_ratio: float = 0.0
     code_churn_since_doc_change: int | None = None
-    # Provenance (generated docs only; see lib.docs.doc_provenance). When a doc
-    # declares a source, staleness is measured against that source instead of
-    # the doc's own age/churn: `provenance_method` names how it was declared
-    # ("frontmatter"/"config"), `provenance_sources` are the resolved source rel
-    # paths, and `source_newer` is True iff a source has changed more recently
-    # than the doc. All None/empty for an ordinary hand-written doc.
+    # Provenance (generated docs; lib.docs.doc_provenance): how the source was
+    # declared ("frontmatter"/"config"), the resolved source rel paths, and
+    # whether a source changed after the doc. None/empty for a hand-written doc.
     provenance_method: str = ""
     provenance_sources: tuple[str, ...] = ()
     provenance_generated_by: str | None = None
@@ -283,6 +284,8 @@ class DocStaleness:
             "code_churn_since_doc_change": self.code_churn_since_doc_change,
             "confidence": self.confidence,
         }
+        if self.subject_match:
+            d["subject_match"] = self.subject_match
         if self.last_change_basis != "content":
             d["last_change_basis"] = self.last_change_basis
         if self.age_is_lower_bound:
@@ -561,15 +564,9 @@ def _doc_row(
     # (bulk commits already skipped by the clock) can make it a lying map.
     ratio, since_doc = behind_ratio(window_ratio, measured, ctx.clock.epoch(d))
 
-    # Provenance (issue #178): a *generated* doc that declares a source is
-    # measured against that source, not its own age/churn. When the source
-    # has NOT moved on, the doc provably matches its source, so its
-    # decaying-map ratio is zero by construction - this is what keeps a
-    # freshly-accurate generated doc out of the lying_map bucket regardless
-    # of how busy the surrounding code is. When the source HAS moved on,
-    # `source_newer` carries the staleness verdict for the join to sign
-    # freshness directly; the churn ratio is left untouched as a secondary
-    # signal.
+    # Provenance (#178): a generated doc is measured against its declared source.
+    # A source that has not moved on makes the ratio 0 (the doc matches it); one
+    # that has sets `source_newer`, the verdict the join signs, and keeps the ratio.
     prov_method, prov_source_rels, generated_by, src_newer = _provenance(d, ctx)
     directive_only = not prov_method and is_directive_only(d)
     if src_newer is False or directive_only:
@@ -584,6 +581,7 @@ def _doc_row(
         subject_code_count=len(subject_rels),
         subject_method=method,
         subject_roots=tuple(spec["roots"]),
+        subject_match=spec.get("match"),
         base_doc_dir=spec["base_dir"],
         subject_paths=tuple(bounded_subject_paths(subject_rels)),
         ratio=ratio,
@@ -713,6 +711,7 @@ def analyze_doc_staleness(
     base_doc_dirs = build_base_doc_dirs(docs)
     code_dirs = {c.parent for c in code_files}
     explicit = explicit_links(repo_root, doc_to_code_edges)
+    parallel = parallel_index(code_files, repo_root)
     code_owner = code_ownership(code_files, base_doc_dirs, repo_root)
 
     # One ownership rule (lib.docs.doc_ownership): a spec per doc, expanded over the
@@ -725,7 +724,7 @@ def analyze_doc_staleness(
     specs = {
         d.relative_to(repo_root).as_posix(): subject_spec(
             d, d.relative_to(repo_root).as_posix(), repo_root, owning_docs, base_docs,
-            code_dirs, explicit,
+            parallel, explicit,
         )
         for d in docs
     }

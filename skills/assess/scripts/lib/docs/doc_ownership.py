@@ -14,7 +14,10 @@ The rule, in precedence order (the PRD's ordered fallbacks):
      ``README.md`` beside a ``design.md`` owns the directory's code. A skill's
      ``SKILL.md`` is a base doc, so it owns its skill directory's code (#614).
   2. ``parallel-docs-tree`` -- a doc under a ``docs/`` tree whose name matches
-     a code directory describes every code file under that directory.
+     production code describes that one module file or directory
+     (``lib.docs.parallel_docs``, #817): never test or fixture code, its stem
+     before its parent directory's name, ties broken by the longest shared path
+     suffix. The row records the deciding key and rule as ``subject_match``.
   3. ``explicit-links`` -- the code files the doc links to.
   4. ``repo-baseline`` -- no derivable subject (an empty one).
 
@@ -36,7 +39,8 @@ The one doc-to-code ownership rule (issues #424, #555), shared by `doc_staleness
 `doc_complexity_join.py`. Precedence: the nearest-ancestor base doc (one per directory,
 ranked by `BASE_DOC_PRECEDENCE`, so a `README.md` beside a `design.md` owns the
 directory's code; a skill's `SKILL.md` is a base doc ranked just after `README.md`, so it
-owns its skill's subtree, #614), then a parallel `docs/` tree, explicit code links, and the empty
+owns its skill's subtree, #614), then a parallel `docs/` tree (one production module by
+stem, then parent name, #817), explicit code links, and the empty
 `repo-baseline` subject. `subject_spec` records each doc's method and roots as
 repo-relative POSIX keys (the keys `complexity-stats.json` uses, also under
 `/assess <path>`); `resolve_subjects` expands the specs over any set of code paths.
@@ -51,8 +55,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from pathlib import Path, PurePosixPath
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
+from lib.docs.parallel_docs import ParallelIndex
 from lib.run_context_types import DocToCodeEdge
 
 # Docs that describe the directory they live in. Precedence (best first) when a
@@ -82,14 +87,15 @@ class SubjectSpec(TypedDict):
     """How one doc's subject is derived: the method and its repo-relative roots.
 
     ``roots`` is the doc's own directory (``""`` at the repo root) for
-    ``nearest-ancestor``, the matched code directories for
-    ``parallel-docs-tree``, the linked code files for ``explicit-links``, and
-    empty for ``repo-baseline``.
+    ``nearest-ancestor``, the one matched code file or directory for
+    ``parallel-docs-tree`` (with its ``<key>:<rule>`` token as ``match``), the
+    linked code files for ``explicit-links``, and empty for ``repo-baseline``.
     """
 
     method: str
     roots: list[str]
     base_dir: str | None
+    match: NotRequired[str]
 
 
 def rel_posix(path: Path, repo_root: Path) -> str:
@@ -167,24 +173,6 @@ def code_ownership(
     return code_owner
 
 
-def parallel_docs_dirs(
-    doc: Path, repo_root: Path, code_dirs: set[Path],
-) -> list[Path] | None:
-    """Fallback (b): a doc under a `docs/` tree mapping to a code dir by name.
-
-    `docs/payments.md` (or `docs/payments/index.md`) -> the `payments` code dir.
-    """
-    rel = doc.relative_to(repo_root)
-    if "docs" not in {p.lower() for p in rel.parts}:
-        return None
-    candidates = {doc.stem.lower(), doc.parent.name.lower()}
-    matches = [d for d in code_dirs if d.name.lower() in candidates]
-    if not matches:
-        return None
-    # Prefer the shallowest matching code dir for determinism.
-    return sorted(matches, key=lambda d: (len(d.parts), str(d)))[:1]
-
-
 def explicit_links(
     repo_root: Path, doc_to_code_edges: list[DocToCodeEdge] | None,
 ) -> dict[str, list[Path]]:
@@ -202,7 +190,7 @@ def subject_spec(
     repo_root: Path,
     owning_docs: set[Path],
     base_docs: set[Path],
-    code_dirs: set[Path],
+    parallel: ParallelIndex,
     explicit: dict[str, list[Path]],
 ) -> SubjectSpec:
     """The method that derives `d`'s subject, its repo-relative roots, and the
@@ -216,10 +204,10 @@ def subject_spec(
     if d in owning_docs:
         return {"method": NEAREST_ANCESTOR, "roots": [rel_posix(d.parent, repo_root)],
                 "base_dir": base_dir}
-    par = parallel_docs_dirs(d, repo_root, code_dirs)
+    par = parallel.match(doc_rel)
     if par is not None:
-        return {"method": PARALLEL_DOCS_TREE,
-                "roots": [rel_posix(p, repo_root) for p in par], "base_dir": base_dir}
+        return {"method": PARALLEL_DOCS_TREE, "roots": [par.root], "base_dir": base_dir,
+                "match": par.match}
     if explicit.get(doc_rel):
         return {"method": EXPLICIT_LINKS,
                 "roots": sorted({rel_posix(p, repo_root) for p in explicit[doc_rel]}),
@@ -228,8 +216,9 @@ def subject_spec(
 
 
 def _under(code: str, root: str) -> bool:
-    """True if `code` sits in directory `root` or below (``""`` is the repo)."""
-    return root == "" or code.startswith(root + "/")
+    """True if `code` is `root` (a matched module file) or sits in directory
+    `root` or below (``""`` is the repo)."""
+    return root in ("", code) or code.startswith(root + "/")
 
 
 def _nearest_owner(code: str, ancestor_dirs: Mapping[str, str]) -> str | None:
