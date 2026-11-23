@@ -601,9 +601,6 @@ SCANS: tuple[ScanSpec, ...] = (
     # the three-way instruction presence (root, nested_only, none; issue #821)
     # read from the root grading and the nested block.
     _spec("layer_grades", scan_layer_grades),
-    # Top 3 candidates read from measured gaps. Post-offers since #821: the
-    # root-instructions gap reads layer_grades.
-    _spec("gap_actions", cs.gap_actions),
     # Instruction placement (Layer 0, issue #559): each instruction file split on
     # its headings, every section classified always-on or fetch-on-need, and the
     # sections to move named with line ranges and a suggested home; agent and
@@ -611,6 +608,10 @@ SCANS: tuple[ScanSpec, ...] = (
     # scores instruction files on the same split (#560). Reads
     # nested_instructions for the nested files.
     _spec("instruction_placement", scan_instruction_placement),
+    # Top 3 candidates read from measured gaps. Post-offers since #821: the
+    # root-instructions gap reads layer_grades; the removal proposal (#1084)
+    # reads instruction_placement, so it runs after it.
+    _spec("gap_actions", cs.gap_actions),
     # Cross-agent instruction consistency (issue #768): whether the root
     # instruction files of every agent system present (Claude Code, AGENTS.md,
     # Copilot, Cursor, Windsurf, Cline, Aider, Junie, Amazon Q, Kiro, Continue,
